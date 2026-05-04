@@ -14,14 +14,17 @@ export class CommentsThread extends WebComponent {
     initial:  { type: Object },
     signedIn: { type: Boolean },
   };
-  postId: string = '';
-  initial: CommentFormatted[] = [];
-  signedIn: boolean = false;
+  declare postId: string;
+  declare initial: CommentFormatted[];
+  declare signedIn: boolean;
   declare state: State;
   _conn: ReturnType<typeof connectWS> | null = null;
 
   constructor() {
     super();
+    this.postId = '';
+    this.initial = [];
+    this.signedIn = false;
     this.state = { comments: [], busy: false, error: null };
   }
 

@@ -53,7 +53,12 @@ export default function RootLayout({ children }: { children: unknown }) {
 export class Counter extends WebComponent {
   // static shadow = false is the default — no need to declare it.
   static properties = { count: { type: Number } };
-  count = 0;
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
 
   render() {
     return html\`

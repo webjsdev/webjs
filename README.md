@@ -103,7 +103,12 @@ import { WebComponent, html } from '@webjskit/core';
 export class Counter extends WebComponent {
   // Light DOM is the default; Tailwind utility classes apply directly.
   static properties = { count: { type: Number } };
-  count = 0;
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
 
   render() {
     return html`

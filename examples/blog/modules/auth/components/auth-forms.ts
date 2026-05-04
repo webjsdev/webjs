@@ -15,12 +15,14 @@ export class AuthForms extends WebComponent {
     then: { type: String },
     mode: { type: String },
   };
-  then: string = '/dashboard';
-  mode: Mode = 'login';
+  declare then: string;
+  declare mode: Mode;
   declare state: State;
 
   constructor() {
     super();
+    this.then = '/dashboard';
+    this.mode = 'login';
     this.state = { busy: false, error: null };
   }
 

@@ -13,6 +13,11 @@ templates:
    the current file's import graph.
 3. **Attribute auto-complete** — inside `<my-counter |>`, completes the
    keys of the component's `static properties = { … }` map.
+4. **Attribute-value type-check** — `<my-counter count=${expr}>`
+   assignability-checks `typeof expr` against the prop's `declare`
+   annotation. Works for primitives, string-literal unions, interfaces,
+   generics — anything the TypeScript checker understands. Static
+   (non-interpolated) attribute text is deliberately not checked.
 
 ```ts
 import './counter.ts';     // side-effect: Counter.register('my-counter')
@@ -82,11 +87,11 @@ Diagnostic suppression and attribute completions are gated on whether
 the file that registers the tag is reachable from the file you're
 editing through `import` / `export` declarations (transitively).
 
-| Tag state                                       | Diagnostic                | Completions |
-|-------------------------------------------------|---------------------------|-------------|
-| Registered & reachable                          | suppressed                | offered     |
-| Registered somewhere but not imported here      | **kept**                  | none        |
-| Not registered anywhere in the program          | (lit-plugin's natural)    | none        |
+| Tag state                                       | "Unknown tag" diagnostic  | Completions | Value type-check |
+|-------------------------------------------------|---------------------------|-------------|------------------|
+| Registered & reachable                          | suppressed                | offered     | runs             |
+| Registered somewhere but not imported here      | **kept**                  | none        | skipped          |
+| Not registered anywhere in the program          | (lit-plugin's natural)    | none        | skipped          |
 
 A tag registered in some other file but not imported here would also
 fail at runtime, so the squiggle is the correct prompt to add the

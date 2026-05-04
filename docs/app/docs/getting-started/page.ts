@@ -96,7 +96,12 @@ export default function Home() {
 
 export class Counter extends WebComponent {
   static properties = { count: { type: Number } };
-  count = 0;
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
 
   render() {
     return html\`

@@ -9,7 +9,13 @@ import './light-inner.ts';
 export class LightParent extends WebComponent {
 
   static properties = { child: { type: String } };
-  child: string = 'shadow';
+  declare child: string;
+
+  constructor() {
+    super();
+    this.child = 'shadow';
+  }
+
   render() {
     return this.child === 'light'
       ? html`<div data-testid="light-parent"><light-inner></light-inner></div>`

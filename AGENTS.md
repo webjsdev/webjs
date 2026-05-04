@@ -500,12 +500,27 @@ import { WebComponent, html } from '@webjskit/core';
 class StudentCard extends WebComponent {
   static properties = { student: { type: Object } };   // runtime: tracked + coerced
   declare student: Student;                             // compile-time: typed
+
+  constructor() {
+    super();
+    this.student = { name: '', email: '' };             // defaults go here, never as class fields
+  }
+
   render() {
     return html`<p>${this.student.name}</p>`;
   }
 }
 StudentCard.register('student-card');
 ```
+
+**Never** write `student: Student = { … }` or `student = { … }` as a class-
+field initializer for a reactive prop — it compiles under modern class-field
+semantics to `Object.defineProperty(this, 'student', …)` *after* `super()`,
+which uses `[[Define]]` semantics and overwrites the reactive accessor that
+`_initializeProperties()` installed inside `super()`. Once clobbered,
+`this.student = …` no longer goes through the setter: no `requestUpdate`,
+no `hasChanged`, no reflect — the reactive contract is silently broken.
+`webjs check` enforces this via the `reactive-props-use-declare` rule.
 
 Built-in constructors (`String`, `Number`, `Boolean`, `Array`, `Object`)
 feed the default attribute coercion. For anything the default doesn't
@@ -1313,6 +1328,12 @@ The scaffold adds `@webjskit/ts-plugin` + `ts-lit-plugin` to `tsconfig.json`'s
   the editor stops red-squiggling every webjs element.
 - **Attribute auto-complete** — inside `<my-counter |>`, suggests the
   keys of the component's `static properties = { … }` map.
+- **Attribute-value type-check** — `<my-counter count=${expr}>`
+  assignability-checks `typeof expr` against the prop's
+  `declare count: T` annotation. Works for primitives, type aliases,
+  string-literal unions, interfaces — anything the TS checker
+  understands. Static (non-interpolated) attribute text is not
+  checked: at runtime it's plain template text.
 
 Both behaviours are gated on the file's import graph: a tag is recognised
 only if the file that registers it is reachable from the file you're
@@ -1901,7 +1922,11 @@ webjs check --rules     # list all rules
 
 Checks for: actions in modules, one-function-per-action, components call
 `customElements.define`, no server imports in client code, tests exist for modules,
-tag names have hyphens. Override any rule in `package.json`:
+tag names have hyphens, **reactive props use `declare` + constructor defaults**
+(class-field initializers like `count = 0` clobber the framework's reactive
+accessor under modern class-field semantics; the rule flags any field whose
+name appears in `static properties` and isn't declared with `declare`).
+Override any rule in `package.json`:
 
 ```json
 { "webjs": { "conventions": { "tests-exist": false } } }

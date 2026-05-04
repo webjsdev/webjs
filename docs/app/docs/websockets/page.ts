@@ -401,9 +401,15 @@ export class LiveComments extends WebComponent {
     .author { font-weight: bold; }
   \`;
 
-  postId = 0;
+  declare postId: number;
   conn = null;
-  state = { comments: [] };
+  declare state: { comments: any[] };
+
+  constructor() {
+    super();
+    this.postId = 0;
+    this.state = { comments: [] };
+  }
 
   connectedCallback() {
     super.connectedCallback();

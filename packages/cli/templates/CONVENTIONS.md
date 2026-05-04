@@ -225,6 +225,14 @@ export class MyWidget extends WebComponent {
   declare count: number;
   // Light DOM is the default; Tailwind utility classes apply directly.
 
+  constructor() {
+    super();
+    // Defaults go here — never as class-field initializers
+    // (`label = ''` would clobber the framework's reactive accessor).
+    this.label = '';
+    this.count = 0;
+  }
+
   render() {
     return html`
       <div class="p-4 border border-border rounded-lg">
@@ -256,6 +264,7 @@ registered webjs elements).
   - `my-widget .body`, `my-widget .title` (descendant selector)
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')` — the standard DOM API
+- **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer — it compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
 - Use `setState()` for state changes, never mutate `this.state` directly
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
 
