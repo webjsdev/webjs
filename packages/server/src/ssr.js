@@ -231,9 +231,11 @@ async function collectMetadata(route, ctx, dev) {
 }
 
 /**
- * Extract leading `<script>` and `<style>` tags from the body HTML and
- * hoist them into `<head>`. Ensures blocking scripts (e.g. Tailwind
- * browser runtime, theme bootstrap) run before any body content renders.
+ * Extract leading `<script>`, `<style>`, and `<link>` tags from the body
+ * HTML and hoist them into `<head>`. Ensures blocking scripts (e.g.
+ * Tailwind runtime, theme bootstrap) run before any body content renders,
+ * and that `<link rel="icon">` / `<link rel="stylesheet">` land where
+ * browsers reliably honour them.
  *
  * @param {string} headHtml
  * @param {string} bodyHtml
@@ -241,8 +243,19 @@ async function collectMetadata(route, ctx, dev) {
  */
 function hoistHeadTags(headHtml, bodyHtml) {
   const hoisted = [];
-  const re = /^\s*(<(?:script|style)[\s>][\s\S]*?<\/(?:script|style)>)/i;
-  let remaining = bodyHtml;
+  // <script>…</script> and <style>…</style> are paired; <link …> is void.
+  const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
+
+  // Step over an optional leading <div data-layout="…"> wrapper. The SSR
+  // pipeline wraps every layout's output in one of these so the client
+  // router can detect same-layout navigations; without this peek-through,
+  // any head-bound tag emitted at the top of a layout template would never
+  // be hoisted (it would always sit inside the wrapper).
+  const wrapRe = /^(\s*<div\s+data-layout="[^"]*">\s*)/;
+  const wm = wrapRe.exec(bodyHtml);
+  const prefix = wm ? wm[1] : '';
+  let remaining = wm ? bodyHtml.slice(wm[0].length) : bodyHtml;
+
   let m;
   while ((m = re.exec(remaining)) !== null) {
     hoisted.push(m[1]);
@@ -250,7 +263,7 @@ function hoistHeadTags(headHtml, bodyHtml) {
   }
   if (!hoisted.length) return { head: headHtml, body: bodyHtml };
   const newHead = headHtml.replace('</head>', hoisted.join('\n') + '\n</head>');
-  return { head: newHead, body: remaining };
+  return { head: newHead, body: prefix + remaining };
 }
 
 // Internal helper re-exported for unit testing.

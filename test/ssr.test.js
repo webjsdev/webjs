@@ -92,6 +92,62 @@ test('hoistHeadTags: is case-insensitive for script/style tags', () => {
   assert.equal(body, '<main>ok</main>');
 });
 
+test('hoistHeadTags: lifts leading <link rel="icon"> to head', () => {
+  // Browsers only honour favicons declared in <head>; layouts that emit
+  // them in their template body must be hoisted, otherwise the tab icon
+  // never appears.
+  const bodyHtml =
+    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
+    '<link rel="apple-touch-icon" href="/public/favicon.png">' +
+    '<main>page</main>';
+  const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
+  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<link rel="apple-touch-icon" href="/public/favicon.png">'));
+  assert.equal(body, '<main>page</main>');
+});
+
+test('hoistHeadTags: lifts a mixed run of leading link/script/style', () => {
+  const bodyHtml =
+    '<link rel="icon" href="/f.svg">' +
+    '<script>var t = "dark";</script>' +
+    '<link rel="stylesheet" href="/x.css">' +
+    '<style>.a{}</style>' +
+    '<main>rest</main>';
+  const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
+  assert.ok(head.includes('<link rel="icon" href="/f.svg">'));
+  assert.ok(head.includes('<script>var t = "dark";</script>'));
+  assert.ok(head.includes('<link rel="stylesheet" href="/x.css">'));
+  assert.ok(head.includes('<style>.a{}</style>'));
+  assert.equal(body, '<main>rest</main>');
+});
+
+test('hoistHeadTags: does NOT lift <link> after normal content', () => {
+  const bodyHtml = '<main>page</main><link rel="icon" href="/late.svg">';
+  const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
+  assert.equal(head, '<head></head>');
+  assert.equal(body, bodyHtml);
+});
+
+test('hoistHeadTags: peeks through leading <div data-layout> wrapper', () => {
+  // The SSR pipeline wraps layout output in <div data-layout="…">; head
+  // tags emitted at the top of a layout template still need to land in
+  // <head>, with the wrapper preserved around the remaining body content.
+  const bodyHtml =
+    '<div data-layout="layout">' +
+    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
+    '<script>var t=1;</script>' +
+    '<main>page</main>' +
+    '</div>';
+  const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
+  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<script>var t=1;</script>'));
+  assert.ok(body.startsWith('<div data-layout="layout">'),
+    `wrapper preserved at start of body, got: ${body.slice(0, 80)}`);
+  assert.ok(body.includes('<main>page</main></div>'),
+    'body keeps page content + closing wrapper');
+  assert.ok(!body.includes('rel="icon"'), 'icon link removed from body');
+});
+
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
 
 async function makeRoute({ pageSrc, layoutSrc, metadata = null }) {
