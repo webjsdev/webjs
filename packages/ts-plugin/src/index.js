@@ -69,8 +69,11 @@ function init(modules) {
     // diagnostic must stay.
     proxy.getSemanticDiagnostics = (fileName) => {
       const diags = inner.getSemanticDiagnostics(fileName);
-      try { return filterLitTagDiagnostics(info, fileName, diags); }
-      catch (e) {
+      try {
+        const filtered = filterLitTagDiagnostics(info, fileName, diags);
+        const attrDiags = webjsAttrValueDiagnostics(info, fileName);
+        return attrDiags.length ? [...filtered, ...attrDiags] : filtered;
+      } catch (e) {
         info.project.projectService.logger?.info?.(
           `@webjskit/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
         );
@@ -816,6 +819,195 @@ function init(modules) {
     if (!ts.isIdentifier(classArg)) return undefined;
 
     return { tag: tagArg.text, className: classArg.text };
+  }
+
+  /* ================================================================
+   * Resolver 4: type-check `<webjs-tag attr=${expr}>` interpolations
+   * against the property's declared TypeScript type.
+   * ================================================================ */
+
+  /**
+   * Walk every html`` template in the file. For each `${expr}` that
+   * sits in attribute-value position of a reachable webjs tag, look up
+   * the matching `declare attr: T` field on the component class and
+   * assignability-check `typeof expr` against `T`. Emit a diagnostic
+   * for any mismatch.
+   *
+   * Static (non-interpolated) attribute values like `mode="login"` are
+   * not checked — they're plain template text and at runtime always
+   * coerce to strings. Only interpolations carry a real value type
+   * worth checking.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @returns {import('typescript').Diagnostic[]}
+   */
+  function webjsAttrValueDiagnostics(info, fileName) {
+    /** @type {import('typescript').Diagnostic[]} */
+    const out = [];
+    const program = info.languageService.getProgram();
+    if (!program) return out;
+    const sf = program.getSourceFile(fileName);
+    if (!sf) return out;
+
+    const registry = buildRegistry(program);
+    if (registry.components.size === 0) return out;
+    const reachable = collectReachableTags(program, sf, registry);
+    if (reachable.size === 0) return out;
+
+    const checker = program.getTypeChecker();
+
+    /** @param {import('typescript').Node} node */
+    function visit(node) {
+      if (ts.isTaggedTemplateExpression(node) && tagMatches(node.tag, 'html')) {
+        collectFromTemplate(node);
+      }
+      ts.forEachChild(node, visit);
+    }
+
+    /** @param {import('typescript').TaggedTemplateExpression} expr */
+    function collectFromTemplate(expr) {
+      const tpl = expr.template;
+      if (ts.isNoSubstitutionTemplateLiteral(tpl)) return;
+      // tpl is a TemplateExpression: head + spans[].
+      const segments = [tpl.head, ...tpl.templateSpans.map((s) => s.literal)];
+      // segments[i].text is the cooked text *between* the (i-1)th hole and
+      // the ith hole (segments[0] is the head, before the first hole).
+      // Walk text segment-by-segment, tracking which interpolation each
+      // hole belongs to.
+      // Stitch the cooked text together with placeholders to track tags.
+      // Simpler: just inspect the trailing text of each segment that
+      // precedes a span — does it look like `<webjs-tag … attr=`?
+      for (let i = 0; i < tpl.templateSpans.length; i++) {
+        // Text immediately preceding the i-th interpolation.
+        const preceding = i === 0 ? tpl.head.text : tpl.templateSpans[i - 1].literal.text;
+        // Build the *full* preceding text for this interpolation (head +
+        // all earlier segments). We need this so an opening `<` from a
+        // previous segment is still visible. Use the cumulative slice
+        // ending at segment `i`.
+        const cumulative = i === 0
+          ? preceding
+          : segments.slice(0, i + 1).map((s) => s.text).join('•'); // any non-tag char as placeholder
+        const ctx = findAttrContext(cumulative);
+        if (!ctx) continue;
+        if (!reachable.has(ctx.tag)) continue;
+        const ref = registry.components.get(ctx.tag);
+        if (!ref) continue;
+        // Skip if the attr name doesn't match a known prop.
+        if (!ref.attributes.includes(ctx.attr)) continue;
+
+        const propType = resolvePropType(program, ref, ctx.attr, checker);
+        if (!propType) continue; // no `declare` annotation → can't check
+
+        const span = tpl.templateSpans[i];
+        const exprNode = span.expression;
+        const exprType = checker.getTypeAtLocation(exprNode);
+
+        if (checker.isTypeAssignableTo(exprType, propType)) continue;
+
+        out.push({
+          file: sf,
+          start: exprNode.getStart(sf),
+          length: exprNode.getEnd() - exprNode.getStart(sf),
+          messageText:
+            `Type '${checker.typeToString(exprType)}' is not assignable to ` +
+            `attribute '${ctx.attr}' of type '${checker.typeToString(propType)}' on <${ctx.tag}>.`,
+          category: ts.DiagnosticCategory.Error,
+          code: 9001,
+          source: 'webjskit-ts-plugin',
+        });
+      }
+    }
+
+    visit(sf);
+    return out;
+  }
+
+  /**
+   * Inspect the tail of `text` (cumulative html`` segments preceding an
+   * interpolation) and return the enclosing tag + attribute name if the
+   * interpolation sits in attribute-value position of an open tag.
+   *
+   * @param {string} text
+   * @returns {{ tag: string, attr: string } | undefined}
+   */
+  function findAttrContext(text) {
+    // Find the last unclosed `<`. We want the opener whose `>` hasn't
+    // appeared yet.
+    let depth = 0;
+    let openIdx = -1;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '<') { openIdx = i; depth = 1; }
+      else if (text[i] === '>' && depth === 1) { depth = 0; openIdx = -1; }
+    }
+    if (openIdx === -1) return undefined;
+    const tagPart = text.slice(openIdx + 1);
+    // First token after `<` is the tag name.
+    const tm = /^([a-zA-Z][\w-]*)/.exec(tagPart);
+    if (!tm) return undefined;
+    const tag = tm[1].toLowerCase();
+    if (!tag.includes('-')) return undefined;
+    // Trailing pattern: ` attrName=` optionally followed by an open quote.
+    const am = /\s+([A-Za-z_][\w-]*)\s*=\s*['"`]?$/.exec(tagPart);
+    if (!am) return undefined;
+    return { tag, attr: am[1] };
+  }
+
+  /**
+   * Resolve the declared type of `attr` on the given component class.
+   * Looks for a class member with that name and a TypeNode annotation
+   * (typically a `declare attr: T` field). Returns undefined if no
+   * annotation is present — the user hasn't told us the type, so we
+   * can't check it.
+   *
+   * @param {import('typescript').Program} program
+   * @param {ComponentRef} ref
+   * @param {string} attrName
+   * @param {import('typescript').TypeChecker} checker
+   * @returns {import('typescript').Type | undefined}
+   */
+  function resolvePropType(program, ref, attrName, checker) {
+    const compSf = program.getSourceFile(ref.fileName);
+    if (!compSf) return undefined;
+    const cls = findClassDeclaration(compSf, ref.className);
+    if (!cls) return undefined;
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member)) continue;
+      if (!member.name) continue;
+      let memberName;
+      if (ts.isIdentifier(member.name) || ts.isPrivateIdentifier(member.name)) {
+        memberName = member.name.text;
+      } else if (ts.isStringLiteralLike(member.name)) {
+        memberName = member.name.text;
+      }
+      if (memberName !== attrName) continue;
+      if (!member.type) return undefined;
+      return checker.getTypeFromTypeNode(member.type);
+    }
+    return undefined;
+  }
+
+  /**
+   * Locate `class <name> { … }` inside a source file. Returns the
+   * ClassDeclaration node, or undefined if not found.
+   *
+   * @param {import('typescript').SourceFile} sf
+   * @param {string} className
+   * @returns {import('typescript').ClassDeclaration | undefined}
+   */
+  function findClassDeclaration(sf, className) {
+    /** @type {import('typescript').ClassDeclaration | undefined} */
+    let found;
+    function walk(node) {
+      if (found) return;
+      if (ts.isClassDeclaration(node) && node.name && node.name.text === className) {
+        found = /** @type any */ (node);
+        return;
+      }
+      ts.forEachChild(node, walk);
+    }
+    walk(sf);
+    return found;
   }
 }
 

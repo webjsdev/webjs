@@ -1,8 +1,8 @@
 {
   "name": "@webjskit/ts-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "commonjs",
-  "description": "TypeScript language-service plugin for webjs — go-to-definition + ts-lit-plugin diagnostic suppression + attribute auto-complete for custom elements registered via Class.register('tag').",
+  "description": "TypeScript language-service plugin for webjs — go-to-definition + ts-lit-plugin diagnostic suppression + attribute auto-complete + attribute-value type-check (against `declare propName: T`) for custom elements registered via Class.register('tag').",
   "main": "src/index.js",
   "peerDependencies": {
     "typescript": ">=5.0.0"

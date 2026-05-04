@@ -498,6 +498,152 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
   assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
 });
 
+/* ================================================================
+ * Attribute-value type-check on `<webjs-tag attr=${expr}>` interpolations
+ * ================================================================ */
+
+test('flags number passed where string is declared', () => {
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `  declare mode: string;\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `const x: number = 42;\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=\${x}></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 1, `expected one webjs diagnostic, got ${ours.length}`);
+  const m = ours[0].messageText;
+  assert.ok(/'number'/.test(m) && /'mode'/.test(m) && /'string'/.test(m),
+    `unexpected message: ${m}`);
+});
+
+test('passes when interpolated value is assignable to declared string type', () => {
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `  declare mode: string;\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `const m: string = 'login';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=\${m}></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 0, `unexpected diagnostics: ${ours.map((d) => d.messageText).join('; ')}`);
+});
+
+test('flags string-or-number against a string-literal-union type', () => {
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `type Mode = 'login' | 'signup';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `  declare mode: Mode;\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `declare const x: string | number;\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=\${x}></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 1, `expected one diagnostic for string|number against Mode`);
+});
+
+test('does not type-check static (non-interpolated) attribute values', () => {
+  // <auth-forms mode=123> is plain template text — at runtime it's just
+  // the string "123", not a number. We deliberately don't flag it.
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `  declare mode: string;\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=123></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 0, 'static attribute value should not produce a webjs diagnostic');
+});
+
+test('skips check when component is reachable but the prop has no `declare` annotation', () => {
+  // If the user hasn't typed the prop, we can't check — fall back to
+  // silence rather than noise.
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` + // no `declare mode: …`
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `declare const x: number;\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=\${x}></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 0, 'no declare → no check, no diagnostic');
+});
+
+test('does not check tags that are not reachable through imports', () => {
+  // The component class exists in the program but page.ts forgets to
+  // import it. Reachability gating means we don't synthesise a value
+  // diagnostic — the missing import is already surfaced via the kept
+  // "unknown tag" warning from ts-lit-plugin.
+  const svc = makeService({
+    '/auth.ts':
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `  declare mode: string;\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      // No import './auth.ts'.
+      `import { html } from '@webjskit/core';\n` +
+      `declare const x: number;\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode=\${x}></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  assert.equal(ours.length, 0, 'unreachable tag → no value-check (lit-plugin keeps its own "unknown tag" warning)');
+});
+
 test('attribute completions are NOT offered when the component is not imported', () => {
   const svc = makeService({
     '/auth.ts':
