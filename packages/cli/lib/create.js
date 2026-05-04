@@ -79,6 +79,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
+      // tsserver plugins for editor intelligence inside html`` templates.
+      // Order in tsconfig matters — see below.
+      'ts-lit-plugin': '^2.0.0',
+      '@webjskit/ts-plugin': 'latest',
     },
   }, null, 2) + '\n');
 
@@ -92,10 +96,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       noEmit: true,
       allowImportingTsExtensions: true,
       skipLibCheck: true,
-      // ts-lit-plugin gives tag/attribute intelligence inside html`` templates
-      // (autocomplete, type-check, go-to-definition for <my-element>).
-      // Install: `npm i -D ts-lit-plugin`. Remove this plugin entry if you don't want it.
-      plugins: [{ name: 'ts-lit-plugin', strict: true }],
+      // ts-lit-plugin: type-check + diagnostics inside html`` templates.
+      // @webjskit/ts-plugin: webjs-aware go-to-definition, "Unknown tag/attr"
+      // suppression for elements registered via Class.register('tag'), and
+      // attribute auto-complete sourced from `static properties`.
+      // Order matters — list ts-lit-plugin first; @webjskit/ts-plugin wraps
+      // it. Remove either entry if you don't want that capability.
+      plugins: [
+        { name: 'ts-lit-plugin', strict: true },
+        { name: '@webjskit/ts-plugin' },
+      ],
     },
   }, null, 2) + '\n');
 

@@ -7,10 +7,11 @@ export default function EditorSetup() {
     <h1>Editor Setup — Neovim &amp; VS Code</h1>
     <p>webjs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
 
-    <p>This page covers two layers of intelligence:</p>
+    <p>This page covers three layers of intelligence:</p>
     <ol>
       <li><strong>Type-safe component internals</strong> — <code>this.student: Student</code> inside the class. Works out of the box once <code>tsconfig.json</code> is set up.</li>
-      <li><strong>Template-literal intelligence</strong> — autocomplete, type-checking, and go-to-definition for <code>&lt;student-card student=\${...}&gt;</code> inside <code>html\`…\`</code> tags. Requires <code>ts-lit-plugin</code>.</li>
+      <li><strong>Template-literal intelligence</strong> — type-checking and go-to-definition for <code>&lt;student-card student=\${...}&gt;</code> inside <code>html\`…\`</code> tags. Requires <code>ts-lit-plugin</code>.</li>
+      <li><strong>webjs-aware intelligence</strong> — silences <code>ts-lit-plugin</code>'s "unknown tag/attribute" diagnostics for components registered via <code>Class.register('tag')</code>, and offers attribute auto-complete sourced from <code>static properties</code>. Requires <code>@webjskit/ts-plugin</code> ≥ 0.2.0.</li>
     </ol>
     <p>There's also an optional standard-TypeScript convention for typing <code>document.querySelector('student-card')</code> — briefly covered at the end.</p>
 
@@ -33,7 +34,10 @@ export default function EditorSetup() {
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "plugins": [{ "name": "ts-lit-plugin", "strict": true }]
+    "plugins": [
+      { "name": "ts-lit-plugin", "strict": true },
+      { "name": "@webjskit/ts-plugin" }
+    ]
   }
 }</pre>
     <p>Key points:</p>
@@ -41,7 +45,7 @@ export default function EditorSetup() {
       <li><code>moduleResolution: "NodeNext"</code> — required for the framework's <code>exports</code> map to resolve correctly.</li>
       <li><code>allowImportingTsExtensions: true</code> — lets you write <code>import { x } from './foo.ts'</code>, matching how webjs serves them.</li>
       <li><code>noEmit: true</code> — TypeScript type-checks only; webjs transforms <code>.ts</code> via esbuild at import / request time.</li>
-      <li><code>plugins: [{ name: 'ts-lit-plugin' }]</code> — enables template-literal intelligence (details below).</li>
+      <li><code>plugins</code> — order matters. <code>ts-lit-plugin</code> runs first; <code>@webjskit/ts-plugin</code> wraps it so it can suppress lit-plugin's webjs-incompatible diagnostics and add attribute completions on top.</li>
     </ul>
 
     <h2>Layer 1 — Component internals (works everywhere)</h2>
@@ -66,12 +70,12 @@ StudentCard.register('student-card');</pre>
     <h2>Layer 2 — <code>ts-lit-plugin</code> for <code>html\`…\`</code> intelligence</h2>
     <p>webjs's <code>html\`…\`</code> is Lit-compatible. Installing <a href="https://www.npmjs.com/package/ts-lit-plugin" target="_blank">ts-lit-plugin</a> unlocks:</p>
     <ul>
-      <li><strong>Autocomplete</strong> custom-element tag names and their attributes inside <code>html\`…\`</code>.</li>
       <li><strong>Type-checking</strong> attribute / property values — <code>&lt;student-card student=\${42}&gt;</code> is flagged because <code>42</code> isn't a <code>Student</code>.</li>
-      <li><strong>Unknown-tag warnings</strong> when you typo an element name.</li>
-      <li><strong>Go-to-definition</strong> — <code>gd</code> / F12 / Ctrl+Click on <code>&lt;student-card&gt;</code> jumps to the <code>StudentCard</code> class. Same for attributes → jumps to the property declaration.</li>
-      <li><strong>Rename-symbol</strong> works across <code>static tag</code>, <code>static properties</code> keys, and every <code>html\`…\`</code> usage.</li>
+      <li><strong>Unknown-tag warnings</strong> when you typo a built-in or Lit-style element name.</li>
+      <li><strong>Go-to-definition</strong> for tags it knows about (Lit's <code>@customElement</code> decorator + <code>HTMLElementTagNameMap</code> augmentations).</li>
+      <li><strong>Rename-symbol</strong> across template usages.</li>
     </ul>
+    <p><strong>Limitation for webjs:</strong> ts-lit-plugin doesn't recognise webjs components — they register at runtime via <code>Class.register('tag')</code>, not via decorator or static map — so it flags every webjs element as "Unknown tag" and offers no attribute completions for them. <code>@webjskit/ts-plugin</code> fills that gap (Layer 3 below). Install ts-lit-plugin first; the webjs plugin sits on top of it.</p>
 
     <h3>Install</h3>
     <pre>npm i -D typescript ts-lit-plugin</pre>
@@ -118,8 +122,34 @@ return {
     <pre>html\`&lt;student-card student=\${42}&gt;&lt;/student-card&gt;\`
 //                                    ^^^ squiggle: \`number\` is not assignable to \`Student\`.</pre>
 
+    <h2>Layer 3 — <code>@webjskit/ts-plugin</code> for webjs-aware intelligence</h2>
+    <p>The webjs plugin proxies <code>ts-lit-plugin</code>'s output and contributes webjs-specific knowledge it can't statically infer:</p>
+    <ul>
+      <li><strong>Diagnostic suppression</strong> — drops lit-plugin's "Unknown tag" / "Unknown attribute" reports for any element registered via <code>Class.register('tag-name')</code> or <code>customElements.define('tag-name', Class)</code>.</li>
+      <li><strong>Attribute auto-complete</strong> — inside <code>&lt;your-tag |&gt;</code>, completes the keys of the component's <code>static properties = { … }</code> map.</li>
+      <li><strong>Go-to-definition</strong> — <code>gd</code> / F12 / Ctrl+Click on a webjs tag jumps to its class declaration. Same for class names inside <code>html\`class="…"\`</code> attributes (jumps to the matching <code>css\`…\`</code> rule).</li>
+    </ul>
+
+    <h3>Import-graph reachability</h3>
+    <p>The first two are gated by reachability through the current file's import graph. A tag is "known here" only if the file that registers it is imported (directly or transitively) by the file you're editing — otherwise the runtime would fail too, and the squiggle / missing completion is the correct prompt to add the import:</p>
+    <table>
+      <thead><tr><th>Tag state</th><th>Diagnostic</th><th>Completions</th></tr></thead>
+      <tbody>
+        <tr><td>Registered &amp; reachable</td><td>suppressed</td><td>offered</td></tr>
+        <tr><td>Registered somewhere but not imported here</td><td><strong>kept</strong></td><td>none</td></tr>
+        <tr><td>Not registered anywhere in the program</td><td>(lit-plugin's natural warning)</td><td>none</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Install</h3>
+    <pre>npm i -D @webjskit/ts-plugin</pre>
+    <p>The baseline <code>tsconfig.json</code> at the top of this page already lists both plugins. Plugin order matters — <code>ts-lit-plugin</code> first, <code>@webjskit/ts-plugin</code> second — because the webjs plugin wraps the lit-plugin to filter its diagnostics and augment its completions.</p>
+
+    <h3>After upgrading the plugin</h3>
+    <p>tsserver loads plugins on startup, so an editor restart is required to pick up new plugin code. In Neovim: <code>:LspRestart</code>. In VS Code: <code>Cmd/Ctrl+Shift+P</code> → "TypeScript: Restart TS Server".</p>
+
     <h2>Optional: typed DOM queries</h2>
-    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a> — the same one <a href="https://lit.dev" target="_blank">Lit</a> uses. Three lines per component; skip it if you don't need the DOM-query typing.</p>
+    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a> — the same one <a href="https://lit.dev" target="_blank">Lit</a> uses. With <code>@webjskit/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates; the augmentation is purely about typing DOM-query call sites.</p>
 
     <h2>Editor actions — quick reference</h2>
     <table>
@@ -139,7 +169,8 @@ return {
     <p>After setup, open a component file and check each layer:</p>
     <ol>
       <li><strong>Layer 1</strong> — hover <code>this.student</code> inside <code>render()</code>: expect <code>(property) student: Student</code>. Type <code>this.</code> inside the class: expect autocomplete for <code>student</code>, <code>setState</code>, <code>requestUpdate</code>, <code>state</code>, <code>render</code>, etc.</li>
-      <li><strong>Layer 2</strong> — inside an <code>html\`…\`</code> template, type <code>&lt;student-</code>: expect <code>student-card</code> in the completion list. On <code>&lt;student-card&gt;</code>, press <code>gd</code> / F12: jumps to the <code>StudentCard</code> class. Type <code>&lt;student-card x</code>: attribute completions from <code>static properties</code>.</li>
+      <li><strong>Layer 2</strong> — type <code>&lt;student-card student=\${42}&gt;</code> in an <code>html\`…\`</code> template: ts-lit-plugin flags it because <code>42</code> isn't <code>Student</code>.</li>
+      <li><strong>Layer 3</strong> — write <code>&lt;student-card&gt;</code> with the side-effect import in place: no "Unknown tag" squiggle. Position cursor inside <code>&lt;student-card |&gt;</code>: completions list includes <code>student</code> (and any other key of <code>static properties</code>). Then comment out the <code>import './student-card.ts'</code> at the top of the file: the squiggle returns and the completions disappear — the plugin requires reachability so a missing import always surfaces.</li>
     </ol>
     <p>If any layer misbehaves, the most common cause is tsserver using a different TypeScript install than your workspace's. In Neovim run <code>:LspInfo</code>; in VS Code click the TypeScript version in the status bar. Both should point inside your project's <code>node_modules/</code>.</p>
 

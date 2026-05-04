@@ -241,9 +241,11 @@ attribute coercion, reflection). `declare` types the field for
 TypeScript without emitting a class-field initializer that would
 clobber the reactive accessor at construction time. The two
 declarations together give you full intelligence in any tsserver-backed
-editor — see the Editor Setup docs for `ts-lit-plugin` setup that
-extends this to tag / attribute intelligence inside `html\`…\``
-templates.
+editor — see the Editor Setup docs for the `ts-lit-plugin` +
+`@webjskit/ts-plugin` setup that extends this to tag / attribute
+intelligence inside `html\`…\`` templates (go-to-definition, attribute
+auto-complete from `static properties`, no "Unknown tag" red-squiggle on
+registered webjs elements).
 
 **Rules:**
 - One component per file
