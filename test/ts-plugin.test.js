@@ -313,3 +313,210 @@ test('ignores code inside ${...} holes (not part of the template markup)', () =>
     }
   }
 });
+
+/* ================================================================
+ * Diagnostic suppression: drop ts-lit-plugin "unknown tag/attr" reports
+ * for webjs components reachable from the file's import graph.
+ * ================================================================ */
+
+/**
+ * ts-lit-plugin runs upstream of us; we can't easily plant it in a unit
+ * test. Simulate the diagnostics it would produce by stubbing the inner
+ * language service's getSemanticDiagnostics. This exercises the proxy's
+ * filter logic directly.
+ */
+function makeServiceWithSimulatedLitDiags(fileMap, simulator) {
+  Object.assign(files, fileMap);
+  const host = {
+    getScriptFileNames: () => Object.keys(files),
+    getScriptVersion: (f) => String(files[f]?.length ?? 0),
+    getScriptSnapshot: (f) =>
+      files[f] === undefined ? undefined : ts.ScriptSnapshot.fromString(files[f]),
+    getCurrentDirectory: () => '/',
+    getCompilationSettings: () => ({
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      strict: false,
+      noEmit: true,
+      lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+    }),
+    getDefaultLibFileName: (o) => ts.getDefaultLibFilePath(o),
+    fileExists: (f) => files[f] !== undefined,
+    readFile: (f) => files[f],
+  };
+  const inner = ts.createLanguageService(host, ts.createDocumentRegistry());
+  const realGetSemanticDiagnostics = inner.getSemanticDiagnostics.bind(inner);
+  inner.getSemanticDiagnostics = (fileName) => {
+    const real = realGetSemanticDiagnostics(fileName) || [];
+    const fake = simulator(fileName, files[fileName] || '') || [];
+    return [...real, ...fake];
+  };
+  const plugin = createPlugin({ typescript: ts });
+  return plugin.create({
+    languageService: inner,
+    languageServiceHost: host,
+    project: { projectService: { logger: { info: () => {} } } },
+    serverHost: {},
+    config: {},
+  });
+}
+
+test('suppresses lit-plugin "unknown tag" diagnostic for an imported webjs component', () => {
+  // Simulate ts-lit-plugin emitting an "Unknown tag" diagnostic on the
+  // <auth-forms> opener.
+  const simulator = (fileName, src) => {
+    if (fileName !== '/page.ts') return [];
+    const i = src.indexOf('auth-forms');
+    if (i < 0) return [];
+    return [{
+      file: undefined,
+      start: i,
+      length: 'auth-forms'.length,
+      messageText: 'Unknown tag "auth-forms".',
+      category: ts.DiagnosticCategory.Warning,
+      code: 1234,
+      source: 'lit-plugin',
+    }];
+  };
+  const svc = makeServiceWithSimulatedLitDiags({
+    '/auth.ts':
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String }, then: { type: String } };\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode="login"></auth-forms>\`;\n` +
+      `}\n`,
+  }, simulator);
+
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const litDiags = diags.filter((d) => /lit/i.test(d.source || ''));
+  assert.equal(litDiags.length, 0, 'lit-plugin diagnostic should be suppressed');
+});
+
+test('keeps lit-plugin "unknown tag" diagnostic when the component is NOT imported', () => {
+  // Same component, but page.ts forgets the side-effect import — runtime
+  // would fail too, so the diagnostic must remain.
+  const simulator = (fileName, src) => {
+    if (fileName !== '/page.ts') return [];
+    const i = src.indexOf('auth-forms');
+    if (i < 0) return [];
+    return [{
+      file: undefined,
+      start: i,
+      length: 'auth-forms'.length,
+      messageText: 'Unknown tag "auth-forms".',
+      category: ts.DiagnosticCategory.Warning,
+      code: 1234,
+      source: 'lit-plugin',
+    }];
+  };
+  const svc = makeServiceWithSimulatedLitDiags({
+    '/auth.ts':
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      // No `import './auth.ts'` — auth-forms unreachable from page.ts.
+      `import { html } from '@webjskit/core';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms></auth-forms>\`;\n` +
+      `}\n`,
+  }, simulator);
+
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const litDiags = diags.filter((d) => /lit/i.test(d.source || ''));
+  assert.equal(litDiags.length, 1, 'unreachable tag → diagnostic stays');
+});
+
+test('suppresses lit-plugin "unknown attribute" inside an imported webjs tag', () => {
+  // ts-lit-plugin reports unknown attributes by spanning the attribute
+  // identifier; the enclosing tag is the webjs component. Suppress.
+  const simulator = (fileName, src) => {
+    if (fileName !== '/page.ts') return [];
+    const i = src.indexOf('mode=');
+    if (i < 0) return [];
+    return [{
+      file: undefined,
+      start: i,
+      length: 'mode'.length,
+      messageText: 'Unknown attribute "mode".',
+      category: ts.DiagnosticCategory.Warning,
+      code: 5678,
+      source: 'lit-plugin',
+    }];
+  };
+  const svc = makeServiceWithSimulatedLitDiags({
+    '/auth.ts':
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms mode="login"></auth-forms>\`;\n` +
+      `}\n`,
+  }, simulator);
+
+  const diags = svc.getSemanticDiagnostics('/page.ts');
+  const litDiags = diags.filter((d) => /lit/i.test(d.source || ''));
+  assert.equal(litDiags.length, 0);
+});
+
+/* ================================================================
+ * Attribute-name auto-complete inside `<webjs-tag …>`
+ * ================================================================ */
+
+test('completes static-properties keys after typing `<webjs-tag `', () => {
+  const svc = makeService({
+    '/auth.ts':
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String }, then: { type: String } };\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      `import { html } from '@webjskit/core';\n` +
+      `import './auth.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms ></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  // Cursor right after the space following the tag name: `<auth-forms |>`.
+  const pos = offsetOf('/page.ts', '<auth-forms ') + '<auth-forms '.length;
+
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  assert.ok(completions, 'should return completions');
+  const names = completions.entries.map((e) => e.name);
+  assert.ok(names.includes('mode'), `expected "mode" in ${JSON.stringify(names)}`);
+  assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
+});
+
+test('attribute completions are NOT offered when the component is not imported', () => {
+  const svc = makeService({
+    '/auth.ts':
+      `export class AuthForms extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` +
+      `AuthForms.register('auth-forms');\n`,
+    '/page.ts':
+      // No `import './auth.ts'` here.
+      `import { html } from '@webjskit/core';\n` +
+      `export default function P() {\n` +
+      `  return html\`<auth-forms ></auth-forms>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<auth-forms ') + '<auth-forms '.length;
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  if (completions) {
+    const names = completions.entries.map((e) => e.name);
+    assert.ok(!names.includes('mode'),
+      `should not suggest props of unimported component, got: ${JSON.stringify(names)}`);
+  }
+});

@@ -60,7 +60,237 @@ function init(modules) {
       }
     };
 
+    // ts-lit-plugin doesn't know about webjs components (no `@customElement`
+    // decorator, no HTMLElementTagNameMap augmentation), so it flags every
+    // `<my-component>` inside an html`` template as "Unknown tag". Filter
+    // those out — but ONLY for tags that this file can actually reach
+    // through its import graph. A tag registered somewhere in the program
+    // but not imported here is still genuinely unknown at runtime, so the
+    // diagnostic must stay.
+    proxy.getSemanticDiagnostics = (fileName) => {
+      const diags = inner.getSemanticDiagnostics(fileName);
+      try { return filterLitTagDiagnostics(info, fileName, diags); }
+      catch (e) {
+        info.project.projectService.logger?.info?.(
+          `@webjskit/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
+        );
+        return diags;
+      }
+    };
+    proxy.getSuggestionDiagnostics = (fileName) => {
+      const diags = inner.getSuggestionDiagnostics(fileName);
+      try { return filterLitTagDiagnostics(info, fileName, diags); }
+      catch (e) { return diags; }
+    };
+
+    // Attribute-name auto-complete inside `<webjs-tag |…>` openers. The
+    // `static properties = { … }` map on the component class drives the
+    // completion list. ts-lit-plugin's own completions kick in only when
+    // it recognises the tag, which it doesn't for webjs.
+    proxy.getCompletionsAtPosition = (fileName, position, options) => {
+      const upstream = inner.getCompletionsAtPosition(fileName, position, options);
+      try {
+        const ours = webjsAttrCompletions(info, fileName, position);
+        if (!ours || ours.length === 0) return upstream;
+        if (!upstream) {
+          return {
+            isGlobalCompletion: false,
+            isMemberCompletion: false,
+            isNewIdentifierLocation: false,
+            entries: ours,
+          };
+        }
+        // De-dupe by name in case upstream and we both contributed the same
+        // attribute (unlikely, but keep the IDE list clean).
+        const seen = new Set(upstream.entries.map((e) => e.name));
+        return {
+          ...upstream,
+          entries: [...upstream.entries, ...ours.filter((e) => !seen.has(e.name))],
+        };
+      } catch (e) {
+        info.project.projectService.logger?.info?.(
+          `@webjskit/ts-plugin: getCompletionsAtPosition threw: ${String(e)}`,
+        );
+        return upstream;
+      }
+    };
+
     return proxy;
+  }
+
+  /* ================================================================
+   * Diagnostic filter: drop ts-lit-plugin "unknown tag/attr" reports
+   * for webjs components that are reachable from `fileName`.
+   * ================================================================ */
+
+  /**
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {readonly import('typescript').Diagnostic[] | undefined} diags
+   */
+  function filterLitTagDiagnostics(info, fileName, diags) {
+    if (!diags || diags.length === 0) return diags;
+    const program = info.languageService.getProgram();
+    if (!program) return diags;
+    const sf = program.getSourceFile(fileName);
+    if (!sf) return diags;
+
+    const registry = buildRegistry(program);
+    if (registry.components.size === 0) return diags;
+    const reachable = collectReachableTags(program, sf, registry);
+    if (reachable.size === 0) return diags;
+
+    return diags.filter((d) => !shouldSuppressDiagnostic(d, sf, reachable));
+  }
+
+  /**
+   * A diagnostic is suppressible only if:
+   *   1. It originates from ts-lit-plugin (source contains "lit"); and
+   *   2. Its span sits on, or inside an opening tag whose name is, a
+   *      reachable webjs tag.
+   *
+   * @param {import('typescript').Diagnostic} d
+   * @param {import('typescript').SourceFile} sf
+   * @param {Set<string>} reachable
+   */
+  function shouldSuppressDiagnostic(d, sf, reachable) {
+    const source = /** @type any */ (d).source;
+    if (typeof source !== 'string' || !/lit/i.test(source)) return false;
+    if (typeof d.start !== 'number' || typeof d.length !== 'number') return false;
+    const text = sf.text;
+    // Case A: the span itself is the tag name.
+    const spanText = text.slice(d.start, d.start + d.length).toLowerCase();
+    if (reachable.has(spanText)) return true;
+    // Case B: the span sits inside an opening tag whose name is reachable
+    // (ts-lit-plugin "unknown attribute" diagnostics target the attribute
+    // identifier, not the tag).
+    const tag = enclosingOpenTag(text, d.start);
+    return !!tag && reachable.has(tag);
+  }
+
+  /**
+   * Walk backwards from `pos` to find the nearest `<tag-name` opener that
+   * has not yet been closed by `>`. Returns the lowercased tag name, or
+   * undefined if the position is not inside an opening tag.
+   *
+   * @param {string} text
+   * @param {number} pos
+   */
+  function enclosingOpenTag(text, pos) {
+    for (let i = pos - 1; i >= 0; i--) {
+      const c = text[i];
+      if (c === '>') return undefined;
+      if (c !== '<') continue;
+      // Found a `<`; read the tag name that follows.
+      let j = i + 1;
+      if (text[j] === '/') return undefined;
+      let name = '';
+      while (j < text.length) {
+        const ch = text[j];
+        if (/[A-Za-z0-9_-]/.test(ch)) { name += ch; j++; }
+        else break;
+      }
+      if (!name || !name.includes('-')) return undefined;
+      return name.toLowerCase();
+    }
+    return undefined;
+  }
+
+  /**
+   * Build the set of webjs tag names reachable from `entry` through its
+   * (transitive) import graph. A tag is reachable if and only if the
+   * file that registers it appears anywhere in entry's import closure
+   * (entry counts as importing itself).
+   *
+   * @param {import('typescript').Program} program
+   * @param {import('typescript').SourceFile} entry
+   * @param {{ components: Map<string, ComponentRef> }} registry
+   * @returns {Set<string>}
+   */
+  function collectReachableTags(program, entry, registry) {
+    const checker = program.getTypeChecker();
+    /** @type {Map<string, string[]>} */
+    const tagsByFile = new Map();
+    for (const [tag, ref] of registry.components) {
+      const arr = tagsByFile.get(ref.fileName) || [];
+      arr.push(tag);
+      tagsByFile.set(ref.fileName, arr);
+    }
+
+    /** @type {Set<string>} */
+    const visited = new Set();
+    /** @type {Set<string>} */
+    const tags = new Set();
+    /** @type {string[]} */
+    const stack = [entry.fileName];
+    while (stack.length) {
+      const fn = stack.pop();
+      if (!fn || visited.has(fn)) continue;
+      visited.add(fn);
+      const arr = tagsByFile.get(fn);
+      if (arr) for (const t of arr) tags.add(t);
+      const sf = program.getSourceFile(fn);
+      if (!sf) continue;
+      for (const stmt of sf.statements) {
+        const spec =
+          ts.isImportDeclaration(stmt) ? stmt.moduleSpecifier
+            : ts.isExportDeclaration(stmt) && stmt.moduleSpecifier ? stmt.moduleSpecifier
+              : undefined;
+        if (!spec || !ts.isStringLiteralLike(spec)) continue;
+        const sym = checker.getSymbolAtLocation(spec);
+        if (!sym || !sym.declarations) continue;
+        for (const d of sym.declarations) {
+          if (ts.isSourceFile(d)) stack.push(d.fileName);
+        }
+      }
+    }
+    return tags;
+  }
+
+  /* ================================================================
+   * Resolver 3: attribute-name completions inside `<webjs-tag …>`
+   * ================================================================ */
+
+  /**
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   * @returns {import('typescript').CompletionEntry[] | undefined}
+   */
+  function webjsAttrCompletions(info, fileName, position) {
+    const program = info.languageService.getProgram();
+    if (!program) return undefined;
+    const source = program.getSourceFile(fileName);
+    if (!source) return undefined;
+
+    // Must be inside an html`` template, in an opening-tag attribute slot.
+    const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
+    if (!templateExpr) return undefined;
+    const { rawText, startPos } = getTemplateText(templateExpr);
+    const offset = position - startPos;
+    if (offset < 0 || offset > rawText.length) return undefined;
+
+    const sanitised = stripHoles(rawText);
+    const tag = enclosingOpenTag(sanitised, offset);
+    if (!tag) return undefined;
+
+    const registry = buildRegistry(program);
+    const ref = registry.components.get(tag);
+    if (!ref || !ref.attributes || ref.attributes.length === 0) return undefined;
+
+    // Restrict to tags reachable from this file. Without the import,
+    // suggesting attributes would imply the element is usable here when
+    // it isn't.
+    const reachable = collectReachableTags(program, source, registry);
+    if (!reachable.has(tag)) return undefined;
+
+    return ref.attributes.map((name) => ({
+      name,
+      kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+      kindModifiers: '',
+      sortText: '0',
+      labelDetails: { description: `<${tag}>` },
+    }));
   }
 
   /* ================================================================
@@ -356,6 +586,7 @@ function init(modules) {
    *   fileName: string,
    *   className: string,
    *   classNameSpan: import('typescript').TextSpan,
+   *   attributes: string[],
    * }} ComponentRef
    *
    * @typedef {{
@@ -422,7 +653,7 @@ function init(modules) {
     /** @type {Map<string, ComponentRef>} */
     const out = new Map();
 
-    /** @type {Map<string, { span: import('typescript').TextSpan }>} */
+    /** @type {Map<string, { span: import('typescript').TextSpan, attrs: string[] }>} */
     const localClasses = new Map();
     function indexClasses(node) {
       if (ts.isClassDeclaration(node) && node.name) {
@@ -431,6 +662,7 @@ function init(modules) {
             start: node.name.getStart(sf),
             length: node.name.getWidth(sf),
           },
+          attrs: extractStaticProperties(node),
         });
       }
       ts.forEachChild(node, indexClasses);
@@ -447,6 +679,7 @@ function init(modules) {
               fileName: sf.fileName,
               className: match.className,
               classNameSpan: local.span,
+              attributes: local.attrs,
             });
           }
         }
@@ -454,6 +687,37 @@ function init(modules) {
       ts.forEachChild(node, visit);
     }
     visit(sf);
+    return out;
+  }
+
+  /**
+   * Read the keys of a class's `static properties = { … }` initializer.
+   * webjs maps each key to a reactive property + matching attribute, so
+   * the keys are exactly the attribute set we want to suggest.
+   *
+   * @param {import('typescript').ClassDeclaration} cls
+   * @returns {string[]}
+   */
+  function extractStaticProperties(cls) {
+    /** @type {string[]} */
+    const out = [];
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member)) continue;
+      const isStatic = (member.modifiers || []).some(
+        (m) => m.kind === ts.SyntaxKind.StaticKeyword,
+      );
+      if (!isStatic) continue;
+      if (!member.name || !ts.isIdentifier(member.name) || member.name.text !== 'properties') continue;
+      const init = member.initializer;
+      if (!init || !ts.isObjectLiteralExpression(init)) continue;
+      for (const prop of init.properties) {
+        if (!prop.name) continue;
+        let key;
+        if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
+        else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
+        if (key) out.push(key);
+      }
+    }
     return out;
   }
 
