@@ -17,8 +17,12 @@ import { Task } from '@webjskit/core/task';
 
 class UserProfile extends WebComponent {
   static properties = { userId: { type: String } };
+  declare userId: string;
 
-  userId = '';
+  constructor() {
+    super();
+    this.userId = '';
+  }
 
   #task = new Task(this, {
     task: async ([userId], { signal }) =&gt; {

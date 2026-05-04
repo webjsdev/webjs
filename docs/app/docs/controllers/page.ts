@@ -65,10 +65,14 @@ export default function Controllers() {
 
 class LazyImage extends WebComponent {
   static properties = { src: { type: String } };
+  declare src: string;
 
   #visibility = new VisibilityController(this, { threshold: 0.1 });
 
-  src = '';
+  constructor() {
+    super();
+    this.src = '';
+  }
 
   render() {
     return html\`
@@ -168,6 +172,7 @@ DashboardWidget.register('dashboard-widget');</pre>
 
 class UserProfile extends WebComponent {
   static properties = { userId: { type: String } };
+  declare userId: string;
 
   #task = new Task(this, {
     task: async ([id], { signal }) =&gt; {
