@@ -9,10 +9,16 @@ import './light-inner.ts';
 export class ShadowParent extends WebComponent {
   static shadow = true;
   static properties = { child: { type: String } };
-  child: string = 'shadow';
   static styles = css`
     :host { display: block; padding: 8px; border: 1px solid #ccc; margin: 4px 0; }
   `;
+  declare child: string;
+
+  constructor() {
+    super();
+    this.child = 'shadow';
+  }
+
   render() {
     return this.child === 'light'
       ? html`<div data-testid="shadow-parent"><light-inner></light-inner></div>`

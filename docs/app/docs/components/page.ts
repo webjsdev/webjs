@@ -24,7 +24,12 @@ class MyCounter extends WebComponent {
     output { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: center; }
   \`;
 
-  count = 0;
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
 
   render() {
     return html\`
@@ -67,13 +72,23 @@ UserCard.register('user-card');</pre>
     config:   { type: Object },
     tags:     { type: Array },
   };
+  // Compile-time types only — never use class-field initializers for
+  // reactive props; they would clobber the framework's accessor under
+  // modern class-field semantics. Set defaults in the constructor.
+  declare name: string;
+  declare age: number;
+  declare active: boolean;
+  declare config: Record&lt;string, unknown&gt;;
+  declare tags: string[];
 
-  // Default values
-  name = 'Anonymous';
-  age = 0;
-  active = false;
-  config = {};
-  tags = [];
+  constructor() {
+    super();
+    this.name = 'Anonymous';
+    this.age = 0;
+    this.active = false;
+    this.config = {};
+    this.tags = [];
+  }
 
   render() {
     return html\`
@@ -226,8 +241,12 @@ static styles = css\`
   static properties = {
     heading: { type: String },
   };
+  declare heading: string;
 
-  heading = '';
+  constructor() {
+    super();
+    this.heading = '';
+  }
 
   render() {
     return html\`
@@ -525,8 +544,12 @@ render() {
 
     <pre>class UserProfile extends WebComponent {
   static properties = { userId: { type: String } };
+  declare userId: string;
 
-  userId = '';
+  constructor() {
+    super();
+    this.userId = '';
+  }
 
   async render() {
     // This await is resolved during SSR — the full HTML is sent to the client
