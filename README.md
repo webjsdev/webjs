@@ -173,7 +173,7 @@ Pre-1.0. 632 unit tests (96.6% line coverage, 87.5% branch, 93.6% function),
 - **Core:** SSR with DSD (opt-in) + light-DOM hydration (default), fine-grained client renderer, `repeat()`, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net
 - **Data:** server actions with webjs's built-in serializer (Date/Map/Set/BigInt/TypedArray/Blob/File/FormData/cycles survive the wire), `expose()` for REST, `json()` + `richFetch()` for content-negotiated APIs, `cache()` for server-side query caching with TTL + `invalidate()`
 - **Server:** file router, per-segment middleware, `rateLimit()`, WebSockets + `broadcast()`, CSRF, compression, HTTP/2, 103 Early Hints, health probes, graceful shutdown, `Session` class with `SessionStorage` (cookie or store-backed), NextAuth-style `createAuth()` (Credentials, Google, GitHub)
-- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, `@webjskit/ts-plugin` for tsserver — tag-name and CSS-class-name go-to-definition inside `html\`\`` templates.
+- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, `@webjskit/ts-plugin` for tsserver — tag-name + CSS-class go-to-definition, attribute auto-complete from `static properties`, and silenced "Unknown tag" diagnostics for webjs elements (gated by the file's import graph).
 
 ## License
 

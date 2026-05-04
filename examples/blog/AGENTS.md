@@ -19,8 +19,10 @@ is what runs. Quick map:
   `cache.js`, `rate-limit.js`, `csrf.js`. `ssr.js` shows exactly how
   the metadata object becomes `<head>` tags.
 - `node_modules/@webjskit/cli/` — CLI commands + scaffold templates.
-- `node_modules/@webjskit/ts-plugin/` — tsserver plugin for go-to-
-  definition on tag names inside `` html`` `` templates.
+- `node_modules/@webjskit/ts-plugin/` — tsserver plugin: go-to-definition
+  on tag names + `<webjs-tag>` "Unknown tag/attribute" diagnostic suppression
+  + attribute auto-complete sourced from `static properties` (gated on the
+  current file's import graph). Inside `` html`` `` templates.
 
 When in doubt, `grep -rn '<symbol>' node_modules/@webjskit/` — the
 framework is plain JS with JSDoc types, small, and readable end-to-end.

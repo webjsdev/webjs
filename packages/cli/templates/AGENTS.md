@@ -28,7 +28,8 @@ node_modules/@webjskit/
     src/actions.js            ← .server.ts scanner, RPC, expose()
     src/auth.js, session.js, cache.js, rate-limit.js, csrf.js
   cli/             webjs CLI (dev / start / build / test / check / create / db)
-  ts-plugin/       tsserver go-to-definition for custom-element tag names
+  ts-plugin/       tsserver plugin: go-to-definition + diagnostic suppression
+                   + attribute auto-complete for Class.register('tag') elements
 ```
 
 Reaching straight for the source is the fastest way to resolve "why

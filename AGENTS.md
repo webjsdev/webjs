@@ -268,7 +268,8 @@ node_modules/@webjskit/
     bin/webjs.js
     lib/create.js                 ← scaffold logic
     templates/                    ← file templates copied into new apps
-  ts-plugin/                      ← tsserver plugin: go-to-definition for tag names
+  ts-plugin/                      ← tsserver plugin: go-to-definition + diagnostic
+                                    suppression + attribute auto-complete
 ```
 
 **Concrete use cases:**
@@ -522,11 +523,14 @@ hooks) fully typed — only the reactive properties need the
 
 **Editor intelligence** — autocomplete on `this.<prop>`, go-to-definition
 for `<student-card>` tags inside `html\`\`` templates, type-checking
-on attribute values, and `document.querySelector('student-card')`
-returning `StudentCard | null` all work across VS Code and Neovim. See
-the [Editor Setup](docs/app/docs/editor-setup/page.ts) doc for the
-one-time `tsconfig` + `ts-lit-plugin` + `HTMLElementTagNameMap`
-augmentation setup.
+on attribute values, attribute completions sourced from `static properties`,
+no "Unknown tag" red-squiggle on registered webjs elements, and
+`document.querySelector('student-card')` returning `StudentCard | null`
+all work across VS Code and Neovim. See the
+[Editor Setup](docs/app/docs/editor-setup/page.ts) doc for the one-time
+`tsconfig` + `ts-lit-plugin` + `@webjskit/ts-plugin` setup;
+`HTMLElementTagNameMap` augmentation is now optional, only needed for
+typing DOM-query call sites.
 
 #### Lifecycle hooks
 
@@ -1297,13 +1301,27 @@ yields two microtasks so setState-triggered re-renders settle.
 The scaffold adds `@webjskit/ts-plugin` + `ts-lit-plugin` to `tsconfig.json`'s
 `compilerOptions.plugins`. Together they give VS Code / Neovim:
 
-- Autocomplete + type-check + diagnostics for attributes inside `` html`` ``
-  tagged templates (`ts-lit-plugin`).
+- Type-check + diagnostics for attribute *values* inside `` html`` `` tagged
+  templates (`ts-lit-plugin`).
 - Go-to-definition from a custom-element tag name (`<my-counter>`) straight
-  to the class declaration that set `static tag = 'my-counter'`
-  (`@webjskit/ts-plugin`). Plain `customElements.define('x', X)` works too.
+  to the class declaration registered via `MyCounter.register('my-counter')`
+  or `customElements.define('my-counter', MyCounter)` (`@webjskit/ts-plugin`).
+  Same plugin also resolves CSS class names inside `html\`class="…"\`` to
+  their `` css`` `` rule.
+- **Diagnostic suppression** — drops `ts-lit-plugin`'s "Unknown tag" /
+  "Unknown attribute" reports for any tag a webjs class registers, so
+  the editor stops red-squiggling every webjs element.
+- **Attribute auto-complete** — inside `<my-counter |>`, suggests the
+  keys of the component's `static properties = { … }` map.
 
-Plugin order matters in tsconfig — list `ts-lit-plugin` first.
+Both behaviours are gated on the file's import graph: a tag is recognised
+only if the file that registers it is reachable from the file you're
+editing (directly or transitively). A tag registered somewhere in the
+program but not imported here is still flagged — runtime would fail
+too, and the warning is the correct prompt to add the import.
+
+Plugin order matters in tsconfig — list `ts-lit-plugin` first; the webjs
+plugin wraps it to filter diagnostics and augment completions.
 
 ### Add a database model
 
