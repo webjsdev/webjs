@@ -115,6 +115,17 @@ export default function LandingPage() {
       }
       .install .comment { color: var(--fg-subtle); }
       .install .cmd { color: var(--fg); }
+      /* On narrow viewports the box would stretch full-width and its
+         left/right border + rounded corners would visibly clip the
+         screen edges. Drop the side borders + radius so it reads as a
+         clean full-bleed band; top/bottom borders still separate it. */
+      @media (max-width: 560px) {
+        .install {
+          border-left: none;
+          border-right: none;
+          border-radius: 0;
+        }
+      }
 
       .features {
         max-width: 900px;
