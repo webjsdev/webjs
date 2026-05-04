@@ -72,6 +72,11 @@ export const RULES = [
     description:
       'Static tag = \'...\' in component files must contain a hyphen (HTML custom element spec).',
   },
+  {
+    name: 'reactive-props-use-declare',
+    description:
+      'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -204,6 +209,205 @@ function countExportedFunctions(content) {
 }
 
 /**
+ * Extract the body of every `class … extends WebComponent { … }` block.
+ * Brace-counts to handle nested template literals, methods, and arrow
+ * functions. String state is tracked so braces inside strings/templates
+ * don't shift depth.
+ *
+ * @param {string} content
+ * @returns {string[]}
+ */
+function extractWebComponentClassBodies(content) {
+  const bodies = [];
+  const re = /class\s+\w+\s+extends\s+WebComponent\s*\{/g;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const bodyStart = m.index + m[0].length;
+    const end = matchClosingBrace(content, bodyStart);
+    if (end !== -1) bodies.push(content.slice(bodyStart, end));
+  }
+  return bodies;
+}
+
+/**
+ * Walk forward from `start` (just after an opening `{`) and return the
+ * index of the matching `}`. Tracks string/template-literal state so
+ * `}` inside `'…'`, `"…"`, or backtick templates don't decrement depth.
+ * Returns -1 if no balanced brace is found.
+ *
+ * @param {string} s
+ * @param {number} start
+ */
+function matchClosingBrace(s, start) {
+  let depth = 1;
+  let i = start;
+  let str = ''; // '', "'", '"', or '`'
+  while (i < s.length) {
+    const c = s[i];
+    if (str) {
+      if (c === '\\') { i += 2; continue; }
+      if (c === str) str = '';
+      else if (str === '`' && c === '$' && s[i + 1] === '{') {
+        // template hole: count its closing `}` toward our brace depth.
+        depth++;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { str = c; i++; continue; }
+    if (c === '/' && s[i + 1] === '/') { // line comment
+      while (i < s.length && s[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') { // block comment
+      i += 2;
+      while (i < s.length && !(s[i] === '*' && s[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return i; }
+    i++;
+  }
+  return -1;
+}
+
+/**
+ * Find every `<key>:` entry inside the first `static properties = { … }`
+ * literal in `classBody`. Returns the bare property names — the keys
+ * we'll then look up as class fields.
+ *
+ * @param {string} classBody
+ * @returns {Set<string>}
+ */
+function extractStaticPropertyNames(classBody) {
+  /** @type {Set<string>} */
+  const names = new Set();
+  const m = /static\s+properties\s*=\s*\{/.exec(classBody);
+  if (!m) return names;
+  const objStart = m.index + m[0].length;
+  const objEnd = matchClosingBrace(classBody, objStart);
+  if (objEnd === -1) return names;
+  const obj = classBody.slice(objStart, objEnd);
+  // Match keys at the top level of the object literal. A nested `{ … }`
+  // (the per-property declaration) is skipped via brace counting.
+  let i = 0;
+  while (i < obj.length) {
+    // Skip whitespace and commas.
+    while (i < obj.length && /[\s,]/.test(obj[i])) i++;
+    if (i >= obj.length) break;
+    // Read the identifier or string-literal key.
+    let key = '';
+    if (obj[i] === '"' || obj[i] === "'") {
+      const quote = obj[i++];
+      while (i < obj.length && obj[i] !== quote) { key += obj[i++]; }
+      i++; // closing quote
+    } else {
+      while (i < obj.length && /[A-Za-z0-9_$]/.test(obj[i])) key += obj[i++];
+    }
+    // Skip whitespace, then expect `:`.
+    while (i < obj.length && /\s/.test(obj[i])) i++;
+    if (obj[i] !== ':') break;
+    i++;
+    // Skip whitespace, then skip the value (either a `{ … }` literal or
+    // a single token like `String`).
+    while (i < obj.length && /\s/.test(obj[i])) i++;
+    if (obj[i] === '{') {
+      const valEnd = matchClosingBrace(obj, i + 1);
+      if (valEnd === -1) break;
+      i = valEnd + 1;
+    } else {
+      while (i < obj.length && obj[i] !== ',' && obj[i] !== '}') i++;
+    }
+    if (key) names.add(key);
+  }
+  return names;
+}
+
+/**
+ * Scan a class body for class-field initializers naming any of `props`.
+ * "Class-field" means: at the top of the class body (brace depth 0
+ * relative to the body), at the start of a line, NOT prefixed with
+ * `declare`, `static`, or `this.`.
+ *
+ * Returns the offending property names. The caller maps these to
+ * Violation objects.
+ *
+ * @param {string} classBody
+ * @param {Set<string>} props
+ * @returns {string[]}
+ */
+function findFieldInitializers(classBody, props) {
+  /** @type {string[]} */
+  const out = [];
+  // Walk the body, tracking brace depth. At depth 0, look for
+  // class-field-shaped lines.
+  let depth = 0;
+  let i = 0;
+  let lineStart = 0;
+  let str = '';
+  while (i < classBody.length) {
+    const c = classBody[i];
+    if (str) {
+      if (c === '\\') { i += 2; continue; }
+      if (c === str) str = '';
+      else if (str === '`' && c === '$' && classBody[i + 1] === '{') {
+        depth++;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (c === '\n') {
+      lineStart = i + 1;
+      i++;
+      continue;
+    }
+    if (c === '/' && classBody[i + 1] === '/') {
+      while (i < classBody.length && classBody[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && classBody[i + 1] === '*') {
+      i += 2;
+      while (i < classBody.length && !(classBody[i] === '*' && classBody[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { str = c; i++; continue; }
+    if (c === '{') { depth++; i++; continue; }
+    if (c === '}') { depth--; i++; continue; }
+    // At class-body top level, examine candidate lines starting at lineStart.
+    if (depth === 0 && i === lineStart || (depth === 0 && /\s/.test(c) && i === lineStart)) {
+      // Take the rest of the line up to a newline.
+      let j = lineStart;
+      while (j < classBody.length && classBody[j] !== '\n') j++;
+      const line = classBody.slice(lineStart, j);
+      // Match: optional whitespace, optional `public/private/protected/readonly`,
+      // an identifier, optional `: <type>`, then `=`.
+      const fieldRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+)?\s*=\s*[^=>]/;
+      const m = fieldRe.exec(line);
+      if (m) {
+        const name = m[2];
+        // `declare`, `static`, and `this.` patterns shouldn't reach here
+        // (declare/static start with their keyword, this.x has the dot in
+        // the regex group), but guard against matching keywords as names:
+        if (name !== 'declare' && name !== 'static' && props.has(name)) {
+          out.push(name);
+        }
+      }
+      // Advance past this line so we don't re-match.
+      i = j;
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
  * Scan a webjs app directory and report convention violations.
  *
  * @param {string} appDir - absolute path to the app root (the directory
@@ -323,6 +527,25 @@ export async function checkConventions(appDir, opts) {
         message: "Component extends WebComponent but is never registered. Call ClassName.register('tag-name') at the bottom of the file.",
         fix: "Add `ClassName.register('tag-name')` after the class definition",
       });
+    }
+  }
+
+  // --- Rule: reactive-props-use-declare ---
+  if (isRuleEnabled('reactive-props-use-declare', overrides)) {
+    for (const { rel, content } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
+      for (const body of extractWebComponentClassBodies(content)) {
+        const propNames = extractStaticPropertyNames(body);
+        if (propNames.size === 0) continue;
+        for (const bad of findFieldInitializers(body, propNames)) {
+          violations.push({
+            rule: 'reactive-props-use-declare',
+            file: rel,
+            message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
+            fix: `Replace with \`declare ${bad}: <Type>;\` and set the default inside \`constructor()\` after \`super()\`.`,
+          });
+        }
+      }
     }
   }
 

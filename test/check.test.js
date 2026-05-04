@@ -112,6 +112,136 @@ customElements.define('native-comp', NativeComp);
   }
 });
 
+test('reactive-props-use-declare: flags class-field initializer on reactive prop', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      `import { WebComponent } from '@webjskit/core';
+class BadProp extends WebComponent {
+  static properties = { count: { type: Number } };
+  count: number = 0;
+}
+BadProp.register('bad-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.ok(v, 'expected reactive-props-use-declare violation');
+    assert.ok(v.message.includes('count'));
+    assert.ok(v.fix.includes('declare'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: also flags untyped initializer', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      `import { WebComponent } from '@webjskit/core';
+class BadProp extends WebComponent {
+  static properties = { name: { type: String } };
+  name = 'Anonymous';
+}
+BadProp.register('bad-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.ok(v, 'expected violation for `name = "Anonymous"`');
+    assert.ok(v.message.includes('name'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: passes when declare + constructor are used', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'good.ts'),
+      `import { WebComponent } from '@webjskit/core';
+class GoodProp extends WebComponent {
+  static properties = { count: { type: Number } };
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
+}
+GoodProp.register('good-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined, 'declare + constructor should be clean');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: ignores non-reactive plain fields', async () => {
+  // Fields whose names are NOT in `static properties` are free-form —
+  // no reactive accessor exists, so a class-field initializer is fine.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'mixed.ts'),
+      `import { WebComponent } from '@webjskit/core';
+class Mixed extends WebComponent {
+  static properties = { count: { type: Number } };
+  declare count: number;
+  _conn: WebSocket | null = null;     // not reactive — fine
+  _retries = 0;                       // not reactive — fine
+
+  constructor() { super(); this.count = 0; }
+}
+Mixed.register('mixed-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined, 'non-reactive class fields should not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: does not trip on `this.x = …` inside methods', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'methods.ts'),
+      `import { WebComponent } from '@webjskit/core';
+class Methods extends WebComponent {
+  static properties = { count: { type: Number } };
+  declare count: number;
+
+  constructor() { super(); this.count = 0; }
+
+  increment() {
+    this.count = this.count + 1;
+  }
+}
+Methods.register('methods-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined, 'this.x = … inside methods is correct');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no violations for empty app', async () => {
   const appDir = await makeTempApp();
   try {
