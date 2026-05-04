@@ -11,7 +11,7 @@ export default function EditorSetup() {
     <ol>
       <li><strong>Type-safe component internals</strong> — <code>this.student: Student</code> inside the class. Works out of the box once <code>tsconfig.json</code> is set up.</li>
       <li><strong>Template-literal intelligence</strong> — type-checking and go-to-definition for <code>&lt;student-card student=\${...}&gt;</code> inside <code>html\`…\`</code> tags. Requires <code>ts-lit-plugin</code>.</li>
-      <li><strong>webjs-aware intelligence</strong> — silences <code>ts-lit-plugin</code>'s "unknown tag/attribute" diagnostics for components registered via <code>Class.register('tag')</code>, and offers attribute auto-complete sourced from <code>static properties</code>. Requires <code>@webjskit/ts-plugin</code> ≥ 0.2.0.</li>
+      <li><strong>webjs-aware intelligence</strong> — silences <code>ts-lit-plugin</code>'s "unknown tag/attribute" diagnostics for components registered via <code>Class.register('tag')</code>, offers attribute auto-complete sourced from <code>static properties</code>, and type-checks attribute-value interpolations (<code>&lt;auth-forms mode=\${expr}&gt;</code>) against each prop's <code>declare</code> annotation. Requires <code>@webjskit/ts-plugin</code> ≥ 0.3.0.</li>
     </ol>
     <p>There's also an optional standard-TypeScript convention for typing <code>document.querySelector('student-card')</code> — briefly covered at the end.</p>
 
@@ -127,6 +127,7 @@ return {
     <ul>
       <li><strong>Diagnostic suppression</strong> — drops lit-plugin's "Unknown tag" / "Unknown attribute" reports for any element registered via <code>Class.register('tag-name')</code> or <code>customElements.define('tag-name', Class)</code>.</li>
       <li><strong>Attribute auto-complete</strong> — inside <code>&lt;your-tag |&gt;</code>, completes the keys of the component's <code>static properties = { … }</code> map.</li>
+      <li><strong>Attribute-value type-check</strong> — <code>&lt;your-tag mode=\${expr}&gt;</code> assignability-checks <code>typeof expr</code> against the prop's <code>declare</code> type. Works for primitives, type aliases, string-literal unions (<code>'login' | 'signup'</code>), interfaces, and anything else the TypeScript checker understands. Static (non-interpolated) attribute text like <code>mode="login"</code> is deliberately not checked — at runtime it's just template text.</li>
       <li><strong>Go-to-definition</strong> — <code>gd</code> / F12 / Ctrl+Click on a webjs tag jumps to its class declaration. Same for class names inside <code>html\`class="…"\`</code> attributes (jumps to the matching <code>css\`…\`</code> rule).</li>
     </ul>
 
@@ -170,7 +171,7 @@ return {
     <ol>
       <li><strong>Layer 1</strong> — hover <code>this.student</code> inside <code>render()</code>: expect <code>(property) student: Student</code>. Type <code>this.</code> inside the class: expect autocomplete for <code>student</code>, <code>setState</code>, <code>requestUpdate</code>, <code>state</code>, <code>render</code>, etc.</li>
       <li><strong>Layer 2</strong> — type <code>&lt;student-card student=\${42}&gt;</code> in an <code>html\`…\`</code> template: ts-lit-plugin flags it because <code>42</code> isn't <code>Student</code>.</li>
-      <li><strong>Layer 3</strong> — write <code>&lt;student-card&gt;</code> with the side-effect import in place: no "Unknown tag" squiggle. Position cursor inside <code>&lt;student-card |&gt;</code>: completions list includes <code>student</code> (and any other key of <code>static properties</code>). Then comment out the <code>import './student-card.ts'</code> at the top of the file: the squiggle returns and the completions disappear — the plugin requires reachability so a missing import always surfaces.</li>
+      <li><strong>Layer 3</strong> — write <code>&lt;student-card&gt;</code> with the side-effect import in place: no "Unknown tag" squiggle. Position cursor inside <code>&lt;student-card |&gt;</code>: completions list includes <code>student</code> (and any other key of <code>static properties</code>). Type <code>&lt;student-card student=\${42}&gt;</code>: a webjs diagnostic flags <code>'number' is not assignable to attribute 'student' of type 'Student'</code>. Then comment out the <code>import './student-card.ts'</code> at the top of the file: the squiggle returns, completions disappear, and the value-check goes silent (the missing import is now the surfaced problem). The plugin requires reachability so a missing import always surfaces.</li>
     </ol>
     <p>If any layer misbehaves, the most common cause is tsserver using a different TypeScript install than your workspace's. In Neovim run <code>:LspInfo</code>; in VS Code click the TypeScript version in the status bar. Both should point inside your project's <code>node_modules/</code>.</p>
 
