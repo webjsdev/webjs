@@ -25,7 +25,7 @@ export default function Conventions() {
     <pre># Component patterns  &lt;!-- OVERRIDE --&gt;
 
 - Opt in to shadow DOM (static shadow = true) for every component
-- Author styles via static styles = css`...`
+- Author styles via static styles = css\`...\`
 - Always call register()</pre>
 
     <p>AI agents read <code>CONVENTIONS.md</code> before every task and follow the overrides. You can also disable specific convention rules in <code>package.json</code>:</p>
