@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "webjs — AI-first, web-components-first framework.",
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*",
