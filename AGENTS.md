@@ -1049,9 +1049,9 @@ components. Conventions enforced across the example blog:
 
 ### Return shape
 
-Actions that can fail with a user-facing error return the
-pilot-platform `ActionResult<T>` envelope so route adapters translate
-them mechanically:
+Actions that can fail with a user-facing error return an
+`ActionResult<T>` envelope so route adapters translate them
+mechanically:
 
 ```js
 /**
