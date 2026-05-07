@@ -10,8 +10,7 @@ export type PublicUser = {
 
 /**
  * Return envelope for any action that can fail with a user-facing message.
- * Matches pilot-platform's convention so routes can translate to HTTP
- * status codes mechanically.
+ * Routes translate this to HTTP status codes mechanically.
  */
 export type ActionResult<T> =
   | { success: true; data: T }
