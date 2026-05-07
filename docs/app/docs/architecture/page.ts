@@ -56,7 +56,7 @@ export default function Architecture() {
     </ul>
 
     <h2>Modules Architecture (Recommended)</h2>
-    <p>For non-trivial apps, webjs recommends a feature-scoped modules pattern (inspired by the pilot-platform convention):</p>
+    <p>For non-trivial apps, webjs recommends a feature-scoped modules pattern:</p>
     <pre>my-app/
 ├── app/                    # thin route adapters
 │   ├── layout.ts
