@@ -137,7 +137,7 @@ Card.register('my-card');
     <pre>// app/_utils/ui.ts
 import { html } from '@webjskit/core';
 
-/** `● label` kicker — small caps, accent colour, above headings. */
+/** \`label\` kicker — small caps, accent colour, above headings. */
 export function rubric(label: string) {
   return html\`
     &lt;span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent mb-4"&gt;● \${label}&lt;/span&gt;
