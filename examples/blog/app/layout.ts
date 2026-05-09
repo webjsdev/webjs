@@ -63,6 +63,14 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/public/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/public/favicon.png">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-3RC87HXJ3P');
+    </script>
     <script>
       (function(){
         try {
