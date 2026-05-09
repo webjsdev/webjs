@@ -6,17 +6,39 @@ type Result = { path: string; title: string; score: number; snippet: string };
  * `<doc-search>` — search input + dropdown results. Light DOM + Tailwind.
  */
 export class DocSearch extends WebComponent {
-  declare state: { query: string; results: Result[]; loading: boolean; open: boolean };
+  declare state: { query: string; results: Result[]; loading: boolean; open: boolean; rect: DOMRect | null };
   _timer: any = null;
 
   constructor() {
     super();
-    this.state = { query: '', results: [], loading: false, open: false };
+    this.state = { query: '', results: [], loading: false, open: false, rect: null };
   }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('scroll', this.updateRect, true);
+    window.addEventListener('resize', this.updateRect);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('scroll', this.updateRect, true);
+    window.removeEventListener('resize', this.updateRect);
+  }
+
+  updateRect = () => {
+    if (this.state.open) {
+      const input = this.querySelector('input');
+      if (input) {
+        this.setState({ rect: input.getBoundingClientRect() });
+      }
+    }
+  };
 
   onInput(e: InputEvent) {
     const val = (e.target as HTMLInputElement).value;
     this.setState({ query: val, open: true });
+    this.updateRect();
     clearTimeout(this._timer);
     if (val.trim().length < 2) {
       this.setState({ results: [], loading: false });
@@ -39,11 +61,15 @@ export class DocSearch extends WebComponent {
   }
 
   onBlur() {
-    setTimeout(() => this.setState({ open: false }), 150);
+    // Timeout to allow clicks on results to register
+    setTimeout(() => this.setState({ open: false }), 200);
   }
 
   onFocus() {
-    if (this.state.query.length >= 2) this.setState({ open: true });
+    if (this.state.query.length >= 2) {
+      this.setState({ open: true });
+      this.updateRect();
+    }
   }
 
   navigate(path: string) {
@@ -56,7 +82,9 @@ export class DocSearch extends WebComponent {
   }
 
   render() {
-    const { query, results, loading, open } = this.state;
+    const { query, results, loading, open, rect } = this.state;
+    const style = rect ? `position: fixed; top: ${rect.bottom + 4}px; left: ${rect.left}px; width: ${rect.width}px;` : '';
+
     return html`
       <div class="block relative mb-4">
         <svg class="absolute left-[10px] top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-fg-subtle pointer-events-none"
@@ -73,7 +101,7 @@ export class DocSearch extends WebComponent {
           @blur=${() => this.onBlur()}
         />
         ${open && query.length >= 2 ? html`
-          <div class="absolute top-[calc(100%+4px)] left-0 right-0 bg-bg-elev border border-border rounded-lg shadow-lg z-50 max-h-[360px] overflow-y-auto">
+          <div class="bg-bg-elev border border-border rounded-lg shadow-lg z-[100] max-h-[360px] overflow-y-auto" style=${style}>
             ${loading ? html`<div class="p-3 text-center text-[13px] text-fg-subtle">Searching…</div>` :
               results.length === 0 ? html`<div class="p-3 text-center text-[13px] text-fg-subtle">No results for "${query}"</div>` :
               results.map(r => html`
