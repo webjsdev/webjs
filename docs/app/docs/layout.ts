@@ -197,7 +197,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
 
     <div class="menu-backdrop" onclick="document.body.removeAttribute('data-menu-open')"></div>
 
-    <div class="grid grid-cols-[260px_1fr] min-h-screen max-[860px]:grid-cols-1">
+    <div class="mx-auto max-w-[1200px] grid grid-cols-[260px_1fr] min-h-screen max-[860px]:grid-cols-1">
       <aside
         id="docs-sidebar"
         class="docs-sidebar sticky top-0 h-screen overflow-y-auto py-8 px-6 border-r border-border bg-bg-subtle text-sm"
