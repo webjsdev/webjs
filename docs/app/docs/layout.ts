@@ -92,9 +92,9 @@ export default function DocsLayout({ children }: { children: unknown }) {
         border-top: 1px solid var(--border);
       }
       .prose-docs h3 { font-size: 1.1rem; font-weight: 700; margin: 24px 0 8px; }
-      .prose-docs p  { margin: 0 0 16px; line-height: 1.7; }
+      .prose-docs p  { margin: 0 0 16px; line-height: 1.7; overflow-wrap: anywhere; }
       .prose-docs ul, .prose-docs ol { padding-left: 24px; margin: 0 0 16px; }
-      .prose-docs li { margin: 8px 0; line-height: 1.6; }
+      .prose-docs li { margin: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
       .prose-docs a {
         color: var(--accent);
         text-decoration: underline;
@@ -126,6 +126,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
         border-radius: 4px;
         background: var(--bg-subtle);
         border: 1px solid var(--border);
+        overflow-wrap: anywhere;
       }
       .prose-docs pre code { padding: 0; border: 0; background: transparent; font-size: inherit; }
       .prose-docs strong { font-weight: 700; color: var(--fg); }
@@ -220,7 +221,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
           `)}
         </nav>
       </aside>
-      <main class="max-w-[800px] px-6 pt-12 pb-16 max-[860px]:pt-6">
+      <main class="min-w-0 max-w-[800px] px-6 pt-12 pb-16 max-[860px]:pt-6">
         <div class="prose-docs">${children}</div>
       </main>
     </div>
