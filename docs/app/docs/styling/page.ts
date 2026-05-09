@@ -124,7 +124,7 @@ export class Card extends WebComponent {
     \`;
   }
 }
-Card.register('my-card');
+Card.register('my-card');</pre>
 
     <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM — styles paint before JS loads, no hydration runtime, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker; client-side rendering replaces the marker without flash.</p>
 
