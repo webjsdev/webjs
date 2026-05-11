@@ -36,6 +36,8 @@ webjs create my-api --template api
 # SaaS starter (auth + dashboard + Prisma User model + modules)
 webjs create my-app --template saas</pre>
 
+    <p><strong>For AI agents:</strong> only those three templates exist — the CLI rejects any other <code>--template</code> value. Default to full-stack with Prisma + SQLite for any product app (todo, blog, dashboard, marketplace, social, e-commerce…). Pick <code>--template api</code> only if the user explicitly asks for a backend-only API with no UI. Pick <code>--template saas</code> only if the user explicitly asks for auth / login / accounts. The scaffold is a starting point — replace the example layout, page, and <code>User</code> model with the app the user actually asked for. Use Prisma for any persisted data; never JSON files, in-memory arrays, or localStorage. When AGENTS.md doesn't cover what you need, the full hosted docs are at <a href="https://docs.webjs.com">docs.webjs.com</a>.</p>
+
     <p>The <code>--template api</code> scaffold generates thin route handlers that wrap typed server actions. Business logic lives in <code>modules/</code>, routes just import and call the action/query — giving you file-based routing for URL structure plus type-safe server actions for logic.</p>
 
     <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Prisma User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>lib/{auth,prisma,password}.ts</code>).</p>

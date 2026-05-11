@@ -1261,18 +1261,68 @@ Then use it as `<hello-world></hello-world>` in any page or component.
 
 ### Scaffold commands
 
-**App templates:**
+**Exactly three scaffolds exist. Do not invent template names. The CLI
+will reject any `--template` value other than these three:**
 
 ```sh
-webjs create <name>                  # full-stack (default): layout, page, components, modules
-webjs create <name> --template api   # backend-only API: route handlers, modules, no pages/components/SSR
-webjs create <name> --template saas  # auth + dashboard + Prisma User model + modules
+webjs create <name>                  # full-stack (default): layout, page, components, modules, Prisma+SQLite
+webjs create <name> --template api   # backend-only API: route handlers, modules, Prisma+SQLite, no pages/components/SSR
+webjs create <name> --template saas  # auth + login/signup + protected dashboard + Prisma User model
 ```
 
 The `--template api` scaffold produces thin route handlers that wrap typed
 server actions. Business logic lives in `modules/`, routes just import and
 call the action/query. This gives you file-based routing for URL structure
 plus type-safe server actions for logic.
+
+### How AI agents must scaffold
+
+When a user asks any AI agent ("create a todo app with webjs", "build a
+chat app", "make an API for X") the agent MUST:
+
+1. **Always scaffold via `webjs create`.** Never hand-roll the directory
+   structure. The scaffold already wires up Prisma + SQLite, tests,
+   convention checks, agent config files, and the route conventions
+   `webjs check` enforces. Skipping the scaffold means losing all of that.
+
+2. **Pick the correct template from the user's request:**
+
+   | The user asks for… | Use |
+   |---|---|
+   | A todo app, blog, note-taker, recipe app, dashboard, marketplace, social feed, e-commerce store, any product with a UI | **default** (`webjs create <name>`) |
+   | An HTTP/JSON API with no UI (microservice, webhook receiver, integration backend) | **`--template api`** |
+   | Anything involving accounts, login, signup, "users can sign up", protected pages, SaaS, subscription product | **`--template saas`** |
+
+   Default to full-stack when ambiguous. Only choose `api` if the user is
+   explicit that they want a backend with no pages. Only choose `saas` if
+   the user is explicit about auth / accounts / sign-up.
+
+3. **Default to a real database — Prisma + SQLite. NEVER use JSON files,
+   in-memory arrays, or localStorage as a substitute for persistence.**
+   Every scaffold ships with `prisma/schema.prisma` (SQLite), `lib/prisma.ts`
+   singleton, `predev`/`prestart` hooks that run `prisma generate` /
+   `prisma migrate deploy`, and `npm run db:*` scripts. For any data the
+   user asks the app to store (todos, posts, users, messages, products),
+   define a Prisma model and persist there. The only exceptions are
+   read-only seed data shipped with the app (e.g. a list of country codes)
+   — and even then, prefer an enum or `prisma db seed`. The convention
+   check `no-json-data-files` flags JSON files used as a database.
+
+4. **Treat the scaffold as REFERENCE, not the final product.** The example
+   `app/page.ts` ("Hello from …"), example `User` model, example
+   `theme-toggle` component, example routes are starting points. Replace
+   them with the app the user actually asked for. Delete what doesn't fit.
+   Do not ship "Hello from my-todo-app" as the final UI.
+
+5. **Update `prisma/schema.prisma` to the app's real models** as the first
+   step after scaffolding. Run `webjs db migrate <name>` to create the
+   migration. Then build pages, actions, queries against those models.
+
+6. **Need more detail than this file covers?** The full framework docs
+   live at **https://docs.webjs.com** — every API, every directive, every
+   recipe (auth, sessions, cache, WebSockets, rate limiting, metadata,
+   testing, deployment). When in doubt, look it up there before guessing
+   or hand-rolling.
 
 ### Full CLI reference
 
@@ -1953,6 +2003,13 @@ Generates an opinionated project with:
 - `CONVENTIONS.md` — editable project conventions (AI agents read this)
 - `AGENTS.md` — full framework API reference
 - `CLAUDE.md` — quick reminders for Claude
+
+**AI agents — picking the right scaffold and replacing the example app:**
+See "How AI agents must scaffold" in the *Scaffold commands* section above.
+Only three templates exist (`full-stack` / `api` / `saas`). Default to
+`full-stack` with Prisma + SQLite — never hand-roll a JSON-file
+"database". The example layout / page / components / `User` model are
+reference; replace them with the app the user asked for.
 
 ### CONVENTIONS.md — overridable project conventions
 

@@ -77,6 +77,11 @@ export const RULES = [
     description:
       'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
   },
+  {
+    name: 'no-json-data-files',
+    description:
+      'Apps must use Prisma + SQLite (already wired up in every scaffold) for persisted data, not JSON files. Flags JSON files that look like a fake database — top-level data/ JSON files (data/todos.json, data/posts.json…), or DB-shaped names (db.json, database.json, store.json, *-db.json) anywhere outside node_modules/, prisma/, .next/, dist/, build/, public/. Read-only seed data and config JSON (package.json, tsconfig.json, etc.) are exempt.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -608,6 +613,92 @@ export async function checkConventions(appDir, opts) {
           fix: `Add test files under test/unit/${mod}.test.js or test/e2e/${mod}.test.js`,
         });
       }
+    }
+  }
+
+  // --- Rule: no-json-data-files ---
+  // Catch AI agents (or hurried humans) using JSON files as a substitute for
+  // the real database. Every scaffold ships Prisma + SQLite ready to go, so
+  // there is never a good reason to invent `data/todos.json`, `db.json`,
+  // etc. The rule is intentionally narrow: we only flag JSON files that
+  // *look like* a database — by location (top-level `data/` directory) or by
+  // name (db/database/store/*-db). Config and read-only seed JSON elsewhere
+  // is left alone.
+  if (isRuleEnabled('no-json-data-files', overrides)) {
+    /** @type {Array<{rel: string, why: string}>} */
+    const suspects = [];
+    /**
+     * @param {string} dir absolute
+     * @param {string} relBase relative to appDir
+     */
+    async function scanDir(dir, relBase) {
+      /** @type {import('node:fs').Dirent[]} */
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        const name = e.name;
+        if (name.startsWith('.')) continue;
+        // Skip directories we know are not the user's data dir.
+        if (e.isDirectory()) {
+          if (
+            name === 'node_modules' ||
+            name === 'prisma' ||
+            name === 'dist' ||
+            name === 'build' ||
+            name === '.next' ||
+            name === 'coverage' ||
+            name === 'public'
+          ) continue;
+          await scanDir(join(dir, name), relBase ? `${relBase}/${name}` : name);
+          continue;
+        }
+        if (!e.isFile()) continue;
+        if (!name.endsWith('.json')) continue;
+        const rel = relBase ? `${relBase}/${name}` : name;
+
+        // Skip well-known config / tooling JSON.
+        const configNames = new Set([
+          'package.json', 'package-lock.json', 'tsconfig.json',
+          'jsconfig.json', 'manifest.json', 'site.webmanifest',
+          '.eslintrc.json', '.prettierrc.json', 'compose.json',
+          'turbo.json', 'lerna.json', 'nx.json', 'biome.json',
+          'renovate.json', 'vercel.json', 'now.json', 'fly.json',
+        ]);
+        if (configNames.has(name)) continue;
+
+        // Trigger 1: any JSON under a top-level `data/` directory.
+        if (rel.startsWith('data/')) {
+          suspects.push({ rel, why: `JSON file in top-level data/ directory (likely a fake database)` });
+          continue;
+        }
+
+        // Trigger 2: file name looks like a database.
+        const lower = name.toLowerCase();
+        const dbShapedName =
+          lower === 'db.json' ||
+          lower === 'database.json' ||
+          lower === 'store.json' ||
+          lower === 'storage.json' ||
+          /-db\.json$/.test(lower) ||
+          /\.db\.json$/.test(lower);
+        if (dbShapedName) {
+          suspects.push({ rel, why: `file name "${name}" suggests it is being used as a database` });
+        }
+      }
+    }
+    await scanDir(appDir, '');
+
+    for (const s of suspects) {
+      violations.push({
+        rule: 'no-json-data-files',
+        file: s.rel,
+        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up — see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
+        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.ts'\`. Delete ${s.rel} once the data has moved.`,
+      });
     }
   }
 
