@@ -267,6 +267,27 @@ export async function POST(req: Request) {
   return Response.json(await createUser(body));
 }
 `);
+    // Minimal test stub so the scaffold passes `webjs check` (tests-exist)
+    // and `webjs test` runs cleanly. Replace these with real assertions
+    // once you wire the action/query to a real data source.
+    await writeFile(join(appDir, 'test', 'unit', 'users.test.ts'), `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { listUsers } from '../../modules/users/queries/list-users.server.ts';
+import { createUser } from '../../modules/users/actions/create-user.server.ts';
+
+test('listUsers returns an array', async () => {
+  const users = await listUsers();
+  assert.ok(Array.isArray(users));
+});
+
+test('createUser returns a success envelope with the input echoed back', async () => {
+  const result = await createUser({ name: 'Test', email: 'test@example.com' });
+  assert.equal(result.success, true);
+  assert.equal(result.data.name, 'Test');
+  assert.equal(result.data.email, 'test@example.com');
+});
+`);
     await writeFile(join(appDir, 'modules', 'users', 'types.ts'), `export interface User {
   id: string;
   name: string;
