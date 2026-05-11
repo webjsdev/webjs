@@ -4,6 +4,26 @@ You are working on a webjs app — an AI-first, no-build, web-components-first
 framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
 project-specific conventions before writing any code.
 
+## Persistence + scaffold rules (non-negotiable)
+
+- **Use Prisma + SQLite for data, never JSON files.** It's already wired up
+  (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`). For ANY
+  data the app stores (todos, posts, messages, products, comments…),
+  define a Prisma model. NEVER create `data/*.json`, `db.json`, or any
+  JSON file as a fake database. NEVER use module-scope arrays / Maps as
+  a substitute. NEVER use localStorage for app data. `webjs check`'s
+  `no-json-data-files` rule will fail the build if you do.
+- **The scaffold is reference, not the final product.** Replace
+  `app/page.ts`, the example `User` model, the example users module, etc.
+  with the app the user actually asked for. Don't ship "Hello from
+  <app-name>" as the deliverable.
+- **Only three templates exist:** `webjs create <name>` (default
+  full-stack), `--template api`, `--template saas`. The CLI rejects any
+  other `--template` value. Pick:
+  - Any product UI (todo, blog, dashboard, marketplace, social…) → default
+  - HTTP/JSON API only, no UI → `--template api`
+  - Auth / login / signup / SaaS → `--template saas`
+
 ## Before starting ANY work
 
 FIRST, before writing any code:
