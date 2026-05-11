@@ -2014,20 +2014,41 @@ This is not optional. The `webjs check` command flags modules without tests.
 
 ```sh
 webjs check             # validate app against conventions
-webjs check --rules     # list all rules
+webjs check --rules     # list all rules with descriptions
 ```
 
-Checks for: actions in modules, one-function-per-action, components call
-`customElements.define`, no server imports in client code, tests exist for modules,
-tag names have hyphens, **reactive props use `declare` + constructor defaults**
-(class-field initializers like `count = 0` clobber the framework's reactive
-accessor under modern class-field semantics; the rule flags any field whose
-name appears in `static properties` and isn't declared with `declare`).
-Override any rule in `package.json`:
+Checks: `actions-in-modules`, `one-function-per-action`,
+`components-have-register`, `no-server-imports-in-components`,
+`tests-exist`, `tag-name-has-hyphen`, `reactive-props-use-declare`
+(class-field initializers like `count = 0` clobber the framework's
+reactive accessor under modern class-field semantics; the rule flags
+any field whose name appears in `static properties` and isn't declared
+with `declare`), and `no-json-data-files` (no JSON-file fake databases).
+
+The action rules are scoped:
+- `actions-in-modules` exempts `lib/` (cross-cutting server infra) and
+  `modules/*/{components,utils}/`.
+- `one-function-per-action` applies ONLY to files inside
+  `modules/*/actions/` or `modules/*/queries/`. Multi-export `'use server'`
+  modules under `lib/` are intentional and not flagged.
+
+**`CONVENTIONS.md` vs `webjs check` — two separate mechanisms.**
+`CONVENTIONS.md` is markdown that humans + AI agents read; `webjs check`
+is a hardcoded linter in `node_modules/@webjskit/server/src/check.js`.
+**Editing the markdown does not change what the linter enforces.** To
+turn off a specific rule, set it to `false` in `package.json`:
 
 ```json
 { "webjs": { "conventions": { "tests-exist": false } } }
 ```
+
+Or in `webjs.conventions.js`:
+
+```js
+export default { 'tests-exist': false };
+```
+
+Only on/off — there's no way to tweak rule behaviour from config today.
 
 ### Scaffolding — `webjs create`
 
