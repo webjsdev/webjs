@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
 
+// Exactly three scaffolds exist — keep this list as the single source of
+// truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
+// .windsurfrules / .github/copilot-instructions.md mirror it.
+const TEMPLATES = ['full-stack', 'api', 'saas'];
+
 const USAGE = `webjs — commands:
   webjs dev   [--port 3000]                       Start dev server with live reload
   webjs start [--port 3000]                       Start production server (serves source directly; no build required)
@@ -14,6 +19,7 @@ const USAGE = `webjs — commands:
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
   webjs create <name> [--template full-stack|api|saas]  Scaffold a new webjs app
+                                                  (only 3 templates exist; default: full-stack with Prisma+SQLite)
   webjs db generate                               Run \`prisma generate\`
   webjs db migrate [name]                         Run \`prisma migrate dev\`
   webjs db studio                                 Run \`prisma studio\`
@@ -201,11 +207,36 @@ async function main() {
     }
     case 'create': {
       const name = rest[0];
-      if (!name) {
-        console.error('Usage: webjs create <app-name> [--template full-stack|api]');
+      if (!name || name.startsWith('-')) {
+        console.error('Usage: webjs create <app-name> [--template full-stack|api|saas]');
         process.exit(1);
       }
       const template = flag(rest, '--template', 'full-stack');
+      if (!TEMPLATES.includes(template)) {
+        // AI agents sometimes hallucinate template names ("blog", "todo",
+        // "ecommerce"). Reject early with the canonical list + guidance
+        // on which scaffold to pick for which kind of app.
+        console.error(`Error: unknown template '${template}'.
+
+Only three scaffolds exist:
+  full-stack   (default) — pages + components + API + Prisma/SQLite.
+                Pick this for any app the user describes in product terms
+                (todo app, blog, dashboard, marketplace, social feed, …).
+  api          — backend-only: route handlers + modules, no pages/SSR.
+                Pick this only if the user explicitly asks for an HTTP/JSON
+                API with no UI.
+  saas         — auth + login/signup + protected dashboard + Prisma User
+                model. Pick this only if the user explicitly asks for auth
+                or a SaaS-shaped product.
+
+The scaffold is a starting point — replace the example layout/page/
+components/schema with the actual app the user requested. Use Prisma +
+SQLite for persistence (already wired up); never store app data in JSON
+files.
+
+Full docs: https://docs.webjs.com`);
+        process.exit(1);
+      }
       const { scaffoldApp } = await import('../lib/create.js');
       await scaffoldApp(name, process.cwd(), { template });
       break;

@@ -25,6 +25,14 @@ const TEMPLATES = resolve(__dirname, '..', 'templates');
  */
 export async function scaffoldApp(name, cwd, opts = {}) {
   const template = opts.template || 'full-stack';
+  // Defence in depth — the CLI already validates this, but library
+  // callers (tests, programmatic use) might pass anything.
+  const VALID_TEMPLATES = ['full-stack', 'api', 'saas'];
+  if (!VALID_TEMPLATES.includes(template)) {
+    throw new Error(
+      `Unknown template '${template}'. Only ${VALID_TEMPLATES.join(' / ')} exist.`,
+    );
+  }
   const isApi = template === 'api';
   const isSaas = template === 'saas';
   const appDir = join(cwd, name);
@@ -589,5 +597,22 @@ AI-driven development (enforced for all AI agents):
   ✓ Commits are automatic, small, and meaningful
   ✓ No AI attribution in commit messages
   ✓ Convention validation via \`webjs check\`
+
+For AI agents — read this before editing scaffolded files:
+  • The example layout / page / components / schema are REFERENCE ONLY.
+    Replace them with the app the user actually asked for. Don't ship
+    the scaffold's example User model or "Hello from …" page as the
+    final product.
+  • Use Prisma + SQLite for app data — it's already wired up. Define
+    real models in prisma/schema.prisma and run \`webjs db migrate\`.
+    NEVER store app data in JSON files, in-memory arrays, or
+    localStorage as a substitute for the database.
+  • Only three scaffolds exist: full-stack (default), api, saas. Don't
+    invent template names. If you need a different kind of app, pick
+    the closest scaffold and adapt it.
+  • Read AGENTS.md + CONVENTIONS.md in the new project before writing
+    any code. They are the contract.
+  • Need more detail? Full hosted docs are at https://docs.webjs.com
+    (every API, directive, recipe, and deployment guide).
 `);
 }

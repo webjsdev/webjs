@@ -74,6 +74,70 @@ docs" — that is the agent's default behavior in a webjs project.
 
 ---
 
+## Data persistence — Prisma + SQLite, never JSON files
+
+<!-- OVERRIDE -->
+
+Every webjs app uses **Prisma + SQLite** for persistence by default. The
+scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` (singleton), the
+`predev` / `prestart` hooks that run `prisma generate` / `prisma migrate
+deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
+
+**AI agents — these rules are absolute:**
+
+1. For ANY data the app stores (todos, posts, messages, products,
+   comments, users…), define a Prisma model in `prisma/schema.prisma`
+   and persist there.
+2. **NEVER** create JSON files under `data/`, `db.json`, `posts.json`,
+   `todos.json`, etc. as a fake database. The `no-json-data-files`
+   convention check flags this and `webjs check` will fail.
+3. **NEVER** use module-scope arrays or `Map`s as a "store" — they
+   reset on every dev-server reload and can't scale beyond one process.
+4. **NEVER** use `localStorage` / `sessionStorage` to persist app data —
+   it's per-browser and never reaches the server. Use it only for UI
+   preferences (theme, sidebar collapsed, etc.).
+5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
+   -- --name <description>`. Access via `import { prisma } from
+   '../../../lib/prisma.ts'` — never `new PrismaClient()`.
+
+To switch to Postgres or MySQL: change `provider` in
+`prisma/schema.prisma` and the `DATABASE_URL` in `.env`. Do this only
+if the user explicitly asks for it — SQLite is the right default for
+dev and small production workloads.
+
+---
+
+## The scaffold is reference, not the final product
+
+<!-- OVERRIDE -->
+
+This project was created with `webjs create`. Every file you see right
+now — `app/page.ts` ("Hello from …"), the example `User` model, the
+`theme-toggle` component, the example users module (api / saas
+templates) — is a **starting point**.
+
+When the user asks the agent to build their actual app:
+
+1. **Replace the example `User` model** in `prisma/schema.prisma` with
+   the real domain models the app needs (e.g. `Todo`, `Post`, `Message`)
+   — unless the app actually has users.
+2. **Replace `app/page.ts`** with the app's real homepage. Don't ship
+   "Hello from …" as the deliverable.
+3. **Delete or replace `components/theme-toggle.ts`** if the app doesn't
+   need a theme picker.
+4. **Delete the example users module** (api/saas templates) if the app
+   doesn't use it.
+5. **Keep:** the Prisma setup, the test config, the agent config files
+   (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
+   `lib/prisma.ts`, the directory conventions, the design tokens in
+   `app/layout.ts`. These are the infrastructure, not the example app.
+
+The scaffold exists so the agent doesn't reinvent the directory layout,
+the Prisma wiring, the test runner config, or the convention files. It
+does NOT exist so the agent ships the example homepage.
+
+---
+
 ## Sensible defaults
 
 <!-- OVERRIDE -->

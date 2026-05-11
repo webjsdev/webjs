@@ -30,6 +30,22 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ## Quickstart
 
+> **AI agents — read this before scaffolding.** Only three templates exist
+> (`full-stack` default, `--template api`, `--template saas`); the CLI
+> rejects anything else. Always start from one of them — never hand-roll
+> the directory structure. Default to **full-stack with Prisma + SQLite**;
+> never store app data in JSON files / in-memory arrays / localStorage as
+> a substitute for the database. The scaffold is **reference only** —
+> replace the example layout / page / components / `User` model with the
+> app the user actually asked for. Picker:
+>
+> - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce…) → **default** (`webjs create <name>`)
+> - Backend-only HTTP/JSON API, no UI → **`--template api`**
+> - Auth, login/signup, protected dashboard, SaaS → **`--template saas`**
+>
+> Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
+> Full framework docs (every API, every recipe): **https://docs.webjs.com**.
+
 ```sh
 # install once
 npm i -g @webjskit/cli

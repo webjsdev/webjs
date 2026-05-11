@@ -98,6 +98,23 @@ export async function createPost(
     <h3>10. Automatic Tests and Docs</h3>
     <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>.</p>
 
+    <h3>11. Scaffold + Persistence Defaults</h3>
+    <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database — not a JSON-file simulation. webjs enforces this with three guardrails:</p>
+    <ul>
+      <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
+      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up — and won't accidentally fall back to JSON files for persistence.</li>
+      <li><strong><code>no-json-data-files</code> convention check.</strong> <code>webjs check</code> flags JSON files used as a fake database (<code>data/todos.json</code>, <code>db.json</code>, etc.) so an agent that takes the shortcut gets caught before shipping.</li>
+    </ul>
+    <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
+    <pre>User asks for…                                          Scaffold
+─────────────────────────────────────────────────────────────────────
+Todo app, blog, notes, dashboard, marketplace, social   default
+HTTP/JSON API only, no UI                                --template api
+Auth / login / signup / SaaS                            --template saas</pre>
+    <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>prisma/schema.prisma</code>, and the example components with the app the user actually requested. The infrastructure (Prisma wiring, test config, agent rules, route conventions) stays.</p>
+
+    <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases) — the full hosted documentation is at <a href="https://docs.webjs.com">docs.webjs.com</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>
+
     <h2>What an AI Agent Can Do with webjs</h2>
     <p>Given a webjs app + AGENTS.md, an AI coding assistant can:</p>
     <ul>
