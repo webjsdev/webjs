@@ -6,7 +6,76 @@ how code should be structured, tested, and organized.
 
 Sections marked `<!-- OVERRIDE -->` contain defaults you can customize.
 Edit the content below the marker to change the convention for your project.
-The `webjs check` command validates your code against these conventions.
+
+---
+
+## How `CONVENTIONS.md` relates to `webjs check`
+
+These are **two separate mechanisms** that share a topic but don't read
+each other:
+
+| | This file (`CONVENTIONS.md`) | `webjs check` |
+|---|---|---|
+| **Kind** | Markdown documentation. | Programmatic linter (code in `node_modules/@webjskit/server/src/check.js`). |
+| **Audience** | Humans + AI agents who read the project. | Run from the CLI / CI. |
+| **Effect of editing this markdown** | Changes the rules AI agents follow when they write code. | **Zero.** The linter does not parse this file. |
+| **How to customize the LINTER** | n/a — it's hardcoded in `@webjskit/server`. | Disable rules via `package.json` or `webjs.conventions.js` (see below). |
+
+So when you edit a `<!-- OVERRIDE -->` section here, you're telling AI
+agents to follow a different convention — but `webjs check` will still
+enforce its hardcoded rules. If you want the linter to stop flagging
+something it currently flags, you have to **disable that rule** as a
+separate step.
+
+### Disabling a `webjs check` rule
+
+`webjs check --rules` prints the full list. To disable one, add to
+`package.json`:
+
+```jsonc
+{
+  "webjs": {
+    "conventions": {
+      "tests-exist": false,
+      "actions-in-modules": false
+    }
+  }
+}
+```
+
+Or create `webjs.conventions.js`:
+
+```js
+export default {
+  'tests-exist': false,
+};
+```
+
+Only `false` is meaningful — there's no way to tweak rule *behaviour* via
+config today, only to switch a whole rule on or off.
+
+### What `webjs check` enforces today
+
+Run `webjs check --rules` for the current set with descriptions. As of
+`@webjskit/server@0.4.1`:
+
+- `actions-in-modules` — `.server.{js,ts}` / `'use server'` files belong
+  in `modules/<feature>/actions/` or `queries/`. `lib/` is exempt
+  (cross-cutting server infra).
+- `one-function-per-action` — files inside `modules/*/actions/` or
+  `modules/*/queries/` should export exactly one async function.
+- `components-have-register` — `WebComponent` subclasses must call
+  `Class.register('tag')` or `customElements.define`.
+- `no-server-imports-in-components` — components must not import
+  `@prisma/client`, `node:*`, or `lib/*`.
+- `reactive-props-use-declare` — props listed in `static properties` must
+  use the `declare propName: Type` + constructor-default pattern (class
+  field initializers clobber the framework's reactive accessor).
+- `tag-name-has-hyphen` — custom element tags must contain a hyphen.
+- `tests-exist` — each `modules/<feature>/` should have a test file.
+- `no-json-data-files` — JSON files that look like a database (under
+  `data/`, or named `db.json` / `database.json` / `*-db.json`) are
+  forbidden; use Prisma + SQLite instead.
 
 ---
 
@@ -612,32 +681,12 @@ This project enforces a git workflow via agent-specific config files
 
 ## Overriding conventions
 
-To disable a convention check, add to your `package.json`:
+See the **"How `CONVENTIONS.md` relates to `webjs check`"** section at
+the top of this file. Short version: disable specific linter rules via
+`package.json` (`webjs.conventions.<rule>: false`) or `webjs.conventions.js`.
 
-```json
-{
-  "webjs": {
-    "conventions": {
-      "actions-in-modules": false,
-      "one-function-per-action": false,
-      "tests-exist": false
-    }
-  }
-}
-```
-
-Or create `webjs.config.js`:
-
-```js
-export default {
-  conventions: {
-    'actions-in-modules': false,
-  },
-};
-```
-
-Run `webjs check` to validate your app against these conventions.
-Run `webjs check --fix` to see suggested fixes for violations.
+Run `webjs check` to validate. Run `webjs check --rules` to list every
+rule with its description.
 
 ---
 

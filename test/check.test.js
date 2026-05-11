@@ -574,6 +574,77 @@ test('unknown rule name in override is ignored (no crash)', async () => {
   }
 });
 
+test('actions-in-modules: exempts files under lib/ (cross-cutting infra)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    // Required: modules/ must exist for actions-in-modules to run at all.
+    await mkdir(join(appDir, 'modules', 'auth'), { recursive: true });
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(
+      join(appDir, 'lib', 'prisma.ts'),
+      `'use server';\nexport const prisma = {};\n`,
+    );
+    await writeFile(
+      join(appDir, 'lib', 'session.ts'),
+      `'use server';\nexport function getSession() {}\nexport function setSession() {}\n`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const flagged = violations.filter((v) => v.rule === 'actions-in-modules');
+    assert.deepEqual(flagged, [], 'lib/*.ts files must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('actions-in-modules: still flags loose .server.ts at the root', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'posts'), { recursive: true });
+    await writeFile(
+      join(appDir, 'create-post.server.ts'),
+      `export async function createPost() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'actions-in-modules');
+    assert.ok(v, 'expected actions-in-modules violation for loose .server.ts');
+    assert.equal(v.file, 'create-post.server.ts');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('one-function-per-action: only applies inside modules/*/actions/ or queries/', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    // lib/session.ts has 5 exports — was previously flagged. Must NOT be flagged now.
+    await writeFile(
+      join(appDir, 'lib', 'session.ts'),
+      `'use server';
+export function getSession() {}
+export function setSession() {}
+export function clearSession() {}
+export function rotateSession() {}
+export function verifySession() {}
+`,
+    );
+    // modules/auth/actions/login.server.ts with 2 exports — MUST be flagged.
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
+      `export async function login() {}\nexport async function loginAlt() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const flagged = violations
+      .filter((v) => v.rule === 'one-function-per-action')
+      .map((v) => v.file);
+    assert.deepEqual(flagged, ['modules/auth/actions/login.server.ts']);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-json-data-files: flags JSON files under data/', async () => {
   const appDir = await makeTempApp();
   try {
