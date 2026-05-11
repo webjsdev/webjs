@@ -13,8 +13,8 @@
     "build": "webjs build"
   },
   "dependencies": {
-    "@webjskit/cli": "^0.3.1",
+    "@webjskit/cli": "^0.4.0",
     "@webjskit/core": "^0.3.0",
-    "@webjskit/server": "^0.3.1"
+    "@webjskit/server": "^0.4.0"
   }
 }
