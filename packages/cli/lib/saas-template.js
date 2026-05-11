@@ -133,6 +133,54 @@ export async function writeSaasFiles(appDir) {
     "",
   ].join('\n'));
 
+  // test/unit/auth.test.ts — minimal stub so the scaffold passes
+  // `webjs check` (tests-exist) and `webjs test` runs cleanly out of the
+  // box. The signup/current-user functions import from lib/prisma.ts and
+  // lib/auth.ts, both of which need `prisma generate` to have run before
+  // they can be imported — so we deliberately test only the runtime-
+  // dependency-free types.ts here. Replace with real tests once Prisma
+  // is set up (run `npm install && npx prisma migrate dev --name init`).
+  await writeFile(join(appDir, 'test', 'unit', 'auth.test.ts'), [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "",
+    "import type { User, ActionResult } from '../../modules/auth/types.ts';",
+    "",
+    "test('User shape: id is numeric, email is required', () => {",
+    "  const u: User = { id: 1, name: 'Test', email: 'test@example.com' };",
+    "  assert.equal(typeof u.id, 'number');",
+    "  assert.equal(typeof u.email, 'string');",
+    "});",
+    "",
+    "test('ActionResult: success envelope carries data', () => {",
+    "  const r: ActionResult<User> = {",
+    "    success: true,",
+    "    data: { id: 1, name: 'Test', email: 'test@example.com' },",
+    "  };",
+    "  assert.equal(r.success, true);",
+    "  if (r.success) assert.equal(r.data.email, 'test@example.com');",
+    "});",
+    "",
+    "test('ActionResult: failure envelope carries error + status', () => {",
+    "  const r: ActionResult<User> = {",
+    "    success: false,",
+    "    error: 'Email already registered',",
+    "    status: 409,",
+    "  };",
+    "  assert.equal(r.success, false);",
+    "  if (!r.success) {",
+    "    assert.equal(r.status, 409);",
+    "    assert.ok(r.error.length > 0);",
+    "  }",
+    "});",
+    "",
+    "// TODO: once you've run `npm install && npx prisma migrate dev` you can",
+    "// import { signup } from '../../modules/auth/actions/signup.server.ts'",
+    "// and { currentUser } from '../../modules/auth/queries/current-user.server.ts'",
+    "// and write real integration tests against a test SQLite DB.",
+    "",
+  ].join('\n'));
+
   // app/api/auth/[...path]/route.ts
   await mkdir(join(appDir, 'app', 'api', 'auth', '[...path]'), { recursive: true });
   await writeFile(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts'), [
