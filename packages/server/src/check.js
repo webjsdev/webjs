@@ -45,12 +45,12 @@ export const RULES = [
   {
     name: 'actions-in-modules',
     description:
-      'Server action files (*.server.{js,ts} or \'use server\') should live under modules/*/actions/ or modules/*/queries/, not loose in the app root. Skipped when no modules/ directory exists.',
+      'Server action files (*.server.{js,ts} or \'use server\') should live under modules/*/actions/ or modules/*/queries/, not loose in the app root. Files under lib/ are exempt — lib/ is the documented home for cross-cutting server infrastructure (prisma client, session helpers, auth config). Skipped when no modules/ directory exists.',
   },
   {
     name: 'one-function-per-action',
     description:
-      'Each .server.{js,ts} file should export exactly one async function (one-function-per-file convention).',
+      'Each .server.{js,ts} file under modules/*/actions/ or modules/*/queries/ should export exactly one async function (one-function-per-file convention). Files outside those two directories — lib/ infrastructure modules, route handlers — are exempt; this rule is specifically about the action/query file pattern.',
   },
   {
     name: 'components-have-register',
@@ -481,13 +481,17 @@ export async function checkConventions(appDir, opts) {
   if (hasModulesDir && isRuleEnabled('actions-in-modules', overrides)) {
     for (const { abs, rel, content } of files) {
       if (!isServerActionFile(abs, content)) continue;
-      // Files already inside modules/*/actions/ or modules/*/queries/ are fine
       const normRel = rel.split(sep).join('/');
+      // OK: action / query files inside modules/<feature>/{actions,queries}/
       if (/^modules\/[^/]+\/(actions|queries)\//.test(normRel)) continue;
-      // Files inside modules/ but not in actions/queries/ — also flag these
-      // but skip files that are in other valid module subdirs (components, utils)
+      // OK: module-scoped components/utils (utils may use 'use server' too)
       if (/^modules\/[^/]+\/(components|utils)\//.test(normRel)) continue;
-      // If inside modules/ at all but wrong subdir, still flag
+      // OK: cross-cutting server infrastructure under lib/. The documented
+      // pattern puts the Prisma singleton, session helpers, auth config,
+      // password hashing, etc. in lib/ — those files are intentionally
+      // multi-export 'use server' modules, not one-function actions.
+      if (/^lib\//.test(normRel)) continue;
+      // Anything else (loose at the root, under app/, etc.) is flagged.
       const moduleName = guessModuleName(rel);
       const fileBase = basename(rel);
       violations.push({
@@ -500,9 +504,15 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: one-function-per-action ---
+  // Apply ONLY to files inside modules/<feature>/{actions,queries}/ — that
+  // is where the one-function-per-file convention lives. lib/ infra modules
+  // and any other 'use server' file outside the action/query dirs are
+  // intentional multi-export utility modules and are exempt.
   if (isRuleEnabled('one-function-per-action', overrides)) {
     for (const { abs, rel, content } of files) {
       if (!isServerActionFile(abs, content)) continue;
+      const normRel = rel.split(sep).join('/');
+      if (!/^modules\/[^/]+\/(actions|queries)\//.test(normRel)) continue;
       const count = countExportedFunctions(content);
       if (count > 1) {
         violations.push({
