@@ -12,6 +12,10 @@ This file instructs AI coding agents on how to work in this project.
 2. **[CONVENTIONS.md](./CONVENTIONS.md)** — Project-specific conventions for
    module architecture, testing rules, component patterns, code style.
    Users may override sections.
+3. **https://docs.webjs.com** — Full hosted docs. When AGENTS.md and
+   CONVENTIONS.md don't cover what you need (an obscure directive, a
+   recipe for auth providers, deployment specifics, edge cases), check
+   docs.webjs.com before guessing.
 
 ## Non-negotiable rules (full detail in AGENTS.md)
 

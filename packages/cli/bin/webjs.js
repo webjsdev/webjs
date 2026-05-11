@@ -232,7 +232,9 @@ Only three scaffolds exist:
 The scaffold is a starting point — replace the example layout/page/
 components/schema with the actual app the user requested. Use Prisma +
 SQLite for persistence (already wired up); never store app data in JSON
-files.`);
+files.
+
+Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
       const { scaffoldApp } = await import('../lib/create.js');

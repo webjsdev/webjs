@@ -2,8 +2,10 @@
 
 Read this before editing any file. This is a webjs app: AI-first, web-
 components-first, no build step. The framework's own full API reference
-lives at https://github.com/vivek7405/webjs/blob/main/AGENTS.md — treat
-this file as the app-scoped companion.
+lives at https://github.com/vivek7405/webjs/blob/main/AGENTS.md and the
+full hosted documentation (every API, recipe, and example) lives at
+**https://docs.webjs.com** — treat this file as the app-scoped
+companion and reach for docs.webjs.com whenever you need more detail.
 
 ## If you just scaffolded this app (AI agents — read first)
 
