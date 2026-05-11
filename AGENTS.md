@@ -160,6 +160,53 @@ or "also commit". That is the default behaviour in a webjs project.
 
 ---
 
+## Working in the webjs framework repo itself
+
+This section applies ONLY when you're editing the framework monorepo
+(this repo). It does NOT apply to scaffolded apps — the template
+`AGENTS.md` shipped via `webjs create` reverses some of these rules
+(e.g. TypeScript is the default for app code).
+
+### Language split
+
+- **`packages/`** — framework source. Plain `.js` with JSDoc types only.
+  Never add `.ts` files here. The framework ships buildless and the
+  source you read in `node_modules/` must equal the source that runs.
+- **`examples/`, `docs/`, `website/`** — apps consuming the framework.
+  TypeScript is fine and encouraged.
+
+### Monorepo commands
+
+```sh
+npm install                          # workspace-linked deps
+npm test                             # run unit tests
+npm run test:browser                 # E2E tests (needs Chromium)
+npm run dev                          # website + docs + blog together (5000/4000/3456)
+cd website && npm run dev            # just the website (port 5000)
+cd docs && npm run dev               # just the docs (port 4000)
+cd examples/blog && npm run dev      # just the blog (port 3456)
+```
+
+### When a framework change lands, update
+
+- **`AGENTS.md`** (this file) if the public API / directive / lifecycle /
+  convention surface changed
+- **`docs/`** for the user-facing doc page
+- **`website/`** if the change is marketable on the landing page
+- **`examples/blog/`** so E2E tests exercise the new path
+- **`packages/cli/templates/`** if scaffolded apps should know about it
+
+### Reference codebases (cloned locally for architectural comparison)
+
+At `~/Documents/Projects/`:
+
+- **`lit`** — [Lit](https://lit.dev): rendering, hydration, lifecycle, directives.
+- **`remix`** — [Remix](https://remix.run) v3: module loading, streaming SSR, hydration data.
+- **`turbo`** — [Turbo](https://turbo.hotwired.dev): link interception, body swap, View Transitions.
+- **`next.js`** — [Next.js](https://nextjs.org): App Router file conventions, layouts, metadata.
+
+---
+
 ## What webjs is
 
 An **AI-first, web-components-first** framework
