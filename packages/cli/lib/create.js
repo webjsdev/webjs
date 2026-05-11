@@ -612,5 +612,7 @@ For AI agents — read this before editing scaffolded files:
     the closest scaffold and adapt it.
   • Read AGENTS.md + CONVENTIONS.md in the new project before writing
     any code. They are the contract.
+  • Need more detail? Full hosted docs are at https://docs.webjs.com
+    (every API, directive, recipe, and deployment guide).
 `);
 }

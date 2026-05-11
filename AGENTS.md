@@ -1318,6 +1318,12 @@ chat app", "make an API for X") the agent MUST:
    step after scaffolding. Run `webjs db migrate <name>` to create the
    migration. Then build pages, actions, queries against those models.
 
+6. **Need more detail than this file covers?** The full framework docs
+   live at **https://docs.webjs.com** — every API, every directive, every
+   recipe (auth, sessions, cache, WebSockets, rate limiting, metadata,
+   testing, deployment). When in doubt, look it up there before guessing
+   or hand-rolling.
+
 ### Full CLI reference
 
 ```sh
