@@ -573,3 +573,97 @@ test('unknown rule name in override is ignored (no crash)', async () => {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+test('no-json-data-files: flags JSON files under data/', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'data'), { recursive: true });
+    await writeFile(join(appDir, 'data', 'todos.json'), '[]');
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-json-data-files');
+    assert.ok(v, 'expected no-json-data-files violation');
+    assert.equal(v.file, 'data/todos.json');
+    assert.ok(v.message.includes('Prisma'));
+    assert.ok(v.fix.includes('schema.prisma'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-json-data-files: flags db.json / database.json / *-db.json anywhere', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFile(join(appDir, 'db.json'), '{}');
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(join(appDir, 'app', 'posts-db.json'), '{}');
+    await writeFile(join(appDir, 'database.json'), '{}');
+
+    const violations = await checkConventions(appDir);
+    const flagged = violations
+      .filter((v) => v.rule === 'no-json-data-files')
+      .map((v) => v.file)
+      .sort();
+    assert.deepEqual(flagged, ['app/posts-db.json', 'database.json', 'db.json']);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-json-data-files: does not flag package.json / tsconfig.json / other config', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFile(join(appDir, 'package.json'), '{"name":"x"}');
+    await writeFile(join(appDir, 'tsconfig.json'), '{}');
+    await writeFile(join(appDir, 'manifest.json'), '{}');
+    // A random JSON file with a normal name elsewhere — also fine.
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(join(appDir, 'app', 'metadata.json'), '{}');
+
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.find((v) => v.rule === 'no-json-data-files'),
+      undefined,
+      'should not flag config / metadata JSON',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-json-data-files: skips node_modules / prisma / dist / build / public', async () => {
+  const appDir = await makeTempApp();
+  try {
+    // db.json inside ignored dirs must NOT be flagged.
+    for (const d of ['node_modules', 'prisma', 'dist', 'build', 'public', '.next']) {
+      await mkdir(join(appDir, d), { recursive: true });
+      await writeFile(join(appDir, d, 'db.json'), '{}');
+    }
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.find((v) => v.rule === 'no-json-data-files'),
+      undefined,
+      'should not descend into ignored dirs',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-json-data-files: can be disabled via overrides', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'data'), { recursive: true });
+    await writeFile(join(appDir, 'data', 'todos.json'), '[]');
+
+    const violations = await checkConventions(appDir, {
+      rules: { 'no-json-data-files': false },
+    });
+    assert.equal(
+      violations.find((v) => v.rule === 'no-json-data-files'),
+      undefined,
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

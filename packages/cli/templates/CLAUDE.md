@@ -7,9 +7,23 @@ This file instructs AI coding agents on how to work in this project.
 
 1. **[AGENTS.md](./AGENTS.md)** — Full webjs API reference, file conventions,
    invariants, recipes, directives, lifecycle, controllers, context, task.
+   Pay special attention to the **"If you just scaffolded this app"**
+   section at the top.
 2. **[CONVENTIONS.md](./CONVENTIONS.md)** — Project-specific conventions for
    module architecture, testing rules, component patterns, code style.
    Users may override sections.
+
+## Non-negotiable rules (full detail in AGENTS.md)
+
+- **Persist with Prisma + SQLite.** It's already wired up. NEVER use JSON
+  files, in-memory arrays, or `localStorage` as a substitute for the
+  database — `webjs check`'s `no-json-data-files` rule will flag it.
+- **The scaffold is a starting point, not the final product.** Replace
+  `app/page.ts`, the example `User` model in `prisma/schema.prisma`, and
+  any other example files with the app the user asked for. Don't ship
+  "Hello from {{APP_NAME}}" as the deliverable.
+- **Only three scaffolds exist:** default (full-stack), `--template api`,
+  `--template saas`. The CLI rejects any other `--template` value.
 
 ## AI-driven development workflow
 

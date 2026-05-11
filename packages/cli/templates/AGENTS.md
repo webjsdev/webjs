@@ -5,6 +5,53 @@ components-first, no build step. The framework's own full API reference
 lives at https://github.com/vivek7405/webjs/blob/main/AGENTS.md — treat
 this file as the app-scoped companion.
 
+## If you just scaffolded this app (AI agents — read first)
+
+This project was created with `webjs create`. The files you see right
+now — `app/page.ts` ("Hello from {{APP_NAME}}"), the example `User`
+model in `prisma/schema.prisma`, the `theme-toggle` component, the
+example users module (api/saas templates) — are **starting-point
+references, not the final product**. Your job is to replace them with
+the app the user actually asked for.
+
+**Non-negotiables for every webjs app:**
+
+1. **Use Prisma + SQLite for persistence.** It's already wired up
+   (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`,
+   `predev` hook running `prisma generate`). For any data the app
+   stores — todos, posts, messages, products, comments, anything —
+   define a Prisma model and persist there.
+   - **NEVER** store app data in JSON files (`data/todos.json`,
+     `db.json`, …). The convention check `no-json-data-files` flags
+     this and the user's prompt explicitly forbids it.
+   - **NEVER** use in-memory arrays or `Map`s as a substitute for the
+     database — they vanish on every dev-server reload and aren't
+     shared across processes.
+   - **NEVER** use `localStorage` to persist app data — it's per-browser
+     and doesn't reach the server.
+2. **One of three scaffolds only.** The CLI exposes exactly three:
+   `full-stack` (default), `--template api`, `--template saas`. Don't
+   reach for a `--template blog` / `--template todo` / `--template
+   ecommerce` — they don't exist and the CLI will reject them.
+3. **First step after scaffolding:** edit `prisma/schema.prisma` to the
+   app's real domain models (delete the example `User` model unless the
+   app actually needs users), run `webjs db migrate <name>`, then build
+   pages / actions / queries against those models.
+
+**Picking the right scaffold from the user's prompt** (you do this BEFORE
+running `webjs create`; if you're reading this you've already scaffolded —
+verify the choice was correct, otherwise re-scaffold in a fresh dir):
+
+| User asks for… | Scaffold |
+|---|---|
+| Todo app, blog, notes, dashboard, marketplace, social feed, e-commerce, any product with a UI | `webjs create <name>` (default full-stack) |
+| HTTP/JSON API only, no UI | `webjs create <name> --template api` |
+| Anything with login / signup / accounts / protected pages / SaaS | `webjs create <name> --template saas` |
+
+When in doubt, **full-stack is the default**. Pick `api` only if the user
+is explicit about wanting a backend-only API. Pick `saas` only if the user
+is explicit about auth / accounts / SaaS.
+
 ## Framework source is in `node_modules/`
 
 No build step, no bundler, no minification — what you read is what
