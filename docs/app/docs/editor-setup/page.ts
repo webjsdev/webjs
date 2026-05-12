@@ -7,6 +7,8 @@ export default function EditorSetup() {
     <h1>Editor Setup — Neovim &amp; VS Code</h1>
     <p>webjs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
 
+    <p><strong>Neither <code>ts-lit-plugin</code> nor <code>@webjskit/ts-plugin</code> is required for the framework to run</strong> — both are editor-only enhancements. They are also a pair: <code>@webjskit/ts-plugin</code> <em>wraps</em> <code>ts-lit-plugin</code> (loads it from <code>node_modules</code>, proxies its diagnostics, layers webjs-aware behaviour on top). Install both, or neither — installing just one is rarely what you want. The scaffold installs both as devDependencies and lists both in <code>tsconfig.json</code> automatically.</p>
+
     <p>This page covers three layers of intelligence:</p>
     <ol>
       <li><strong>Type-safe component internals</strong> — <code>this.student: Student</code> inside the class. Works out of the box once <code>tsconfig.json</code> is set up.</li>
