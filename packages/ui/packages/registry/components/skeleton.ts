@@ -1,13 +1,16 @@
-import { WebComponent, html } from '@webjskit/core';
-import { cn } from '../lib/utils.ts';
+/**
+ * Skeleton — loading placeholder. Pure class helper.
+ *
+ * shadcn parity: matches shadcn Skeleton (animated rounded muted block).
+ *
+ * Usage:
+ *   <div class=${cn(skeletonClass(), 'h-4 w-32')}></div>
+ *   <div class=${cn(skeletonClass(), 'h-12 w-12 rounded-full')}></div>
+ *
+ * Sizing comes from caller-supplied utilities — skeletonClass() only
+ * provides the animation and base look.
+ *
+ * Design tokens used: --accent.
+ */
 
-export class UiSkeleton extends WebComponent {
-  static properties = { className: { type: String } };
-  declare className: string;
-  constructor() { super(); this.className = ''; }
-
-  render() {
-    return html`<div data-slot="skeleton" class=${cn('bg-accent animate-pulse rounded-md', this.className)}></div>`;
-  }
-}
-UiSkeleton.register('ui-skeleton');
+export const skeletonClass = (): string => 'animate-pulse rounded-md bg-accent';

@@ -21,7 +21,7 @@ function makeWrapper(tag: string, slot: string, classes: string) {
   class Wrap extends WebComponent {
     private _slot = '';
     connectedCallback() {
-      if (!this._slot) this._slot = this.innerHTML;
+      if (!this._slot) this._slot = this.getSourceChildren();
       super.connectedCallback();
     }
     render() {
@@ -65,7 +65,7 @@ export class UiEmptyMedia extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 

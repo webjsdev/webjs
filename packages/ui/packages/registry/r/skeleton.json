@@ -12,7 +12,7 @@
     {
       "path": "components/skeleton.ts",
       "type": "registry:ui",
-      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { cn } from '../lib/utils.ts';\n\nexport class UiSkeleton extends WebComponent {\n  static properties = { className: { type: String } };\n  declare className: string;\n  constructor() { super(); this.className = ''; }\n\n  render() {\n    return html`<div data-slot=\"skeleton\" class=${cn('bg-accent animate-pulse rounded-md', this.className)}></div>`;\n  }\n}\nUiSkeleton.register('ui-skeleton');\n"
+      "content": "/**\n * Skeleton — loading placeholder. Pure class helper.\n *\n * shadcn parity: matches shadcn Skeleton (animated rounded muted block).\n *\n * Usage:\n *   <div class=${cn(skeletonClass(), 'h-4 w-32')}></div>\n *   <div class=${cn(skeletonClass(), 'h-12 w-12 rounded-full')}></div>\n *\n * Sizing comes from caller-supplied utilities — skeletonClass() only\n * provides the animation and base look.\n *\n * Design tokens used: --accent.\n */\n\nexport const skeletonClass = (): string => 'animate-pulse rounded-md bg-accent';\n"
     }
   ]
 }

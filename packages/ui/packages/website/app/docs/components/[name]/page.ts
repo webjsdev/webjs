@@ -1,9 +1,6 @@
-import { html, unsafeHTML } from '@webjskit/core';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { notFound } from '@webjskit/core';
+import { html, unsafeHTML, notFound } from '@webjskit/core';
 import { getExample } from './examples.ts';
+import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 
 // ---------------------------------------------------------------------------
 // Side-effect imports — load every ui-* component module so the custom
@@ -15,40 +12,71 @@ import { getExample } from './examples.ts';
 import '../../../../components/ui/accordion.ts';
 import '../../../../components/ui/alert.ts';
 import '../../../../components/ui/alert-dialog.ts';
+import '../../../../components/ui/aspect-ratio.ts';
 import '../../../../components/ui/avatar.ts';
 import '../../../../components/ui/badge.ts';
 import '../../../../components/ui/breadcrumb.ts';
 import '../../../../components/ui/button.ts';
+import '../../../../components/ui/button-group.ts';
+// NOTE: calendar.ts is intentionally NOT imported here — its `default` import
+// of `date-fns` doesn't round-trip through webjs's auto-vendor bundler, and
+// its SSR path calls DOM APIs that aren't available in linkedom. The
+// calendar example renders a static visual scaffold instead.
 import '../../../../components/ui/card.ts';
+import '../../../../components/ui/carousel.ts';
+import '../../../../components/ui/chart.ts';
 import '../../../../components/ui/checkbox.ts';
+import '../../../../components/ui/collapsible.ts';
+import '../../../../components/ui/combobox.ts';
+import '../../../../components/ui/command.ts';
+import '../../../../components/ui/context-menu.ts';
 import '../../../../components/ui/dialog.ts';
+import '../../../../components/ui/direction.ts';
+import '../../../../components/ui/drawer.ts';
+import '../../../../components/ui/dropdown-menu.ts';
+import '../../../../components/ui/empty.ts';
+import '../../../../components/ui/field.ts';
+import '../../../../components/ui/form.ts';
+import '../../../../components/ui/hover-card.ts';
 import '../../../../components/ui/input.ts';
+import '../../../../components/ui/input-group.ts';
+import '../../../../components/ui/input-otp.ts';
+import '../../../../components/ui/item.ts';
 import '../../../../components/ui/kbd.ts';
 import '../../../../components/ui/label.ts';
+import '../../../../components/ui/menubar.ts';
+import '../../../../components/ui/native-select.ts';
+import '../../../../components/ui/navigation-menu.ts';
 import '../../../../components/ui/pagination.ts';
+import '../../../../components/ui/popover.ts';
 import '../../../../components/ui/progress.ts';
 import '../../../../components/ui/radio-group.ts';
+import '../../../../components/ui/resizable.ts';
+import '../../../../components/ui/scroll-area.ts';
+import '../../../../components/ui/select.ts';
 import '../../../../components/ui/separator.ts';
+import '../../../../components/ui/sheet.ts';
+import '../../../../components/ui/sidebar.ts';
 import '../../../../components/ui/skeleton.ts';
 import '../../../../components/ui/slider.ts';
+import '../../../../components/ui/sonner.ts';
 import '../../../../components/ui/spinner.ts';
 import '../../../../components/ui/switch.ts';
+import '../../../../components/ui/table.ts';
 import '../../../../components/ui/tabs.ts';
 import '../../../../components/ui/textarea.ts';
 import '../../../../components/ui/toggle.ts';
-
-// page.ts is 5 levels deep inside website/. Walk 5 ups to packages/ui/packages/.
-const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', 'registry', 'r');
+import '../../../../components/ui/toggle-group.ts';
+import '../../../../components/ui/tooltip.ts';
 
 export function generateMetadata({ params }: { params: { name: string } }) {
   return { title: `${params.name} — @webjskit/ui` };
 }
 
-export default function ComponentDoc({ params }: { params: { name: string } }) {
-  const p = join(REGISTRY_DIR, `${params.name}.json`);
-  if (!existsSync(p)) throw notFound();
+export default async function ComponentDoc({ params }: { params: { name: string } }) {
+  const item = await loadRegistryItem(params.name);
+  if (!item) throw notFound();
 
-  const item = JSON.parse(readFileSync(p, 'utf8'));
   const source = item.files?.[0]?.content || '';
   const npmDeps = (item.dependencies || []).filter((d: string) => d !== '@webjskit/core');
   const registryDeps = item.registryDependencies || [];
@@ -79,7 +107,16 @@ export default function ComponentDoc({ params }: { params: { name: string } }) {
             <div class="flex items-center justify-between mb-3">
               <h2 class="text-base font-medium" style="color: var(--fg-muted)">Preview</h2>
             </div>
-            <div class="rounded-lg border p-8 flex items-center justify-center min-h-[280px]" style="background: var(--bg-elev)">
+            <!--
+              The preview is injected client-side rather than SSR'd because the
+              ui-* components capture their innerHTML in connectedCallback (which
+              doesn't run during webjs SSR). SSR would emit an empty inner button
+              followed by stray child text. By writing the example template into
+              the DOM client-side, the custom-element parser instantiates each
+              component fresh, connectedCallback captures innerHTML correctly, and
+              the rendered output looks right.
+            -->
+            <div class="rounded-lg border p-8 flex items-center justify-center min-h-[280px] bg-background text-foreground">
               ${unsafeHTML(example)}
             </div>
           </section>

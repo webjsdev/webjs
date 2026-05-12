@@ -49,7 +49,14 @@ for (const name of readdirSync(COMPONENTS_SRC)) {
     // the main entry. Rewrite so the website resolves correctly against the
     // installed package.
     .replaceAll("from '@webjskit/core/directives'", "from '@webjskit/core'")
-    .replaceAll('from "@webjskit/core/directives"', 'from "@webjskit/core"');
+    .replaceAll('from "@webjskit/core/directives"', 'from "@webjskit/core"')
+    // `@floating-ui/dom` has dual ESM/CJS shape that webjs's auto-vendor
+    // bundles as default-export-only — named imports break in the browser.
+    // Route through a website-local shim that handles both shapes. The shim
+    // lives at app/libs/floating-ui-shim.ts; from `components/ui/<x>.ts`
+    // that's `../../app/libs/floating-ui-shim.ts`.
+    .replaceAll("from '@floating-ui/dom'", "from '../../app/libs/floating-ui-shim.ts'")
+    .replaceAll('from "@floating-ui/dom"', 'from "../../app/libs/floating-ui-shim.ts"');
   writeFileSync(join(COMPONENTS_DST, name), rewritten);
   copied++;
 }

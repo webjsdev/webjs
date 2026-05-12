@@ -1,113 +1,88 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-
 /**
- * Collapsible. Composition:
+ * Collapsible — togglable content panel.
  *
- *   <ui-collapsible ?open=${expanded}>
- *     <ui-collapsible-trigger><button>Toggle</button></ui-collapsible-trigger>
- *     <ui-collapsible-content>Hidden content</ui-collapsible-content>
+ * shadcn parity: Collapsible, CollapsibleTrigger, CollapsibleContent.
+ *
+ * Usage:
+ *   <ui-collapsible>
+ *     <ui-collapsible-trigger>
+ *       <button class=${buttonClass({ variant: 'ghost' })}>Show details</button>
+ *     </ui-collapsible-trigger>
+ *     <ui-collapsible-content>
+ *       <p>Hidden by default. Revealed on trigger click.</p>
+ *     </ui-collapsible-content>
  *   </ui-collapsible>
  *
- * Root owns `open`. Trigger toggles it. Content shows/hides via data-state.
+ * Attributes: `open` (boolean reflected).
+ * Events: `ui-open-change`.
  */
-export class UiCollapsible extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-    disabled: { type: Boolean, reflect: true },
-  };
-  declare open: boolean;
-  declare disabled: boolean;
+import { Base, defineElement } from '../lib/utils.ts';
 
-  private _slot = '';
+const STYLES = `
+ui-collapsible:not([open]) ui-collapsible-content { display: none !important; }
+ui-collapsible-content { display: block; }
+`;
 
-  constructor() {
-    super();
-    this.open = false;
-    this.disabled = false;
-  }
+function installStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ui-collapsible-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'ui-collapsible-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
+}
 
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-    this.addEventListener('ui-collapsible-toggle', this._onToggle as EventListener);
-    queueMicrotask(() => this._syncChildren());
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('ui-collapsible-toggle', this._onToggle as EventListener);
-  }
-
-  _onToggle = () => {
-    if (this.disabled) return;
-    this.open = !this.open;
-    this._syncChildren();
-    this.dispatchEvent(new CustomEvent('open-change', { detail: { open: this.open }, bubbles: true, composed: true }));
-  };
-
-  _syncChildren() {
-    const state = this.open ? 'open' : 'closed';
-    this.querySelectorAll('ui-collapsible-trigger, ui-collapsible-content').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-state', state);
-    });
-  }
-
-  static get observedAttributes() {
+export class UiCollapsible extends Base {
+  static get observedAttributes(): string[] {
     return ['open'];
   }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name === 'open') this._syncChildren();
+  connectedCallback(): void {
+    installStyles();
+    this.setAttribute('data-slot', 'collapsible');
+    this._reflect();
   }
-
-  render() {
-    return html`<div data-slot="collapsible" data-state=${this.open ? 'open' : 'closed'}>${unsafeHTML(this._slot)}</div>`;
+  attributeChangedCallback(): void {
+    this._reflect();
+    this.dispatchEvent(
+      new CustomEvent('ui-open-change', { detail: { open: this.hasAttribute('open') }, bubbles: true }),
+    );
+  }
+  show(): void {
+    this.setAttribute('open', '');
+  }
+  hide(): void {
+    this.removeAttribute('open');
+  }
+  toggle(): void {
+    if (this.hasAttribute('open')) this.hide();
+    else this.show();
+  }
+  private _reflect(): void {
+    const open = this.hasAttribute('open');
+    this.setAttribute('data-state', open ? 'open' : 'closed');
+    const trigger = this.querySelector<HTMLElement>(':scope > ui-collapsible-trigger');
+    trigger?.setAttribute('aria-expanded', String(open));
+    const content = this.querySelector<HTMLElement>(':scope > ui-collapsible-content');
+    content?.setAttribute('data-state', open ? 'open' : 'closed');
   }
 }
-UiCollapsible.register('ui-collapsible');
+defineElement('ui-collapsible', UiCollapsible);
 
-export class UiCollapsibleTrigger extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+export class UiCollapsibleTrigger extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'collapsible-trigger');
     this.addEventListener('click', this._onClick);
   }
-  disconnectedCallback() {
-    super.disconnectedCallback();
+  disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
   }
-  _onClick = () => {
-    this.dispatchEvent(new CustomEvent('ui-collapsible-toggle', { bubbles: true }));
-  };
-  render() {
-    return html`<span data-slot="collapsible-trigger">${unsafeHTML(this._slot)}</span>`;
-  }
+  private _onClick = (): void => (this.closest('ui-collapsible') as UiCollapsible | null)?.toggle();
 }
-UiCollapsibleTrigger.register('ui-collapsible-trigger');
+defineElement('ui-collapsible-trigger', UiCollapsibleTrigger);
 
-export class UiCollapsibleContent extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-  }
-  static get observedAttributes() {
-    return ['data-state'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name === 'data-state') this.requestUpdate();
-  }
-  render() {
-    const state = this.getAttribute('data-state') || 'closed';
-    return html`<div
-      data-slot="collapsible-content"
-      data-state=${state}
-      ?hidden=${state !== 'open'}
-      class="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down"
-    >${unsafeHTML(this._slot)}</div>`;
+export class UiCollapsibleContent extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'collapsible-content');
   }
 }
-UiCollapsibleContent.register('ui-collapsible-content');
+defineElement('ui-collapsible-content', UiCollapsibleContent);

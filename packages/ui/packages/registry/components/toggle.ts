@@ -1,84 +1,114 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
+/**
+ * Toggle — pressable on/off button. Pure class helper; use with a native
+ * `<button>` and toggle the `data-state="on|off"` and `aria-pressed`
+ * attributes yourself, OR use the stateful `<ui-toggle>` element.
+ *
+ * shadcn parity:
+ *   variants: default | outline
+ *   sizes:    default | sm | lg
+ *
+ * Usage (controlled, declarative):
+ *   <button class=${toggleClass()} data-state="off" aria-pressed="false"
+ *           onclick="this.dataset.state = this.dataset.state==='on'?'off':'on'">
+ *     <svg>…</svg>
+ *   </button>
+ *
+ * Usage (custom element — handles state for you):
+ *   <ui-toggle aria-label="Toggle bold">
+ *     <svg>…</svg>
+ *   </ui-toggle>
+ *
+ * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
+ * --input, --background, --ring, --destructive.
+ */
+import { cn, Base, defineElement } from '../lib/utils.ts';
 
-const toggleBase =
+const BASE =
   "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-[color,box-shadow] outline-none hover:bg-muted hover:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
-const toggleVariants = {
+const VARIANTS = {
   default: 'bg-transparent',
   outline:
     'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
 } as const;
 
-const toggleSizes = {
+const SIZES = {
   default: 'h-9 min-w-9 px-2',
   sm: 'h-8 min-w-8 px-1.5',
   lg: 'h-10 min-w-10 px-2.5',
 } as const;
 
-export type ToggleVariant = keyof typeof toggleVariants;
-export type ToggleSize = keyof typeof toggleSizes;
+export type ToggleVariant = keyof typeof VARIANTS;
+export type ToggleSize = keyof typeof SIZES;
 
-export function toggleClasses(variant: ToggleVariant = 'default', size: ToggleSize = 'default') {
-  return cn(toggleBase, toggleVariants[variant] || toggleVariants.default, toggleSizes[size] || toggleSizes.default);
+export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize } = {}): string {
+  return cn(BASE, VARIANTS[opts.variant ?? 'default'], SIZES[opts.size ?? 'default']);
 }
 
-/**
- * Standalone toggle button. Pressed/unpressed state.
- *
- *   <ui-toggle ?pressed=${on} @change=${e => …}>Bold</ui-toggle>
- */
-export class UiToggle extends WebComponent {
-  static properties = {
-    pressed: { type: Boolean, reflect: true },
-    disabled: { type: Boolean, reflect: true },
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-  };
-  declare pressed: boolean;
-  declare disabled: boolean;
-  declare variant: ToggleVariant;
-  declare size: ToggleSize;
+// --------------------------------------------------------------------------
+// <ui-toggle> — manages pressed state + aria-pressed + data-state on a host
+// button. Convenience when you want state without writing the toggling JS.
+// --------------------------------------------------------------------------
 
-  private _slot = '';
-
-  constructor() {
-    super();
-    this.pressed = false;
-    this.disabled = false;
-    this.variant = 'default';
-    this.size = 'default';
+export class UiToggle extends Base {
+  static get observedAttributes(): string[] {
+    return ['pressed', 'variant', 'size', 'disabled'];
   }
 
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'toggle');
+    this.setAttribute('role', 'button');
+    this.setAttribute('tabindex', this.hasAttribute('disabled') ? '-1' : '0');
+    this._applyClass();
+    this._reflect();
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
+  }
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', this._onKeyDown);
+  }
+  attributeChangedCallback(name: string): void {
+    if (name === 'pressed' || name === 'disabled') this._reflect();
+    if (name === 'variant' || name === 'size') this._applyClass();
   }
 
-  render() {
-    const state = this.pressed ? 'on' : 'off';
-    return html`
-      <button
-        type="button"
-        aria-pressed=${this.pressed ? 'true' : 'false'}
-        ?disabled=${this.disabled}
-        data-slot="toggle"
-        data-state=${state}
-        data-variant=${this.variant}
-        data-size=${this.size}
-        class=${toggleClasses(this.variant, this.size)}
-        @click=${this._onClick}
-      >${unsafeHTML(this._slot)}</button>
-    `;
+  get pressed(): boolean {
+    return this.hasAttribute('pressed');
+  }
+  set pressed(v: boolean) {
+    if (v) this.setAttribute('pressed', '');
+    else this.removeAttribute('pressed');
   }
 
-  private _onClick = () => {
-    if (this.disabled) return;
+  private _applyClass(): void {
+    const userClass = this.getAttribute('class') ?? '';
+    const variant = (this.getAttribute('variant') ?? 'default') as ToggleVariant;
+    const size = (this.getAttribute('size') ?? 'default') as ToggleSize;
+    this.className = cn(toggleClass({ variant, size }), userClass);
+  }
+
+  private _reflect(): void {
+    const on = this.pressed;
+    this.setAttribute('data-state', on ? 'on' : 'off');
+    this.setAttribute('aria-pressed', String(on));
+    if (this.hasAttribute('disabled')) this.setAttribute('aria-disabled', 'true');
+    else this.removeAttribute('aria-disabled');
+  }
+
+  private _onClick = (): void => {
+    if (this.hasAttribute('disabled')) return;
     this.pressed = !this.pressed;
     this.dispatchEvent(
-      new CustomEvent('change', { detail: { pressed: this.pressed }, bubbles: true, composed: true }),
+      new CustomEvent('ui-pressed-change', { detail: { pressed: this.pressed }, bubbles: true }),
     );
   };
+
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      this._onClick();
+    }
+  };
 }
-UiToggle.register('ui-toggle');
+defineElement('ui-toggle', UiToggle);

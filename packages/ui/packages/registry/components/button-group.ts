@@ -41,7 +41,7 @@ export class UiButtonGroup extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -62,7 +62,7 @@ UiButtonGroup.register('ui-button-group');
 export class UiButtonGroupText extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {

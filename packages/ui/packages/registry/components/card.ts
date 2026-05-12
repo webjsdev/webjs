@@ -1,37 +1,48 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Card subcomponents. Each is a thin styled wrapper that captures host
- * innerHTML and re-emits it inside a styled div.
+ * Card — visual container. Pure class-helper functions; compose with any
+ * element you like (most commonly `<div>`).
  *
- * Compose via DOM nesting:
+ * shadcn parity:
+ *   Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter.
  *
- *   <ui-card>
- *     <ui-card-header>
- *       <ui-card-title>Title</ui-card-title>
- *       <ui-card-description>Description</ui-card-description>
- *     </ui-card-header>
- *     <ui-card-content>...</ui-card-content>
- *     <ui-card-footer>...</ui-card-footer>
- *   </ui-card>
+ * Usage:
+ *   <div class=${cardClass()}>
+ *     <div class=${cardHeaderClass()}>
+ *       <div class=${cardTitleClass()}>Notifications</div>
+ *       <div class=${cardDescriptionClass()}>You have 3 unread messages.</div>
+ *       <div class=${cardActionClass()}>
+ *         <button class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Mark all read</button>
+ *       </div>
+ *     </div>
+ *     <div class=${cardContentClass()}>…</div>
+ *     <div class=${cardFooterClass()}>
+ *       <button class=${buttonClass()}>Save</button>
+ *     </div>
+ *   </div>
+ *
+ * Design tokens used: --card, --card-foreground, --muted-foreground, --border.
  */
 
-function makeWrapper(tag: string, slot: string, classes: string) {
-  class Wrap extends WebComponent {
-    private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
-    render() { return html`<div data-slot=${slot} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`; }
-  }
-  Wrap.register(tag);
-  return Wrap;
-}
+/** Card root. `data-slot="card"` recommended on the host. */
+export const cardClass = (): string =>
+  'flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm';
 
-export const UiCard = makeWrapper('ui-card', 'card', 'flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm');
-export const UiCardHeader = makeWrapper('ui-card-header', 'card-header', '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6');
-export const UiCardTitle = makeWrapper('ui-card-title', 'card-title', 'leading-none font-semibold');
-export const UiCardDescription = makeWrapper('ui-card-description', 'card-description', 'text-sm text-muted-foreground');
-export const UiCardAction = makeWrapper('ui-card-action', 'card-action', 'col-start-2 row-span-2 row-start-1 self-start justify-self-end');
-export const UiCardContent = makeWrapper('ui-card-content', 'card-content', 'px-6');
-export const UiCardFooter = makeWrapper('ui-card-footer', 'card-footer', 'flex items-center px-6 [.border-t]:pt-6');
+/** Card header — supports an optional `CardAction` slot via grid layout. */
+export const cardHeaderClass = (): string =>
+  '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6';
+
+/** Card title — heading text within the header. */
+export const cardTitleClass = (): string => 'leading-none font-semibold';
+
+/** Card description — subdued caption beneath the title. */
+export const cardDescriptionClass = (): string => 'text-sm text-muted-foreground';
+
+/** Card action — right-aligned controls inside the header (matches shadcn CardAction). */
+export const cardActionClass = (): string =>
+  'col-start-2 row-span-2 row-start-1 self-start justify-self-end';
+
+/** Card content — the main body region. */
+export const cardContentClass = (): string => 'px-6';
+
+/** Card footer — trailing controls or actions. */
+export const cardFooterClass = (): string => 'flex items-center px-6 [.border-t]:pt-6';

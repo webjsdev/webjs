@@ -101,7 +101,7 @@ export class UiSelectTrigger extends WebComponent {
   private _slot = '';
   constructor() { super(); this.size = 'default'; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-select-toggle', { bubbles: true })));
   }
@@ -139,7 +139,7 @@ export class UiSelectContent extends WebComponent {
   private _cleanupOutside: (() => void) | null = null;
   private _onKey: ((e: KeyboardEvent) => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }
@@ -216,7 +216,7 @@ export class UiSelectItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; this.disabled = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.setAttribute('tabindex', '-1');
     this.addEventListener('click', () => {
@@ -244,7 +244,7 @@ UiSelectItem.register('ui-select-item');
 function makeChild(tag: string, slot: string, classes: string, role?: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() {
       return role
         ? html`<div data-slot=${slot} role=${role} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`

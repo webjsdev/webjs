@@ -77,7 +77,7 @@ UiDrawer.register('ui-drawer');
 export class UiDrawerTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', this._onClick);
   }
@@ -89,7 +89,7 @@ UiDrawerTrigger.register('ui-drawer-trigger');
 export class UiDrawerClose extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', this._onClick);
   }
@@ -127,7 +127,7 @@ export class UiDrawerContent extends WebComponent {
   private _sign: 1 | -1 = 1; // +1 = dismiss when positive delta (bottom/right), -1 = dismiss when negative (top/left)
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -317,7 +317,7 @@ UiDrawerContent.register('ui-drawer-content');
 function makeChild(tag: string, slot: string, classes: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() { return html`<div data-slot=${slot} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`; }
   }
   C.register(tag);

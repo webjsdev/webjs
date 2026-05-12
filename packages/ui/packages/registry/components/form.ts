@@ -491,7 +491,7 @@ export class UiForm extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     // Listen for field registrations bubbling up from descendants.
     this.addEventListener('ui-form-field-register', this._onFieldRegister as EventListener);
@@ -564,7 +564,7 @@ export class UiFormField extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -658,7 +658,7 @@ export class UiFormLabel extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -685,7 +685,7 @@ UiFormLabel.register('ui-form-label');
 export class UiFormControl extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -701,7 +701,7 @@ UiFormControl.register('ui-form-control');
 export class UiFormDescription extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -733,7 +733,7 @@ export class UiFormMessage extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 

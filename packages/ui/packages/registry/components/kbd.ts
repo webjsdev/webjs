@@ -1,41 +1,22 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Keyboard key indicator (`<kbd>`). Use `<ui-kbd>⌘K</ui-kbd>`.
- * `<ui-kbd-group>` groups multiple kbd elements with a small gap.
+ * Kbd — keyboard chord display. Pure class helpers; use with native `<kbd>`.
+ *
+ * shadcn parity: Kbd, KbdGroup.
+ *
+ * Usage:
+ *   <kbd class=${kbdClass()}>⌘</kbd>
+ *   <kbd class=${kbdClass()}>K</kbd>
+ *
+ *   <div class=${kbdGroupClass()}>
+ *     <kbd class=${kbdClass()}>⌘</kbd>
+ *     <kbd class=${kbdClass()}>Shift</kbd>
+ *     <kbd class=${kbdClass()}>P</kbd>
+ *   </div>
+ *
+ * Design tokens used: --muted, --muted-foreground, --background.
  */
-export class UiKbd extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-  }
-  render() {
-    return html`<kbd
-      data-slot="kbd"
-      class=${cn(
-        "pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none",
-        "[&_svg:not([class*='size-'])]:size-3",
-        '[[data-slot=tooltip-content]_&]:bg-background/20 [[data-slot=tooltip-content]_&]:text-background dark:[[data-slot=tooltip-content]_&]:bg-background/10',
-      )}
-    >${unsafeHTML(this._slot)}</kbd>`;
-  }
-}
-UiKbd.register('ui-kbd');
 
-export class UiKbdGroup extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-  }
-  render() {
-    return html`<kbd
-      data-slot="kbd-group"
-      class=${cn('inline-flex items-center gap-1')}
-    >${unsafeHTML(this._slot)}</kbd>`;
-  }
-}
-UiKbdGroup.register('ui-kbd-group');
+export const kbdClass = (): string =>
+  "pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none [&_svg:not([class*='size-'])]:size-3 [[data-slot=tooltip-content]_&]:bg-background/20 [[data-slot=tooltip-content]_&]:text-background dark:[[data-slot=tooltip-content]_&]:bg-background/10";
+
+export const kbdGroupClass = (): string => 'inline-flex items-center gap-1';

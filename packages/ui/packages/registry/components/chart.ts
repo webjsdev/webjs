@@ -87,7 +87,7 @@ export class UiChartContainer extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -906,7 +906,7 @@ UiChart.register('ui-chart');
 export class UiChartTooltip extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     // Listen for hover events from the sibling <ui-chart>.
     const root = this.closest('[data-chart]') ?? this.parentElement;
@@ -1009,7 +1009,7 @@ UiChartTooltipContent.register('ui-chart-tooltip-content');
 export class UiChartLegend extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
