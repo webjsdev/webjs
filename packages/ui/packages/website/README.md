@@ -9,16 +9,15 @@ A webjs app — dogfoods the framework.
 
 | Path | Serves |
 |---|---|
-| `GET /r` | Full manifest with every item's content inlined |
-| `GET /r/index.json` | Flat metadata-only list of every registry item |
-| `GET /r/<name>.json` | One registry item (with inlined `content`) |
-| `GET /r/registry.json` | Alias for `/r` (full manifest) |
+| `GET /registry` | Full manifest with every item's content inlined |
+| `GET /registry/index.json` | Flat metadata-only list of every registry item |
+| `GET /registry/<name>.json` | One registry item (with inlined `content`) |
 | `GET /docs/components/<name>` | Docs page for a single component (preview + props + install) |
 | `GET /` | Index of all components |
 
 Registry JSON is composed on demand from `packages/ui/packages/registry/`
 sources by `app/_lib/registry.server.ts`. There is no build step and no
-`r/` output to commit.
+generated output to commit.
 
 ## Dev
 
