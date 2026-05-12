@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "aspect-ratio",
+  "type": "registry:ui",
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/aspect-ratio.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { unsafeHTML } from '@webjskit/core/directives';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Aspect-ratio container. Set the `ratio` attribute to a number\n * (e.g. `1.7777` for 16:9 or `1` for square). Slotted children fill the box.\n */\nexport class UiAspectRatio extends WebComponent {\n  static properties = {\n    ratio: { type: Number },\n  };\n  declare ratio: number;\n\n  private _slot = '';\n\n  constructor() {\n    super();\n    this.ratio = 1;\n  }\n\n  connectedCallback() {\n    if (!this._slot) this._slot = this.innerHTML;\n    super.connectedCallback();\n  }\n\n  render() {\n    return html`<div\n      data-slot=\"aspect-ratio\"\n      style=\"aspect-ratio: ${this.ratio};\"\n      class=${cn('w-full')}\n    >${unsafeHTML(this._slot)}</div>`;\n  }\n}\nUiAspectRatio.register('ui-aspect-ratio');\n"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "scroll-area",
+  "type": "registry:ui",
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/scroll-area.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { unsafeHTML } from '@webjskit/core/directives';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Scroll area — a scrolling container around slotted children.\n *\n * TODO(v2): port the Radix custom-scrollbar UI. v1 uses the native scrollbar\n * via `overflow-auto` for simplicity. Set a `height`/`max-height` on the\n * element (e.g. `<ui-scroll-area style=\"height:200px\">`) so it actually scrolls.\n */\nexport class UiScrollArea extends WebComponent {\n  private _slot = '';\n  connectedCallback() {\n    if (!this._slot) this._slot = this.innerHTML;\n    super.connectedCallback();\n  }\n  render() {\n    return html`<div\n      data-slot=\"scroll-area\"\n      class=${cn('relative overflow-hidden')}\n    >\n      <div\n        data-slot=\"scroll-area-viewport\"\n        class=${cn(\n          'size-full overflow-auto rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1',\n        )}\n      >${unsafeHTML(this._slot)}</div>\n    </div>`;\n  }\n}\nUiScrollArea.register('ui-scroll-area');\n"
+    }
+  ]
+}

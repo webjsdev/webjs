@@ -23,6 +23,9 @@ const USAGE = `webjs — commands:
   webjs db generate                               Run \`prisma generate\`
   webjs db migrate [name]                         Run \`prisma migrate dev\`
   webjs db studio                                 Run \`prisma studio\`
+  webjs ui <subcmd>                               shadcn-style component CLI
+                                                  (init / add / list / view / diff / info)
+                                                  Requires @webjskit/ui installed in the project
   webjs help                                      Show this help`;
 
 /** @param {string[]} args */
@@ -105,6 +108,32 @@ async function main() {
       const prismaArgs = map[sub];
       if (!prismaArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
       const child = spawn('npx', ['prisma', ...prismaArgs], { stdio: 'inherit', cwd: process.cwd() });
+      child.on('exit', (code) => process.exit(code ?? 0));
+      break;
+    }
+    case 'ui': {
+      // Delegate to @webjskit/ui. Bundled as a hard dependency of
+      // @webjskit/cli — `npm install -g @webjskit/cli` pulls it in
+      // automatically, so `webjs ui add button` works out of the box
+      // without an extra install in user projects.
+      const { createRequire } = await import('node:module');
+      const req = createRequire(import.meta.url);
+      let entry;
+      try {
+        entry = req.resolve('@webjskit/ui/bin/webjsui.js');
+      } catch {
+        // Fallback: try resolving from the user's cwd in case of weird
+        // workspace setups.
+        try {
+          const userReq = createRequire(join(process.cwd(), 'package.json'));
+          entry = userReq.resolve('@webjskit/ui/bin/webjsui.js');
+        } catch {
+          console.error('@webjskit/ui could not be resolved.');
+          console.error('Reinstall the CLI:  npm install -g @webjskit/cli');
+          process.exit(1);
+        }
+      }
+      const child = spawn('node', [entry, ...rest], { stdio: 'inherit', cwd: process.cwd() });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }

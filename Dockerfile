@@ -16,13 +16,16 @@ WORKDIR /app
 # Copy every workspace manifest before source so dep changes don't bust
 # the source layer and vice versa.
 COPY package.json package-lock.json ./
-COPY packages/cli/package.json            ./packages/cli/
-COPY packages/core/package.json           ./packages/core/
-COPY packages/server/package.json         ./packages/server/
-COPY packages/ts-plugin/package.json      ./packages/ts-plugin/
-COPY examples/blog/package.json           ./examples/blog/
-COPY website/package.json                 ./website/
-COPY docs/package.json                    ./docs/
+COPY packages/cli/package.json                       ./packages/cli/
+COPY packages/core/package.json                      ./packages/core/
+COPY packages/server/package.json                    ./packages/server/
+COPY packages/ts-plugin/package.json                 ./packages/ts-plugin/
+COPY packages/ui/package.json                        ./packages/ui/
+COPY packages/ui/packages/registry/package.json      ./packages/ui/packages/registry/
+COPY packages/ui/packages/website/package.json       ./packages/ui/packages/website/
+COPY examples/blog/package.json                      ./examples/blog/
+COPY website/package.json                            ./website/
+COPY docs/package.json                               ./docs/
 
 # Copy the CLI's bin/ before install so npm can symlink it into
 # /app/node_modules/.bin/webjs. Without this, the bin target doesn't
@@ -42,9 +45,12 @@ COPY docs      ./docs
 # Blog: generate Prisma client (needs schema.prisma in context).
 RUN cd examples/blog && npx prisma generate
 
-# Tailwind: compile per-app CSS (all three use the CLI, no browser runtime).
-RUN npx tailwindcss -i website/public/input.css      -o website/public/tailwind.css      --minify \
- && npx tailwindcss -i docs/public/input.css         -o docs/public/tailwind.css         --minify \
+# UI registry: compile components → r/*.json so the ui-website can serve them.
+RUN node packages/ui/packages/registry/scripts/build.js
+
+# Tailwind: compile per-app CSS (all four use the CLI, no browser runtime).
+RUN npx tailwindcss -i website/public/input.css       -o website/public/tailwind.css       --minify \
+ && npx tailwindcss -i docs/public/input.css          -o docs/public/tailwind.css          --minify \
  && npx tailwindcss -i examples/blog/public/input.css -o examples/blog/public/tailwind.css --minify
 
 # Defaults — Railway / compose override per service.

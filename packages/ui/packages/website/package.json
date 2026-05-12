@@ -1,0 +1,18 @@
+{
+  "name": "@webjskit/ui-website",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Registry host + docs site for @webjskit/ui. Serves /r/<name>.json and renders per-component docs.",
+  "scripts": {
+    "dev": "webjs dev --port 5001",
+    "start": "webjs start",
+    "build": "webjs build"
+  },
+  "dependencies": {
+    "@webjskit/cli": "^0.4.0",
+    "@webjskit/core": "^0.3.0",
+    "@webjskit/server": "^0.4.0",
+    "@webjskit/ui-registry": "*"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "checkbox",
+  "type": "registry:ui",
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/checkbox.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Checkbox. Native `<button role=\"checkbox\">`. Click toggles `checked`.\n * Renders a lucide CheckIcon when checked. Dispatches `change` on the host.\n *\n *   <ui-checkbox ?checked=${on} @change=${e => …}></ui-checkbox>\n */\nexport class UiCheckbox extends WebComponent {\n  static properties = {\n    checked: { type: Boolean, reflect: true },\n    disabled: { type: Boolean, reflect: true },\n    name: { type: String },\n    value: { type: String },\n    id: { type: String, reflect: true },\n    required: { type: Boolean },\n  };\n  declare checked: boolean;\n  declare disabled: boolean;\n  declare name: string;\n  declare value: string;\n  declare id: string;\n  declare required: boolean;\n\n  constructor() {\n    super();\n    this.checked = false;\n    this.disabled = false;\n    this.name = '';\n    this.value = 'on';\n    this.id = '';\n    this.required = false;\n  }\n\n  render() {\n    const state = this.checked ? 'checked' : 'unchecked';\n    return html`\n      <button\n        type=\"button\"\n        role=\"checkbox\"\n        aria-checked=${this.checked ? 'true' : 'false'}\n        ?disabled=${this.disabled}\n        data-slot=\"checkbox\"\n        data-state=${state}\n        class=${cn(\n          'peer size-4 shrink-0 rounded-[4px] border border-input shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-input/30 dark:aria-invalid:ring-destructive/40 dark:data-[state=checked]:bg-primary',\n        )}\n        @click=${this._onClick}\n      >\n        ${this.checked\n          ? html`<span\n              data-slot=\"checkbox-indicator\"\n              class=\"grid place-content-center text-current transition-none\"\n            >\n              <svg\n                xmlns=\"http://www.w3.org/2000/svg\"\n                width=\"14\"\n                height=\"14\"\n                viewBox=\"0 0 24 24\"\n                fill=\"none\"\n                stroke=\"currentColor\"\n                stroke-width=\"2\"\n                stroke-linecap=\"round\"\n                stroke-linejoin=\"round\"\n                class=\"size-3.5\"\n              ><path d=\"M20 6 9 17l-5-5\"/></svg>\n            </span>`\n          : ''}\n      </button>\n    `;\n  }\n\n  private _onClick = () => {\n    if (this.disabled) return;\n    this.checked = !this.checked;\n    this.dispatchEvent(\n      new CustomEvent('change', { detail: { checked: this.checked }, bubbles: true, composed: true }),\n    );\n  };\n}\nUiCheckbox.register('ui-checkbox');\n"
+    }
+  ]
+}

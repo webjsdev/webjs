@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "theme-mauve",
+  "type": "registry:theme",
+  "title": "Mauve",
+  "description": "mauve base colour",
+  "cssVars": {
+    "light": {
+      "primary": "oklch(0.42 0.05 296)",
+      "primary-foreground": "oklch(0.985 0 0)",
+      "accent": "oklch(0.96 0.01 296)",
+      "accent-foreground": "oklch(0.42 0.05 296)",
+      "ring": "oklch(0.55 0.05 296)"
+    },
+    "dark": {
+      "primary": "oklch(0.75 0.06 296)",
+      "accent": "oklch(0.35 0.04 296)",
+      "ring": "oklch(0.55 0.05 296)"
+    }
+  }
+}

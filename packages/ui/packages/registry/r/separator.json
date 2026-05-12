@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "separator",
+  "type": "registry:ui",
+  "registryDependencies": [
+    "lib-utils"
+  ],
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/separator.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { cn } from '../lib/utils.ts';\n\nexport class UiSeparator extends WebComponent {\n  static properties = {\n    orientation: { type: String, reflect: true },\n    decorative: { type: Boolean, reflect: true },\n  };\n  declare orientation: 'horizontal' | 'vertical';\n  declare decorative: boolean;\n\n  constructor() {\n    super();\n    this.orientation = 'horizontal';\n    this.decorative = true;\n  }\n\n  render() {\n    return html`<div\n      data-slot=\"separator-root\"\n      data-orientation=${this.orientation}\n      role=${this.decorative ? 'none' : 'separator'}\n      aria-orientation=${this.orientation === 'vertical' ? 'vertical' : 'horizontal'}\n      class=${cn(\n        'bg-border shrink-0',\n        this.orientation === 'horizontal' ? 'data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full' : 'data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px',\n      )}\n    ></div>`;\n  }\n}\nUiSeparator.register('ui-separator');\n"
+    }
+  ]
+}

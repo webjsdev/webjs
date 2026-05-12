@@ -57,6 +57,12 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    title: 'Component Library',
+    items: [
+      { href: '/docs/ui', label: '@webjskit/ui (shadcn-style)' },
+    ],
+  },
+  {
     title: 'Advanced',
     items: [
       { href: '/docs/controllers', label: 'Reactive Controllers' },
