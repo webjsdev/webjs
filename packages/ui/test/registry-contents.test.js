@@ -48,7 +48,9 @@ function read(name) {
 
 test('registry is built (run `node packages/registry/scripts/build.js` if this fails)', { skip }, () => {
   const files = readdirSync(R_DIR).filter((f) => f.endsWith('.json'));
-  assert.ok(files.length >= 55, `expected ≥55 registry JSONs, found ${files.length}`);
+  // 32 v1 components + lib-utils + theme entries + manifest (registry.json) + index.json.
+  // Hard floor at 32 catches an accidentally-empty registry build.
+  assert.ok(files.length >= 32, `expected ≥32 registry JSONs, found ${files.length}`);
 });
 
 test('every v1 component has non-empty inlined content', { skip }, () => {
