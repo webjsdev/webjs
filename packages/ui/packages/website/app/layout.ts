@@ -88,7 +88,7 @@ export default function Layout({ children }: { children: any }) {
       <body>
         <div class="announce">
           <span class="tag">v1</span>
-          <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer">Part of webjs — the AI-first, web-components-first framework &rarr;</a>
+          <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer">Part of webjs - the AI-first, web components framework</a>
         </div>
         <header class="border-b">
           <div class="max-w-5xl mx-auto flex h-14 items-center px-6 gap-6">

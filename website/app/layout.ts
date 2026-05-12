@@ -189,8 +189,8 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <div class="announce">
       <span class="tag">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer">
-        @webjskit/ui — shadcn-style web components for any project &rarr;
+      <a href="https://ui.webjs.dev" target="_blank" rel="noopener noreferrer">
+        Introducing webjs ui, a shadcn equivalent for web components
       </a>
     </div>
 
