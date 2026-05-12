@@ -5,10 +5,10 @@ const WEBSITE_URL = env.WEBSITE_URL || 'https://webjs.dev';
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.dev';
 
 export const metadata = {
-  title: 'Webjs UI — shadcn-style components for web components',
-  description: 'A shadcn-equivalent component registry. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla — any project with Tailwind v4.',
+  title: 'Webjs UI — AI-first component library',
+  description: 'An AI-first component library. Two-tier composition — class-helper functions for visuals, custom elements only where state matters. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla — any project with Tailwind v4.',
   themeColor: '#1c1613',
-  openGraph: { type: 'website', title: 'Webjs UI', description: 'shadcn-style components for web components' },
+  openGraph: { type: 'website', title: 'Webjs UI', description: 'AI-first component library' },
 };
 
 export default function Layout({ children }: { children: any }) {
