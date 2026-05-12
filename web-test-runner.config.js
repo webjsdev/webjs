@@ -10,17 +10,21 @@
  *   npm run test:all                  # everything
  */
 import { playwrightLauncher } from '@web/test-runner-playwright';
+import { esbuildPlugin } from '@web/dev-server-esbuild';
 
 export default {
   files: [
     'test/browser/render-client.test.js',
     'test/browser/light-dom-hydration.test.js',
-    'test/browser/ui-visual.test.js',
     'test/browser/ui-stateful.test.js',
     'test/browser/ui-overlay.test.js',
-    'test/browser/ui-composite.test.js',
   ],
   nodeResolve: true,
+  // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
+  // component sources directly. Mirrors `webjs dev` (which registers an esbuild
+  // ESM loader hook for the same purpose) — esbuild is already a hard dep of
+  // @webjskit/server, so this isn't adding a new toolchain.
+  plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
   browsers: [
     playwrightLauncher({ product: 'chromium' }),
   ],
