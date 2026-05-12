@@ -63,7 +63,17 @@ export default function Layout({ children }: { children: any }) {
           .text-muted-foreground { color: var(--fg-muted); }
           .text-foreground { color: var(--fg); }
           .bg-background { background: var(--bg); }
+          /* Light, low-contrast surface — used for chips / badges, not code blocks. */
           .bg-muted { background: var(--bg-subtle); }
+          /* Code-block surface: always dark for clear differentiation against
+             the page background, regardless of light/dark mode. Mirrors how
+             the shadcn website renders pre blocks (zinc-950 in light mode). */
+          .bg-code, pre.bg-muted, pre {
+            background: oklch(0.18 0.01 55);
+            color: oklch(0.92 0.008 80);
+            border: 1px solid color-mix(in oklch, oklch(0.18 0.01 55) 80%, var(--border));
+          }
+          pre code { color: inherit; }
           .bg-primary { background: var(--accent); }
           .text-primary { color: var(--accent); }
           .text-primary-foreground { color: var(--accent-fg); }
@@ -88,7 +98,12 @@ export default function Layout({ children }: { children: any }) {
       <body>
         <div class="announce">
           <span class="tag">v1</span>
-          <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer">Part of webjs - the AI-first, web components framework</a>
+          <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5">
+            Part of webjs - the AI-first, web components framework
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
+            </svg>
+          </a>
         </div>
         <header class="border-b">
           <div class="max-w-5xl mx-auto flex flex-wrap min-h-14 items-center px-4 sm:px-6 py-2 gap-x-4 gap-y-2 sm:gap-6">
@@ -106,11 +121,11 @@ export default function Layout({ children }: { children: any }) {
           </div>
         </header>
         <main class="max-w-5xl mx-auto px-6 py-10">${children}</main>
-        <footer class="border-t mt-20 py-8" style="color: var(--fg-subtle); font-size: 13px">
+        <footer class="border-t mt-20 py-8 text-center" style="color: var(--fg-subtle); font-size: 13px">
           <div class="max-w-5xl mx-auto px-6">
-            <a href=${WEBSITE_URL} target="_blank">webjs.dev</a> ·
+            <a href="https://webjs.dev" target="_blank">WebJs</a> ·
             <a href=${DOCS_URL} target="_blank">Docs</a> ·
-            <a href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a> · MIT
+            <a href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
           </div>
         </footer>
       </body>
