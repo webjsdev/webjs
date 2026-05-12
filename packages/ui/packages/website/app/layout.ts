@@ -91,16 +91,16 @@ export default function Layout({ children }: { children: any }) {
           <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer">Part of webjs - the AI-first, web components framework</a>
         </div>
         <header class="border-b">
-          <div class="max-w-5xl mx-auto flex h-14 items-center px-6 gap-6">
-            <a href="/" class="font-bold text-base" style="color: var(--fg)">
+          <div class="max-w-5xl mx-auto flex flex-wrap min-h-14 items-center px-4 sm:px-6 py-2 gap-x-4 gap-y-2 sm:gap-6">
+            <a href="/" class="font-bold text-base inline-flex items-center" style="color: var(--fg)">
               <span style="display:inline-block; width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg, var(--accent), color-mix(in oklch, var(--accent) 55%, var(--fg))); vertical-align:middle; margin-right:8px"></span>
               @webjskit/ui
             </a>
-            <nav class="flex gap-4 text-sm" style="color: var(--fg-muted); margin-left: auto">
+            <nav class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:ml-auto sm:gap-x-5" style="color: var(--fg-muted)">
               <a href="/" style="color: var(--fg-muted)">Components</a>
               <a href="/docs" style="color: var(--fg-muted)">Docs</a>
-              <a href=${WEBSITE_URL} target="_blank" style="color: var(--fg-muted)">webjs.dev</a>
-              <a href=${DOCS_URL} target="_blank" style="color: var(--fg-muted)">Framework Docs</a>
+              <a class="hidden sm:inline" href=${WEBSITE_URL} target="_blank" style="color: var(--fg-muted)">webjs.dev</a>
+              <a class="hidden sm:inline" href=${DOCS_URL} target="_blank" style="color: var(--fg-muted)">Framework Docs</a>
               <a href="https://github.com/vivek7405/webjs" target="_blank" style="color: var(--fg-muted)">GitHub</a>
             </nav>
           </div>
