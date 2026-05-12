@@ -9,7 +9,7 @@
  *
  * Run via `npm run preview:build` / automatically before `dev` and `start`.
  */
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,10 +31,17 @@ if (!existsSync(COMPONENTS_SRC)) {
 mkdirSync(COMPONENTS_DST, { recursive: true });
 mkdirSync(dirname(LIB_DST), { recursive: true });
 
-// 1. Copy lib/utils.ts verbatim.
+// 1. Clean the destination so removed-from-registry components don't linger as
+//    orphans (they'd still be importable from website code and confuse SSR /
+//    the dev server's module graph). We only remove .ts files we'd manage.
+for (const name of readdirSync(COMPONENTS_DST)) {
+  if (name.endsWith('.ts')) rmSync(join(COMPONENTS_DST, name));
+}
+
+// 2. Copy lib/utils.ts verbatim.
 copyFileSync(LIB_SRC, LIB_DST);
 
-// 2. Copy each component, rewriting the `../lib/utils.ts` import path so it
+// 3. Copy each component, rewriting the `../lib/utils.ts` import path so it
 //    points to the website's `lib/utils.ts` (two levels up from
 //    `components/ui/<name>.ts`).
 let copied = 0;
@@ -43,20 +50,7 @@ for (const name of readdirSync(COMPONENTS_SRC)) {
   const raw = readFileSync(join(COMPONENTS_SRC, name), 'utf8');
   const rewritten = raw
     .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"')
-    // `@webjskit/core/directives` isn't a declared subpath export in the
-    // published `@webjskit/core` package — `unsafeHTML` is re-exported from
-    // the main entry. Rewrite so the website resolves correctly against the
-    // installed package.
-    .replaceAll("from '@webjskit/core/directives'", "from '@webjskit/core'")
-    .replaceAll('from "@webjskit/core/directives"', 'from "@webjskit/core"')
-    // `@floating-ui/dom` has dual ESM/CJS shape that webjs's auto-vendor
-    // bundles as default-export-only — named imports break in the browser.
-    // Route through a website-local shim that handles both shapes. The shim
-    // lives at app/libs/floating-ui-shim.ts; from `components/ui/<x>.ts`
-    // that's `../../app/libs/floating-ui-shim.ts`.
-    .replaceAll("from '@floating-ui/dom'", "from '../../app/libs/floating-ui-shim.ts'")
-    .replaceAll('from "@floating-ui/dom"', 'from "../../app/libs/floating-ui-shim.ts"');
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
   writeFileSync(join(COMPONENTS_DST, name), rewritten);
   copied++;
 }

@@ -233,8 +233,7 @@
       "name": "dropdown-menu",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core",
-        "@floating-ui/dom"
+        "@webjskit/core"
       ],
       "files": [
         {
@@ -249,8 +248,7 @@
       "name": "hover-card",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core",
-        "@floating-ui/dom"
+        "@webjskit/core"
       ],
       "files": [
         {
@@ -349,8 +347,7 @@
       "name": "popover",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core",
-        "@floating-ui/dom"
+        "@webjskit/core"
       ],
       "files": [
         {
@@ -536,8 +533,7 @@
       "name": "tooltip",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core",
-        "@floating-ui/dom"
+        "@webjskit/core"
       ],
       "files": [
         {

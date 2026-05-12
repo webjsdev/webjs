@@ -38,8 +38,8 @@ npx webjsui add button card dialog</code></pre>
         stylesheet.
       </p>
       <p>
-        <code>add &lt;name&gt;</code> copies the component source to <code>components/ui/&lt;name&gt;.ts</code>
-        and installs any npm dependencies (like <code>@floating-ui/dom</code> for popover-style components).
+        <code>add &lt;name&gt;</code> copies the component source to <code>components/ui/&lt;name&gt;.ts</code>.
+        Components are dependency-free — positioning, focus trap, toast queue are all hand-rolled.
       </p>
       <h2>Usage</h2>
       <pre><code class="block bg-muted p-4 rounded">&lt;ui-card&gt;

@@ -3,8 +3,7 @@
   "name": "tooltip",
   "type": "registry:ui",
   "dependencies": [
-    "@webjskit/core",
-    "@floating-ui/dom"
+    "@webjskit/core"
   ],
   "files": [
     {
