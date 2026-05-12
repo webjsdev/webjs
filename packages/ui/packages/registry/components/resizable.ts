@@ -15,8 +15,17 @@ import { cn } from '../lib/utils.ts';
  * v1 SCOPE: mouse-pointer drag-to-resize only. The handle adjusts the
  * flex-basis of its two adjacent panels by tracking pointer movement.
  *
- * TODO(v2): keyboard support (Arrow keys, Home/End), min/max size
- * enforcement past initial defaults, panel collapse, persistence.
+ * v2: keyboard support on `<ui-resizable-handle>`. The handle is
+ * focusable (`tabindex="0"`), exposes the separator role with proper
+ * `aria-orientation` / `aria-valuenow` / `aria-valuemin` / `aria-valuemax`
+ * pulled from the adjacent panels' sizes, and responds to:
+ *   - Arrow keys (Left/Right for horizontal, Up/Down for vertical) —
+ *     resize ±1% (or ±10% with Shift).
+ *   - Home / End — collapse the previous / next panel to its min size.
+ *   - Enter — toggle collapsed state of one adjacent panel.
+ *
+ * TODO(v3): min/max size enforcement past initial defaults,
+ * persistence.
  */
 
 export class UiResizablePanelGroup extends WebComponent {
@@ -114,6 +123,8 @@ export class UiResizableHandle extends WebComponent {
   private _isVertical = false;
   private _startPrevSize = 0;
   private _startNextSize = 0;
+  /** Snapshot of prev-panel size before the most recent Enter collapse. */
+  private _collapsedSnapshot: number | null = null;
 
   constructor() {
     super();
@@ -122,15 +133,130 @@ export class UiResizableHandle extends WebComponent {
 
   connectedCallback() {
     super.connectedCallback();
+    // The inner [data-slot] div carries `tabindex=0`, but we also make the
+    // host focusable so users tabbing directly to `<ui-resizable-handle>`
+    // still hit the keyboard handler.
+    if (!this.hasAttribute('tabindex')) this.setAttribute('tabindex', '0');
     this.addEventListener('pointerdown', this._onPointerDown);
+    this.addEventListener('keydown', this._onKeyDown);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('pointerdown', this._onPointerDown);
+    this.removeEventListener('keydown', this._onKeyDown);
     document.removeEventListener('pointermove', this._onPointerMove);
     document.removeEventListener('pointerup', this._onPointerUp);
   }
+
+  /** Resolve the adjacent panels — used by keyboard + ARIA reflection. */
+  _adjacentPanels(): { prev: UiResizablePanel | null; next: UiResizablePanel | null; isVertical: boolean } {
+    const group = this.closest('ui-resizable-panel-group') as UiResizablePanelGroup | null;
+    const prev = this.previousElementSibling instanceof UiResizablePanel ? this.previousElementSibling : null;
+    const next = this.nextElementSibling instanceof UiResizablePanel ? this.nextElementSibling : null;
+    return { prev, next, isVertical: group?.direction === 'vertical' };
+  }
+
+  /** Apply a delta percent to the adjacent panels, clamped to min/max. */
+  _resizeBy(deltaPct: number): void {
+    const { prev, next } = this._adjacentPanels();
+    if (!prev || !next) return;
+    const newPrev = prev.size + deltaPct;
+    const newNext = next.size - deltaPct;
+    if (newPrev < prev.minSize || newNext < next.minSize) return;
+    if (newPrev > prev.maxSize || newNext > next.maxSize) return;
+    prev.setSize(newPrev);
+    next.setSize(newNext);
+    this._reflectAria();
+  }
+
+  /** Reflect current size as `aria-valuenow` / `aria-valuemin` / `aria-valuemax`. */
+  _reflectAria(): void {
+    const { prev } = this._adjacentPanels();
+    if (!prev) return;
+    const handle = this.querySelector('[data-slot="resizable-handle"]') as HTMLElement | null;
+    if (!handle) return;
+    handle.setAttribute('aria-valuenow', String(Math.round(prev.size)));
+    handle.setAttribute('aria-valuemin', String(Math.round(prev.minSize)));
+    handle.setAttribute('aria-valuemax', String(Math.round(prev.maxSize)));
+  }
+
+  firstUpdated() {
+    this._reflectAria();
+  }
+
+  _onKeyDown = (e: KeyboardEvent) => {
+    const { prev, next, isVertical } = this._adjacentPanels();
+    if (!prev || !next) return;
+    const step = e.shiftKey ? 10 : 1;
+    let handled = true;
+    switch (e.key) {
+      case 'ArrowLeft':
+        if (!isVertical) this._resizeBy(-step);
+        else handled = false;
+        break;
+      case 'ArrowRight':
+        if (!isVertical) this._resizeBy(step);
+        else handled = false;
+        break;
+      case 'ArrowUp':
+        if (isVertical) this._resizeBy(-step);
+        else handled = false;
+        break;
+      case 'ArrowDown':
+        if (isVertical) this._resizeBy(step);
+        else handled = false;
+        break;
+      case 'Home': {
+        // Collapse the previous panel to its min, give the slack to next.
+        const slack = prev.size - prev.minSize;
+        if (slack <= 0) break;
+        const newNext = next.size + slack;
+        if (newNext > next.maxSize) break;
+        prev.setSize(prev.minSize);
+        next.setSize(newNext);
+        this._reflectAria();
+        break;
+      }
+      case 'End': {
+        // Collapse the next panel to its min, give the slack to prev.
+        const slack = next.size - next.minSize;
+        if (slack <= 0) break;
+        const newPrev = prev.size + slack;
+        if (newPrev > prev.maxSize) break;
+        next.setSize(next.minSize);
+        prev.setSize(newPrev);
+        this._reflectAria();
+        break;
+      }
+      case 'Enter': {
+        // Toggle collapsed: if not collapsed, collapse prev to its min and
+        // remember its previous size; if collapsed, restore it.
+        if (this._collapsedSnapshot != null) {
+          const restorePrev = this._collapsedSnapshot;
+          const delta = restorePrev - prev.size;
+          const newNext = next.size - delta;
+          if (newNext < next.minSize || newNext > next.maxSize) break;
+          prev.setSize(restorePrev);
+          next.setSize(newNext);
+          this._collapsedSnapshot = null;
+        } else {
+          const slack = prev.size - prev.minSize;
+          if (slack <= 0) break;
+          const newNext = next.size + slack;
+          if (newNext > next.maxSize) break;
+          this._collapsedSnapshot = prev.size;
+          prev.setSize(prev.minSize);
+          next.setSize(newNext);
+        }
+        this._reflectAria();
+        break;
+      }
+      default:
+        handled = false;
+    }
+    if (handled) e.preventDefault();
+  };
 
   _onPointerDown = (e: PointerEvent) => {
     const group = this.closest('ui-resizable-panel-group') as UiResizablePanelGroup | null;
@@ -175,11 +301,19 @@ export class UiResizableHandle extends WebComponent {
   render() {
     const group = this.closest('ui-resizable-panel-group') as UiResizablePanelGroup | null;
     const isVertical = group?.direction === 'vertical';
+    const { prev } = this._adjacentPanels();
+    const valueNow = prev ? Math.round(prev.size) : 50;
+    const valueMin = prev ? Math.round(prev.minSize) : 0;
+    const valueMax = prev ? Math.round(prev.maxSize) : 100;
     return html`
       <div
         role="separator"
         data-slot="resizable-handle"
+        tabindex="0"
         aria-orientation=${isVertical ? 'horizontal' : 'vertical'}
+        aria-valuenow=${String(valueNow)}
+        aria-valuemin=${String(valueMin)}
+        aria-valuemax=${String(valueMax)}
         class=${cn(
           'relative flex items-center justify-center bg-border focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-hidden',
           isVertical
