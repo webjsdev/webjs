@@ -8,7 +8,7 @@ export default function Components() {
     <p>webjs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle — there is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
 
     <h2>The WebComponent Base Class</h2>
-    <p>Every interactive component extends <code>WebComponent</code> and declares three static fields: a <strong>tag name</strong>, a <strong>property map</strong>, and <strong>styles</strong>. Then it implements <code>render()</code> and registers itself.</p>
+    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code> — not a static field.</p>
 
     <pre>import { WebComponent, html, css } from '@webjskit/core';
 
@@ -710,14 +710,14 @@ ChatBox.register('chat-box');</pre>
 
     <h2>Quick Reference</h2>
     <ul>
-      <li><strong>Extend</strong> <code>WebComponent</code> and set <code>static tag</code>, <code>static properties</code>, <code>static styles</code>.</li>
+      <li><strong>Extend</strong> <code>WebComponent</code> and set <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
-      <li><strong>Register</strong> with <code>ClassName.register('tag')</code>.</li>
+      <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
       <li><strong>State</strong> — use <code>this.setState({...})</code> for shallow merge + batched re-render.</li>
       <li><strong>Events</strong> — <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong> — <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
-      <li><strong>Slots</strong> — <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots.</li>
-      <li><strong>Shadow DOM</strong> — on by default. Set <code>static shadow = false</code> for light DOM.</li>
+      <li><strong>Slots</strong> — <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots. Shadow DOM only.</li>
+      <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles, slot projection, or third-party embed isolation.</li>
       <li><strong>Lifecycle</strong> — <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
       <li><strong>Lists</strong> — <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
       <li><strong>SSR</strong> — components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>

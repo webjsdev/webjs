@@ -6,19 +6,17 @@ export default function Routing() {
   return html`
     <h1>Routing</h1>
     <p>
-      webjs uses <strong>file-based routing inspired by the NextJs App Router</strong>.
-      Every file under your project's <code>app/</code> directory maps to a URL based on
-      its folder path. There is no central route configuration file — the file system
-      <em>is</em> the router.
+      webjs uses <strong>file-based routing</strong>. Every file under your project's
+      <code>app/</code> directory maps to a URL based on its folder path. There is no
+      central route configuration file — the file system <em>is</em> the router.
     </p>
 
     <blockquote>
-      If you have used NextJs 13+ App Router, webjs routing will feel immediately
-      familiar. The conventions — <code>page.ts</code>, <code>layout.ts</code>,
+      The conventions — <code>page.ts</code>, <code>layout.ts</code>,
       <code>route.ts</code>, <code>[param]</code> folders, <code>(group)</code> folders,
       <code>not-found.ts</code>, <code>error.ts</code>, and <code>loading.ts</code> — are
-      modelled directly on NextJs, adapted for a no-build, web-components-first
-      architecture.
+      adapted for a no-build, web-components-first architecture and will feel familiar
+      if you have used the NextJs App Router.
     </blockquote>
 
     <h2>File Conventions at a Glance</h2>

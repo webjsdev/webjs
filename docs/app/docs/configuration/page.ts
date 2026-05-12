@@ -98,7 +98,7 @@ const resp = await app.handle(new Request('http://x/api/hello'));
     <p>Some things are intentionally fixed:</p>
     <ul>
       <li><strong>Routing conventions</strong> — <code>page.ts</code>, <code>layout.ts</code>, <code>route.ts</code>, <code>middleware.ts</code>, <code>error.ts</code>, <code>not-found.ts</code> are the file names. No aliases.</li>
-      <li><strong>Shadow DOM by default</strong> — components use shadow DOM unless <code>static shadow = false</code>. No global opt-out.</li>
+      <li><strong>Light DOM by default</strong> — components render into light DOM so global CSS and Tailwind utilities apply directly. Opt into shadow DOM per component with <code>static shadow = true</code>. No global toggle.</li>
       <li><strong>CSRF on server actions</strong> — always on for <code>/__webjs/action/*</code> RPC. Can't disable.</li>
       <li><strong>Import map</strong> — auto-generated. Maps <code>@webjskit/core</code> sub-paths to framework-served URLs and any bare npm imports your client code uses to vendor bundles.</li>
     </ul>

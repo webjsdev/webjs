@@ -590,7 +590,7 @@ no "Unknown tag" red-squiggle on registered webjs elements, and
 `document.querySelector('student-card')` returning `StudentCard | null`
 all work across VS Code and Neovim. See the
 [Editor Setup](docs/app/docs/editor-setup/page.ts) doc for the one-time
-`tsconfig` + `ts-lit-plugin` + `@webjskit/ts-plugin` setup;
+one-line `tsconfig` plugins entry for `@webjskit/ts-plugin` (which bundles `ts-lit-plugin` internally);
 `HTMLElementTagNameMap` augmentation is now optional, only needed for
 typing DOM-query call sites.
 
@@ -1211,7 +1211,7 @@ the class-prefix rule documented in the Shadow-vs-Light DOM section.
 
 1. **Never import `@prisma/client`, `node:*`, or any server-only dependency from a file under `components/` or from a page's top-level module graph that isn't a server action.** The browser will try to load it and fail. Use a server action instead.
 2. **Every `*.server.js` export must be an `async` JSON-safe function.** Arguments/results are serialised over the wire.
-3. **Custom element tag names must contain a hyphen** (HTML spec). Set `static tag`, call `Class.register('tag')`.
+3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')` at the bottom of the file. The tag is not a static field — it's the argument to `.register()`.
 4. **Event (`@`), property (`.`), and boolean (`?`) holes in `html` must be unquoted** — e.g. `@click=${fn}`, never `@click="${fn}"`.
 5. **Do not mutate `this.state` directly** — use `setState`. State reads are fine.
 6. **Page and layout default exports must be functions.** They return a value (usually a `TemplateResult`); they do not call `render()` themselves.
@@ -1410,8 +1410,27 @@ yields two microtasks so setState-triggered re-renders settle.
 
 ### TypeScript editor plugin — `@webjskit/ts-plugin`
 
-The scaffold adds `@webjskit/ts-plugin` + `ts-lit-plugin` to `tsconfig.json`'s
-`compilerOptions.plugins`. Together they give VS Code / Neovim:
+**Editor-only — not required for the framework to run.** The runtime
+(renderer, hydration, SSR, dev server) has no dependency on it. The
+plugin exists purely to give VS Code / Neovim / any tsserver-backed
+editor proper intelligence inside `` html`…` `` and `` css`…` `` templates.
+
+**A single plugin.** As of `@webjskit/ts-plugin@0.4.0`, `ts-lit-plugin`
+is bundled internally as a runtime dependency — our plugin loads it
+programmatically inside its `create(info)` factory and layers
+webjs-aware behaviour on top. Users list exactly one plugin in
+`tsconfig.json`:
+
+```jsonc
+"plugins": [
+  { "name": "@webjskit/ts-plugin" }
+]
+```
+
+The scaffold writes this for you and lists only `@webjskit/ts-plugin`
+in `devDependencies` (`ts-lit-plugin` arrives transitively).
+
+It gives VS Code / Neovim:
 
 - Type-check + diagnostics for attribute *values* inside `` html`` `` tagged
   templates (`ts-lit-plugin`).
@@ -1438,8 +1457,10 @@ editing (directly or transitively). A tag registered somewhere in the
 program but not imported here is still flagged — runtime would fail
 too, and the warning is the correct prompt to add the import.
 
-Plugin order matters in tsconfig — list `ts-lit-plugin` first; the webjs
-plugin wraps it to filter diagnostics and augment completions.
+(Historical note: before `@webjskit/ts-plugin@0.4.0` users had to list
+`ts-lit-plugin` and `@webjskit/ts-plugin` separately in `tsconfig.json`
+and order mattered. `0.4.0` bundles ts-lit-plugin as a runtime dep and
+loads it programmatically, so only one entry is needed now.)
 
 ### Add a database model
 
