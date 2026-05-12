@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "description": "Source registry for @webjskit/ui — component sources, themes, lib. Compiled to JSON for the registry HTTP host.",
-  "scripts": {
-    "build": "node scripts/build.js"
-  },
   "dependencies": {
     "@webjskit/core": "0.3.1"
   },
