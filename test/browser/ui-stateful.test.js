@@ -342,3 +342,128 @@ suite('ui-progress', () => {
     root.remove();
   });
 });
+
+suite('ui-toggle-group', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/toggle-group.ts`);
+  });
+
+  test('host gets role="group" + data-slot="toggle-group"', async () => {
+    const root = await mount(html`
+      <ui-toggle-group type="single">
+        <ui-toggle-group-item value="a">A</ui-toggle-group-item>
+        <ui-toggle-group-item value="b">B</ui-toggle-group-item>
+      </ui-toggle-group>
+    `);
+    const tg = root.querySelector('ui-toggle-group');
+    assert.equal(tg.getAttribute('role'), 'group');
+    assert.equal(tg.getAttribute('data-slot'), 'toggle-group');
+    root.remove();
+  });
+
+  test('items reflect data-state from initial value (single)', async () => {
+    const root = await mount(html`
+      <ui-toggle-group type="single" value="b">
+        <ui-toggle-group-item value="a">A</ui-toggle-group-item>
+        <ui-toggle-group-item value="b">B</ui-toggle-group-item>
+      </ui-toggle-group>
+    `);
+    await tick();
+    const items = root.querySelectorAll('ui-toggle-group-item');
+    assert.equal(items[0].getAttribute('data-state'), 'off');
+    assert.equal(items[1].getAttribute('data-state'), 'on');
+    assert.equal(items[1].getAttribute('aria-pressed'), 'true');
+    root.remove();
+  });
+
+  test('items reflect data-state from initial value (multiple, comma-separated)', async () => {
+    const root = await mount(html`
+      <ui-toggle-group type="multiple" value="a,c">
+        <ui-toggle-group-item value="a">A</ui-toggle-group-item>
+        <ui-toggle-group-item value="b">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="c">C</ui-toggle-group-item>
+      </ui-toggle-group>
+    `);
+    await tick();
+    const items = root.querySelectorAll('ui-toggle-group-item');
+    assert.equal(items[0].getAttribute('data-state'), 'on');
+    assert.equal(items[1].getAttribute('data-state'), 'off');
+    assert.equal(items[2].getAttribute('data-state'), 'on');
+    root.remove();
+  });
+
+  test('clicking an item updates value + fires ui-value-change (single)', async () => {
+    const root = await mount(html`
+      <ui-toggle-group type="single" value="a">
+        <ui-toggle-group-item value="a">A</ui-toggle-group-item>
+        <ui-toggle-group-item value="b">B</ui-toggle-group-item>
+      </ui-toggle-group>
+    `);
+    const tg = root.querySelector('ui-toggle-group');
+    let detail = null;
+    tg.addEventListener('ui-value-change', (e) => { detail = e.detail; });
+    root.querySelector('ui-toggle-group-item[value="b"]').click();
+    await tick();
+    assert.equal(tg.getAttribute('value'), 'b');
+    assert.equal(detail?.value, 'b');
+    root.remove();
+  });
+});
+
+suite('ui-sonner', () => {
+  let toastModule;
+  suiteSetup(async () => {
+    toastModule = await import(`${COMPONENTS_DIR}/sonner.ts`);
+  });
+
+  test('mounting <ui-sonner> sets data-slot + fixed positioning class', async () => {
+    const root = await mount(html`<ui-sonner position="top-right"></ui-sonner>`);
+    const son = root.querySelector('ui-sonner');
+    assert.equal(son.getAttribute('data-slot'), 'sonner');
+    // position="top-right" → top-4 right-4
+    assert.match(son.className, /top-4/);
+    assert.match(son.className, /right-4/);
+    assert.match(son.className, /fixed/);
+    root.remove();
+  });
+
+  test('toast() adds a toast element rendered into the sonner', async () => {
+    const root = await mount(html`<ui-sonner></ui-sonner>`);
+    const { toast } = toastModule;
+    const id = toast('Saved');
+    await tick();
+    const items = root.querySelectorAll('ui-sonner [data-slot="sonner-toast"], ui-sonner [data-slot="toast"], ui-sonner > div');
+    assert.ok(items.length >= 1, 'at least one toast rendered');
+    // Cleanup so the toast doesn't bleed into the next test.
+    toast.dismiss(id);
+    root.remove();
+  });
+
+  test('toast.error / toast.success render with their type wired up', async () => {
+    const root = await mount(html`<ui-sonner></ui-sonner>`);
+    const { toast } = toastModule;
+    const a = toast.success('OK');
+    const b = toast.error('Boom');
+    await tick();
+    const html_ = root.querySelector('ui-sonner').innerHTML;
+    assert.match(html_, /OK/);
+    assert.match(html_, /Boom/);
+    toast.dismiss(a);
+    toast.dismiss(b);
+    root.remove();
+  });
+
+  test('toast.dismiss(id) removes the toast', async () => {
+    const root = await mount(html`<ui-sonner></ui-sonner>`);
+    const { toast } = toastModule;
+    const id = toast('Will dismiss');
+    await tick();
+    const before = root.querySelector('ui-sonner').children.length;
+    assert.ok(before >= 1);
+    toast.dismiss(id);
+    await tick();
+    const after = root.querySelector('ui-sonner').children.length;
+    assert.ok(after < before, 'child count must decrease after dismiss');
+    root.remove();
+  });
+});
