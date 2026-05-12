@@ -1,14 +1,31 @@
 # @webjskit/ui
 
-A shadcn-style component library for **web components**. Source-copied into your
-project — you own the code.
+An **AI-first component library** for the web. Source-copied into your project —
+you own the code.
+
+Two-tier composition designed for AI agents who reason about real HTML +
+function calls, not for a layered React abstraction over every primitive:
+
+- **Tier 1 — class-helper functions** (`buttonClass`, `cardClass`,
+  `inputClass`, `labelClass`, `alertClass`, …). Pure functions that return
+  Tailwind class strings. You spread them onto raw native elements —
+  `<button class=${buttonClass({ variant: 'outline' })}>` — so a real
+  `<button>` participates in form submission, autocomplete, screen readers,
+  and devtools as itself.
+- **Tier 2 — stateful custom elements** (`<ui-dialog>`, `<ui-popover>`,
+  `<ui-tabs>`, `<ui-tooltip>`, `<ui-dropdown-menu>`, `<ui-accordion>`, …).
+  Reserved for behavior the browser doesn't give you natively: focus
+  traps, portaled overlays, keyboard-navigated lists, body-scroll lock.
+  Decorate the host, no shadow DOM.
 
 Works with any project that uses Tailwind CSS v4 and supports custom elements:
-webjs, Lit, Stencil, vanilla HTML, framework-agnostic — as long as Tailwind is
-configured, the components render correctly.
+webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML — as long as Tailwind
+is configured, the components render correctly. Variant names, sizes, and
+data-attribute conventions mirror shadcn's so an AI agent's existing
+knowledge of shadcn maps directly.
 
-Components extend `WebComponent` from [`@webjskit/core`](https://npm.im/@webjskit/core),
-which any project can install standalone.
+Tier-2 elements extend `Base` (a Node-safe `HTMLElement` shim) from a small
+shared `lib/utils.ts` the CLI writes into your project.
 
 ## Install
 

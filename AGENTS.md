@@ -1414,7 +1414,7 @@ webjs test   [--server] [--browser] [--watch]         # runs test/unit/**/*.test
 webjs check  [--fix]                                  # convention validator; --fix applies safe rewrites
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to `prisma` (saas template only)
-webjs ui init                                         # shadcn-style component CLI (proxies to @webjskit/ui)
+webjs ui init                                         # AI-first component library CLI (proxies to @webjskit/ui)
 webjs ui add <names...>                               # copy components from the registry into your project
 webjs ui list                                         # list available components
 webjs ui view <name>                                  # print a component's source

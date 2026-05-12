@@ -1,7 +1,10 @@
 # AGENTS.md — @webjskit/ui
 
-The webjs **shadcn-equivalent component CLI** — `webjsui init` / `add` / `list` /
-`view` / `diff` / `info` / `build`. Ships 32 shadcn-equivalent primitives.
+The webjs **AI-first component library + CLI** — `webjsui init` / `add` /
+`list` / `view` / `diff` / `info` / `build`. Ships 32 primitives across two
+tiers: class-helper functions for visual components, custom elements only
+where state matters. Variant names, sizes, and data-attribute conventions
+mirror shadcn so existing shadcn knowledge transfers directly.
 
 Framework-wide rules live in the root [`../../AGENTS.md`](../../AGENTS.md) and
 apply here. Read that first. This file only covers what's specific to
@@ -95,7 +98,7 @@ packages/ui/
     get-config.test.js            config read/write/round-trip
 
   packages/registry/              the registry (internal, not published)
-    components/                   .ts files, one per shadcn-equivalent component
+    components/                   .ts files, one per component
     lib/utils.ts                  cn() + Base + defineElement + layout/typography helpers
     themes/
       index.css                   @theme block + CSS variables (light + dark, neutral defaults)
