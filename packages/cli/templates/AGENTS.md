@@ -342,18 +342,47 @@ type-safe RPC stub automatically.
 
 ## Metadata (per-page)
 
+The `metadata` export is Next.js-compatible. Common fields shown below;
+the full surface includes `title.template / .default / .absolute`,
+`metadataBase`, `alternates: { canonical, languages, media, types }`,
+`robots`, `keywords`, `authors`, `creator`, `publisher`, `verification`,
+`icons`, `manifest`, `appleWebApp`, `formatDetection`, `itunes`, and
+the typed `other: { '<meta-name>': value }` escape hatch.
+
 ```ts
 export const metadata = {
   title: 'My page',
+  // OR: title: { template: '%s — {{APP_NAME}}', default: '{{APP_NAME}}' }
   description: 'A page in {{APP_NAME}}',
-  openGraph: { type: 'website', image: 'https://...' },
+  metadataBase: 'https://example.com',           // base for relative URLs below
+  openGraph: { type: 'website', image: '/og.png' },
   twitter: { card: 'summary_large_image' },
-  cacheControl: 'public, max-age=60',  // opt into caching (default: no-store)
+  icons: { icon: '/favicon.svg', apple: '/apple.png' },
+  alternates: { canonical: '/post' },            // → <link rel="canonical">
+  robots: { index: true, follow: true },
+  cacheControl: 'public, max-age=60',            // opt into caching (default: no-store)
 };
 ```
 
 Use `generateMetadata(ctx)` when you need request-scoped values (e.g.
-absolute URLs from `ctx.url`).
+absolute URLs from `ctx.url`):
+
+```ts
+export function generateMetadata(ctx: { url: string }) {
+  return { metadataBase: new URL(ctx.url).origin, title: 'Hello' };
+}
+```
+
+Viewport may be split into its own export (Next.js 14+ pattern):
+
+```ts
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1c1613',
+  colorScheme: 'light dark',
+};
+```
 
 ## Document shell (`<html>` / `<head>` / `<body>`)
 
