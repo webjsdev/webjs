@@ -61,6 +61,7 @@ export class UiInputOtp extends WebComponent {
     super.connectedCallback();
     this.addEventListener('ui-otp-input', this._onSlotInput as EventListener);
     this.addEventListener('ui-otp-keydown', this._onSlotKey as EventListener);
+    this.addEventListener('ui-otp-paste', this._onSlotPaste as EventListener);
     queueMicrotask(() => this._syncSlots());
   }
 
@@ -68,7 +69,35 @@ export class UiInputOtp extends WebComponent {
     super.disconnectedCallback();
     this.removeEventListener('ui-otp-input', this._onSlotInput as EventListener);
     this.removeEventListener('ui-otp-keydown', this._onSlotKey as EventListener);
+    this.removeEventListener('ui-otp-paste', this._onSlotPaste as EventListener);
   }
+
+  // Paste a multi-char string starting at the focused slot, filling the
+  // subsequent slots and focusing the next-empty (or last) slot.
+  _onSlotPaste = (e: CustomEvent) => {
+    const { index, text, numericOnly } = e.detail as { index: number; text: string; numericOnly: boolean };
+    let pasted = String(text || '');
+    if (numericOnly) pasted = pasted.replace(/\D/g, '');
+    if (!pasted) return;
+    const max = this.maxlength;
+    const chars = (this.value || '').padEnd(max, ' ').split('');
+    let writeAt = index;
+    let written = 0;
+    for (const c of pasted) {
+      if (writeAt >= max) break;
+      chars[writeAt++] = c;
+      written++;
+    }
+    this.value = chars.join('').replace(/ +$/, '');
+    this._syncSlots();
+    const slots = this._allSlots();
+    const focusIdx = Math.min(index + written, max - 1);
+    slots[focusIdx]?.querySelector<HTMLInputElement>('input')?.focus();
+    this.dispatchEvent(new CustomEvent('change', { detail: { value: this.value }, bubbles: true, composed: true }));
+    if (this.value.length >= max) {
+      this.dispatchEvent(new CustomEvent('complete', { detail: { value: this.value }, bubbles: true, composed: true }));
+    }
+  };
 
   static get observedAttributes() {
     return ['value', 'maxlength', 'disabled'];
@@ -209,6 +238,7 @@ export class UiInputOtpSlot extends WebComponent {
         @input=${this._onInput}
         @keydown=${this._onKeyDown}
         @focus=${this._onFocus}
+        @paste=${this._onPaste}
       />
       ${char ? html`<span aria-hidden="true">${char}</span>` : ''}
     </div>`;
@@ -234,6 +264,20 @@ export class UiInputOtpSlot extends WebComponent {
 
   private _onFocus = () => {
     this.setAttribute('data-active', 'true');
+  };
+
+  private _onPaste = (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text') ?? '';
+    if (!text || text.length <= 1) return; // single-char paste falls through to input handler
+    e.preventDefault();
+    const input = e.target as HTMLInputElement;
+    const numericOnly = input.getAttribute('inputmode') === 'numeric';
+    this.dispatchEvent(
+      new CustomEvent('ui-otp-paste', {
+        detail: { index: this.index, text, numericOnly },
+        bubbles: true,
+      }),
+    );
   };
 }
 UiInputOtpSlot.register('ui-input-otp-slot');

@@ -49,6 +49,27 @@ README.md                npm-facing package readme.
 | `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjskit/server/check` |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
 | `webjs db <generate\|migrate\|studio>` | Passthrough to `prisma` |
+| `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjskit/ui` (see "UI subcommand" below) |
+
+## UI subcommand — proxies to `@webjskit/ui`
+
+`@webjskit/ui` is a **hard dependency** of `@webjskit/cli` (listed in
+`package.json` `dependencies`), so a global `webjs` install always ships
+with the shadcn-style component CLI out of the box — no separate install.
+
+`webjs ui <subcmd> [args...]` is a thin dispatch into `@webjskit/ui`'s
+`run({ argv })` entry. The implementation lives in
+[`bin/webjs.js`](./bin/webjs.js) under `case 'ui':` — it resolves
+`@webjskit/ui` via `createRequire` rooted at the CLI's own location first
+(the hard-dep path), with a fallback to the user's `cwd` for the rare case
+where the user installed `@webjskit/ui` directly without going through
+`@webjskit/cli`.
+
+The subcommands (`init`, `add`, `list`, `view`, `diff`, `info`) are owned
+and documented by `@webjskit/ui` — see
+[`../ui/AGENTS.md`](../ui/AGENTS.md) for the surface. The CLI does not
+wrap or transform args; everything after `webjs ui` is forwarded
+verbatim.
 
 ## Package-specific invariants
 

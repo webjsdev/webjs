@@ -29,6 +29,13 @@ import { cn } from '../lib/utils.ts';
  * transitions, ~300ms), and secondary Y axis (per-series `secondaryYKey`
  * or shared `axis: 'right'`).
  *
+ * Implemented in v2.1: pie/radial animation. Arc `d` strings aren't
+ * linearly interpolable, so CSS transitions don't work. Instead we
+ * hand-roll a 300ms requestAnimationFrame loop that tweens the
+ * underlying angle values (pie) or pct values (radial) with an
+ * ease-out cubic, rebuilding the `d` attribute every frame. Any
+ * in-flight animation is cancelled when new data arrives.
+ *
  * Deferred for v3: mixed series types in one chart, hierarchical / sankey,
  * treemap.
  */
@@ -227,6 +234,19 @@ export class UiChart extends WebComponent {
   private _uid = `c${++chartIdCounter}`;
   private _brushDrag: { handle: 'left' | 'right' | 'window'; pointerId: number; startX: number; startBS: number; startBE: number } | null = null;
 
+  // ---- pie / radial animation state -----------------------------------
+  // CSS `transition: d 300ms` doesn't tween correctly for arc paths
+  // because path commands aren't linearly interpolable. Instead we
+  // hand-roll a rAF loop that interpolates the angles per slice and
+  // rebuilds the `d` attribute each frame.
+  private _animRaf = 0;
+  /** Previous arc snapshot, keyed by slice index. */
+  private _prevPieArcs: Array<{ a0: number; a1: number }> | null = null;
+  private _prevRadialArcs: Array<{ pct: number }> | null = null;
+  /** Interpolated values used by the current frame's render(). */
+  private _pieArcsFrame: Array<{ a0: number; a1: number }> | null = null;
+  private _radialArcsFrame: Array<{ pct: number }> | null = null;
+
   constructor() {
     super();
     this.type = 'line';
@@ -245,6 +265,14 @@ export class UiChart extends WebComponent {
     if (!svg) return;
     svg.addEventListener('pointermove', (e) => this._onPointerMove(e));
     svg.addEventListener('pointerleave', () => this._onPointerLeave());
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._raf) cancelAnimationFrame(this._raf);
+    if (this._animRaf) cancelAnimationFrame(this._animRaf);
+    this._raf = 0;
+    this._animRaf = 0;
   }
 
   _onPointerMove(e: PointerEvent) {
@@ -527,24 +555,44 @@ export class UiChart extends WebComponent {
 
   // ------- Pie chart -------
 
-  _renderPie() {
+  /** Compute target pie arcs from current data. */
+  _computePieArcs(): Array<{ a0: number; a1: number }> {
     const series = this._activeSeries();
-    // Pie reads first series only; one slice per data row, value from series[0].key.
     const key = series[0]?.key ?? this.series[0]?.key;
-    if (!key) return html``;
+    if (!key) return [];
     const values = this.data.map((d) => num(d[key]));
     const total = values.reduce((a, b) => a + b, 0) || 1;
+    const arcs: Array<{ a0: number; a1: number }> = [];
+    let angle = -Math.PI / 2;
+    for (let i = 0; i < this.data.length; i++) {
+      const slice = (values[i] / total) * Math.PI * 2;
+      arcs.push({ a0: angle, a1: angle + slice });
+      angle += slice;
+    }
+    return arcs;
+  }
+
+  _renderPie() {
+    const series = this._activeSeries();
+    const key = series[0]?.key ?? this.series[0]?.key;
+    if (!key) return html``;
+    const target = this._computePieArcs();
+    // Use the in-flight frame snapshot when animating; otherwise the target.
+    const arcs = this._pieArcsFrame ?? target;
+    // Kick off an animation when the target diverges from the last
+    // rendered arcs and animation is enabled.
+    if (this.animate && this._pieArcsChanged(target)) {
+      this._animatePie(target);
+    }
+    this._prevPieArcs = target;
     const cx = VB_W / 2, cy = VB_H / 2;
     const r = Math.min(PLOT_W, PLOT_H) / 2 - 8;
     const ir = Math.max(0, Math.min(r - 4, this.innerRadius || 0));
-    let angle = -Math.PI / 2;
     const slices = this.data.map((row, i) => {
-      const v = values[i];
-      const slice = (v / total) * Math.PI * 2;
-      const a0 = angle;
-      const a1 = angle + slice;
-      angle = a1;
-      const large = slice > Math.PI ? 1 : 0;
+      const arc = arcs[i] || target[i] || { a0: 0, a1: 0 };
+      const { a0, a1 } = arc;
+      const slice = a1 - a0;
+      const large = Math.abs(slice) > Math.PI ? 1 : 0;
       const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
       const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
       const fill = `var(--color-${String(row[this.dataKey] ?? `s${i}`)})`;
@@ -560,15 +608,120 @@ export class UiChart extends WebComponent {
     return html`<g>${slices}</g>`;
   }
 
+  _pieArcsChanged(target: Array<{ a0: number; a1: number }>): boolean {
+    const prev = this._prevPieArcs;
+    if (!prev) return false; // first render — no anim needed
+    if (prev.length !== target.length) return true;
+    for (let i = 0; i < prev.length; i++) {
+      if (Math.abs(prev[i].a0 - target[i].a0) > 1e-6) return true;
+      if (Math.abs(prev[i].a1 - target[i].a1) > 1e-6) return true;
+    }
+    return false;
+  }
+
+  /** Animate pie arcs from `_prevPieArcs` → `target` over 300ms. */
+  _animatePie(target: Array<{ a0: number; a1: number }>): void {
+    if (typeof window === 'undefined') return;
+    if (this._animRaf) cancelAnimationFrame(this._animRaf);
+    const from = this._prevPieArcs
+      ? this._prevPieArcs.map((a) => ({ ...a }))
+      : target.map((_, i) => {
+          // First-time render: animate from a collapsed wedge.
+          const seed = target[0]?.a0 ?? -Math.PI / 2;
+          return { a0: seed, a1: seed };
+        });
+    const start = performance.now();
+    const dur = 300;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const len = Math.max(from.length, target.length);
+      const frame: Array<{ a0: number; a1: number }> = [];
+      for (let i = 0; i < len; i++) {
+        const f = from[i] ?? from[from.length - 1] ?? { a0: 0, a1: 0 };
+        const tt = target[i] ?? target[target.length - 1] ?? { a0: 0, a1: 0 };
+        frame.push({
+          a0: f.a0 + (tt.a0 - f.a0) * eased,
+          a1: f.a1 + (tt.a1 - f.a1) * eased,
+        });
+      }
+      this._pieArcsFrame = frame;
+      this.requestUpdate();
+      if (t < 1) {
+        this._animRaf = requestAnimationFrame(tick);
+      } else {
+        this._pieArcsFrame = null;
+        this._animRaf = 0;
+      }
+    };
+    this._animRaf = requestAnimationFrame(tick);
+  }
+
   // ------- Radial chart -------
+
+  /** Flat list of slice pcts in (row, series) row-major order. */
+  _computeRadialArcs(): Array<{ pct: number }> {
+    const series = this._activeSeries();
+    const allVals: number[] = [];
+    for (const row of this.data) for (const s of series) allVals.push(num(row[s.key]));
+    const max = Math.max(1, ...allVals);
+    const out: Array<{ pct: number }> = [];
+    for (const row of this.data) for (const s of series) {
+      out.push({ pct: max ? num(row[s.key]) / max : 0 });
+    }
+    return out;
+  }
+
+  _radialArcsChanged(target: Array<{ pct: number }>): boolean {
+    const prev = this._prevRadialArcs;
+    if (!prev) return false;
+    if (prev.length !== target.length) return true;
+    for (let i = 0; i < prev.length; i++) {
+      if (Math.abs(prev[i].pct - target[i].pct) > 1e-6) return true;
+    }
+    return false;
+  }
+
+  _animateRadial(target: Array<{ pct: number }>): void {
+    if (typeof window === 'undefined') return;
+    if (this._animRaf) cancelAnimationFrame(this._animRaf);
+    const from = this._prevRadialArcs
+      ? this._prevRadialArcs.map((a) => ({ ...a }))
+      : target.map(() => ({ pct: 0 }));
+    const start = performance.now();
+    const dur = 300;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const len = Math.max(from.length, target.length);
+      const frame: Array<{ pct: number }> = [];
+      for (let i = 0; i < len; i++) {
+        const f = from[i] ?? { pct: 0 };
+        const tt = target[i] ?? { pct: 0 };
+        frame.push({ pct: f.pct + (tt.pct - f.pct) * eased });
+      }
+      this._radialArcsFrame = frame;
+      this.requestUpdate();
+      if (t < 1) {
+        this._animRaf = requestAnimationFrame(tick);
+      } else {
+        this._radialArcsFrame = null;
+        this._animRaf = 0;
+      }
+    };
+    this._animRaf = requestAnimationFrame(tick);
+  }
 
   _renderRadial() {
     const series = this._activeSeries();
     const cx = VB_W / 2, cy = VB_H / 2;
     const rMax = Math.min(PLOT_W, PLOT_H) / 2 - 8;
-    const allVals: number[] = [];
-    for (const row of this.data) for (const s of series) allVals.push(num(row[s.key]));
-    const max = Math.max(1, ...allVals);
+    const target = this._computeRadialArcs();
+    const arcs = this._radialArcsFrame ?? target;
+    if (this.animate && this._radialArcsChanged(target)) {
+      this._animateRadial(target);
+    }
+    this._prevRadialArcs = target;
     const rowCount = this.data.length || 1;
     const bandH = (rMax - 20) / rowCount;
 
@@ -576,9 +729,9 @@ export class UiChart extends WebComponent {
       const rowR = rMax - i * bandH;
       const rowInner = rowR - bandH * 0.8;
       const seriesCount = series.length || 1;
-      const arcs = series.map((s, sIdx) => {
-        const v = num(row[s.key]);
-        const pct = max ? v / max : 0;
+      const arcsForRow = series.map((s, sIdx) => {
+        const flatIdx = i * series.length + sIdx;
+        const pct = arcs[flatIdx]?.pct ?? 0;
         const startAngle = -Math.PI / 2;
         const endAngle = startAngle + pct * Math.PI * 2 * 0.95;
         const subBand = (rowR - rowInner) / seriesCount;
@@ -603,7 +756,7 @@ export class UiChart extends WebComponent {
           ${fg ? html`<path d=${fg} fill=${seriesColor(s)} class="recharts-sector" />` : html``}
         `;
       });
-      return html`<g class="recharts-layer">${arcs}</g>`;
+      return html`<g class="recharts-layer">${arcsForRow}</g>`;
     });
     return html`<g>${groups}</g>`;
   }

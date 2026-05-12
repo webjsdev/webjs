@@ -43,6 +43,7 @@ app/                         thin route adapters
     page.ts                  /dashboard
     posts/new/page.ts        /dashboard/posts/new
   (marketing)/about/page.ts  /about (route group — parens not in URL)
+  ui-demo/page.ts            /ui-demo (showcases the @webjskit/ui kit)
   _utils/format.ts           private folder (underscore — not routable)
   api/
     hello/route.ts           GET /api/hello
@@ -85,7 +86,9 @@ modules/
     utils/clients.ts         shared WebSocket client Set + broadcast()
     types.ts                 ChatMessage
 components/                  shared UI primitives
-  counter.ts, error-card.ts, theme-toggle.ts
+  counter.ts, error-card.ts, theme-toggle.ts, blog-shell.ts, muted-text.ts
+  ui/                        @webjskit/ui standard kit (button, card, input, dialog, …)
+                              installed via `webjs ui add …` from https://ui.webjs.dev
 prisma/schema.prisma         User, Session, Post, Comment
 ```
 
@@ -112,6 +115,24 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - `app/api/chat/route.ts` exports `WS` for the live chat.
 - `app/api/comments/[postId]/route.ts` exports `WS` for live comment threads.
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
+
+### `@webjskit/ui` standard kit
+`components/ui/` holds the shadcn-style component library (`ui-button`,
+`ui-card`, `ui-input`, `ui-dialog`, `ui-label`, etc.). `/ui-demo` renders
+every shipped component as a live gallery — open it during development
+to see what's available without hopping to the registry website. Three
+real surfaces in this app have been migrated to the kit:
+
+- `modules/auth/components/auth-forms.ts` — login/signup forms now use
+  `ui-input`, `ui-label`, `ui-button`.
+- `modules/posts/components/new-post.ts` — post composer uses `ui-input`,
+  `ui-textarea`, `ui-button`.
+- `app/dashboard/page.ts` — dashboard layout uses `ui-card` for stat
+  blocks and `ui-button` for actions.
+
+These are reference implementations of "what a real product surface looks
+like with `ui-*` instead of hand-rolled Tailwind." Add more components
+via `webjs ui add <name>` (registry at https://ui.webjs.dev).
 
 ## Conventions
 

@@ -33,6 +33,20 @@ The features grid is driven by the `FEATURES` array near the top of
 `app/page.ts`. Each entry is `{ icon, title, desc }`. Add a new entry
 in the correct order; the layout reflows automatically.
 
+The grid currently includes a card for **`@webjskit/ui`** (the
+shadcn-equivalent component library at https://ui.webjs.dev). When
+shipping major UI-kit changes, update that card's copy or pin a
+companion card highlighting the new components.
+
+## Announcement banner
+
+The layout (`app/layout.ts`) renders a top-of-page announcement strip —
+`<div class="announce">` block — typically pointing at the current
+release or shipping highlight (e.g. "v1 — @webjskit/ui is live"). To
+swap the announcement target, edit the layout's `<div class="announce">`
+block; the banner shows on every page. Remove the block entirely to
+hide it.
+
 ## How to update headline / hero copy
 
 `app/page.ts` — the hero block is at the top of the default-exported

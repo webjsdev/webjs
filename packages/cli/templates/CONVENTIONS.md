@@ -345,6 +345,43 @@ with puppeteer or playwright imports.
 
 ---
 
+## UI components — prefer `ui-*` over hand-rolled Tailwind
+
+<!-- OVERRIDE -->
+
+This scaffold ships with `@webjskit/ui` preinstalled at `components/ui/`.
+For buttons, inputs, cards, dialogs, dropdowns, selects, forms, toasts,
+tables — anywhere a shadcn-style component fits — **use the `ui-*`
+components instead of hand-rolling buttons/inputs with raw Tailwind
+classes.**
+
+```ts
+// Good — uses the standard kit (a11y, focus mgmt, keyboard handling included)
+return html`
+  <ui-button variant="default" size="lg">Save</ui-button>
+  <ui-input placeholder="Email" />
+`;
+
+// Avoid — hand-rolled equivalents lose a11y + visual consistency
+return html`
+  <button class="px-4 py-2 rounded-md bg-accent text-accent-fg">Save</button>
+  <input class="w-full px-3 py-2 border rounded-md" placeholder="Email" />
+`;
+```
+
+Add more components with `webjs ui add <name>`. The catalogue lives at
+[https://ui.webjs.dev](https://ui.webjs.dev).
+
+**Hand-rolled Tailwind is still appropriate for:**
+- One-off marketing pages, hero sections, landing CTAs.
+- Anywhere the visual design intentionally diverges from the shadcn baseline.
+- Layout primitives (`<div class="grid grid-cols-3 gap-4">`).
+
+The convention: any *interactive* element (button, input, select,
+dialog, dropdown) on a product surface uses `ui-*`.
+
+---
+
 ## Components
 
 <!-- OVERRIDE -->

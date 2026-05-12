@@ -131,3 +131,222 @@ test('menubar: items + sub-triggers close sibling submenus on pointerenter', () 
   assert.ok(enterCount >= 2, `expected ≥2 callers of closeSiblingSubmenus, got ${enterCount}`);
   assert.match(src, /'ui-menubar-sub-close'/);
 });
+
+/* -------------------- scroll-area — custom scrollbar UI -------------------- */
+
+test('scroll-area: renders vertical + horizontal thumbs with scrollbar tracks', () => {
+  const src = source('scroll-area');
+  assert.match(src, /data-slot="scroll-area-scrollbar"/);
+  assert.match(src, /data-slot="scroll-area-thumb"/);
+  assert.match(src, /data-orientation="vertical"/);
+  assert.match(src, /data-orientation="horizontal"/);
+  // Native scrollbars hidden.
+  assert.match(src, /\[scrollbar-width:none\]/);
+  assert.match(src, /::-webkit-scrollbar/);
+});
+
+test('scroll-area: thumb size + position derived from viewport/content ratio', () => {
+  const src = source('scroll-area');
+  // Size = (viewport / content) * track; position = (scroll / maxScroll) * (track - thumb)
+  assert.match(src, /ratio\s*=\s*v\.clientHeight\s*\/\s*Math\.max\(v\.scrollHeight/);
+  assert.match(src, /ratio\s*\*\s*track/);
+  assert.match(src, /maxScroll\s*=\s*v\.scrollHeight\s*-\s*v\.clientHeight/);
+});
+
+test('scroll-area: thumbs are pointer-draggable', () => {
+  const src = source('scroll-area');
+  assert.match(src, /_onThumbDown/);
+  assert.match(src, /_onThumbMove/);
+  assert.match(src, /pointermove/);
+  assert.match(src, /pointerup/);
+});
+
+test('scroll-area: type prop controls visibility (hover / always / auto / scroll)', () => {
+  const src = source('scroll-area');
+  assert.match(src, /type:\s*\{\s*type:\s*String/);
+  assert.match(src, /this\.type\s*===\s*'always'/);
+  assert.match(src, /group-hover\/scroll-area:opacity-100/);
+});
+
+/* -------------------- tooltip — provider delayDuration + skipDelay -------------------- */
+
+test('tooltip: provider exposes delay-duration + skip-delay-duration attrs', () => {
+  const src = source('tooltip');
+  assert.match(src, /delayDuration:\s*\{[^}]*attribute:\s*'delay-duration'/);
+  assert.match(src, /skipDelayDuration:\s*\{[^}]*attribute:\s*'skip-delay-duration'/);
+});
+
+test('tooltip: root reads delayDuration from nearest provider on connect', () => {
+  const src = source('tooltip');
+  assert.match(src, /closest\('ui-tooltip-provider'\)/);
+  assert.match(src, /this\._delay\s*=\s*Number\(this\._provider\.delayDuration/);
+});
+
+test('tooltip: skip-delay window opens next tooltip instantly', () => {
+  const src = source('tooltip');
+  // delay = sinceLastClose < skipDelay ? 0 : configured delay
+  assert.match(src, /sinceLastClose\s*<\s*this\._skipDelay/);
+  assert.match(src, /_lastClosedAt/);
+});
+
+/* -------------------- navigation-menu — viewport + indicator -------------------- */
+
+test('navigation-menu: teleports active content into the viewport', () => {
+  const src = source('navigation-menu');
+  assert.match(src, /_syncViewport/);
+  assert.match(src, /viewportEl\.appendChild\(content\)/);
+  // Previously-active content is returned to its original parent.
+  assert.match(src, /_contentHome/);
+});
+
+test('navigation-menu: indicator slides to the active trigger center', () => {
+  const src = source('navigation-menu');
+  assert.match(src, /_syncIndicator/);
+  assert.match(src, /trigger\.getBoundingClientRect\(\)/);
+  assert.match(src, /transform\s*=\s*`translateX/);
+  assert.match(src, /transition\s*=\s*'transform 250ms/);
+});
+
+test('navigation-menu: setOpen drives both viewport + indicator updates', () => {
+  const src = source('navigation-menu');
+  // _setOpen calls _syncViewport(target) and _syncIndicator(target).
+  assert.match(src, /_setOpen\([\s\S]*?_syncViewport\(target\)[\s\S]*?_syncIndicator\(target\)/);
+});
+
+/* -------------------- input-otp — paste-to-fill -------------------- */
+
+test('input-otp: slot input wires a paste handler that dispatches ui-otp-paste', () => {
+  const src = source('input-otp');
+  assert.match(src, /@paste=\$\{this\._onPaste\}/);
+  assert.match(src, /clipboardData\?\.getData\('text'\)/);
+  assert.match(src, /'ui-otp-paste'/);
+});
+
+test('input-otp: root spreads pasted chars across subsequent slots', () => {
+  const src = source('input-otp');
+  assert.match(src, /_onSlotPaste/);
+  // Loops through pasted chars, writing into chars[writeAt++].
+  assert.match(src, /for \(const c of pasted\)[\s\S]*chars\[writeAt\+\+\]\s*=\s*c/);
+  // Focuses min(index + written, max - 1).
+  assert.match(src, /Math\.min\(index\s*\+\s*written,\s*max\s*-\s*1\)/);
+});
+
+test('input-otp: numeric-only slots strip non-digits from paste', () => {
+  const src = source('input-otp');
+  assert.match(src, /numericOnly/);
+  assert.match(src, /pasted\.replace\(\/\\D\/g,\s*''\)/);
+  // Numeric detection looks at inputmode="numeric".
+  assert.match(src, /getAttribute\('inputmode'\)\s*===\s*'numeric'/);
+});
+
+/* -------------------- form — nested keys / async / submitCount -------------------- */
+
+test('form: ships path helpers for nested keys (getPath / setPath)', () => {
+  const src = source('form');
+  assert.match(src, /function getPath\(/);
+  assert.match(src, /function setPath\(/);
+  // Numeric path segments mint arrays so `addresses.0.street` works.
+  assert.match(src, /nextIsIndex\s*=\s*\/\^\\d\+\$\/\.test\(nextKey\)/);
+});
+
+test('form: register accepts asyncValidate with 200ms debounce', () => {
+  const src = source('form');
+  assert.match(src, /asyncValidate\?:\s*\(value:\s*any\)\s*=>\s*Promise<string\s*\|\s*null\s*\|\s*undefined>/);
+  // Debounce timer fires _runFieldAsync after 200ms.
+  assert.match(src, /_runFieldAsync\(name\)/);
+  assert.match(src, /\}, 200\);/);
+  // Pending flag toggled while in flight.
+  assert.match(src, /this\.pending\[name\]\s*=\s*true/);
+});
+
+test('form: handleSubmit increments submitCount and exposes the getter', () => {
+  const src = source('form');
+  assert.match(src, /get submitCount\(\): number/);
+  assert.match(src, /this\._submitCount\s*\+=\s*1/);
+});
+
+test('form: field renders data-state="pending" when async validator in flight', () => {
+  const src = source('form');
+  assert.match(src, /fieldPending\s*\?\s*'pending'/);
+  // Pending state lookups go via ctrl.pending[name].
+  assert.match(src, /ctrl\.pending\[this\.name\]/);
+});
+
+/* -------------------- chart — pie / radial animation -------------------- */
+
+test('chart: pie animates arc angles via rAF + ease-out cubic', () => {
+  const src = source('chart');
+  assert.match(src, /_animatePie\(/);
+  assert.match(src, /_computePieArcs\(/);
+  // The 1 - (1 - t)^3 ease-out cubic curve.
+  assert.match(src, /1\s*-\s*Math\.pow\(1\s*-\s*t,\s*3\)/);
+  assert.match(src, /const dur = 300;/);
+  // In-flight animation is cancelled on new data.
+  assert.match(src, /cancelAnimationFrame\(this\._animRaf\)/);
+});
+
+test('chart: radial animates pct values via requestAnimationFrame', () => {
+  const src = source('chart');
+  assert.match(src, /_animateRadial\(/);
+  assert.match(src, /_computeRadialArcs\(/);
+  assert.match(src, /_radialArcsFrame/);
+});
+
+/* -------------------- sonner — swipe / action / undo / dismiss -------------------- */
+
+test('sonner: swipe-to-dismiss tracks pointer drag past 40% threshold', () => {
+  const src = source('sonner');
+  assert.match(src, /SWIPE_THRESHOLD\s*=\s*0\.4/);
+  assert.match(src, /_onPointerDown\s*=/);
+  assert.match(src, /_onPointerMove\s*=/);
+  assert.match(src, /_onPointerUp\s*=/);
+  assert.match(src, /_swipeAxis\(\)/);
+});
+
+test('sonner: renders action + cancel buttons when provided', () => {
+  const src = source('sonner');
+  assert.match(src, /data-button="action"/);
+  assert.match(src, /data-button="cancel"/);
+  assert.match(src, /_invokeAction\(/);
+  assert.match(src, /export interface ToastAction/);
+});
+
+test('sonner: toast.dismiss(id?), toast.success/error/info/warning/message helpers', () => {
+  const src = source('sonner');
+  assert.match(src, /toastImpl\.dismiss\s*=/);
+  assert.match(src, /toastImpl\.success\s*=/);
+  assert.match(src, /toastImpl\.error\s*=/);
+  assert.match(src, /toastImpl\.info\s*=/);
+  assert.match(src, /toastImpl\.warning\s*=/);
+  assert.match(src, /toastImpl\.message\s*=/);
+  // Dismiss-all path.
+  assert.match(src, /detail:\s*\{\s*all:\s*true\s*\}/);
+});
+
+/* -------------------- resizable — keyboard support -------------------- */
+
+test('resizable handle: focusable separator with valuenow/valuemin/valuemax', () => {
+  const src = source('resizable');
+  assert.match(src, /tabindex="0"/);
+  assert.match(src, /role="separator"/);
+  assert.match(src, /aria-valuenow=/);
+  assert.match(src, /aria-valuemin=/);
+  assert.match(src, /aria-valuemax=/);
+});
+
+test('resizable handle: arrow keys resize by 1% (10% with shift)', () => {
+  const src = source('resizable');
+  assert.match(src, /const step = e\.shiftKey \? 10 : 1;/);
+  assert.match(src, /case 'ArrowLeft':/);
+  assert.match(src, /case 'ArrowRight':/);
+  assert.match(src, /case 'ArrowUp':/);
+  assert.match(src, /case 'ArrowDown':/);
+});
+
+test('resizable handle: Home/End collapse adjacent panels; Enter toggles', () => {
+  const src = source('resizable');
+  assert.match(src, /case 'Home':/);
+  assert.match(src, /case 'End':/);
+  assert.match(src, /case 'Enter':/);
+  assert.match(src, /_collapsedSnapshot/);
+});

@@ -31,6 +31,11 @@ export class UiNavigationMenu extends WebComponent {
   declare viewport: boolean;
   private _slot = '';
   private _openItem: HTMLElement | null = null;
+  // Track the content node currently teleported into the viewport, so we can
+  // move it back out before swapping in a new one.
+  private _activeContent: HTMLElement | null = null;
+  // Remember each content's original parent so it can be returned on close.
+  private _contentHome = new WeakMap<HTMLElement, HTMLElement>();
 
   constructor() { super(); this.viewport = true; }
 
@@ -56,12 +61,59 @@ export class UiNavigationMenu extends WebComponent {
     if (this._openItem) (this._openItem as any).setItemOpen(false);
     this._openItem = target;
     if (target) (target as any).setItemOpen(true);
+    this._syncViewport(target);
+    this._syncIndicator(target);
   }
 
-  _onOutside = (e: PointerEvent) => {
-    if (!this._openItem) return;
-    if (!e.composedPath().includes(this)) this._setOpen(null);
-  };
+  // Teleport the newly-opened item's <ui-navigation-menu-content> into the
+  // viewport. The previously-teleported content (if any) is returned to its
+  // original parent so it can be reopened later in place.
+  _syncViewport(target: HTMLElement | null) {
+    if (!this.viewport) return;
+    const viewportEl =
+      (this.querySelector('[data-slot="navigation-menu-viewport"]') as HTMLElement | null) ??
+      (this.querySelector('ui-navigation-menu-viewport') as HTMLElement | null);
+    if (!viewportEl) return;
+    // Move out the old one.
+    if (this._activeContent) {
+      const home = this._contentHome.get(this._activeContent);
+      if (home) home.appendChild(this._activeContent);
+      this._activeContent = null;
+    }
+    if (!target) return;
+    const content = target.querySelector('ui-navigation-menu-content') as HTMLElement | null;
+    if (!content) return;
+    if (!this._contentHome.has(content) && content.parentElement) {
+      this._contentHome.set(content, content.parentElement);
+    }
+    viewportEl.appendChild(content);
+    this._activeContent = content;
+  }
+
+  // Slide the small triangle/arrow indicator under the active trigger's
+  // horizontal centre. Hidden when nothing is open.
+  _syncIndicator(target: HTMLElement | null) {
+    const indicator = this.querySelector('ui-navigation-menu-indicator') as HTMLElement | null;
+    if (!indicator) return;
+    if (!target) {
+      indicator.setAttribute('data-state', 'hidden');
+      return;
+    }
+    const trigger = target.querySelector('ui-navigation-menu-trigger') as HTMLElement | null;
+    if (!trigger) {
+      indicator.setAttribute('data-state', 'hidden');
+      return;
+    }
+    const triggerRect = trigger.getBoundingClientRect();
+    const navRect = this.getBoundingClientRect();
+    const indicatorWidth = indicator.offsetWidth || 10;
+    const x = triggerRect.left - navRect.left + triggerRect.width / 2 - indicatorWidth / 2;
+    indicator.style.position = 'absolute';
+    indicator.style.left = '0';
+    indicator.style.transform = `translateX(${x}px)`;
+    indicator.style.transition = 'transform 250ms ease';
+    indicator.setAttribute('data-state', 'visible');
+  }
 
   render() {
     return html`<nav data-slot="navigation-menu" data-viewport=${String(this.viewport)} class=${cn('group/navigation-menu relative flex max-w-max flex-1 items-center justify-center')}>${unsafeHTML(this._slot)}${this.viewport ? html`<ui-navigation-menu-viewport></ui-navigation-menu-viewport>` : html``}</nav>`;

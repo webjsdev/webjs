@@ -18,7 +18,7 @@ export default function Layout({ children }: { children: any }) {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="/public/tailwind.css" />
         <style>
           :root {
             color-scheme: light dark;

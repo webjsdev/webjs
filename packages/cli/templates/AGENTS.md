@@ -112,6 +112,63 @@ layered on top:
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
 
+## UI components — `@webjskit/ui` (preinstalled)
+
+This scaffold ships with the standard `@webjskit/ui` component kit
+**already installed at `components/ui/`**. These are shadcn-equivalent
+web components — light DOM, Tailwind-styled, framework-agnostic. You
+import the source like any other component:
+
+```ts
+import '../../components/ui/button.ts';
+import '../../components/ui/card.ts';
+```
+
+Then use them in templates with the `ui-` tag prefix:
+
+```ts
+return html`
+  <ui-card>
+    <ui-card-header>
+      <ui-card-title>Profile</ui-card-title>
+    </ui-card-header>
+    <ui-card-content>
+      <ui-input placeholder="Name" />
+    </ui-card-content>
+    <ui-card-footer>
+      <ui-button variant="default">Save</ui-button>
+    </ui-card-footer>
+  </ui-card>
+`;
+```
+
+**Add more components from the registry:**
+
+```sh
+webjs ui add dialog dropdown-menu select tabs
+```
+
+Each `webjs ui add` call fetches the component source from
+`https://ui.webjs.dev/r/<name>.json`, copies it into
+`components/ui/`, and installs any required npm deps. Run
+`webjs ui list` to see the full catalogue (~55 components) or browse
+[https://ui.webjs.dev](https://ui.webjs.dev).
+
+**AI agents — when to reach for `ui-*`:**
+
+When the user asks for a form, dashboard, settings page, modal, dropdown,
+toast, table — anything that maps onto a known shadcn pattern — **prefer
+the `ui-*` components over hand-rolling buttons/inputs with raw Tailwind**.
+You get accessibility, focus management, keyboard handling, and visual
+consistency for free. Hand-rolled `<button class="px-4 py-2 bg-…">` is
+fine for one-offs (a hero CTA, a marketing pill); for any real product
+surface, use `<ui-button>`.
+
+The tag mapping is mechanical: shadcn `<Button>` → `<ui-button>`, shadcn
+`<DialogContent>` → `<ui-dialog-content>`, etc. When porting any
+shadcn-React example you find on the web, swap PascalCase tags for
+`kebab-case` with the `ui-` prefix and you're done.
+
 ## File conventions
 
 ```
