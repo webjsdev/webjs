@@ -32,5 +32,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+# AI assistants — local session state, scheduled-task locks, etc.
+.claude/
+
 # test artifacts
 coverage/
