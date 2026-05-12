@@ -1,5 +1,44 @@
-import { html } from '@webjskit/core';
+import { html, css } from '@webjskit/core';
 import { loadRegistryIndex } from '../_lib/registry.server.ts';
+
+// Subtle, hover-revealed scrollbar for the sidenav.
+//
+// Default behavior: scrollbar track + thumb are transparent — the column
+// looks bar-less while idle. On hover (mouse over the aside) the thumb
+// fades in. Mirrors macOS overlay-scrollbar feel cross-browser:
+//   - Firefox: scrollbar-color, scrollbar-width
+//   - Chromium / Safari: ::-webkit-scrollbar pseudo-elements
+const SIDENAV_STYLES = css`
+  .docs-sidenav {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 200ms ease;
+  }
+  .docs-sidenav:hover,
+  .docs-sidenav:focus-within {
+    scrollbar-color: color-mix(in oklch, var(--fg) 25%, transparent) transparent;
+  }
+  .docs-sidenav::-webkit-scrollbar {
+    width: 8px;
+  }
+  .docs-sidenav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .docs-sidenav::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 200ms ease;
+  }
+  .docs-sidenav:hover::-webkit-scrollbar-thumb,
+  .docs-sidenav:focus-within::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--fg) 25%, transparent);
+  }
+  .docs-sidenav::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--fg) 45%, transparent);
+  }
+`;
 
 /**
  * Shadcn-style docs shell: sidebar (component list, getting started) on the
@@ -20,8 +59,9 @@ export default async function DocsLayout({ children }: { children: unknown }) {
     'block py-1.5 px-2 -mx-2 rounded-md text-fg-muted hover:bg-fg/10 hover:text-fg transition-colors';
 
   return html`
+    <style>${SIDENAV_STYLES.text}</style>
     <div class="grid lg:grid-cols-[220px_1fr] gap-8 -mt-10">
-      <aside class="hidden lg:block sticky top-4 self-start h-[calc(100vh-2rem)] overflow-y-auto py-10 text-sm">
+      <aside class="docs-sidenav hidden lg:block sticky top-4 self-start h-[calc(100vh-2rem)] overflow-y-auto py-10 text-sm">
         <div class="font-semibold mb-2 text-fg">Getting Started</div>
         <nav class="flex flex-col gap-0.5 mb-6">
           <a href="/docs" class=${linkClass}>Introduction</a>
