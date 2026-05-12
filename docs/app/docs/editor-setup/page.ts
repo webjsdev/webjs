@@ -7,11 +7,13 @@ export default function EditorSetup() {
     <h1>Editor Setup — Neovim &amp; VS Code</h1>
     <p>webjs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
 
-    <p>This page covers three layers of intelligence:</p>
+    <p><strong><code>@webjskit/ts-plugin</code> is editor-only — not required for the framework to run.</strong> As of <code>@webjskit/ts-plugin@0.4.0</code> it bundles <code>ts-lit-plugin</code> internally (loads it programmatically inside its <code>create(info)</code> factory), so users install one plugin and list one plugin in <code>tsconfig.json</code>. The scaffold wires this up automatically.</p>
+
+    <p>This page covers three layers of intelligence — the first works out of the box; the last two arrive together once <code>@webjskit/ts-plugin</code> is installed:</p>
     <ol>
       <li><strong>Type-safe component internals</strong> — <code>this.student: Student</code> inside the class. Works out of the box once <code>tsconfig.json</code> is set up.</li>
-      <li><strong>Template-literal intelligence</strong> — type-checking and go-to-definition for <code>&lt;student-card student=\${...}&gt;</code> inside <code>html\`…\`</code> tags. Requires <code>ts-lit-plugin</code>.</li>
-      <li><strong>webjs-aware intelligence</strong> — silences <code>ts-lit-plugin</code>'s "unknown tag/attribute" diagnostics for components registered via <code>Class.register('tag')</code>, offers attribute auto-complete sourced from <code>static properties</code>, and type-checks attribute-value interpolations (<code>&lt;auth-forms mode=\${expr}&gt;</code>) against each prop's <code>declare</code> annotation. Requires <code>@webjskit/ts-plugin</code> ≥ 0.3.0.</li>
+      <li><strong>Template-literal intelligence</strong> — type-checking and go-to-definition for <code>&lt;student-card student=\${...}&gt;</code> inside <code>html\`…\`</code> tags. Provided by the bundled <code>ts-lit-plugin</code>.</li>
+      <li><strong>webjs-aware intelligence</strong> — silences <code>ts-lit-plugin</code>'s "unknown tag/attribute" diagnostics for components registered via <code>Class.register('tag')</code>, offers attribute auto-complete sourced from <code>static properties</code>, and type-checks attribute-value interpolations (<code>&lt;auth-forms mode=\${expr}&gt;</code>) against each prop's <code>declare</code> annotation.</li>
     </ol>
     <p>There's also an optional standard-TypeScript convention for typing <code>document.querySelector('student-card')</code> — briefly covered at the end.</p>
 
@@ -35,7 +37,6 @@ export default function EditorSetup() {
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "plugins": [
-      { "name": "ts-lit-plugin", "strict": true },
       { "name": "@webjskit/ts-plugin" }
     ]
   }
@@ -45,7 +46,7 @@ export default function EditorSetup() {
       <li><code>moduleResolution: "NodeNext"</code> — required for the framework's <code>exports</code> map to resolve correctly.</li>
       <li><code>allowImportingTsExtensions: true</code> — lets you write <code>import { x } from './foo.ts'</code>, matching how webjs serves them.</li>
       <li><code>noEmit: true</code> — TypeScript type-checks only; webjs transforms <code>.ts</code> via esbuild at import / request time.</li>
-      <li><code>plugins</code> — order matters. <code>ts-lit-plugin</code> runs first; <code>@webjskit/ts-plugin</code> wraps it so it can suppress lit-plugin's webjs-incompatible diagnostics and add attribute completions on top.</li>
+      <li><code>plugins</code> — one entry. <code>@webjskit/ts-plugin@0.4.0+</code> bundles <code>ts-lit-plugin</code> internally and loads it programmatically; no separate <code>ts-lit-plugin</code> entry needed.</li>
     </ul>
 
     <h2>Layer 1 — Component internals (works everywhere)</h2>
@@ -67,22 +68,22 @@ StudentCard.register('student-card');</pre>
     <h3>Why <code>declare</code> is required</h3>
     <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code> inside the constructor. Without <code>declare</code>, TypeScript emits a <code>student = undefined</code> class-field initializer that runs <em>after</em> <code>super()</code> and overwrites that accessor. <code>declare</code> tells TS "type this field for me, but don't emit any runtime assignment."</p>
 
-    <h2>Layer 2 — <code>ts-lit-plugin</code> for <code>html\`…\`</code> intelligence</h2>
-    <p>webjs's <code>html\`…\`</code> is Lit-compatible. Installing <a href="https://www.npmjs.com/package/ts-lit-plugin" target="_blank">ts-lit-plugin</a> unlocks:</p>
+    <h2>Layer 2 — Template-literal intelligence (bundled)</h2>
+    <p><code>@webjskit/ts-plugin</code> bundles <a href="https://www.npmjs.com/package/ts-lit-plugin" target="_blank">ts-lit-plugin</a> as a runtime dependency and loads it programmatically inside its factory, so once you install <code>@webjskit/ts-plugin</code> you also get:</p>
     <ul>
       <li><strong>Type-checking</strong> attribute / property values — <code>&lt;student-card student=\${42}&gt;</code> is flagged because <code>42</code> isn't a <code>Student</code>.</li>
-      <li><strong>Unknown-tag warnings</strong> when you typo a built-in or Lit-style element name.</li>
-      <li><strong>Go-to-definition</strong> for tags it knows about (Lit's <code>@customElement</code> decorator + <code>HTMLElementTagNameMap</code> augmentations).</li>
+      <li><strong>Unknown-tag warnings</strong> when you typo a built-in or decorator-registered element name.</li>
+      <li><strong>Go-to-definition</strong> for tags ts-lit-plugin already knows about (decorator-registered elements + <code>HTMLElementTagNameMap</code> augmentations).</li>
       <li><strong>Rename-symbol</strong> across template usages.</li>
     </ul>
-    <p><strong>Limitation for webjs:</strong> ts-lit-plugin doesn't recognise webjs components — they register at runtime via <code>Class.register('tag')</code>, not via decorator or static map — so it flags every webjs element as "Unknown tag" and offers no attribute completions for them. <code>@webjskit/ts-plugin</code> fills that gap (Layer 3 below). Install ts-lit-plugin first; the webjs plugin sits on top of it.</p>
+    <p>By itself, <code>ts-lit-plugin</code> doesn't recognise webjs components — they register at runtime via <code>Class.register('tag')</code>, not via decorator or static map — so it would flag every webjs element as "Unknown tag". Layer 3 (next section) silences those false positives and adds webjs-specific completions. Because <code>@webjskit/ts-plugin</code> owns the bundling, both layers ship together; you don't install or configure <code>ts-lit-plugin</code> directly.</p>
 
     <h3>Install</h3>
-    <pre>npm i -D typescript ts-lit-plugin</pre>
-    <p>Add the plugin to <code>tsconfig.json</code> (already shown in the baseline above):</p>
+    <pre>npm i -D typescript @webjskit/ts-plugin</pre>
+    <p><code>ts-lit-plugin</code> arrives transitively. Make sure the plugin is listed in <code>tsconfig.json</code> (already in the baseline above):</p>
     <pre>{
   "compilerOptions": {
-    "plugins": [{ "name": "ts-lit-plugin", "strict": true }]
+    "plugins": [{ "name": "@webjskit/ts-plugin" }]
   }
 }</pre>
 
@@ -144,13 +145,15 @@ return {
 
     <h3>Install</h3>
     <pre>npm i -D @webjskit/ts-plugin</pre>
-    <p>The baseline <code>tsconfig.json</code> at the top of this page already lists both plugins. Plugin order matters — <code>ts-lit-plugin</code> first, <code>@webjskit/ts-plugin</code> second — because the webjs plugin wraps the lit-plugin to filter its diagnostics and augment its completions.</p>
+    <p>The baseline <code>tsconfig.json</code> at the top of this page already lists this single plugin. From <code>0.4.0</code> onward there's no separate <code>ts-lit-plugin</code> entry — it's bundled as a runtime dependency of <code>@webjskit/ts-plugin</code> and loaded programmatically.</p>
+
+    <p><strong>Upgrading from a pre-0.4.0 setup?</strong> Remove <code>ts-lit-plugin</code> from your <code>devDependencies</code> and from the <code>plugins</code> array in <code>tsconfig.json</code>; leave only <code>{ "name": "@webjskit/ts-plugin" }</code>. Run <code>npm install</code> — <code>ts-lit-plugin</code> will reappear in <code>node_modules</code> as a transitive dep.</p>
 
     <h3>After upgrading the plugin</h3>
     <p>tsserver loads plugins on startup, so an editor restart is required to pick up new plugin code. In Neovim: <code>:LspRestart</code>. In VS Code: <code>Cmd/Ctrl+Shift+P</code> → "TypeScript: Restart TS Server".</p>
 
     <h2>Optional: typed DOM queries</h2>
-    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a> — the same one <a href="https://lit.dev" target="_blank">Lit</a> uses. With <code>@webjskit/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates; the augmentation is purely about typing DOM-query call sites.</p>
+    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a>. With <code>@webjskit/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates; the augmentation is purely about typing DOM-query call sites.</p>
 
     <h2>Editor actions — quick reference</h2>
     <table>

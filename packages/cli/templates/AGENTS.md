@@ -84,6 +84,34 @@ node_modules/@webjskit/
 Reaching straight for the source is the fastest way to resolve "why
 doesn't X work?" — no documentation guesswork, no stale blog posts.
 
+## Editor TS plugin — `@webjskit/ts-plugin`
+
+This scaffold's `tsconfig.json` lists a single tsserver plugin. It is
+editor-only — not required for the framework to run.
+
+```jsonc
+// tsconfig.json (already wired by the scaffold)
+"plugins": [
+  { "name": "@webjskit/ts-plugin" }
+]
+```
+
+`@webjskit/ts-plugin` bundles `ts-lit-plugin` internally (it's a runtime
+dependency of the plugin) and loads it programmatically — so users
+list one entry, not two. You get the full stack of template-literal
+intelligence (type-checking, diagnostics, go-to-def inside
+`` html`…` `` and `` css`…` `` templates) **plus** webjs-aware behaviour
+layered on top:
+
+- "Unknown tag/attribute" diagnostics are silenced for elements
+  registered via `Class.register('tag-name')`.
+- Attribute auto-complete sourced from each component's
+  `static properties`.
+- Attribute-value type-check against `declare propName: T` annotations.
+
+See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
+for the full walkthrough.
+
 ## File conventions
 
 ```
@@ -172,9 +200,8 @@ import { rateLimit, cache, createAuth, Credentials, Session } from '@webjskit/se
 import { WebComponent, html, css } from '@webjskit/core';
 
 export class Counter extends WebComponent {
-  static tag = 'my-counter';       // required, must contain a hyphen
   static properties = { count: { type: Number } };
-  static styles = css`button { padding: 8px 12px; }`;
+  static styles = css`button { padding: 8px 12px; }`;   // shadow-DOM only
   // static shadow = true;          // opt into shadow DOM (default: light DOM)
   // static lazy = true;             // download JS only when scrolled into view
 
@@ -223,7 +250,7 @@ absolute URLs from `ctx.url`).
 
 ## Invariants (do not violate)
 
-1. Custom element tags must contain a hyphen. Set `static tag`, call `.register()`.
+1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
 2. Never import `@prisma/client` or `node:*` from client-reachable files —
    only from `.server.ts` modules or `lib/*.ts`.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
