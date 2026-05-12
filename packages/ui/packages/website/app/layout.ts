@@ -12,17 +12,22 @@ export const metadata = {
 };
 
 export default function Layout({ children }: { children: any }) {
+  // Don't wrap in <!doctype><html><head><body> — the framework's SSR
+  // pipeline already emits those (along with title, meta, importmap,
+  // and modulepreload tags derived from `metadata`). Adding a manual
+  // shell produces a second <head> block that the HTML parser drops
+  // — which used to silently disable the favicon, the inline <style>,
+  // and the Tailwind stylesheet link.
+  //
+  // The pipeline auto-hoists <link>, <style>, <script>, and <meta>
+  // elements returned here into the real <head>. Other markup goes
+  // into <body>.
   return html`
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" />
-        <link rel="icon" href="/public/favicon.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/public/favicon.png" />
-        <link rel="stylesheet" href="/public/tailwind.css" />
-        <style>
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/public/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/public/favicon.png" />
+    <link rel="stylesheet" href="/public/tailwind.css" />
+    <style>
           :root {
             color-scheme: light dark;
             --fg:            oklch(0.18 0.015 60);
@@ -106,10 +111,8 @@ export default function Layout({ children }: { children: any }) {
 
           .announce { width: 100%; background: var(--accent-tint); border-bottom: 1px solid var(--border); padding: 8px 16px; text-align: center; font-size: 13px; }
           .announce .tag { display: inline-block; font: 700 10px/1 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); background: color-mix(in oklch, var(--accent) 15%, transparent); padding: 3px 7px; border-radius: 999px; margin-right: 8px; vertical-align: middle; }
-        </style>
-      </head>
-      <body>
-        <div class="announce">
+    </style>
+    <div class="announce">
           <span class="tag">v1</span>
           <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5">
             Part of webjs - the AI-first, web components framework
