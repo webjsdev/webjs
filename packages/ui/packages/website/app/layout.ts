@@ -192,7 +192,7 @@ export default function Layout({ children }: { children: any }) {
     <header class="border-b">
       <div class="max-w-5xl mx-auto flex flex-wrap min-h-14 items-center px-4 sm:px-6 py-2 gap-x-4 gap-y-2 sm:gap-6">
         <a class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
-          <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
+          <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
           Webjs UI
         </a>
         <nav class="flex items-center gap-4">
