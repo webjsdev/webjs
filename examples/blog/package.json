@@ -22,9 +22,8 @@
   },
   "devDependencies": {
     "prisma": "^5.22.0",
-    "ts-lit-plugin": "^2.0.2",
     "typescript": "^6.0.3",
-    "@webjskit/ts-plugin": "^0.3.0",
+    "@webjskit/ts-plugin": "^0.4.0",
     "@webjskit/ui": "^0.1.0"
   }
 }
