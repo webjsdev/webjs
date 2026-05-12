@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Docs — @webjskit/ui' };
+export const metadata = { title: 'Docs — Webjs UI' };
 
 export default function Docs() {
   return html`

@@ -47,7 +47,7 @@ import '../../../../components/ui/toggle-group.ts';
 import '../../../../components/ui/tooltip.ts';
 
 export function generateMetadata({ params }: { params: { name: string } }) {
-  return { title: `${params.name} — @webjskit/ui` };
+  return { title: `${params.name} — Webjs UI` };
 }
 
 export default async function ComponentDoc({ params }: { params: { name: string } }) {
