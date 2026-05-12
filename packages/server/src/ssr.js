@@ -220,6 +220,12 @@ async function renderChain(route, ctx, dev, suspenseCtx) {
 async function collectMetadata(route, ctx, dev) {
   /** @type {Record<string, any>} */
   let meta = {};
+  // Carry the title template forward across layers. Once an outer layout
+  // sets `title: { template, default }`, every deeper layer that supplies
+  // a plain string title gets it transformed via the template — matching
+  // Next.js App Router semantics.
+  /** @type {string | null} */
+  let titleTemplate = null;
   for (const file of route.metadataFiles) {
     try {
       const mod = await loadModule(file, dev);
@@ -229,7 +235,31 @@ async function collectMetadata(route, ctx, dev) {
       } else if (mod.metadata) {
         m = mod.metadata;
       }
-      if (m && typeof m === 'object') meta = { ...meta, ...m };
+      if (!m || typeof m !== 'object') continue;
+      // Pre-resolve the title for this layer using the inherited template.
+      const resolved = { ...m };
+      if (m.title !== undefined) {
+        const t = m.title;
+        if (typeof t === 'string') {
+          resolved.title = titleTemplate ? titleTemplate.replace('%s', t) : t;
+        } else if (t && typeof t === 'object') {
+          // { template, default, absolute }: `absolute` overrides everything;
+          // `template` is captured for deeper layers; `default` is the value
+          // used when no deeper layer supplies a plain title string.
+          if (typeof t.template === 'string') titleTemplate = t.template;
+          if (typeof t.absolute === 'string') {
+            resolved.title = t.absolute;
+            // `absolute` does NOT clear the template — Next.js propagates
+            // it for deeper segments below, but the *current* segment is
+            // rendered absolute.
+          } else if (typeof t.default === 'string') {
+            resolved.title = t.default;
+          } else {
+            delete resolved.title;
+          }
+        }
+      }
+      meta = { ...meta, ...resolved };
     } catch {
       // ignore: metadata collection never fails the request
     }
@@ -499,13 +529,90 @@ function wrapHead(opts) {
 
   const m = opts.metadata || {};
   const metaTags = [];
+
+  // Tiny URL resolver against metadataBase. If metadataBase is set and a
+  // value looks like a relative URL (no scheme, no `//` prefix), resolve
+  // it. Otherwise return as-is. Used by og:image, twitter:image,
+  // alternates.canonical / languages / media.
+  const base = typeof m.metadataBase === 'string' ? m.metadataBase : '';
+  /** @param {unknown} v */
+  const absUrl = (v) => {
+    const s = String(v);
+    if (!base) return s;
+    if (/^https?:\/\//i.test(s) || s.startsWith('//') || s.startsWith('data:')) return s;
+    try {
+      return new URL(s, base).toString();
+    } catch {
+      return s;
+    }
+  };
+
   if (m.description) metaTags.push(`<meta name="description" content="${escapeAttr(m.description)}">`);
   if (m.viewport) metaTags.push(`<meta name="viewport" content="${escapeAttr(m.viewport)}">`);
   else metaTags.push(`<meta name="viewport" content="width=device-width,initial-scale=1">`);
   if (m.themeColor) metaTags.push(`<meta name="theme-color" content="${escapeAttr(m.themeColor)}">`);
+
+  // ---- i18n + SEO essentials ----
+
+  // robots: { index, follow, googleBot, etc. }
+  if (m.robots) {
+    if (typeof m.robots === 'string') {
+      metaTags.push(`<meta name="robots" content="${escapeAttr(m.robots)}">`);
+    } else if (typeof m.robots === 'object') {
+      const parts = [];
+      if (m.robots.index === false) parts.push('noindex');
+      else if (m.robots.index === true) parts.push('index');
+      if (m.robots.follow === false) parts.push('nofollow');
+      else if (m.robots.follow === true) parts.push('follow');
+      if (m.robots.noarchive) parts.push('noarchive');
+      if (m.robots.nosnippet) parts.push('nosnippet');
+      if (m.robots.noimageindex) parts.push('noimageindex');
+      if (parts.length) {
+        metaTags.push(`<meta name="robots" content="${escapeAttr(parts.join(', '))}">`);
+      }
+      if (typeof m.robots.googleBot === 'string') {
+        metaTags.push(`<meta name="googlebot" content="${escapeAttr(m.robots.googleBot)}">`);
+      }
+    }
+  }
+
+  // keywords: string | string[]
+  if (m.keywords) {
+    const kws = Array.isArray(m.keywords) ? m.keywords.join(', ') : String(m.keywords);
+    if (kws) metaTags.push(`<meta name="keywords" content="${escapeAttr(kws)}">`);
+  }
+
+  // authors: Array<{ name, url? }> | { name, url? } | string
+  if (m.authors) {
+    const list = Array.isArray(m.authors) ? m.authors : [m.authors];
+    for (const a of list) {
+      if (!a) continue;
+      const name = typeof a === 'string' ? a : a.name;
+      if (!name) continue;
+      metaTags.push(`<meta name="author" content="${escapeAttr(name)}">`);
+      if (typeof a === 'object' && a.url) {
+        metaTags.push(`<link rel="author" href="${escapeAttr(absUrl(a.url))}">`);
+      }
+    }
+  }
+
+  // Singletons that map 1:1 to <meta name="…">.
+  for (const [field, metaName] of [
+    ['creator', 'creator'],
+    ['publisher', 'publisher'],
+    ['applicationName', 'application-name'],
+    ['generator', 'generator'],
+    ['referrer', 'referrer'],
+  ]) {
+    if (m[field]) {
+      metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(m[field]))}">`);
+    }
+  }
+
   if (m.openGraph && typeof m.openGraph === 'object') {
     for (const [k, v] of Object.entries(m.openGraph)) {
-      metaTags.push(`<meta property="og:${escapeAttr(k)}" content="${escapeAttr(String(v))}">`);
+      const out = k === 'image' || k === 'url' ? absUrl(v) : String(v);
+      metaTags.push(`<meta property="og:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
     }
   }
   // Twitter card tags. Twitter falls back to og:* when these are absent
@@ -513,7 +620,8 @@ function wrapHead(opts) {
   // twitter:card entry.
   if (m.twitter && typeof m.twitter === 'object') {
     for (const [k, v] of Object.entries(m.twitter)) {
-      metaTags.push(`<meta name="twitter:${escapeAttr(k)}" content="${escapeAttr(String(v))}">`);
+      const out = k === 'image' ? absUrl(v) : String(v);
+      metaTags.push(`<meta name="twitter:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
     }
   }
 
@@ -533,6 +641,37 @@ function wrapHead(opts) {
         .map(([k, v]) => `${k}="${escapeAttr(String(v))}"`)
         .join(' ');
       linkTags.push(`<link rel="preload" ${attrs}>`);
+    }
+  }
+
+  // alternates: { canonical, languages: { '<hreflang>': url }, media: { '<media>': url } }
+  // Mirrors Next.js's metadata.alternates surface. Relative values are resolved
+  // against metadataBase.
+  if (m.alternates && typeof m.alternates === 'object') {
+    if (m.alternates.canonical) {
+      linkTags.push(`<link rel="canonical" href="${escapeAttr(absUrl(m.alternates.canonical))}">`);
+    }
+    if (m.alternates.languages && typeof m.alternates.languages === 'object') {
+      for (const [hreflang, href] of Object.entries(m.alternates.languages)) {
+        linkTags.push(
+          `<link rel="alternate" hreflang="${escapeAttr(hreflang)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
+    }
+    if (m.alternates.media && typeof m.alternates.media === 'object') {
+      for (const [media, href] of Object.entries(m.alternates.media)) {
+        linkTags.push(
+          `<link rel="alternate" media="${escapeAttr(media)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
+    }
+    if (m.alternates.types && typeof m.alternates.types === 'object') {
+      // alternates.types: { 'application/rss+xml': '/rss.xml' }
+      for (const [type, href] of Object.entries(m.alternates.types)) {
+        linkTags.push(
+          `<link rel="alternate" type="${escapeAttr(type)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
     }
   }
 

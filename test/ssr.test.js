@@ -278,6 +278,192 @@ test('buildDocumentParts: peeks past the data-layout wrapper to find user shell'
   assert.match(streamBody, /<main>page<\/main>/);
 });
 
+/* ------------ Metadata parity: i18n + SEO essentials ------------ */
+
+// Small helper that bypasses the full SSR boot and just exercises wrapHead
+// indirectly via _buildDocumentParts (whose framework branch ends up calling
+// wrapHead).
+function render(metadata) {
+  const { prefix } = _buildDocumentParts(
+    '<main>p</main>',
+    { metadata, moduleUrls: [], dev: false, streaming: false },
+  );
+  return prefix;
+}
+
+test('metadata.robots: object form maps to noindex/nofollow tokens', () => {
+  const html = render({ robots: { index: false, follow: true, noarchive: true } });
+  assert.match(html, /<meta name="robots" content="noindex, follow, noarchive">/);
+});
+
+test('metadata.robots: string form passes through unchanged', () => {
+  const html = render({ robots: 'noindex, nofollow' });
+  assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
+});
+
+test('metadata.robots.googleBot emits a separate <meta name="googlebot">', () => {
+  const html = render({ robots: { googleBot: 'index, max-snippet:-1' } });
+  assert.match(html, /<meta name="googlebot" content="index, max-snippet:-1">/);
+});
+
+test('metadata.keywords: array joins with comma-space; string passes through', () => {
+  const html = render({ keywords: ['ai', 'web components', 'no-build'] });
+  assert.match(html, /<meta name="keywords" content="ai, web components, no-build">/);
+  const html2 = render({ keywords: 'a, b' });
+  assert.match(html2, /<meta name="keywords" content="a, b">/);
+});
+
+test('metadata.authors: single + array forms emit <meta name="author"> + optional <link rel="author">', () => {
+  const html = render({
+    authors: [
+      { name: 'Vivek', url: 'https://vivek.dev' },
+      { name: 'Alice' },
+      'Bob (string form)',
+    ],
+  });
+  assert.match(html, /<meta name="author" content="Vivek">/);
+  assert.match(html, /<link rel="author" href="https:\/\/vivek\.dev">/);
+  assert.match(html, /<meta name="author" content="Alice">/);
+  assert.match(html, /<meta name="author" content="Bob \(string form\)">/);
+});
+
+test('metadata: creator / publisher / applicationName / generator / referrer', () => {
+  const html = render({
+    creator: 'C',
+    publisher: 'P',
+    applicationName: 'webjs',
+    generator: 'webjs 0.5',
+    referrer: 'origin-when-cross-origin',
+  });
+  assert.match(html, /<meta name="creator" content="C">/);
+  assert.match(html, /<meta name="publisher" content="P">/);
+  assert.match(html, /<meta name="application-name" content="webjs">/);
+  assert.match(html, /<meta name="generator" content="webjs 0\.5">/);
+  assert.match(html, /<meta name="referrer" content="origin-when-cross-origin">/);
+});
+
+test('metadata.alternates.canonical emits <link rel="canonical">', () => {
+  const html = render({ alternates: { canonical: 'https://example.com/post' } });
+  assert.match(html, /<link rel="canonical" href="https:\/\/example\.com\/post">/);
+});
+
+test('metadata.alternates.languages emits hreflang <link>s', () => {
+  const html = render({
+    alternates: {
+      languages: { 'es-ES': 'https://example.com/es', 'fr-FR': 'https://example.com/fr' },
+    },
+  });
+  assert.match(html, /<link rel="alternate" hreflang="es-ES" href="https:\/\/example\.com\/es">/);
+  assert.match(html, /<link rel="alternate" hreflang="fr-FR" href="https:\/\/example\.com\/fr">/);
+});
+
+test('metadata.alternates.media + alternates.types emit media + type alternates', () => {
+  const html = render({
+    alternates: {
+      media: { 'only screen and (max-width: 600px)': '/mobile' },
+      types: { 'application/rss+xml': '/rss.xml' },
+    },
+  });
+  assert.match(html, /<link rel="alternate" media="only screen and \(max-width: 600px\)" href="\/mobile">/);
+  assert.match(html, /<link rel="alternate" type="application\/rss\+xml" href="\/rss\.xml">/);
+});
+
+test('metadata.metadataBase: relative og:image becomes absolute', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    openGraph: { image: '/og.png' },
+  });
+  assert.match(html, /<meta property="og:image" content="https:\/\/example\.com\/og\.png">/);
+});
+
+test('metadata.metadataBase: relative canonical + hreflang become absolute', () => {
+  const html = render({
+    metadataBase: 'https://example.com/',
+    alternates: {
+      canonical: '/post',
+      languages: { 'es-ES': '/es' },
+    },
+  });
+  assert.match(html, /<link rel="canonical" href="https:\/\/example\.com\/post">/);
+  assert.match(html, /<link rel="alternate" hreflang="es-ES" href="https:\/\/example\.com\/es">/);
+});
+
+test('metadata.metadataBase: absolute URLs pass through untouched', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    openGraph: { image: 'https://cdn.test/og.png' },
+    alternates: { canonical: 'https://other.test/post' },
+  });
+  assert.match(html, /<meta property="og:image" content="https:\/\/cdn\.test\/og\.png">/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/other\.test\/post">/);
+});
+
+/* ------------ title template propagation across nested metadata layers ------------ */
+
+async function makeLayeredRoute(...metadataSources) {
+  const sub = mkdtempSync(join(tmpDir, 'meta-route-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+  const pageFile = join(appDir, 'page.js');
+  writeFileSync(
+    pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function P() { return html\`<main>p</main>\`; }\n`,
+  );
+  const metadataFiles = metadataSources.map((src, i) => {
+    const f = join(appDir, `meta-${i}.js`);
+    writeFileSync(f, src);
+    return f;
+  });
+  return {
+    route: { file: pageFile, layouts: [], errors: [], metadataFiles },
+    appDir,
+  };
+}
+
+test('title template: page string title is wrapped by root template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    // Root (outer): template + default
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    // Page (inner): plain string title
+    `export const metadata = { title: 'Hello' };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>Hello — webjs<\/title>/);
+});
+
+test('title template: page omits title; root default is used', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>webjs<\/title>/);
+});
+
+test('title template: page absolute title escapes the template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    `export const metadata = { title: { absolute: 'A standalone title' } };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>A standalone title<\/title>/);
+  assert.doesNotMatch(html, /— webjs/);
+});
+
+test('title template: deeper layout can override the inherited template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — Site', default: 'Site' } };`,
+    `export const metadata = { title: { template: '%s — Blog' } };`, // intermediate layout overrides
+    `export const metadata = { title: 'Post' };`,                    // page supplies plain string
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>Post — Blog<\/title>/);
+});
+
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
 
 async function makeRoute({ pageSrc, layoutSrc, metadata = null }) {
