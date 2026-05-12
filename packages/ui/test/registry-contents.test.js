@@ -1,26 +1,32 @@
 /**
- * Validates the BUILT registry contents against expected invariants.
+ * Validates registry contents against expected invariants.
  *
- * As of v1 the architecture is two-tier:
+ * Reads source files directly from `packages/registry/` (no build step
+ * anymore — the website composes JSON on demand via _lib/registry.server.ts).
+ *
+ * v1 architecture is two-tier:
  *   - Tier 1 — pure class-helper functions (button, card, badge, alert, …),
  *     they import `cn` from `lib/utils.ts` and export named functions.
  *   - Tier 2 — stateful custom elements (dialog, tabs, popover, …), they
  *     import `Base` + `defineElement` and call `defineElement('ui-…', Class)`.
  *
- * Tests cover both shapes plus a handful of hallmark-class assertions to
- * catch regressions that would silently nuke shadcn-equivalent visuals.
+ * Tests cover both shapes plus hallmark-class assertions to catch regressions
+ * that would silently nuke shadcn-equivalent visuals.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const R_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'registry', 'r');
-const skip = !existsSync(R_DIR);
+const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'registry');
+const COMPONENTS_DIR = join(REGISTRY_DIR, 'components');
+const MANIFEST_PATH = join(REGISTRY_DIR, 'registry.json');
 
-// All v1 components — every one of these MUST be present in the built registry
-// and follow either the Tier-1 (class-helper) or Tier-2 (custom-element) shape.
+const skip = !existsSync(MANIFEST_PATH);
+
+// All v1 components — every one of these MUST exist in the registry and follow
+// either the Tier-1 (class-helper) or Tier-2 (custom-element) shape.
 const V1_COMPONENTS = [
   'button', 'badge', 'alert', 'card',
   'input', 'textarea', 'label',
@@ -41,49 +47,53 @@ const TIER_2 = new Set([
   'dropdown-menu', 'sonner',
 ]);
 
-function read(name) {
-  const item = JSON.parse(readFileSync(join(R_DIR, `${name}.json`), 'utf8'));
-  return { item, content: item.files?.[0]?.content || '' };
+function readSource(name) {
+  return readFileSync(join(COMPONENTS_DIR, `${name}.ts`), 'utf8');
 }
 
-test('registry is built (run `node packages/registry/scripts/build.js` if this fails)', { skip }, () => {
-  const files = readdirSync(R_DIR).filter((f) => f.endsWith('.json'));
-  // 32 v1 components + lib-utils + theme entries + manifest (registry.json) + index.json.
-  // Hard floor at 32 catches an accidentally-empty registry build.
-  assert.ok(files.length >= 32, `expected ≥32 registry JSONs, found ${files.length}`);
+function readManifest() {
+  return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+}
+
+test('registry.json exists and enumerates ≥32 v1 components', { skip }, () => {
+  const m = readManifest();
+  const uiItems = m.items.filter((it) => it.type === 'registry:ui');
+  assert.ok(uiItems.length >= 32, `expected ≥32 registry:ui items, found ${uiItems.length}`);
 });
 
-test('every v1 component has non-empty inlined content', { skip }, () => {
+test('every v1 component source file exists and is non-trivial', { skip }, () => {
   for (const name of V1_COMPONENTS) {
-    const { item } = read(name);
-    assert.ok(Array.isArray(item.files), `${name}: files[] missing`);
-    for (const file of item.files) {
-      assert.ok(file.content && file.content.length > 50, `${name}: ${file.path} content too short`);
-    }
+    const src = readSource(name);
+    assert.ok(src.length > 200, `${name}: source too short`);
+  }
+});
+
+test('every v1 component is declared in registry.json', { skip }, () => {
+  const m = readManifest();
+  const names = new Set(m.items.map((it) => it.name));
+  for (const name of V1_COMPONENTS) {
+    assert.ok(names.has(name), `${name}: missing from registry.json`);
   }
 });
 
 test('every Tier-2 component imports Base + defineElement from ../lib/utils.ts', { skip }, () => {
-  // Tier 1 helpers that are pure class strings (card, separator, skeleton,
-  // aspect-ratio, kbd, table, breadcrumb, avatar) don't need cn() and so
-  // don't import utils.ts at all — that's fine. Tier 2 always must.
   for (const name of TIER_2) {
-    const { content } = read(name);
+    const src = readSource(name);
     assert.match(
-      content,
+      src,
       /from\s+['"]\.\.\/lib\/utils\.ts['"]/,
       `${name}: missing import from '../lib/utils.ts'`,
     );
-    assert.match(content, /\bBase\b/, `${name}: not using Base from utils.ts`);
-    assert.match(content, /\bdefineElement\b/, `${name}: not using defineElement`);
+    assert.match(src, /\bBase\b/, `${name}: not using Base from utils.ts`);
+    assert.match(src, /\bdefineElement\b/, `${name}: not using defineElement`);
   }
 });
 
 test('Tier-2 components register at least one ui-* element via defineElement', { skip }, () => {
   for (const name of TIER_2) {
-    const { content } = read(name);
+    const src = readSource(name);
     assert.match(
-      content,
+      src,
       /defineElement\(['"]ui-[a-z-]+['"]/,
       `${name}: no defineElement('ui-…') call found`,
     );
@@ -93,74 +103,71 @@ test('Tier-2 components register at least one ui-* element via defineElement', {
 test('Tier-1 components export named class-helper functions ending in *Class', { skip }, () => {
   const tier1 = V1_COMPONENTS.filter((n) => !TIER_2.has(n));
   for (const name of tier1) {
-    const { content } = read(name);
+    const src = readSource(name);
     assert.match(
-      content,
+      src,
       /export\s+(?:const|function)\s+\w+Class\b/,
       `${name}: no exported *Class helper function/const`,
     );
   }
 });
 
-test('button.json — variant + size class strings are present', { skip }, () => {
-  const { content } = read('button');
-  // Variant signatures
-  assert.match(content, /bg-primary/);
-  assert.match(content, /bg-destructive/);
-  assert.match(content, /bg-secondary/);
-  assert.match(content, /hover:bg-primary\/90/);
-  assert.match(content, /hover:underline/);    // link variant
-  assert.match(content, /hover:bg-accent/);    // ghost / outline
-  // Size signatures
-  assert.match(content, /h-9 px-4/);   // default
-  assert.match(content, /h-8/);        // sm
-  assert.match(content, /h-10/);       // lg
-  assert.match(content, /size-9/);     // icon
-  assert.match(content, /size-6/);     // icon-xs
+test('button — variant + size class strings are present', { skip }, () => {
+  const src = readSource('button');
+  assert.match(src, /bg-primary/);
+  assert.match(src, /bg-destructive/);
+  assert.match(src, /bg-secondary/);
+  assert.match(src, /hover:bg-primary\/90/);
+  assert.match(src, /hover:underline/);    // link variant
+  assert.match(src, /hover:bg-accent/);    // ghost / outline
+  assert.match(src, /h-9 px-4/);   // default
+  assert.match(src, /h-8/);        // sm
+  assert.match(src, /h-10/);       // lg
+  assert.match(src, /size-9/);     // icon
+  assert.match(src, /size-6/);     // icon-xs
 });
 
-test('card.json — exposes all 7 subpart class helpers (no custom elements)', { skip }, () => {
-  const { content } = read('card');
+test('card — exposes all 7 subpart class helpers (no custom elements)', { skip }, () => {
+  const src = readSource('card');
   for (const fn of ['cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass', 'cardActionClass', 'cardContentClass', 'cardFooterClass']) {
-    assert.match(content, new RegExp(`export\\s+const\\s+${fn}\\b`), `card missing ${fn}`);
+    assert.match(src, new RegExp(`export\\s+const\\s+${fn}\\b`), `card missing ${fn}`);
   }
 });
 
-test('dialog.json — has focus-trap, escape, role wiring', { skip }, () => {
-  const { content } = read('dialog');
-  // role="dialog" set via setAttribute — match either single-quoted or double-quoted form
-  assert.match(content, /'role',\s*'dialog'|"role",\s*"dialog"|role="dialog"/);
-  assert.match(content, /aria-modal/);
-  assert.match(content, /Escape/);
-  assert.match(content, /Tab/);
-  assert.match(content, /focusable/i);
-  assert.match(content, /defineElement\(['"]ui-dialog['"]/);
+test('dialog — has focus-trap, escape, role wiring', { skip }, () => {
+  const src = readSource('dialog');
+  assert.match(src, /'role',\s*'dialog'|"role",\s*"dialog"|role="dialog"/);
+  assert.match(src, /aria-modal/);
+  assert.match(src, /Escape/);
+  assert.match(src, /Tab/);
+  assert.match(src, /focusable/i);
+  assert.match(src, /defineElement\(['"]ui-dialog['"]/);
 });
 
-test('alert-dialog.json — uses alertdialog role, no overlay-click-to-close', { skip }, () => {
-  const { content } = read('alert-dialog');
-  assert.match(content, /alertdialog/);
-  assert.match(content, /No click-to-close/);
+test('alert-dialog — uses alertdialog role, no overlay-click-to-close', { skip }, () => {
+  const src = readSource('alert-dialog');
+  assert.match(src, /alertdialog/);
+  assert.match(src, /No click-to-close/);
 });
 
-test('popover.json — positioning helper + side/align/side-offset attrs', { skip }, () => {
-  const { content } = read('popover');
-  assert.match(content, /positionFloating/);
-  assert.match(content, /side/);
-  assert.match(content, /align/);
-  assert.match(content, /side-offset/);
+test('popover — positioning helper + side/align/side-offset attrs', { skip }, () => {
+  const src = readSource('popover');
+  assert.match(src, /positionFloating/);
+  assert.match(src, /side/);
+  assert.match(src, /align/);
+  assert.match(src, /side-offset/);
 });
 
-test('tabs.json — exposes Arrow-key navigation + roles', { skip }, () => {
-  const { content } = read('tabs');
-  assert.match(content, /ArrowLeft|ArrowRight|ArrowDown|ArrowUp/);
-  assert.match(content, /tablist/);
-  assert.match(content, /'role',\s*'tab'|"role",\s*"tab"/);
+test('tabs — exposes Arrow-key navigation + roles', { skip }, () => {
+  const src = readSource('tabs');
+  assert.match(src, /ArrowLeft|ArrowRight|ArrowDown|ArrowUp/);
+  assert.match(src, /tablist/);
+  assert.match(src, /'role',\s*'tab'|"role",\s*"tab"/);
 });
 
-test('accordion.json — supports single/multiple + collapsible', { skip }, () => {
-  const { content } = read('accordion');
-  assert.match(content, /'single'|"single"/);
-  assert.match(content, /'multiple'|"multiple"/);
-  assert.match(content, /collapsible/);
+test('accordion — supports single/multiple + collapsible', { skip }, () => {
+  const src = readSource('accordion');
+  assert.match(src, /'single'|"single"/);
+  assert.match(src, /'multiple'|"multiple"/);
+  assert.match(src, /collapsible/);
 });
