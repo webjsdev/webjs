@@ -615,6 +615,8 @@ ThemeToggle.register('theme-toggle');
   console.log(`Next steps:
   cd ${name}
   npm install${isSaas ? '\n  npx prisma migrate dev --name init' : ''}
+  webjs ui init           # initialise @webjskit/ui (writes components.json + lib/utils.ts + theme)
+  webjs ui add button card dialog input label form    # copy the standard component kit
   webjs dev
 
 AI-driven development (enforced for all AI agents):
