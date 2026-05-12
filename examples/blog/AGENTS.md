@@ -126,7 +126,7 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 ## Invariants
 
 1. Never import `@prisma/client` or `node:*` from components or pages.
-2. Custom element tags must contain a hyphen. Set `static tag`, call `register()`.
+2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file — the tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
 4. Use `setState()`, not direct `this.state` mutation.
 5. Pages/layouts are server-only functions returning TemplateResult.
@@ -145,7 +145,7 @@ Import from auth/types.ts for ActionResult<T>.
 
 ### Add a component
 Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
-Extend WebComponent. Set `static tag`. Call `register()`.
+Extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen.
 
 ### Add a database model
 Edit `prisma/schema.prisma`. Run `webjs db migrate <name>` then `webjs db generate`.

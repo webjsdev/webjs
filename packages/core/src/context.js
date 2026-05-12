@@ -33,7 +33,6 @@
  * const ThemeCtx = createContext('theme');
  *
  * class MyApp extends WebComponent {
- *   static tag = 'my-app';
  *   _theme = new ContextProvider(this, { context: ThemeCtx, initialValue: 'light' });
  *   render() {
  *     return html`
@@ -44,16 +43,15 @@
  *     `;
  *   }
  * }
- * MyApp.register();
+ * MyApp.register('my-app');
  *
  * class ThemedCard extends WebComponent {
- *   static tag = 'themed-card';
  *   _theme = new ContextConsumer(this, { context: ThemeCtx, subscribe: true });
  *   render() {
  *     return html`<div class=${this._theme.value}>Card content</div>`;
  *   }
  * }
- * ThemedCard.register();
+ * ThemedCard.register('themed-card');
  * ```
  *
  * `<themed-card>` can live at any depth under `<my-app>` — it finds the
