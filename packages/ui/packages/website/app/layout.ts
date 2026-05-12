@@ -1,5 +1,5 @@
 import { html } from '@webjskit/core';
-import '../components/theme-toggle.ts';
+import './_components/theme-toggle.ts';
 
 const env = (globalThis as any).process?.env ?? {};
 const WEBSITE_URL = env.WEBSITE_URL || 'https://webjs.dev';
