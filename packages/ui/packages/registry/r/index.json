@@ -113,16 +113,14 @@
     "name": "dropdown-menu",
     "type": "registry:ui",
     "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
+      "@webjskit/core"
     ]
   },
   {
     "name": "hover-card",
     "type": "registry:ui",
     "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
+      "@webjskit/core"
     ]
   },
   {
@@ -173,8 +171,7 @@
     "name": "popover",
     "type": "registry:ui",
     "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
+      "@webjskit/core"
     ]
   },
   {
@@ -264,8 +261,7 @@
     "name": "tooltip",
     "type": "registry:ui",
     "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
+      "@webjskit/core"
     ]
   },
   {
