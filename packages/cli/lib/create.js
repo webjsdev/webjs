@@ -470,16 +470,17 @@ export type ActionResult<T> =
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html } from '@webjskit/core';
 import '@webjskit/core/client-router';
 import '../components/theme-toggle.ts';
-// Register the ui-* components used by the scaffold's example pages.
-// Each import is a side-effect — the module calls Class.register('ui-…')
-// at load time. Add more here as you 'webjs ui add <name>' them.
-import '../components/ui/button.ts';
-import '../components/ui/card.ts';
-import '../components/ui/alert.ts';
-import '../components/ui/badge.ts';
-import '../components/ui/separator.ts';
-import '../components/ui/label.ts';
-import '../components/ui/input.ts';
+// Webjs UI components are tiered:
+//   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
+//     class-helper FUNCTIONS — no custom element to register. Each page
+//     imports the specific helpers it needs (e.g.
+//     \`import { buttonClass } from '../components/ui/button.ts'\`).
+//   - Tier 2 (dialog, popover, tooltip, tabs, accordion, etc.) ARE custom
+//     elements. Register them by side-effect-importing here once so they
+//     work transitively across every page:
+//       import '../components/ui/dialog.ts';
+// The example app/page.ts below uses only Tier-1 helpers, so nothing
+// extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
 /**
  * Root layout — globals + chrome.
@@ -625,8 +626,17 @@ ${SHADCN_THEME}
 
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
 import { rubric, displayH1, accentLink } from './_utils/ui.ts';
-// ui-* registrations come transitively from the root layout's imports —
-// no need to re-import them on each page.
+import { buttonClass } from '../components/ui/button.ts';
+import { badgeClass } from '../components/ui/badge.ts';
+import {
+  cardClass,
+  cardHeaderClass,
+  cardTitleClass,
+  cardDescriptionClass,
+  cardContentClass,
+} from '../components/ui/card.ts';
+import { alertClass, alertTitleClass, alertDescriptionClass } from '../components/ui/alert.ts';
+import { separatorClass } from '../components/ui/separator.ts';
 
 export const metadata = {
   title: '${name} — built with webjs',
@@ -643,33 +653,34 @@ export default function Home() {
         \${accentLink('#', 'webjs check')} to validate conventions.
       </p>
       <div class="flex gap-3 items-center">
-        <ui-button variant="default">Get started</ui-button>
-        <ui-button variant="outline">View docs</ui-button>
-        <ui-badge variant="secondary">v0.1</ui-badge>
+        <button class=\${buttonClass()}>Get started</button>
+        <button class=\${buttonClass({ variant: 'outline' })}>View docs</button>
+        <span class=\${badgeClass({ variant: 'secondary' })}>v0.1</span>
       </div>
     </section>
 
-    <ui-card class="block mb-12">
-      <ui-card-header>
-        <ui-card-title>Web Components + Server Actions</ui-card-title>
-        <ui-card-description>
+    <div class=\${cardClass()} style="margin-bottom: 3rem">
+      <div class=\${cardHeaderClass()}>
+        <h3 class=\${cardTitleClass()}>Web Components + Server Actions</h3>
+        <p class=\${cardDescriptionClass()}>
           Drop a custom element anywhere. Call a server action like a local
           function — webjs rewrites the import into a typed RPC stub.
-        </ui-card-description>
-      </ui-card-header>
-      <ui-card-content>
-        <ui-alert>
-          <ui-alert-title>Shadcn-style component kit included</ui-alert-title>
-          <ui-alert-description>
+        </p>
+      </div>
+      <div class=\${cardContentClass()}>
+        <div class=\${alertClass()}>
+          <h5 class=\${alertTitleClass()}>AI-first component kit included</h5>
+          <div class=\${alertDescriptionClass()}>
             button, card, alert, badge, separator, label, input are already
-            in <code class="font-mono text-[0.9em]">components/ui/</code>.
-            Add more with <code class="font-mono text-[0.9em]">webjs ui add &lt;name&gt;</code>.
-          </ui-alert-description>
-        </ui-alert>
-      </ui-card-content>
-    </ui-card>
+            in <code class="font-mono text-[0.9em]">components/ui/</code> as
+            class-helper functions you call from a native element. Add more
+            with <code class="font-mono text-[0.9em]">webjs ui add &lt;name&gt;</code>.
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <ui-separator class="block my-10"></ui-separator>
+    <div class=\${separatorClass()} style="margin: 2.5rem 0"></div>
 
     <section class="mt-10">
       <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-2">Light DOM + Tailwind</h2>

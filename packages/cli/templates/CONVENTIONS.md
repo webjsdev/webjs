@@ -345,40 +345,61 @@ with puppeteer or playwright imports.
 
 ---
 
-## UI components — prefer `ui-*` over hand-rolled Tailwind
+## UI components — prefer the Webjs UI kit over raw Tailwind
 
 <!-- OVERRIDE -->
 
-This scaffold ships with `@webjskit/ui` preinstalled at `components/ui/`.
-For buttons, inputs, cards, dialogs, dropdowns, selects, forms, toasts,
-tables — anywhere a shadcn-style component fits — **use the `ui-*`
-components instead of hand-rolling buttons/inputs with raw Tailwind
-classes.**
+This scaffold ships with the Webjs UI kit preinstalled at `components/ui/`.
+The kit splits into **two tiers** — picking the wrong tier produces
+broken markup.
+
+**Tier 1 — class helpers** (button, card, input, label, alert, badge,
+separator, skeleton, table, etc.): pure functions that return Tailwind
+class strings. Call them and spread onto a **raw native element**.
+
+**Tier 2 — custom elements** (dialog, popover, tooltip, dropdown-menu,
+tabs, accordion, collapsible, progress, etc.): real `<ui-X>` tags. Import
+the module once (typically in `app/layout.ts`) and use the tag.
 
 ```ts
-// Good — uses the standard kit (a11y, focus mgmt, keyboard handling included)
+// Tier 1 — class helpers on native elements (use this for forms,
+// dashboards, cards, layouts — anywhere the value is purely visual)
+import { buttonClass } from '../components/ui/button.ts';
+import { inputClass } from '../components/ui/input.ts';
 return html`
-  <ui-button variant="default" size="lg">Save</ui-button>
-  <ui-input placeholder="Email" />
+  <button class=${buttonClass({ size: 'lg' })}>Save</button>
+  <input class=${inputClass()} placeholder="Email">
 `;
 
-// Avoid — hand-rolled equivalents lose a11y + visual consistency
+// Tier 2 — custom elements (modals, dropdowns, tab strips, tooltips —
+// state the browser doesn't give you natively)
+return html`
+  <ui-dialog>
+    <ui-dialog-trigger>
+      <button class=${buttonClass({ variant: 'outline' })}>Edit</button>
+    </ui-dialog-trigger>
+    <ui-dialog-content>…</ui-dialog-content>
+  </ui-dialog>
+`;
+
+// Avoid — hand-rolled Tailwind on every <button> loses visual
+// consistency. Tier-1 helpers give you the same control with one import.
 return html`
   <button class="px-4 py-2 rounded-md bg-accent text-accent-fg">Save</button>
-  <input class="w-full px-3 py-2 border rounded-md" placeholder="Email" />
 `;
 ```
 
-Add more components with `webjs ui add <name>`. The catalogue lives at
+Add more components with `webjs ui add <name>` (e.g. `webjs ui add dialog
+tabs popover`). The catalogue lives at
 [https://ui.webjs.dev](https://ui.webjs.dev).
 
 **Hand-rolled Tailwind is still appropriate for:**
 - One-off marketing pages, hero sections, landing CTAs.
-- Anywhere the visual design intentionally diverges from the shadcn baseline.
+- Anywhere the visual design intentionally diverges from the kit baseline.
 - Layout primitives (`<div class="grid grid-cols-3 gap-4">`).
 
-The convention: any *interactive* element (button, input, select,
-dialog, dropdown) on a product surface uses `ui-*`.
+The convention: any visual element with a Tier-1 helper uses the helper.
+Any stateful behavior with a Tier-2 element uses the element.
 
 ---
 
