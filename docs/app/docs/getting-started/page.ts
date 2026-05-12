@@ -5,7 +5,7 @@ export const metadata = { title: 'Getting Started — webjs' };
 export default function GettingStarted() {
   return html`
     <h1>Getting Started</h1>
-    <p>webjs is an <strong>AI-first, web-components-first</strong> framework with a NextJs-like API built on web standards. You can use it as a full-stack framework with server-rendered pages, or as a lightweight backend-only API framework — the same file conventions work either way.</p>
+    <p>webjs is an <strong>AI-first, web-components-first</strong> framework with a NextJs-like API and Lit-inspired web components, built on web standards. You can use it as a full-stack framework with server-rendered pages, or as a lightweight backend-only API framework — the same file conventions work either way.</p>
 
     <h2>Prerequisites</h2>
     <ul>
@@ -132,7 +132,7 @@ Counter.register('my-counter');</pre>
 
     <h2>Next Steps</h2>
     <ul>
-      <li><a href="/docs/routing">Routing</a> — file-based routing inspired by NextJs App Router</li>
+      <li><a href="/docs/routing">Routing</a> — file-based routing with pages, layouts, dynamic segments, and route groups</li>
       <li><a href="/docs/components">Components</a> — web components with shadow DOM + scoped styles</li>
       <li><a href="/docs/server-actions">Server Actions</a> — type-safe server functions callable from client components</li>
       <li><a href="/docs/backend-only">Backend-Only Mode</a> — use webjs as a pure API framework</li>
