@@ -78,7 +78,7 @@ export class UiCarousel extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('keydown', this._onKey);
   }
@@ -157,7 +157,7 @@ UiCarousel.register('ui-carousel');
 export class UiCarouselContent extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -186,7 +186,7 @@ UiCarouselContent.register('ui-carousel-content');
 export class UiCarouselItem extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {

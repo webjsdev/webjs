@@ -63,7 +63,7 @@ UiContextMenu.register('ui-context-menu');
 export class UiContextMenuTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('contextmenu', this._onContext);
   }
@@ -82,7 +82,7 @@ export class UiContextMenuContent extends WebComponent {
   private _cleanupAutoUpdate: (() => void) | null = null;
   private _onKey: ((e: KeyboardEvent) => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }
@@ -180,7 +180,7 @@ export class UiContextMenuItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.inset = false; this.variant = 'default'; this.disabled = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('pointerenter', this._onPointerEnter);
   }
@@ -197,7 +197,7 @@ export class UiContextMenuCheckboxItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.checked = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => { this.checked = !this.checked; });
   }
@@ -221,7 +221,7 @@ export class UiContextMenuRadioGroup extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('ui-context-menu-radio-change', (e: any) => { this.value = e.detail.value; this._sync(); });
     queueMicrotask(() => this._sync());
@@ -242,7 +242,7 @@ export class UiContextMenuRadioItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; this.checked = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-context-menu-radio-change', { detail: { value: this.value }, bubbles: true })));
   }
@@ -263,7 +263,7 @@ UiContextMenuRadioItem.register('ui-context-menu-radio-item');
 function makeChild(tag: string, slot: string, classes: string, role?: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() {
       return role
         ? html`<div data-slot=${slot} role=${role} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`
@@ -280,7 +280,7 @@ export const UiContextMenuGroup = makeChild('ui-context-menu-group', 'context-me
 
 export class UiContextMenuShortcut extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() { return html`<span data-slot="context-menu-shortcut" class=${cn('ml-auto text-xs tracking-widest text-muted-foreground')}>${unsafeHTML(this._slot)}</span>`; }
 }
 UiContextMenuShortcut.register('ui-context-menu-shortcut');
@@ -309,7 +309,7 @@ export class UiContextMenuSubTrigger extends WebComponent {
   private _slot = '';
   constructor() { super(); this.inset = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('pointerenter', this._onPointerEnter);
   }
@@ -334,7 +334,7 @@ export class UiContextMenuSubContent extends WebComponent {
   private _portal: HTMLElement | null = null;
   private _cleanupAutoUpdate: (() => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }

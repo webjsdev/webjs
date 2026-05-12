@@ -1,182 +1,171 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-import { toggleClasses, type ToggleVariant, type ToggleSize } from './toggle.ts';
-
 /**
- * Toggle group. Single- or multi-select group of toggle buttons.
+ * ToggleGroup — group of toggles with single or multiple selection. Stateful
+ * because items coordinate active state across the group.
  *
+ * shadcn parity:
+ *   type:     single | multiple
+ *   variant:  default | outline
+ *   size:     default | sm | lg
+ *   spacing:  0 (joined) | number (gapped)
+ *
+ * Usage:
  *   <ui-toggle-group type="single" value="bold">
+ *     <ui-toggle-group-item value="bold" aria-label="Bold"><b>B</b></ui-toggle-group-item>
+ *     <ui-toggle-group-item value="italic" aria-label="Italic"><i>I</i></ui-toggle-group-item>
+ *     <ui-toggle-group-item value="underline" aria-label="Underline"><u>U</u></ui-toggle-group-item>
+ *   </ui-toggle-group>
+ *
+ *   <!-- Multiple selection: -->
+ *   <ui-toggle-group type="multiple" value="bold,italic">
  *     <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
  *     <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
  *   </ui-toggle-group>
  *
- * In multiple mode `value` is a comma-separated list.
+ * Attributes on `<ui-toggle-group>`:
+ *   `type`     — "single" | "multiple"
+ *   `value`    — current selected value(s). Single: string. Multiple: comma-separated.
+ *   `variant`  — "default" | "outline"
+ *   `size`     — "default" | "sm" | "lg"
+ *   `spacing`  — 0 (joined) | number (gap multiplier)
+ *
+ * Events:
+ *   `ui-value-change` — { detail: { value } } when selection changes.
+ *
+ * Design tokens used: inherited from toggleClass.
  */
-export class UiToggleGroup extends WebComponent {
-  static properties = {
-    type: { type: String, reflect: true },
-    value: { type: String, reflect: true },
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-    disabled: { type: Boolean, reflect: true },
-    spacing: { type: Number, reflect: true },
-  };
-  declare type: 'single' | 'multiple';
-  declare value: string;
-  declare variant: ToggleVariant;
-  declare size: ToggleSize;
-  declare disabled: boolean;
-  declare spacing: number;
+import { cn, Base, defineElement } from '../lib/utils.ts';
+import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
-  private _slot = '';
+const ROOT_BASE =
+  'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs';
 
-  constructor() {
-    super();
-    this.type = 'single';
-    this.value = '';
-    this.variant = 'default';
-    this.size = 'default';
-    this.disabled = false;
-    this.spacing = 0;
+export class UiToggleGroup extends Base {
+  static get observedAttributes(): string[] {
+    return ['value', 'variant', 'size', 'spacing', 'type'];
   }
 
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-    this.addEventListener('ui-toggle-group-select', this._onSelect as EventListener);
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'toggle-group');
+    if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
+    if (!this.hasAttribute('variant')) this.setAttribute('variant', 'default');
+    if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
+    if (!this.hasAttribute('spacing')) this.setAttribute('spacing', '0');
+    this.setAttribute('role', 'group');
+    this._applyClass();
+    this._reflect();
+    this.addEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
+  }
+  disconnectedCallback(): void {
+    this.removeEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
   }
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('ui-toggle-group-select', this._onSelect as EventListener);
+  attributeChangedCallback(): void {
+    this._applyClass();
+    this._reflect();
   }
 
-  _onSelect = (e: CustomEvent) => {
-    const v = e.detail?.value as string | undefined;
-    if (v == null) return;
-    if (this.type === 'multiple') {
-      const set = new Set((this.value || '').split(',').filter(Boolean));
-      if (set.has(v)) set.delete(v);
-      else set.add(v);
-      this.value = Array.from(set).join(',');
+  private get _type(): 'single' | 'multiple' {
+    return (this.getAttribute('type') as 'single' | 'multiple') ?? 'single';
+  }
+
+  private get _values(): Set<string> {
+    const raw = this.getAttribute('value') ?? '';
+    return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
+  }
+
+  private _setValues(values: Set<string>): void {
+    const next = Array.from(values).join(',');
+    if (this._type === 'single') {
+      this.setAttribute('value', next.split(',')[0] ?? '');
     } else {
-      this.value = this.value === v ? '' : v;
+      this.setAttribute('value', next);
     }
-    this._syncChildren();
-    this.dispatchEvent(new CustomEvent('change', { detail: { value: this.value }, bubbles: true, composed: true }));
-  };
+  }
 
-  _syncChildren() {
-    this.querySelectorAll('ui-toggle-group-item').forEach((el) => {
-      const target = el as HTMLElement;
-      target.setAttribute('data-group-value', this.value || '');
-      target.setAttribute('data-group-type', this.type);
-      target.setAttribute('data-group-variant', this.variant);
-      target.setAttribute('data-group-size', this.size);
-      target.setAttribute('data-group-spacing', String(this.spacing));
+  private _applyClass(): void {
+    const userClass = this.getAttribute('class') ?? '';
+    const spacing = this.getAttribute('spacing') ?? '0';
+    this.setAttribute('data-variant', this.getAttribute('variant') ?? 'default');
+    this.setAttribute('data-size', this.getAttribute('size') ?? 'default');
+    this.setAttribute('data-spacing', spacing);
+    const gap = spacing === '0' ? '' : 'gap-1';
+    this.className = cn(ROOT_BASE, gap, userClass);
+  }
+
+  private _reflect(): void {
+    const values = this._values;
+    const items = this.querySelectorAll<HTMLElement>('ui-toggle-group-item');
+    items.forEach((item) => {
+      const v = item.getAttribute('value');
+      const on = !!v && values.has(v);
+      item.setAttribute('data-state', on ? 'on' : 'off');
+      item.setAttribute('aria-pressed', String(on));
     });
   }
 
-  static get observedAttributes() {
-    return ['value', 'type', 'variant', 'size', 'spacing'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    this._syncChildren();
-  }
-
-  render() {
-    return html`<div
-      data-slot="toggle-group"
-      data-variant=${this.variant}
-      data-size=${this.size}
-      data-spacing=${this.spacing}
-      role="group"
-      class=${cn(
-        'group/toggle-group flex w-fit items-center rounded-md data-[spacing=0]:gap-0 data-[spacing=default]:data-[variant=outline]:shadow-xs',
-      )}
-      style=${`gap: ${this.spacing * 0.25}rem`}
-    >${unsafeHTML(this._slot)}</div>`;
-  }
-}
-UiToggleGroup.register('ui-toggle-group');
-
-export class UiToggleGroupItem extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-    disabled: { type: Boolean, reflect: true },
+  private _onItemClick = (e: CustomEvent): void => {
+    const v = e.detail?.value as string | undefined;
+    if (!v) return;
+    const values = this._values;
+    if (this._type === 'single') {
+      values.clear();
+      values.add(v);
+    } else {
+      if (values.has(v)) values.delete(v);
+      else values.add(v);
+    }
+    this._setValues(values);
+    this.dispatchEvent(
+      new CustomEvent('ui-value-change', {
+        detail: { value: this.getAttribute('value') ?? '' },
+        bubbles: true,
+      }),
+    );
   };
-  declare value: string;
-  declare disabled: boolean;
+}
+defineElement('ui-toggle-group', UiToggleGroup);
 
-  private _slot = '';
+const ITEM_EXTRA =
+  'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l';
 
-  constructor() {
-    super();
-    this.value = '';
-    this.disabled = false;
+export class UiToggleGroupItem extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'toggle-group-item');
+    this.setAttribute('role', 'button');
+    this.setAttribute('tabindex', '0');
+    this._applyClass();
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
   }
-
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', this._onKeyDown);
   }
-
-  static get observedAttributes() {
-    return ['data-group-value', 'data-group-type', 'data-group-variant', 'data-group-size', 'data-group-spacing', 'value', 'disabled'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name.startsWith('data-group-')) this.requestUpdate();
-  }
-
   private get _group(): UiToggleGroup | null {
     return this.closest('ui-toggle-group') as UiToggleGroup | null;
   }
-
-  private get _variant(): ToggleVariant {
-    return (this.getAttribute('data-group-variant') as ToggleVariant) || this._group?.variant || 'default';
+  private _applyClass(): void {
+    const userClass = this.getAttribute('class') ?? '';
+    const group = this._group;
+    const variant = (group?.getAttribute('variant') ?? 'default') as ToggleVariant;
+    const size = (group?.getAttribute('size') ?? 'default') as ToggleSize;
+    this.setAttribute('data-variant', variant);
+    this.setAttribute('data-size', size);
+    this.setAttribute('data-spacing', group?.getAttribute('spacing') ?? '0');
+    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA, userClass);
   }
-  private get _size(): ToggleSize {
-    return (this.getAttribute('data-group-size') as ToggleSize) || this._group?.size || 'default';
-  }
-  private get _type(): 'single' | 'multiple' {
-    return (this.getAttribute('data-group-type') as 'single' | 'multiple') || this._group?.type || 'single';
-  }
-  private get _pressed(): boolean {
-    if (!this.value) return false;
-    const gv = this.getAttribute('data-group-value') ?? this._group?.value ?? '';
-    if (this._type === 'multiple') return gv.split(',').includes(this.value);
-    return gv === this.value;
-  }
-
-  render() {
-    const state = this._pressed ? 'on' : 'off';
-    const spacing = this.getAttribute('data-group-spacing') || '0';
-    return html`
-      <button
-        type="button"
-        aria-pressed=${this._pressed ? 'true' : 'false'}
-        ?disabled=${this.disabled}
-        data-slot="toggle-group-item"
-        data-state=${state}
-        data-variant=${this._variant}
-        data-size=${this._size}
-        data-spacing=${spacing}
-        class=${cn(
-          toggleClasses(this._variant, this._size),
-          'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10',
-          'data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l',
-        )}
-        @click=${this._onClick}
-      >${unsafeHTML(this._slot)}</button>
-    `;
-  }
-
-  private _onClick = () => {
-    if (this.disabled) return;
-    this.dispatchEvent(new CustomEvent('ui-toggle-group-select', { detail: { value: this.value }, bubbles: true }));
+  private _onClick = (): void => {
+    const v = this.getAttribute('value');
+    if (!v) return;
+    this.dispatchEvent(
+      new CustomEvent('ui-toggle-item-click', { detail: { value: v }, bubbles: true }),
+    );
+  };
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      this._onClick();
+    }
   };
 }
-UiToggleGroupItem.register('ui-toggle-group-item');
+defineElement('ui-toggle-group-item', UiToggleGroupItem);

@@ -1,175 +1,198 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Alert dialog. Same shape as <ui-dialog> but no close (X) button on the
- * content; expected to be dismissed via explicit action/cancel buttons.
+ * AlertDialog — modal that requires explicit user confirmation. Variant of
+ * Dialog with explicit Cancel/Action buttons.
  *
+ * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/alertdialog/
+ *
+ * shadcn parity:
+ *   AlertDialog, AlertDialogTrigger, AlertDialogContent (size: default | sm),
+ *   AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
+ *   AlertDialogFooter, AlertDialogAction, AlertDialogCancel.
+ *
+ * Usage:
  *   <ui-alert-dialog>
- *     <ui-alert-dialog-trigger><ui-button>Delete</ui-button></ui-alert-dialog-trigger>
+ *     <ui-alert-dialog-trigger>
+ *       <button class=${buttonClass({ variant: 'destructive' })}>Delete</button>
+ *     </ui-alert-dialog-trigger>
  *     <ui-alert-dialog-content>
- *       <ui-alert-dialog-header>
- *         <ui-alert-dialog-title>Are you sure?</ui-alert-dialog-title>
- *         <ui-alert-dialog-description>This cannot be undone.</ui-alert-dialog-description>
- *       </ui-alert-dialog-header>
- *       <ui-alert-dialog-footer>
- *         <ui-alert-dialog-cancel><ui-button variant="outline">Cancel</ui-button></ui-alert-dialog-cancel>
- *         <ui-alert-dialog-action><ui-button>Delete</ui-button></ui-alert-dialog-action>
- *       </ui-alert-dialog-footer>
+ *       <div class=${alertDialogHeaderClass()}>
+ *         <h2 class=${alertDialogTitleClass()}>Delete account?</h2>
+ *         <p class=${alertDialogDescriptionClass()}>This cannot be undone.</p>
+ *       </div>
+ *       <div class=${alertDialogFooterClass()}>
+ *         <ui-alert-dialog-cancel>
+ *           <button class=${buttonClass({ variant: 'outline' })}>Cancel</button>
+ *         </ui-alert-dialog-cancel>
+ *         <ui-alert-dialog-action>
+ *           <button class=${buttonClass({ variant: 'destructive' })}>Delete</button>
+ *         </ui-alert-dialog-action>
+ *       </div>
  *     </ui-alert-dialog-content>
  *   </ui-alert-dialog>
+ *
+ * Behavior is identical to <ui-dialog> except role="alertdialog" and Escape /
+ * overlay-click are disabled (user MUST choose Cancel or Action).
+ *
+ * Design tokens used: --background, --border, --muted-foreground.
  */
+import { cn, Base, defineElement } from '../lib/utils.ts';
 
-export class UiAlertDialog extends WebComponent {
-  static properties = { open: { type: Boolean, reflect: true } };
-  declare open: boolean;
-  private _lastFocused: HTMLElement | null = null;
+export const alertDialogContentClass = (): string =>
+  'group/alert-dialog-content fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadcn-lg shadow-lg duration-200 data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg';
 
-  constructor() { super(); this.open = false; }
+export const alertDialogOverlayClass = (): string => 'fixed inset-0 z-50 bg-black/50';
 
-  connectedCallback() {
-    super.connectedCallback();
-    this.addEventListener('ui-alert-dialog-toggle', this._handleToggle as EventListener);
-    this.addEventListener('ui-alert-dialog-close', this._handleClose as EventListener);
+export const alertDialogHeaderClass = (): string =>
+  'grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left';
+
+export const alertDialogFooterClass = (): string =>
+  'flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end';
+
+export const alertDialogTitleClass = (): string => 'text-lg font-semibold';
+
+export const alertDialogDescriptionClass = (): string => 'text-sm text-muted-foreground';
+
+const STYLES = `
+ui-alert-dialog:not([open]) ui-alert-dialog-content,
+ui-alert-dialog:not([open]) ui-alert-dialog-overlay { display: none !important; }
+ui-alert-dialog-content { display: grid; }
+`;
+
+function installStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ui-alert-dialog-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'ui-alert-dialog-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
+}
+
+let scrollLockCount = 0;
+let savedOverflow = '';
+function lockScroll(): void {
+  if (scrollLockCount === 0) {
+    savedOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
   }
+  scrollLockCount++;
+}
+function unlockScroll(): void {
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0) document.body.style.overflow = savedOverflow;
+}
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('ui-alert-dialog-toggle', this._handleToggle as EventListener);
-    this.removeEventListener('ui-alert-dialog-close', this._handleClose as EventListener);
+export class UiAlertDialog extends Base {
+  static get observedAttributes(): string[] {
+    return ['open'];
   }
+  private _previouslyFocused: HTMLElement | null = null;
 
-  _handleToggle = () => { this.setOpen(!this.open); };
-  _handleClose = () => { this.setOpen(false); };
-
-  setOpen(open: boolean) {
-    if (open === this.open) return;
-    this.open = open;
-    this._syncDescendants();
-    if (open) {
-      this._lastFocused = document.activeElement as HTMLElement;
-      document.addEventListener('keydown', this._onKey);
-      queueMicrotask(() => {
-        const content = this.querySelector('ui-alert-dialog-content') as HTMLElement | null;
-        const f = content?.querySelector<HTMLElement>('[autofocus], button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        f?.focus();
-      });
-    } else {
-      document.removeEventListener('keydown', this._onKey);
-      this._lastFocused?.focus();
+  connectedCallback(): void {
+    installStyles();
+    this.setAttribute('data-slot', 'alert-dialog');
+    if (!this.querySelector(':scope > ui-alert-dialog-overlay')) {
+      const overlay = document.createElement('ui-alert-dialog-overlay');
+      this.insertBefore(overlay, this.firstChild);
     }
-    this.dispatchEvent(new CustomEvent('open-change', { detail: { open }, bubbles: true, composed: true }));
+    this._reflect();
   }
-
-  _onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); this.setOpen(false); }
-    if (e.key === 'Tab') this._trapFocus(e);
-  };
-
-  _trapFocus(e: KeyboardEvent) {
-    const content = this.querySelector('ui-alert-dialog-content') as HTMLElement | null;
-    if (!content) return;
-    const focusable = content.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  disconnectedCallback(): void {
+    if (this.hasAttribute('open')) this._teardown();
   }
-
-  _syncDescendants() {
-    const state = this.open ? 'open' : 'closed';
-    this.querySelectorAll('ui-alert-dialog-content, ui-alert-dialog-overlay, ui-alert-dialog-trigger').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-state', state);
+  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
+    if (name === 'open' && oldVal !== newVal) {
+      this._reflect();
+      if (newVal !== null) this._setup();
+      else this._teardown();
+    }
+  }
+  show(): void {
+    this.setAttribute('open', '');
+  }
+  hide(): void {
+    this.removeAttribute('open');
+  }
+  private _reflect(): void {
+    const open = this.hasAttribute('open');
+    this.setAttribute('data-state', open ? 'open' : 'closed');
+    const content = this.querySelector<HTMLElement>(':scope > ui-alert-dialog-content');
+    if (content) {
+      content.setAttribute('data-state', open ? 'open' : 'closed');
+      content.setAttribute('role', 'alertdialog');
+      content.setAttribute('aria-modal', 'true');
+    }
+  }
+  private _setup(): void {
+    this._previouslyFocused = document.activeElement as HTMLElement | null;
+    lockScroll();
+    queueMicrotask(() => {
+      const action = this.querySelector<HTMLElement>('ui-alert-dialog-action button, ui-alert-dialog-action');
+      action?.focus({ preventScroll: true });
     });
   }
-
-  render() { return html`<slot></slot>`; }
+  private _teardown(): void {
+    unlockScroll();
+    this._previouslyFocused?.focus({ preventScroll: true });
+    this._previouslyFocused = null;
+  }
 }
-UiAlertDialog.register('ui-alert-dialog');
+defineElement('ui-alert-dialog', UiAlertDialog);
 
-export class UiAlertDialogTrigger extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+export class UiAlertDialogTrigger extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'alert-dialog-trigger');
     this.addEventListener('click', this._onClick);
   }
-  _onClick = () => { this.dispatchEvent(new CustomEvent('ui-alert-dialog-toggle', { bubbles: true })); };
-  render() { return html`${unsafeHTML(this._slot)}`; }
-}
-UiAlertDialogTrigger.register('ui-alert-dialog-trigger');
-
-export class UiAlertDialogContent extends WebComponent {
-  private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
-  render() {
-    const state = this.getAttribute('data-state') || 'closed';
-    if (state !== 'open') return html``;
-    return html`
-      <div
-        data-slot="alert-dialog-overlay"
-        data-state=${state}
-        class=${cn('fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0')}
-      ></div>
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        data-slot="alert-dialog-content"
-        data-state=${state}
-        class=${cn('fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 sm:max-w-lg', 'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95')}
-      >
-        ${unsafeHTML(this._slot)}
-      </div>
-    `;
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
   }
-  static get observedAttributes() { return ['data-state']; }
-  attributeChangedCallback() { this.requestUpdate(); }
+  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.show();
 }
-UiAlertDialogContent.register('ui-alert-dialog-content');
+defineElement('ui-alert-dialog-trigger', UiAlertDialogTrigger);
 
-function makeChild(tag: string, slot: string, classes: string) {
-  class C extends WebComponent {
-    private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
-    render() { return html`<div data-slot=${slot} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`; }
+export class UiAlertDialogContent extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'alert-dialog-content');
+    if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
+    this.setAttribute('data-size', this.getAttribute('size') ?? 'default');
+    this.setAttribute('tabindex', '-1');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(alertDialogContentClass(), userClass);
   }
-  C.register(tag);
-  return C;
 }
+defineElement('ui-alert-dialog-content', UiAlertDialogContent);
 
-export const UiAlertDialogHeader = makeChild('ui-alert-dialog-header', 'alert-dialog-header', 'grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center sm:place-items-start sm:text-left');
-export const UiAlertDialogFooter = makeChild('ui-alert-dialog-footer', 'alert-dialog-footer', 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end');
-export const UiAlertDialogTitle = makeChild('ui-alert-dialog-title', 'alert-dialog-title', 'text-lg font-semibold');
-export const UiAlertDialogDescription = makeChild('ui-alert-dialog-description', 'alert-dialog-description', 'text-sm text-muted-foreground');
+export class UiAlertDialogOverlay extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'alert-dialog-overlay');
+    this.setAttribute('aria-hidden', 'true');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(alertDialogOverlayClass(), userClass);
+    // No click-to-close — alert dialogs require explicit Cancel/Action.
+  }
+}
+defineElement('ui-alert-dialog-overlay', UiAlertDialogOverlay);
 
-// Action: closes the dialog on click (the inner button can handle its own
-// onClick; cancellation here just dismisses the alert).
-export class UiAlertDialogAction extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+export class UiAlertDialogCancel extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'alert-dialog-cancel');
     this.addEventListener('click', this._onClick);
   }
-  _onClick = () => { this.dispatchEvent(new CustomEvent('ui-alert-dialog-close', { bubbles: true })); };
-  render() {
-    return html`<span data-slot="alert-dialog-action">${unsafeHTML(this._slot)}</span>`;
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
   }
+  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
 }
-UiAlertDialogAction.register('ui-alert-dialog-action');
+defineElement('ui-alert-dialog-cancel', UiAlertDialogCancel);
 
-export class UiAlertDialogCancel extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+export class UiAlertDialogAction extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'alert-dialog-action');
     this.addEventListener('click', this._onClick);
   }
-  _onClick = () => { this.dispatchEvent(new CustomEvent('ui-alert-dialog-close', { bubbles: true })); };
-  render() {
-    return html`<span data-slot="alert-dialog-cancel">${unsafeHTML(this._slot)}</span>`;
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
   }
+  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
 }
-UiAlertDialogCancel.register('ui-alert-dialog-cancel');
+defineElement('ui-alert-dialog-action', UiAlertDialogAction);

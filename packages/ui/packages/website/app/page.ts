@@ -1,166 +1,103 @@
-import { html, unsafeHTML } from '@webjskit/core';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { html } from '@webjskit/core';
+import { loadRegistryIndex } from './_lib/registry.server.ts';
 
-// Side-effect imports — register the ui-* tags used in the hero demo.
-import '../components/ui/button.ts';
-import '../components/ui/card.ts';
-import '../components/ui/input.ts';
-import '../components/ui/label.ts';
-import '../components/ui/badge.ts';
-import '../components/ui/switch.ts';
-import '../components/ui/separator.ts';
-import '../components/ui/avatar.ts';
-import '../components/ui/tabs.ts';
-import '../components/ui/skeleton.ts';
-
-const REGISTRY_DIR = resolveRegistryDir();
-
-function resolveRegistryDir(): string {
-  // packages/ui/packages/website/app/page.ts → ../../registry/r
-  const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, '..', '..', 'registry', 'r');
-}
-
-export default function Home() {
-  const indexPath = join(REGISTRY_DIR, 'index.json');
-  let items: Array<{ name: string; type: string; description?: string }> = [];
-  if (existsSync(indexPath)) {
-    items = JSON.parse(readFileSync(indexPath, 'utf8'));
-  }
+export default async function Home() {
+  const items = await loadRegistryIndex();
   const ui = items.filter((i) => i.type === 'registry:ui');
 
   return html`
-    <section class="mb-16 text-center max-w-3xl mx-auto">
-      <h1 class="text-4xl sm:text-5xl font-bold tracking-tight" style="color: var(--fg)">
-        Web components, shadcn style.
+    <!-- Hero -->
+    <section class="pt-16 pb-20">
+      <div class="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elev px-3 py-1 text-xs font-medium text-fg-muted">
+        <span class="size-1.5 rounded-full bg-accent"></span>
+        AI-first component library
+      </div>
+      <h1 class="mt-6 text-5xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+        Web components library<br />written for AI agents.
       </h1>
-      <p class="mt-4 text-lg text-muted-foreground">
-        A registry of beautifully designed web components — drop into webjs, Next, Astro, Vite,
-        SvelteKit, Lit, or vanilla HTML. Source-copied into your project, you own it, you edit it.
+      <p class="mt-6 text-xl text-fg-muted max-w-2xl leading-relaxed">
+        ${ui.length} primitives designed for the agent era — copy‑paste source code,
+        full native HTML semantics, shadcn API parity, zero third‑party dependencies.
+        Works in webjs, Next, Astro, Vite, Lit, vanilla — any project with Tailwind v4.
       </p>
-      <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <a href="/docs" class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Get started</a>
-        <a href="/docs/components" class="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-accent">Browse components</a>
-        <a href="https://github.com/vivek7405/webjs" class="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-accent">GitHub</a>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a
+          href="/docs"
+          class="group inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-3 text-sm font-semibold text-brand-fg! transition-colors hover:bg-brand-hover"
+        >
+          Get started
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14" />
+            <path d="m12 5 7 7-7 7" />
+          </svg>
+        </a>
+        <a
+          href="https://github.com/vivek7405/webjs"
+          class="inline-flex items-center rounded-full border border-border-strong bg-transparent px-5 py-3 text-sm font-semibold text-fg-muted transition-colors hover:text-fg hover:border-fg-muted"
+        >
+          View on GitHub
+        </a>
       </div>
     </section>
 
-    <!-- Live playground — composed components showing what you get out of the box -->
-    <section class="mb-16">
-      <div class="mb-4 text-sm font-medium" style="color: var(--fg-muted)">Live playground — these are real web components, rendered on this page.</div>
-      <div class="grid md:grid-cols-2 gap-6">
-        <!-- Card 1: Sign-up form -->
-        <ui-card class="w-full">
-          <ui-card-header>
-            <ui-card-title>Create an account</ui-card-title>
-            <ui-card-description>Get started with @webjskit/ui. No build step required.</ui-card-description>
-          </ui-card-header>
-          <ui-card-content class="flex flex-col gap-4">
-            <div class="flex flex-col gap-2">
-              <ui-label for="demo-email">Email</ui-label>
-              <ui-input id="demo-email" type="email" placeholder="m@example.com"></ui-input>
-            </div>
-            <div class="flex flex-col gap-2">
-              <ui-label for="demo-password">Password</ui-label>
-              <ui-input id="demo-password" type="password" placeholder="••••••••"></ui-input>
-            </div>
-            <div class="flex items-center gap-2">
-              <ui-switch id="demo-newsletter"></ui-switch>
-              <ui-label for="demo-newsletter">Send me product updates</ui-label>
-            </div>
-          </ui-card-content>
-          <ui-card-footer class="flex flex-col gap-2 items-stretch">
-            <ui-button>Create account</ui-button>
-            <ui-button variant="outline">Continue with GitHub</ui-button>
-          </ui-card-footer>
-        </ui-card>
-
-        <!-- Card 2: Profile / team summary -->
-        <ui-card class="w-full">
-          <ui-card-header>
-            <ui-card-title>Team</ui-card-title>
-            <ui-card-description>Invite your team members to collaborate.</ui-card-description>
-          </ui-card-header>
-          <ui-card-content class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-              <ui-avatar>
-                <ui-avatar-image src="https://github.com/vivek7405.png" alt="Vivek"></ui-avatar-image>
-                <ui-avatar-fallback>V</ui-avatar-fallback>
-              </ui-avatar>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium" style="color: var(--fg)">Vivek</div>
-                <div class="text-xs text-muted-foreground">vivek@webjs.dev</div>
-              </div>
-              <ui-badge>Owner</ui-badge>
-            </div>
-            <ui-separator></ui-separator>
-            <div class="flex items-center gap-3">
-              <ui-avatar><ui-avatar-fallback>AS</ui-avatar-fallback></ui-avatar>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium" style="color: var(--fg)">Aarav S.</div>
-                <div class="text-xs text-muted-foreground">aarav@example.com</div>
-              </div>
-              <ui-badge variant="secondary">Editor</ui-badge>
-            </div>
-            <div class="flex items-center gap-3">
-              <ui-avatar><ui-avatar-fallback>RG</ui-avatar-fallback></ui-avatar>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium" style="color: var(--fg)">Rhea G.</div>
-                <div class="text-xs text-muted-foreground">rhea@example.com</div>
-              </div>
-              <ui-badge variant="outline">Viewer</ui-badge>
-            </div>
-          </ui-card-content>
-          <ui-card-footer>
-            <ui-button variant="outline" class="w-full">Invite member</ui-button>
-          </ui-card-footer>
-        </ui-card>
+    <!-- AI-first principles -->
+    <section class="py-16">
+      <div class="grid md:grid-cols-3 gap-6">
+        <div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">01 · Composition</div>
+          <h3 class="text-lg font-semibold mb-2">Class helpers, not wrappers</h3>
+          <p class="text-sm text-fg-muted leading-relaxed">
+            Tier‑1 components are pure functions returning Tailwind class strings. AI
+            agents compose with raw native HTML they already know — no DSL, no JSX
+            translation, no projection complexity.
+          </p>
+        </div>
+        <div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">02 · Native semantics</div>
+          <h3 class="text-lg font-semibold mb-2">Real elements, real forms</h3>
+          <p class="text-sm text-fg-muted leading-relaxed">
+            A button is a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;button&gt;</code>.
+            A checkbox is a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;input&gt;</code>.
+            Form submission, autofill, browser validation, screen readers — all work
+            natively, never proxied.
+          </p>
+        </div>
+        <div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">03 · Zero dependencies</div>
+          <h3 class="text-lg font-semibold mb-2">Auditable in an afternoon</h3>
+          <p class="text-sm text-fg-muted leading-relaxed">
+            No Radix, no clsx, no tailwind‑merge, no Floating UI, no Sonner.
+            Hand‑rolled <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">cn()</code>,
+            positioning, focus trap, toast queue. Every line is yours to read and edit.
+          </p>
+        </div>
       </div>
-
-      <!-- Tabs row -->
-      <ui-card class="w-full mt-6">
-        <ui-card-content class="py-6">
-          <ui-tabs value="overview">
-            <ui-tabs-list>
-              <ui-tabs-trigger value="overview">Overview</ui-tabs-trigger>
-              <ui-tabs-trigger value="analytics">Analytics</ui-tabs-trigger>
-              <ui-tabs-trigger value="reports">Reports</ui-tabs-trigger>
-            </ui-tabs-list>
-            <ui-tabs-content value="overview" class="text-sm text-muted-foreground mt-4">
-              All 55 shadcn components ported to web components. Buttons, cards, inputs, dialogs,
-              forms, calendars, charts — every primitive your app needs, rendered as standards-compliant
-              custom elements.
-            </ui-tabs-content>
-            <ui-tabs-content value="analytics" class="text-sm text-muted-foreground mt-4">
-              Visual parity with shadcn-react. Tailwind utility classes, light/dark themes, the same
-              data-attribute hooks (data-state, data-orientation) — your existing Tailwind overrides
-              keep working.
-            </ui-tabs-content>
-            <ui-tabs-content value="reports" class="text-sm text-muted-foreground mt-4">
-              Framework agnostic. Works in webjs, Next.js, Astro, Vite, SvelteKit, Nuxt, SolidStart,
-              Lit projects, and plain HTML. One install of @webjskit/core (~12KB gzip), components
-              copy-pasted into your repo.
-            </ui-tabs-content>
-          </ui-tabs>
-        </ui-card-content>
-      </ui-card>
     </section>
 
-    <!-- Install snippets -->
-    <section class="mb-16">
-      <div class="mb-4 text-sm font-medium" style="color: var(--fg-muted)">Install</div>
+    <!-- Install -->
+    <section class="py-16">
+      <h2 class="text-2xl font-semibold mb-6">Install</h2>
       <div class="grid md:grid-cols-2 gap-4">
-        <div class="border rounded-lg p-4">
-          <div class="text-sm font-semibold mb-2" style="color: var(--fg)">Webjs users</div>
-          <pre class="text-xs p-3 rounded overflow-x-auto"><code># included with @webjskit/cli
+        <div class="rounded-lg border border-border bg-bg-elev p-5">
+          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Webjs users</div>
+          <pre class="text-sm font-mono"><code><span class="text-fg-subtle"># shipped with @webjskit/cli</span>
 webjs ui init
 webjs ui add button card dialog</code></pre>
         </div>
-        <div class="border rounded-lg p-4">
-          <div class="text-sm font-semibold mb-2" style="color: var(--fg)">Next / Astro / Vite / Lit / anything else</div>
-          <pre class="text-xs p-3 rounded overflow-x-auto"><code>npm install -D @webjskit/ui
+        <div class="rounded-lg border border-border bg-bg-elev p-5">
+          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Next · Astro · Vite · Lit · vanilla</div>
+          <pre class="text-sm font-mono"><code>npm install -D @webjskit/ui
 npm install @webjskit/core
 npx webjsui init
 npx webjsui add button card dialog</code></pre>
@@ -168,17 +105,98 @@ npx webjsui add button card dialog</code></pre>
       </div>
     </section>
 
-    <!-- Browse all -->
-    <section>
-      <div class="flex items-end justify-between mb-4">
-        <h2 class="text-2xl font-semibold" style="color: var(--fg)">Browse all <span class="text-sm font-normal" style="color: var(--fg-muted)">(${ui.length})</span></h2>
-        <a href="/docs/components" class="text-sm hover:underline" style="color: var(--accent)">See all components →</a>
+    <!-- Examples preview -->
+    <section class="py-16">
+      <h2 class="text-2xl font-semibold mb-2">How agents write it</h2>
+      <p class="text-sm text-fg-muted mb-6">
+        Idiomatic HTML + a named class helper. No state to thread, no wrappers to decode.
+      </p>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="flex flex-col rounded-lg border border-border bg-bg-elev p-5">
+          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A form field</div>
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;form</span> class<span class="text-fg-subtle">=</span>\${stackClass(<span class="text-accent">'sm'</span>)}<span class="text-fg-subtle">&gt;</span>
+  <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${fieldClass()}<span class="text-fg-subtle">&gt;</span>
+    <span class="text-fg-subtle">&lt;label</span> class<span class="text-fg-subtle">=</span>\${labelClass()} <span class="text-fg-subtle">for="email"&gt;</span>Email<span class="text-fg-subtle">&lt;/label&gt;</span>
+    <span class="text-fg-subtle">&lt;input</span> class<span class="text-fg-subtle">=</span>\${inputClass()} <span class="text-fg-subtle">id="email" type="email" required /&gt;</span>
+    <span class="text-fg-subtle">&lt;p</span> class<span class="text-fg-subtle">=</span>\${hintClass()}<span class="text-fg-subtle">&gt;</span>We'll send a link.<span class="text-fg-subtle">&lt;/p&gt;</span>
+  <span class="text-fg-subtle">&lt;/div&gt;</span>
+  <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">size</span>: <span class="text-accent">'sm'</span> })} <span class="text-fg-subtle">type="submit"&gt;</span>Subscribe<span class="text-fg-subtle">&lt;/button&gt;</span>
+<span class="text-fg-subtle">&lt;/form&gt;</span></code></pre>
+        </div>
+        <div class="flex flex-col rounded-lg border border-border bg-bg-elev p-5">
+          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A dialog</div>
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;ui-dialog&gt;</span>
+  <span class="text-fg-subtle">&lt;ui-dialog-trigger&gt;</span>
+    <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'outline'</span> })}<span class="text-fg-subtle">&gt;</span>Edit<span class="text-fg-subtle">&lt;/button&gt;</span>
+  <span class="text-fg-subtle">&lt;/ui-dialog-trigger&gt;</span>
+  <span class="text-fg-subtle">&lt;ui-dialog-content&gt;</span>
+    <span class="text-fg-subtle">&lt;h2</span> class<span class="text-fg-subtle">=</span>\${dialogTitleClass()}<span class="text-fg-subtle">&gt;</span>Delete project?<span class="text-fg-subtle">&lt;/h2&gt;</span>
+    <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${dialogFooterClass()}<span class="text-fg-subtle">&gt;</span>
+      <span class="text-fg-subtle">&lt;ui-dialog-close&gt;&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'ghost'</span> })}<span class="text-fg-subtle">&gt;</span>Cancel<span class="text-fg-subtle">&lt;/button&gt;&lt;/ui-dialog-close&gt;</span>
+      <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'destructive'</span> })}<span class="text-fg-subtle">&gt;</span>Delete<span class="text-fg-subtle">&lt;/button&gt;</span>
+    <span class="text-fg-subtle">&lt;/div&gt;</span>
+  <span class="text-fg-subtle">&lt;/ui-dialog-content&gt;</span>
+<span class="text-fg-subtle">&lt;/ui-dialog&gt;</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Two tiers -->
+    <section class="py-16">
+      <h2 class="text-2xl font-semibold mb-2">Two tiers, one mental model</h2>
+      <p class="text-sm text-fg-muted mb-6">
+        Visual primitives are composable. Stateful primitives are custom elements.
+      </p>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="rounded-lg border border-border bg-bg-elev p-6">
+          <div class="text-xs font-mono uppercase tracking-widest text-accent mb-2">Tier 1</div>
+          <h3 class="text-lg font-semibold mb-2">Class‑helper functions</h3>
+          <p class="text-sm text-fg-muted mb-4">
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">buttonClass</code>,
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">cardClass</code>,
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">inputClass</code>…
+            Apply to any native element. Same variants and sizes as shadcn.
+          </p>
+          <div class="text-xs text-fg-subtle">
+            20 components · button, card, badge, alert, input, textarea, label,
+            checkbox, switch, radio, native‑select, avatar, separator, skeleton,
+            aspect‑ratio, kbd, table, toggle, breadcrumb, pagination
+          </div>
+        </div>
+        <div class="rounded-lg border border-border bg-bg-elev p-6">
+          <div class="text-xs font-mono uppercase tracking-widest text-accent mb-2">Tier 2</div>
+          <h3 class="text-lg font-semibold mb-2">Stateful custom elements</h3>
+          <p class="text-sm text-fg-muted mb-4">
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dialog&gt;</code>,
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-tabs&gt;</code>,
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-popover&gt;</code>…
+            Manage open/close, keyboard nav, focus trap, escape, click‑outside.
+          </p>
+          <div class="text-xs text-fg-subtle">
+            12 components · dialog, alert‑dialog, popover, tooltip, hover‑card,
+            tabs, accordion, collapsible, dropdown‑menu, sonner, progress, toggle‑group
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Components grid -->
+    <section class="py-16">
+      <div class="flex items-baseline justify-between mb-6">
+        <h2 class="text-2xl font-semibold">All components</h2>
+        <span class="text-sm text-fg-muted">${ui.length} primitives</span>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        ${ui.slice(0, 12).map(
+        ${ui.map(
           (it) => html`
-            <a href="/docs/components/${it.name}" class="block border rounded-lg p-3 hover:bg-accent transition">
-              <div class="font-medium text-sm" style="color: var(--fg)">${it.name}</div>
+            <a
+              href="/docs/components/${it.name}"
+              class="block rounded-lg border border-border bg-bg-elev p-4 transition-colors hover:bg-bg-subtle hover:border-border-strong"
+            >
+              <div class="font-medium text-fg">${it.name}</div>
+              ${it.description
+                ? html`<div class="text-xs text-fg-muted mt-1 line-clamp-2 leading-relaxed">${it.description}</div>`
+                : ''}
             </a>
           `,
         )}

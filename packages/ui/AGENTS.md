@@ -1,29 +1,67 @@
 # AGENTS.md — @webjskit/ui
 
 The webjs **shadcn-equivalent component CLI** — `webjsui init` / `add` / `list` /
-`view` / `diff` / `info` / `build`. Ships ~55 web-component ports of shadcn's
-new-york-v4 style.
+`view` / `diff` / `info` / `build`. Ships 32 shadcn-equivalent primitives.
 
 Framework-wide rules live in the root [`../../AGENTS.md`](../../AGENTS.md) and
 apply here. Read that first. This file only covers what's specific to
 `@webjskit/ui`.
 
-## Role
+## Architecture — composition-first, two tiers
 
-`@webjskit/ui` is a **CLI + registry-fetcher**. It does not contain the
-component sources directly — those live in
-[`packages/ui/packages/registry/`](./packages/registry/) (internal, not
-published). The CLI fetches compiled JSON from
-[`https://ui.webjs.dev/r/<name>.json`](https://ui.webjs.dev) and copies the
-source into the user's project.
+`@webjskit/ui` ships **class-helper functions** (returning Tailwind class
+strings) and **a small set of stateful custom elements** — never bundled
+wrappers around native form controls.
 
-Three workspace packages cooperate:
+### Tier 1 — class helpers (the majority)
 
+Pure functions returning Tailwind class strings. Compose with whatever
+native element you want.
+
+```ts
+import { buttonClass, cardClass, inputClass, labelClass, fieldClass, hintClass }
+  from '@/components/ui';
+
+html`
+  <div class=${cardClass()}>
+    <form class=${formClass()}>
+      <div class=${fieldClass()}>
+        <label class=${labelClass()} for="email">Email</label>
+        <input class=${inputClass()} type="email" id="email" name="email"
+               aria-describedby="email-hint" required>
+        <p class=${hintClass()} id="email-hint">We never share it.</p>
+      </div>
+      <button class=${buttonClass()} type="submit">Sign up</button>
+    </form>
+  </div>
+`
 ```
-packages/ui/                       @webjskit/ui — published CLI (this package)
-└─ packages/
-   ├─ registry/                    internal: component sources + build pipeline
-   └─ website/                     internal: registry HTTP host + docs site
+
+Helpers that take options accept an object: `buttonClass({ variant: 'outline', size: 'sm' })`.
+
+### Tier 2 — stateful custom elements
+
+For things the browser doesn't provide natively: dialogs, popovers, tabs,
+accordions, dropdowns. Plain `HTMLElement` subclasses (not `WebComponent`)
+so they DECORATE their host (set classes, listen for events) without
+replacing children. Children flow naturally.
+
+```ts
+html`
+  <ui-dialog>
+    <ui-dialog-trigger>
+      <button class=${buttonClass({ variant: 'outline' })}>Edit</button>
+    </ui-dialog-trigger>
+    <ui-dialog-content>
+      <div class=${dialogHeaderClass()}>
+        <h2 class=${dialogTitleClass()}>Edit profile</h2>
+        <p class=${dialogDescriptionClass()}>Make changes here.</p>
+      </div>
+      <!-- a real form inside; submission works normally -->
+      <form action="/profile" method="post" class=${formClass()}>…</form>
+    </ui-dialog-content>
+  </ui-dialog>
+`
 ```
 
 ## Module map
@@ -50,7 +88,6 @@ packages/ui/
       get-config.js               read components.json
       detect-project.js           webjs / next / vite / astro / plain detection
       logger.js                   kleur-based logger
-      index.js                    barrel
   test/
     schema.test.js                schema validation
     resolver.test.js              transitive deps + npm dedupe
@@ -58,8 +95,8 @@ packages/ui/
     get-config.test.js            config read/write/round-trip
 
   packages/registry/              the registry (internal, not published)
-    components/                   55 .ts files, one per shadcn component
-    lib/utils.ts                  cn() class-merge helper (shipped to user projects)
+    components/                   .ts files, one per shadcn-equivalent component
+    lib/utils.ts                  cn() + layout/typography helpers (ships via init)
     themes/
       index.css                   @theme block + CSS variables (light + dark)
       base-colors.js              the 7 base palettes (neutral/stone/zinc/mauve/olive/mist/taupe)
@@ -77,6 +114,41 @@ packages/ui/
       docs/components/[name]/page.ts  per-component docs page
 ```
 
+## v1 component inventory (32 components)
+
+| Tier | Component | Surface |
+|---|---|---|
+| 1a | `button` | `buttonClass({ variant, size })` — 6 variants × 8 sizes |
+| 1a | `badge` | `badgeClass({ variant })` — 6 variants |
+| 1a | `alert` | `alertClass({ variant })`, `alertTitleClass`, `alertDescriptionClass` |
+| 1a | `card` | `cardClass`, `cardHeaderClass`, `cardTitleClass`, `cardDescriptionClass`, `cardActionClass`, `cardContentClass`, `cardFooterClass` |
+| 1a | `input` / `textarea` / `label` | `inputClass`, `textareaClass`, `labelClass` |
+| 1a | `checkbox` | `checkboxClass` — native `<input type="checkbox">` with SVG check on `:checked` |
+| 1a | `radio-group` | `radioGroupClass`, `radioClass` — native `<input type="radio">` |
+| 1a | `switch` | `switchInputClass`, `switchTrackClass({ size })` — hidden native checkbox + visible track |
+| 1a | `native-select` | `nativeSelectWrapperClass`, `nativeSelectClass`, `nativeSelectIconClass`, `nativeSelectOptionClass`, `nativeSelectOptGroupClass` |
+| 1a | `avatar` | `avatarClass`, `avatarImageClass`, `avatarFallbackClass`, `avatarBadgeClass`, `avatarGroupClass`, `avatarGroupCountClass` |
+| 1a | `separator` | `separatorClass({ orientation })` |
+| 1a | `skeleton` | `skeletonClass` |
+| 1a | `aspect-ratio` | `aspectRatioClass` — use Tailwind `aspect-[16/9]` directly |
+| 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
+| 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
+| 1a | `toggle` | `toggleClass({ variant, size })` — pair with native `<button>` |
+| 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
+| 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
+| 2  | `progress` | `<ui-progress value="...">` — handles indicator transform |
+| 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>` |
+| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>` / overlay. Class helpers for `dialogHeader/Title/Description/Footer`. Focus trap, Escape, body-scroll lock. |
+| 2  | `alert-dialog` | Like dialog, role=alertdialog, no Escape/overlay-close. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
+| 2  | `popover` | `<ui-popover>` + Trigger + Content with `side`/`align`/`side-offset`. Hand-rolled positioning, auto-flip. |
+| 2  | `tooltip` | `<ui-tooltip delay-duration>` — hover/focus + delay. |
+| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>` — hover with linger-keep-open. |
+| 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. |
+| 2  | `accordion` | `<ui-accordion type collapsible value>` + Item / Trigger / Content. |
+| 2  | `collapsible` | `<ui-collapsible open>` + Trigger / Content. |
+| 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. ArrowUp/Down nav, Escape close. |
+| 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. |
+
 ## Public commands (binary: `webjsui`)
 
 | Command | What it does |
@@ -92,70 +164,81 @@ packages/ui/
 ## Webjs‑CLI subcommand
 
 `webjs ui <subcmd>` proxies to `@webjskit/ui`. Implementation lives in
-[`../cli/bin/webjs.js`](../cli/bin/webjs.js) under `case 'ui':`. Resolves
-`@webjskit/ui` from the CLI's own location (it's a hard dependency of
-`@webjskit/cli`), with a fallback to the user's `cwd`.
+[`../cli/bin/webjs.js`](../cli/bin/webjs.js) under `case 'ui':`.
 
 ## Package-specific invariants
 
-1. **`@webjskit/ui` is a hard dependency of `@webjskit/cli`.** Listed in
-   `packages/cli/package.json` `dependencies` — global `webjs` install ships
-   with the UI CLI out of the box. `webjs create` also preinstalls it as a
-   devDependency in scaffolded apps (see `packages/cli/lib/create.js`).
+1. **`@webjskit/ui` is a hard dependency of `@webjskit/cli`.** Global
+   `webjs` install ships with the UI CLI out of the box.
 
-2. **Registry wire format mirrors shadcn's `registryItemSchema`.** Same `name`,
-   `type`, `files[].path/content/target`, `dependencies`, `devDependencies`,
-   `registryDependencies` shape. A shadcn-compatible client could in principle
-   point at our registry URL and consume it (modulo TS vs TSX file extensions).
+2. **No third-party runtime deps.** No clsx, no tailwind-merge, no
+   class-variance-authority, no Radix, no `@floating-ui/dom`, no `sonner`.
+   Hand-rolled `cn()` in `lib/utils.ts`, hand-rolled positioning in
+   `popover.ts` (re-used by tooltip and hover-card via export),
+   hand-rolled focus trap in `dialog.ts`, hand-rolled toast queue in
+   `sonner.ts`.
 
-3. **Components are light DOM + Tailwind.** Each extends `WebComponent` from
-   `@webjskit/core`. Children projection uses the `innerHTML`-capture pattern
-   (capture `this.innerHTML` in `connectedCallback` BEFORE `super`, re-emit via
-   `unsafeHTML`). Light DOM means the host's Tailwind stylesheet reaches the
-   component template directly — exact visual parity with shadcn.
+3. **Registry wire format mirrors shadcn's `registryItemSchema`.**
+   Same shape, so a shadcn-compatible client could in principle consume
+   our registry (modulo TS vs TSX extensions).
 
-4. **`@webjskit/core` is the single runtime dependency.** No Radix, no
-   class-variance-authority, no clsx, no tailwind-merge. The `cn()` helper
-   in `lib/utils.ts` is hand-rolled. Components that need positioning import
-   `@floating-ui/dom`; the CLI auto-installs it.
+4. **Light DOM + Tailwind everywhere.** Custom elements extend `HTMLElement`
+   (NOT `WebComponent`) — they decorate the host element rather than
+   render replacement children. Light DOM means Tailwind utility classes
+   apply directly.
 
-5. **All 7 base colours** ship as `registry:theme` items (neutral, stone, zinc,
-   mauve, olive, mist, taupe). `init` writes one into the user's global CSS.
+5. **API parity with shadcn.** Variant names, size names, subcomponent
+   breakdown, `data-state` / `data-orientation` / `data-side` /
+   `data-align` attribute conventions all match shadcn 1:1. An AI agent
+   trained on shadcn maps its knowledge directly:
+   - `<DialogContent>` → `<ui-dialog-content>`
+   - `variant="destructive"` → `variant="destructive"` (same)
+   - `onValueChange={fn}` → `addEventListener('ui-value-change', fn)`
+   - `asChild` → drop the wrapper, apply the class helper directly
 
-## Component tag convention
+6. **Native form controls participate in `<form>` submission natively.**
+   `<input type="checkbox" class=${checkboxClass()}>` is a real input —
+   no `ElementInternals`, no `setFormValue` proxying. Submission,
+   autofill, browser autocomplete, native validation all work.
 
-Single `ui-` prefix; sub-components hyphenated:
+## Component tag convention (Tier 2)
+
+Single `ui-` prefix; sub-components hyphenated. Matches shadcn's React tag
+names mechanically:
 
 ```html
-<ui-button variant="default" size="lg">Click me</ui-button>
-
-<ui-card>
-  <ui-card-header>
-    <ui-card-title>Title</ui-card-title>
-    <ui-card-description>Description</ui-card-description>
-  </ui-card-header>
-  <ui-card-content>
-    <ui-input placeholder="Type here..." />
-  </ui-card-content>
-  <ui-card-footer>
-    <ui-button>Save</ui-button>
-  </ui-card-footer>
-</ui-card>
-
-<ui-dialog>
-  <ui-dialog-trigger><ui-button>Open</ui-button></ui-dialog-trigger>
-  <ui-dialog-content>
-    <ui-dialog-header>
-      <ui-dialog-title>Confirm</ui-dialog-title>
-      <ui-dialog-description>Are you sure?</ui-dialog-description>
-    </ui-dialog-header>
-  </ui-dialog-content>
-</ui-dialog>
+<ui-dialog>          <!-- = <Dialog> -->
+  <ui-dialog-trigger>  <!-- = <DialogTrigger> -->
+  <ui-dialog-content>  <!-- = <DialogContent> -->
 ```
 
-Direct 1:1 mapping with shadcn's React tag names. `Button` → `ui-button`,
-`DialogContent` → `ui-dialog-content`, etc. The AI translation from a known
-shadcn pattern to a webjs page is mechanical.
+## Class-helper conventions (Tier 1)
+
+- Helpers with no parameters: `cardClass()`, `inputClass()`, etc.
+- Helpers with variants: `buttonClass({ variant, size })` — object arg, all keys optional.
+- All `.ts` files in `components/` export named functions. No default exports.
+- Use `cn()` from `'../lib/utils.ts'` to merge a helper's output with
+  user-supplied classes when needed: `<button class=${cn(buttonClass(), 'rounded-full')}>`.
+
+## Layout + typography helpers (the design system)
+
+These live in `lib/utils.ts` and are foundational — encode the spacing
+and typography rhythm.
+
+| Helper | Returns | Use for |
+|---|---|---|
+| `fieldClass()` | `grid gap-2` | Vertical rhythm: label ↔ input ↔ hint |
+| `fieldRowClass()` | `flex items-center gap-3` | Horizontal label-and-input |
+| `stackClass(gap)` | `grid gap-{3\|6\|8}` | Multiple form fields stacked |
+| `formClass()` | `grid gap-6` | `<form>` body rhythm |
+| `sectionClass()` | `grid gap-8` | Page sections |
+| `fieldLabelClass()` | label typography | `<label>` text style |
+| `hintClass()` | `text-sm text-muted-foreground` | Helper text below input |
+| `helpClass()` | `text-xs text-muted-foreground` | Tertiary muted text |
+| `errorClass()` | `text-sm font-medium text-destructive` | Validation error text |
+
+Change one helper to retune the entire app — every form field that uses
+`fieldClass()` updates atomically.
 
 ## Tests
 
@@ -163,9 +246,8 @@ shadcn pattern to a webjs page is mechanical.
 npm test --workspace=@webjskit/ui    # schema + resolver + project-detect + config
 ```
 
-The component sources themselves are smoke-validated via the registry build
-(empty content is flagged, schema is re-validated on every file). Browser
-tests for individual components are deliberately limited in v1.
+Component sources are smoke-validated via the registry build (empty
+content flagged, schema re-validated on every file).
 
 ## Building / running
 
@@ -174,16 +256,18 @@ npm run ui:build                     # rebuild registry/r/*.json
 npm run ui:dev                       # serve the registry website on :5001
 ```
 
-## Scope cuts in v1 (documented, not abandoned)
+## Scope cuts in v1 (deferred to v2)
 
-- `chart` — DOM scaffolding only; no recharts/vega-lite integration.
-- `sidebar` — visual layout works; no drag-to-resize / cookie persistence.
-- `command`, `combobox` — substring filter only (no fuzzy ranking).
-- `calendar` — month view, single date select only.
-- `form` — layout primitives; no React Hook Form equivalent.
-- `carousel` — simple slide tracker; no swipe gestures, no autoplay.
+These shadcn components are NOT shipped in v1 and have intentionally been
+left as old-pattern files until reimplemented:
 
-Each component file has a header TODO when scope was trimmed.
+button-group, calendar, carousel, chart, combobox, command, context-menu,
+direction, drawer, empty, field, form, input-group, input-otp, item,
+menubar, navigation-menu, resizable, scroll-area, select (rich), sheet,
+sidebar, slider, spinner.
+
+Each gets a "v2" docs page that explains the scope cut and a workaround
+(native equivalent, or recommended alternative library) until shipped.
 
 ---
 

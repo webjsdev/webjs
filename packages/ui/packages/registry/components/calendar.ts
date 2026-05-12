@@ -1,24 +1,36 @@
 import { WebComponent, html } from '@webjskit/core';
 import { cn } from '../lib/utils.ts';
-import {
-  addMonths,
-  addYears,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameDay,
-  isSameMonth,
-  isSameYear,
-  startOfWeek,
-  endOfWeek,
-  startOfDay,
-  isAfter,
-  isBefore,
-  setMonth,
-  setYear,
-  addDays,
-  addWeeks,
-} from 'date-fns';
+
+// Hand-rolled date helpers — no external dep. Equivalent to the date-fns
+// functions of the same name but bundle-portable across environments
+// (avoids dual-mode ESM/CJS export shape problems with date-fns auto-vendoring).
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const addWeeks = (d: Date, n: number) => addDays(d, n * 7);
+const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
+const addYears = (d: Date, n: number) => new Date(d.getFullYear() + n, d.getMonth(), d.getDate());
+const setMonth = (d: Date, m: number) => new Date(d.getFullYear(), m, d.getDate());
+const setYear = (d: Date, y: number) => new Date(y, d.getMonth(), d.getDate());
+const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+const startOfWeek = (d: Date, opts: { weekStartsOn?: number } = {}) => {
+  const start = opts.weekStartsOn ?? 0;
+  const diff = (d.getDay() - start + 7) % 7;
+  return addDays(startOfDay(d), -diff);
+};
+const endOfWeek = (d: Date, opts: { weekStartsOn?: number } = {}) => addDays(startOfWeek(d, opts), 6);
+const isSameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const isSameMonth = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+const isSameYear = (a: Date, b: Date) => a.getFullYear() === b.getFullYear();
+const isAfter = (a: Date, b: Date) => a.getTime() > b.getTime();
+const isBefore = (a: Date, b: Date) => a.getTime() < b.getTime();
+const eachDayOfInterval = ({ start, end }: { start: Date; end: Date }) => {
+  const out: Date[] = [];
+  let d = startOfDay(start);
+  const last = startOfDay(end);
+  while (d.getTime() <= last.getTime()) { out.push(d); d = addDays(d, 1); }
+  return out;
+};
 
 /**
  * Calendar — shadcn-parity date picker.

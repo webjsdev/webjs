@@ -1,11 +1,5 @@
 import { html } from '@webjskit/core';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-// app/docs/layout.ts is 2 levels deep inside the website (app → docs).
-// Walk 3 levels up to reach packages/ui/packages/, then down into registry/r.
-const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'registry', 'r');
+import { loadRegistryIndex } from '../_lib/registry.server.ts';
 
 /**
  * Shadcn-style docs shell: sidebar (component list, getting started) on the
@@ -13,12 +7,9 @@ const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '
  * index at request time so adding a new component to the registry shows up
  * here automatically.
  */
-export default function DocsLayout({ children }: { children: unknown }) {
-  const indexPath = join(REGISTRY_DIR, 'index.json');
-  let components: Array<{ name: string; type: string }> = [];
-  if (existsSync(indexPath)) {
-    components = JSON.parse(readFileSync(indexPath, 'utf8')).filter((i: any) => i.type === 'registry:ui');
-  }
+export default async function DocsLayout({ children }: { children: unknown }) {
+  const all = await loadRegistryIndex();
+  const components = all.filter((i) => i.type === 'registry:ui');
 
   return html`
     <div class="grid lg:grid-cols-[220px_1fr] gap-8 -mt-10">

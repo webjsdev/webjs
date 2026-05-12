@@ -1,135 +1,125 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Hover card. Same shape as popover but opens on hover (with delay) and
- * closes on mouseleave from the trigger AND content.
+ * HoverCard — popover-like panel triggered by hover with configurable delays.
  *
- *   <ui-hover-card>
- *     <ui-hover-card-trigger>@username</ui-hover-card-trigger>
- *     <ui-hover-card-content>Bio...</ui-hover-card-content>
+ * shadcn parity: HoverCard, HoverCardTrigger, HoverCardContent.
+ *   open-delay, close-delay (ms).
+ *
+ * Usage:
+ *   <ui-hover-card open-delay="700" close-delay="300">
+ *     <ui-hover-card-trigger>
+ *       <a href="/user/vivek">@vivek</a>
+ *     </ui-hover-card-trigger>
+ *     <ui-hover-card-content>
+ *       <div class="flex gap-3">
+ *         <img class="size-10 rounded-full" src="…" alt="">
+ *         <div>
+ *           <h4 class="font-semibold">@vivek</h4>
+ *           <p class="text-sm text-muted-foreground">Building webjs.</p>
+ *         </div>
+ *       </div>
+ *     </ui-hover-card-content>
  *   </ui-hover-card>
+ *
+ * Design tokens used: --popover, --popover-foreground, --border.
  */
+import { cn, Base, defineElement } from '../lib/utils.ts';
+import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
-function position(anchor: HTMLElement, floating: HTMLElement, placement: any = 'bottom') {
-  return computePosition(anchor, floating, {
-    placement,
-    middleware: [offset(4), flip(), shift({ padding: 8 })],
-  }).then(({ x, y, placement: p }) => {
-    Object.assign(floating.style, { left: `${x}px`, top: `${y}px`, position: 'fixed' });
-    floating.setAttribute('data-side', p.split('-')[0]);
-  });
+export const hoverCardContentClass = (): string =>
+  'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
+
+const STYLES = `
+ui-hover-card:not([open]) ui-hover-card-content { display: none !important; }
+ui-hover-card-content { display: block; position: fixed; }
+`;
+
+function installStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ui-hover-card-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'ui-hover-card-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
 }
 
-const OPEN_DELAY = 700;
-const CLOSE_DELAY = 300;
-
-export class UiHoverCard extends WebComponent {
-  static properties = { open: { type: Boolean, reflect: true } };
-  declare open: boolean;
-  private _openTimer: any = null;
-  private _closeTimer: any = null;
-
-  constructor() { super(); this.open = false; }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.addEventListener('ui-hover-card-open-request', this._onOpenReq as EventListener);
-    this.addEventListener('ui-hover-card-close-request', this._onCloseReq as EventListener);
-    this.addEventListener('ui-hover-card-cancel-close', this._cancelClose as EventListener);
+export class UiHoverCard extends Base {
+  static get observedAttributes(): string[] {
+    return ['open'];
   }
+  private _showTimer: number | undefined;
+  private _hideTimer: number | undefined;
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this._openTimer) clearTimeout(this._openTimer);
-    if (this._closeTimer) clearTimeout(this._closeTimer);
+  connectedCallback(): void {
+    installStyles();
+    this.setAttribute('data-slot', 'hover-card');
+    this._reflect();
   }
-
-  _onOpenReq = () => {
-    if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
-    if (this.open) return;
-    this._openTimer = setTimeout(() => this.setOpen(true), OPEN_DELAY);
-  };
-
-  _onCloseReq = () => {
-    if (this._openTimer) { clearTimeout(this._openTimer); this._openTimer = null; }
-    this._closeTimer = setTimeout(() => this.setOpen(false), CLOSE_DELAY);
-  };
-
-  _cancelClose = () => {
-    if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
-  };
-
-  setOpen(open: boolean) {
-    if (open === this.open) return;
-    this.open = open;
-    const state = open ? 'open' : 'closed';
-    this.querySelectorAll('ui-hover-card-trigger, ui-hover-card-content').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-state', state);
+  attributeChangedCallback(): void {
+    this._reflect();
+    if (this.hasAttribute('open')) this._reposition();
+  }
+  show(): void {
+    clearTimeout(this._hideTimer);
+    const delay = Number(this.getAttribute('open-delay') ?? 700);
+    this._showTimer = window.setTimeout(() => this.setAttribute('open', ''), delay);
+  }
+  hide(): void {
+    clearTimeout(this._showTimer);
+    const delay = Number(this.getAttribute('close-delay') ?? 300);
+    this._hideTimer = window.setTimeout(() => this.removeAttribute('open'), delay);
+  }
+  _reposition(): void {
+    const trigger = this.querySelector<HTMLElement>(':scope > ui-hover-card-trigger');
+    const content = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
+    if (!trigger || !content) return;
+    positionFloating(trigger, content, {
+      side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
+      align: (content.getAttribute('align') ?? 'center') as PopoverAlign,
+      sideOffset: Number(content.getAttribute('side-offset') ?? 4),
     });
   }
-
-  render() { return html`<slot></slot>`; }
+  private _reflect(): void {
+    this.setAttribute('data-state', this.hasAttribute('open') ? 'open' : 'closed');
+    const c = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
+    c?.setAttribute('data-state', this.hasAttribute('open') ? 'open' : 'closed');
+  }
 }
-UiHoverCard.register('ui-hover-card');
+defineElement('ui-hover-card', UiHoverCard);
 
-export class UiHoverCardTrigger extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-    this.addEventListener('pointerenter', this._onEnter);
-    this.addEventListener('pointerleave', this._onLeave);
-    this.addEventListener('focus', this._onEnter, true);
-    this.addEventListener('blur', this._onLeave, true);
+export class UiHoverCardTrigger extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'hover-card-trigger');
+    this.addEventListener('mouseenter', this._onEnter);
+    this.addEventListener('mouseleave', this._onLeave);
+    this.addEventListener('focusin', this._onEnter);
+    this.addEventListener('focusout', this._onLeave);
   }
-  _onEnter = () => this.dispatchEvent(new CustomEvent('ui-hover-card-open-request', { bubbles: true }));
-  _onLeave = () => this.dispatchEvent(new CustomEvent('ui-hover-card-close-request', { bubbles: true }));
-  render() { return html`${unsafeHTML(this._slot)}`; }
+  disconnectedCallback(): void {
+    this.removeEventListener('mouseenter', this._onEnter);
+    this.removeEventListener('mouseleave', this._onLeave);
+    this.removeEventListener('focusin', this._onEnter);
+    this.removeEventListener('focusout', this._onLeave);
+  }
+  private _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  private _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
 }
-UiHoverCardTrigger.register('ui-hover-card-trigger');
+defineElement('ui-hover-card-trigger', UiHoverCardTrigger);
 
-export class UiHoverCardContent extends WebComponent {
-  private _slot = '';
-  private _portal: HTMLElement | null = null;
-  private _cleanupAutoUpdate: (() => void) | null = null;
-
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
-  disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
-
-  static get observedAttributes() { return ['data-state']; }
-  attributeChangedCallback() {
-    const state = this.getAttribute('data-state') || 'closed';
-    if (state === 'open') this._show();
-    else this._teardown();
+export class UiHoverCardContent extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'hover-card-content');
+    this.setAttribute('role', 'dialog');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(hoverCardContentClass(), userClass);
+    // Keep open while pointer is over the content itself.
+    this.addEventListener('mouseenter', this._onEnter);
+    this.addEventListener('mouseleave', this._onLeave);
   }
-
-  _show() {
-    if (this._portal) return;
-    const root = this.closest('ui-hover-card') as HTMLElement | null;
-    const trigger = root?.querySelector('ui-hover-card-trigger') as HTMLElement | null;
-    if (!root || !trigger) return;
-
-    const el = document.createElement('div');
-    el.setAttribute('data-slot', 'hover-card-content');
-    el.setAttribute('data-state', 'open');
-    el.className = cn('z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95');
-    el.innerHTML = this._slot;
-    el.addEventListener('pointerenter', () => root.dispatchEvent(new CustomEvent('ui-hover-card-cancel-close', { bubbles: true })));
-    el.addEventListener('pointerleave', () => root.dispatchEvent(new CustomEvent('ui-hover-card-close-request', { bubbles: true })));
-    document.body.appendChild(el);
-    this._portal = el;
-    const placement = this.getAttribute('placement') || 'bottom';
-    this._cleanupAutoUpdate = autoUpdate(trigger, el, () => position(trigger, el, placement));
+  disconnectedCallback(): void {
+    this.removeEventListener('mouseenter', this._onEnter);
+    this.removeEventListener('mouseleave', this._onLeave);
   }
-
-  _teardown() {
-    if (this._cleanupAutoUpdate) { this._cleanupAutoUpdate(); this._cleanupAutoUpdate = null; }
-    if (this._portal) { this._portal.remove(); this._portal = null; }
-  }
-
-  render() { return html``; }
+  private _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  private _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
 }
-UiHoverCardContent.register('ui-hover-card-content');
+defineElement('ui-hover-card-content', UiHoverCardContent);

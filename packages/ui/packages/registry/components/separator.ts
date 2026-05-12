@@ -1,31 +1,30 @@
-import { WebComponent, html } from '@webjskit/core';
+/**
+ * Separator — horizontal or vertical divider. Pure class helper. For
+ * accessibility, set `role="separator"` (or `role="none"` for purely
+ * decorative use) and `aria-orientation` on the element.
+ *
+ * shadcn parity:
+ *   orientation: horizontal (default) | vertical
+ *   decorative: true (default — uses `role="none"`)
+ *
+ * Usage:
+ *   <div role="none" class=${separatorClass()} data-orientation="horizontal"></div>
+ *   <div role="separator" aria-orientation="vertical"
+ *        class=${separatorClass({ orientation: 'vertical' })}
+ *        data-orientation="vertical"></div>
+ *
+ * Design tokens used: --border.
+ */
 import { cn } from '../lib/utils.ts';
 
-export class UiSeparator extends WebComponent {
-  static properties = {
-    orientation: { type: String, reflect: true },
-    decorative: { type: Boolean, reflect: true },
-  };
-  declare orientation: 'horizontal' | 'vertical';
-  declare decorative: boolean;
+const BASE =
+  'shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px';
 
-  constructor() {
-    super();
-    this.orientation = 'horizontal';
-    this.decorative = true;
-  }
+export type SeparatorOrientation = 'horizontal' | 'vertical';
 
-  render() {
-    return html`<div
-      data-slot="separator-root"
-      data-orientation=${this.orientation}
-      role=${this.decorative ? 'none' : 'separator'}
-      aria-orientation=${this.orientation === 'vertical' ? 'vertical' : 'horizontal'}
-      class=${cn(
-        'bg-border shrink-0',
-        this.orientation === 'horizontal' ? 'data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full' : 'data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px',
-      )}
-    ></div>`;
-  }
+export function separatorClass(_opts: { orientation?: SeparatorOrientation } = {}): string {
+  // Orientation is driven by the `data-orientation` attribute on the element,
+  // not by class variants — matches shadcn. The opts arg is reserved for
+  // future variants (e.g. dashed) and to keep the signature stable.
+  return cn(BASE);
 }
-UiSeparator.register('ui-separator');

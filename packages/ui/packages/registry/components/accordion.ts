@@ -1,227 +1,176 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Accordion. Composition:
+ * Accordion — vertical collapsible item list. Single or multiple open at a time.
  *
- *   <ui-accordion type="single" value="item-1">
+ * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/accordion/
+ *
+ * shadcn parity:
+ *   Accordion (type: single | multiple, collapsible: boolean, value: string|string[])
+ *   AccordionItem (value), AccordionTrigger, AccordionContent.
+ *
+ * Usage:
+ *   <ui-accordion type="single" collapsible>
  *     <ui-accordion-item value="item-1">
- *       <ui-accordion-trigger>Section 1</ui-accordion-trigger>
- *       <ui-accordion-content>Body</ui-accordion-content>
+ *       <ui-accordion-trigger>Is it accessible?</ui-accordion-trigger>
+ *       <ui-accordion-content>Yes — uses APG accordion pattern.</ui-accordion-content>
+ *     </ui-accordion-item>
+ *     <ui-accordion-item value="item-2">
+ *       <ui-accordion-trigger>Is it animated?</ui-accordion-trigger>
+ *       <ui-accordion-content>Yes (height transition).</ui-accordion-content>
  *     </ui-accordion-item>
  *   </ui-accordion>
  *
- * In `multiple` mode `value` is a comma-separated list.
+ * Design tokens used: --muted-foreground, --border, --ring.
  */
-export class UiAccordion extends WebComponent {
-  static properties = {
-    type: { type: String, reflect: true },
-    value: { type: String, reflect: true },
-    collapsible: { type: Boolean, reflect: true },
-  };
-  declare type: 'single' | 'multiple';
-  declare value: string;
-  declare collapsible: boolean;
+import { cn, Base, defineElement } from '../lib/utils.ts';
 
-  private _slot = '';
+export const accordionItemClass = (): string => 'border-b last:border-b-0';
 
-  constructor() {
-    super();
-    this.type = 'single';
-    this.value = '';
-    this.collapsible = false;
+export const accordionTriggerClass = (): string =>
+  'flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180';
+
+export const accordionContentClass = (): string => 'overflow-hidden text-sm';
+
+const STYLES = `
+ui-accordion-item[data-state="closed"] > ui-accordion-content { display: none !important; }
+ui-accordion-content > * { padding-top: 0; padding-bottom: 1rem; }
+`;
+
+function installStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ui-accordion-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'ui-accordion-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
+}
+
+export class UiAccordion extends Base {
+  static get observedAttributes(): string[] {
+    return ['value', 'type', 'collapsible'];
+  }
+  connectedCallback(): void {
+    installStyles();
+    this.setAttribute('data-slot', 'accordion');
+    if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
+    this.addEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
+    queueMicrotask(() => this._sync());
+  }
+  disconnectedCallback(): void {
+    this.removeEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
+  }
+  attributeChangedCallback(): void {
+    this._sync();
   }
 
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-    this.addEventListener('ui-accordion-toggle', this._onToggle as EventListener);
-    queueMicrotask(() => this._syncChildren());
+  private get _type(): 'single' | 'multiple' {
+    return (this.getAttribute('type') as 'single' | 'multiple') ?? 'single';
   }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('ui-accordion-toggle', this._onToggle as EventListener);
+  private get _values(): Set<string> {
+    const raw = this.getAttribute('value') ?? '';
+    return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
   }
-
-  _onToggle = (e: CustomEvent) => {
+  private _setValues(values: Set<string>): void {
+    const next = Array.from(values).join(',');
+    this.setAttribute('value', next);
+  }
+  private _sync(): void {
+    const values = this._values;
+    const items = this.querySelectorAll<HTMLElement>('ui-accordion-item');
+    items.forEach((item) => {
+      const v = item.getAttribute('value');
+      const open = !!v && values.has(v);
+      item.setAttribute('data-state', open ? 'open' : 'closed');
+      const trigger = item.querySelector<HTMLElement>('ui-accordion-trigger');
+      trigger?.setAttribute('data-state', open ? 'open' : 'closed');
+      trigger?.setAttribute('aria-expanded', String(open));
+      const content = item.querySelector<HTMLElement>('ui-accordion-content');
+      content?.setAttribute('data-state', open ? 'open' : 'closed');
+    });
+  }
+  private _onTriggerClick = (e: CustomEvent): void => {
     const v = e.detail?.value as string | undefined;
     if (!v) return;
-    if (this.type === 'multiple') {
-      const set = new Set((this.value || '').split(',').filter(Boolean));
-      if (set.has(v)) set.delete(v);
-      else set.add(v);
-      this.value = Array.from(set).join(',');
-    } else {
-      if (this.value === v) {
-        if (this.collapsible) this.value = '';
+    const values = this._values;
+    const collapsible = this.hasAttribute('collapsible');
+    if (this._type === 'single') {
+      if (values.has(v)) {
+        if (collapsible) values.clear();
+        else return;
       } else {
-        this.value = v;
+        values.clear();
+        values.add(v);
       }
+    } else {
+      if (values.has(v)) values.delete(v);
+      else values.add(v);
     }
-    this._syncChildren();
-    this.dispatchEvent(new CustomEvent('change', { detail: { value: this.value }, bubbles: true, composed: true }));
+    this._setValues(values);
   };
+}
+defineElement('ui-accordion', UiAccordion);
 
-  _syncChildren() {
-    this.querySelectorAll('ui-accordion-item').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-group-value', this.value || '');
-      (el as HTMLElement).setAttribute('data-group-type', this.type);
-    });
-  }
-
-  static get observedAttributes() {
-    return ['value', 'type'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    this._syncChildren();
-  }
-
-  render() {
-    return html`<div data-slot="accordion">${unsafeHTML(this._slot)}</div>`;
+export class UiAccordionItem extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'accordion-item');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(accordionItemClass(), userClass);
   }
 }
-UiAccordion.register('ui-accordion');
+defineElement('ui-accordion-item', UiAccordionItem);
 
-export class UiAccordionItem extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-    disabled: { type: Boolean, reflect: true },
-  };
-  declare value: string;
-  declare disabled: boolean;
-
-  private _slot = '';
-
-  constructor() {
-    super();
-    this.value = '';
-    this.disabled = false;
-  }
-
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-    queueMicrotask(() => this._syncChildren());
-  }
-
-  static get observedAttributes() {
-    return ['data-group-value', 'data-group-type', 'value', 'disabled'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name.startsWith('data-group-')) {
-      this._syncChildren();
-      this.requestUpdate();
+export class UiAccordionTrigger extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'accordion-trigger');
+    this.setAttribute('role', 'button');
+    this.setAttribute('tabindex', '0');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(accordionTriggerClass(), userClass);
+    // Default chevron icon if no SVG child is provided
+    if (!this.querySelector('svg')) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.setAttribute(
+        'class',
+        'pointer-events-none size-4 shrink-0 translate-y-0.5 text-muted-foreground transition-transform duration-200',
+      );
+      svg.innerHTML = '<path d="m6 9 6 6 6-6"/>';
+      this.appendChild(svg);
     }
-  }
-
-  private get _open(): boolean {
-    if (!this.value) return false;
-    const gv = this.getAttribute('data-group-value') || '';
-    const type = this.getAttribute('data-group-type') || 'single';
-    if (type === 'multiple') return gv.split(',').includes(this.value);
-    return gv === this.value;
-  }
-
-  _syncChildren() {
-    const state = this._open ? 'open' : 'closed';
-    this.querySelectorAll(':scope > ui-accordion-trigger, :scope > ui-accordion-content').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-state', state);
-      (el as HTMLElement).setAttribute('data-item-value', this.value);
-    });
-  }
-
-  render() {
-    const state = this._open ? 'open' : 'closed';
-    return html`<div
-      data-slot="accordion-item"
-      data-state=${state}
-      class=${cn('border-b last:border-b-0')}
-    >${unsafeHTML(this._slot)}</div>`;
-  }
-}
-UiAccordionItem.register('ui-accordion-item');
-
-export class UiAccordionTrigger extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
     this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
   }
-  disconnectedCallback() {
-    super.disconnectedCallback();
+  disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', this._onKeyDown);
   }
-  _onClick = () => {
-    const value = this.getAttribute('data-item-value') || this.closest('ui-accordion-item')?.getAttribute('value') || '';
+  private _onClick = (): void => {
+    const item = this.closest('ui-accordion-item');
+    const value = item?.getAttribute('value');
     if (!value) return;
-    this.dispatchEvent(new CustomEvent('ui-accordion-toggle', { detail: { value }, bubbles: true }));
+    this.dispatchEvent(
+      new CustomEvent('ui-accordion-trigger-click', { detail: { value }, bubbles: true }),
+    );
   };
-  static get observedAttributes() {
-    return ['data-state'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name === 'data-state') this.requestUpdate();
-  }
-  render() {
-    const state = this.getAttribute('data-state') || 'closed';
-    return html`<h3 class="flex">
-      <button
-        type="button"
-        data-slot="accordion-trigger"
-        data-state=${state}
-        aria-expanded=${state === 'open' ? 'true' : 'false'}
-        class=${cn(
-          'flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180',
-        )}
-      >
-        <span class="flex-1">${unsafeHTML(this._slot)}</span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="pointer-events-none size-4 shrink-0 translate-y-0.5 text-muted-foreground transition-transform duration-200"
-        ><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-    </h3>`;
-  }
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      this._onClick();
+    }
+  };
 }
-UiAccordionTrigger.register('ui-accordion-trigger');
+defineElement('ui-accordion-trigger', UiAccordionTrigger);
 
-export class UiAccordionContent extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-  }
-  static get observedAttributes() {
-    return ['data-state'];
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
-    super.attributeChangedCallback?.(name, oldVal, newVal);
-    if (name === 'data-state') this.requestUpdate();
-  }
-  render() {
-    const state = this.getAttribute('data-state') || 'closed';
-    return html`<div
-      data-slot="accordion-content"
-      data-state=${state}
-      ?hidden=${state !== 'open'}
-      class="overflow-hidden text-sm data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
-    >
-      <div class=${cn('pt-0 pb-4')}>${unsafeHTML(this._slot)}</div>
-    </div>`;
+export class UiAccordionContent extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'accordion-content');
+    this.setAttribute('role', 'region');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(accordionContentClass(), userClass);
   }
 }
-UiAccordionContent.register('ui-accordion-content');
+defineElement('ui-accordion-content', UiAccordionContent);

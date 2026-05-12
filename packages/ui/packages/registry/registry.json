@@ -16,7 +16,7 @@
     { "name": "breadcrumb",      "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/breadcrumb.ts",      "type": "registry:ui" }] },
     { "name": "button",          "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/button.ts",          "type": "registry:ui" }] },
     { "name": "button-group",    "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/button-group.ts",    "type": "registry:ui" }] },
-    { "name": "calendar",        "type": "registry:ui", "dependencies": ["@webjskit/core", "date-fns"], "files": [{ "path": "components/calendar.ts",        "type": "registry:ui" }] },
+    { "name": "calendar",        "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/calendar.ts",        "type": "registry:ui" }] },
     { "name": "card",            "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/card.ts",            "type": "registry:ui" }] },
     { "name": "carousel",        "type": "registry:ui", "dependencies": ["@webjskit/core", "embla-carousel"], "files": [{ "path": "components/carousel.ts",        "type": "registry:ui" }] },
     { "name": "chart",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/chart.ts",           "type": "registry:ui" }] },
