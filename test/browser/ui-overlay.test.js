@@ -407,3 +407,148 @@ suite('ui-dropdown-menu', () => {
     root.remove();
   });
 });
+
+suite('ui-alert-dialog', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/alert-dialog.ts`);
+  });
+
+  test('trigger click opens via show(); content has role="alertdialog"', async () => {
+    const root = await mount(html`
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger><button>Delete</button></ui-alert-dialog-trigger>
+        <ui-alert-dialog-content>
+          <ui-alert-dialog-title>Are you sure?</ui-alert-dialog-title>
+          <ui-alert-dialog-cancel><button>Cancel</button></ui-alert-dialog-cancel>
+          <ui-alert-dialog-action><button>Delete</button></ui-alert-dialog-action>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
+    `);
+    const ad = root.querySelector('ui-alert-dialog');
+    root.querySelector('ui-alert-dialog-trigger').click();
+    await tick();
+    assert.ok(ad.hasAttribute('open'), 'host gets [open] attribute');
+    const content = ad.querySelector(':scope > ui-alert-dialog-content');
+    assert.equal(content.getAttribute('role'), 'alertdialog');
+    ad.hide();
+    root.remove();
+  });
+
+  test('cancel trigger closes the dialog (no escape close, unlike ui-dialog)', async () => {
+    const root = await mount(html`
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger><button>Delete</button></ui-alert-dialog-trigger>
+        <ui-alert-dialog-content>
+          <ui-alert-dialog-title>T</ui-alert-dialog-title>
+          <ui-alert-dialog-cancel><button>Cancel</button></ui-alert-dialog-cancel>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
+    `);
+    const ad = root.querySelector('ui-alert-dialog');
+    ad.show();
+    await tick();
+    root.querySelector('ui-alert-dialog-cancel').click();
+    await tick();
+    assert.equal(ad.hasAttribute('open'), false, 'cancel closes');
+    root.remove();
+  });
+
+  test('action trigger closes the dialog', async () => {
+    const root = await mount(html`
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger><button>X</button></ui-alert-dialog-trigger>
+        <ui-alert-dialog-content>
+          <ui-alert-dialog-action><button>Confirm</button></ui-alert-dialog-action>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
+    `);
+    const ad = root.querySelector('ui-alert-dialog');
+    ad.show();
+    await tick();
+    root.querySelector('ui-alert-dialog-action').click();
+    await tick();
+    assert.equal(ad.hasAttribute('open'), false);
+    root.remove();
+  });
+
+  test('content hidden when host has no [open] attribute', async () => {
+    const root = await mount(html`
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger><button>X</button></ui-alert-dialog-trigger>
+        <ui-alert-dialog-content>
+          <ui-alert-dialog-title>T</ui-alert-dialog-title>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
+    `);
+    const ad = root.querySelector('ui-alert-dialog');
+    const content = ad.querySelector(':scope > ui-alert-dialog-content');
+    assert.ok(content, 'content stays in DOM when closed');
+    assert.equal(getComputedStyle(content).display, 'none', 'CSS hides content when not [open]');
+    root.remove();
+  });
+});
+
+suite('ui-hover-card', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/hover-card.ts`);
+  });
+
+  test('hover-card is closed initially; data-state="closed"', async () => {
+    const root = await mount(html`
+      <ui-hover-card>
+        <ui-hover-card-trigger><span>Hover me</span></ui-hover-card-trigger>
+        <ui-hover-card-content>Profile preview</ui-hover-card-content>
+      </ui-hover-card>
+    `);
+    const hc = root.querySelector('ui-hover-card');
+    assert.equal(hc.hasAttribute('open'), false);
+    assert.equal(hc.getAttribute('data-state'), 'closed');
+    root.remove();
+  });
+
+  test('show() with open-delay=0 opens immediately on next macrotask', async () => {
+    // Default open-delay is 700ms — too long for a tick(). Set to 0 to
+    // make the setTimeout fire on the next macrotask.
+    const root = await mount(html`
+      <ui-hover-card open-delay="0" close-delay="0">
+        <ui-hover-card-trigger><span>x</span></ui-hover-card-trigger>
+        <ui-hover-card-content>preview</ui-hover-card-content>
+      </ui-hover-card>
+    `);
+    const hc = root.querySelector('ui-hover-card');
+    hc.show();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.ok(hc.hasAttribute('open'));
+    assert.equal(hc.getAttribute('data-state'), 'open');
+    hc.hide();
+    root.remove();
+  });
+
+  test('hide() closes after close-delay', async () => {
+    const root = await mount(html`
+      <ui-hover-card open-delay="0" close-delay="0">
+        <ui-hover-card-trigger><span>x</span></ui-hover-card-trigger>
+        <ui-hover-card-content>preview</ui-hover-card-content>
+      </ui-hover-card>
+    `);
+    const hc = root.querySelector('ui-hover-card');
+    hc.show();
+    await new Promise((r) => setTimeout(r, 5));
+    hc.hide();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(hc.hasAttribute('open'), false);
+    root.remove();
+  });
+
+  test('content has role="dialog" for screen-reader semantics', async () => {
+    const root = await mount(html`
+      <ui-hover-card>
+        <ui-hover-card-trigger><span>x</span></ui-hover-card-trigger>
+        <ui-hover-card-content>preview</ui-hover-card-content>
+      </ui-hover-card>
+    `);
+    const content = root.querySelector('ui-hover-card-content');
+    assert.equal(content.getAttribute('role'), 'dialog');
+    root.remove();
+  });
+});
