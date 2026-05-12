@@ -69,11 +69,11 @@ StudentCard.register('student-card');</pre>
     <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code> inside the constructor. Without <code>declare</code>, TypeScript emits a <code>student = undefined</code> class-field initializer that runs <em>after</em> <code>super()</code> and overwrites that accessor. <code>declare</code> tells TS "type this field for me, but don't emit any runtime assignment."</p>
 
     <h2>Layer 2 — Template-literal intelligence (bundled)</h2>
-    <p>webjs's <code>html\`…\`</code> is Lit-compatible. <code>@webjskit/ts-plugin</code> bundles <a href="https://www.npmjs.com/package/ts-lit-plugin" target="_blank">ts-lit-plugin</a> as a runtime dependency and loads it programmatically inside its factory, so once you install <code>@webjskit/ts-plugin</code> you also get:</p>
+    <p><code>@webjskit/ts-plugin</code> bundles <a href="https://www.npmjs.com/package/ts-lit-plugin" target="_blank">ts-lit-plugin</a> as a runtime dependency and loads it programmatically inside its factory, so once you install <code>@webjskit/ts-plugin</code> you also get:</p>
     <ul>
       <li><strong>Type-checking</strong> attribute / property values — <code>&lt;student-card student=\${42}&gt;</code> is flagged because <code>42</code> isn't a <code>Student</code>.</li>
-      <li><strong>Unknown-tag warnings</strong> when you typo a built-in or Lit-style element name.</li>
-      <li><strong>Go-to-definition</strong> for tags ts-lit-plugin already knows about (Lit's <code>@customElement</code> decorator + <code>HTMLElementTagNameMap</code> augmentations).</li>
+      <li><strong>Unknown-tag warnings</strong> when you typo a built-in or decorator-registered element name.</li>
+      <li><strong>Go-to-definition</strong> for tags ts-lit-plugin already knows about (decorator-registered elements + <code>HTMLElementTagNameMap</code> augmentations).</li>
       <li><strong>Rename-symbol</strong> across template usages.</li>
     </ul>
     <p>By itself, <code>ts-lit-plugin</code> doesn't recognise webjs components — they register at runtime via <code>Class.register('tag')</code>, not via decorator or static map — so it would flag every webjs element as "Unknown tag". Layer 3 (next section) silences those false positives and adds webjs-specific completions. Because <code>@webjskit/ts-plugin</code> owns the bundling, both layers ship together; you don't install or configure <code>ts-lit-plugin</code> directly.</p>
@@ -153,7 +153,7 @@ return {
     <p>tsserver loads plugins on startup, so an editor restart is required to pick up new plugin code. In Neovim: <code>:LspRestart</code>. In VS Code: <code>Cmd/Ctrl+Shift+P</code> → "TypeScript: Restart TS Server".</p>
 
     <h2>Optional: typed DOM queries</h2>
-    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a> — the same one <a href="https://lit.dev" target="_blank">Lit</a> uses. With <code>@webjskit/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates; the augmentation is purely about typing DOM-query call sites.</p>
+    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a>. With <code>@webjskit/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates; the augmentation is purely about typing DOM-query call sites.</p>
 
     <h2>Editor actions — quick reference</h2>
     <table>
