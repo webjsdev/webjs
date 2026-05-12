@@ -19,6 +19,122 @@ import { existsSync } from 'node:fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = resolve(__dirname, '..', 'templates');
 
+// Root of the @webjskit/ui registry workspace. We read component sources
+// directly from disk at create time so the scaffolded app boots ready for
+// `webjs ui add` without an HTTP round-trip during scaffolding.
+//
+// Layout in the monorepo:
+//   packages/cli/lib/create.js                       ← __dirname
+//   packages/ui/packages/registry/components/*.ts
+//   packages/ui/packages/registry/lib/utils.ts
+//   packages/ui/packages/registry/themes/index.css
+const UI_REGISTRY_ROOT = resolve(
+  __dirname, '..', '..', 'ui', 'packages', 'registry',
+);
+
+/**
+ * Read a single @webjskit/ui registry component, rewrite its relative import
+ * of `../lib/utils.ts` so it resolves correctly when written to
+ * `components/ui/<name>.ts` in the scaffolded app (which puts utils at
+ * `lib/utils.ts`, i.e. two levels up), and return the rewritten source.
+ *
+ * @param {string} name  component name without `.ts` (e.g. 'button')
+ * @returns {Promise<string|null>} source or null if not found
+ */
+async function readUiComponent(name) {
+  const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
+  if (!existsSync(src)) return null;
+  const raw = await readFile(src, 'utf8');
+  // The registry source lives at <registry>/components/<x>.ts and imports
+  // its sibling utils via '../lib/utils.ts'. Once copied to the user's
+  // project at components/ui/<x>.ts, the equivalent path is two-up:
+  // '../../lib/utils.ts'. Same rewrite for the unquoted form.
+  return raw
+    .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+}
+
+/**
+ * Copy a list of @webjskit/ui registry components into the scaffolded app
+ * under `components/ui/`. Silently skips any name that isn't in the registry.
+ *
+ * @param {string} appDir  destination app root
+ * @param {string[]} names list of component file basenames (without `.ts`)
+ */
+async function copyUiComponents(appDir, names) {
+  const uiDir = join(appDir, 'components', 'ui');
+  await mkdir(uiDir, { recursive: true });
+  for (const n of names) {
+    const content = await readUiComponent(n);
+    if (content == null) continue;
+    await writeFile(join(uiDir, `${n}.ts`), content);
+  }
+}
+
+/**
+ * Write `lib/utils.ts` (the `cn()` helper) and `components.json` so the
+ * scaffolded app is pre-initialised for `webjs ui add`. Reads `lib/utils.ts`
+ * verbatim from the registry source so we never drift.
+ *
+ * @param {string} appDir
+ */
+async function writeUiBootstrap(appDir) {
+  // 1) lib/utils.ts — the cn() helper
+  const utilsSrc = join(UI_REGISTRY_ROOT, 'lib', 'utils.ts');
+  if (existsSync(utilsSrc)) {
+    const content = await readFile(utilsSrc, 'utf8');
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(join(appDir, 'lib', 'utils.ts'), content);
+  }
+
+  // 2) components.json — the same shape `webjsui init` writes for webjs
+  // projects (see packages/ui/src/utils/detect-project.js).
+  const componentsJson = {
+    $schema: 'https://ui.webjs.com/schema.json',
+    style: 'default',
+    tailwind: {
+      css: 'app/globals.css',
+      baseColor: 'neutral',
+      cssVariables: true,
+    },
+    aliases: {
+      components: 'components',
+      utils: 'lib/utils',
+      ui: 'components/ui',
+      lib: 'lib',
+    },
+    iconLibrary: 'lucide',
+  };
+  await writeFile(
+    join(appDir, 'components.json'),
+    JSON.stringify(componentsJson, null, 2) + '\n',
+  );
+
+  // 3) app/globals.css — copy the neutral theme verbatim. components.json
+  // references this path; future `webjs ui add` calls append to it.
+  const themeSrc = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
+  if (existsSync(themeSrc)) {
+    const css = await readFile(themeSrc, 'utf8');
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(join(appDir, 'app', 'globals.css'), css);
+  }
+}
+
+/**
+ * Read the shadcn theme CSS so we can inline it into the layout's
+ * `<style type="text/tailwindcss">` block. The Tailwind browser runtime
+ * picks up inline `<style type="text/tailwindcss">` content, so the theme
+ * tokens (`--color-primary`, `--color-card`, …) the registry components
+ * consume are available at runtime without a build step.
+ *
+ * @returns {Promise<string>} theme CSS source, or '' if registry missing
+ */
+async function readThemeCss() {
+  const src = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
+  if (!existsSync(src)) return '';
+  return await readFile(src, 'utf8');
+}
+
 /**
  * @param {string} name  App directory name
  * @param {string} cwd   Current working directory
@@ -326,9 +442,44 @@ export type ActionResult<T> =
       await cp(uiSrc, join(utilsDir, 'ui.ts'));
     }
 
+    // Pre-initialise @webjskit/ui so the scaffold boots ready for
+    // `webjs ui add <name>`: writes components.json + lib/utils.ts +
+    // app/globals.css (the shadcn theme).
+    await writeUiBootstrap(appDir);
+
+    // Copy the standard ui-* component kit the scaffold's example pages
+    // use. Sources are read from packages/ui/packages/registry/ in this
+    // monorepo. Users can `webjs ui add <name>` for anything else.
+    await copyUiComponents(appDir, [
+      'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
+    ]);
+
+    // The shadcn theme tokens (`--color-primary`, `--color-card`, …) the
+    // ui-* components consume. We read the registry's themes/index.css at
+    // create time and inline it into the layout's
+    // `<style type="text/tailwindcss">` block so the Tailwind browser
+    // runtime picks it up. Same content also lives at app/globals.css for
+    // `webjsui` tooling.
+    const SHADCN_THEME = (await readThemeCss())
+      // Escape backticks + ${} so the CSS survives interpolation into the
+      // layout's template literal below.
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$\{/g, '\\${');
+
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html } from '@webjskit/core';
 import '@webjskit/core/client-router';
 import '../components/theme-toggle.ts';
+// Register the ui-* components used by the scaffold's example pages.
+// Each import is a side-effect — the module calls Class.register('ui-…')
+// at load time. Add more here as you 'webjs ui add <name>' them.
+import '../components/ui/button.ts';
+import '../components/ui/card.ts';
+import '../components/ui/alert.ts';
+import '../components/ui/badge.ts';
+import '../components/ui/separator.ts';
+import '../components/ui/label.ts';
+import '../components/ui/input.ts';
 
 /**
  * Root layout — globals + chrome.
@@ -359,6 +510,16 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <script src="/public/tailwind-browser.js"></script>
+    <!--
+      @webjskit/ui theme — shadcn-style tokens (--color-primary,
+      --color-card, --radius, etc.) the ui-* components consume.
+      The same content is also at app/globals.css; we inline it here so
+      the Tailwind browser runtime resolves the tokens without a build step.
+      Edit base palette via the :root / .dark blocks below.
+    -->
+    <style type="text/tailwindcss">
+${SHADCN_THEME}
+    </style>
     <style type="text/tailwindcss">
       @theme {
         --color-fg:            var(--fg);
@@ -464,6 +625,8 @@ export default function RootLayout({ children }: { children: unknown }) {
 
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
 import { rubric, displayH1, accentLink } from './_utils/ui.ts';
+// ui-* registrations come transitively from the root layout's imports —
+// no need to re-import them on each page.
 
 export const metadata = {
   title: '${name} — built with webjs',
@@ -474,14 +637,41 @@ export default function Home() {
     <section class="mb-18">
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-accent italic">${name}</span>.\`)}
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0">
+      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
         Edit <code class="font-mono text-[0.9em]">app/page.ts</code> to get started.
         Run \${accentLink('#', 'webjs test')} to run tests and
         \${accentLink('#', 'webjs check')} to validate conventions.
       </p>
+      <div class="flex gap-3 items-center">
+        <ui-button variant="default">Get started</ui-button>
+        <ui-button variant="outline">View docs</ui-button>
+        <ui-badge variant="secondary">v0.1</ui-badge>
+      </div>
     </section>
 
-    <section class="mt-18 pt-6 border-t border-border">
+    <ui-card class="block mb-12">
+      <ui-card-header>
+        <ui-card-title>Web Components + Server Actions</ui-card-title>
+        <ui-card-description>
+          Drop a custom element anywhere. Call a server action like a local
+          function — webjs rewrites the import into a typed RPC stub.
+        </ui-card-description>
+      </ui-card-header>
+      <ui-card-content>
+        <ui-alert>
+          <ui-alert-title>Shadcn-style component kit included</ui-alert-title>
+          <ui-alert-description>
+            button, card, alert, badge, separator, label, input are already
+            in <code class="font-mono text-[0.9em]">components/ui/</code>.
+            Add more with <code class="font-mono text-[0.9em]">webjs ui add &lt;name&gt;</code>.
+          </ui-alert-description>
+        </ui-alert>
+      </ui-card-content>
+    </ui-card>
+
+    <ui-separator class="block my-10"></ui-separator>
+
+    <section class="mt-10">
       <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-2">Light DOM + Tailwind</h2>
       <p class="text-fg-muted text-sm m-0 mb-4">
         Components render into light DOM by default. Tailwind utility classes
@@ -596,27 +786,43 @@ ThemeToggle.register('theme-toggle');
     app/layout.ts, page.ts, login/, signup/
     app/dashboard/{page,settings,middleware}.ts  ← protected
     app/api/auth/[...path]/route.ts      ← auth API
-    modules/auth/{actions,queries,types.ts}
-    lib/{auth,prisma,password}.ts
-    prisma/schema.prisma                 ← User model
+    app/globals.css                      ← @webjskit/ui theme tokens
+    components.json                      ← preconfigured for \`webjs ui add\`
+    components/ui/{button,card,alert,badge,separator,label,input,
+                    dialog,form,field,switch,checkbox}.ts
     components/theme-toggle.ts
+    modules/auth/{actions,queries,types.ts}
+    lib/{auth,prisma,password,utils}.ts  ← utils.ts is the cn() helper
+    prisma/schema.prisma                 ← User model
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   } else {
     console.log(`  ${name}/
     app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
     app/_utils/ui.ts             ← JS helpers for repeated class bundles
-    public/tailwind-browser.js   ← Tailwind runtime
+    app/globals.css              ← @webjskit/ui theme tokens
+    components.json              ← preconfigured for \`webjs ui add\`
+    components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
+    lib/utils.ts                 ← cn() helper for ui-* components
+    public/tailwind-browser.js   ← Tailwind runtime
     modules/
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
+  // Post-scaffold guidance. The full-stack and saas templates ship with
+  // @webjskit/ui already initialised (components.json, lib/utils.ts, the
+  // standard kit under components/ui/), so the user only runs `webjs dev`.
+  // The api template has no UI; we only mention `webjs ui` in case the
+  // user later adds one.
+  const uiNote = isApi
+    ? `# If you later add a UI to this API project:
+  #   webjs ui init && webjs ui add button card dialog`
+    : `webjs ui add <name>     # optional — add more ui-* components later`;
   console.log(`Next steps:
   cd ${name}
   npm install${isSaas ? '\n  npx prisma migrate dev --name init' : ''}
-  webjs ui init           # initialise @webjskit/ui (writes components.json + lib/utils.ts + theme)
-  webjs ui add button card dialog input label form    # copy the standard component kit
+  ${uiNote}
   webjs dev
 
 AI-driven development (enforced for all AI agents):

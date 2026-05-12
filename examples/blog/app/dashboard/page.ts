@@ -1,5 +1,7 @@
 import { html, repeat } from '@webjskit/core';
 import '../../components/muted-text.ts';
+import '../../components/ui/button.ts';
+import '../../components/ui/card.ts';
 import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
 import { rubric, clampH1, stat, accentLink } from '../_utils/ui.ts';
@@ -19,27 +21,34 @@ export default async function Dashboard() {
     </section>
 
     <div class="flex gap-3 mb-18">
-      <a href="/dashboard/posts/new" class="inline-flex items-center gap-1.5 px-6 py-3 font-sans font-semibold text-[13px] leading-none tracking-[0.02em] rounded-full no-underline transition-[background,border-color,color] duration-fast bg-accent text-accent-fg hover:bg-accent-hover">+ New post</a>
-      <a href="#" data-logout class="inline-flex items-center gap-1.5 px-6 py-3 font-sans font-semibold text-[13px] leading-none tracking-[0.02em] rounded-full no-underline transition-[background,border-color,color] duration-fast bg-transparent border border-border-strong text-fg-muted hover:text-fg hover:border-fg-muted">Log out</a>
+      <a href="/dashboard/posts/new">
+        <ui-button variant="default" size="lg">+ New post</ui-button>
+      </a>
+      <ui-button data-logout variant="outline" size="lg">Log out</ui-button>
     </div>
 
-    <div class="flex items-baseline justify-between mb-4">
-      <h2 class="font-serif text-[1.5rem] font-bold tracking-[-0.02em] m-0">Your posts</h2>
-      ${stat(`${mine.length.toString().padStart(2, '0')} published`)}
-    </div>
-
-    ${mine.length === 0
-      ? html`<div class="py-12 text-center border border-dashed border-border rounded-[14px] text-fg-muted italic font-serif text-[15px] leading-[1.6]">
-          You haven't published anything yet.
-          ${accentLink('/dashboard/posts/new', 'Write your first post →')}
-        </div>`
-      : html`<ul class="list-none p-0 m-0">
-          ${repeat(mine, (p) => p.id, (p) => html`
-            <li class="flex items-baseline justify-between gap-4 py-4 border-b border-border first:border-t">
-              <a href="/blog/${p.slug}" class="font-serif text-[1.1rem] no-underline text-fg font-semibold tracking-[-0.01em] transition-colors duration-fast hover:text-accent">${p.title}</a>
-              <muted-text>${new Date(p.createdAt).toLocaleDateString()}</muted-text>
-            </li>`)}
-        </ul>`}
+    <ui-card>
+      <ui-card-header>
+        <div class="flex items-baseline justify-between">
+          <ui-card-title class="font-serif text-[1.5rem] font-bold tracking-[-0.02em]">Your posts</ui-card-title>
+          ${stat(`${mine.length.toString().padStart(2, '0')} published`)}
+        </div>
+      </ui-card-header>
+      <ui-card-content>
+        ${mine.length === 0
+          ? html`<div class="py-12 text-center border border-dashed border-border rounded-[14px] text-fg-muted italic font-serif text-[15px] leading-[1.6]">
+              You haven't published anything yet.
+              ${accentLink('/dashboard/posts/new', 'Write your first post →')}
+            </div>`
+          : html`<ul class="list-none p-0 m-0">
+              ${repeat(mine, (p) => p.id, (p) => html`
+                <li class="flex items-baseline justify-between gap-4 py-4 border-b border-border first:border-t">
+                  <a href="/blog/${p.slug}" class="font-serif text-[1.1rem] no-underline text-fg font-semibold tracking-[-0.01em] transition-colors duration-fast hover:text-accent">${p.title}</a>
+                  <muted-text>${new Date(p.createdAt).toLocaleDateString()}</muted-text>
+                </li>`)}
+            </ul>`}
+      </ui-card-content>
+    </ui-card>
 
     <script type="module">
       document.querySelector('[data-logout]')?.addEventListener('click', async (e) => {

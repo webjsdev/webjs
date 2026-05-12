@@ -133,6 +133,25 @@ export class UiCalendar extends WebComponent {
 
   state: { focused: Date | null; hover: Date | null } = { focused: null, hover: null };
 
+  /**
+   * Returns true if the host element resolves to right-to-left direction.
+   * Reads `getComputedStyle().direction` so a `dir="rtl"` on any ancestor
+   * (e.g. `<html dir="rtl">`) is respected — not just the host's own attr.
+   * Falls back to checking the `dir` attribute on the host or `document`
+   * for environments where `getComputedStyle` isn't reliable (linkedom).
+   */
+  _isRtl(): boolean {
+    try {
+      if (typeof getComputedStyle === 'function') {
+        const dir = getComputedStyle(this).direction;
+        if (dir === 'rtl' || dir === 'ltr') return dir === 'rtl';
+      }
+    } catch { /* SSR / linkedom — fall through */ }
+    if (this.getAttribute('dir') === 'rtl') return true;
+    if (typeof document !== 'undefined' && document.documentElement?.getAttribute('dir') === 'rtl') return true;
+    return false;
+  }
+
   constructor() {
     super();
     this.mode = 'single';
@@ -250,10 +269,12 @@ export class UiCalendar extends WebComponent {
     if (this.view !== 'month') return;
     let f = this.state.focused ?? this._monthDate();
     const wasFocused = this.state.focused != null;
+    const rtl = this._isRtl();
     let handled = true;
     switch (e.key) {
-      case 'ArrowLeft':  f = addDays(f, -1); break;
-      case 'ArrowRight': f = addDays(f, 1); break;
+      // RTL flips the horizontal arrows so they follow visual direction.
+      case 'ArrowLeft':  f = addDays(f, rtl ? 1 : -1); break;
+      case 'ArrowRight': f = addDays(f, rtl ? -1 : 1); break;
       case 'ArrowUp':    f = addWeeks(f, -1); break;
       case 'ArrowDown':  f = addWeeks(f, 1); break;
       case 'Home':       f = startOfWeek(f, { weekStartsOn: this.weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 }); break;
@@ -303,9 +324,11 @@ export class UiCalendar extends WebComponent {
   // ---------- render ----------
 
   render() {
+    const rtl = this._isRtl();
     return html`
       <div
         data-slot="calendar"
+        data-direction=${rtl ? 'rtl' : 'ltr'}
         tabindex="0"
         @keydown=${this._onKeyDown}
         class=${cn('bg-background p-3 inline-block rounded-md select-none outline-none')}
@@ -318,12 +341,18 @@ export class UiCalendar extends WebComponent {
   }
 
   _renderHeader(label: string, prev: () => void, next: () => void, headerClickable = true) {
+    const rtl = this._isRtl();
+    // Visual "Previous" sits at the start (left in LTR, right in RTL). We flip
+    // the chevron via scaleX(-1) instead of swapping SVG paths so a single icon
+    // works for both directions.
+    const chevronFlip = rtl ? 'rotate-180' : '';
     return html`
       <div class="flex items-center justify-between mb-4">
         <button
           type="button"
           aria-label="Previous"
-          class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground')}
+          data-chevron="prev"
+          class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground', chevronFlip)}
           @click=${prev}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -341,7 +370,8 @@ export class UiCalendar extends WebComponent {
         <button
           type="button"
           aria-label="Next"
-          class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground')}
+          data-chevron="next"
+          class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground', chevronFlip)}
           @click=${next}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
@@ -367,12 +397,14 @@ export class UiCalendar extends WebComponent {
     const gridStart = startOfWeek(monthStart, { weekStartsOn: ws });
     const gridEnd = endOfWeek(monthEnd, { weekStartsOn: ws });
     const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+    const rtl = this._isRtl();
+    const chevronFlip = rtl ? 'rotate-180' : '';
 
     return html`
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           ${showPrev
-            ? html`<button type="button" aria-label="Previous month" class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground')} @click=${() => this._shiftMonth(-1)}>
+            ? html`<button type="button" aria-label="Previous month" data-chevron="prev" class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground', chevronFlip)} @click=${() => this._shiftMonth(-1)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>`
             : html`<span class="size-7"></span>`}
@@ -382,7 +414,7 @@ export class UiCalendar extends WebComponent {
             class=${cn('text-sm font-medium px-2 py-1 rounded-md hover:bg-accent hover:text-accent-foreground')}
           >${this._monthLabel(monthBase)}</button>
           ${showNext
-            ? html`<button type="button" aria-label="Next month" class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground')} @click=${() => this._shiftMonth(1)}>
+            ? html`<button type="button" aria-label="Next month" data-chevron="next" class=${cn('inline-flex size-7 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground', chevronFlip)} @click=${() => this._shiftMonth(1)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </button>`
             : html`<span class="size-7"></span>`}

@@ -1,8 +1,23 @@
 import { WebComponent, html } from '@webjskit/core';
+import '../../../components/ui/button.ts';
+import '../../../components/ui/input.ts';
+import '../../../components/ui/label.ts';
+import '../../../components/ui/card.ts';
+import '../../../components/ui/alert.ts';
 
 /**
- * `<auth-forms>` — tabbed sign-in / sign-up, 2026 spotlight style.
- * Pill-switcher, serif heading, mono field labels, amber CTA.
+ * `<auth-forms>` — tabbed sign-in / sign-up.
+ *
+ * Migrated to `@webjskit/ui` primitives:
+ *  - <ui-card> + <ui-card-header>/<ui-card-content> wraps the whole form
+ *  - <ui-label> + <ui-input> replaces hand-rolled label/input pairs
+ *  - <ui-button> replaces the submit button
+ *  - <ui-alert variant="destructive"> shows server-side errors
+ *
+ * The tab switcher (Sign in / Create account) is intentionally kept as
+ * a custom pill control — `<ui-tabs>` is structured for separate tab
+ * panels, whereas here both tabs share the same form fields with only
+ * a `mode` toggle, so the custom switcher remains a better fit.
  */
 type Mode = 'login' | 'signup';
 type State = { busy: boolean; error: string | null };
@@ -51,45 +66,52 @@ export class AuthForms extends WebComponent {
   render() {
     const mode = this.mode;
     const { busy, error } = this.state;
+    const submitLabel = busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account');
     return html`
-      <div class="p-7 px-6 bg-bg-elev border border-border rounded-2xl shadow">
-        <div class="grid grid-cols-2 p-1 mb-5 rounded-full bg-bg-subtle border border-border" role="tablist">
-          <button role="tab"
-                  class="${mode === 'login'
-                    ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
-                    : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
-                  @click=${() => { this.mode = 'login'; this.setState({ error: null }); }}>Sign in</button>
-          <button role="tab"
-                  class="${mode === 'signup'
-                    ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
-                    : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
-                  @click=${() => { this.mode = 'signup'; this.setState({ error: null }); }}>Create account</button>
-        </div>
-        <form class="grid gap-4" @submit=${(e) => this.onSubmit(e)}>
-          ${mode === 'signup'
-            ? html`<label class="grid gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">Name (optional)
-                <input class="font-sans text-[15px] leading-normal py-3 px-4 rounded border border-border-strong bg-bg text-fg transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
-                       name="name" autocomplete="name" />
-              </label>`
-            : ''}
-          <label class="grid gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">Email
-            <input class="font-sans text-[15px] leading-normal py-3 px-4 rounded border border-border-strong bg-bg text-fg transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
-                   name="email" type="email" autocomplete="email" required />
-          </label>
-          <label class="grid gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">Password
-            <input class="font-sans text-[15px] leading-normal py-3 px-4 rounded border border-border-strong bg-bg text-fg transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
-                   name="password" type="password"
-                   autocomplete=${mode === 'login' ? 'current-password' : 'new-password'}
-                   minlength="8" required />
-          </label>
-          <button type="submit"
-                  class="mt-2 font-sans text-[13px] font-semibold tracking-[0.02em] py-3 rounded-full border-0 bg-accent text-accent-fg cursor-pointer transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-progress"
-                  ?disabled=${busy}>
-            ${busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account')}
-          </button>
-          ${error ? html`<p class="m-0 p-3 rounded bg-[color-mix(in_oklch,var(--bg-elev)_80%,var(--accent))] text-accent font-mono text-[13px] leading-snug">${error}</p>` : ''}
-        </form>
-      </div>
+      <ui-card>
+        <ui-card-header>
+          <div class="grid grid-cols-2 p-1 rounded-full bg-bg-subtle border border-border" role="tablist">
+            <button role="tab"
+                    class="${mode === 'login'
+                      ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
+                      : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
+                    @click=${() => { this.mode = 'login'; this.setState({ error: null }); }}>Sign in</button>
+            <button role="tab"
+                    class="${mode === 'signup'
+                      ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
+                      : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
+                    @click=${() => { this.mode = 'signup'; this.setState({ error: null }); }}>Create account</button>
+          </div>
+        </ui-card-header>
+        <ui-card-content>
+          <form class="grid gap-4" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
+            ${mode === 'signup'
+              ? html`<div class="grid gap-1.5">
+                  <ui-label for="auth-name">Name (optional)</ui-label>
+                  <ui-input id="auth-name" name="name" autocomplete="name"></ui-input>
+                </div>`
+              : ''}
+            <div class="grid gap-1.5">
+              <ui-label for="auth-email">Email</ui-label>
+              <ui-input id="auth-email" type="email" name="email" autocomplete="email" required></ui-input>
+            </div>
+            <div class="grid gap-1.5">
+              <ui-label for="auth-password">Password</ui-label>
+              <ui-input id="auth-password"
+                        type="password"
+                        name="password"
+                        autocomplete=${mode === 'login' ? 'current-password' : 'new-password'}
+                        required></ui-input>
+            </div>
+            <ui-button type="submit" variant="default" ?disabled=${busy} class="mt-2">${submitLabel}</ui-button>
+            ${error
+              ? html`<ui-alert variant="destructive">
+                  <ui-alert-description>${error}</ui-alert-description>
+                </ui-alert>`
+              : ''}
+          </form>
+        </ui-card-content>
+      </ui-card>
     `;
   }
 }
