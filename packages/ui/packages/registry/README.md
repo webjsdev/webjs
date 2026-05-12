@@ -14,9 +14,15 @@ demand and serves it at `https://ui.webjs.dev/r/<name>.json`, which the
 ```
 components/        — one .ts per shadcn component (web component port, light DOM + Tailwind)
 lib/               — shared lib code shipped into user projects (utils.ts → cn)
-themes/            — theme CSS + base-colour palettes (neutral, stone, zinc, …)
+themes/
+  index.css        — neutral @theme block + CSS variables (light + dark defaults)
+  base-colors.js   — per-base-colour overrides (stone, zinc, mauve, olive, mist, taupe) + mergeThemeCss
 registry.json      — manifest read by the website composer at request time
 ```
+
+Only `theme-neutral` is in `registry.json`. The other 6 base colours are
+synthesized by the composer at request time — neutral CSS + per-colour
+overrides → merged CSS, same `files[]` shape.
 
 ## Wire endpoints
 

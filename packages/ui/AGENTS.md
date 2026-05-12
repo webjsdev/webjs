@@ -98,7 +98,8 @@ packages/ui/
     components/                   .ts files, one per shadcn-equivalent component
     lib/utils.ts                  cn() + Base + defineElement + layout/typography helpers
     themes/
-      index.css                   @theme block + CSS variables (light + dark)
+      index.css                   @theme block + CSS variables (light + dark, neutral defaults)
+      base-colors.js              per-base-colour overrides (stone/zinc/mauve/olive/mist/taupe) + mergeThemeCss
     registry.json                 manifest (item names + types + file paths + deps)
 
   packages/website/               the registry HTTP host + docs (internal)
@@ -256,8 +257,16 @@ npm run ui:dev                       # serve the registry website on :5001
 
 **No registry build step.** Registry JSON is composed on demand by the
 website's route handlers (see `app/_lib/registry.server.ts`). Source of
-truth is `packages/registry/components/*.ts` + `registry.json`. Cached
-in memory after first request.
+truth is `packages/registry/components/*.ts` + `registry.json` +
+`themes/base-colors.js`. Cached in memory after first request.
+
+Theme synthesis: only `theme-neutral` is declared in `registry.json`
+(canonical CSS lives at `themes/index.css`). The other 6 base colours —
+`theme-stone`, `theme-zinc`, `theme-mauve`, `theme-olive`, `theme-mist`,
+`theme-taupe` — are synthesized on demand by merging per-colour
+overrides from `themes/base-colors.js` into the neutral CSS. All 7
+themes return the same `files: [{ target: 'app/globals.css', content }]`
+shape so `webjsui init --base-color <name>` works uniformly.
 
 ## Deferred to v2 (not in the registry)
 
