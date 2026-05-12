@@ -1,7 +1,12 @@
 import { html, repeat } from '@webjskit/core';
 import '../../components/muted-text.ts';
-import '../../components/ui/button.ts';
-import '../../components/ui/card.ts';
+import { buttonClass } from '../../components/ui/button.ts';
+import {
+  cardClass,
+  cardHeaderClass,
+  cardTitleClass,
+  cardContentClass,
+} from '../../components/ui/card.ts';
 import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
 import { rubric, clampH1, stat, accentLink } from '../_utils/ui.ts';
@@ -21,20 +26,18 @@ export default async function Dashboard() {
     </section>
 
     <div class="flex gap-3 mb-18">
-      <a href="/dashboard/posts/new">
-        <ui-button variant="default" size="lg">+ New post</ui-button>
-      </a>
-      <ui-button data-logout variant="outline" size="lg">Log out</ui-button>
+      <a class=${buttonClass({ size: 'lg' })} href="/dashboard/posts/new">+ New post</a>
+      <button data-logout class=${buttonClass({ variant: 'outline', size: 'lg' })}>Log out</button>
     </div>
 
-    <ui-card>
-      <ui-card-header>
+    <div class=${cardClass()}>
+      <div class=${cardHeaderClass()}>
         <div class="flex items-baseline justify-between">
-          <ui-card-title class="font-serif text-[1.5rem] font-bold tracking-[-0.02em]">Your posts</ui-card-title>
+          <h3 class="${cardTitleClass()} font-serif text-[1.5rem] font-bold tracking-[-0.02em]">Your posts</h3>
           ${stat(`${mine.length.toString().padStart(2, '0')} published`)}
         </div>
-      </ui-card-header>
-      <ui-card-content>
+      </div>
+      <div class=${cardContentClass()}>
         ${mine.length === 0
           ? html`<div class="py-12 text-center border border-dashed border-border rounded-[14px] text-fg-muted italic font-serif text-[15px] leading-[1.6]">
               You haven't published anything yet.
@@ -47,8 +50,8 @@ export default async function Dashboard() {
                   <muted-text>${new Date(p.createdAt).toLocaleDateString()}</muted-text>
                 </li>`)}
             </ul>`}
-      </ui-card-content>
-    </ui-card>
+      </div>
+    </div>
 
     <script type="module">
       document.querySelector('[data-logout]')?.addEventListener('click', async (e) => {
