@@ -220,6 +220,12 @@ async function renderChain(route, ctx, dev, suspenseCtx) {
 async function collectMetadata(route, ctx, dev) {
   /** @type {Record<string, any>} */
   let meta = {};
+  // Carry the title template forward across layers. Once an outer layout
+  // sets `title: { template, default }`, every deeper layer that supplies
+  // a plain string title gets it transformed via the template — matching
+  // Next.js App Router semantics.
+  /** @type {string | null} */
+  let titleTemplate = null;
   for (const file of route.metadataFiles) {
     try {
       const mod = await loadModule(file, dev);
@@ -229,7 +235,50 @@ async function collectMetadata(route, ctx, dev) {
       } else if (mod.metadata) {
         m = mod.metadata;
       }
-      if (m && typeof m === 'object') meta = { ...meta, ...m };
+      // Next.js 14+ split `viewport` out of metadata into its own export
+      // (with `themeColor`, `colorScheme`). We support both: the new
+      // `export const viewport = {…}` shape merges into metadata.viewport
+      // as a string at emit time, and existing `metadata.viewport` keeps
+      // working. Likewise for `themeColor` and `colorScheme`.
+      let vp = null;
+      if (typeof mod.generateViewport === 'function') {
+        vp = await mod.generateViewport(ctx);
+      } else if (mod.viewport) {
+        vp = mod.viewport;
+      }
+      if (vp && typeof vp === 'object') {
+        m = { ...(m || {}), _viewport: { ...(m && m._viewport), ...vp } };
+        // Allow `themeColor` / `colorScheme` to live on the viewport export.
+        if (typeof vp.themeColor === 'string' && !(m && m.themeColor)) {
+          m.themeColor = vp.themeColor;
+        }
+        if (typeof vp.colorScheme === 'string') m.colorScheme = vp.colorScheme;
+      }
+      if (!m || typeof m !== 'object') continue;
+      // Pre-resolve the title for this layer using the inherited template.
+      const resolved = { ...m };
+      if (m.title !== undefined) {
+        const t = m.title;
+        if (typeof t === 'string') {
+          resolved.title = titleTemplate ? titleTemplate.replace('%s', t) : t;
+        } else if (t && typeof t === 'object') {
+          // { template, default, absolute }: `absolute` overrides everything;
+          // `template` is captured for deeper layers; `default` is the value
+          // used when no deeper layer supplies a plain title string.
+          if (typeof t.template === 'string') titleTemplate = t.template;
+          if (typeof t.absolute === 'string') {
+            resolved.title = t.absolute;
+            // `absolute` does NOT clear the template — Next.js propagates
+            // it for deeper segments below, but the *current* segment is
+            // rendered absolute.
+          } else if (typeof t.default === 'string') {
+            resolved.title = t.default;
+          } else {
+            delete resolved.title;
+          }
+        }
+      }
+      meta = { ...meta, ...resolved };
     } catch {
       // ignore: metadata collection never fails the request
     }
@@ -499,13 +548,231 @@ function wrapHead(opts) {
 
   const m = opts.metadata || {};
   const metaTags = [];
+  // linkTags is populated by both the metadata emission below (icons,
+  // alternates, archives, etc.) AND by the preload block further down.
+  // Hoist the declaration so the metadata block can push into it.
+  const linkTags = [];
+
+  // Tiny URL resolver against metadataBase. If metadataBase is set and a
+  // value looks like a relative URL (no scheme, no `//` prefix), resolve
+  // it. Otherwise return as-is. Used by og:image, twitter:image,
+  // alternates.canonical / languages / media.
+  const base = typeof m.metadataBase === 'string' ? m.metadataBase : '';
+  /** @param {unknown} v */
+  const absUrl = (v) => {
+    const s = String(v);
+    if (!base) return s;
+    if (/^https?:\/\//i.test(s) || s.startsWith('//') || s.startsWith('data:')) return s;
+    try {
+      return new URL(s, base).toString();
+    } catch {
+      return s;
+    }
+  };
+
   if (m.description) metaTags.push(`<meta name="description" content="${escapeAttr(m.description)}">`);
-  if (m.viewport) metaTags.push(`<meta name="viewport" content="${escapeAttr(m.viewport)}">`);
-  else metaTags.push(`<meta name="viewport" content="width=device-width,initial-scale=1">`);
+
+  // viewport: support string form (legacy), `metadata.viewport` object form,
+  // and the new Next.js 14+ `export const viewport = { … }` shape captured
+  // into `_viewport` by collectMetadata.
+  let viewportStr = '';
+  if (typeof m.viewport === 'string') {
+    viewportStr = m.viewport;
+  } else if (m.viewport && typeof m.viewport === 'object') {
+    viewportStr = serializeViewport(m.viewport);
+  } else if (m._viewport && typeof m._viewport === 'object') {
+    viewportStr = serializeViewport(m._viewport);
+  }
+  metaTags.push(`<meta name="viewport" content="${escapeAttr(viewportStr || 'width=device-width,initial-scale=1')}">`);
+
   if (m.themeColor) metaTags.push(`<meta name="theme-color" content="${escapeAttr(m.themeColor)}">`);
+  if (m.colorScheme) metaTags.push(`<meta name="color-scheme" content="${escapeAttr(m.colorScheme)}">`);
+
+  // ---- i18n + SEO essentials ----
+
+  // robots: { index, follow, googleBot, etc. }
+  if (m.robots) {
+    if (typeof m.robots === 'string') {
+      metaTags.push(`<meta name="robots" content="${escapeAttr(m.robots)}">`);
+    } else if (typeof m.robots === 'object') {
+      const parts = [];
+      if (m.robots.index === false) parts.push('noindex');
+      else if (m.robots.index === true) parts.push('index');
+      if (m.robots.follow === false) parts.push('nofollow');
+      else if (m.robots.follow === true) parts.push('follow');
+      if (m.robots.noarchive) parts.push('noarchive');
+      if (m.robots.nosnippet) parts.push('nosnippet');
+      if (m.robots.noimageindex) parts.push('noimageindex');
+      if (parts.length) {
+        metaTags.push(`<meta name="robots" content="${escapeAttr(parts.join(', '))}">`);
+      }
+      if (typeof m.robots.googleBot === 'string') {
+        metaTags.push(`<meta name="googlebot" content="${escapeAttr(m.robots.googleBot)}">`);
+      }
+    }
+  }
+
+  // keywords: string | string[]
+  if (m.keywords) {
+    const kws = Array.isArray(m.keywords) ? m.keywords.join(', ') : String(m.keywords);
+    if (kws) metaTags.push(`<meta name="keywords" content="${escapeAttr(kws)}">`);
+  }
+
+  // authors: Array<{ name, url? }> | { name, url? } | string
+  if (m.authors) {
+    const list = Array.isArray(m.authors) ? m.authors : [m.authors];
+    for (const a of list) {
+      if (!a) continue;
+      const name = typeof a === 'string' ? a : a.name;
+      if (!name) continue;
+      metaTags.push(`<meta name="author" content="${escapeAttr(name)}">`);
+      if (typeof a === 'object' && a.url) {
+        metaTags.push(`<link rel="author" href="${escapeAttr(absUrl(a.url))}">`);
+      }
+    }
+  }
+
+  // Singletons that map 1:1 to <meta name="…">.
+  for (const [field, metaName] of [
+    ['creator', 'creator'],
+    ['publisher', 'publisher'],
+    ['applicationName', 'application-name'],
+    ['generator', 'generator'],
+    ['referrer', 'referrer'],
+  ]) {
+    if (m[field]) {
+      metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(m[field]))}">`);
+    }
+  }
+
+  // ---- Long-tail metadata (the Next.js "everything else") ----
+
+  // appleWebApp: { capable, title, statusBarStyle, startupImage }
+  if (m.appleWebApp && typeof m.appleWebApp === 'object') {
+    if (m.appleWebApp.capable !== undefined) {
+      metaTags.push(
+        `<meta name="apple-mobile-web-app-capable" content="${m.appleWebApp.capable ? 'yes' : 'no'}">`,
+      );
+    }
+    if (m.appleWebApp.title) {
+      metaTags.push(`<meta name="apple-mobile-web-app-title" content="${escapeAttr(m.appleWebApp.title)}">`);
+    }
+    if (m.appleWebApp.statusBarStyle) {
+      metaTags.push(
+        `<meta name="apple-mobile-web-app-status-bar-style" content="${escapeAttr(m.appleWebApp.statusBarStyle)}">`,
+      );
+    }
+    // startupImage maps to <link rel="apple-touch-startup-image">.
+    if (m.appleWebApp.startupImage) {
+      const list = Array.isArray(m.appleWebApp.startupImage)
+        ? m.appleWebApp.startupImage
+        : [m.appleWebApp.startupImage];
+      for (const it of list) {
+        if (typeof it === 'string') {
+          linkTags.push(`<link rel="apple-touch-startup-image" href="${escapeAttr(absUrl(it))}">`);
+        } else if (it && it.url) {
+          const parts = [`rel="apple-touch-startup-image"`, `href="${escapeAttr(absUrl(it.url))}"`];
+          if (it.media) parts.push(`media="${escapeAttr(it.media)}"`);
+          linkTags.push(`<link ${parts.join(' ')}>`);
+        }
+      }
+    }
+  } else if (m.appleWebApp === true) {
+    metaTags.push(`<meta name="apple-mobile-web-app-capable" content="yes">`);
+  }
+
+  // formatDetection: { telephone, address, email, date, … }. All booleans.
+  // Disabled detection types append "type=no" to the content string.
+  if (m.formatDetection && typeof m.formatDetection === 'object') {
+    const parts = [];
+    for (const [k, v] of Object.entries(m.formatDetection)) {
+      if (v === false) parts.push(`${k}=no`);
+      else if (v === true) parts.push(`${k}=yes`);
+    }
+    if (parts.length) {
+      metaTags.push(`<meta name="format-detection" content="${escapeAttr(parts.join(', '))}">`);
+    }
+  }
+
+  // itunes: { appId, appArgument? }
+  if (m.itunes && typeof m.itunes === 'object' && m.itunes.appId) {
+    let content = `app-id=${m.itunes.appId}`;
+    if (m.itunes.appArgument) content += `, app-argument=${m.itunes.appArgument}`;
+    metaTags.push(`<meta name="apple-itunes-app" content="${escapeAttr(content)}">`);
+  }
+
+  // Plain singleton string fields.
+  for (const [field, metaName] of [
+    ['category', 'category'],
+    ['classification', 'classification'],
+    ['abstract', 'abstract'],
+  ]) {
+    if (m[field]) metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(m[field]))}">`);
+  }
+
+  // archives / assets / bookmarks: each is string | string[].
+  // Standard registered link relations.
+  for (const [field, rel] of [
+    ['archives', 'archives'],
+    ['assets', 'assets'],
+    ['bookmarks', 'bookmark'],
+  ]) {
+    if (m[field]) {
+      const list = Array.isArray(m[field]) ? m[field] : [m[field]];
+      for (const href of list) {
+        linkTags.push(`<link rel="${rel}" href="${escapeAttr(absUrl(href))}">`);
+      }
+    }
+  }
+
+  // `other` is the typed escape hatch for any arbitrary <meta name="…">
+  // entries Next.js (or future webjs) doesn't ship as a typed field.
+  // Values can be string, number, or string[] (emits multiple meta tags).
+  if (m.other && typeof m.other === 'object') {
+    for (const [name, v] of Object.entries(m.other)) {
+      const list = Array.isArray(v) ? v : [v];
+      for (const item of list) {
+        if (item == null) continue;
+        metaTags.push(`<meta name="${escapeAttr(name)}" content="${escapeAttr(String(item))}">`);
+      }
+    }
+  }
+
+  // verification: { google, yandex, yahoo, me }. Each is string OR string[].
+  // - google     → <meta name="google-site-verification">
+  // - yandex     → <meta name="yandex-verification">
+  // - yahoo      → <meta name="y_key">  (Yahoo's unusual canonical name)
+  // - me         → <meta name="me">     (IndieAuth / personal verification)
+  if (m.verification && typeof m.verification === 'object') {
+    const verifyKeys = {
+      google: 'google-site-verification',
+      yandex: 'yandex-verification',
+      yahoo: 'y_key',
+      me: 'me',
+    };
+    for (const [field, metaName] of Object.entries(verifyKeys)) {
+      const v = m.verification[field];
+      if (!v) continue;
+      const list = Array.isArray(v) ? v : [v];
+      for (const item of list) {
+        metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(item))}">`);
+      }
+    }
+    // `verification.other` allows arbitrary <meta name="…"> entries.
+    if (m.verification.other && typeof m.verification.other === 'object') {
+      for (const [name, v] of Object.entries(m.verification.other)) {
+        const list = Array.isArray(v) ? v : [v];
+        for (const item of list) {
+          metaTags.push(`<meta name="${escapeAttr(name)}" content="${escapeAttr(String(item))}">`);
+        }
+      }
+    }
+  }
+
   if (m.openGraph && typeof m.openGraph === 'object') {
     for (const [k, v] of Object.entries(m.openGraph)) {
-      metaTags.push(`<meta property="og:${escapeAttr(k)}" content="${escapeAttr(String(v))}">`);
+      const out = k === 'image' || k === 'url' ? absUrl(v) : String(v);
+      metaTags.push(`<meta property="og:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
     }
   }
   // Twitter card tags. Twitter falls back to og:* when these are absent
@@ -513,13 +780,15 @@ function wrapHead(opts) {
   // twitter:card entry.
   if (m.twitter && typeof m.twitter === 'object') {
     for (const [k, v] of Object.entries(m.twitter)) {
-      metaTags.push(`<meta name="twitter:${escapeAttr(k)}" content="${escapeAttr(String(v))}">`);
+      const out = k === 'image' ? absUrl(v) : String(v);
+      metaTags.push(`<meta name="twitter:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
     }
   }
 
   // Preload hints: page modules themselves + every discovered component
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
-  const linkTags = [];
+  // (linkTags array was declared earlier so the metadata block above can
+  // push icons / canonical / hreflang / archives / etc. into it.)
   for (const url of opts.moduleUrls) {
     linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
   }
@@ -533,6 +802,84 @@ function wrapHead(opts) {
         .map(([k, v]) => `${k}="${escapeAttr(String(v))}"`)
         .join(' ');
       linkTags.push(`<link rel="preload" ${attrs}>`);
+    }
+  }
+
+  // icons: { icon, apple, shortcut, other }. Each entry can be a string
+  // (URL), an object { url, sizes?, type? }, or an array of those.
+  //   - icon    → <link rel="icon">
+  //   - apple   → <link rel="apple-touch-icon">
+  //   - shortcut→ <link rel="shortcut icon">
+  //   - other   → <link rel="…" href="…"> using the entry's `rel` field
+  if (m.icons) {
+    const buckets = typeof m.icons === 'string' || Array.isArray(m.icons)
+      ? { icon: m.icons }
+      : m.icons;
+    /** @param {string} rel @param {unknown} entry */
+    const pushIcon = (rel, entry) => {
+      if (!entry) return;
+      const items = Array.isArray(entry) ? entry : [entry];
+      for (const it of items) {
+        if (!it) continue;
+        if (typeof it === 'string') {
+          linkTags.push(`<link rel="${rel}" href="${escapeAttr(absUrl(it))}">`);
+        } else if (typeof it === 'object' && it.url) {
+          const parts = [`rel="${rel}"`, `href="${escapeAttr(absUrl(it.url))}"`];
+          if (it.sizes) parts.push(`sizes="${escapeAttr(it.sizes)}"`);
+          if (it.type) parts.push(`type="${escapeAttr(it.type)}"`);
+          linkTags.push(`<link ${parts.join(' ')}>`);
+        }
+      }
+    };
+    pushIcon('icon', buckets.icon);
+    pushIcon('apple-touch-icon', buckets.apple);
+    pushIcon('shortcut icon', buckets.shortcut);
+    // `other` is the catch-all: array of { rel, url, ...attrs }.
+    if (buckets.other) {
+      const others = Array.isArray(buckets.other) ? buckets.other : [buckets.other];
+      for (const o of others) {
+        if (!o || !o.rel || !o.url) continue;
+        const parts = [`rel="${escapeAttr(o.rel)}"`, `href="${escapeAttr(absUrl(o.url))}"`];
+        if (o.sizes) parts.push(`sizes="${escapeAttr(o.sizes)}"`);
+        if (o.type) parts.push(`type="${escapeAttr(o.type)}"`);
+        linkTags.push(`<link ${parts.join(' ')}>`);
+      }
+    }
+  }
+
+  // manifest: a string URL → <link rel="manifest">
+  if (typeof m.manifest === 'string') {
+    linkTags.push(`<link rel="manifest" href="${escapeAttr(absUrl(m.manifest))}">`);
+  }
+
+  // alternates: { canonical, languages: { '<hreflang>': url }, media: { '<media>': url } }
+  // Mirrors Next.js's metadata.alternates surface. Relative values are resolved
+  // against metadataBase.
+  if (m.alternates && typeof m.alternates === 'object') {
+    if (m.alternates.canonical) {
+      linkTags.push(`<link rel="canonical" href="${escapeAttr(absUrl(m.alternates.canonical))}">`);
+    }
+    if (m.alternates.languages && typeof m.alternates.languages === 'object') {
+      for (const [hreflang, href] of Object.entries(m.alternates.languages)) {
+        linkTags.push(
+          `<link rel="alternate" hreflang="${escapeAttr(hreflang)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
+    }
+    if (m.alternates.media && typeof m.alternates.media === 'object') {
+      for (const [media, href] of Object.entries(m.alternates.media)) {
+        linkTags.push(
+          `<link rel="alternate" media="${escapeAttr(media)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
+    }
+    if (m.alternates.types && typeof m.alternates.types === 'object') {
+      // alternates.types: { 'application/rss+xml': '/rss.xml' }
+      for (const [type, href] of Object.entries(m.alternates.types)) {
+        linkTags.push(
+          `<link rel="alternate" type="${escapeAttr(type)}" href="${escapeAttr(absUrl(href))}">`,
+        );
+      }
     }
   }
 
@@ -755,4 +1102,35 @@ function escapeHtml(s) {
 /** @param {string} s */
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Serialize a Next.js-shaped viewport object into the comma-separated
+ * `content` string the meta tag expects. Recognised fields:
+ *   width, height, initialScale, minimumScale, maximumScale,
+ *   userScalable, viewportFit, interactiveWidget.
+ * Other fields (themeColor, colorScheme) live on their own meta tags
+ * and are handled by the caller — skipped here.
+ *
+ * @param {Record<string, unknown>} v
+ * @returns {string}
+ */
+function serializeViewport(v) {
+  const parts = [];
+  /** @param {string} key @param {string} prop */
+  const push = (key, prop) => {
+    if (v[prop] !== undefined && v[prop] !== null && v[prop] !== '') {
+      parts.push(`${key}=${v[prop]}`);
+    }
+  };
+  push('width', 'width');
+  push('height', 'height');
+  push('initial-scale', 'initialScale');
+  push('minimum-scale', 'minimumScale');
+  push('maximum-scale', 'maximumScale');
+  if (v.userScalable === false) parts.push('user-scalable=no');
+  else if (v.userScalable === true) parts.push('user-scalable=yes');
+  push('viewport-fit', 'viewportFit');
+  push('interactive-widget', 'interactiveWidget');
+  return parts.join(',');
 }

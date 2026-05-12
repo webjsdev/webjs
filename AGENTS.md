@@ -877,52 +877,139 @@ Set `static shadow = true` when:
 #### Metadata API
 
 Every key is optional. Values flow into `<head>` at SSR time and merge
-from outer layouts inward (page wins on conflict).
+across nested layouts (deeper wins — same semantics as Next.js App
+Router). The API surface is intentionally Next.js-compatible: an AI
+agent's existing knowledge of `metadata` from Next.js maps 1:1.
 
 ```ts
 export const metadata = {
-  title: 'Blog post title',              // → <title>
-  description: 'Short summary',          // → <meta name="description">
-  viewport: 'width=device-width,initial-scale=1',  // → <meta name="viewport">
-  themeColor: '#1c1613',                 // → <meta name="theme-color">
-  cacheControl: 'public, max-age=60',    // → Cache-Control response header (pages default to no-store)
-  preload: [                             // → <link rel="preload"> array
-    { href: '/public/fonts/Inter.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
-  ],
-  openGraph: {                           // → <meta property="og:*">
+  // ----- Identity -----
+  title: 'Blog post title',                          // → <title>
+  // OR { template, default, absolute } — template propagates from
+  // outer layouts; deeper plain-string titles get wrapped via "%s".
+  // title: { template: '%s — webjs', default: 'webjs', absolute: 'standalone title' },
+  description: 'Short summary',                      // → <meta name="description">
+  keywords: ['ai', 'web components'],                // → <meta name="keywords"> (or single string)
+  authors: [{ name: 'Vivek', url: 'https://...' }],  // → <meta name="author"> (+ optional <link rel="author">)
+  creator: 'Vivek',                                  // → <meta name="creator">
+  publisher: 'My Co',                                // → <meta name="publisher">
+  applicationName: 'webjs',                          // → <meta name="application-name">
+  generator: 'webjs 0.5',                            // → <meta name="generator">
+  referrer: 'origin-when-cross-origin',              // → <meta name="referrer">
+
+  // ----- Base URL for relative metadata URLs -----
+  metadataBase: 'https://example.com',
+  // Any relative URL in openGraph.image, openGraph.url, twitter.image,
+  // alternates.canonical / languages / media / types, icons, authors[].url,
+  // archives / assets / bookmarks gets resolved against this base.
+
+  // ----- Viewport / theme -----
+  viewport: 'width=device-width,initial-scale=1',    // string OR object
+  // viewport: { width: 'device-width', initialScale: 1, maximumScale: 5, userScalable: true },
+  // (or split-export: `export const viewport = { … }` — Next.js 14+ style)
+  themeColor: '#1c1613',                             // → <meta name="theme-color">
+  colorScheme: 'light dark',                         // → <meta name="color-scheme">
+
+  // ----- Crawler / SEO -----
+  robots: { index: true, follow: true, googleBot: 'index, max-snippet:-1' },
+  // OR robots: 'noindex, nofollow'
+  alternates: {
+    canonical: '/post',                              // → <link rel="canonical">
+    languages: { 'es-ES': '/es', 'fr-FR': '/fr' },   // → hreflang <link>s
+    media: { '(max-width: 600px)': '/mobile' },      // → media alternates
+    types: { 'application/rss+xml': '/rss.xml' },    // → RSS / Atom alternates
+  },
+  verification: {
+    google: 'token',                                 // → <meta name="google-site-verification">
+    yandex: 'token',                                 // → <meta name="yandex-verification">
+    yahoo: 'token',                                  // → <meta name="y_key">
+    me: 'https://me.example',                        // → <meta name="me"> (IndieAuth)
+    other: { 'facebook-domain-verification': 'fb-token' },
+  },
+
+  // ----- Icons + manifest -----
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/icon-32.png', sizes: '32x32' }],
+    apple: '/apple-touch-icon.png',
+    shortcut: '/favicon.ico',
+    other: [{ rel: 'mask-icon', url: '/mask.svg' }],
+  },
+  manifest: '/manifest.webmanifest',                 // → <link rel="manifest">
+
+  // ----- Open Graph -----
+  openGraph: {
     type: 'website',
     title: 'OG title',
     description: 'OG description',
-    url: 'https://example.com/post',
-    image: 'https://example.com/og.png',
+    url: '/post',                                    // relative resolves via metadataBase
+    image: '/og.png',                                // ditto
     'image:width': '1200',
     'image:height': '630',
     'image:alt': 'Post cover',
     'site_name': 'My Site',
   },
-  twitter: {                             // → <meta name="twitter:*">
-    card: 'summary_large_image',         // required for big-image preview
+
+  // ----- Twitter -----
+  twitter: {
+    card: 'summary_large_image',                     // required for big-image preview
     title: 'Twitter title',
     description: 'Twitter description',
-    image: 'https://example.com/og.png',
+    image: '/og.png',
+  },
+
+  // ----- iOS / mobile -----
+  appleWebApp: {
+    capable: true,                                   // → apple-mobile-web-app-capable
+    title: 'My App',                                 // → apple-mobile-web-app-title
+    statusBarStyle: 'black-translucent',
+    startupImage: [{ url: '/splash.png', media: '(device-width: 320px)' }],
+  },
+  formatDetection: { telephone: false, email: false },
+  itunes: { appId: '12345', appArgument: 'myapp://open' },
+
+  // ----- Long-tail descriptive -----
+  category: 'tech',
+  classification: 'documentation',
+  abstract: 'A short summary',
+  archives: ['/archive-2024', '/archive-2023'],      // → <link rel="archives">
+  assets: '/assets-cdn',                             // → <link rel="assets">
+  bookmarks: ['/bm-1'],                              // → <link rel="bookmark">
+
+  // ----- Cache-control (response header, not <meta>) -----
+  cacheControl: 'public, max-age=60',                // pages default to no-store
+  preload: [
+    { href: '/public/fonts/Inter.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
+  ],
+
+  // ----- Catch-all -----
+  other: {
+    'msvalidate.01': 'bing-token',
+    'mobile-web-app-capable': 'yes',
   },
 };
 ```
 
 ```ts
-// Request-scoped: derive absolute URLs for OG/twitter from ctx.url.
-export function generateMetadata(ctx: { url: string }) {
-  const origin = new URL(ctx.url).origin;
-  const image = `${origin}/public/og.png`;
+// Request-scoped via generateMetadata — receives ctx with url/params.
+export function generateMetadata(ctx: { url: string; params: Record<string,string> }) {
   return {
-    title: 'My Page',
-    openGraph: { type: 'website', url: origin, image, 'image:width': '1200', 'image:height': '630' },
-    twitter: { card: 'summary_large_image', image },
+    title: `Post — ${ctx.params.slug}`,
+    metadataBase: new URL(ctx.url).origin,
   };
 }
+
+// Viewport may also be split into its own export (Next.js 14+ pattern).
+// All fields above under `metadata.viewport` are equally valid here, plus
+// `themeColor` and `colorScheme` bubble up to their own meta tags.
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1c1613',
+  colorScheme: 'light dark',
+};
 ```
 
-`cacheControl` is special — it's emitted as a **response header**, not a
+**Special:** `cacheControl` is emitted as a **response header**, not a
 `<meta>` tag. Pages default to `no-store` for safety; opt into caching
 by setting this explicitly.
 

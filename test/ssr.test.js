@@ -278,6 +278,405 @@ test('buildDocumentParts: peeks past the data-layout wrapper to find user shell'
   assert.match(streamBody, /<main>page<\/main>/);
 });
 
+/* ------------ Metadata parity: i18n + SEO essentials ------------ */
+
+// Small helper that bypasses the full SSR boot and just exercises wrapHead
+// indirectly via _buildDocumentParts (whose framework branch ends up calling
+// wrapHead).
+function render(metadata) {
+  const { prefix } = _buildDocumentParts(
+    '<main>p</main>',
+    { metadata, moduleUrls: [], dev: false, streaming: false },
+  );
+  return prefix;
+}
+
+test('metadata.robots: object form maps to noindex/nofollow tokens', () => {
+  const html = render({ robots: { index: false, follow: true, noarchive: true } });
+  assert.match(html, /<meta name="robots" content="noindex, follow, noarchive">/);
+});
+
+test('metadata.robots: string form passes through unchanged', () => {
+  const html = render({ robots: 'noindex, nofollow' });
+  assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
+});
+
+test('metadata.robots.googleBot emits a separate <meta name="googlebot">', () => {
+  const html = render({ robots: { googleBot: 'index, max-snippet:-1' } });
+  assert.match(html, /<meta name="googlebot" content="index, max-snippet:-1">/);
+});
+
+test('metadata.keywords: array joins with comma-space; string passes through', () => {
+  const html = render({ keywords: ['ai', 'web components', 'no-build'] });
+  assert.match(html, /<meta name="keywords" content="ai, web components, no-build">/);
+  const html2 = render({ keywords: 'a, b' });
+  assert.match(html2, /<meta name="keywords" content="a, b">/);
+});
+
+test('metadata.authors: single + array forms emit <meta name="author"> + optional <link rel="author">', () => {
+  const html = render({
+    authors: [
+      { name: 'Vivek', url: 'https://vivek.dev' },
+      { name: 'Alice' },
+      'Bob (string form)',
+    ],
+  });
+  assert.match(html, /<meta name="author" content="Vivek">/);
+  assert.match(html, /<link rel="author" href="https:\/\/vivek\.dev">/);
+  assert.match(html, /<meta name="author" content="Alice">/);
+  assert.match(html, /<meta name="author" content="Bob \(string form\)">/);
+});
+
+test('metadata: creator / publisher / applicationName / generator / referrer', () => {
+  const html = render({
+    creator: 'C',
+    publisher: 'P',
+    applicationName: 'webjs',
+    generator: 'webjs 0.5',
+    referrer: 'origin-when-cross-origin',
+  });
+  assert.match(html, /<meta name="creator" content="C">/);
+  assert.match(html, /<meta name="publisher" content="P">/);
+  assert.match(html, /<meta name="application-name" content="webjs">/);
+  assert.match(html, /<meta name="generator" content="webjs 0\.5">/);
+  assert.match(html, /<meta name="referrer" content="origin-when-cross-origin">/);
+});
+
+test('metadata.alternates.canonical emits <link rel="canonical">', () => {
+  const html = render({ alternates: { canonical: 'https://example.com/post' } });
+  assert.match(html, /<link rel="canonical" href="https:\/\/example\.com\/post">/);
+});
+
+test('metadata.alternates.languages emits hreflang <link>s', () => {
+  const html = render({
+    alternates: {
+      languages: { 'es-ES': 'https://example.com/es', 'fr-FR': 'https://example.com/fr' },
+    },
+  });
+  assert.match(html, /<link rel="alternate" hreflang="es-ES" href="https:\/\/example\.com\/es">/);
+  assert.match(html, /<link rel="alternate" hreflang="fr-FR" href="https:\/\/example\.com\/fr">/);
+});
+
+test('metadata.alternates.media + alternates.types emit media + type alternates', () => {
+  const html = render({
+    alternates: {
+      media: { 'only screen and (max-width: 600px)': '/mobile' },
+      types: { 'application/rss+xml': '/rss.xml' },
+    },
+  });
+  assert.match(html, /<link rel="alternate" media="only screen and \(max-width: 600px\)" href="\/mobile">/);
+  assert.match(html, /<link rel="alternate" type="application\/rss\+xml" href="\/rss\.xml">/);
+});
+
+test('metadata.metadataBase: relative og:image becomes absolute', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    openGraph: { image: '/og.png' },
+  });
+  assert.match(html, /<meta property="og:image" content="https:\/\/example\.com\/og\.png">/);
+});
+
+test('metadata.metadataBase: relative canonical + hreflang become absolute', () => {
+  const html = render({
+    metadataBase: 'https://example.com/',
+    alternates: {
+      canonical: '/post',
+      languages: { 'es-ES': '/es' },
+    },
+  });
+  assert.match(html, /<link rel="canonical" href="https:\/\/example\.com\/post">/);
+  assert.match(html, /<link rel="alternate" hreflang="es-ES" href="https:\/\/example\.com\/es">/);
+});
+
+test('metadata.metadataBase: absolute URLs pass through untouched', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    openGraph: { image: 'https://cdn.test/og.png' },
+    alternates: { canonical: 'https://other.test/post' },
+  });
+  assert.match(html, /<meta property="og:image" content="https:\/\/cdn\.test\/og\.png">/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/other\.test\/post">/);
+});
+
+/* ------------ title template propagation across nested metadata layers ------------ */
+
+async function makeLayeredRoute(...metadataSources) {
+  const sub = mkdtempSync(join(tmpDir, 'meta-route-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+  const pageFile = join(appDir, 'page.js');
+  writeFileSync(
+    pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function P() { return html\`<main>p</main>\`; }\n`,
+  );
+  const metadataFiles = metadataSources.map((src, i) => {
+    const f = join(appDir, `meta-${i}.js`);
+    writeFileSync(f, src);
+    return f;
+  });
+  return {
+    route: { file: pageFile, layouts: [], errors: [], metadataFiles },
+    appDir,
+  };
+}
+
+test('title template: page string title is wrapped by root template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    // Root (outer): template + default
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    // Page (inner): plain string title
+    `export const metadata = { title: 'Hello' };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>Hello — webjs<\/title>/);
+});
+
+test('title template: page omits title; root default is used', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>webjs<\/title>/);
+});
+
+test('title template: page absolute title escapes the template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    `export const metadata = { title: { absolute: 'A standalone title' } };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>A standalone title<\/title>/);
+  assert.doesNotMatch(html, /— webjs/);
+});
+
+test('title template: deeper layout can override the inherited template', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const metadata = { title: { template: '%s — Site', default: 'Site' } };`,
+    `export const metadata = { title: { template: '%s — Blog' } };`, // intermediate layout overrides
+    `export const metadata = { title: 'Post' };`,                    // page supplies plain string
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<title>Post — Blog<\/title>/);
+});
+
+/* ------------ Metadata parity: icons + manifest ------------ */
+
+test('metadata.icons: string shorthand sets <link rel="icon">', () => {
+  const html = render({ icons: '/favicon.svg' });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
+});
+
+test('metadata.icons: object form with icon/apple/shortcut', () => {
+  const html = render({
+    icons: {
+      icon: '/favicon.svg',
+      apple: '/apple-touch-icon.png',
+      shortcut: '/favicon.ico',
+    },
+  });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/);
+  assert.match(html, /<link rel="shortcut icon" href="\/favicon\.ico">/);
+});
+
+test('metadata.icons: array form with {url, sizes, type}', () => {
+  const html = render({
+    icons: {
+      icon: [
+        { url: '/icon-16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
+      ],
+    },
+  });
+  assert.match(html, /<link rel="icon" href="\/icon-16\.png" sizes="16x16" type="image\/png">/);
+  assert.match(html, /<link rel="icon" href="\/icon-32\.png" sizes="32x32" type="image\/png">/);
+});
+
+test('metadata.icons.other: arbitrary rel allowed', () => {
+  const html = render({
+    icons: {
+      other: [
+        { rel: 'mask-icon', url: '/mask.svg', type: 'image/svg+xml' },
+      ],
+    },
+  });
+  assert.match(html, /<link rel="mask-icon" href="\/mask\.svg" type="image\/svg\+xml">/);
+});
+
+test('metadata.icons + metadataBase: relative URLs are absolutified', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    icons: { icon: '/favicon.svg', apple: '/apple.png' },
+  });
+  assert.match(html, /<link rel="icon" href="https:\/\/example\.com\/favicon\.svg">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/example\.com\/apple\.png">/);
+});
+
+test('metadata.manifest: emits <link rel="manifest">', () => {
+  const html = render({ manifest: '/manifest.webmanifest' });
+  assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+});
+
+/* ------------ Metadata parity: verification ------------ */
+
+test('metadata.verification: google/yandex/yahoo/me emit canonical meta names', () => {
+  const html = render({
+    verification: {
+      google: 'g-token',
+      yandex: 'y-token',
+      yahoo: 'yahoo-token',
+      me: 'https://me.example',
+    },
+  });
+  assert.match(html, /<meta name="google-site-verification" content="g-token">/);
+  assert.match(html, /<meta name="yandex-verification" content="y-token">/);
+  assert.match(html, /<meta name="y_key" content="yahoo-token">/);
+  assert.match(html, /<meta name="me" content="https:\/\/me\.example">/);
+});
+
+test('metadata.verification: array form emits multiple <meta>s with the same name', () => {
+  const html = render({ verification: { google: ['token-a', 'token-b'] } });
+  assert.match(html, /<meta name="google-site-verification" content="token-a">/);
+  assert.match(html, /<meta name="google-site-verification" content="token-b">/);
+});
+
+test('metadata.verification.other: arbitrary <meta name="…"> entries', () => {
+  const html = render({
+    verification: { other: { 'facebook-domain-verification': 'fb-token' } },
+  });
+  assert.match(html, /<meta name="facebook-domain-verification" content="fb-token">/);
+});
+
+/* ------------ Metadata parity: viewport object + split-export ------------ */
+
+test('metadata.viewport: object form serializes to comma-separated content', () => {
+  const html = render({
+    viewport: { width: 'device-width', initialScale: 1, maximumScale: 5, userScalable: true },
+  });
+  assert.match(
+    html,
+    /<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">/,
+  );
+});
+
+test('metadata.viewport: user-scalable=false emits user-scalable=no', () => {
+  const html = render({ viewport: { width: 'device-width', userScalable: false } });
+  assert.match(html, /user-scalable=no/);
+});
+
+test('metadata.viewport: string form still works (legacy)', () => {
+  const html = render({ viewport: 'width=device-width,initial-scale=1.0' });
+  assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1\.0">/);
+});
+
+test('metadata.colorScheme: emits <meta name="color-scheme">', () => {
+  const html = render({ colorScheme: 'light dark' });
+  assert.match(html, /<meta name="color-scheme" content="light dark">/);
+});
+
+test('split `viewport` export: collectMetadata picks it up alongside metadata', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#000' };
+     export const metadata = { title: 'X' };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1">/);
+  // themeColor on the viewport export bubbles up.
+  assert.match(html, /<meta name="theme-color" content="#000">/);
+});
+
+/* ------------ Metadata parity: long-tail + `other` passthrough ------------ */
+
+test('metadata.appleWebApp: object form emits apple-mobile-web-app meta tags', () => {
+  const html = render({
+    appleWebApp: {
+      capable: true,
+      title: 'My App',
+      statusBarStyle: 'black-translucent',
+    },
+  });
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes">/);
+  assert.match(html, /<meta name="apple-mobile-web-app-title" content="My App">/);
+  assert.match(html, /<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">/);
+});
+
+test('metadata.appleWebApp.startupImage: emits <link rel="apple-touch-startup-image">', () => {
+  const html = render({
+    appleWebApp: {
+      startupImage: [
+        { url: '/splash-1.png', media: '(device-width: 320px)' },
+        '/splash-2.png',
+      ],
+    },
+  });
+  assert.match(html, /<link rel="apple-touch-startup-image" href="\/splash-1\.png" media="\(device-width: 320px\)">/);
+  assert.match(html, /<link rel="apple-touch-startup-image" href="\/splash-2\.png">/);
+});
+
+test('metadata.appleWebApp: true shorthand emits just the `capable` tag', () => {
+  const html = render({ appleWebApp: true });
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes">/);
+});
+
+test('metadata.formatDetection: combines bool fields into a content string', () => {
+  const html = render({
+    formatDetection: { telephone: false, address: false, email: true },
+  });
+  assert.match(
+    html,
+    /<meta name="format-detection" content="telephone=no, address=no, email=yes">/,
+  );
+});
+
+test('metadata.itunes: appId + appArgument emit apple-itunes-app meta', () => {
+  const html = render({ itunes: { appId: '12345', appArgument: 'myapp://open' } });
+  assert.match(html, /<meta name="apple-itunes-app" content="app-id=12345, app-argument=myapp:\/\/open">/);
+});
+
+test('metadata: category / classification / abstract emit <meta name="…">', () => {
+  const html = render({
+    category: 'tech',
+    classification: 'documentation',
+    abstract: 'A short summary',
+  });
+  assert.match(html, /<meta name="category" content="tech">/);
+  assert.match(html, /<meta name="classification" content="documentation">/);
+  assert.match(html, /<meta name="abstract" content="A short summary">/);
+});
+
+test('metadata: archives / assets / bookmarks emit <link rel="…">', () => {
+  const html = render({
+    archives: ['/archive-2024', '/archive-2023'],
+    assets: '/assets-cdn',
+    bookmarks: ['/bm-1', '/bm-2'],
+  });
+  assert.match(html, /<link rel="archives" href="\/archive-2024">/);
+  assert.match(html, /<link rel="archives" href="\/archive-2023">/);
+  assert.match(html, /<link rel="assets" href="\/assets-cdn">/);
+  assert.match(html, /<link rel="bookmark" href="\/bm-1">/);
+  assert.match(html, /<link rel="bookmark" href="\/bm-2">/);
+});
+
+test('metadata.other: arbitrary meta key passthrough; supports string + array values', () => {
+  const html = render({
+    other: {
+      'facebook-domain-verification': 'fb-token',
+      'msvalidate.01': ['bing-token-a', 'bing-token-b'],
+      'custom-key': 'custom-value',
+    },
+  });
+  assert.match(html, /<meta name="facebook-domain-verification" content="fb-token">/);
+  assert.match(html, /<meta name="msvalidate\.01" content="bing-token-a">/);
+  assert.match(html, /<meta name="msvalidate\.01" content="bing-token-b">/);
+  assert.match(html, /<meta name="custom-key" content="custom-value">/);
+});
+
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
 
 async function makeRoute({ pageSrc, layoutSrc, metadata = null }) {
