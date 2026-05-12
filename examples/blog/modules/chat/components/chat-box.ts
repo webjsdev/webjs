@@ -1,4 +1,6 @@
 import { WebComponent, html, connectWS } from '@webjskit/core';
+import { inputClass } from '../../../components/ui/input.ts';
+import { buttonClass } from '../../../components/ui/button.ts';
 
 type Line = { id: number; text: string; kind: 'say' | 'meta' };
 type State = { lines: Line[]; connected: boolean; count: number };
@@ -73,11 +75,10 @@ export class ChatBox extends WebComponent {
                   : html`<p class="m-0 mb-2 text-fg">${l.text}</p>`)}
         </div>
         <form class="flex gap-2 px-4 py-3 border-t border-border bg-bg-subtle" @submit=${(e) => this.onSubmit(e)}>
-          <input class="flex-1 font-sans text-sm leading-normal px-3 py-2 border border-border-strong rounded bg-bg-elev text-fg transition-colors duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
+          <input class="${inputClass()} flex-1"
                  placeholder=${connected ? 'Say hi…' : 'Disconnected'}
-                 ?disabled=${!connected} autocomplete="off" />
-          <button class="font-sans text-xs font-semibold tracking-[0.02em] px-4 py-2 rounded-full border-0 bg-accent text-accent-fg cursor-pointer transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed"
-                  ?disabled=${!connected}>Send</button>
+                 ?disabled=${!connected} autocomplete="off">
+          <button class=${buttonClass({ size: 'sm' })} ?disabled=${!connected}>Send</button>
         </form>
       </div>
     `;

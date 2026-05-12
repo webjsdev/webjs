@@ -112,62 +112,112 @@ layered on top:
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
 
-## UI components — `@webjskit/ui` (preinstalled)
+## UI components — Webjs UI (preinstalled)
 
-This scaffold ships with the standard `@webjskit/ui` component kit
-**already installed at `components/ui/`**. These are shadcn-equivalent
-web components — light DOM, Tailwind-styled, framework-agnostic. You
-import the source like any other component:
+This scaffold ships with the standard Webjs UI component kit
+**already installed at `components/ui/`**. The kit is **AI-first** and
+splits into two tiers. Internalise the split — picking the wrong tier
+produces broken markup.
+
+### Tier 1 — class-helper functions (the majority)
+
+Pure functions that return Tailwind class strings. You apply them to
+**raw native HTML elements** that you write yourself. Examples:
+`button`, `card`, `input`, `label`, `alert`, `badge`, `separator`,
+`skeleton`, `kbd`, `table`, `breadcrumb`, `pagination`, `native-select`,
+`avatar`, `checkbox`, `switch`, `radio-group`, `textarea`, `toggle`,
+`aspect-ratio`.
 
 ```ts
-import '../../components/ui/button.ts';
-import '../../components/ui/card.ts';
-```
+import {
+  cardClass, cardHeaderClass, cardTitleClass,
+  cardContentClass, cardFooterClass,
+} from '../../components/ui/card.ts';
+import { inputClass } from '../../components/ui/input.ts';
+import { labelClass } from '../../components/ui/label.ts';
+import { buttonClass } from '../../components/ui/button.ts';
 
-Then use them in templates with the `ui-` tag prefix:
-
-```ts
 return html`
-  <ui-card>
-    <ui-card-header>
-      <ui-card-title>Profile</ui-card-title>
-    </ui-card-header>
-    <ui-card-content>
-      <ui-input placeholder="Name" />
-    </ui-card-content>
-    <ui-card-footer>
-      <ui-button variant="default">Save</ui-button>
-    </ui-card-footer>
-  </ui-card>
+  <div class=${cardClass()}>
+    <div class=${cardHeaderClass()}>
+      <h3 class=${cardTitleClass()}>Profile</h3>
+    </div>
+    <div class=${cardContentClass()}>
+      <label class=${labelClass()} for="name">Name</label>
+      <input class=${inputClass()} id="name" name="name">
+    </div>
+    <div class=${cardFooterClass()}>
+      <button class=${buttonClass()}>Save</button>
+    </div>
+  </div>
 `;
 ```
 
-**Add more components from the registry:**
+Helpers with variants take an options object:
+`buttonClass({ variant: 'outline', size: 'sm' })`.
+
+### Tier 2 — stateful custom elements
+
+For things the browser doesn't provide natively (focus traps, portaled
+overlays, keyboard-navigated lists): `dialog`, `alert-dialog`, `popover`,
+`tooltip`, `hover-card`, `tabs`, `accordion`, `collapsible`,
+`dropdown-menu`, `progress`, `sonner`, `toggle-group`. These ARE custom
+elements — import them once (typically in `app/layout.ts`) and use
+`<ui-X>` tags:
+
+```ts
+// app/layout.ts (registers the custom elements for every page)
+import '../components/ui/dialog.ts';
+import '../components/ui/tabs.ts';
+```
+
+```ts
+// app/some-page/page.ts (uses the registered elements)
+import { buttonClass } from '../../components/ui/button.ts';
+
+return html`
+  <ui-dialog>
+    <ui-dialog-trigger>
+      <button class=${buttonClass({ variant: 'outline' })}>Edit</button>
+    </ui-dialog-trigger>
+    <ui-dialog-content>
+      <h2>Edit profile</h2>
+      ...
+    </ui-dialog-content>
+  </ui-dialog>
+`;
+```
+
+### Adding more components
 
 ```sh
-webjs ui add dialog dropdown-menu select tabs
+webjs ui add dialog dropdown-menu tabs progress
 ```
 
 Each `webjs ui add` call fetches the component source from
 `https://ui.webjs.dev/registry/<name>.json`, copies it into
 `components/ui/`, and installs any required npm deps. Run
-`webjs ui list` to see the full catalogue (~55 components) or browse
+`webjs ui list` to browse the catalogue or visit
 [https://ui.webjs.dev](https://ui.webjs.dev).
 
-**AI agents — when to reach for `ui-*`:**
+### AI agents — picking the right tier
 
-When the user asks for a form, dashboard, settings page, modal, dropdown,
-toast, table — anything that maps onto a known shadcn pattern — **prefer
-the `ui-*` components over hand-rolling buttons/inputs with raw Tailwind**.
-You get accessibility, focus management, keyboard handling, and visual
-consistency for free. Hand-rolled `<button class="px-4 py-2 bg-…">` is
-fine for one-offs (a hero CTA, a marketing pill); for any real product
-surface, use `<ui-button>`.
+For forms, dashboards, settings pages, marketing layouts: **call the
+Tier-1 class helpers on raw native elements**. You get accessibility,
+visual consistency, and form submission semantics for free —
+`<input class=${inputClass()}>` is a real `<input>`, with native
+autofill, browser validation, and `<form>` submission unchanged.
 
-The tag mapping is mechanical: shadcn `<Button>` → `<ui-button>`, shadcn
-`<DialogContent>` → `<ui-dialog-content>`, etc. When porting any
-shadcn-React example you find on the web, swap PascalCase tags for
-`kebab-case` with the `ui-` prefix and you're done.
+For modals, dropdowns, tooltips, tab strips, accordions: use the
+Tier-2 `<ui-X>` custom element tags after importing the corresponding
+module.
+
+The composition style is deliberately **not** shadcn's
+component-everything React API. We use native elements + class helpers
+for the visual stuff because hiding a `<button>` inside a `<Button>`
+wrapper adds zero value and obscures the real element from inspection,
+form submission, and screen readers. Custom elements are reserved for
+behavior the browser can't deliver natively.
 
 ## File conventions
 
