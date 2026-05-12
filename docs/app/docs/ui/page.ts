@@ -1,14 +1,19 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: '@webjskit/ui — shadcn-style components for web components' };
+export const metadata = { title: '@webjskit/ui — AI-first component library' };
 
 export default function UiDocs() {
   return html`
     <h1>@webjskit/ui</h1>
     <p>
-      A shadcn-equivalent registry of <strong>web components</strong>. Source-copied into your project —
-      you own the code and edit it freely, just like shadcn. Works in any project with Tailwind v4
-      and the small <code>@webjskit/core</code> runtime: webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML.
+      An <strong>AI-first component library</strong> with two-tier composition: pure class-helper
+      functions (<code>buttonClass</code>, <code>cardClass</code>, <code>inputClass</code>) for
+      visual primitives, plus a small set of stateful custom elements
+      (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-popover&gt;</code>)
+      where state matters. Source-copied into your project — you own the code and edit it freely.
+      Variant names, sizes, and data attributes mirror shadcn so existing shadcn knowledge maps
+      directly. Works in any project with Tailwind v4 and the small <code>@webjskit/core</code>
+      runtime: webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML.
     </p>
 
     <h2>For webjs users</h2>

@@ -17,7 +17,7 @@ process.on('SIGTERM', () => process.exit(0));
 
 const program = new Command()
   .name('webjsui')
-  .description('shadcn-style components for web components — copy into your project, you own the code')
+  .description('AI-first component library — class helpers + custom elements, copied into your project so you own the code')
   .version(pkg.version, '-v, --version', 'display the version number');
 
 program

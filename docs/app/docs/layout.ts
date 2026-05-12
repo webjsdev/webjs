@@ -59,7 +59,7 @@ const NAV_SECTIONS = [
   {
     title: 'Component Library',
     items: [
-      { href: '/docs/ui', label: '@webjskit/ui (shadcn-style)' },
+      { href: '/docs/ui', label: '@webjskit/ui (AI-first)' },
     ],
   },
   {

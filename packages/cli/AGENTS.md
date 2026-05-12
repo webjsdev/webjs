@@ -55,7 +55,7 @@ README.md                npm-facing package readme.
 
 `@webjskit/ui` is a **hard dependency** of `@webjskit/cli` (listed in
 `package.json` `dependencies`), so a global `webjs` install always ships
-with the shadcn-style component CLI out of the box — no separate install.
+with the AI-first component CLI out of the box — no separate install.
 
 `webjs ui <subcmd> [args...]` is a thin dispatch into `@webjskit/ui`'s
 `run({ argv })` entry. The implementation lives in
