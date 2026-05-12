@@ -12,10 +12,16 @@ export default async function Home() {
         <span class="size-1.5 rounded-full bg-accent"></span>
         AI-first component library
       </div>
-      <h1 class="mt-6 text-5xl md:text-6xl font-bold tracking-tight leading-[1.05]">
+      <h1
+        class="mt-6 font-bold text-fg max-w-3xl"
+        style="font-family: var(--font-serif); font-size: var(--fs-display); line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance;"
+      >
         Web components library<br />written for AI agents.
       </h1>
-      <p class="mt-6 text-xl text-fg-muted max-w-2xl leading-relaxed">
+      <p
+        class="text-fg-muted max-w-[60ch]"
+        style="margin-top: var(--sp-5); font-size: var(--fs-lede); line-height: 1.55;"
+      >
         ${ui.length} primitives designed for the agent era — copy‑paste source code,
         full native HTML semantics, shadcn API parity, zero third‑party dependencies.
         Works in webjs, Next, Astro, Vite, Lit, vanilla — any project with Tailwind v4.
