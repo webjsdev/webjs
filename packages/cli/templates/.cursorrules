@@ -80,5 +80,5 @@ Quality bar stays the same — just no blocking on questions.
 - One function per server action file (*.server.ts)
 - Components must call customElements.define('tag', Class)
 - Never import @prisma/client or node:* from client components
-- Use directives (classMap, styleMap, ref, etc.) from '@webjskit/core/directives'
+- Directives are deliberately minimal: only `unsafeHTML`, `live`, and `repeat` ship. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported — use plain template-literal expressions (`class=${cond ? 'a' : 'b'}`, `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in `firstUpdated`) instead.
 - See AGENTS.md for the complete directive decision guide
