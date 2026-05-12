@@ -355,6 +355,44 @@ export const metadata = {
 Use `generateMetadata(ctx)` when you need request-scoped values (e.g.
 absolute URLs from `ctx.url`).
 
+## Document shell (`<html>` / `<head>` / `<body>`)
+
+The framework owns the shell by default. The SSR pipeline auto-emits
+`<!doctype html><html lang="en"><head>…</head><body>` around every
+composition, and auto-hoists `<link>` / `<style>` / `<meta>` / `<script>`
+tags returned anywhere in a layout/page into the real `<head>`. The
+`metadata` export drives `<title>` and `<meta>` tags.
+
+**Only `app/layout.ts` (the root layout)** may optionally write its
+own `<!doctype><html><head>…</head><body>` shell to override `<html lang>`,
+`<html dir>`, `<html data-*>`, `<body class>`, or add a custom
+`<link rel="preconnect">` etc. When the root layout supplies a shell,
+the framework respects it and splices its required tags into the
+user's `<head>`.
+
+```ts
+// app/layout.ts — root, optionally owning the shell
+export default function RootLayout({ children }) {
+  return html`
+    <!doctype html>
+    <html lang="es" data-theme="dark">
+      <head>
+        <link rel="preconnect" href="https://cdn.example.com">
+      </head>
+      <body class="min-h-screen bg-bg">
+        <main>${children}</main>
+      </body>
+    </html>
+  `;
+}
+```
+
+**Non-root layouts** (`app/<segment>/layout.ts`) and **pages**
+(`app/**/page.ts`) **must NOT** write `<!doctype>` / `<html>` / `<head>`
+/ `<body>`. The framework auto-emits the wrapper around the whole
+composition, so a nested shell ends up dropped by the HTML parser.
+`webjs check` enforces this via the `shell-in-non-root-layout` rule.
+
 ## Invariants (do not violate)
 
 1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
