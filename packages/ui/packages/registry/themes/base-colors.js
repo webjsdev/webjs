@@ -1,17 +1,40 @@
 /**
- * The 7 base colours shadcn ships. Each one swaps a small set of oklch hue/chroma
- * values; lightness stays identical so contrast ratios are preserved.
+ * The 7 base colours `@webjskit/ui` ships, mirroring shadcn's palette set.
+ * Each entry is a partial override on the canonical neutral palette defined
+ * in `themes/index.css`. Lightness stays identical so contrast ratios are
+ * preserved; only hue / chroma shift.
  *
- * The build pipeline emits one `r/themes/<name>.json` per entry.
+ * Pure ESM data module — imported at request time by the website's registry
+ * composer (`app/_lib/registry.server.ts`) to synthesize `theme-<color>` items
+ * on demand. No build step, no committed output. Numbers match the values
+ * shadcn emits in `apps/v4/public/r/themes/*.json`.
  */
 
 export const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taupe'];
 
+export const BASE_TITLES = {
+  neutral: 'Neutral',
+  stone: 'Stone',
+  zinc: 'Zinc',
+  mauve: 'Mauve',
+  olive: 'Olive',
+  mist: 'Mist',
+  taupe: 'Taupe',
+};
+
+export const BASE_DESCRIPTIONS = {
+  neutral: 'Pure grayscale (default)',
+  stone: 'Warm grey with a hint of brown',
+  zinc: 'Cool grey with a hint of blue',
+  mauve: 'Soft purple',
+  olive: 'Muted green',
+  mist: 'Cool teal',
+  taupe: 'Warm beige',
+};
+
 /**
- * Per-base overrides on the canonical neutral palette. Anything not listed here
- * is inherited from `themes/index.css` (the neutral default).
- *
- * Numbers chosen to match shadcn's emitted oklch values (apps/v4/public/r/themes/*.json).
+ * Per-base overrides. Anything not listed here is inherited from
+ * `themes/index.css` (the neutral default).
  */
 export const BASE_OVERRIDES = {
   neutral: { light: {}, dark: {} },
@@ -132,3 +155,39 @@ export const BASE_OVERRIDES = {
     },
   },
 };
+
+/**
+ * Merge per-base-colour overrides into the canonical neutral CSS.
+ *
+ * Strategy: locate the `:root { ... }` and `.dark { ... }` blocks, then
+ * substitute each overridden `--<key>: <value>` line in place. Keys not
+ * present in `overrides` keep their neutral defaults. The output preserves
+ * the original file's formatting + comments verbatim — only the values
+ * change.
+ *
+ * @param {string} neutralCss — verbatim contents of `themes/index.css`
+ * @param {{ light: Record<string,string>, dark: Record<string,string> }} overrides
+ */
+export function mergeThemeCss(neutralCss, overrides) {
+  let css = neutralCss;
+  css = replaceBlockVars(css, ':root', overrides.light || {});
+  css = replaceBlockVars(css, '.dark', overrides.dark || {});
+  return css;
+}
+
+function replaceBlockVars(css, selector, vars) {
+  if (!Object.keys(vars).length) return css;
+  const blockRe = new RegExp(`(${escapeRe(selector)}\\s*\\{)([\\s\\S]*?)(\\n\\})`);
+  return css.replace(blockRe, (_m, open, body, close) => {
+    let next = body;
+    for (const [key, value] of Object.entries(vars)) {
+      const varRe = new RegExp(`(--${escapeRe(key)}\\s*:\\s*)[^;\\n]+`);
+      next = next.replace(varRe, `$1${value}`);
+    }
+    return open + next + close;
+  });
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

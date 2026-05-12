@@ -190,7 +190,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <div class="announce">
       <span class="tag">New</span>
       <a href="https://ui.webjs.dev" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5">
-        Introducing webjs ui, a shadcn equivalent for web components
+        Introducing webjs ui, a component library for AI agents
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
         </svg>

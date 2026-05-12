@@ -5,10 +5,10 @@ const WEBSITE_URL = env.WEBSITE_URL || 'https://webjs.dev';
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.dev';
 
 export const metadata = {
-  title: '@webjskit/ui — shadcn-style components for web components',
+  title: 'Webjs UI — shadcn-style components for web components',
   description: 'A shadcn-equivalent component registry. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla — any project with Tailwind v4.',
   themeColor: '#1c1613',
-  openGraph: { type: 'website', title: '@webjskit/ui', description: 'shadcn-style components for web components' },
+  openGraph: { type: 'website', title: 'Webjs UI', description: 'shadcn-style components for web components' },
 };
 
 export default function Layout({ children }: { children: any }) {
@@ -119,7 +119,7 @@ export default function Layout({ children }: { children: any }) {
           <div class="max-w-5xl mx-auto flex flex-wrap min-h-14 items-center px-4 sm:px-6 py-2 gap-x-4 gap-y-2 sm:gap-6">
             <a href="/" class="font-bold text-base inline-flex items-center" style="color: var(--fg)">
               <span style="display:inline-block; width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg, var(--accent), color-mix(in oklch, var(--accent) 55%, var(--fg))); vertical-align:middle; margin-right:8px"></span>
-              @webjskit/ui
+              Webjs UI
             </a>
             <nav class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:ml-auto sm:gap-x-5" style="color: var(--fg-muted)">
               <a href="/" style="color: var(--fg-muted)">Components</a>

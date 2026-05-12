@@ -82,8 +82,8 @@ test('saas scaffold adds form/dialog components on top of the standard kit', asy
       assert.ok(await exists(join(appDir, 'components', 'ui', `${name}.ts`)));
     }
 
-    // Saas extras
-    for (const name of ['dialog', 'form', 'field', 'switch', 'checkbox']) {
+    // Saas extras (form + field are deferred to v2 — see packages/ui/AGENTS.md)
+    for (const name of ['dialog', 'switch', 'checkbox']) {
       assert.ok(
         await exists(join(appDir, 'components', 'ui', `${name}.ts`)),
         `saas should include components/ui/${name}.ts`,

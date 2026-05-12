@@ -2,31 +2,34 @@
 
 Internal — sources for the `@webjskit/ui` component registry.
 
-Not published. The build script reads `registry.json` + the files it points at
-and emits `r/*.json` — one JSON file per registry item, wire-compatible with
-shadcn's `registryItemSchema`. Those JSON files are served by
-[`@webjskit/ui-website`](../ui-website) at `https://ui.webjs.dev/r/<name>.json`,
-which the `@webjskit/ui` CLI fetches.
+Not published. `registry.json` is the manifest; the files it points at are the
+source of truth. The website
+([`@webjskit/ui-website`](../ui-website)) composes shadcn-compatible JSON on
+demand and serves it at `https://ui.webjs.dev/r/<name>.json`, which the
+`@webjskit/ui` CLI fetches. There is no build step — no `r/` output, no
+`prestart` hook.
 
 ## Layout
 
 ```
 components/        — one .ts per shadcn component (web component port, light DOM + Tailwind)
 lib/               — shared lib code shipped into user projects (utils.ts → cn)
-themes/            — theme CSS + base-colour palettes (neutral, stone, zinc, …)
-registry.json      — manifest read by scripts/build.js
-scripts/build.js   — compile registry.json + sources → r/*.json
-r/                 — build output (gitignored)
+themes/
+  index.css        — neutral @theme block + CSS variables (light + dark defaults)
+  base-colors.js   — per-base-colour overrides (stone, zinc, mauve, olive, mist, taupe) + mergeThemeCss
+registry.json      — manifest read by the website composer at request time
 ```
 
-## Build
+Only `theme-neutral` is in `registry.json`. The other 6 base colours are
+synthesized by the composer at request time — neutral CSS + per-colour
+overrides → merged CSS, same `files[]` shape.
 
-```sh
-npm run build
-```
+## Wire endpoints
 
-Emits:
-- `r/<name>.json` for every component (`type: "registry:ui"`)
-- `r/themes/<name>.json` for each base-colour theme (`type: "registry:theme"`)
-- `r/index.json` — flat list of all items
-- `r/registry.json` — full manifest (for clients that want it all in one fetch)
+Served by `@webjskit/ui-website` (`app/_lib/registry.server.ts` +
+`app/r/**`):
+
+- `GET /r/<name>.json` — single registry item (`type: registry:ui` /
+  `registry:theme` / `registry:lib`), with file contents inlined.
+- `GET /r/index.json` — flat metadata-only list.
+- `GET /r` — full manifest with every item's content inlined.
