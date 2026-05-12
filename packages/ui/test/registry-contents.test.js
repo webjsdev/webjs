@@ -11,7 +11,8 @@
  *     import `Base` + `defineElement` and call `defineElement('ui-…', Class)`.
  *
  * Tests cover both shapes plus hallmark-class assertions to catch regressions
- * that would silently nuke shadcn-equivalent visuals.
+ * that would silently nuke the expected visual output (variant classes,
+ * size classes, data-state attribute wiring).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

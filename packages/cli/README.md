@@ -48,10 +48,12 @@ webjs ui list                  # list every component available in the registry
 ```
 
 `webjs ui` proxies to [`@webjskit/ui`](https://www.npmjs.com/package/@webjskit/ui),
-a shadcn-equivalent CLI that copies framework-agnostic web-component sources
-into your project. The package is a hard dependency of `@webjskit/cli` —
-installing the CLI gives you `webjs ui` automatically. See
-[https://ui.webjs.dev](https://ui.webjs.dev) for the component catalogue.
+an AI-first component library + CLI that copies sources into your project — class
+helpers (`buttonClass`, `cardClass`, …) for the visual primitives and a small set
+of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where
+state matters. The package is a hard dependency of `@webjskit/cli` — installing
+the CLI gives you `webjs ui` automatically. See
+[https://ui.webjs.dev](https://ui.webjs.dev) for the catalogue.
 
 ## Scaffolded templates
 

@@ -33,10 +33,10 @@ The features grid is driven by the `FEATURES` array near the top of
 `app/page.ts`. Each entry is `{ icon, title, desc }`. Add a new entry
 in the correct order; the layout reflows automatically.
 
-The grid currently includes a card for **`@webjskit/ui`** (the
-shadcn-equivalent component library at https://ui.webjs.dev). When
-shipping major UI-kit changes, update that card's copy or pin a
-companion card highlighting the new components.
+The grid currently includes a card for **Webjs UI** (the AI-first
+component library at https://ui.webjs.dev). When shipping major UI-kit
+changes, update that card's copy or pin a companion card highlighting
+the new components.
 
 ## Announcement banner
 

@@ -23,7 +23,7 @@ const USAGE = `webjs — commands:
   webjs db generate                               Run \`prisma generate\`
   webjs db migrate [name]                         Run \`prisma migrate dev\`
   webjs db studio                                 Run \`prisma studio\`
-  webjs ui <subcmd>                               shadcn-style component CLI
+  webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjskit/ui installed in the project
   webjs help                                      Show this help`;
