@@ -64,7 +64,7 @@ Every code change must include:
 ## Code patterns
 
 - Tagged template: html`<div>${value}</div>` with css`...` for styles
-- Components: extend WebComponent, use static tag/styles/properties, call Class.register('tag')
+- Components: extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), call `Class.register('tag-name')` at the bottom of the file. The tag name is the argument to `.register()`, not a static field.
 - Server actions: *.server.ts files with one exported async function each
 - Directives: import { classMap, styleMap, ref, when, ... } from '@webjskit/core/directives'
 - Context: import { createContext, ContextProvider, ContextConsumer } from '@webjskit/core/context'

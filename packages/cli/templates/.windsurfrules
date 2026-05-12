@@ -67,7 +67,8 @@ The user should never have to ask for tests or documentation.
 ## Framework specifics
 
 - No build step: ES modules served directly
-- Web components with shadow DOM by default
+- Web components render into light DOM by default (so Tailwind / global CSS apply directly). Opt in to shadow DOM per component with `static shadow = true` when you need scoped styles, slot projection, or third-party-embed isolation.
+- Custom-element tag names are passed to `.register('tag-name')` — they are NOT a static field on the class.
 - One function per server action file (*.server.ts)
 - Use webjs directives: classMap, styleMap, ref, when, choose, guard, etc.
 - Use Context for cross-component data, Task for async data in components

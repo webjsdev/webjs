@@ -18,10 +18,10 @@
  * Or manually: mark a component and the framework handles the rest.
  *
  *   class MyWidget extends WebComponent {
- *     static tag = 'my-lazy-widget';
  *     static lazy = true;
  *     // ...
  *   }
+ *   MyWidget.register('my-lazy-widget');
  */
 
 /** @type {Map<string, string>} tag → module URL */

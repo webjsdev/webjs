@@ -30,7 +30,6 @@
  * import { Task } from '@webjskit/core/task';
  *
  * class UserSearch extends WebComponent {
- *   static tag = 'user-search';
  *   static properties = { query: { type: String } };
  *
  *   _search = new Task(this, {
@@ -55,7 +54,7 @@
  *     `;
  *   }
  * }
- * UserSearch.register();
+ * UserSearch.register('user-search');
  * ```
  *
  * ### Manual control

@@ -172,9 +172,8 @@ import { rateLimit, cache, createAuth, Credentials, Session } from '@webjskit/se
 import { WebComponent, html, css } from '@webjskit/core';
 
 export class Counter extends WebComponent {
-  static tag = 'my-counter';       // required, must contain a hyphen
   static properties = { count: { type: Number } };
-  static styles = css`button { padding: 8px 12px; }`;
+  static styles = css`button { padding: 8px 12px; }`;   // shadow-DOM only
   // static shadow = true;          // opt into shadow DOM (default: light DOM)
   // static lazy = true;             // download JS only when scrolled into view
 
@@ -223,7 +222,7 @@ absolute URLs from `ctx.url`).
 
 ## Invariants (do not violate)
 
-1. Custom element tags must contain a hyphen. Set `static tag`, call `.register()`.
+1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
 2. Never import `@prisma/client` or `node:*` from client-reachable files —
    only from `.server.ts` modules or `lib/*.ts`.
 3. Event / property / boolean holes in `` html`` `` are unquoted:

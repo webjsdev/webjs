@@ -1211,7 +1211,7 @@ the class-prefix rule documented in the Shadow-vs-Light DOM section.
 
 1. **Never import `@prisma/client`, `node:*`, or any server-only dependency from a file under `components/` or from a page's top-level module graph that isn't a server action.** The browser will try to load it and fail. Use a server action instead.
 2. **Every `*.server.js` export must be an `async` JSON-safe function.** Arguments/results are serialised over the wire.
-3. **Custom element tag names must contain a hyphen** (HTML spec). Set `static tag`, call `Class.register('tag')`.
+3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')` at the bottom of the file. The tag is not a static field — it's the argument to `.register()`.
 4. **Event (`@`), property (`.`), and boolean (`?`) holes in `html` must be unquoted** — e.g. `@click=${fn}`, never `@click="${fn}"`.
 5. **Do not mutate `this.state` directly** — use `setState`. State reads are fine.
 6. **Page and layout default exports must be functions.** They return a value (usually a `TemplateResult`); they do not call `render()` themselves.

@@ -84,12 +84,16 @@ function defaultHasChanged(a, b) {
  * while staying JSDoc-only and no-build.
  *
  * Subclasses declare:
- *  - `static tag` — the custom element name (e.g. `'my-counter'`)
  *  - `static properties` — attribute/property declarations with type info,
  *    reflection, custom converters, and internal-state mode
- *  - `static styles` — CSSResult or array thereof
- *  - `static shadow` — set false to render into light DOM instead of shadow
+ *  - `static styles` — CSSResult or array thereof (only meaningful with
+ *    `static shadow = true`; light-DOM components inherit global CSS)
+ *  - `static shadow` — set `true` to opt in to shadow DOM (default: `false`
+ *    → light DOM, so Tailwind / global CSS apply directly)
  *  - `render()` — returns a TemplateResult
+ *
+ * The tag name is not a static field — pass it to `.register('tag-name')`
+ * at the bottom of the file. Tag must contain a hyphen (HTML spec).
  *
  * Lifecycle (called in order during each update cycle):
  *  1. controllers' `beforeRender()`
@@ -104,12 +108,11 @@ function defaultHasChanged(a, b) {
  * Usage:
  * ```js
  * class MyCounter extends WebComponent {
- *   static tag = 'my-counter';
  *   static properties = { count: { type: Number, reflect: true } };
  *   state = { count: 0 };
  *   render() { return html`<button @click=${() => this.setState({ count: this.state.count + 1 })}>${this.state.count}</button>`; }
  * }
- * MyCounter.register();
+ * MyCounter.register('my-counter');
  * ```
  */
 
