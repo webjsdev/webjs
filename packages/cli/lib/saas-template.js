@@ -46,7 +46,9 @@ export async function writeSaasFiles(appDir) {
   // the standard set the full-stack scaffold already wrote. Pre-importing
   // them in login/signup/dashboard pages below means the dev server will
   // SSR these elements with full styling on first paint.
-  await copyUiComponents(appDir, ['dialog', 'form', 'field', 'switch', 'checkbox']);
+  // `form` and `field` are deferred to v2 (see packages/ui/AGENTS.md) —
+  // the saas auth pages use raw <form> + label/input class helpers instead.
+  await copyUiComponents(appDir, ['dialog', 'switch', 'checkbox']);
 
   // lib/prisma.ts
   await mkdir(join(appDir, 'lib'), { recursive: true });
