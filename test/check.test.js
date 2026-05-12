@@ -738,3 +738,126 @@ test('no-json-data-files: can be disabled via overrides', async () => {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+test('shell-in-non-root-layout: passes when root layout owns the shell', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'layout.ts'),
+      `import { html } from '@webjskit/core';
+export default function RootLayout({ children }) {
+  return html\`
+    <!doctype html>
+    <html lang="es" data-theme="dark">
+      <head></head>
+      <body class="bg-bg">\${children}</body>
+    </html>
+  \`;
+}
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
+    assert.equal(v, undefined, 'root layout writing the shell is allowed');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('shell-in-non-root-layout: flags nested layout with <html>', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'admin'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'admin', 'layout.ts'),
+      `import { html } from '@webjskit/core';
+export default function AdminLayout({ children }) {
+  return html\`
+    <!doctype html>
+    <html lang="en"><head></head><body>\${children}</body></html>
+  \`;
+}
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
+    assert.ok(v, 'nested layout writing a shell must be flagged');
+    assert.match(v.file, /app\/admin\/layout\.ts$/);
+    assert.match(v.message, /<!doctype|<html/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('shell-in-non-root-layout: flags page.ts that writes <body>', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'blog'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'blog', 'page.ts'),
+      `import { html } from '@webjskit/core';
+export default function BlogPage() {
+  return html\`<body class="bg-white"><main>hello</main></body>\`;
+}
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
+    assert.ok(v, 'page.ts writing <body> must be flagged');
+    assert.match(v.message, /<body/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('shell-in-non-root-layout: ignores shell tokens inside line/block comments', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'foo'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'foo', 'layout.ts'),
+      `import { html } from '@webjskit/core';
+// Note: do NOT write <!doctype> here — only the root layout owns the shell.
+/* Reminder: the framework auto-emits <html>/<head>/<body>. */
+export default function FooLayout({ children }) {
+  return html\`<main>\${children}</main>\`;
+}
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
+    assert.equal(v, undefined, 'comments mentioning the shell shouldn\'t trigger');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('shell-in-non-root-layout: ignores non-layout files in app/', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    // route.ts / middleware.ts / error.ts etc. can mention these tokens
+    // (e.g. error pages constructing fallback HTML) — only layout.* and
+    // page.* are policed by this rule.
+    await writeFile(
+      join(appDir, 'app', 'route.ts'),
+      `export async function GET() {
+  return new Response('<!doctype html><html><body>hi</body></html>', {
+    headers: { 'content-type': 'text/html' },
+  });
+}
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
+    assert.equal(v, undefined, 'route handlers must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

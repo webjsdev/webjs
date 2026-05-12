@@ -20,11 +20,17 @@ const WEBJS_MODULE_URL = pathToFileURL(
   resolve(__dirname, '../packages/core/index.js')
 ).toString();
 
-let _hoistHeadTags, ssrPage, ssrNotFound;
+let _hoistHeadTags, _extractUserShell, _buildDocumentParts, ssrPage, ssrNotFound;
 let tmpDir;
 
 before(async () => {
-  ({ _hoistHeadTags, ssrPage, ssrNotFound } = await import('../packages/server/src/ssr.js'));
+  ({
+    _hoistHeadTags,
+    _extractUserShell,
+    _buildDocumentParts,
+    ssrPage,
+    ssrNotFound,
+  } = await import('../packages/server/src/ssr.js'));
   tmpDir = mkdtempSync(join(tmpdir(), 'webjs-ssr-test-'));
 });
 
@@ -146,6 +152,130 @@ test('hoistHeadTags: peeks through leading <div data-layout> wrapper', () => {
   assert.ok(body.includes('<main>page</main></div>'),
     'body keeps page content + closing wrapper');
   assert.ok(!body.includes('rel="icon"'), 'icon link removed from body');
+});
+
+/* ------------ extractUserShell (pure function) ------------ */
+
+test('extractUserShell: returns null when body has no <html> shell', () => {
+  assert.equal(_extractUserShell('<main>hello</main>'), null);
+  assert.equal(_extractUserShell('<div>x</div><span>y</span>'), null);
+});
+
+test('extractUserShell: parses minimal <!doctype><html><head><body> shell', () => {
+  const shell = _extractUserShell(
+    '<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body class="dark"><main>x</main></body></html>'
+  );
+  assert.ok(shell, 'shell must be detected');
+  assert.equal(shell.htmlAttrs.trim(), 'lang="es"');
+  assert.equal(shell.bodyAttrs.trim(), 'class="dark"');
+  assert.match(shell.userHead, /<meta charset="utf-8">/);
+  assert.match(shell.userBody, /<main>x<\/main>/);
+});
+
+test('extractUserShell: tolerates leading whitespace + multi-attr <html>', () => {
+  const shell = _extractUserShell(
+    '\n  <!doctype html>\n  <html lang="en" dir="rtl" data-theme="dark">\n  <head></head><body><p>p</p></body></html>'
+  );
+  assert.ok(shell);
+  assert.match(shell.htmlAttrs, /lang="en"/);
+  assert.match(shell.htmlAttrs, /dir="rtl"/);
+  assert.match(shell.htmlAttrs, /data-theme="dark"/);
+});
+
+test('extractUserShell: works with <html> but no explicit <head>', () => {
+  const shell = _extractUserShell('<html lang="en"><body><main>x</main></body></html>');
+  assert.ok(shell);
+  assert.equal(shell.htmlAttrs.trim(), 'lang="en"');
+  assert.equal(shell.userHead, '');
+  assert.match(shell.userBody, /<main>x<\/main>/);
+});
+
+test('extractUserShell: rejects body that only contains <html> as a literal text', () => {
+  // Text containing the string "<html>" but not at the start shouldn't match.
+  assert.equal(_extractUserShell('<div>some <html> in text</div>'), null);
+});
+
+/* ------------ buildDocumentParts: user-shell + framework-shell paths ---- */
+
+test('buildDocumentParts: framework shell when no user shell present', () => {
+  const { prefix, streamBody, closer } = _buildDocumentParts(
+    '<main>page</main>',
+    { metadata: { title: 'X' }, moduleUrls: [], dev: false, streaming: false }
+  );
+  assert.match(prefix, /^<!doctype html>/);
+  assert.match(prefix, /<html lang="en">/);
+  assert.match(prefix, /<title>X<\/title>/);
+  assert.equal(streamBody, '<main>page</main>');
+  assert.equal(closer, '\n</body>\n</html>');
+});
+
+test('buildDocumentParts: keeps user shell attrs; splices framework tags into user <head>', () => {
+  const userShell =
+    '<!doctype html><html lang="es" data-theme="dark"><head><link rel="preconnect" href="https://cdn.test"></head><body class="bg-dark"><main>page</main></body></html>';
+  const { prefix, streamBody, closer } = _buildDocumentParts(userShell, {
+    metadata: { title: 'X', description: 'd' },
+    moduleUrls: [],
+    dev: false,
+    streaming: false,
+  });
+  // Open tag attributes from user.
+  assert.match(prefix, /<html lang="es" data-theme="dark">/);
+  assert.match(prefix, /<body class="bg-dark">/);
+  // Framework tags injected into <head>.
+  assert.match(prefix, /<title>X<\/title>/);
+  assert.match(prefix, /<meta name="description" content="d">/);
+  // User's own head tag preserved.
+  assert.match(prefix, /<link rel="preconnect" href="https:\/\/cdn\.test">/);
+  // No duplicate <html> or <head> wrapper.
+  assert.equal(prefix.match(/<html\b/g)?.length, 1, 'exactly one <html> tag');
+  assert.equal(prefix.match(/<head\b/g)?.length, 1, 'exactly one <head> tag');
+  assert.equal(streamBody.trim(), '<main>page</main>');
+  assert.equal(closer, '\n</body>\n</html>');
+});
+
+test('buildDocumentParts: auto-hoist of body-positioned <link> still works with user shell', () => {
+  const userShell =
+    '<!doctype html><html lang="en"><head></head><body><link rel="icon" href="/x.svg"><main>p</main></body></html>';
+  const { prefix, streamBody } = _buildDocumentParts(userShell, {
+    metadata: { title: 'X' },
+    moduleUrls: [],
+    dev: false,
+    streaming: false,
+  });
+  // The body-positioned <link rel="icon"> should have been lifted into <head>.
+  assert.match(prefix, /<link rel="icon" href="\/x\.svg">/);
+  // …and removed from the body.
+  assert.equal(streamBody.includes('rel="icon"'), false, 'icon link removed from body');
+});
+
+test('buildDocumentParts: passes through user shell with no <head> at all', () => {
+  const { prefix } = _buildDocumentParts(
+    '<html lang="en"><body><main>p</main></body></html>',
+    { metadata: { title: 'X' }, moduleUrls: [], dev: false, streaming: false }
+  );
+  // Framework still injects its tags (we just open a fresh <head>).
+  assert.match(prefix, /<head\b/);
+  assert.match(prefix, /<title>X<\/title>/);
+});
+
+test('buildDocumentParts: peeks past the data-layout wrapper to find user shell', () => {
+  // renderChain wraps every layout's output in <div data-layout="…">; the
+  // shell detection must still work end-to-end through that wrapper.
+  const wrappedShell =
+    `<div data-layout="layout"><!doctype html><html lang="es" data-theme="dark"><head></head><body class="bg-test"><main>page</main></body></html></div>`;
+  const { prefix, streamBody } = _buildDocumentParts(wrappedShell, {
+    metadata: { title: 'X' },
+    moduleUrls: [],
+    dev: false,
+    streaming: false,
+  });
+  // User shell attributes preserved.
+  assert.match(prefix, /<html lang="es" data-theme="dark">/);
+  assert.match(prefix, /<body class="bg-test">/);
+  // The data-layout marker reappears INSIDE the user's <body> so the
+  // client router can still detect same-layout navigations.
+  assert.match(streamBody, /<div data-layout="layout">/);
+  assert.match(streamBody, /<main>page<\/main>/);
 });
 
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
