@@ -43,7 +43,7 @@ webjs test                     # run server + browser tests
 webjs db <prisma-subcommand>   # prisma passthrough (saas template)
 
 webjs ui init                  # initialise @webjskit/ui in this project
-webjs ui add <names...>        # copy components from the registry (https://ui.webjs.dev/r/<name>.json)
+webjs ui add <names...>        # copy components from the registry (https://ui.webjs.dev/registry/<name>.json)
 webjs ui list                  # list every component available in the registry
 ```
 

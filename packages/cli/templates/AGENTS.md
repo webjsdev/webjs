@@ -149,7 +149,7 @@ webjs ui add dialog dropdown-menu select tabs
 ```
 
 Each `webjs ui add` call fetches the component source from
-`https://ui.webjs.dev/r/<name>.json`, copies it into
+`https://ui.webjs.dev/registry/<name>.json`, copies it into
 `components/ui/`, and installs any required npm deps. Run
 `webjs ui list` to see the full catalogue (~55 components) or browse
 [https://ui.webjs.dev](https://ui.webjs.dev).
