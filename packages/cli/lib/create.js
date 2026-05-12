@@ -87,9 +87,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
-      // tsserver plugins for editor intelligence inside html`` templates.
-      // Order in tsconfig matters — see below.
-      'ts-lit-plugin': '^2.0.0',
+      // tsserver plugin for editor intelligence inside html`` templates.
+      // @webjskit/ts-plugin bundles ts-lit-plugin internally, so just one
+      // plugin entry is needed in tsconfig (see below).
       '@webjskit/ts-plugin': 'latest',
     },
   }, null, 2) + '\n');
@@ -104,14 +104,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       noEmit: true,
       allowImportingTsExtensions: true,
       skipLibCheck: true,
-      // ts-lit-plugin: type-check + diagnostics inside html`` templates.
-      // @webjskit/ts-plugin: webjs-aware go-to-definition, "Unknown tag/attr"
-      // suppression for elements registered via Class.register('tag'), and
-      // attribute auto-complete sourced from `static properties`.
-      // Order matters — list ts-lit-plugin first; @webjskit/ts-plugin wraps
-      // it. Remove either entry if you don't want that capability.
+      // @webjskit/ts-plugin gives the editor:
+      //   • type-check + diagnostics inside html`` templates (via the
+      //     ts-lit-plugin it bundles internally)
+      //   • webjs-aware go-to-definition on custom-element tags
+      //   • "Unknown tag/attribute" suppression for elements registered
+      //     via Class.register('tag-name')
+      //   • attribute auto-complete sourced from `static properties`
+      //   • attribute-value type-check against `declare` annotations
+      // Editor-only — the framework runs without it.
       plugins: [
-        { name: 'ts-lit-plugin', strict: true },
         { name: '@webjskit/ts-plugin' },
       ],
     },

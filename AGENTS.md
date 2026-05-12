@@ -590,7 +590,7 @@ no "Unknown tag" red-squiggle on registered webjs elements, and
 `document.querySelector('student-card')` returning `StudentCard | null`
 all work across VS Code and Neovim. See the
 [Editor Setup](docs/app/docs/editor-setup/page.ts) doc for the one-time
-`tsconfig` + `ts-lit-plugin` + `@webjskit/ts-plugin` setup;
+one-line `tsconfig` plugins entry for `@webjskit/ts-plugin` (which bundles `ts-lit-plugin` internally);
 `HTMLElementTagNameMap` augmentation is now optional, only needed for
 typing DOM-query call sites.
 
@@ -1408,24 +1408,29 @@ renders it (via `renderToString` if a template), parses it into a DOM
 environment, and returns the first child element. `waitForUpdate(el)`
 yields two microtasks so setState-triggered re-renders settle.
 
-### TypeScript editor plugins — `ts-lit-plugin` + `@webjskit/ts-plugin` (a pair)
+### TypeScript editor plugin — `@webjskit/ts-plugin`
 
-**Both plugins are editor-only — neither is required for the framework
-to run.** The framework's runtime (renderer, hydration, SSR, the dev
-server) has no dependency on them; they exist purely to give VS Code /
-Neovim / any tsserver-backed editor proper intelligence inside
-`` html`…` `` and `` css`…` `` templates.
+**Editor-only — not required for the framework to run.** The runtime
+(renderer, hydration, SSR, dev server) has no dependency on it. The
+plugin exists purely to give VS Code / Neovim / any tsserver-backed
+editor proper intelligence inside `` html`…` `` and `` css`…` `` templates.
 
-**Install both or neither — they go together.** `ts-lit-plugin` provides
-the underlying template-literal intelligence; `@webjskit/ts-plugin`
-*wraps* it to add webjs-aware behaviour (it physically loads
-`ts-lit-plugin` from `node_modules` and proxies its output). With only
-`ts-lit-plugin` installed, every webjs custom tag gets red-squiggled
-as "Unknown tag". With only `@webjskit/ts-plugin` installed, there's
-nothing to wrap. The scaffold installs both as devDependencies and
-wires both into `tsconfig.json` automatically.
+**A single plugin.** As of `@webjskit/ts-plugin@0.4.0`, `ts-lit-plugin`
+is bundled internally as a runtime dependency — our plugin loads it
+programmatically inside its `create(info)` factory and layers
+webjs-aware behaviour on top. Users list exactly one plugin in
+`tsconfig.json`:
 
-Together they give VS Code / Neovim:
+```jsonc
+"plugins": [
+  { "name": "@webjskit/ts-plugin" }
+]
+```
+
+The scaffold writes this for you and lists only `@webjskit/ts-plugin`
+in `devDependencies` (`ts-lit-plugin` arrives transitively).
+
+It gives VS Code / Neovim:
 
 - Type-check + diagnostics for attribute *values* inside `` html`` `` tagged
   templates (`ts-lit-plugin`).
@@ -1452,8 +1457,10 @@ editing (directly or transitively). A tag registered somewhere in the
 program but not imported here is still flagged — runtime would fail
 too, and the warning is the correct prompt to add the import.
 
-Plugin order matters in tsconfig — list `ts-lit-plugin` first; the webjs
-plugin wraps it to filter diagnostics and augment completions.
+(Historical note: before `@webjskit/ts-plugin@0.4.0` users had to list
+`ts-lit-plugin` and `@webjskit/ts-plugin` separately in `tsconfig.json`
+and order mattered. `0.4.0` bundles ts-lit-plugin as a runtime dep and
+loads it programmatically, so only one entry is needed now.)
 
 ### Add a database model
 
