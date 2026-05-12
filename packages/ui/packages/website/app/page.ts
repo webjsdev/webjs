@@ -13,7 +13,7 @@ export default async function Home() {
         AI-first component library
       </div>
       <h1 class="mt-6 text-5xl md:text-6xl font-bold tracking-tight leading-[1.05]">
-        A component library<br />built for AI agents.
+        Web components library<br />written for AI agents.
       </h1>
       <p class="mt-6 text-xl text-fg-muted max-w-2xl leading-relaxed">
         ${ui.length} primitives designed for the agent era — copy‑paste source code,
