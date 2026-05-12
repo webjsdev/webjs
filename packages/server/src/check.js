@@ -82,6 +82,11 @@ export const RULES = [
     description:
       'Apps must use Prisma + SQLite (already wired up in every scaffold) for persisted data, not JSON files. Flags JSON files that look like a fake database — top-level data/ JSON files (data/todos.json, data/posts.json…), or DB-shaped names (db.json, database.json, store.json, *-db.json) anywhere outside node_modules/, prisma/, .next/, dist/, build/, public/. Read-only seed data and config JSON (package.json, tsconfig.json, etc.) are exempt.',
   },
+  {
+    name: 'shell-in-non-root-layout',
+    description:
+      'Only the root layout (app/layout.{js,ts}) may write a <!doctype>/<html>/<head>/<body> shell to override default <html lang>, <body class>, etc. Non-root layouts (app/<segment>/layout.{js,ts}) and pages (app/**/page.{js,ts}) must not — the framework auto-emits the wrapper around the whole composition, so a nested shell ends up nested inside <body> where browsers drop it. Triggers on any of <!doctype>, <html, <head, <body in a non-root layout or page.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -709,6 +714,43 @@ export async function checkConventions(appDir, opts) {
         message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up — see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
         fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.ts'\`. Delete ${s.rel} once the data has moved.`,
       });
+    }
+  }
+
+  // --- Rule: shell-in-non-root-layout ---
+  // Only app/layout.{js,ts} may write <!doctype>/<html>/<head>/<body>. The
+  // framework auto-emits the shell around the whole composition; a nested
+  // shell ends up duplicated and silently dropped by the HTML parser.
+  if (isRuleEnabled('shell-in-non-root-layout', overrides)) {
+    // Root layout = exactly "app/layout.js" or "app/layout.ts".
+    const ROOT_LAYOUT = /^app\/layout\.(?:js|mjs|ts|mts)$/;
+    // Any other layout or page under app/ (including pages, nested layouts).
+    const LAYOUT_OR_PAGE = /^app\/(?:.+\/)?(?:layout|page)\.(?:js|mjs|ts|mts)$/;
+    // Shell tags. Case-insensitive, allow whitespace, allow attributes for <html>/<body>.
+    const SHELL_RE = /<!doctype\b|<html\b|<head\b|<body\b/i;
+    for (const { rel, content } of files) {
+      if (ROOT_LAYOUT.test(rel)) continue;
+      if (!LAYOUT_OR_PAGE.test(rel)) continue;
+      // Strip line comments + /* … */ block comments + ` ` string-template
+      // tag content is fine — we're looking at the literal HTML in the
+      // returned `html` template, which won't be inside a code comment.
+      // A naive substring scan is good enough; false positives only when
+      // someone genuinely embeds `<html>` inside a string literal that
+      // isn't a layout shell (rare and probably an honest code smell).
+      const stripped = content
+        .replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '');
+      const m = stripped.match(SHELL_RE);
+      if (m) {
+        violations.push({
+          rule: 'shell-in-non-root-layout',
+          file: rel,
+          message:
+            `Non-root layout/page contains ${m[0]} — only the root layout (app/layout.{js,ts}) may write the shell. The framework auto-emits <!doctype>/<html>/<head>/<body> around the whole composition; a nested shell ends up duplicated and dropped by the HTML parser.`,
+          fix:
+            'Remove the <!doctype>/<html>/<head>/<body> wrapper from this file. Use the `metadata` export for <title>/<meta>/og/twitter, return inline <link>/<style>/<script> for head-bound resources (they auto-hoist), and put any `<html lang>` / `<body class>` overrides in app/layout.{js,ts} instead.',
+        });
+      }
     }
   }
 

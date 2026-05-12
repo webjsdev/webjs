@@ -1017,6 +1017,66 @@ Supported files: `sitemap.js`, `robots.js`, `manifest.js`, `icon.js`, `apple-ico
 - Must embed `children` somewhere in its returned template.
 - Nest by folder: `app/layout.js` wraps everything; `app/blog/layout.js` wraps only `/blog/**`.
 
+#### Document shell — who owns `<html>` / `<head>` / `<body>`
+
+By default the framework owns the shell. The SSR pipeline auto-emits
+`<!doctype html><html lang="en"><head>…</head><body>` around every page
+composition, and auto-hoists any `<link>` / `<style>` / `<meta>` /
+`<script>` tags returned from a layout or page into the real `<head>`.
+So a layout that just returns `html\`<main>${children}</main>\`` works
+out of the box with the framework's default shell.
+
+**The root layout** (`app/layout.{js,ts}` — exactly that path) **may
+optionally write its own `<!doctype><html><head>…</head><body>` shell**
+if it needs to override the defaults — e.g. set `<html lang="es">`,
+`<html dir="rtl">`, `<html data-theme="dark">`, `<body class="…">`,
+or add custom `<head>` content like a `<link rel="preconnect">`. When
+the root layout supplies a shell, the framework detects it and:
+
+- Keeps the user's `<html>` / `<body>` attributes verbatim.
+- Splices the framework's required tags (importmap, modulepreload,
+  `<title>`, `<meta>` from the `metadata` export, og/twitter meta)
+  into the user's `<head>` alongside whatever the user wrote there.
+- Continues to auto-hoist body-positioned head-bound tags up into
+  that same `<head>`.
+
+```ts
+// app/layout.ts — root, optionally owning the shell.
+export const metadata = {
+  title: 'My App',
+  description: 'A great app',
+  openGraph: { type: 'website', image: '/og.png' },
+};
+
+export default function RootLayout({ children }) {
+  // Default — let the framework own the shell:
+  return html`<main>${children}</main>`;
+
+  // OR — own the shell to set <html>/<body> attributes:
+  return html`
+    <!doctype html>
+    <html lang="es" dir="ltr" data-theme="dark">
+      <head>
+        <link rel="preconnect" href="https://cdn.example.com">
+      </head>
+      <body class="min-h-screen bg-bg">
+        <main>${children}</main>
+      </body>
+    </html>
+  `;
+}
+```
+
+**Non-root layouts** (`app/<segment>/layout.{js,ts}`) and **pages**
+(`app/**/page.{js,ts}`) **MUST NOT** write `<!doctype>` / `<html>` /
+`<head>` / `<body>`. The framework auto-emits the wrapper around the
+whole composition, so a nested shell ends up nested inside `<body>`
+where the HTML parser drops it. `webjs check` enforces this via the
+`shell-in-non-root-layout` rule.
+
+The `metadata` export still merges across nested layouts (deepest
+wins), regardless of which layout supplied the shell.
+
 ### Route handlers (`app/**/route.js`)
 
 - Export named async functions per method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.

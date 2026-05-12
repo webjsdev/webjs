@@ -62,17 +62,24 @@ export async function ssrPage(route, params, url, opts) {
         );
     // Extract CSP nonce from request headers (if present).
     const nonce = opts.req ? getNonce(opts.req) : undefined;
+    const wrapOpts = {
+      metadata,
+      moduleUrls,
+      dev: opts.dev,
+      streaming: suspenseCtx.pending.length > 0,
+      preloads,
+      lazyComponents,
+      nonce,
+    };
+    // buildDocumentParts picks up a user-supplied <!doctype><html>…</html>
+    // shell from the body when present; otherwise auto-emits the framework
+    // shell. Either way the returned `prefix` ends just past the open <body>
+    // and `closer` is the matching `</body></html>`.
+    const { prefix, streamBody, closer } = buildDocumentParts(body, wrapOpts);
     return streamingHtmlResponse(
-      wrapHead({
-        metadata,
-        moduleUrls,
-        dev: opts.dev,
-        streaming: suspenseCtx.pending.length > 0,
-        preloads,
-        lazyComponents,
-        nonce,
-      }),
-      body,
+      prefix,
+      streamBody,
+      closer,
       suspenseCtx,
       200,
       opts.req,
@@ -270,14 +277,186 @@ function hoistHeadTags(headHtml, bodyHtml) {
 export { hoistHeadTags as _hoistHeadTags };
 
 /**
+ * Detect a user-supplied <!doctype><html>…</html> shell at the top of
+ * `body`. Returns the parsed parts when present; otherwise null.
+ *
+ * The framework owns the shell by default — it auto-emits
+ * `<!doctype><html lang="en"><head>…</head><body>` around every page.
+ * But the *root layout* (only) may write its own shell to set
+ * `<html lang>`, `<html dir>`, `<html data-*>`, `<body class>`, etc.
+ * When that happens we keep the user's shell verbatim and splice the
+ * framework's required `<head>` tags (importmap, modulepreload, title,
+ * meta, og/twitter) into the user's `<head>`. Non-root layouts that
+ * try this would produce nested-shell garbage; `webjs check` flags
+ * them via the `shell-in-non-root-layout` rule.
+ *
+ * Peeks past an optional leading `<div data-layout="…">` wrapper —
+ * `renderChain` always wraps the outermost layout's output in one so
+ * the client router can detect same-layout navigations. Without this
+ * peek-through, a user-supplied shell would always sit inside the
+ * wrapper and never be detected. When a shell is found, the
+ * data-layout attribute is propagated to the user's <body> via the
+ * returned `dataLayoutAttr` field so the client router still works.
+ *
+ * @param {string} body
+ * @returns {{
+ *   htmlAttrs: string,
+ *   headAttrs: string,
+ *   userHead: string,
+ *   bodyAttrs: string,
+ *   userBody: string,
+ *   dataLayoutAttr: string,
+ * } | null}
+ */
+function extractUserShell(body) {
+  // Strip an optional outer `<div data-layout="…">…</div>` wrapper. We
+  // only strip if it's a single wrapping div whose contents are the
+  // entire body — the case `renderChain` produces.
+  const wrapRe = /^(\s*)<div\s+(data-layout="[^"]*")>\s*([\s\S]*?)\s*<\/div>\s*$/i;
+  const wm = body.match(wrapRe);
+  let dataLayoutAttr = '';
+  let inner = body;
+  if (wm) {
+    dataLayoutAttr = wm[2];
+    inner = wm[3];
+  }
+
+  // Tolerant: allow optional whitespace, optional <!doctype>, then <html ...>.
+  // Capture html attributes (anything between <html and >).
+  const htmlOpen = /^\s*(?:<!doctype[^>]*>\s*)?<html\b([^>]*)>\s*([\s\S]*)<\/html>\s*$/i;
+  const m = inner.match(htmlOpen);
+  if (!m) return null;
+  const htmlAttrs = m[1] || '';
+  const shellInner = m[2];
+
+  // <head> is optional inside the user's shell — if missing, the
+  // framework's head content stands alone. Same for <body>.
+  const headRe = /<head\b([^>]*)>([\s\S]*?)<\/head>/i;
+  const bodyRe = /<body\b([^>]*)>([\s\S]*?)<\/body>/i;
+  const headMatch = shellInner.match(headRe);
+  const bodyMatch = shellInner.match(bodyRe);
+
+  return {
+    htmlAttrs,
+    headAttrs: headMatch ? (headMatch[1] || '') : '',
+    userHead: headMatch ? headMatch[2] : '',
+    bodyAttrs: bodyMatch ? (bodyMatch[1] || '') : '',
+    // If the user omitted <body>, treat everything outside <head>…</head>
+    // as their body content.
+    userBody: bodyMatch
+      ? bodyMatch[2]
+      : (headMatch ? shellInner.replace(headMatch[0], '') : shellInner).trim(),
+    dataLayoutAttr,
+  };
+}
+
+// Re-export for unit testing.
+export { extractUserShell as _extractUserShell };
+
+/**
+ * Inner-only variant of wrapHead — returns just the meta/title/link/script
+ * tags that should live INSIDE <head>, without the surrounding
+ * <!doctype><html><head>…</head><body> shell. Used to splice into a
+ * user-provided shell from `extractUserShell()`.
+ *
+ * @param {Parameters<typeof wrapHead>[0]} opts
+ * @returns {string}
+ */
+function buildHeadInner(opts) {
+  // Pull the full prefix and strip the <!doctype><html><head> opening + the
+  // closing </head><body> so we're left with the inner tags only. Keeps a
+  // single source of truth for what goes in <head>.
+  const full = wrapHead({ ...opts, streaming: false });
+  const start = full.indexOf('<head>');
+  const end = full.indexOf('</head>');
+  if (start === -1 || end === -1) return '';
+  // +'<head>'.length to skip past the opening tag itself.
+  return full.slice(start + '<head>'.length, end).trim();
+}
+
+/**
+ * Build the prefix/body/closer triple for a rendered layout's body. Single
+ * source of truth used by both the buffered (`wrapInDocument`) and
+ * streaming (`streamingHtmlResponse`) paths.
+ *
+ * If `body` starts with a user-supplied <!doctype><html>…</html> shell:
+ *   - `prefix` opens with the user's `<!doctype><html><head>` (with their
+ *     attributes), splices the framework's required tags + the user's
+ *     own head content + auto-hoisted body-positioned head-bound tags,
+ *     then closes `</head>` and opens `<body>` (with user attributes).
+ *   - `streamBody` is the user's body content (head-hoist already stripped).
+ *   - `closer` is `</body></html>`.
+ *
+ * Otherwise (no user shell): use the framework's auto-emitted shell.
+ *
+ * @param {string} body
+ * @param {Parameters<typeof wrapHead>[0]} wrapOpts
+ * @returns {{ prefix: string, streamBody: string, closer: string }}
+ */
+function buildDocumentParts(body, wrapOpts) {
+  const shell = extractUserShell(body);
+  if (shell) {
+    const headInner = buildHeadInner(wrapOpts);
+    const hoist = collectHoistedHeadTags(shell.userBody);
+    const composedHead = [headInner, shell.userHead.trim(), hoist.tags.join('\n')]
+      .filter(Boolean)
+      .join('\n');
+    // Re-apply the data-layout marker inside the user's <body> so the
+    // client router can still detect same-layout navigations.
+    const bodyInner = shell.dataLayoutAttr
+      ? `<div ${shell.dataLayoutAttr}>${hoist.body}</div>`
+      : hoist.body;
+    const prefix =
+      `<!doctype html>\n<html${shell.htmlAttrs}>\n<head${shell.headAttrs}>\n` +
+      composedHead +
+      `\n</head>\n<body${shell.bodyAttrs}>\n`;
+    return { prefix, streamBody: bodyInner, closer: `\n</body>\n</html>` };
+  }
+  // No user shell — framework owns the wrapper.
+  const headHtml = wrapHead(wrapOpts);
+  const { head, body: bodyOut } = hoistHeadTags(headHtml, body);
+  return { prefix: head, streamBody: bodyOut, closer: `\n</body>\n</html>` };
+}
+
+// Re-export for unit testing.
+export { buildDocumentParts as _buildDocumentParts };
+
+/**
  * Buffered wrapper (error / not-found paths; no Suspense streaming).
+ *
  * @param {string} body
  * @param {{ metadata: Record<string,any>, moduleUrls: string[], dev: boolean }} opts
  */
 function wrapInDocument(body, opts) {
-  const headHtml = wrapHead({ ...opts, streaming: false });
-  const { head, body: bodyOut } = hoistHeadTags(headHtml, body);
-  return head + bodyOut + `\n</body>\n</html>`;
+  const { prefix, streamBody, closer } = buildDocumentParts(body, { ...opts, streaming: false });
+  return prefix + streamBody + closer;
+}
+
+/**
+ * Strip leading head-bound tags (<script>, <style>, <link>) from a body
+ * string. Returns the collected tags + the remaining body. Mirrors what
+ * `hoistHeadTags` does but takes/returns plain strings (no head input)
+ * so it can be used with a user-provided <head>.
+ *
+ * @param {string} bodyHtml
+ * @returns {{ tags: string[], body: string }}
+ */
+function collectHoistedHeadTags(bodyHtml) {
+  const tags = [];
+  const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
+  // Walk past an optional leading <div data-layout="..."> wrapper, same as
+  // hoistHeadTags() does. Without this, head-bound tags emitted at the top
+  // of a layout template would always sit inside the wrapper and never lift.
+  const wrapRe = /^(\s*<div\s+data-layout="[^"]*">\s*)/;
+  const wm = wrapRe.exec(bodyHtml);
+  const prefix = wm ? wm[1] : '';
+  let remaining = wm ? bodyHtml.slice(wm[0].length) : bodyHtml;
+  let m;
+  while ((m = re.exec(remaining)) !== null) {
+    tags.push(m[1]);
+    remaining = remaining.slice(m[0].length);
+  }
+  return { tags, body: prefix + remaining };
 }
 
 /**
@@ -478,8 +657,7 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
  * @param {URL | undefined} url
  * @param {Record<string, any>} [metadata]
  */
-function streamingHtmlResponse(headHtml, bodyHtml, ctx, status, req, url, metadata) {
-  const { head, body: hoistedBody } = hoistHeadTags(headHtml, bodyHtml);
+function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default — the developer
@@ -491,12 +669,12 @@ function streamingHtmlResponse(headHtml, bodyHtml, ctx, status, req, url, metada
   }
 
   if (!ctx.pending.length) {
-    return new Response(head + hoistedBody + '\n</body>\n</html>', { status, headers });
+    return new Response(prefix + bodyHtml + closer, { status, headers });
   }
 
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(head + hoistedBody));
+      controller.enqueue(encoder.encode(prefix + bodyHtml));
       try {
         // Loop: resolve all currently-pending promises in parallel; nested
         // Suspense inside resolved content adds more pending entries.
@@ -529,7 +707,7 @@ function streamingHtmlResponse(headHtml, bodyHtml, ctx, status, req, url, metada
           }
         }
       } finally {
-        controller.enqueue(encoder.encode('\n</body>\n</html>'));
+        controller.enqueue(encoder.encode(closer));
         controller.close();
       }
     },
