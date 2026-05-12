@@ -40,6 +40,11 @@
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
 
+  /* Transition tokens — matched to webjs.dev. Generates Tailwind's
+     `duration-fast` and `duration-slow` utilities. */
+  --duration-fast: 140ms;
+  --duration-slow: 220ms;
+
   /* ------------------------------------------------------------------------
      Shadcn theme tokens — used by the ui-* component previews.
      These are SEPARATE from the webjs chrome tokens above so the docs site
