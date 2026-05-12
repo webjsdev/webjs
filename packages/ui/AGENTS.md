@@ -106,9 +106,9 @@ packages/ui/
     app/
       layout.ts, page.ts          docs site shell + home
       _lib/registry.server.ts     composes registry JSON on demand from ../../registry/
-      r/route.ts                  GET /r — full manifest (composed on demand)
-      r/index.json/route.ts       GET /r/index.json — flat list
-      r/[name]/route.ts           GET /r/<name>.json — single item (CLI fetches here)
+      registry/route.ts                  GET /registry — full manifest (composed on demand)
+      registry/index.json/route.ts       GET /registry/index.json — flat list
+      registry/[name]/route.ts           GET /registry/<name>.json — single item (CLI fetches here)
       docs/page.ts                docs root
       docs/components/[name]/page.ts  per-component docs page
 ```

@@ -1,6 +1,6 @@
 import { loadRegistryManifest } from '../_lib/registry.server.ts';
 
-/** GET /r — full registry manifest with content inlined per item. */
+/** GET /registry — full registry manifest with content inlined per item. */
 export async function GET() {
   const body = await loadRegistryManifest();
   return new Response(body, {

@@ -3,7 +3,7 @@ import { registryItemSchema, registryIndexSchema } from './schema.js';
 /**
  * Default registry URL. Override via REGISTRY_URL env var, or per-call.
  */
-export const DEFAULT_REGISTRY_URL = process.env.REGISTRY_URL || 'https://ui.webjs.dev/r';
+export const DEFAULT_REGISTRY_URL = process.env.REGISTRY_URL || 'https://ui.webjs.dev/registry';
 
 const cache = new Map();
 

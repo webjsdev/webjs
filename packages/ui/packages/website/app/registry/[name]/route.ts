@@ -11,11 +11,10 @@ const HEADERS = {
 };
 
 /**
- * GET /r/<name>.json — returns the registry item for `<name>`.
+ * GET /registry/<name>.json — returns the registry item for `<name>`.
  *
- * Two reserved slugs:
- *   - `index`    → flat list (same as `GET /r/index.json` via the sibling route)
- *   - `registry` → full manifest with every item's content inlined
+ * One reserved slug:
+ *   - `index` → flat list (same as `GET /registry/index.json` via the sibling route)
  *
  * Everything else looks up the item in `registry.json` and composes its
  * shadcn-compatible JSON on demand. See _lib/registry.server.ts.
