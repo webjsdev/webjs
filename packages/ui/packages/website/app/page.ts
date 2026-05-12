@@ -112,7 +112,7 @@ npx webjsui add button card dialog</code></pre>
         Idiomatic HTML + a named class helper. No state to thread, no wrappers to decode.
       </p>
       <div class="grid md:grid-cols-2 gap-4">
-        <div class="flex flex-col rounded-lg border border-border bg-bg-elev p-5">
+        <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A form field</div>
           <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;form</span> class<span class="text-fg-subtle">=</span>\${stackClass(<span class="text-accent">'sm'</span>)}<span class="text-fg-subtle">&gt;</span>
   <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${fieldClass()}<span class="text-fg-subtle">&gt;</span>
@@ -123,7 +123,7 @@ npx webjsui add button card dialog</code></pre>
   <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">size</span>: <span class="text-accent">'sm'</span> })} <span class="text-fg-subtle">type="submit"&gt;</span>Subscribe<span class="text-fg-subtle">&lt;/button&gt;</span>
 <span class="text-fg-subtle">&lt;/form&gt;</span></code></pre>
         </div>
-        <div class="flex flex-col rounded-lg border border-border bg-bg-elev p-5">
+        <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A dialog</div>
           <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;ui-dialog&gt;</span>
   <span class="text-fg-subtle">&lt;ui-dialog-trigger&gt;</span>
