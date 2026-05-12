@@ -625,45 +625,60 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   });
 
   // ---------------------------------------------------------------------------
-  // UI demo route (@webjskit/ui showcase)
+  // UI demo route (Webjs UI showcase)
   //
-  // Verifies the /ui-demo route renders the expected ui-* custom elements:
-  // ui-button, ui-card, ui-input, ui-alert, ui-badge. These tags are part
-  // of the @webjskit/ui registry that ships components on demand via
-  // `webjs ui add`. The test only asserts that the tags are present in
-  // the DOM — they may or may not be upgraded depending on whether the
-  // user has run `webjs ui add` for each.
+  // Verifies /ui-demo renders both tiers correctly:
+  //   - Tier 1 (button, card, input, label, alert, badge) — class-helper
+  //     functions on native elements. Asserts the helper output (e.g.
+  //     "rounded-xl border bg-card", "bg-primary text-primary-foreground")
+  //     is present in the rendered HTML.
+  //   - Tier 2 (dialog) — real <ui-dialog> custom element.
+  // Also enforces the regression denylist: no <ui-button>/<ui-card>/
+  // <ui-input>/<ui-alert>/<ui-badge> tags (Tier-1 is class-helper-only
+  // after the migration).
   // ---------------------------------------------------------------------------
 
-  test('/ui-demo route renders the @webjskit/ui demo heading and components', async () => {
+  test('/ui-demo route renders both tiers: class-helper output + ui-dialog', async () => {
+    // After the Tier-1/Tier-2 migration: Tier-1 components (button, card,
+    // input, label, alert, badge) are class-helper functions — no
+    // <ui-button>/<ui-card> custom elements. They render as native
+    // <button>/<div>/<input> with the helper's class string. Tier-2
+    // components (dialog and friends) stay as <ui-X> custom elements.
     const resp = await page.goto(baseUrl + '/ui-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
     assert.equal(resp.status(), 200, '/ui-demo should respond 200');
     await sleep(1500);
 
     const result = await page.evaluate(() => {
-      const headings = [...document.querySelectorAll('h1')].map(h => h.textContent || '');
+      const headings = [...document.querySelectorAll('h1')].map((h) => h.textContent || '');
+      const html = document.documentElement.outerHTML;
       return {
-        hasHeading: headings.some(t => t.includes('@webjskit/ui demo')),
-        uiButtonCount: document.querySelectorAll('ui-button').length,
-        uiCardCount: document.querySelectorAll('ui-card').length,
-        uiInputCount: document.querySelectorAll('ui-input').length,
-        uiAlertCount: document.querySelectorAll('ui-alert').length,
-        uiBadgeCount: document.querySelectorAll('ui-badge').length,
+        hasHeading: headings.some((t) => t.toLowerCase().includes('webjs ui demo')),
+        // Stale Tier-1 tags MUST NOT appear (regression denylist).
+        staleTier1: {
+          'ui-button': document.querySelectorAll('ui-button').length,
+          'ui-card':   document.querySelectorAll('ui-card').length,
+          'ui-input':  document.querySelectorAll('ui-input').length,
+          'ui-alert':  document.querySelectorAll('ui-alert').length,
+          'ui-badge':  document.querySelectorAll('ui-badge').length,
+        },
+        // Tier-2 dialog WAS migrated to stay as a custom element.
+        uiDialogCount: document.querySelectorAll('ui-dialog').length,
+        // Tier-1 helper output present (cardClass + buttonClass characteristic strings).
+        hasCardClassOutput: html.includes('rounded-xl border bg-card'),
+        hasButtonClassOutput: html.includes('bg-primary text-primary-foreground hover:bg-primary'),
       };
     });
 
-    assert.ok(result.hasHeading, '"@webjskit/ui demo" heading should be visible');
-    assert.ok(result.uiButtonCount >= 1, `expected at least one <ui-button>, got ${result.uiButtonCount}`);
-    assert.ok(result.uiCardCount >= 1, `expected at least one <ui-card>, got ${result.uiCardCount}`);
-    assert.ok(result.uiInputCount >= 1, `expected at least one <ui-input>, got ${result.uiInputCount}`);
-    assert.ok(result.uiAlertCount >= 1, `expected at least one <ui-alert>, got ${result.uiAlertCount}`);
-    assert.ok(result.uiBadgeCount >= 1, `expected at least one <ui-badge>, got ${result.uiBadgeCount}`);
+    assert.ok(result.hasHeading, '"Webjs UI demo" heading should be visible');
+    for (const [tag, count] of Object.entries(result.staleTier1)) {
+      assert.equal(count, 0, `Tier-1 ${tag} is a class helper after migration; <${tag}> tag must not appear`);
+    }
+    assert.ok(result.uiDialogCount >= 1, `expected at least one <ui-dialog>, got ${result.uiDialogCount}`);
+    assert.ok(result.hasCardClassOutput, 'cardClass() Tailwind output should be present');
+    assert.ok(result.hasButtonClassOutput, 'buttonClass() Tailwind output should be present');
   });
 
-  test('/ui-demo: clicking the "Send link" button does not crash the page', async () => {
-    // The button may or may not be upgraded — either way clicking it
-    // should be a no-op (no handler wired up in the demo). We just verify
-    // there are no JS errors as a result of the click.
+  test('/ui-demo: clicking a button does not crash the page', async () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
@@ -671,10 +686,12 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     await sleep(1500);
 
     const clicked = await page.evaluate(() => {
-      // Find the "Send link" ui-button — it has the visible "Send link" text.
-      const buttons = [...document.querySelectorAll('ui-button')];
+      // Tier-1 buttons render as native <button> with buttonClass() output.
+      // Find one in the demo (any of the two on /ui-demo work).
+      const buttons = [...document.querySelectorAll('button')];
       for (const b of buttons) {
-        if ((b.textContent || '').toLowerCase().includes('send link')) {
+        const t = (b.textContent || '').toLowerCase();
+        if (t.includes('send link') || t.includes('cancel') || t.includes('open dialog')) {
           b.click();
           return true;
         }
@@ -682,91 +699,78 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       return false;
     });
 
-    assert.ok(clicked, 'a ui-button containing "Send link" should be present');
+    assert.ok(clicked, 'a button with the expected text should be present');
     await sleep(500);
 
-    const critical = errors.filter(e => !e.includes('favicon'));
-    assert.equal(critical.length, 0, `clicking Send link should not throw JS errors: ${critical.join('; ')}`);
+    const critical = errors.filter((e) => !e.includes('favicon'));
+    assert.equal(critical.length, 0, `clicking a button should not throw JS errors: ${critical.join('; ')}`);
     page.removeAllListeners('pageerror');
   });
 
   // ---------------------------------------------------------------------------
-  // Migrated auth flow — assumes <auth-forms> has been migrated to use
-  // <ui-input> and <ui-button> internally. If the migration hasn't landed,
-  // these tests skip gracefully.
+  // Migrated auth flow — <auth-forms> uses Tier-1 class helpers
+  // (inputClass, labelClass, buttonClass) on raw native <input>/<label>/
+  // <button> elements. No <ui-input>/<ui-button> custom elements after
+  // the Tier-1/Tier-2 split.
   // ---------------------------------------------------------------------------
 
-  test('migrated auth flow: login form uses <ui-input> and <ui-button>', async (t) => {
+  test('migrated auth flow: login form uses native inputs styled by class helpers', async () => {
     await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(1500);
 
     const shape = await page.evaluate(() => {
       const af = document.querySelector('auth-forms');
+      const html = af?.innerHTML || '';
       return {
-        hasUiInput: !!af?.querySelector('ui-input'),
-        hasUiButton: !!af?.querySelector('ui-button'),
+        nativeInputCount: af?.querySelectorAll('input').length || 0,
+        nativeButtonCount: af?.querySelectorAll('button[type="submit"]').length || 0,
+        // Stale Tier-1 custom-element tags must not appear.
+        staleUiInput: af?.querySelectorAll('ui-input').length || 0,
+        staleUiButton: af?.querySelectorAll('ui-button').length || 0,
+        // Tier-1 helper characteristic Tailwind strings should be present.
+        hasInputClass: html.includes('border-input'),
+        hasButtonClass: html.includes('bg-primary text-primary-foreground'),
       };
     });
 
-    if (!shape.hasUiInput || !shape.hasUiButton) {
-      t.skip('auth-forms has not been migrated to <ui-input>/<ui-button> yet');
-      return;
-    }
-
-    assert.ok(shape.hasUiInput, '<auth-forms> should contain <ui-input> elements after migration');
-    assert.ok(shape.hasUiButton, '<auth-forms> should contain a <ui-button> after migration');
+    assert.equal(shape.staleUiInput, 0, '<auth-forms> should not contain <ui-input> (Tier-1 is a class helper)');
+    assert.equal(shape.staleUiButton, 0, '<auth-forms> should not contain <ui-button> (Tier-1 is a class helper)');
+    assert.ok(shape.nativeInputCount >= 2, `expected native email + password <input>, found ${shape.nativeInputCount}`);
+    assert.ok(shape.nativeButtonCount >= 1, `expected a native <button type="submit">, found ${shape.nativeButtonCount}`);
+    assert.ok(shape.hasInputClass, 'inputClass() Tailwind output should be present on inputs');
+    assert.ok(shape.hasButtonClass, 'buttonClass() Tailwind output should be present on submit button');
   });
 
-  test('migrated auth flow: fill email + password and submit navigates or shows error', async (t) => {
-    // This exercises the post-migration submit path: type into the
-    // ui-input wrappers, click the ui-button submit, and verify the form
-    // either navigates away or surfaces an error. Skips gracefully if
-    // the migration hasn't landed yet.
+  test('migrated auth flow: fill email + password and submit navigates or shows error', async () => {
     await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(1500);
-
-    const hasMigratedUi = await page.evaluate(() => {
-      const af = document.querySelector('auth-forms');
-      return !!af?.querySelector('ui-input') && !!af?.querySelector('ui-button');
-    });
-
-    if (!hasMigratedUi) {
-      t.skip('auth-forms has not been migrated to <ui-input>/<ui-button> yet');
-      return;
-    }
 
     const startUrl = page.url();
     const submitOutcome = await page.evaluate(async () => {
       const af = document.querySelector('auth-forms');
-      // ui-input wraps a real <input> inside its render tree. Find the
-      // native <input> elements within the ui-input wrappers.
-      const uiInputs = [...(af?.querySelectorAll('ui-input') || [])];
-      const inputs = uiInputs
-        .map(el => el.querySelector('input') || (el.shadowRoot && el.shadowRoot.querySelector('input')))
-        .filter(Boolean);
-
-      const emailInput = inputs.find(i => i.type === 'email' || i.name === 'email');
-      const passwordInput = inputs.find(i => i.type === 'password' || i.name === 'password');
+      // Tier-1: inputs are real native <input> elements inside the form.
+      const inputs = [...(af?.querySelectorAll('input') || [])];
+      const emailInput = inputs.find((i) => i.type === 'email' || i.name === 'email');
+      const passwordInput = inputs.find((i) => i.type === 'password' || i.name === 'password');
       if (!emailInput || !passwordInput) {
-        return { ok: false, reason: 'native input not reachable through ui-input' };
+        return { ok: false, reason: 'native email/password input not found' };
       }
-      // Set values + dispatch input events to mimic typing.
       emailInput.value = `e2e-ui-${Date.now()}@test.local`;
       emailInput.dispatchEvent(new Event('input', { bubbles: true }));
       passwordInput.value = 'correct-horse-battery-staple';
       passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // Find submit button (ui-button) and submit the form.
       const form = af.querySelector('form');
       if (!form) return { ok: false, reason: 'no <form> inside auth-forms' };
-      form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form.requestSubmit
+        ? form.requestSubmit()
+        : form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       return { ok: true };
     });
 
     assert.ok(submitOutcome.ok, `submit setup failed: ${submitOutcome.reason || ''}`);
     await sleep(1500);
 
-    // Either we navigated (success) or an error message rendered.
     const after = await page.evaluate(() => {
       const af = document.querySelector('auth-forms');
       const errText = af?.textContent?.toLowerCase() || '';
