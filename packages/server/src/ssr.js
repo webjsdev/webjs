@@ -235,6 +235,25 @@ async function collectMetadata(route, ctx, dev) {
       } else if (mod.metadata) {
         m = mod.metadata;
       }
+      // Next.js 14+ split `viewport` out of metadata into its own export
+      // (with `themeColor`, `colorScheme`). We support both: the new
+      // `export const viewport = {…}` shape merges into metadata.viewport
+      // as a string at emit time, and existing `metadata.viewport` keeps
+      // working. Likewise for `themeColor` and `colorScheme`.
+      let vp = null;
+      if (typeof mod.generateViewport === 'function') {
+        vp = await mod.generateViewport(ctx);
+      } else if (mod.viewport) {
+        vp = mod.viewport;
+      }
+      if (vp && typeof vp === 'object') {
+        m = { ...(m || {}), _viewport: { ...(m && m._viewport), ...vp } };
+        // Allow `themeColor` / `colorScheme` to live on the viewport export.
+        if (typeof vp.themeColor === 'string' && !(m && m.themeColor)) {
+          m.themeColor = vp.themeColor;
+        }
+        if (typeof vp.colorScheme === 'string') m.colorScheme = vp.colorScheme;
+      }
       if (!m || typeof m !== 'object') continue;
       // Pre-resolve the title for this layer using the inherited template.
       const resolved = { ...m };
@@ -548,9 +567,22 @@ function wrapHead(opts) {
   };
 
   if (m.description) metaTags.push(`<meta name="description" content="${escapeAttr(m.description)}">`);
-  if (m.viewport) metaTags.push(`<meta name="viewport" content="${escapeAttr(m.viewport)}">`);
-  else metaTags.push(`<meta name="viewport" content="width=device-width,initial-scale=1">`);
+
+  // viewport: support string form (legacy), `metadata.viewport` object form,
+  // and the new Next.js 14+ `export const viewport = { … }` shape captured
+  // into `_viewport` by collectMetadata.
+  let viewportStr = '';
+  if (typeof m.viewport === 'string') {
+    viewportStr = m.viewport;
+  } else if (m.viewport && typeof m.viewport === 'object') {
+    viewportStr = serializeViewport(m.viewport);
+  } else if (m._viewport && typeof m._viewport === 'object') {
+    viewportStr = serializeViewport(m._viewport);
+  }
+  metaTags.push(`<meta name="viewport" content="${escapeAttr(viewportStr || 'width=device-width,initial-scale=1')}">`);
+
   if (m.themeColor) metaTags.push(`<meta name="theme-color" content="${escapeAttr(m.themeColor)}">`);
+  if (m.colorScheme) metaTags.push(`<meta name="color-scheme" content="${escapeAttr(m.colorScheme)}">`);
 
   // ---- i18n + SEO essentials ----
 
@@ -609,6 +641,37 @@ function wrapHead(opts) {
     }
   }
 
+  // verification: { google, yandex, yahoo, me }. Each is string OR string[].
+  // - google     → <meta name="google-site-verification">
+  // - yandex     → <meta name="yandex-verification">
+  // - yahoo      → <meta name="y_key">  (Yahoo's unusual canonical name)
+  // - me         → <meta name="me">     (IndieAuth / personal verification)
+  if (m.verification && typeof m.verification === 'object') {
+    const verifyKeys = {
+      google: 'google-site-verification',
+      yandex: 'yandex-verification',
+      yahoo: 'y_key',
+      me: 'me',
+    };
+    for (const [field, metaName] of Object.entries(verifyKeys)) {
+      const v = m.verification[field];
+      if (!v) continue;
+      const list = Array.isArray(v) ? v : [v];
+      for (const item of list) {
+        metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(item))}">`);
+      }
+    }
+    // `verification.other` allows arbitrary <meta name="…"> entries.
+    if (m.verification.other && typeof m.verification.other === 'object') {
+      for (const [name, v] of Object.entries(m.verification.other)) {
+        const list = Array.isArray(v) ? v : [v];
+        for (const item of list) {
+          metaTags.push(`<meta name="${escapeAttr(name)}" content="${escapeAttr(String(item))}">`);
+        }
+      }
+    }
+  }
+
   if (m.openGraph && typeof m.openGraph === 'object') {
     for (const [k, v] of Object.entries(m.openGraph)) {
       const out = k === 'image' || k === 'url' ? absUrl(v) : String(v);
@@ -642,6 +705,53 @@ function wrapHead(opts) {
         .join(' ');
       linkTags.push(`<link rel="preload" ${attrs}>`);
     }
+  }
+
+  // icons: { icon, apple, shortcut, other }. Each entry can be a string
+  // (URL), an object { url, sizes?, type? }, or an array of those.
+  //   - icon    → <link rel="icon">
+  //   - apple   → <link rel="apple-touch-icon">
+  //   - shortcut→ <link rel="shortcut icon">
+  //   - other   → <link rel="…" href="…"> using the entry's `rel` field
+  if (m.icons) {
+    const buckets = typeof m.icons === 'string' || Array.isArray(m.icons)
+      ? { icon: m.icons }
+      : m.icons;
+    /** @param {string} rel @param {unknown} entry */
+    const pushIcon = (rel, entry) => {
+      if (!entry) return;
+      const items = Array.isArray(entry) ? entry : [entry];
+      for (const it of items) {
+        if (!it) continue;
+        if (typeof it === 'string') {
+          linkTags.push(`<link rel="${rel}" href="${escapeAttr(absUrl(it))}">`);
+        } else if (typeof it === 'object' && it.url) {
+          const parts = [`rel="${rel}"`, `href="${escapeAttr(absUrl(it.url))}"`];
+          if (it.sizes) parts.push(`sizes="${escapeAttr(it.sizes)}"`);
+          if (it.type) parts.push(`type="${escapeAttr(it.type)}"`);
+          linkTags.push(`<link ${parts.join(' ')}>`);
+        }
+      }
+    };
+    pushIcon('icon', buckets.icon);
+    pushIcon('apple-touch-icon', buckets.apple);
+    pushIcon('shortcut icon', buckets.shortcut);
+    // `other` is the catch-all: array of { rel, url, ...attrs }.
+    if (buckets.other) {
+      const others = Array.isArray(buckets.other) ? buckets.other : [buckets.other];
+      for (const o of others) {
+        if (!o || !o.rel || !o.url) continue;
+        const parts = [`rel="${escapeAttr(o.rel)}"`, `href="${escapeAttr(absUrl(o.url))}"`];
+        if (o.sizes) parts.push(`sizes="${escapeAttr(o.sizes)}"`);
+        if (o.type) parts.push(`type="${escapeAttr(o.type)}"`);
+        linkTags.push(`<link ${parts.join(' ')}>`);
+      }
+    }
+  }
+
+  // manifest: a string URL → <link rel="manifest">
+  if (typeof m.manifest === 'string') {
+    linkTags.push(`<link rel="manifest" href="${escapeAttr(absUrl(m.manifest))}">`);
   }
 
   // alternates: { canonical, languages: { '<hreflang>': url }, media: { '<media>': url } }
@@ -894,4 +1004,35 @@ function escapeHtml(s) {
 /** @param {string} s */
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Serialize a Next.js-shaped viewport object into the comma-separated
+ * `content` string the meta tag expects. Recognised fields:
+ *   width, height, initialScale, minimumScale, maximumScale,
+ *   userScalable, viewportFit, interactiveWidget.
+ * Other fields (themeColor, colorScheme) live on their own meta tags
+ * and are handled by the caller — skipped here.
+ *
+ * @param {Record<string, unknown>} v
+ * @returns {string}
+ */
+function serializeViewport(v) {
+  const parts = [];
+  /** @param {string} key @param {string} prop */
+  const push = (key, prop) => {
+    if (v[prop] !== undefined && v[prop] !== null && v[prop] !== '') {
+      parts.push(`${key}=${v[prop]}`);
+    }
+  };
+  push('width', 'width');
+  push('height', 'height');
+  push('initial-scale', 'initialScale');
+  push('minimum-scale', 'minimumScale');
+  push('maximum-scale', 'maximumScale');
+  if (v.userScalable === false) parts.push('user-scalable=no');
+  else if (v.userScalable === true) parts.push('user-scalable=yes');
+  push('viewport-fit', 'viewportFit');
+  push('interactive-widget', 'interactiveWidget');
+  return parts.join(',');
 }

@@ -464,6 +464,133 @@ test('title template: deeper layout can override the inherited template', async 
   assert.match(html, /<title>Post — Blog<\/title>/);
 });
 
+/* ------------ Metadata parity: icons + manifest ------------ */
+
+test('metadata.icons: string shorthand sets <link rel="icon">', () => {
+  const html = render({ icons: '/favicon.svg' });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
+});
+
+test('metadata.icons: object form with icon/apple/shortcut', () => {
+  const html = render({
+    icons: {
+      icon: '/favicon.svg',
+      apple: '/apple-touch-icon.png',
+      shortcut: '/favicon.ico',
+    },
+  });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/);
+  assert.match(html, /<link rel="shortcut icon" href="\/favicon\.ico">/);
+});
+
+test('metadata.icons: array form with {url, sizes, type}', () => {
+  const html = render({
+    icons: {
+      icon: [
+        { url: '/icon-16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
+      ],
+    },
+  });
+  assert.match(html, /<link rel="icon" href="\/icon-16\.png" sizes="16x16" type="image\/png">/);
+  assert.match(html, /<link rel="icon" href="\/icon-32\.png" sizes="32x32" type="image\/png">/);
+});
+
+test('metadata.icons.other: arbitrary rel allowed', () => {
+  const html = render({
+    icons: {
+      other: [
+        { rel: 'mask-icon', url: '/mask.svg', type: 'image/svg+xml' },
+      ],
+    },
+  });
+  assert.match(html, /<link rel="mask-icon" href="\/mask\.svg" type="image\/svg\+xml">/);
+});
+
+test('metadata.icons + metadataBase: relative URLs are absolutified', () => {
+  const html = render({
+    metadataBase: 'https://example.com',
+    icons: { icon: '/favicon.svg', apple: '/apple.png' },
+  });
+  assert.match(html, /<link rel="icon" href="https:\/\/example\.com\/favicon\.svg">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="https:\/\/example\.com\/apple\.png">/);
+});
+
+test('metadata.manifest: emits <link rel="manifest">', () => {
+  const html = render({ manifest: '/manifest.webmanifest' });
+  assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+});
+
+/* ------------ Metadata parity: verification ------------ */
+
+test('metadata.verification: google/yandex/yahoo/me emit canonical meta names', () => {
+  const html = render({
+    verification: {
+      google: 'g-token',
+      yandex: 'y-token',
+      yahoo: 'yahoo-token',
+      me: 'https://me.example',
+    },
+  });
+  assert.match(html, /<meta name="google-site-verification" content="g-token">/);
+  assert.match(html, /<meta name="yandex-verification" content="y-token">/);
+  assert.match(html, /<meta name="y_key" content="yahoo-token">/);
+  assert.match(html, /<meta name="me" content="https:\/\/me\.example">/);
+});
+
+test('metadata.verification: array form emits multiple <meta>s with the same name', () => {
+  const html = render({ verification: { google: ['token-a', 'token-b'] } });
+  assert.match(html, /<meta name="google-site-verification" content="token-a">/);
+  assert.match(html, /<meta name="google-site-verification" content="token-b">/);
+});
+
+test('metadata.verification.other: arbitrary <meta name="…"> entries', () => {
+  const html = render({
+    verification: { other: { 'facebook-domain-verification': 'fb-token' } },
+  });
+  assert.match(html, /<meta name="facebook-domain-verification" content="fb-token">/);
+});
+
+/* ------------ Metadata parity: viewport object + split-export ------------ */
+
+test('metadata.viewport: object form serializes to comma-separated content', () => {
+  const html = render({
+    viewport: { width: 'device-width', initialScale: 1, maximumScale: 5, userScalable: true },
+  });
+  assert.match(
+    html,
+    /<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">/,
+  );
+});
+
+test('metadata.viewport: user-scalable=false emits user-scalable=no', () => {
+  const html = render({ viewport: { width: 'device-width', userScalable: false } });
+  assert.match(html, /user-scalable=no/);
+});
+
+test('metadata.viewport: string form still works (legacy)', () => {
+  const html = render({ viewport: 'width=device-width,initial-scale=1.0' });
+  assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1\.0">/);
+});
+
+test('metadata.colorScheme: emits <meta name="color-scheme">', () => {
+  const html = render({ colorScheme: 'light dark' });
+  assert.match(html, /<meta name="color-scheme" content="light dark">/);
+});
+
+test('split `viewport` export: collectMetadata picks it up alongside metadata', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#000' };
+     export const metadata = { title: 'X' };`,
+  );
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const html = await resp.text();
+  assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1">/);
+  // themeColor on the viewport export bubbles up.
+  assert.match(html, /<meta name="theme-color" content="#000">/);
+});
+
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
 
 async function makeRoute({ pageSrc, layoutSrc, metadata = null }) {
