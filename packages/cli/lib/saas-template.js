@@ -3,13 +3,51 @@
  * Extracted to avoid nested template literal escaping issues.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const UI_REGISTRY_ROOT = resolve(
+  __dirname, '..', '..', 'ui', 'packages', 'registry',
+);
+
+/**
+ * Read a registry component and rewrite its `'../lib/utils.ts'` import for
+ * the scaffolded app's `components/ui/<name>.ts` layout (two-up to lib/).
+ * Mirrors the helper in `create.js` — kept private here to avoid coupling.
+ */
+async function readUiComponent(name) {
+  const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
+  if (!existsSync(src)) return null;
+  const raw = await readFile(src, 'utf8');
+  return raw
+    .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+}
+
+/** Copy named registry components into `<appDir>/components/ui/`. */
+async function copyUiComponents(appDir, names) {
+  const uiDir = join(appDir, 'components', 'ui');
+  await mkdir(uiDir, { recursive: true });
+  for (const n of names) {
+    const content = await readUiComponent(n);
+    if (content == null) continue;
+    await writeFile(join(uiDir, `${n}.ts`), content);
+  }
+}
 
 /**
  * @param {string} appDir
  */
 export async function writeSaasFiles(appDir) {
+  // SaaS pages use auth forms — copy the extra ui-* components on top of
+  // the standard set the full-stack scaffold already wrote. Pre-importing
+  // them in login/signup/dashboard pages below means the dev server will
+  // SSR these elements with full styling on first paint.
+  await copyUiComponents(appDir, ['dialog', 'form', 'field', 'switch', 'checkbox']);
+
   // lib/prisma.ts
   await mkdir(join(appDir, 'lib'), { recursive: true });
   await writeFile(join(appDir, 'lib', 'prisma.ts'), [
@@ -194,18 +232,37 @@ export async function writeSaasFiles(appDir) {
   await mkdir(join(appDir, 'app', 'login'), { recursive: true });
   await writeFile(join(appDir, 'app', 'login', 'page.ts'), [
     "import { html } from '@webjskit/core';",
+    "// ui-* registrations come transitively from the root layout's imports.",
+    "// The login page consumes ui-card, ui-button, ui-input, ui-label.",
     "",
     "export const metadata = { title: 'Login' };",
     "",
     "export default function LoginPage() {",
     "  return html`",
-    "    <h1>Login</h1>",
-    "    <form method=\"POST\" action=\"/api/auth/callback/credentials\">",
-    "      <label>Email <input type=\"email\" name=\"email\" required></label>",
-    "      <label>Password <input type=\"password\" name=\"password\" required></label>",
-    "      <button type=\"submit\">Sign in</button>",
-    "    </form>",
-    "    <p>Don't have an account? <a href=\"/signup\">Sign up</a></p>",
+    "    <div class=\"max-w-sm mx-auto mt-12\">",
+    "      <ui-card>",
+    "        <ui-card-header>",
+    "          <ui-card-title>Sign in</ui-card-title>",
+    "          <ui-card-description>Welcome back — log in to continue.</ui-card-description>",
+    "        </ui-card-header>",
+    "        <ui-card-content>",
+    "          <form method=\"POST\" action=\"/api/auth/callback/credentials\" class=\"flex flex-col gap-4\">",
+    "            <div class=\"flex flex-col gap-1.5\">",
+    "              <ui-label for=\"email\">Email</ui-label>",
+    "              <ui-input id=\"email\" name=\"email\" type=\"email\" required></ui-input>",
+    "            </div>",
+    "            <div class=\"flex flex-col gap-1.5\">",
+    "              <ui-label for=\"password\">Password</ui-label>",
+    "              <ui-input id=\"password\" name=\"password\" type=\"password\" required></ui-input>",
+    "            </div>",
+    "            <ui-button type=\"submit\" variant=\"default\">Sign in</ui-button>",
+    "          </form>",
+    "        </ui-card-content>",
+    "        <ui-card-footer>",
+    "          <p class=\"text-sm text-muted-foreground\">Don't have an account? <a href=\"/signup\" class=\"underline\">Sign up</a></p>",
+    "        </ui-card-footer>",
+    "      </ui-card>",
+    "    </div>",
     "  `;",
     "}",
     "",
@@ -215,19 +272,40 @@ export async function writeSaasFiles(appDir) {
   await mkdir(join(appDir, 'app', 'signup'), { recursive: true });
   await writeFile(join(appDir, 'app', 'signup', 'page.ts'), [
     "import { html } from '@webjskit/core';",
+    "// ui-* registrations come transitively from the root layout's imports.",
     "",
     "export const metadata = { title: 'Sign up' };",
     "",
     "export default function SignupPage() {",
     "  return html`",
-    "    <h1>Sign up</h1>",
-    "    <form id=\"signup-form\">",
-    "      <label>Name <input type=\"text\" name=\"name\" required></label>",
-    "      <label>Email <input type=\"email\" name=\"email\" required></label>",
-    "      <label>Password <input type=\"password\" name=\"password\" required minlength=\"8\"></label>",
-    "      <button type=\"submit\">Create account</button>",
-    "    </form>",
-    "    <p>Already have an account? <a href=\"/login\">Log in</a></p>",
+    "    <div class=\"max-w-sm mx-auto mt-12\">",
+    "      <ui-card>",
+    "        <ui-card-header>",
+    "          <ui-card-title>Create an account</ui-card-title>",
+    "          <ui-card-description>Get started with your new workspace.</ui-card-description>",
+    "        </ui-card-header>",
+    "        <ui-card-content>",
+    "          <form id=\"signup-form\" class=\"flex flex-col gap-4\">",
+    "            <div class=\"flex flex-col gap-1.5\">",
+    "              <ui-label for=\"name\">Name</ui-label>",
+    "              <ui-input id=\"name\" name=\"name\" type=\"text\" required></ui-input>",
+    "            </div>",
+    "            <div class=\"flex flex-col gap-1.5\">",
+    "              <ui-label for=\"email\">Email</ui-label>",
+    "              <ui-input id=\"email\" name=\"email\" type=\"email\" required></ui-input>",
+    "            </div>",
+    "            <div class=\"flex flex-col gap-1.5\">",
+    "              <ui-label for=\"password\">Password</ui-label>",
+    "              <ui-input id=\"password\" name=\"password\" type=\"password\" required></ui-input>",
+    "            </div>",
+    "            <ui-button type=\"submit\" variant=\"default\">Create account</ui-button>",
+    "          </form>",
+    "        </ui-card-content>",
+    "        <ui-card-footer>",
+    "          <p class=\"text-sm text-muted-foreground\">Already have an account? <a href=\"/login\" class=\"underline\">Log in</a></p>",
+    "        </ui-card-footer>",
+    "      </ui-card>",
+    "    </div>",
     "  `;",
     "}",
     "",
@@ -252,15 +330,26 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'app', 'dashboard', 'page.ts'), [
     "import { html } from '@webjskit/core';",
     "import { currentUser } from '../../modules/auth/queries/current-user.server.ts';",
+    "// ui-* registrations come transitively from the root layout's imports.",
     "",
     "export const metadata = { title: 'Dashboard' };",
     "",
     "export default async function Dashboard() {",
     "  const user = await currentUser();",
     "  return html`",
-    "    <h1>Dashboard</h1>",
-    "    <p>Welcome, ${`\\$\\{user?.name || user?.email\\}`}!</p>",
-    "    <a href=\"/dashboard/settings\">Settings</a>",
+    "    <div class=\"flex items-center justify-between mb-6\">",
+    "      <h1 class=\"text-2xl font-semibold\">Dashboard</h1>",
+    "      <ui-badge variant=\"secondary\">Signed in</ui-badge>",
+    "    </div>",
+    "    <ui-card>",
+    "      <ui-card-header>",
+    "        <ui-card-title>Welcome, ${`\\$\\{user?.name || user?.email\\}`}!</ui-card-title>",
+    "        <ui-card-description>You're authenticated. Replace this scaffold with your real app.</ui-card-description>",
+    "      </ui-card-header>",
+    "      <ui-card-content>",
+    "        <a href=\"/dashboard/settings\"><ui-button variant=\"outline\">Settings</ui-button></a>",
+    "      </ui-card-content>",
+    "    </ui-card>",
     "  `;",
     "}",
     "",
@@ -270,15 +359,28 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), [
     "import { html } from '@webjskit/core';",
     "import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';",
+    "// ui-* registrations come transitively from the root layout's imports.",
     "",
     "export const metadata = { title: 'Settings' };",
     "",
     "export default async function Settings() {",
     "  const user = await currentUser();",
     "  return html`",
-    "    <h1>Settings</h1>",
-    "    <p>Email: ${`\\$\\{user?.email\\}`}</p>",
-    "    <p>Name: ${`\\$\\{user?.name || 'Not set'\\}`}</p>",
+    "    <h1 class=\"text-2xl font-semibold mb-6\">Settings</h1>",
+    "    <ui-card>",
+    "      <ui-card-header>",
+    "        <ui-card-title>Account</ui-card-title>",
+    "        <ui-card-description>Your basic profile information.</ui-card-description>",
+    "      </ui-card-header>",
+    "      <ui-card-content>",
+    "        <dl class=\"grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm\">",
+    "          <dt class=\"text-muted-foreground\">Email</dt>",
+    "          <dd>${`\\$\\{user?.email\\}`}</dd>",
+    "          <dt class=\"text-muted-foreground\">Name</dt>",
+    "          <dd>${`\\$\\{user?.name || 'Not set'\\}`}</dd>",
+    "        </dl>",
+    "      </ui-card-content>",
+    "    </ui-card>",
     "  `;",
     "}",
     "",

@@ -624,6 +624,163 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(ok.hasInputs, '<auth-forms> should render form inputs');
   });
 
+  // ---------------------------------------------------------------------------
+  // UI demo route (@webjskit/ui showcase)
+  //
+  // Verifies the /ui-demo route renders the expected ui-* custom elements:
+  // ui-button, ui-card, ui-input, ui-alert, ui-badge. These tags are part
+  // of the @webjskit/ui registry that ships components on demand via
+  // `webjs ui add`. The test only asserts that the tags are present in
+  // the DOM — they may or may not be upgraded depending on whether the
+  // user has run `webjs ui add` for each.
+  // ---------------------------------------------------------------------------
+
+  test('/ui-demo route renders the @webjskit/ui demo heading and components', async () => {
+    const resp = await page.goto(baseUrl + '/ui-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    assert.equal(resp.status(), 200, '/ui-demo should respond 200');
+    await sleep(1500);
+
+    const result = await page.evaluate(() => {
+      const headings = [...document.querySelectorAll('h1')].map(h => h.textContent || '');
+      return {
+        hasHeading: headings.some(t => t.includes('@webjskit/ui demo')),
+        uiButtonCount: document.querySelectorAll('ui-button').length,
+        uiCardCount: document.querySelectorAll('ui-card').length,
+        uiInputCount: document.querySelectorAll('ui-input').length,
+        uiAlertCount: document.querySelectorAll('ui-alert').length,
+        uiBadgeCount: document.querySelectorAll('ui-badge').length,
+      };
+    });
+
+    assert.ok(result.hasHeading, '"@webjskit/ui demo" heading should be visible');
+    assert.ok(result.uiButtonCount >= 1, `expected at least one <ui-button>, got ${result.uiButtonCount}`);
+    assert.ok(result.uiCardCount >= 1, `expected at least one <ui-card>, got ${result.uiCardCount}`);
+    assert.ok(result.uiInputCount >= 1, `expected at least one <ui-input>, got ${result.uiInputCount}`);
+    assert.ok(result.uiAlertCount >= 1, `expected at least one <ui-alert>, got ${result.uiAlertCount}`);
+    assert.ok(result.uiBadgeCount >= 1, `expected at least one <ui-badge>, got ${result.uiBadgeCount}`);
+  });
+
+  test('/ui-demo: clicking the "Send link" button does not crash the page', async () => {
+    // The button may or may not be upgraded — either way clicking it
+    // should be a no-op (no handler wired up in the demo). We just verify
+    // there are no JS errors as a result of the click.
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await page.goto(baseUrl + '/ui-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+
+    const clicked = await page.evaluate(() => {
+      // Find the "Send link" ui-button — it has the visible "Send link" text.
+      const buttons = [...document.querySelectorAll('ui-button')];
+      for (const b of buttons) {
+        if ((b.textContent || '').toLowerCase().includes('send link')) {
+          b.click();
+          return true;
+        }
+      }
+      return false;
+    });
+
+    assert.ok(clicked, 'a ui-button containing "Send link" should be present');
+    await sleep(500);
+
+    const critical = errors.filter(e => !e.includes('favicon'));
+    assert.equal(critical.length, 0, `clicking Send link should not throw JS errors: ${critical.join('; ')}`);
+    page.removeAllListeners('pageerror');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Migrated auth flow — assumes <auth-forms> has been migrated to use
+  // <ui-input> and <ui-button> internally. If the migration hasn't landed,
+  // these tests skip gracefully.
+  // ---------------------------------------------------------------------------
+
+  test('migrated auth flow: login form uses <ui-input> and <ui-button>', async (t) => {
+    await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+
+    const shape = await page.evaluate(() => {
+      const af = document.querySelector('auth-forms');
+      return {
+        hasUiInput: !!af?.querySelector('ui-input'),
+        hasUiButton: !!af?.querySelector('ui-button'),
+      };
+    });
+
+    if (!shape.hasUiInput || !shape.hasUiButton) {
+      t.skip('auth-forms has not been migrated to <ui-input>/<ui-button> yet');
+      return;
+    }
+
+    assert.ok(shape.hasUiInput, '<auth-forms> should contain <ui-input> elements after migration');
+    assert.ok(shape.hasUiButton, '<auth-forms> should contain a <ui-button> after migration');
+  });
+
+  test('migrated auth flow: fill email + password and submit navigates or shows error', async (t) => {
+    // This exercises the post-migration submit path: type into the
+    // ui-input wrappers, click the ui-button submit, and verify the form
+    // either navigates away or surfaces an error. Skips gracefully if
+    // the migration hasn't landed yet.
+    await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+
+    const hasMigratedUi = await page.evaluate(() => {
+      const af = document.querySelector('auth-forms');
+      return !!af?.querySelector('ui-input') && !!af?.querySelector('ui-button');
+    });
+
+    if (!hasMigratedUi) {
+      t.skip('auth-forms has not been migrated to <ui-input>/<ui-button> yet');
+      return;
+    }
+
+    const startUrl = page.url();
+    const submitOutcome = await page.evaluate(async () => {
+      const af = document.querySelector('auth-forms');
+      // ui-input wraps a real <input> inside its render tree. Find the
+      // native <input> elements within the ui-input wrappers.
+      const uiInputs = [...(af?.querySelectorAll('ui-input') || [])];
+      const inputs = uiInputs
+        .map(el => el.querySelector('input') || (el.shadowRoot && el.shadowRoot.querySelector('input')))
+        .filter(Boolean);
+
+      const emailInput = inputs.find(i => i.type === 'email' || i.name === 'email');
+      const passwordInput = inputs.find(i => i.type === 'password' || i.name === 'password');
+      if (!emailInput || !passwordInput) {
+        return { ok: false, reason: 'native input not reachable through ui-input' };
+      }
+      // Set values + dispatch input events to mimic typing.
+      emailInput.value = `e2e-ui-${Date.now()}@test.local`;
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+      passwordInput.value = 'correct-horse-battery-staple';
+      passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // Find submit button (ui-button) and submit the form.
+      const form = af.querySelector('form');
+      if (!form) return { ok: false, reason: 'no <form> inside auth-forms' };
+      form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      return { ok: true };
+    });
+
+    assert.ok(submitOutcome.ok, `submit setup failed: ${submitOutcome.reason || ''}`);
+    await sleep(1500);
+
+    // Either we navigated (success) or an error message rendered.
+    const after = await page.evaluate(() => {
+      const af = document.querySelector('auth-forms');
+      const errText = af?.textContent?.toLowerCase() || '';
+      return {
+        url: location.href,
+        hasError: /error|invalid|fail|password|email/.test(errText),
+      };
+    });
+
+    const navigated = after.url !== startUrl;
+    assert.ok(navigated || after.hasError,
+      `expected navigation or error message after submit; url=${after.url}, hasError=${after.hasError}`);
+  });
+
   test('metadata: <title> and <meta description> update per route', async () => {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(500);

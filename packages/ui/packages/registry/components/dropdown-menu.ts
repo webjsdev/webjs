@@ -159,6 +159,21 @@ UiDropdownMenuContent.register('ui-dropdown-menu-content');
 // Items, separators, labels, etc.
 const ITEM_CLS = "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground";
 
+/**
+ * Close any *other* open submenu in the same menu portal when the pointer
+ * enters this item. Prevents two sibling submenus being open at once when
+ * the user slides from one row to the next.
+ */
+function closeSiblingSubmenus(el: HTMLElement) {
+  const container = el.closest('[data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"]');
+  if (!container) return;
+  container.querySelectorAll('ui-dropdown-menu-sub[open]').forEach((sub) => {
+    if (!sub.contains(el)) {
+      sub.dispatchEvent(new CustomEvent('ui-dropdown-menu-sub-close', { bubbles: true }));
+    }
+  });
+}
+
 export class UiDropdownMenuItem extends WebComponent {
   static properties = { inset: { type: Boolean }, variant: { type: String }, disabled: { type: Boolean } };
   declare inset: boolean; declare variant: string; declare disabled: boolean;
@@ -169,7 +184,9 @@ export class UiDropdownMenuItem extends WebComponent {
     super.connectedCallback();
     this.setAttribute('tabindex', '-1');
     this.setAttribute('role', 'menuitem');
+    this.addEventListener('pointerenter', this._onPointerEnter);
   }
+  _onPointerEnter = () => closeSiblingSubmenus(this);
   render() {
     return html`<div data-slot="dropdown-menu-item" data-inset=${this.inset ? '' : null as any} data-variant=${this.variant} data-disabled=${this.disabled ? '' : null as any} tabindex="-1" role="menuitem" class=${cn(ITEM_CLS)}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -299,9 +316,16 @@ export class UiDropdownMenuSubTrigger extends WebComponent {
   connectedCallback() {
     if (!this._slot) this._slot = this.innerHTML;
     super.connectedCallback();
-    this.addEventListener('pointerenter', () => this.dispatchEvent(new CustomEvent('ui-dropdown-menu-sub-open', { bubbles: true })));
+    this.addEventListener('pointerenter', this._onPointerEnter);
     this.addEventListener('click', (e) => { e.stopPropagation(); this.dispatchEvent(new CustomEvent('ui-dropdown-menu-sub-open', { bubbles: true })); });
   }
+  // Close any sibling submenu first, then request our own open. This keeps
+  // exactly one submenu open per parent menu when the pointer slides between
+  // sub-trigger rows.
+  _onPointerEnter = () => {
+    closeSiblingSubmenus(this);
+    this.dispatchEvent(new CustomEvent('ui-dropdown-menu-sub-open', { bubbles: true }));
+  };
   render() {
     const cls = "flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[inset]:pl-8 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
     return html`

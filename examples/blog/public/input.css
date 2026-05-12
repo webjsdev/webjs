@@ -3,6 +3,11 @@
  * public/tailwind.css directly; it's generated and gitignored. */
 @import "tailwindcss";
 
+/* Scan the new shadcn-style component sources so their utility classes
+ * make it into the generated bundle. (Tailwind v4 already scans the
+ * project tree by default — this @source is belt-and-braces.) */
+@source "../components/ui/*.ts";
+
 /* @theme maps our design-token CSS custom properties (defined on
  * :root in app/layout.ts for light/dark switching) into Tailwind's
  * palette so utility classes like `text-fg`, `bg-bg-elev`,

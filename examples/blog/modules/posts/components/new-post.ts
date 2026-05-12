@@ -1,4 +1,9 @@
 import { WebComponent, html } from '@webjskit/core';
+import '../../../components/ui/button.ts';
+import '../../../components/ui/input.ts';
+import '../../../components/ui/label.ts';
+import '../../../components/ui/card.ts';
+import '../../../components/ui/alert.ts';
 // Server action — dev server rewrites this import into an RPC stub for the
 // browser. At type-check time TS resolves the real source so createPost's
 // input + return types flow across the RPC boundary.
@@ -16,7 +21,9 @@ export class NewPost extends WebComponent {
   }
 
   firstUpdated() {
-    const titleInput = this.querySelector<HTMLInputElement>('input[name="title"]');
+    // Walk into the <ui-input> wrapper to focus the real <input>.
+    const wrapper = this.querySelector('ui-input[name="title"]');
+    const titleInput = wrapper?.querySelector<HTMLInputElement>('input');
     titleInput?.focus();
   }
 
@@ -51,21 +58,33 @@ export class NewPost extends WebComponent {
   render() {
     const { busy, error } = this.state;
     return html`
-      <form class="grid gap-5 p-6 px-[clamp(1rem,4vw,1.5rem)] bg-bg-elev border border-border rounded-xl shadow" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
-        <label class="grid gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">
-          Title
-          <input class="font-serif font-bold text-[clamp(1.4rem,calc(1.1rem+1vw),1.75rem)] leading-tight tracking-tight text-fg bg-transparent border-0 border-b border-border-strong py-3 px-0 transition-colors duration-150 focus:outline-none focus:border-accent"
-                 name="title" placeholder="A bold title…" required />
-        </label>
-        <label class="grid gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">
-          Body
-          <textarea class="font-serif text-base leading-relaxed resize-y min-h-[220px] text-fg bg-transparent border border-border-strong rounded p-4 transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
-                    name="body" placeholder="Write your post — markdown not required." required></textarea>
-        </label>
-        <button class="justify-self-start font-sans text-[13px] font-semibold tracking-[0.02em] py-3 px-5 rounded-full border-0 bg-accent text-accent-fg cursor-pointer transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-progress"
-                ?disabled=${busy}>${busy ? 'Publishing…' : 'Publish'}</button>
-        ${error ? html`<p class="m-0 p-3 rounded bg-[color-mix(in_oklch,var(--bg-elev)_80%,var(--accent))] text-accent font-mono text-[13px] leading-snug">${error}</p>` : ''}
-      </form>
+      <ui-card>
+        <ui-card-content>
+          <form class="grid gap-5" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
+            <div class="grid gap-2">
+              <ui-label for="new-post-title">Title</ui-label>
+              <ui-input id="new-post-title"
+                        name="title"
+                        placeholder="A bold title…"
+                        required></ui-input>
+            </div>
+            <div class="grid gap-2">
+              <ui-label for="new-post-body">Body</ui-label>
+              <textarea id="new-post-body"
+                        class="font-serif text-base leading-relaxed resize-y min-h-[220px] text-fg bg-transparent border border-border-strong rounded p-4 transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
+                        name="body"
+                        placeholder="Write your post — markdown not required."
+                        required></textarea>
+            </div>
+            <ui-button type="submit" variant="default" ?disabled=${busy} class="justify-self-start">${busy ? 'Publishing…' : 'Publish'}</ui-button>
+            ${error
+              ? html`<ui-alert variant="destructive">
+                  <ui-alert-description>${error}</ui-alert-description>
+                </ui-alert>`
+              : ''}
+          </form>
+        </ui-card-content>
+      </ui-card>
     `;
   }
 }

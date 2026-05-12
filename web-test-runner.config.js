@@ -12,7 +12,14 @@
 import { playwrightLauncher } from '@web/test-runner-playwright';
 
 export default {
-  files: ['test/browser/render-client.test.js', 'test/browser/light-dom-hydration.test.js'],
+  files: [
+    'test/browser/render-client.test.js',
+    'test/browser/light-dom-hydration.test.js',
+    'test/browser/ui-visual.test.js',
+    'test/browser/ui-stateful.test.js',
+    'test/browser/ui-overlay.test.js',
+    'test/browser/ui-composite.test.js',
+  ],
   nodeResolve: true,
   browsers: [
     playwrightLauncher({ product: 'chromium' }),

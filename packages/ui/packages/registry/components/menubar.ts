@@ -186,12 +186,31 @@ UiMenubarContent.register('ui-menubar-content');
 
 const ITEM_CLS = "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground";
 
+/**
+ * Close any *other* open submenu in the same menu portal when the pointer
+ * enters this item. Prevents two sibling submenus being open at once.
+ */
+function closeSiblingSubmenus(el: HTMLElement) {
+  const container = el.closest('[data-slot="menubar-content"], [data-slot="menubar-sub-content"]');
+  if (!container) return;
+  container.querySelectorAll('ui-menubar-sub[open]').forEach((sub) => {
+    if (!sub.contains(el)) {
+      sub.dispatchEvent(new CustomEvent('ui-menubar-sub-close', { bubbles: true }));
+    }
+  });
+}
+
 export class UiMenubarItem extends WebComponent {
   static properties = { inset: { type: Boolean }, variant: { type: String }, disabled: { type: Boolean } };
   declare inset: boolean; declare variant: string; declare disabled: boolean;
   private _slot = '';
   constructor() { super(); this.inset = false; this.variant = 'default'; this.disabled = false; }
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() {
+    if (!this._slot) this._slot = this.innerHTML;
+    super.connectedCallback();
+    this.addEventListener('pointerenter', this._onPointerEnter);
+  }
+  _onPointerEnter = () => closeSiblingSubmenus(this);
   render() {
     return html`<div data-slot="menubar-item" data-inset=${this.inset ? '' : null as any} data-variant=${this.variant} data-disabled=${this.disabled ? '' : null as any} tabindex="-1" role="menuitem" class=${cn(ITEM_CLS)}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -318,8 +337,12 @@ export class UiMenubarSubTrigger extends WebComponent {
   connectedCallback() {
     if (!this._slot) this._slot = this.innerHTML;
     super.connectedCallback();
-    this.addEventListener('pointerenter', () => this.dispatchEvent(new CustomEvent('ui-menubar-sub-open', { bubbles: true })));
+    this.addEventListener('pointerenter', this._onPointerEnter);
   }
+  _onPointerEnter = () => {
+    closeSiblingSubmenus(this);
+    this.dispatchEvent(new CustomEvent('ui-menubar-sub-open', { bubbles: true }));
+  };
   render() {
     const cls = "flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-[inset]:pl-8 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground";
     return html`
