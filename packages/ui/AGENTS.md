@@ -108,13 +108,38 @@ packages/ui/
   packages/website/               the registry HTTP host + docs (internal)
     app/
       layout.ts, page.ts          docs site shell + home
+      _components/                hand-written website-chrome custom elements (theme-toggle, …)
       _lib/registry.server.ts     composes registry JSON on demand from ../../registry/
       registry/route.ts                  GET /registry — full manifest (composed on demand)
       registry/index.json/route.ts       GET /registry/index.json — flat list
       registry/[name]/route.ts           GET /registry/<name>.json — single item (CLI fetches here)
       docs/page.ts                docs root
       docs/components/[name]/page.ts  per-component docs page
+    components/                   GITIGNORED — auto-populated at prestart by scripts/copy-registry.js
+    lib/                          GITIGNORED — same as above (for utils.ts)
 ```
+
+### ⚠️ ui-website footgun — do NOT write hand-written files into `packages/website/components/`
+
+`packages/website/` is the publisher AND a consumer of the kit, so its
+`components/` and `lib/` directories are wholesale gitignored —
+`scripts/copy-registry.js` regenerates them at prestart by mirroring
+`../registry/` with each component's `'../lib/utils.ts'` import rewritten
+to the website's depth. **Anything hand-written you put in
+`packages/website/components/*` or `packages/website/lib/*` is invisible
+to git, never reaches the deploy, and breaks SSR with a prod 500
+(this has happened — see git log for the favicon / theme-toggle incidents).**
+
+Hand-written components for the website go in
+**`packages/website/app/_components/`** instead. The underscore prefix
+keeps them out of the router, the directory is tracked normally, and
+the `components/` mirror's gitignore can stay simple.
+
+This trap exists ONLY in `packages/website/`. Scaffolded user apps,
+`examples/blog`, and every other webjs app keep `components/ui/` as
+normal tracked source — the standard shadcn "you own it" pattern.
+See [`packages/website/AGENTS.md`](packages/website/AGENTS.md) for the
+full per-directory breakdown.
 
 ## v1 component inventory (32 components)
 
