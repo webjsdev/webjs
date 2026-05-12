@@ -70,6 +70,6 @@ The user should never have to ask for tests or documentation.
 - Web components render into light DOM by default (so Tailwind / global CSS apply directly). Opt in to shadow DOM per component with `static shadow = true` when you need scoped styles, slot projection, or third-party-embed isolation.
 - Custom-element tag names are passed to `.register('tag-name')` — they are NOT a static field on the class.
 - One function per server action file (*.server.ts)
-- Use webjs directives: classMap, styleMap, ref, when, choose, guard, etc.
+- Directives are deliberately minimal: only `unsafeHTML`, `live`, and `repeat` ship. Use plain template-literal expressions (`class=${active ? 'btn active' : 'btn'}`, `style=${'color:' + color}`, `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in `firstUpdated`) instead of Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard`.
 - Use Context for cross-component data, Task for async data in components
 - Full API reference in AGENTS.md
