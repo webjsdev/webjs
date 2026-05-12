@@ -377,8 +377,8 @@ export async function createUser(input: { name: string; email: string }) {
  * /api/users — thin route wrapper over typed server actions.
  * Business logic lives in modules/users/, not here.
  */
-import { listUsers } from '../../../../modules/users/queries/list-users.server.ts';
-import { createUser } from '../../../../modules/users/actions/create-user.server.ts';
+import { listUsers } from '../../../modules/users/queries/list-users.server.ts';
+import { createUser } from '../../../modules/users/actions/create-user.server.ts';
 
 export async function GET() {
   return Response.json(await listUsers());
