@@ -18,6 +18,9 @@ export default function Layout({ children }: { children: any }) {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/public/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/public/favicon.png" />
         <link rel="stylesheet" href="/public/tailwind.css" />
         <style>
           :root {
