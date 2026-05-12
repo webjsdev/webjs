@@ -186,6 +186,40 @@ test('api scaffold deliberately ships no ui-* components', async () => {
   }
 });
 
+test('api scaffold route imports resolve to real modules/ files', async () => {
+  // Regression for an off-by-one in the relative `../` depth: route.ts
+  // lives at app/api/<feature>/route.ts (3 levels deep), so reaching
+  // modules/<feature>/... needs three `..` segments, not four.
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'api' });
+    const appDir = join(cwd, 'demo');
+
+    const route = await readFile(join(appDir, 'app', 'api', 'users', 'route.ts'), 'utf8');
+    // Must NOT contain the 4-dot path (the old bug).
+    assert.doesNotMatch(
+      route,
+      /from '\.\.\/\.\.\/\.\.\/\.\.\/modules\//,
+      'route.ts should not use four ../ segments to reach modules/',
+    );
+    // Must use the correct 3-dot path.
+    assert.match(route, /from '\.\.\/\.\.\/\.\.\/modules\/users\/queries\/list-users\.server\.ts'/);
+    assert.match(route, /from '\.\.\/\.\.\/\.\.\/modules\/users\/actions\/create-user\.server\.ts'/);
+
+    // The imported module files must actually exist on disk.
+    assert.ok(
+      await exists(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts')),
+      'modules/users/queries/list-users.server.ts should exist',
+    );
+    assert.ok(
+      await exists(join(appDir, 'modules', 'users', 'actions', 'create-user.server.ts')),
+      'modules/users/actions/create-user.server.ts should exist',
+    );
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test('lib/utils.ts ships the cn() helper + Base + defineElement', async () => {
   const cwd = await tempCwd();
   try {
