@@ -43,7 +43,7 @@ function tmp() {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-add-'));
   // Pre-seed a components.json so `add` proceeds
   writeFileSync(join(d, 'components.json'), JSON.stringify({
-    $schema: 'https://ui.webjs.com/schema.json',
+    $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
     tailwind: { css: 'app/globals.css', baseColor: 'neutral', cssVariables: true },
     aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },

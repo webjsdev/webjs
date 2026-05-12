@@ -26,7 +26,7 @@ export const build = new Command()
     const flatIndex = [];
     for (const item of manifest.items) {
       const enriched = {
-        $schema: 'https://ui.webjs.com/schema/registry-item.json',
+        $schema: 'https://ui.webjs.dev/schema/registry-item.json',
         ...item,
         files: (item.files || []).map((f) => ({
           ...f,

@@ -1,10 +1,10 @@
 {
-  "$schema": "https://ui.webjs.com/schema/registry.json",
+  "$schema": "https://ui.webjs.dev/schema/registry.json",
   "name": "@webjskit/ui",
-  "homepage": "https://ui.webjs.com",
+  "homepage": "https://ui.webjs.dev",
   "items": [
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "lib-utils",
       "type": "registry:lib",
       "description": "cn() class-merge helper",
@@ -18,7 +18,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "theme-neutral",
       "type": "registry:theme",
       "title": "Neutral",
@@ -33,7 +33,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "accordion",
       "type": "registry:ui",
       "dependencies": [
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "alert",
       "type": "registry:ui",
       "dependencies": [
@@ -63,7 +63,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "alert-dialog",
       "type": "registry:ui",
       "registryDependencies": [
@@ -82,7 +82,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "aspect-ratio",
       "type": "registry:ui",
       "dependencies": [
@@ -97,7 +97,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "avatar",
       "type": "registry:ui",
       "dependencies": [
@@ -112,7 +112,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "badge",
       "type": "registry:ui",
       "registryDependencies": [
@@ -130,7 +130,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "breadcrumb",
       "type": "registry:ui",
       "dependencies": [
@@ -145,7 +145,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "button",
       "type": "registry:ui",
       "registryDependencies": [
@@ -163,7 +163,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "button-group",
       "type": "registry:ui",
       "dependencies": [
@@ -178,7 +178,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "calendar",
       "type": "registry:ui",
       "dependencies": [
@@ -194,7 +194,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "card",
       "type": "registry:ui",
       "registryDependencies": [
@@ -212,7 +212,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "carousel",
       "type": "registry:ui",
       "dependencies": [
@@ -228,7 +228,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "chart",
       "type": "registry:ui",
       "dependencies": [
@@ -243,7 +243,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "checkbox",
       "type": "registry:ui",
       "dependencies": [
@@ -258,7 +258,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "collapsible",
       "type": "registry:ui",
       "dependencies": [
@@ -273,7 +273,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "combobox",
       "type": "registry:ui",
       "registryDependencies": [
@@ -294,7 +294,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "command",
       "type": "registry:ui",
       "registryDependencies": [
@@ -314,7 +314,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "context-menu",
       "type": "registry:ui",
       "dependencies": [
@@ -330,7 +330,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "dialog",
       "type": "registry:ui",
       "registryDependencies": [
@@ -348,7 +348,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "direction",
       "type": "registry:ui",
       "dependencies": [
@@ -363,7 +363,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "drawer",
       "type": "registry:ui",
       "dependencies": [
@@ -378,7 +378,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "dropdown-menu",
       "type": "registry:ui",
       "dependencies": [
@@ -394,7 +394,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "empty",
       "type": "registry:ui",
       "dependencies": [
@@ -409,7 +409,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "field",
       "type": "registry:ui",
       "dependencies": [
@@ -424,7 +424,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "form",
       "type": "registry:ui",
       "registryDependencies": [
@@ -443,7 +443,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "hover-card",
       "type": "registry:ui",
       "dependencies": [
@@ -459,7 +459,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "input",
       "type": "registry:ui",
       "registryDependencies": [
@@ -477,7 +477,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "input-group",
       "type": "registry:ui",
       "registryDependencies": [
@@ -495,7 +495,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "input-otp",
       "type": "registry:ui",
       "dependencies": [
@@ -510,7 +510,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "item",
       "type": "registry:ui",
       "dependencies": [
@@ -525,7 +525,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "kbd",
       "type": "registry:ui",
       "dependencies": [
@@ -540,7 +540,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "label",
       "type": "registry:ui",
       "registryDependencies": [
@@ -558,7 +558,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "menubar",
       "type": "registry:ui",
       "dependencies": [
@@ -574,7 +574,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "native-select",
       "type": "registry:ui",
       "dependencies": [
@@ -589,7 +589,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "navigation-menu",
       "type": "registry:ui",
       "dependencies": [
@@ -605,7 +605,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "pagination",
       "type": "registry:ui",
       "registryDependencies": [
@@ -623,7 +623,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "popover",
       "type": "registry:ui",
       "dependencies": [
@@ -639,7 +639,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "progress",
       "type": "registry:ui",
       "dependencies": [
@@ -654,7 +654,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "radio-group",
       "type": "registry:ui",
       "dependencies": [
@@ -669,7 +669,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "resizable",
       "type": "registry:ui",
       "dependencies": [
@@ -684,7 +684,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "scroll-area",
       "type": "registry:ui",
       "dependencies": [
@@ -699,7 +699,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "select",
       "type": "registry:ui",
       "dependencies": [
@@ -715,7 +715,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "separator",
       "type": "registry:ui",
       "registryDependencies": [
@@ -733,7 +733,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "sheet",
       "type": "registry:ui",
       "dependencies": [
@@ -748,7 +748,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "sidebar",
       "type": "registry:ui",
       "registryDependencies": [
@@ -771,7 +771,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "skeleton",
       "type": "registry:ui",
       "registryDependencies": [
@@ -789,7 +789,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "slider",
       "type": "registry:ui",
       "dependencies": [
@@ -804,7 +804,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "sonner",
       "type": "registry:ui",
       "dependencies": [
@@ -819,7 +819,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "spinner",
       "type": "registry:ui",
       "dependencies": [
@@ -834,7 +834,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "switch",
       "type": "registry:ui",
       "dependencies": [
@@ -849,7 +849,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "table",
       "type": "registry:ui",
       "dependencies": [
@@ -864,7 +864,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "tabs",
       "type": "registry:ui",
       "dependencies": [
@@ -879,7 +879,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "textarea",
       "type": "registry:ui",
       "dependencies": [
@@ -894,7 +894,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "toggle",
       "type": "registry:ui",
       "dependencies": [
@@ -909,7 +909,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "toggle-group",
       "type": "registry:ui",
       "dependencies": [
@@ -924,7 +924,7 @@
       ]
     },
     {
-      "$schema": "https://ui.webjs.com/schema/registry-item.json",
+      "$schema": "https://ui.webjs.dev/schema/registry-item.json",
       "name": "tooltip",
       "type": "registry:ui",
       "dependencies": [
