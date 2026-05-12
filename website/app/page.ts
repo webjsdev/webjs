@@ -360,7 +360,7 @@ middleware.ts              → global auth</pre>
         <a href=${UI_URL} target="_blank">UI</a> ·
         <a href=${DOCS_URL + '/docs/ai-first'} target="_blank">AI-First</a> ·
         <a href=${BLOG_URL} target="_blank">Example Blog</a> ·
-        <a href=${STORY_URL} target="_blank" rel="noopener noreferrer">Story</a>
+        <a href=${STORY_URL} target="_blank" rel="noopener noreferrer">Webjs Story</a>
       </p>
     </footer>
   `;
