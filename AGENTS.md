@@ -196,14 +196,23 @@ cd examples/blog && npm run dev      # just the blog (port 3456)
 - **`examples/blog/`** so E2E tests exercise the new path
 - **`packages/cli/templates/`** if scaffolded apps should know about it
 
-### Reference codebases (cloned locally for architectural comparison)
+### Reference codebases (for architectural comparison)
 
-At `~/Documents/Projects/`:
+webjs draws from a handful of frameworks. When you need to understand how
+they actually implement something — not just what the docs say — read the
+source directly. Expected local path is `~/Documents/Projects/<name>/`;
+if missing, clone from the GitHub URL into that path before referencing.
 
-- **`lit`** — [Lit](https://lit.dev): rendering, hydration, lifecycle, directives.
-- **`remix`** — [Remix](https://remix.run) v3: module loading, streaming SSR, hydration data.
-- **`turbo`** — [Turbo](https://turbo.hotwired.dev): link interception, body swap, View Transitions.
-- **`next.js`** — [Next.js](https://nextjs.org): App Router file conventions, layouts, metadata.
+- **`lit`** — [lit/lit](https://github.com/lit/lit) ([lit.dev](https://lit.dev)): `html`/`css` tagged-template ergonomics, `WebComponent` base API (reactive `static properties`, `firstUpdated`, `render`), `ReactiveController` protocol, `Task` controller. _Reimplemented from scratch — no `lit-*` packages in `package.json`._
+- **`lit.dev`** — [lit/lit.dev](https://github.com/lit/lit.dev): docs-site conventions, examples, playground patterns.
+- **`remix`** — [remix-run/remix](https://github.com/remix-run/remix) ([remix.run](https://remix.run)) v3: `Session` class + `SessionStorage` interface (explicitly "Remix-style" in `packages/server/src/session.js`), HTTP-standards caching philosophy. _Narrow — no loaders/actions, no progressive-enhancement `<Form>`._
+- **`turbo`** — [hotwired/turbo](https://github.com/hotwired/turbo) ([turbo.hotwired.dev](https://turbo.hotwired.dev)): Turbo Drive — same-origin link interception, body swap via `replaceChildren`, `history.pushState`, View Transitions integration. `data-no-router` mirrors `data-turbo="false"`. _Frames (`<turbo-frame>`) and Streams (`<turbo-stream>`) not adopted; no Idiomorph._
+- **`next.js`** — [vercel/next.js](https://github.com/vercel/next.js) ([nextjs.org](https://nextjs.org)): App Router file conventions wholesale (`page.ts`, `layout.ts`, `error.ts`, `loading.ts`, `middleware.ts`, `not-found.ts`, `[param]`, `(group)`), nested layouts, metadata API (`metadata` + `generateMetadata`), `"use server"` directive. webjs adds the `.server.ts` extension as a convenience marker.
+
+For surface-level questions ("what does the public API look like?",
+"what does the docs page say?") prefer WebFetch on the docs URL — don't
+clone just to skim. Clone only when you need to read implementation
+details, trace internal call paths, or compare structural decisions.
 
 ---
 
