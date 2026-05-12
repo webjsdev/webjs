@@ -86,8 +86,7 @@
     "name": "calendar",
     "type": "registry:ui",
     "dependencies": [
-      "@webjskit/core",
-      "date-fns"
+      "@webjskit/core"
     ]
   },
   {

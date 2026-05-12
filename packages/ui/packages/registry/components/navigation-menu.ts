@@ -40,7 +40,7 @@ export class UiNavigationMenu extends WebComponent {
   constructor() { super(); this.viewport = true; }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('ui-nav-menu-open', this._onOpen as EventListener);
     this.addEventListener('ui-nav-menu-close', this._onClose as EventListener);
@@ -123,7 +123,7 @@ UiNavigationMenu.register('ui-navigation-menu');
 
 export class UiNavigationMenuList extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() { return html`<ul data-slot="navigation-menu-list" class=${cn('group flex flex-1 list-none items-center justify-center gap-1')}>${unsafeHTML(this._slot)}</ul>`; }
 }
 UiNavigationMenuList.register('ui-navigation-menu-list');
@@ -135,7 +135,7 @@ export class UiNavigationMenuItem extends WebComponent {
   constructor() { super(); this.open = false; }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('ui-nav-menu-trigger-click', () => {
       if (this.open) this.dispatchEvent(new CustomEvent('ui-nav-menu-close', { bubbles: true }));
@@ -158,7 +158,7 @@ UiNavigationMenuItem.register('ui-navigation-menu-item');
 export class UiNavigationMenuTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-nav-menu-trigger-click', { bubbles: true })));
     this.addEventListener('pointerenter', () => this.dispatchEvent(new CustomEvent('ui-nav-menu-trigger-hover', { bubbles: true })));
@@ -178,7 +178,7 @@ UiNavigationMenuTrigger.register('ui-navigation-menu-trigger');
 
 export class UiNavigationMenuContent extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     const state = this.getAttribute('data-state') || 'closed';
     return html`
@@ -197,7 +197,7 @@ export class UiNavigationMenuLink extends WebComponent {
   declare href: string; declare active: boolean;
   private _slot = '';
   constructor() { super(); this.href = '#'; this.active = false; }
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     const cls = "flex flex-col gap-1 rounded-sm p-2 text-sm transition-all outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground data-[active=true]:hover:bg-accent data-[active=true]:focus:bg-accent [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground";
     return html`<a data-slot="navigation-menu-link" data-active=${String(this.active)} href=${this.href} class=${cn(cls)}>${unsafeHTML(this._slot)}</a>`;

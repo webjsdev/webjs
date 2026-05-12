@@ -65,7 +65,7 @@ UiSheet.register('ui-sheet');
 export class UiSheetTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', this._onClick);
   }
@@ -77,7 +77,7 @@ UiSheetTrigger.register('ui-sheet-trigger');
 export class UiSheetClose extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', this._onClick);
   }
@@ -88,7 +88,7 @@ UiSheetClose.register('ui-sheet-close');
 
 export class UiSheetContent extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
 
   static get observedAttributes() { return ['data-state', 'side']; }
   attributeChangedCallback() { this.requestUpdate(); }
@@ -138,7 +138,7 @@ UiSheetContent.register('ui-sheet-content');
 function makeChild(tag: string, slot: string, classes: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() { return html`<div data-slot=${slot} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`; }
   }
   C.register(tag);

@@ -16,7 +16,7 @@ import { cn } from '../lib/utils.ts';
 export class UiInputGroup extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -39,7 +39,7 @@ UiInputGroup.register('ui-input-group');
 export class UiInputGroupText extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -58,7 +58,7 @@ UiInputGroupText.register('ui-input-group-text');
 export class UiInputGroupIcon extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -91,7 +91,7 @@ export class UiInputGroupButton extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 

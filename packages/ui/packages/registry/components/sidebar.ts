@@ -91,7 +91,7 @@ export class UiSidebarProvider extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
 
     // Restore open state from cookie (overrides default-open if present).
     const cookieState = readCookie(COOKIE_STATE);
@@ -261,7 +261,7 @@ export class UiSidebar extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -554,7 +554,7 @@ UiSidebarBackdrop.register('ui-sidebar-backdrop');
 export class UiSidebarInset extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -610,7 +610,7 @@ UiSidebarInput.register('ui-sidebar-input');
 
 export class UiSidebarHeader extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-header" data-sidebar="header" class=${cn('flex flex-col gap-2 p-2')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -619,7 +619,7 @@ UiSidebarHeader.register('ui-sidebar-header');
 
 export class UiSidebarFooter extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-footer" data-sidebar="footer" class=${cn('flex flex-col gap-2 p-2')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -635,7 +635,7 @@ UiSidebarSeparator.register('ui-sidebar-separator');
 
 export class UiSidebarContent extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-content" data-sidebar="content" class=${cn('flex min-h-0 flex-1 flex-col gap-2 overflow-auto')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -644,7 +644,7 @@ UiSidebarContent.register('ui-sidebar-content');
 
 export class UiSidebarGroup extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-group" data-sidebar="group" class=${cn('relative flex w-full min-w-0 flex-col p-2')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -653,7 +653,7 @@ UiSidebarGroup.register('ui-sidebar-group');
 
 export class UiSidebarGroupLabel extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-group-label" data-sidebar="group-label" class=${cn('flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 transition-[margin,opacity] duration-200 ease-linear [&>svg]:size-4 [&>svg]:shrink-0')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -662,7 +662,7 @@ UiSidebarGroupLabel.register('ui-sidebar-group-label');
 
 export class UiSidebarGroupAction extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<button type="button" data-slot="sidebar-group-action" data-sidebar="group-action" class=${cn('absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground transition-transform hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0')}>${unsafeHTML(this._slot)}</button>`;
   }
@@ -671,7 +671,7 @@ UiSidebarGroupAction.register('ui-sidebar-group-action');
 
 export class UiSidebarGroupContent extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-group-content" data-sidebar="group-content" class=${cn('w-full text-sm')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -680,7 +680,7 @@ UiSidebarGroupContent.register('ui-sidebar-group-content');
 
 export class UiSidebarMenu extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<ul data-slot="sidebar-menu" data-sidebar="menu" class=${cn('flex w-full min-w-0 flex-col gap-1')}>${unsafeHTML(this._slot)}</ul>`;
   }
@@ -689,7 +689,7 @@ UiSidebarMenu.register('ui-sidebar-menu');
 
 export class UiSidebarMenuItem extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${cn('group/menu-item relative')}>${unsafeHTML(this._slot)}</li>`;
   }
@@ -731,7 +731,7 @@ export class UiSidebarMenuButton extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -772,7 +772,7 @@ export class UiSidebarMenuAction extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -796,7 +796,7 @@ UiSidebarMenuAction.register('ui-sidebar-menu-action');
 
 export class UiSidebarMenuBadge extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<div data-slot="sidebar-menu-badge" data-sidebar="menu-badge" class=${cn('pointer-events-none absolute right-1 flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium text-sidebar-foreground tabular-nums select-none')}>${unsafeHTML(this._slot)}</div>`;
   }
@@ -805,7 +805,7 @@ UiSidebarMenuBadge.register('ui-sidebar-menu-badge');
 
 export class UiSidebarMenuSub extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<ul data-slot="sidebar-menu-sub" data-sidebar="menu-sub" class=${cn('mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5')}>${unsafeHTML(this._slot)}</ul>`;
   }
@@ -814,7 +814,7 @@ UiSidebarMenuSub.register('ui-sidebar-menu-sub');
 
 export class UiSidebarMenuSubItem extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() {
     return html`<li data-slot="sidebar-menu-sub-item" data-sidebar="menu-sub-item" class=${cn('group/menu-sub-item relative')}>${unsafeHTML(this._slot)}</li>`;
   }
@@ -841,7 +841,7 @@ export class UiSidebarMenuSubButton extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 

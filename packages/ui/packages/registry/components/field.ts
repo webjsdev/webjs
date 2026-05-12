@@ -51,7 +51,7 @@ export class UiField extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -83,7 +83,7 @@ export class UiFieldLabel extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -105,7 +105,7 @@ UiFieldLabel.register('ui-field-label');
 export class UiFieldDescription extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -134,7 +134,7 @@ export class UiFieldError extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -155,7 +155,7 @@ UiFieldError.register('ui-field-error');
 export class UiFieldGroup extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -174,7 +174,7 @@ UiFieldGroup.register('ui-field-group');
 export class UiFieldSeparator extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -207,7 +207,7 @@ export class UiFieldLegend extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -229,7 +229,7 @@ UiFieldLegend.register('ui-field-legend');
 export class UiFieldSet extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -246,7 +246,7 @@ UiFieldSet.register('ui-field-set');
 export class UiFieldTitle extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -266,7 +266,7 @@ UiFieldTitle.register('ui-field-title');
 export class UiFieldContent extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {

@@ -16,10 +16,14 @@
     "preview:build": "node scripts/copy-registry.js"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.7.6",
     "@webjskit/cli": "^0.4.0",
     "@webjskit/core": "^0.3.0",
     "@webjskit/server": "^0.4.0",
-    "@webjskit/ui-registry": "*"
+    "@webjskit/ui-registry": "*",
+    "date-fns": "^4.1.0",
+    "embla-carousel": "^8.6.0",
+    "fuse.js": "^7.3.0"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.2",

@@ -40,7 +40,7 @@ export class UiResizablePanelGroup extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -80,7 +80,7 @@ export class UiResizablePanel extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     // Apply initial size via inline flex-basis
     queueMicrotask(() => this._applySize(this.defaultSize));
