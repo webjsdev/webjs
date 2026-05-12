@@ -227,19 +227,14 @@ async function renderTemplate(tr, ctx) {
  * @returns {Promise<string>}
  */
 async function injectDSD(html, ctx) {
-  // Sort by length descending so longer tags (e.g. `ui-card-header`) match
-  // before shorter prefixes (e.g. `ui-card`). JS regex alternation otherwise
-  // picks the FIRST match in the source order — so `<ui-card-header>` would
-  // match as `ui-card` with `-header` swallowed into the attrs group.
-  const tags = allTags().slice().sort((a, b) => b.length - a.length);
+  const tags = allTags();
   if (!tags.length) return html;
   // Attribute section is "anything that isn't `>`, with quoted values as a
   // single unit" so slashes in URL-valued attrs (e.g. then="/dashboard") don't
   // prevent the match. Non-greedy so self-closing `/>` still captures into the
-  // third group. The `(?=[\s>/])` lookahead enforces a tag-name boundary so a
-  // shorter alternative can't partial-match a longer tag.
+  // third group.
   const pattern = new RegExp(
-    `<(${tags.map(escapeRegex).join('|')})(?=[\\s>/])((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
+    `<(${tags.map(escapeRegex).join('|')})((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
     'g'
   );
   /** @type {{start:number, end:number, text:string}[]} */
@@ -257,32 +252,6 @@ async function injectDSD(html, ctx) {
       const instance = new /** @type any */ (Cls)();
       const attrMap = parseAttrs(attrs);
       applyAttrsToInstance(instance, attrMap, Cls);
-
-      // Extract source children (the content between opening and closing
-      // tag) so wrapper-style components — `<ui-card>title</ui-card>`,
-      // `<ui-dialog-content>…</ui-dialog-content>`, etc. — can read them via
-      // `this.innerHTML` in their connectedCallback. Without this the
-      // `_slot = this.innerHTML` pattern silently produces empty output
-      // server-side and the original children float outside the rendered
-      // wrapper (shadcn-style composition broken).
-      let childContent = '';
-      let closingTagEnd = m.index + match.length;
-      if (!selfClose) {
-        const balanced = findClosingTag(html, tag, m.index + match.length);
-        if (balanced.end !== -1) {
-          childContent = html.slice(m.index + match.length, balanced.start);
-          closingTagEnd = balanced.end;
-        }
-      }
-
-      // Expose children to the instance both as `innerHTML` (so component
-      // overrides reading `this.innerHTML` work) and via a connectedCallback
-      // call (so the component's setup runs the same way as in the browser).
-      // The base WebComponent.connectedCallback no-ops outside the browser,
-      // so subclass overrides are the only ones that execute.
-      try { instance.innerHTML = childContent; } catch { /* ignore — read-only */ }
-      try { instance.connectedCallback?.(); } catch { /* tolerated */ }
-
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
       // Render the template to HTML, then recursively inject DSD for
@@ -291,8 +260,7 @@ async function injectDSD(html, ctx) {
       const inner = await injectDSD(rawInner, ctx);
 
       if (isShadow) {
-        // Shadow DOM: wrap in Declarative Shadow DOM template. Keep original
-        // children outside the template (they go in as ::slotted).
+        // Shadow DOM: wrap in Declarative Shadow DOM template
         /** @type {any} */
         const rawStyles = /** @type any */ (Cls).styles;
         const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
@@ -302,27 +270,8 @@ async function injectDSD(html, ctx) {
           end: m.index + match.length,
           text: `${opening}<template shadowrootmode="open">${styleStr}${inner}</template>`,
         });
-      } else if (childContent && instance.render) {
-        // Light DOM with source children + an explicit render() override:
-        // the render output has already incorporated those children (via the
-        // wrapper pattern), so REPLACE the source children. This is the
-        // shadcn-style composition path. Store the ORIGINAL user children in
-        // a `data-webjs-children` attribute (URI-encoded) so the client can
-        // recover them at hydration time — without this the client would
-        // re-capture the post-SSR innerHTML and produce a doubled render.
-        const encodedChildren = encodeURIComponent(childContent);
-        // Inject the attribute right before the closing `>` of the opening tag.
-        const withAttr = opening.replace(/(\/?)>$/, ` data-webjs-children="${encodedChildren}"$1>`);
-        edits.push({
-          start: m.index,
-          end: closingTagEnd,
-          text: `${withAttr}<!--webjs-hydrate-->${inner}</${tag}>`,
-        });
       } else {
-        // Light DOM, no source children: insert render() output between
-        // opening and closing tag, preserving the existing structure (the
-        // original behaviour for self-contained components like
-        // <theme-toggle>).
+        // Light DOM: render content directly as children, add hydration marker
         edits.push({
           start: m.index,
           end: m.index + match.length,
@@ -346,38 +295,6 @@ async function injectDSD(html, ctx) {
 /** @param {string} s */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Find the matching closing tag for `<tag>` starting from `from`, accounting
- * for same-name nesting. Returns `{ start, end }` of the closing tag in the
- * source string — `start` is the position of `<`, `end` is one past `>`. If
- * no balanced closing exists, returns `{ start: -1, end: -1 }`.
- *
- * @param {string} html
- * @param {string} tag
- * @param {number} from
- */
-function findClosingTag(html, tag, from) {
-  const open = new RegExp(`<${escapeRegex(tag)}(\\s[^>]*)?>`, 'g');
-  const close = new RegExp(`</${escapeRegex(tag)}>`, 'g');
-  open.lastIndex = from;
-  close.lastIndex = from;
-  let depth = 1;
-  while (depth > 0) {
-    const o = open.exec(html);
-    const c = close.exec(html);
-    if (!c) return { start: -1, end: -1 };
-    if (o && o.index < c.index) {
-      depth++;
-      close.lastIndex = o.index + o[0].length;
-    } else {
-      depth--;
-      if (depth === 0) return { start: c.index, end: c.index + c[0].length };
-      open.lastIndex = c.index + c[0].length;
-    }
-  }
-  return { start: -1, end: -1 };
 }
 
 /** @param {string} tag */

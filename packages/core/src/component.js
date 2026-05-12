@@ -117,28 +117,7 @@ function defaultHasChanged(a, b) {
  */
 
 // Base class choice: real HTMLElement on the browser, a dummy on the server.
-// The server-side dummy provides minimal HTMLElement-shaped stubs so that
-// component code reaching for DOM APIs (`getAttribute`, `setAttribute`,
-// `closest`, event-listener methods, `innerHTML`) during SSR no-ops cleanly
-// instead of throwing. This lets the same render() body work in both
-// environments — anything client-only is gated by `isBrowser` upstream.
-const Base = isBrowser
-  ? HTMLElement
-  : /** @type {any} */ (class {
-      _ssrAttrs = /** @type {Record<string, string>} */ ({});
-      get innerHTML() { return this._ssrInnerHTML || ''; }
-      set innerHTML(v) { this._ssrInnerHTML = v; }
-      getAttribute(name) { return this._ssrAttrs[name] ?? null; }
-      setAttribute(name, value) { this._ssrAttrs[name] = String(value); }
-      removeAttribute(name) { delete this._ssrAttrs[name]; }
-      hasAttribute(name) { return name in this._ssrAttrs; }
-      closest() { return null; }
-      querySelector() { return null; }
-      querySelectorAll() { return []; }
-      addEventListener() {}
-      removeEventListener() {}
-      dispatchEvent() { return true; }
-    });
+const Base = isBrowser ? HTMLElement : /** @type {any} */ (class {});
 
 export class WebComponent extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
@@ -474,39 +453,6 @@ export class WebComponent extends Base {
   /**
    * Shallow-merge new state and schedule a re-render.
    *
-   * Get the original user-authored child markup for this element.
-   *
-   * In server-side render, this returns whatever was between the opening and
-   * closing tags in the source HTML. On the client, after SSR has run, it
-   * returns the same string — recovered from the `data-webjs-children`
-   * attribute that the SSR renderer stamps onto the host. If neither is
-   * present (the component was created client-side from scratch), it falls
-   * back to `this.innerHTML`.
-   *
-   * Use this in wrapper-style components (shadcn-style composition) when
-   * `render()` needs to project children:
-   *
-   * ```js
-   * connectedCallback() {
-   *   if (!this._slot) this._slot = this.getSourceChildren();
-   *   super.connectedCallback();
-   * }
-   * render() {
-   *   return html`<div class="...">${unsafeHTML(this._slot)}</div>`;
-   * }
-   * ```
-   *
-   * @returns {string}
-   */
-  getSourceChildren() {
-    const attr = this.getAttribute && this.getAttribute('data-webjs-children');
-    if (attr != null) {
-      try { return decodeURIComponent(attr); } catch { return attr; }
-    }
-    return /** @type any */ (this).innerHTML || '';
-  }
-
-  /**
    * @param {Record<string, unknown>} patch
    */
   setState(patch) {
