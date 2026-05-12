@@ -5,13 +5,15 @@
   "private": true,
   "description": "Registry host + docs site for @webjskit/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {
-    "prestart": "npm run css:build",
+    "predev": "node scripts/copy-registry.js",
+    "prestart": "node scripts/copy-registry.js && npm run css:build",
     "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
     "start": "webjs start",
     "webjs:dev": "webjs dev --port 5001",
     "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
-    "build": "webjs build"
+    "build": "node scripts/copy-registry.js && webjs build",
+    "preview:build": "node scripts/copy-registry.js"
   },
   "dependencies": {
     "@webjskit/cli": "^0.4.0",

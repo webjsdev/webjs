@@ -1,13 +1,43 @@
-import { html } from '@webjskit/core';
+import { html, unsafeHTML } from '@webjskit/core';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { notFound } from '@webjskit/core';
+import { getExample } from './examples.ts';
 
-// app/docs/components/[name]/page.ts is 5 levels deep inside website/
-// (app → docs → components → [name] → page.ts). We need to reach
-// packages/ui/packages/registry/r/. From here that's five `..` to land in
-// `packages/ui/packages/`, then down into `registry/r`.
+// ---------------------------------------------------------------------------
+// Side-effect imports — load every ui-* component module so the custom
+// elements register, and the preview pane can render any of them. Modules
+// are copied from the registry into `components/ui/` at prestart
+// (see `scripts/copy-registry.js`), so the same source webjs serves to the
+// browser is what SSR uses.
+// ---------------------------------------------------------------------------
+import '../../../../components/ui/accordion.ts';
+import '../../../../components/ui/alert.ts';
+import '../../../../components/ui/alert-dialog.ts';
+import '../../../../components/ui/avatar.ts';
+import '../../../../components/ui/badge.ts';
+import '../../../../components/ui/breadcrumb.ts';
+import '../../../../components/ui/button.ts';
+import '../../../../components/ui/card.ts';
+import '../../../../components/ui/checkbox.ts';
+import '../../../../components/ui/dialog.ts';
+import '../../../../components/ui/input.ts';
+import '../../../../components/ui/kbd.ts';
+import '../../../../components/ui/label.ts';
+import '../../../../components/ui/pagination.ts';
+import '../../../../components/ui/progress.ts';
+import '../../../../components/ui/radio-group.ts';
+import '../../../../components/ui/separator.ts';
+import '../../../../components/ui/skeleton.ts';
+import '../../../../components/ui/slider.ts';
+import '../../../../components/ui/spinner.ts';
+import '../../../../components/ui/switch.ts';
+import '../../../../components/ui/tabs.ts';
+import '../../../../components/ui/textarea.ts';
+import '../../../../components/ui/toggle.ts';
+
+// page.ts is 5 levels deep inside website/. Walk 5 ups to packages/ui/packages/.
 const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', 'registry', 'r');
 
 export function generateMetadata({ params }: { params: { name: string } }) {
@@ -20,26 +50,60 @@ export default function ComponentDoc({ params }: { params: { name: string } }) {
 
   const item = JSON.parse(readFileSync(p, 'utf8'));
   const source = item.files?.[0]?.content || '';
-  const deps = [...(item.dependencies || []), ...(item.registryDependencies || [])];
+  const npmDeps = (item.dependencies || []).filter((d: string) => d !== '@webjskit/core');
+  const registryDeps = item.registryDependencies || [];
+  const example = getExample(params.name);
 
   return html`
-    <a href="/" class="text-sm text-muted-foreground hover:text-foreground">← All components</a>
-    <h1 class="text-3xl font-bold tracking-tight mt-4">${item.name}</h1>
-    ${item.description ? html`<p class="text-muted-foreground mt-2">${item.description}</p>` : ''}
+    <a href="/" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>
+      </svg>
+      All components
+    </a>
 
-    <div class="mt-6 flex flex-wrap gap-2 text-sm">
-      <span class="rounded-md border px-2 py-1">${item.type}</span>
-      ${(deps || []).map((d: string) => html`<code class="rounded-md bg-muted px-2 py-1 text-xs">${d}</code>`)}
-    </div>
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold tracking-tight" style="color: var(--fg)">${item.name}</h1>
+      ${item.description ? html`<p class="mt-2 text-base text-muted-foreground">${item.description}</p>` : ''}
+      <div class="mt-4 flex flex-wrap gap-2 text-xs">
+        <span class="rounded-md border px-2 py-1" style="color: var(--fg-muted)">${item.type.replace('registry:', '')}</span>
+        ${registryDeps.map((d: string) => html`<a href="/docs/components/${d}" class="rounded-md border px-2 py-1 hover:bg-accent" style="color: var(--fg-muted)">↳ ${d}</a>`)}
+        ${npmDeps.map((d: string) => html`<code class="rounded-md px-2 py-1 text-[11px]" style="background: var(--bg-subtle); color: var(--fg-muted)">${d}</code>`)}
+      </div>
+    </header>
 
-    <section class="mt-10">
-      <h2 class="text-xl font-semibold mb-3">Install</h2>
-      <pre class="bg-muted p-4 rounded-md overflow-x-auto"><code>npx webjsui add ${item.name}</code></pre>
+    ${
+      example
+        ? html`
+          <section class="mb-12">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-base font-medium" style="color: var(--fg-muted)">Preview</h2>
+            </div>
+            <div class="rounded-lg border p-8 flex items-center justify-center min-h-[280px]" style="background: var(--bg-elev)">
+              ${unsafeHTML(example)}
+            </div>
+          </section>
+        `
+        : html`
+          <section class="mb-12">
+            <div class="rounded-lg border p-8 text-sm text-muted-foreground" style="background: var(--bg-subtle)">
+              No live preview available for this component yet. The source code below shows
+              the full implementation; <code>webjs ui add ${item.name}</code> copies it into your project.
+            </div>
+          </section>
+        `
+    }
+
+    <section class="mb-12">
+      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Installation</h2>
+      <pre class="rounded-lg p-4 overflow-x-auto"><code>npx webjsui add ${item.name}</code></pre>
+      <p class="mt-3 text-sm text-muted-foreground">Webjs users — also available as:</p>
+      <pre class="rounded-lg p-4 overflow-x-auto mt-1"><code>webjs ui add ${item.name}</code></pre>
     </section>
 
-    <section class="mt-10">
-      <h2 class="text-xl font-semibold mb-3">Source</h2>
-      <pre class="bg-muted p-4 rounded-md overflow-x-auto text-xs"><code>${source}</code></pre>
+    <section>
+      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Source — <code class="text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-subtle)">components/ui/${item.name}.ts</code></h2>
+      <pre class="rounded-lg p-4 overflow-x-auto text-xs max-h-[480px] overflow-y-auto"><code>${source}</code></pre>
     </section>
   `;
 }
