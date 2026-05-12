@@ -90,7 +90,7 @@ async function writeUiBootstrap(appDir) {
   // 2) components.json — the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js).
   const componentsJson = {
-    $schema: 'https://ui.webjs.com/schema.json',
+    $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
     tailwind: {
       css: 'app/globals.css',

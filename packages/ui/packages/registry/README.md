@@ -5,7 +5,7 @@ Internal — sources for the `@webjskit/ui` component registry.
 Not published. The build script reads `registry.json` + the files it points at
 and emits `r/*.json` — one JSON file per registry item, wire-compatible with
 shadcn's `registryItemSchema`. Those JSON files are served by
-[`@webjskit/ui-website`](../ui-website) at `https://ui.webjs.com/r/<name>.json`,
+[`@webjskit/ui-website`](../ui-website) at `https://ui.webjs.dev/r/<name>.json`,
 which the `@webjskit/ui` CLI fetches.
 
 ## Layout

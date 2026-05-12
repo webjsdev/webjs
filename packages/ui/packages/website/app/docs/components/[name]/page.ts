@@ -4,7 +4,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { notFound } from '@webjskit/core';
 
-const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'registry', 'r');
+// app/docs/components/[name]/page.ts is 5 levels deep inside website/
+// (app → docs → components → [name] → page.ts). We need to reach
+// packages/ui/packages/registry/r/. From here that's five `..` to land in
+// `packages/ui/packages/`, then down into `registry/r`.
+const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', 'registry', 'r');
 
 export function generateMetadata({ params }: { params: { name: string } }) {
   return { title: `${params.name} — @webjskit/ui` };

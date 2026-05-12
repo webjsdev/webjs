@@ -34,7 +34,7 @@
     "url": "git+https://github.com/vivek7405/webjs.git",
     "directory": "packages/ui"
   },
-  "homepage": "https://ui.webjs.com",
+  "homepage": "https://ui.webjs.dev",
   "bugs": "https://github.com/vivek7405/webjs/issues",
   "license": "MIT",
   "keywords": [

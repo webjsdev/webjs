@@ -1,7 +1,7 @@
 {
-  "$schema": "https://ui.webjs.com/schema/registry.json",
+  "$schema": "https://ui.webjs.dev/schema/registry.json",
   "name": "@webjskit/ui",
-  "homepage": "https://ui.webjs.com",
+  "homepage": "https://ui.webjs.dev",
   "items": [
     { "name": "lib-utils", "type": "registry:lib", "description": "cn() class-merge helper", "files": [{ "path": "lib/utils.ts", "type": "registry:lib", "target": "lib/utils.ts" }] },
 

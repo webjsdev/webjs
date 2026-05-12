@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ui.webjs.com/schema.json",
+  "$schema": "https://ui.webjs.dev/schema.json",
   "style": "default",
   "tailwind": { "css": "public/input.css", "baseColor": "neutral", "cssVariables": true },
   "aliases": { "components": "components", "utils": "lib/utils", "ui": "components/ui", "lib": "lib" },

@@ -27,7 +27,7 @@ function main() {
 
   for (const item of manifest.items) {
     const enriched = {
-      $schema: 'https://ui.webjs.com/schema/registry-item.json',
+      $schema: 'https://ui.webjs.dev/schema/registry-item.json',
       ...item,
       files: (item.files || []).map((f) => {
         const filePath = resolve(ROOT, f.path);
@@ -48,7 +48,7 @@ function main() {
   for (const color of BASE_COLORS) {
     const overrides = BASE_OVERRIDES[color] || { light: {}, dark: {} };
     const themeItem = {
-      $schema: 'https://ui.webjs.com/schema/registry-item.json',
+      $schema: 'https://ui.webjs.dev/schema/registry-item.json',
       name: `theme-${color}`,
       type: 'registry:theme',
       title: color.charAt(0).toUpperCase() + color.slice(1),

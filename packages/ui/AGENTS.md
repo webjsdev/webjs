@@ -14,7 +14,7 @@ apply here. Read that first. This file only covers what's specific to
 component sources directly — those live in
 [`packages/ui/packages/registry/`](./packages/registry/) (internal, not
 published). The CLI fetches compiled JSON from
-[`https://ui.webjs.com/r/<name>.json`](https://ui.webjs.com) and copies the
+[`https://ui.webjs.dev/r/<name>.json`](https://ui.webjs.dev) and copies the
 source into the user's project.
 
 Three workspace packages cooperate:

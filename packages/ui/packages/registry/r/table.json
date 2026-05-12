@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "$schema": "https://ui.webjs.dev/schema/registry-item.json",
   "name": "table",
   "type": "registry:ui",
   "dependencies": [

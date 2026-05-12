@@ -50,7 +50,7 @@ export const init = new Command()
     }
 
     const config = {
-      $schema: 'https://ui.webjs.com/schema.json',
+      $schema: 'https://ui.webjs.dev/schema.json',
       style: 'default',
       tailwind: {
         css: answers.css,
