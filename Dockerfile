@@ -45,8 +45,9 @@ COPY docs      ./docs
 # Blog: generate Prisma client (needs schema.prisma in context).
 RUN cd examples/blog && npx prisma generate
 
-# UI registry: compile components → r/*.json so the ui-website can serve them.
-RUN node packages/ui/packages/registry/scripts/build.js
+# UI registry: no build step. The ui-website composes registry JSON on
+# demand from packages/ui/packages/registry/ sources via its route handlers
+# (see packages/ui/packages/website/app/_lib/registry.server.ts).
 
 # Tailwind: compile per-app CSS (all four use the CLI, no browser runtime).
 RUN npx tailwindcss -i website/public/input.css       -o website/public/tailwind.css       --minify \
