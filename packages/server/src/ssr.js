@@ -548,6 +548,10 @@ function wrapHead(opts) {
 
   const m = opts.metadata || {};
   const metaTags = [];
+  // linkTags is populated by both the metadata emission below (icons,
+  // alternates, archives, etc.) AND by the preload block further down.
+  // Hoist the declaration so the metadata block can push into it.
+  const linkTags = [];
 
   // Tiny URL resolver against metadataBase. If metadataBase is set and a
   // value looks like a relative URL (no scheme, no `//` prefix), resolve
@@ -641,6 +645,99 @@ function wrapHead(opts) {
     }
   }
 
+  // ---- Long-tail metadata (the Next.js "everything else") ----
+
+  // appleWebApp: { capable, title, statusBarStyle, startupImage }
+  if (m.appleWebApp && typeof m.appleWebApp === 'object') {
+    if (m.appleWebApp.capable !== undefined) {
+      metaTags.push(
+        `<meta name="apple-mobile-web-app-capable" content="${m.appleWebApp.capable ? 'yes' : 'no'}">`,
+      );
+    }
+    if (m.appleWebApp.title) {
+      metaTags.push(`<meta name="apple-mobile-web-app-title" content="${escapeAttr(m.appleWebApp.title)}">`);
+    }
+    if (m.appleWebApp.statusBarStyle) {
+      metaTags.push(
+        `<meta name="apple-mobile-web-app-status-bar-style" content="${escapeAttr(m.appleWebApp.statusBarStyle)}">`,
+      );
+    }
+    // startupImage maps to <link rel="apple-touch-startup-image">.
+    if (m.appleWebApp.startupImage) {
+      const list = Array.isArray(m.appleWebApp.startupImage)
+        ? m.appleWebApp.startupImage
+        : [m.appleWebApp.startupImage];
+      for (const it of list) {
+        if (typeof it === 'string') {
+          linkTags.push(`<link rel="apple-touch-startup-image" href="${escapeAttr(absUrl(it))}">`);
+        } else if (it && it.url) {
+          const parts = [`rel="apple-touch-startup-image"`, `href="${escapeAttr(absUrl(it.url))}"`];
+          if (it.media) parts.push(`media="${escapeAttr(it.media)}"`);
+          linkTags.push(`<link ${parts.join(' ')}>`);
+        }
+      }
+    }
+  } else if (m.appleWebApp === true) {
+    metaTags.push(`<meta name="apple-mobile-web-app-capable" content="yes">`);
+  }
+
+  // formatDetection: { telephone, address, email, date, … }. All booleans.
+  // Disabled detection types append "type=no" to the content string.
+  if (m.formatDetection && typeof m.formatDetection === 'object') {
+    const parts = [];
+    for (const [k, v] of Object.entries(m.formatDetection)) {
+      if (v === false) parts.push(`${k}=no`);
+      else if (v === true) parts.push(`${k}=yes`);
+    }
+    if (parts.length) {
+      metaTags.push(`<meta name="format-detection" content="${escapeAttr(parts.join(', '))}">`);
+    }
+  }
+
+  // itunes: { appId, appArgument? }
+  if (m.itunes && typeof m.itunes === 'object' && m.itunes.appId) {
+    let content = `app-id=${m.itunes.appId}`;
+    if (m.itunes.appArgument) content += `, app-argument=${m.itunes.appArgument}`;
+    metaTags.push(`<meta name="apple-itunes-app" content="${escapeAttr(content)}">`);
+  }
+
+  // Plain singleton string fields.
+  for (const [field, metaName] of [
+    ['category', 'category'],
+    ['classification', 'classification'],
+    ['abstract', 'abstract'],
+  ]) {
+    if (m[field]) metaTags.push(`<meta name="${metaName}" content="${escapeAttr(String(m[field]))}">`);
+  }
+
+  // archives / assets / bookmarks: each is string | string[].
+  // Standard registered link relations.
+  for (const [field, rel] of [
+    ['archives', 'archives'],
+    ['assets', 'assets'],
+    ['bookmarks', 'bookmark'],
+  ]) {
+    if (m[field]) {
+      const list = Array.isArray(m[field]) ? m[field] : [m[field]];
+      for (const href of list) {
+        linkTags.push(`<link rel="${rel}" href="${escapeAttr(absUrl(href))}">`);
+      }
+    }
+  }
+
+  // `other` is the typed escape hatch for any arbitrary <meta name="…">
+  // entries Next.js (or future webjs) doesn't ship as a typed field.
+  // Values can be string, number, or string[] (emits multiple meta tags).
+  if (m.other && typeof m.other === 'object') {
+    for (const [name, v] of Object.entries(m.other)) {
+      const list = Array.isArray(v) ? v : [v];
+      for (const item of list) {
+        if (item == null) continue;
+        metaTags.push(`<meta name="${escapeAttr(name)}" content="${escapeAttr(String(item))}">`);
+      }
+    }
+  }
+
   // verification: { google, yandex, yahoo, me }. Each is string OR string[].
   // - google     → <meta name="google-site-verification">
   // - yandex     → <meta name="yandex-verification">
@@ -690,7 +787,8 @@ function wrapHead(opts) {
 
   // Preload hints: page modules themselves + every discovered component
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
-  const linkTags = [];
+  // (linkTags array was declared earlier so the metadata block above can
+  // push icons / canonical / hreflang / archives / etc. into it.)
   for (const url of opts.moduleUrls) {
     linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
   }

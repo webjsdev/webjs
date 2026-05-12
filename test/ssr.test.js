@@ -591,6 +591,92 @@ test('split `viewport` export: collectMetadata picks it up alongside metadata', 
   assert.match(html, /<meta name="theme-color" content="#000">/);
 });
 
+/* ------------ Metadata parity: long-tail + `other` passthrough ------------ */
+
+test('metadata.appleWebApp: object form emits apple-mobile-web-app meta tags', () => {
+  const html = render({
+    appleWebApp: {
+      capable: true,
+      title: 'My App',
+      statusBarStyle: 'black-translucent',
+    },
+  });
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes">/);
+  assert.match(html, /<meta name="apple-mobile-web-app-title" content="My App">/);
+  assert.match(html, /<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">/);
+});
+
+test('metadata.appleWebApp.startupImage: emits <link rel="apple-touch-startup-image">', () => {
+  const html = render({
+    appleWebApp: {
+      startupImage: [
+        { url: '/splash-1.png', media: '(device-width: 320px)' },
+        '/splash-2.png',
+      ],
+    },
+  });
+  assert.match(html, /<link rel="apple-touch-startup-image" href="\/splash-1\.png" media="\(device-width: 320px\)">/);
+  assert.match(html, /<link rel="apple-touch-startup-image" href="\/splash-2\.png">/);
+});
+
+test('metadata.appleWebApp: true shorthand emits just the `capable` tag', () => {
+  const html = render({ appleWebApp: true });
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes">/);
+});
+
+test('metadata.formatDetection: combines bool fields into a content string', () => {
+  const html = render({
+    formatDetection: { telephone: false, address: false, email: true },
+  });
+  assert.match(
+    html,
+    /<meta name="format-detection" content="telephone=no, address=no, email=yes">/,
+  );
+});
+
+test('metadata.itunes: appId + appArgument emit apple-itunes-app meta', () => {
+  const html = render({ itunes: { appId: '12345', appArgument: 'myapp://open' } });
+  assert.match(html, /<meta name="apple-itunes-app" content="app-id=12345, app-argument=myapp:\/\/open">/);
+});
+
+test('metadata: category / classification / abstract emit <meta name="…">', () => {
+  const html = render({
+    category: 'tech',
+    classification: 'documentation',
+    abstract: 'A short summary',
+  });
+  assert.match(html, /<meta name="category" content="tech">/);
+  assert.match(html, /<meta name="classification" content="documentation">/);
+  assert.match(html, /<meta name="abstract" content="A short summary">/);
+});
+
+test('metadata: archives / assets / bookmarks emit <link rel="…">', () => {
+  const html = render({
+    archives: ['/archive-2024', '/archive-2023'],
+    assets: '/assets-cdn',
+    bookmarks: ['/bm-1', '/bm-2'],
+  });
+  assert.match(html, /<link rel="archives" href="\/archive-2024">/);
+  assert.match(html, /<link rel="archives" href="\/archive-2023">/);
+  assert.match(html, /<link rel="assets" href="\/assets-cdn">/);
+  assert.match(html, /<link rel="bookmark" href="\/bm-1">/);
+  assert.match(html, /<link rel="bookmark" href="\/bm-2">/);
+});
+
+test('metadata.other: arbitrary meta key passthrough; supports string + array values', () => {
+  const html = render({
+    other: {
+      'facebook-domain-verification': 'fb-token',
+      'msvalidate.01': ['bing-token-a', 'bing-token-b'],
+      'custom-key': 'custom-value',
+    },
+  });
+  assert.match(html, /<meta name="facebook-domain-verification" content="fb-token">/);
+  assert.match(html, /<meta name="msvalidate\.01" content="bing-token-a">/);
+  assert.match(html, /<meta name="msvalidate\.01" content="bing-token-b">/);
+  assert.match(html, /<meta name="custom-key" content="custom-value">/);
+});
+
 /* ------------ ssrPage integration: cache-control + data-layout wrapping ------------ */
 
 async function makeRoute({ pageSrc, layoutSrc, metadata = null }) {
