@@ -1,6 +1,6 @@
 {
   "name": "@webjskit/cli",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "type": "module",
   "description": "webjs CLI — dev, start, create, db",
   "bin": {

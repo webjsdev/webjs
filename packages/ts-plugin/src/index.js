@@ -30,10 +30,52 @@ function init(modules) {
 
   return { create };
 
+  /**
+   * Load `ts-lit-plugin` programmatically and let it enhance the
+   * language service first, so our wrapping sits on top of its
+   * template-literal intelligence. This is what lets users install
+   * `@webjskit/ts-plugin` as a single plugin (instead of needing to
+   * list `ts-lit-plugin` separately in tsconfig).
+   *
+   * Failure modes:
+   *  - ts-lit-plugin missing from node_modules (very unlikely — we
+   *    declare it as a runtime dep)
+   *  - factory shape changed in an incompatible way upstream
+   *  - factory throws
+   *
+   * In every failure path we log + fall back to the bare language
+   * service so the editor degrades to "no template intelligence" but
+   * never crashes.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @returns {import('typescript/lib/tsserverlibrary').LanguageService}
+   */
+  function loadLitEnhanced(info) {
+    try {
+      // eslint-disable-next-line global-require
+      const litFactory = require('ts-lit-plugin');
+      const litMod = typeof litFactory === 'function' ? litFactory({ typescript: ts }) : null;
+      const litCreate = litMod && typeof litMod.create === 'function' ? litMod.create : null;
+      if (!litCreate) {
+        info.project.projectService.logger?.info?.(
+          '@webjskit/ts-plugin: ts-lit-plugin has unexpected factory shape — falling back to bare LS',
+        );
+        return info.languageService;
+      }
+      const enhanced = litCreate(info);
+      return enhanced || info.languageService;
+    } catch (e) {
+      info.project.projectService.logger?.info?.(
+        `@webjskit/ts-plugin: ts-lit-plugin failed to load — falling back to bare LS: ${String(e)}`,
+      );
+      return info.languageService;
+    }
+  }
+
   /** @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info */
   function create(info) {
     const proxy = Object.create(null);
-    const inner = info.languageService;
+    const inner = loadLitEnhanced(info);
     for (const k of Object.keys(inner)) {
       proxy[k] = /** @type any */ (inner[/** @type any */ (k)]).bind(inner);
     }

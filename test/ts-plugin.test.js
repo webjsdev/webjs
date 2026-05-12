@@ -71,6 +71,31 @@ function offsetOf(file, needle) {
   return i;
 }
 
+test('loadLitEnhanced: ts-lit-plugin is bundled — single-plugin tsconfig works', () => {
+  // Sanity check: @webjskit/ts-plugin pulls ts-lit-plugin in transitively
+  // and loads it inside create(info). This test verifies the package is
+  // resolvable from the plugin's perspective so we never accidentally
+  // ship without the runtime dep.
+  const litFactory = require('ts-lit-plugin');
+  assert.equal(typeof litFactory, 'function', 'ts-lit-plugin must be a factory function');
+  const inst = litFactory({ typescript: ts });
+  assert.equal(typeof inst.create, 'function', 'ts-lit-plugin factory must return a {create} object');
+});
+
+test('loadLitEnhanced: falls back gracefully when create(info) is given a minimal info', () => {
+  // Our existing tests pass a deliberately partial `info` object (no
+  // serverHost data, minimal logger). ts-lit-plugin may not handle that
+  // and throw — the plugin must NOT crash; it should just degrade to the
+  // bare languageService. If this test passes, the fallback works for
+  // the rest of the suite.
+  const svc = makeService({
+    '/empty.ts': `export const x = 1;\n`,
+  });
+  // Smoke: any LS method should be callable without throwing.
+  assert.doesNotThrow(() => svc.getSemanticDiagnostics('/empty.ts'));
+  assert.doesNotThrow(() => svc.getDefinitionAndBoundSpan('/empty.ts', 0));
+});
+
 test('resolves <my-counter> inside html`` to the Counter class', () => {
   const svc = makeService({
     '/counter.ts':
