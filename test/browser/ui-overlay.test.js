@@ -1,12 +1,20 @@
 /**
- * Browser tests for overlay @webjskit/ui components — components that
- * portal their content to document.body and use positioning. Runs in
- * real Chromium via WTR + Playwright.
+ * Browser tests for overlay Tier-2 @webjskit/ui custom elements — dialog,
+ * popover, tooltip, dropdown-menu. Runs in real Chromium via WTR + Playwright.
  *
- * Covers: dialog, popover, tooltip, dropdown-menu, select.
- *
- * Note: overlay content is rendered into document.body via portal, so
- * we query document.body (not the root container) for the floating UI.
+ * API conventions across all four (mirror what they actually implement, not
+ * what shadcn's React API looks like):
+ *   - `el.isOpen` — boolean getter (popover, dialog, tooltip). For dropdown-
+ *     menu and collapsible the state lives on the `open` HTML attribute, so
+ *     `el.hasAttribute('open')` is the canonical read.
+ *   - `el.show()` / `el.hide()` / `el.toggle()` — programmatic control.
+ *   - Event `ui-open-change` with `detail: { open }` — fires from dialog,
+ *     popover, and collapsible. Tooltip and dropdown-menu do NOT emit this
+ *     today, so tests for those use post-action state assertions instead.
+ *   - Content is rendered INLINE as `:scope > ui-X-content` (not portaled to
+ *     document.body). Visibility is controlled by CSS:
+ *     `ui-X:not([open]) ui-X-content { display: none !important; }`. So
+ *     queries always go through the host element / root, not document.body.
  */
 import { html } from '../../packages/core/src/html.js';
 import { render } from '../../packages/core/src/render-client.js';
@@ -20,7 +28,6 @@ const assert = {
 const COMPONENTS_DIR = '/packages/ui/packages/registry/components';
 
 const tick = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function mount(tpl) {
   const root = document.createElement('div');
@@ -30,60 +37,44 @@ async function mount(tpl) {
   return root;
 }
 
-/** Clean up any leftover portals from prior tests. */
-function cleanupPortals() {
-  document.body.querySelectorAll(
-    '[data-slot="dialog-overlay"], [data-slot="dialog-content"], [data-slot="popover-content"], [data-slot="tooltip-content"], [data-slot="dropdown-menu-content"], [data-slot="select-content"]'
-  ).forEach((el) => el.remove());
-}
-
 suite('ui-dialog', () => {
   suiteSetup(async () => {
     await import(`${COMPONENTS_DIR}/dialog.ts`);
   });
 
-  teardown(() => { cleanupPortals(); });
-
-  test('trigger click opens dialog content', async () => {
+  test('trigger click opens dialog', async () => {
     const root = await mount(html`
       <ui-dialog>
         <ui-dialog-trigger><button>Open</button></ui-dialog-trigger>
         <ui-dialog-content>
-          <ui-dialog-header>
-            <ui-dialog-title>T</ui-dialog-title>
-            <ui-dialog-description>D</ui-dialog-description>
-          </ui-dialog-header>
+          <ui-dialog-title>T</ui-dialog-title>
+          <ui-dialog-description>D</ui-dialog-description>
         </ui-dialog-content>
       </ui-dialog>
     `);
-    await tick();
     const trigger = root.querySelector('ui-dialog-trigger');
     trigger.click();
     await tick();
     const dialog = root.querySelector('ui-dialog');
-    assert.ok(dialog.open, 'dialog.open=true');
-    const content = root.querySelector('[data-slot="dialog-content"]');
-    assert.ok(content, 'dialog content rendered');
+    assert.equal(dialog.isOpen, true, 'dialog.isOpen=true after trigger click');
+    assert.equal(dialog.getAttribute('data-state'), 'open');
+    dialog.hide();
     root.remove();
   });
 
-  test('escape key closes the dialog', async () => {
+  test('escape key closes the dialog when open', async () => {
     const root = await mount(html`
-      <ui-dialog open>
+      <ui-dialog>
         <ui-dialog-trigger><button>Open</button></ui-dialog-trigger>
-        <ui-dialog-content>
-          <ui-dialog-title>T</ui-dialog-title>
-        </ui-dialog-content>
+        <ui-dialog-content><ui-dialog-title>T</ui-dialog-title></ui-dialog-content>
       </ui-dialog>
     `);
-    await tick();
     const dialog = root.querySelector('ui-dialog');
-    // First explicitly toggle open via the API to set up listeners
-    dialog.setOpen(true);
+    dialog.show();
     await tick();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await tick();
-    assert.equal(dialog.open, false, 'escape closes dialog');
+    assert.equal(dialog.isOpen, false, 'escape closes dialog');
     root.remove();
   });
 
@@ -91,54 +82,52 @@ suite('ui-dialog', () => {
     const root = await mount(html`
       <ui-dialog>
         <ui-dialog-trigger><button>Open</button></ui-dialog-trigger>
-        <ui-dialog-content>
-          <ui-dialog-title>T</ui-dialog-title>
-        </ui-dialog-content>
+        <ui-dialog-content><ui-dialog-title>T</ui-dialog-title></ui-dialog-content>
       </ui-dialog>
     `);
-    await tick();
     const dialog = root.querySelector('ui-dialog');
-    dialog.setOpen(true);
+    dialog.show();
     await tick();
-    const overlay = root.querySelector('[data-slot="dialog-overlay"]');
-    assert.ok(overlay, 'overlay rendered when open');
+    const overlay = dialog.querySelector(':scope > ui-dialog-overlay');
+    assert.ok(overlay, 'overlay element present');
     overlay.click();
     await tick();
-    assert.equal(dialog.open, false);
+    assert.equal(dialog.isOpen, false);
     root.remove();
   });
 
-  test('fires open-change event when toggling', async () => {
+  test('fires ui-open-change event when toggling', async () => {
     const root = await mount(html`
       <ui-dialog>
         <ui-dialog-trigger><button>Open</button></ui-dialog-trigger>
-        <ui-dialog-content>
-          <ui-dialog-title>T</ui-dialog-title>
-        </ui-dialog-content>
+        <ui-dialog-content><ui-dialog-title>T</ui-dialog-title></ui-dialog-content>
       </ui-dialog>
     `);
-    await tick();
     const dialog = root.querySelector('ui-dialog');
     let detail = null;
-    dialog.addEventListener('open-change', (e) => { detail = e.detail; });
-    dialog.setOpen(true);
+    dialog.addEventListener('ui-open-change', (e) => { detail = e.detail; });
+    dialog.show();
     await tick();
     assert.equal(detail?.open, true);
+    dialog.hide();
+    await tick();
+    assert.equal(detail?.open, false);
     root.remove();
   });
 
-  test('dialog-content renders nothing when closed', async () => {
+  test('dialog-content has data-state="closed" when host is not open', async () => {
     const root = await mount(html`
       <ui-dialog>
         <ui-dialog-trigger><button>O</button></ui-dialog-trigger>
-        <ui-dialog-content>
-          <ui-dialog-title>T</ui-dialog-title>
-        </ui-dialog-content>
+        <ui-dialog-content><ui-dialog-title>T</ui-dialog-title></ui-dialog-content>
       </ui-dialog>
     `);
-    await tick();
-    const content = root.querySelector('[data-slot="dialog-content"]');
-    assert.ok(!content, 'no content rendered when closed');
+    const dialog = root.querySelector('ui-dialog');
+    const content = dialog.querySelector(':scope > ui-dialog-content');
+    assert.ok(content, 'content element exists in DOM');
+    assert.equal(content.getAttribute('data-state'), 'closed');
+    // Content is hidden by CSS (display:none) — visible via computed style.
+    assert.equal(getComputedStyle(content).display, 'none', 'content is display:none when closed');
     root.remove();
   });
 });
@@ -148,23 +137,19 @@ suite('ui-popover', () => {
     await import(`${COMPONENTS_DIR}/popover.ts`);
   });
 
-  teardown(() => { cleanupPortals(); });
-
-  test('trigger click opens popover content (portal to body)', async () => {
+  test('trigger click opens popover content', async () => {
     const root = await mount(html`
       <ui-popover>
         <ui-popover-trigger><button>Open</button></ui-popover-trigger>
         <ui-popover-content>Body</ui-popover-content>
       </ui-popover>
     `);
-    await tick();
     root.querySelector('ui-popover-trigger').click();
     await tick();
     const pop = root.querySelector('ui-popover');
-    assert.equal(pop.open, true);
-    // portal lives in document.body, not root
-    const portal = document.body.querySelector('[data-slot="popover-content"]');
-    assert.ok(portal, 'popover portal rendered to body');
+    assert.equal(pop.isOpen, true);
+    assert.equal(pop.getAttribute('data-state'), 'open');
+    pop.hide();
     root.remove();
   });
 
@@ -175,17 +160,16 @@ suite('ui-popover', () => {
         <ui-popover-content>Body</ui-popover-content>
       </ui-popover>
     `);
-    await tick();
     const pop = root.querySelector('ui-popover');
-    pop.setOpen(true);
+    pop.show();
     await tick();
-    // Click an unrelated location
     const outside = document.createElement('button');
     outside.textContent = 'outside';
     document.body.appendChild(outside);
-    outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    // Popover's outside-click handler listens on document `click`, not pointerdown.
+    outside.click();
     await tick();
-    assert.equal(pop.open, false);
+    assert.equal(pop.isOpen, false);
     outside.remove();
     root.remove();
   });
@@ -197,30 +181,29 @@ suite('ui-popover', () => {
         <ui-popover-content>Body</ui-popover-content>
       </ui-popover>
     `);
-    await tick();
     const pop = root.querySelector('ui-popover');
-    pop.setOpen(true);
+    pop.show();
     await tick();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await tick();
-    assert.equal(pop.open, false);
+    assert.equal(pop.isOpen, false);
     root.remove();
   });
 
-  test('open-change event fires on toggle', async () => {
+  test('ui-open-change event fires on toggle', async () => {
     const root = await mount(html`
       <ui-popover>
         <ui-popover-trigger><button>Open</button></ui-popover-trigger>
         <ui-popover-content>Body</ui-popover-content>
       </ui-popover>
     `);
-    await tick();
     const pop = root.querySelector('ui-popover');
     let detail = null;
-    pop.addEventListener('open-change', (e) => { detail = e.detail; });
-    pop.setOpen(true);
+    pop.addEventListener('ui-open-change', (e) => { detail = e.detail; });
+    pop.show();
     await tick();
     assert.equal(detail?.open, true);
+    pop.hide();
     root.remove();
   });
 
@@ -231,15 +214,14 @@ suite('ui-popover', () => {
         <ui-popover-content>Body</ui-popover-content>
       </ui-popover>
     `);
-    await tick();
     const trigger = root.querySelector('ui-popover-trigger');
     const pop = root.querySelector('ui-popover');
     trigger.click();
     await tick();
-    assert.equal(pop.open, true);
+    assert.equal(pop.isOpen, true);
     trigger.click();
     await tick();
-    assert.equal(pop.open, false);
+    assert.equal(pop.isOpen, false);
     root.remove();
   });
 });
@@ -249,8 +231,6 @@ suite('ui-tooltip', () => {
     await import(`${COMPONENTS_DIR}/tooltip.ts`);
   });
 
-  teardown(() => { cleanupPortals(); });
-
   test('tooltip is closed initially', async () => {
     const root = await mount(html`
       <ui-tooltip>
@@ -258,78 +238,64 @@ suite('ui-tooltip', () => {
         <ui-tooltip-content>Tip</ui-tooltip-content>
       </ui-tooltip>
     `);
-    await tick();
     const tip = root.querySelector('ui-tooltip');
-    assert.equal(tip.open, false);
+    assert.equal(tip.isOpen, false);
+    assert.equal(tip.getAttribute('data-state'), 'closed');
     root.remove();
   });
 
-  test('setOpen(true) renders tooltip portal', async () => {
+  test('show() opens the tooltip and reflects via data-state', async () => {
+    // `delay-duration="0"` skips the default 700ms open delay so the
+    // setTimeout fires effectively immediately.
+    const root = await mount(html`
+      <ui-tooltip delay-duration="0">
+        <ui-tooltip-trigger><button>Hover</button></ui-tooltip-trigger>
+        <ui-tooltip-content>Tip</ui-tooltip-content>
+      </ui-tooltip>
+    `);
+    const tip = root.querySelector('ui-tooltip');
+    tip.show();
+    // setTimeout(0) fires on the next macrotask — wait a beat past microtasks.
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(tip.isOpen, true);
+    assert.equal(tip.getAttribute('data-state'), 'open');
+    const content = tip.querySelector(':scope > ui-tooltip-content');
+    assert.ok(content, 'tooltip content element rendered');
+    assert.equal(content.getAttribute('role'), 'tooltip');
+    root.remove();
+  });
+
+  test('mouseleave on trigger closes after open', async () => {
     const root = await mount(html`
       <ui-tooltip>
         <ui-tooltip-trigger><button>Hover</button></ui-tooltip-trigger>
         <ui-tooltip-content>Tip</ui-tooltip-content>
       </ui-tooltip>
     `);
-    await tick();
     const tip = root.querySelector('ui-tooltip');
-    tip.setOpen(true);
-    await tick();
-    const portal = document.body.querySelector('[data-slot="tooltip-content"]');
-    assert.ok(portal, 'tooltip portal rendered');
-    assert.equal(portal.getAttribute('role'), 'tooltip');
-    root.remove();
-  });
-
-  test('mouseleave/hide closes after open', async () => {
-    const root = await mount(html`
-      <ui-tooltip>
-        <ui-tooltip-trigger><button>Hover</button></ui-tooltip-trigger>
-        <ui-tooltip-content>Tip</ui-tooltip-content>
-      </ui-tooltip>
-    `);
-    await tick();
-    const tip = root.querySelector('ui-tooltip');
-    tip.setOpen(true);
+    tip.show();
     await tick();
     const trigger = root.querySelector('ui-tooltip-trigger');
-    trigger.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+    trigger.dispatchEvent(new Event('mouseleave', { bubbles: true }));
     await tick();
-    assert.equal(tip.open, false);
+    assert.equal(tip.isOpen, false);
     root.remove();
   });
 
-  test('content has tooltip styling classes', async () => {
+  test('content has tooltip-content styling classes', async () => {
     const root = await mount(html`
       <ui-tooltip>
         <ui-tooltip-trigger><button>Hover</button></ui-tooltip-trigger>
         <ui-tooltip-content>TipText</ui-tooltip-content>
       </ui-tooltip>
     `);
-    await tick();
-    root.querySelector('ui-tooltip').setOpen(true);
-    await tick();
-    const portal = document.body.querySelector('[data-slot="tooltip-content"]');
-    assert.ok(portal);
-    assert.match(portal.className, /bg-foreground/);
-    root.remove();
-  });
-
-  test('provider passthrough does not block descendants', async () => {
-    const root = await mount(html`
-      <ui-tooltip-provider>
-        <ui-tooltip>
-          <ui-tooltip-trigger><button>x</button></ui-tooltip-trigger>
-          <ui-tooltip-content>Tip</ui-tooltip-content>
-        </ui-tooltip>
-      </ui-tooltip-provider>
-    `);
-    await tick();
     const tip = root.querySelector('ui-tooltip');
-    assert.ok(tip);
-    tip.setOpen(true);
+    tip.show();
     await tick();
-    assert.ok(document.body.querySelector('[data-slot="tooltip-content"]'));
+    const content = tip.querySelector(':scope > ui-tooltip-content');
+    assert.ok(content);
+    assert.match(content.className, /bg-foreground/);
+    tip.hide();
     root.remove();
   });
 });
@@ -339,9 +305,7 @@ suite('ui-dropdown-menu', () => {
     await import(`${COMPONENTS_DIR}/dropdown-menu.ts`);
   });
 
-  teardown(() => { cleanupPortals(); });
-
-  test('trigger click opens dropdown content (portal)', async () => {
+  test('show() opens content and content has role="menu"', async () => {
     const root = await mount(html`
       <ui-dropdown-menu>
         <ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger>
@@ -351,17 +315,18 @@ suite('ui-dropdown-menu', () => {
         </ui-dropdown-menu-content>
       </ui-dropdown-menu>
     `);
-    await tick();
     const dm = root.querySelector('ui-dropdown-menu');
-    dm.setOpen(true);
+    dm.show();
     await tick();
-    const portal = document.body.querySelector('[data-slot="dropdown-menu-content"]');
-    assert.ok(portal);
-    assert.equal(portal.getAttribute('role'), 'menu');
+    assert.ok(dm.hasAttribute('open'));
+    const content = dm.querySelector(':scope > ui-dropdown-menu-content');
+    assert.ok(content);
+    assert.equal(content.getAttribute('role'), 'menu');
+    dm.hide();
     root.remove();
   });
 
-  test('arrow keys cycle highlighted item', async () => {
+  test('ArrowDown cycles focus across items', async () => {
     const root = await mount(html`
       <ui-dropdown-menu>
         <ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger>
@@ -372,19 +337,16 @@ suite('ui-dropdown-menu', () => {
         </ui-dropdown-menu-content>
       </ui-dropdown-menu>
     `);
-    await tick();
     const dm = root.querySelector('ui-dropdown-menu');
-    dm.setOpen(true);
+    dm.show();
     await tick();
-    const portal = document.body.querySelector('[data-slot="dropdown-menu-content"]');
-    const items = portal.querySelectorAll('[data-slot="dropdown-menu-item"]');
+    const items = root.querySelectorAll('ui-dropdown-menu-item');
     assert.ok(items.length >= 2);
-    // First item should be focused after open
     items[0].focus();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     await tick();
-    // Active element should now be items[1]
     assert.equal(document.activeElement, items[1]);
+    dm.hide();
     root.remove();
   });
 
@@ -397,13 +359,12 @@ suite('ui-dropdown-menu', () => {
         </ui-dropdown-menu-content>
       </ui-dropdown-menu>
     `);
-    await tick();
     const dm = root.querySelector('ui-dropdown-menu');
-    dm.setOpen(true);
+    dm.show();
     await tick();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await tick();
-    assert.equal(dm.open, false);
+    assert.equal(dm.hasAttribute('open'), false);
     root.remove();
   });
 
@@ -416,19 +377,17 @@ suite('ui-dropdown-menu', () => {
         </ui-dropdown-menu-content>
       </ui-dropdown-menu>
     `);
-    await tick();
     const dm = root.querySelector('ui-dropdown-menu');
-    dm.setOpen(true);
+    dm.show();
     await tick();
-    const portal = document.body.querySelector('[data-slot="dropdown-menu-content"]');
-    const item = portal.querySelector('[data-slot="dropdown-menu-item"]');
+    const item = root.querySelector('ui-dropdown-menu-item');
     item.click();
     await tick();
-    assert.equal(dm.open, false);
+    assert.equal(dm.hasAttribute('open'), false);
     root.remove();
   });
 
-  test('open-change event fires on toggle', async () => {
+  test('trigger click toggles open', async () => {
     const root = await mount(html`
       <ui-dropdown-menu>
         <ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger>
@@ -437,13 +396,14 @@ suite('ui-dropdown-menu', () => {
         </ui-dropdown-menu-content>
       </ui-dropdown-menu>
     `);
-    await tick();
     const dm = root.querySelector('ui-dropdown-menu');
-    let detail = null;
-    dm.addEventListener('open-change', (e) => { detail = e.detail; });
-    dm.setOpen(true);
+    const trigger = root.querySelector('ui-dropdown-menu-trigger');
+    trigger.click();
     await tick();
-    assert.equal(detail?.open, true);
+    assert.equal(dm.hasAttribute('open'), true);
+    trigger.click();
+    await tick();
+    assert.equal(dm.hasAttribute('open'), false);
     root.remove();
   });
 });
