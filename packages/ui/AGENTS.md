@@ -256,17 +256,19 @@ npm run ui:build                     # rebuild registry/r/*.json
 npm run ui:dev                       # serve the registry website on :5001
 ```
 
-## Scope cuts in v1 (deferred to v2)
+## Deferred to v2 (not in the registry)
 
-These shadcn components are NOT shipped in v1 and have intentionally been
-left as old-pattern files until reimplemented:
+These shadcn components are NOT shipped in v1 — their old-pattern source
+files have been **removed entirely** from `packages/registry/components/`.
+When v2 starts, write fresh files following the Tier-1 / Tier-2 conventions
+above:
 
 button-group, calendar, carousel, chart, combobox, command, context-menu,
 direction, drawer, empty, field, form, input-group, input-otp, item,
 menubar, navigation-menu, resizable, scroll-area, select (rich), sheet,
 sidebar, slider, spinner.
 
-Each gets a "v2" docs page that explains the scope cut and a workaround
+Each will get a "v2" docs page that explains the scope cut and a workaround
 (native equivalent, or recommended alternative library) until shipped.
 
 ---

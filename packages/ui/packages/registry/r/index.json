@@ -76,20 +76,6 @@
     ]
   },
   {
-    "name": "button-group",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "calendar",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
     "name": "card",
     "type": "registry:ui",
     "dependencies": [
@@ -97,21 +83,6 @@
     ],
     "registryDependencies": [
       "lib-utils"
-    ]
-  },
-  {
-    "name": "carousel",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "embla-carousel"
-    ]
-  },
-  {
-    "name": "chart",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
     ]
   },
   {
@@ -129,39 +100,6 @@
     ]
   },
   {
-    "name": "combobox",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom",
-      "fuse.js"
-    ],
-    "registryDependencies": [
-      "popover",
-      "input"
-    ]
-  },
-  {
-    "name": "command",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "fuse.js"
-    ],
-    "registryDependencies": [
-      "dialog",
-      "input"
-    ]
-  },
-  {
-    "name": "context-menu",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
-    ]
-  },
-  {
     "name": "dialog",
     "type": "registry:ui",
     "dependencies": [
@@ -172,50 +110,11 @@
     ]
   },
   {
-    "name": "direction",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "drawer",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
     "name": "dropdown-menu",
     "type": "registry:ui",
     "dependencies": [
       "@webjskit/core",
       "@floating-ui/dom"
-    ]
-  },
-  {
-    "name": "empty",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "field",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "form",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ],
-    "registryDependencies": [
-      "label",
-      "field"
     ]
   },
   {
@@ -237,30 +136,6 @@
     ]
   },
   {
-    "name": "input-group",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ],
-    "registryDependencies": [
-      "input"
-    ]
-  },
-  {
-    "name": "input-otp",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "item",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
     "name": "kbd",
     "type": "registry:ui",
     "dependencies": [
@@ -278,26 +153,10 @@
     ]
   },
   {
-    "name": "menubar",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
-    ]
-  },
-  {
     "name": "native-select",
     "type": "registry:ui",
     "dependencies": [
       "@webjskit/core"
-    ]
-  },
-  {
-    "name": "navigation-menu",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
     ]
   },
   {
@@ -333,28 +192,6 @@
     ]
   },
   {
-    "name": "resizable",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "scroll-area",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "select",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core",
-      "@floating-ui/dom"
-    ]
-  },
-  {
     "name": "separator",
     "type": "registry:ui",
     "dependencies": [
@@ -362,28 +199,6 @@
     ],
     "registryDependencies": [
       "lib-utils"
-    ]
-  },
-  {
-    "name": "sheet",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "sidebar",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ],
-    "registryDependencies": [
-      "button",
-      "input",
-      "separator",
-      "sheet",
-      "skeleton",
-      "tooltip"
     ]
   },
   {
@@ -397,21 +212,7 @@
     ]
   },
   {
-    "name": "slider",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
     "name": "sonner",
-    "type": "registry:ui",
-    "dependencies": [
-      "@webjskit/core"
-    ]
-  },
-  {
-    "name": "spinner",
     "type": "registry:ui",
     "dependencies": [
       "@webjskit/core"

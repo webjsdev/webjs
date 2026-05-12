@@ -3,65 +3,481 @@
   "name": "@webjskit/ui",
   "homepage": "https://ui.webjs.dev",
   "items": [
-    { "name": "lib-utils", "type": "registry:lib", "description": "cn() class-merge helper", "files": [{ "path": "lib/utils.ts", "type": "registry:lib", "target": "lib/utils.ts" }] },
-
-    { "name": "theme-neutral", "type": "registry:theme", "title": "Neutral", "description": "Pure grayscale (default)", "files": [{ "path": "themes/index.css", "type": "registry:file", "target": "app/globals.css" }] },
-
-    { "name": "accordion",       "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/accordion.ts",       "type": "registry:ui" }] },
-    { "name": "alert",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/alert.ts",           "type": "registry:ui" }] },
-    { "name": "alert-dialog",    "type": "registry:ui", "registryDependencies": ["button", "dialog"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/alert-dialog.ts",    "type": "registry:ui" }] },
-    { "name": "aspect-ratio",    "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/aspect-ratio.ts",    "type": "registry:ui" }] },
-    { "name": "avatar",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/avatar.ts",          "type": "registry:ui" }] },
-    { "name": "badge",           "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/badge.ts",           "type": "registry:ui" }] },
-    { "name": "breadcrumb",      "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/breadcrumb.ts",      "type": "registry:ui" }] },
-    { "name": "button",          "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/button.ts",          "type": "registry:ui" }] },
-    { "name": "button-group",    "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/button-group.ts",    "type": "registry:ui" }] },
-    { "name": "calendar",        "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/calendar.ts",        "type": "registry:ui" }] },
-    { "name": "card",            "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/card.ts",            "type": "registry:ui" }] },
-    { "name": "carousel",        "type": "registry:ui", "dependencies": ["@webjskit/core", "embla-carousel"], "files": [{ "path": "components/carousel.ts",        "type": "registry:ui" }] },
-    { "name": "chart",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/chart.ts",           "type": "registry:ui" }] },
-    { "name": "checkbox",        "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/checkbox.ts",        "type": "registry:ui" }] },
-    { "name": "collapsible",     "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/collapsible.ts",     "type": "registry:ui" }] },
-    { "name": "combobox",        "type": "registry:ui", "registryDependencies": ["popover", "input"], "dependencies": ["@webjskit/core", "@floating-ui/dom", "fuse.js"], "files": [{ "path": "components/combobox.ts",        "type": "registry:ui" }] },
-    { "name": "command",         "type": "registry:ui", "registryDependencies": ["dialog", "input"], "dependencies": ["@webjskit/core", "fuse.js"], "files": [{ "path": "components/command.ts",         "type": "registry:ui" }] },
-    { "name": "context-menu",    "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/context-menu.ts",    "type": "registry:ui" }] },
-    { "name": "dialog",          "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/dialog.ts",          "type": "registry:ui" }] },
-    { "name": "direction",       "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/direction.ts",       "type": "registry:ui" }] },
-    { "name": "drawer",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/drawer.ts",          "type": "registry:ui" }] },
-    { "name": "dropdown-menu",   "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/dropdown-menu.ts",   "type": "registry:ui" }] },
-    { "name": "empty",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/empty.ts",           "type": "registry:ui" }] },
-    { "name": "field",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/field.ts",           "type": "registry:ui" }] },
-    { "name": "form",            "type": "registry:ui", "registryDependencies": ["label", "field"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/form.ts",            "type": "registry:ui" }] },
-    { "name": "hover-card",      "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/hover-card.ts",      "type": "registry:ui" }] },
-    { "name": "input",           "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/input.ts",           "type": "registry:ui" }] },
-    { "name": "input-group",     "type": "registry:ui", "registryDependencies": ["input"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/input-group.ts",     "type": "registry:ui" }] },
-    { "name": "input-otp",       "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/input-otp.ts",       "type": "registry:ui" }] },
-    { "name": "item",            "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/item.ts",            "type": "registry:ui" }] },
-    { "name": "kbd",             "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/kbd.ts",             "type": "registry:ui" }] },
-    { "name": "label",           "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/label.ts",           "type": "registry:ui" }] },
-    { "name": "menubar",         "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/menubar.ts",         "type": "registry:ui" }] },
-    { "name": "native-select",   "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/native-select.ts",   "type": "registry:ui" }] },
-    { "name": "navigation-menu", "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/navigation-menu.ts", "type": "registry:ui" }] },
-    { "name": "pagination",      "type": "registry:ui", "registryDependencies": ["button"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/pagination.ts",      "type": "registry:ui" }] },
-    { "name": "popover",         "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/popover.ts",         "type": "registry:ui" }] },
-    { "name": "progress",        "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/progress.ts",        "type": "registry:ui" }] },
-    { "name": "radio-group",     "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/radio-group.ts",     "type": "registry:ui" }] },
-    { "name": "resizable",       "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/resizable.ts",       "type": "registry:ui" }] },
-    { "name": "scroll-area",     "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/scroll-area.ts",     "type": "registry:ui" }] },
-    { "name": "select",          "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/select.ts",          "type": "registry:ui" }] },
-    { "name": "separator",       "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/separator.ts",       "type": "registry:ui" }] },
-    { "name": "sheet",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/sheet.ts",           "type": "registry:ui" }] },
-    { "name": "sidebar",         "type": "registry:ui", "registryDependencies": ["button", "input", "separator", "sheet", "skeleton", "tooltip"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/sidebar.ts",         "type": "registry:ui" }] },
-    { "name": "skeleton",        "type": "registry:ui", "registryDependencies": ["lib-utils"], "dependencies": ["@webjskit/core"], "files": [{ "path": "components/skeleton.ts",        "type": "registry:ui" }] },
-    { "name": "slider",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/slider.ts",          "type": "registry:ui" }] },
-    { "name": "sonner",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/sonner.ts",          "type": "registry:ui" }] },
-    { "name": "spinner",         "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/spinner.ts",         "type": "registry:ui" }] },
-    { "name": "switch",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/switch.ts",          "type": "registry:ui" }] },
-    { "name": "table",           "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/table.ts",           "type": "registry:ui" }] },
-    { "name": "tabs",            "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/tabs.ts",            "type": "registry:ui" }] },
-    { "name": "textarea",        "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/textarea.ts",        "type": "registry:ui" }] },
-    { "name": "toggle",          "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/toggle.ts",          "type": "registry:ui" }] },
-    { "name": "toggle-group",    "type": "registry:ui", "dependencies": ["@webjskit/core"], "files": [{ "path": "components/toggle-group.ts",    "type": "registry:ui" }] },
-    { "name": "tooltip",         "type": "registry:ui", "dependencies": ["@webjskit/core", "@floating-ui/dom"], "files": [{ "path": "components/tooltip.ts",         "type": "registry:ui" }] }
+    {
+      "name": "lib-utils",
+      "type": "registry:lib",
+      "description": "cn() class-merge helper",
+      "files": [
+        {
+          "path": "lib/utils.ts",
+          "type": "registry:lib",
+          "target": "lib/utils.ts"
+        }
+      ]
+    },
+    {
+      "name": "theme-neutral",
+      "type": "registry:theme",
+      "title": "Neutral",
+      "description": "Pure grayscale (default)",
+      "files": [
+        {
+          "path": "themes/index.css",
+          "type": "registry:file",
+          "target": "app/globals.css"
+        }
+      ]
+    },
+    {
+      "name": "accordion",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/accordion.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "alert",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/alert.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "alert-dialog",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button",
+        "dialog"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/alert-dialog.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "aspect-ratio",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/aspect-ratio.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "avatar",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/avatar.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "badge",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/badge.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "breadcrumb",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/breadcrumb.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "button",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/button.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "card",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/card.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "checkbox",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/checkbox.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "collapsible",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/collapsible.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "dialog",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/dialog.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "dropdown-menu",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core",
+        "@floating-ui/dom"
+      ],
+      "files": [
+        {
+          "path": "components/dropdown-menu.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "hover-card",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core",
+        "@floating-ui/dom"
+      ],
+      "files": [
+        {
+          "path": "components/hover-card.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "input",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/input.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "kbd",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/kbd.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "label",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/label.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "native-select",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/native-select.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "pagination",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/pagination.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "popover",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core",
+        "@floating-ui/dom"
+      ],
+      "files": [
+        {
+          "path": "components/popover.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "progress",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/progress.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "radio-group",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/radio-group.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "separator",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/separator.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "skeleton",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/skeleton.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "sonner",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/sonner.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "switch",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/switch.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "table",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/table.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "tabs",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/tabs.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "textarea",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/textarea.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "toggle",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/toggle.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "toggle-group",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core"
+      ],
+      "files": [
+        {
+          "path": "components/toggle-group.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "tooltip",
+      "type": "registry:ui",
+      "dependencies": [
+        "@webjskit/core",
+        "@floating-ui/dom"
+      ],
+      "files": [
+        {
+          "path": "components/tooltip.ts",
+          "type": "registry:ui"
+        }
+      ]
+    }
   ]
 }
