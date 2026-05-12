@@ -1,5 +1,7 @@
 import { WebComponent, html, repeat, connectWS } from '@webjskit/core';
 import '../../../components/muted-text.ts';
+import { inputClass } from '../../../components/ui/input.ts';
+import { buttonClass } from '../../../components/ui/button.ts';
 import type { CommentFormatted } from '../types.ts';
 
 type State = { comments: CommentFormatted[]; busy: boolean; error: string | null };
@@ -91,10 +93,9 @@ export class CommentsThread extends WebComponent {
 
       ${this.signedIn
         ? html`<form class="flex gap-2 p-3 bg-bg-elev border border-border rounded" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
-            <input class="flex-1 font-sans text-sm leading-normal py-2 px-3 border border-border-strong rounded bg-bg text-fg transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
-                   placeholder="Add a comment…" ?disabled=${busy} autocomplete="off" />
-            <button class="font-sans text-xs font-semibold tracking-[0.02em] py-2 px-4 rounded-full border-0 bg-accent text-accent-fg cursor-pointer transition-all duration-150 hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed"
-                    type="submit" ?disabled=${busy}>Post</button>
+            <input class="${inputClass()} flex-1"
+                   placeholder="Add a comment…" ?disabled=${busy} autocomplete="off">
+            <button class=${buttonClass({ size: 'sm' })} type="submit" ?disabled=${busy}>Post</button>
           </form>
           ${error ? html`<p class="mt-2 text-accent font-mono text-xs leading-snug">${error}</p>` : ''}`
         : html`<p class="p-5 text-fg-muted bg-bg-subtle border border-dashed border-border rounded text-center font-serif text-sm leading-relaxed italic">

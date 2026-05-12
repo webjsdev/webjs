@@ -116,23 +116,34 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - `app/api/comments/[postId]/route.ts` exports `WS` for live comment threads.
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
 
-### `@webjskit/ui` standard kit
-`components/ui/` holds the shadcn-style component library (`ui-button`,
-`ui-card`, `ui-input`, `ui-dialog`, `ui-label`, etc.). `/ui-demo` renders
-every shipped component as a live gallery — open it during development
-to see what's available without hopping to the registry website. Three
-real surfaces in this app have been migrated to the kit:
+### Webjs UI kit
+`components/ui/` holds the kit, split into two tiers:
 
-- `modules/auth/components/auth-forms.ts` — login/signup forms now use
-  `ui-input`, `ui-label`, `ui-button`.
-- `modules/posts/components/new-post.ts` — post composer uses `ui-input`,
-  `ui-textarea`, `ui-button`.
-- `app/dashboard/page.ts` — dashboard layout uses `ui-card` for stat
-  blocks and `ui-button` for actions.
+- **Tier 1 — class helpers**: `buttonClass`, `cardClass`,
+  `cardHeaderClass`, `inputClass`, `labelClass`, `alertClass`,
+  `badgeClass`, `separatorClass`. Pure functions returning Tailwind
+  class strings; apply to raw native elements (`<button>`, `<input>`,
+  `<div>`).
+- **Tier 2 — custom elements**: `<ui-dialog>` (and subparts). Real
+  custom elements for state the browser doesn't give you natively.
+  Register via side-effect import in the consumer file.
 
-These are reference implementations of "what a real product surface looks
-like with `ui-*` instead of hand-rolled Tailwind." Add more components
-via `webjs ui add <name>` (registry at https://ui.webjs.dev).
+`/ui-demo` showcases both tiers side-by-side — open it during
+development to see the patterns without hopping to the registry website.
+Real surfaces in this app:
+
+- `modules/auth/components/auth-forms.ts` — login/signup form uses
+  `cardClass`, `inputClass`, `labelClass`, `buttonClass`, `alertClass`.
+- `modules/posts/components/new-post.ts` — post composer uses
+  `cardClass`, `inputClass`, `labelClass`, `buttonClass`, `alertClass`
+  on native elements, with a raw `<textarea>` for the body field.
+- `app/dashboard/page.ts` — dashboard uses `cardClass` for the post
+  list and `buttonClass({ size: 'lg' })` for actions.
+
+Add more components via `webjs ui add <name>` (registry at
+https://ui.webjs.dev). Tier-1 additions auto-export class helpers
+from their `components/ui/<name>.ts` file; Tier-2 additions register
+their custom element on import.
 
 ## Conventions
 
