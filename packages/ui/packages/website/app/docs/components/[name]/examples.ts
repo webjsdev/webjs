@@ -1,6 +1,6 @@
 /**
  * Curated example markup per component, rendered as the "Preview" pane on
- * the component docs page (shadcn-style playground).
+ * the component docs page.
  *
  * The map is intentionally hand-curated rather than auto-generated so each
  * component shows a representative use case.

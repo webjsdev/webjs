@@ -207,7 +207,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // @webjskit/ts-plugin bundles ts-lit-plugin internally, so just one
       // plugin entry is needed in tsconfig (see below).
       '@webjskit/ts-plugin': 'latest',
-      // shadcn-style component CLI — preinstalled so `webjs ui add button`
+      // AI-first component library CLI — preinstalled so `webjs ui add button`
       // works immediately after scaffold. Users can remove if they prefer
       // to add it later.
       '@webjskit/ui': 'latest',
@@ -512,7 +512,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     </script>
     <script src="/public/tailwind-browser.js"></script>
     <!--
-      @webjskit/ui theme — shadcn-style tokens (--color-primary,
+      Webjs UI theme — design tokens (--color-primary,
       --color-card, --radius, etc.) the ui-* components consume.
       The same content is also at app/globals.css; we inline it here so
       the Tailwind browser runtime resolves the tokens without a build step.
