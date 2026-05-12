@@ -55,7 +55,7 @@ export class UiInputOtp extends WebComponent {
 
   connectedCallback() {
     if (!this._slot) {
-      this._slot = this.innerHTML;
+      this._slot = this.getSourceChildren();
       this._hasComposition = !!this._slot.trim();
     }
     super.connectedCallback();
@@ -186,7 +186,7 @@ UiInputOtp.register('ui-input-otp');
 export class UiInputOtpGroup extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {

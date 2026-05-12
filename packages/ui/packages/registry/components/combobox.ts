@@ -81,7 +81,7 @@ UiCombobox.register('ui-combobox');
 export class UiComboboxTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-combobox-toggle', { bubbles: true })));
   }
@@ -106,7 +106,7 @@ export class UiComboboxContent extends WebComponent {
   private _cleanupOutside: (() => void) | null = null;
   private _onKey: ((e: KeyboardEvent) => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }
@@ -227,7 +227,7 @@ UiComboboxInput.register('ui-combobox-input');
 
 export class UiComboboxList extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() { return html`<div data-slot="combobox-list" class=${cn('max-h-[300px] overflow-y-auto p-1')}>${unsafeHTML(this._slot)}</div>`; }
 }
 UiComboboxList.register('ui-combobox-list');
@@ -238,7 +238,7 @@ export class UiComboboxItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; this.disabled = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.setAttribute('tabindex', '-1');
     this.addEventListener('click', () => {
@@ -256,7 +256,7 @@ UiComboboxItem.register('ui-combobox-item');
 function makeChild(tag: string, slot: string, classes: string, role?: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() {
       return role
         ? html`<div data-slot=${slot} role=${role} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`

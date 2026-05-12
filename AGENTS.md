@@ -204,13 +204,21 @@ cd examples/blog && npm run dev      # just the blog (port 3456)
   sessions, cache, rate-limit.
 - **`@webjskit/cli`** — `webjs` binary: dev/start/build/test/check/create/db/**ui**.
 - **`@webjskit/ts-plugin`** — tsserver plugin for editor intelligence.
-- **`@webjskit/ui`** — shadcn-style component CLI (`webjsui` / `webjs ui`).
-  Nested workspaces under `packages/ui/packages/`:
-  - **`@webjskit/ui-registry`** (internal) — sources for the 55 components.
-  - **`@webjskit/ui-website`** (internal) — hosts the registry JSON + docs.
+- **`@webjskit/ui`** — webjs-native component library + CLI (`webjsui` / `webjs ui`).
+  32 v1 components with shadcn API parity (variants, sizes, subcomponent
+  breakdown, data-attribute conventions). Two-tier architecture:
+  - **Tier 1** — class-helper functions (`buttonClass`, `cardClass`, …)
+    returning Tailwind strings. Compose with raw native HTML.
+  - **Tier 2** — stateful custom elements (`<ui-dialog>`, `<ui-tabs>`,
+    `<ui-popover>`, …) extending a Node-safe `Base` class.
+  Zero third-party deps: hand-rolled `cn()`, focus trap, floating positioning,
+  toast queue. Nested workspaces under `packages/ui/packages/`:
+  - **`@webjskit/ui-registry`** (internal) — sources for the components.
+  - **`@webjskit/ui-website`** (internal) — hosts the registry JSON + docs at ui.webjs.dev.
 
   `webjs ui add button card dialog …` copies component source into the user's
-  project. See [`packages/ui/AGENTS.md`](packages/ui/AGENTS.md) for details.
+  project. See [`packages/ui/AGENTS.md`](packages/ui/AGENTS.md) for the
+  per-component inventory and conventions.
 
 ### Reference codebases (for architectural comparison)
 

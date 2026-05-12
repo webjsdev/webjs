@@ -1,35 +1,20 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Aspect-ratio container. Set the `ratio` attribute to a number
- * (e.g. `1.7777` for 16:9 or `1` for square). Slotted children fill the box.
+ * AspectRatio — preserve a width:height ratio for its child. Uses the modern
+ * CSS `aspect-ratio` property (Baseline 2022). No custom element needed.
+ *
+ * shadcn parity: matches shadcn AspectRatio (Radix primitive).
+ *
+ * Usage:
+ *   <div style="aspect-ratio: 16/9;" class="${aspectRatioClass()}">
+ *     <img src="…" class="h-full w-full object-cover rounded-md">
+ *   </div>
+ *
+ *   <!-- Or with Tailwind's arbitrary aspect-ratio: -->
+ *   <div class="aspect-[16/9]">
+ *     <img …>
+ *   </div>
+ *
+ * Design tokens used: none (layout only).
  */
-export class UiAspectRatio extends WebComponent {
-  static properties = {
-    ratio: { type: Number },
-  };
-  declare ratio: number;
 
-  private _slot = '';
-
-  constructor() {
-    super();
-    this.ratio = 1;
-  }
-
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
-  }
-
-  render() {
-    return html`<div
-      data-slot="aspect-ratio"
-      style="aspect-ratio: ${this.ratio};"
-      class=${cn('w-full')}
-    >${unsafeHTML(this._slot)}</div>`;
-  }
-}
-UiAspectRatio.register('ui-aspect-ratio');
+export const aspectRatioClass = (): string => 'relative w-full';

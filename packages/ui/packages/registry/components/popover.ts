@@ -1,138 +1,237 @@
-import { WebComponent, html } from '@webjskit/core';
-import { unsafeHTML } from '@webjskit/core/directives';
-import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
-import { cn } from '../lib/utils.ts';
-
 /**
- * Popover primitives. Composition:
+ * Popover — floating panel anchored to a trigger. Hand-rolled positioning
+ * (no @floating-ui/dom). Auto-flips if there's not enough room.
  *
+ * shadcn parity:
+ *   Popover, PopoverTrigger, PopoverContent, PopoverAnchor,
+ *   PopoverHeader, PopoverTitle, PopoverDescription.
+ *   Attributes on content: align (start | center | end), side, side-offset.
+ *
+ * Usage:
  *   <ui-popover>
- *     <ui-popover-trigger><ui-button>Open</ui-button></ui-popover-trigger>
- *     <ui-popover-content>Content...</ui-popover-content>
+ *     <ui-popover-trigger>
+ *       <button class=${buttonClass({ variant: 'outline' })}>Filter</button>
+ *     </ui-popover-trigger>
+ *     <ui-popover-content side="bottom" align="start" side-offset="4">
+ *       <div class=${popoverHeaderClass()}>
+ *         <h3 class=${popoverTitleClass()}>Filter posts</h3>
+ *         <p class=${popoverDescriptionClass()}>By tag and status.</p>
+ *       </div>
+ *       …
+ *     </ui-popover-content>
  *   </ui-popover>
  *
- * State is managed on the root <ui-popover>. The trigger toggles `open`;
- * the content portals into document.body and is positioned via floating-ui.
- * Click outside or Escape closes.
+ * Events on `<ui-popover>`:
+ *   `ui-open-change` — { detail: { open: boolean } }.
+ *
+ * Keyboard: Escape closes; outside-click closes; Tab cycles content focus.
+ *
+ * Design tokens used: --popover, --popover-foreground, --border,
+ * --muted-foreground.
  */
+import { cn, Base, defineElement } from '../lib/utils.ts';
 
-function position(anchor: HTMLElement, floating: HTMLElement, placement: any = 'bottom') {
-  return computePosition(anchor, floating, {
-    placement,
-    middleware: [offset(4), flip(), shift({ padding: 8 })],
-  }).then(({ x, y, placement: p }) => {
-    Object.assign(floating.style, { left: `${x}px`, top: `${y}px`, position: 'fixed' });
-    floating.setAttribute('data-side', p.split('-')[0]);
-  });
+// --------------------------------------------------------------------------
+// Class helpers
+// --------------------------------------------------------------------------
+
+export const popoverContentClass = (): string =>
+  'z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
+
+export const popoverHeaderClass = (): string => 'flex flex-col gap-1 text-sm';
+export const popoverTitleClass = (): string => 'font-medium';
+export const popoverDescriptionClass = (): string => 'text-muted-foreground';
+
+// --------------------------------------------------------------------------
+// Visibility CSS
+// --------------------------------------------------------------------------
+
+const STYLES = `
+ui-popover:not([open]) ui-popover-content { display: none !important; }
+ui-popover-content { display: block; position: fixed; }
+`;
+
+function installStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('ui-popover-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'ui-popover-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
 }
 
-export class UiPopover extends WebComponent {
-  static properties = { open: { type: Boolean, reflect: true } };
-  declare open: boolean;
+// --------------------------------------------------------------------------
+// Positioning helper. Computes top/left for a content element relative to a
+// trigger, given side + align + offset. Auto-flips when off-screen.
+// --------------------------------------------------------------------------
 
-  constructor() { super(); this.open = false; }
+export type PopoverSide = 'top' | 'bottom' | 'left' | 'right';
+export type PopoverAlign = 'start' | 'center' | 'end';
 
-  connectedCallback() {
-    super.connectedCallback();
-    this.addEventListener('ui-popover-toggle', this._onToggle as EventListener);
-    this.addEventListener('ui-popover-close', this._onClose as EventListener);
+export function positionFloating(
+  trigger: HTMLElement,
+  content: HTMLElement,
+  opts: { side?: PopoverSide; align?: PopoverAlign; sideOffset?: number } = {},
+): void {
+  const side = opts.side ?? 'bottom';
+  const align = opts.align ?? 'center';
+  const sideOffset = opts.sideOffset ?? 4;
+  const tr = trigger.getBoundingClientRect();
+  const cr = content.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  let top = 0;
+  let left = 0;
+  let actualSide = side;
+
+  const fitsBottom = tr.bottom + sideOffset + cr.height <= vh;
+  const fitsTop = tr.top - sideOffset - cr.height >= 0;
+  const fitsRight = tr.right + sideOffset + cr.width <= vw;
+  const fitsLeft = tr.left - sideOffset - cr.width >= 0;
+
+  if (side === 'bottom' && !fitsBottom && fitsTop) actualSide = 'top';
+  else if (side === 'top' && !fitsTop && fitsBottom) actualSide = 'bottom';
+  else if (side === 'right' && !fitsRight && fitsLeft) actualSide = 'left';
+  else if (side === 'left' && !fitsLeft && fitsRight) actualSide = 'right';
+
+  if (actualSide === 'bottom') top = tr.bottom + sideOffset;
+  else if (actualSide === 'top') top = tr.top - sideOffset - cr.height;
+  else if (actualSide === 'right' || actualSide === 'left') {
+    if (align === 'start') top = tr.top;
+    else if (align === 'end') top = tr.bottom - cr.height;
+    else top = tr.top + (tr.height - cr.height) / 2;
   }
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('ui-popover-toggle', this._onToggle as EventListener);
-    this.removeEventListener('ui-popover-close', this._onClose as EventListener);
+
+  if (actualSide === 'right') left = tr.right + sideOffset;
+  else if (actualSide === 'left') left = tr.left - sideOffset - cr.width;
+  else {
+    if (align === 'start') left = tr.left;
+    else if (align === 'end') left = tr.right - cr.width;
+    else left = tr.left + (tr.width - cr.width) / 2;
   }
 
-  _onToggle = () => { this.setOpen(!this.open); };
-  _onClose = () => { this.setOpen(false); };
+  // Clamp into viewport
+  left = Math.max(8, Math.min(left, vw - cr.width - 8));
+  top = Math.max(8, Math.min(top, vh - cr.height - 8));
 
-  setOpen(open: boolean) {
-    if (open === this.open) return;
-    this.open = open;
-    const state = open ? 'open' : 'closed';
-    this.querySelectorAll('ui-popover-trigger, ui-popover-content').forEach((el) => {
-      (el as HTMLElement).setAttribute('data-state', state);
+  content.style.top = `${top}px`;
+  content.style.left = `${left}px`;
+  content.setAttribute('data-side', actualSide);
+  content.setAttribute('data-align', align);
+}
+
+// --------------------------------------------------------------------------
+// <ui-popover>
+// --------------------------------------------------------------------------
+
+export class UiPopover extends Base {
+  static get observedAttributes(): string[] {
+    return ['open'];
+  }
+
+  private _docClickHandler = (e: MouseEvent): void => this._onDocClick(e);
+  private _keyHandler = (e: KeyboardEvent): void => this._onKeyDown(e);
+  private _resizeHandler = (): void => this._reposition();
+
+  connectedCallback(): void {
+    installStyles();
+    this.setAttribute('data-slot', 'popover');
+    this._reflect();
+  }
+  disconnectedCallback(): void {
+    if (this.isOpen) this._teardown();
+  }
+  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
+    if (name === 'open' && oldVal !== newVal) {
+      this._reflect();
+      if (newVal !== null) this._setup();
+      else this._teardown();
+      this.dispatchEvent(
+        new CustomEvent('ui-open-change', { detail: { open: this.isOpen }, bubbles: true }),
+      );
+    }
+  }
+
+  get isOpen(): boolean {
+    return this.hasAttribute('open');
+  }
+  show(): void {
+    this.setAttribute('open', '');
+  }
+  hide(): void {
+    this.removeAttribute('open');
+  }
+  toggle(): void {
+    if (this.isOpen) this.hide();
+    else this.show();
+  }
+
+  _reposition(): void {
+    const trigger = this.querySelector<HTMLElement>(':scope > ui-popover-trigger');
+    const content = this.querySelector<HTMLElement>(':scope > ui-popover-content');
+    if (!trigger || !content) return;
+    positionFloating(trigger, content, {
+      side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
+      align: (content.getAttribute('align') ?? 'center') as PopoverAlign,
+      sideOffset: Number(content.getAttribute('side-offset') ?? 4),
     });
-    this.dispatchEvent(new CustomEvent('open-change', { detail: { open }, bubbles: true, composed: true }));
   }
 
-  render() { return html`<slot></slot>`; }
-}
-UiPopover.register('ui-popover');
+  private _reflect(): void {
+    this.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
+    const content = this.querySelector<HTMLElement>(':scope > ui-popover-content');
+    if (content) content.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
+  }
 
-export class UiPopoverTrigger extends WebComponent {
-  private _slot = '';
-  connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
-    super.connectedCallback();
+  private _setup(): void {
+    queueMicrotask(() => {
+      this._reposition();
+      document.addEventListener('click', this._docClickHandler);
+      document.addEventListener('keydown', this._keyHandler);
+      window.addEventListener('resize', this._resizeHandler);
+      window.addEventListener('scroll', this._resizeHandler, true);
+    });
+  }
+  private _teardown(): void {
+    document.removeEventListener('click', this._docClickHandler);
+    document.removeEventListener('keydown', this._keyHandler);
+    window.removeEventListener('resize', this._resizeHandler);
+    window.removeEventListener('scroll', this._resizeHandler, true);
+  }
+
+  private _onDocClick(e: MouseEvent): void {
+    if (!this.isOpen) return;
+    if (e.composedPath().some((n) => n === this)) return;
+    this.hide();
+  }
+  private _onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape' && this.isOpen) this.hide();
+  }
+}
+defineElement('ui-popover', UiPopover);
+
+export class UiPopoverTrigger extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'popover-trigger');
     this.addEventListener('click', this._onClick);
   }
-  _onClick = () => { this.dispatchEvent(new CustomEvent('ui-popover-toggle', { bubbles: true })); };
-  render() { return html`${unsafeHTML(this._slot)}`; }
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
+  }
+  private _onClick = (): void => {
+    (this.closest('ui-popover') as UiPopover | null)?.toggle();
+  };
 }
-UiPopoverTrigger.register('ui-popover-trigger');
+defineElement('ui-popover-trigger', UiPopoverTrigger);
 
-export class UiPopoverContent extends WebComponent {
-  private _slot = '';
-  private _portal: HTMLElement | null = null;
-  private _cleanupAutoUpdate: (() => void) | null = null;
-  private _cleanupOutside: (() => void) | null = null;
-  private _onKey: ((e: KeyboardEvent) => void) | null = null;
-
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this._teardown();
+export class UiPopoverContent extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'popover-content');
+    this.setAttribute('role', 'dialog');
+    this.setAttribute('tabindex', '-1');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(popoverContentClass(), userClass);
   }
-
-  static get observedAttributes() { return ['data-state']; }
-  attributeChangedCallback() {
-    const state = this.getAttribute('data-state') || 'closed';
-    if (state === 'open') this._show();
-    else this._teardown();
-  }
-
-  _show() {
-    if (this._portal) return;
-    const root = this.closest('ui-popover') as HTMLElement | null;
-    const trigger = root?.querySelector('ui-popover-trigger') as HTMLElement | null;
-    if (!root || !trigger) return;
-
-    const el = document.createElement('div');
-    el.setAttribute('data-slot', 'popover-content');
-    el.setAttribute('data-state', 'open');
-    el.className = cn('z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95');
-    el.innerHTML = this._slot;
-    document.body.appendChild(el);
-    this._portal = el;
-
-    const placement = this.getAttribute('placement') || 'bottom';
-    this._cleanupAutoUpdate = autoUpdate(trigger, el, () => position(trigger, el, placement));
-
-    // click-outside
-    const outside = (e: PointerEvent) => {
-      const path = e.composedPath();
-      if (!path.includes(el) && !path.includes(trigger)) {
-        (root as any).dispatchEvent(new CustomEvent('ui-popover-close', { bubbles: true }));
-      }
-    };
-    document.addEventListener('pointerdown', outside);
-    this._cleanupOutside = () => document.removeEventListener('pointerdown', outside);
-
-    this._onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') (root as any).dispatchEvent(new CustomEvent('ui-popover-close', { bubbles: true }));
-    };
-    document.addEventListener('keydown', this._onKey);
-  }
-
-  _teardown() {
-    if (this._cleanupAutoUpdate) { this._cleanupAutoUpdate(); this._cleanupAutoUpdate = null; }
-    if (this._cleanupOutside) { this._cleanupOutside(); this._cleanupOutside = null; }
-    if (this._onKey) { document.removeEventListener('keydown', this._onKey); this._onKey = null; }
-    if (this._portal) { this._portal.remove(); this._portal = null; }
-  }
-
-  render() { return html``; } // content renders into portal, host stays empty
 }
-UiPopoverContent.register('ui-popover-content');
+defineElement('ui-popover-content', UiPopoverContent);

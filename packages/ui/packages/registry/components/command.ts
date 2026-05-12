@@ -64,7 +64,7 @@ export class UiCommand extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('keydown', this._onKey);
     queueMicrotask(() => this._refresh());
@@ -221,7 +221,7 @@ UiCommandInput.register('ui-command-input');
 export class UiCommandList extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -238,7 +238,7 @@ UiCommandList.register('ui-command-list');
 export class UiCommandEmpty extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     // Hidden by default; UiCommand toggles based on filter results.
     this.style.display = 'none';
@@ -261,7 +261,7 @@ export class UiCommandGroup extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 
@@ -298,7 +298,7 @@ export class UiCommandItem extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', this._onClick);
     this.addEventListener('mouseenter', this._onHover);
@@ -365,7 +365,7 @@ UiCommandSeparator.register('ui-command-separator');
 export class UiCommandShortcut extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
   render() {
@@ -407,7 +407,7 @@ export class UiCommandDialog extends WebComponent {
   }
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
   }
 

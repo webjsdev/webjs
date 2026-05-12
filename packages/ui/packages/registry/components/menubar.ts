@@ -37,7 +37,7 @@ export class UiMenubar extends WebComponent {
   private _openMenu: HTMLElement | null = null;
 
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('ui-menubar-menu-open', this._onMenuOpen as EventListener);
     this.addEventListener('ui-menubar-menu-close', this._onMenuClose as EventListener);
@@ -118,7 +118,7 @@ UiMenubarMenu.register('ui-menubar-menu');
 export class UiMenubarTrigger extends WebComponent {
   private _slot = '';
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-menubar-trigger-click', { bubbles: true })));
     this.addEventListener('pointerenter', () => this.dispatchEvent(new CustomEvent('ui-menubar-trigger-hover', { bubbles: true })));
@@ -137,7 +137,7 @@ export class UiMenubarContent extends WebComponent {
   private _portal: HTMLElement | null = null;
   private _cleanupAutoUpdate: (() => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }
@@ -206,7 +206,7 @@ export class UiMenubarItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.inset = false; this.variant = 'default'; this.disabled = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('pointerenter', this._onPointerEnter);
   }
@@ -223,7 +223,7 @@ export class UiMenubarCheckboxItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.checked = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => { this.checked = !this.checked; });
   }
@@ -247,7 +247,7 @@ export class UiMenubarRadioGroup extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('ui-menubar-radio-change', (e: any) => { this.value = e.detail.value; this._sync(); });
     queueMicrotask(() => this._sync());
@@ -268,7 +268,7 @@ export class UiMenubarRadioItem extends WebComponent {
   private _slot = '';
   constructor() { super(); this.value = ''; this.checked = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('click', () => this.dispatchEvent(new CustomEvent('ui-menubar-radio-change', { detail: { value: this.value }, bubbles: true })));
   }
@@ -289,7 +289,7 @@ UiMenubarRadioItem.register('ui-menubar-radio-item');
 function makeChild(tag: string, slot: string, classes: string, role?: string) {
   class C extends WebComponent {
     private _slot = '';
-    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+    connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
     render() {
       return role
         ? html`<div data-slot=${slot} role=${role} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`
@@ -306,7 +306,7 @@ export const UiMenubarGroup = makeChild('ui-menubar-group', 'menubar-group', '',
 
 export class UiMenubarShortcut extends WebComponent {
   private _slot = '';
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   render() { return html`<span data-slot="menubar-shortcut" class=${cn('ml-auto text-xs tracking-widest text-muted-foreground')}>${unsafeHTML(this._slot)}</span>`; }
 }
 UiMenubarShortcut.register('ui-menubar-shortcut');
@@ -335,7 +335,7 @@ export class UiMenubarSubTrigger extends WebComponent {
   private _slot = '';
   constructor() { super(); this.inset = false; }
   connectedCallback() {
-    if (!this._slot) this._slot = this.innerHTML;
+    if (!this._slot) this._slot = this.getSourceChildren();
     super.connectedCallback();
     this.addEventListener('pointerenter', this._onPointerEnter);
   }
@@ -360,7 +360,7 @@ export class UiMenubarSubContent extends WebComponent {
   private _portal: HTMLElement | null = null;
   private _cleanupAutoUpdate: (() => void) | null = null;
 
-  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }
+  connectedCallback() { if (!this._slot) this._slot = this.getSourceChildren(); super.connectedCallback(); }
   disconnectedCallback() { super.disconnectedCallback(); this._teardown(); }
 
   static get observedAttributes() { return ['data-state']; }
