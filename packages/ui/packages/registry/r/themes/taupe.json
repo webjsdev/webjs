@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "theme-taupe",
+  "type": "registry:theme",
+  "title": "Taupe",
+  "description": "taupe base colour",
+  "cssVars": {
+    "light": {
+      "primary": "oklch(0.40 0.04 30)",
+      "primary-foreground": "oklch(0.985 0 0)",
+      "accent": "oklch(0.95 0.02 30)",
+      "accent-foreground": "oklch(0.40 0.04 30)",
+      "ring": "oklch(0.55 0.05 30)"
+    },
+    "dark": {
+      "primary": "oklch(0.72 0.05 30)",
+      "accent": "oklch(0.35 0.04 30)",
+      "ring": "oklch(0.55 0.05 30)"
+    }
+  }
+}

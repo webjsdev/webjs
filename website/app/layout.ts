@@ -15,6 +15,7 @@ import '../components/theme-toggle.ts';
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
 const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
+const UI_URL   = env.UI_URL   || 'https://ui.webjs.dev';
 
 // Site-wide Open Graph + Twitter card metadata. `generateMetadata`
 // receives the request context so we can derive an absolute og:image
@@ -188,8 +189,8 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <div class="announce">
       <span class="tag">New</span>
-      <a href="https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full-stack-framework-for-the-ai-era-i-call-it-webjs" target="_blank" rel="noopener noreferrer">
-        Read the story behind webjs &rarr;
+      <a href=${UI_URL} target="_blank" rel="noopener noreferrer">
+        @webjskit/ui — shadcn-style web components for any project &rarr;
       </a>
     </div>
 
@@ -200,6 +201,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       </a>
       <nav class="flex items-center gap-4">
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${UI_URL} target="_blank">UI</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${BLOG_URL} target="_blank">Blog Demo</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
         <theme-toggle></theme-toggle>

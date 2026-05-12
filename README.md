@@ -27,6 +27,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 - **Metadata routes.** `sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts` — dynamic SEO/PWA metadata from functions, not static files.
 - **`expose()` for REST.** Tag a server action with `expose('POST /api/posts', fn)` to make it reachable over HTTP and via RPC. Optional input validation.
 - **Production ready.** CSRF, gzip/brotli, HTTP/2, 103 Early Hints, CSP nonces, modulepreload, rate limiting, health probes, graceful shutdown, streaming Suspense.
+- **shadcn-style component library — `@webjskit/ui`.** 55 web-component ports of shadcn at [ui.webjs.dev](https://ui.webjs.dev). `webjs ui add button card dialog` copies source into your project — you own it, edit it. Auto-installed with `@webjskit/cli`. Non-webjs users: `npx webjsui add button card dialog`.
 
 ## Quickstart
 

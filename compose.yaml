@@ -1,10 +1,11 @@
-# docker compose — runs website + docs + blog as three services from a
-# single image. Local parity with Railway deployment (same Dockerfile).
+# docker compose — runs website + docs + blog + ui-website as four services
+# from a single image. Local parity with Railway deployment (same Dockerfile).
 #
 #   docker compose up --build
-#     website → http://localhost:15000
-#     docs    → http://localhost:14000
-#     blog    → http://localhost:13000
+#     website    → http://localhost:15000
+#     docs       → http://localhost:14000
+#     blog       → http://localhost:13000
+#     ui-website → http://localhost:15001  (registry host + @webjskit/ui docs)
 services:
   website:
     image: webjs
@@ -18,6 +19,7 @@ services:
     environment:
       DOCS_URL: ${DOCS_URL:-http://localhost:14000}
       BLOG_URL: ${BLOG_URL:-http://localhost:13000}
+      UI_URL:   ${UI_URL:-http://localhost:15001}
 
   docs:
     image: webjs
@@ -47,6 +49,19 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-change-me-at-least-32-characters-long!}
     volumes:
       - blog-data:/data
+
+  ui-website:
+    image: webjs
+    build: .
+    working_dir: /app/packages/ui/packages/website
+    # Registry host for @webjskit/ui:
+    #   GET /r/<name>.json   — single registry item (CLI fetches from here)
+    #   GET /r/index.json    — flat list of all items
+    #   GET /docs/components/<name> — per-component docs page
+    # The registry JSON is built at image time (see Dockerfile RUN step).
+    command: ["node", "/app/node_modules/@webjskit/cli/bin/webjs.js", "start", "--port", "5001"]
+    ports:
+      - "15001:5001"
 
 volumes:
   blog-data:

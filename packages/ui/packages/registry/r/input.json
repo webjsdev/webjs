@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "input",
+  "type": "registry:ui",
+  "registryDependencies": [
+    "lib-utils"
+  ],
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/input.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Native input wrapped in a custom element. Forwards `value` to the inner\n * <input>. Dispatches an `input` and `change` event on this host so listeners\n * on `<ui-input>` work as if it were a real input.\n */\nexport class UiInput extends WebComponent {\n  static properties = {\n    type: { type: String },\n    value: { type: String },\n    placeholder: { type: String },\n    disabled: { type: Boolean, reflect: true },\n    readonly: { type: Boolean },\n    required: { type: Boolean },\n    name: { type: String },\n    id: { type: String, reflect: true },\n    autocomplete: { type: String },\n  };\n  declare type: string;\n  declare value: string;\n  declare placeholder: string;\n  declare disabled: boolean;\n  declare readonly: boolean;\n  declare required: boolean;\n  declare name: string;\n  declare id: string;\n  declare autocomplete: string;\n\n  constructor() {\n    super();\n    this.type = 'text';\n    this.value = '';\n    this.placeholder = '';\n    this.disabled = false;\n    this.readonly = false;\n    this.required = false;\n    this.name = '';\n    this.id = '';\n    this.autocomplete = '';\n  }\n\n  render() {\n    return html`<input\n      data-slot=\"input\"\n      type=${this.type}\n      .value=${this.value}\n      placeholder=${this.placeholder || null}\n      ?disabled=${this.disabled}\n      ?readonly=${this.readonly}\n      ?required=${this.required}\n      name=${this.name || null}\n      id=${this.id || null}\n      autocomplete=${this.autocomplete || null}\n      @input=${this._onInput}\n      @change=${this._onChange}\n      class=${cn(\n        'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',\n        'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',\n        'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',\n      )}\n    />`;\n  }\n\n  private _onInput = (e: Event) => {\n    this.value = (e.target as HTMLInputElement).value;\n    this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));\n  };\n  private _onChange = () => {\n    this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));\n  };\n}\nUiInput.register('ui-input');\n"
+    }
+  ]
+}

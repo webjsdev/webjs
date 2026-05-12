@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "skeleton",
+  "type": "registry:ui",
+  "registryDependencies": [
+    "lib-utils"
+  ],
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/skeleton.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { cn } from '../lib/utils.ts';\n\nexport class UiSkeleton extends WebComponent {\n  static properties = { className: { type: String } };\n  declare className: string;\n  constructor() { super(); this.className = ''; }\n\n  render() {\n    return html`<div data-slot=\"skeleton\" class=${cn('bg-accent animate-pulse rounded-md', this.className)}></div>`;\n  }\n}\nUiSkeleton.register('ui-skeleton');\n"
+    }
+  ]
+}

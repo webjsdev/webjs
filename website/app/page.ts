@@ -15,6 +15,8 @@ export const metadata = {
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
 const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
+const UI_URL   = env.UI_URL   || 'https://ui.webjs.dev';
+const STORY_URL = 'https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full-stack-framework-for-the-ai-era-i-call-it-webjs';
 
 const FEATURES = [
   { icon: '🤖', title: 'AI-First Development', desc: 'Designed from the ground up for AI agents. AGENTS.md contract, cross-agent guardrails (.cursorrules, .windsurfrules, copilot-instructions.md), auto-generated tests and docs, opinionated conventions — LLMs produce production-quality code without guesswork.' },
@@ -22,6 +24,7 @@ const FEATURES = [
   { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class — html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles, <slot> projection, or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
   { icon: '💡', title: 'Editor Intelligence', desc: '@webjskit/ts-plugin gives VS Code and Neovim type-checked html`` templates, custom-element go-to-definition, attribute auto-complete from static properties, and silenced "Unknown tag" diagnostics for Class.register("tag") elements.' },
   { icon: '🎨', title: 'Tailwind CSS by Default', desc: 'The scaffold ships with the Tailwind browser runtime and @theme design tokens — color palette, font families, fluid type scale, and motion durations wired into Tailwind classes. Dedup repeated class bundles with small JS helpers in app/_utils/ui.ts that run at SSR time. Custom CSS still supported — no hard Tailwind dependency.' },
+  { icon: '🧩', title: 'shadcn-style Component Library', desc: '@webjskit/ui ships 55 web-component ports of shadcn (button, card, dialog, form, sidebar, command…). webjs ui add button copies the source into your project — you own it, edit it. Auto-installed with @webjskit/cli. Visit ui.webjs.dev.' },
   { icon: '📁', title: 'File-Based Routing', desc: 'Pages, layouts, route handlers, error boundaries, and loading states from the file system — page.ts, layout.ts, route.ts, error.ts, loading.ts (auto-Suspense), not-found.ts (nested), middleware.ts, [param], [...slug], [[...optional]], (groups), and metadata routes (sitemap.ts, robots.ts). Familiar if you have used the NextJs App Router.' },
   { icon: '🔄', title: 'Server Actions, rich types on the wire', desc: 'Import a .server.ts function from a client component — it auto-rewrites into a type-safe RPC stub. Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, and reference cycles all round-trip as their real types via webjs\'s built-in ESM serializer.' },
   { icon: '🌊', title: 'Streaming SSR + Suspense', desc: 'Fallback content flushes immediately. Deferred data streams in as it resolves. TTFB measured in milliseconds, not seconds.' },
@@ -351,7 +354,14 @@ middleware.ts              → global auth</pre>
     </section>
 
     <footer>
-      <p><a href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a> · <a href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a> · <a href=${DOCS_URL + '/docs/ai-first'} target="_blank">AI-First</a> · <a href=${BLOG_URL} target="_blank">Example Blog</a></p>
+      <p>
+        <a href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a> ·
+        <a href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a> ·
+        <a href=${UI_URL} target="_blank">UI</a> ·
+        <a href=${DOCS_URL + '/docs/ai-first'} target="_blank">AI-First</a> ·
+        <a href=${BLOG_URL} target="_blank">Example Blog</a> ·
+        <a href=${STORY_URL} target="_blank" rel="noopener noreferrer">Story</a>
+      </p>
     </footer>
   `;
 }

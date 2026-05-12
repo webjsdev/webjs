@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "card",
+  "type": "registry:ui",
+  "registryDependencies": [
+    "lib-utils"
+  ],
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/card.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { unsafeHTML } from '@webjskit/core/directives';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Card subcomponents. Each is a thin styled wrapper that captures host\n * innerHTML and re-emits it inside a styled div.\n *\n * Compose via DOM nesting:\n *\n *   <ui-card>\n *     <ui-card-header>\n *       <ui-card-title>Title</ui-card-title>\n *       <ui-card-description>Description</ui-card-description>\n *     </ui-card-header>\n *     <ui-card-content>...</ui-card-content>\n *     <ui-card-footer>...</ui-card-footer>\n *   </ui-card>\n */\n\nfunction makeWrapper(tag: string, slot: string, classes: string) {\n  class Wrap extends WebComponent {\n    private _slot = '';\n    connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }\n    render() { return html`<div data-slot=${slot} class=${cn(classes)}>${unsafeHTML(this._slot)}</div>`; }\n  }\n  Wrap.register(tag);\n  return Wrap;\n}\n\nexport const UiCard = makeWrapper('ui-card', 'card', 'flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm');\nexport const UiCardHeader = makeWrapper('ui-card-header', 'card-header', '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6');\nexport const UiCardTitle = makeWrapper('ui-card-title', 'card-title', 'leading-none font-semibold');\nexport const UiCardDescription = makeWrapper('ui-card-description', 'card-description', 'text-sm text-muted-foreground');\nexport const UiCardAction = makeWrapper('ui-card-action', 'card-action', 'col-start-2 row-span-2 row-start-1 self-start justify-self-end');\nexport const UiCardContent = makeWrapper('ui-card-content', 'card-content', 'px-6');\nexport const UiCardFooter = makeWrapper('ui-card-footer', 'card-footer', 'flex items-center px-6 [.border-t]:pt-6');\n"
+    }
+  ]
+}

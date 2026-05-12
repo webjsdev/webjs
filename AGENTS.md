@@ -196,6 +196,22 @@ cd examples/blog && npm run dev      # just the blog (port 3456)
 - **`examples/blog/`** so E2E tests exercise the new path
 - **`packages/cli/templates/`** if scaffolded apps should know about it
 
+### Workspace packages
+
+- **`@webjskit/core`** — runtime: `html`/`css` tags, `WebComponent`, renderers,
+  router, Task, Context.
+- **`@webjskit/server`** — dev/prod server, SSR, file router, actions, auth,
+  sessions, cache, rate-limit.
+- **`@webjskit/cli`** — `webjs` binary: dev/start/build/test/check/create/db/**ui**.
+- **`@webjskit/ts-plugin`** — tsserver plugin for editor intelligence.
+- **`@webjskit/ui`** — shadcn-style component CLI (`webjsui` / `webjs ui`).
+  Nested workspaces under `packages/ui/packages/`:
+  - **`@webjskit/ui-registry`** (internal) — sources for the 55 components.
+  - **`@webjskit/ui-website`** (internal) — hosts the registry JSON + docs.
+
+  `webjs ui add button card dialog …` copies component source into the user's
+  project. See [`packages/ui/AGENTS.md`](packages/ui/AGENTS.md) for details.
+
 ### Reference codebases (for architectural comparison)
 
 webjs draws from a handful of frameworks. When you need to understand how
@@ -1390,7 +1406,17 @@ webjs test   [--server] [--browser] [--watch]         # runs test/unit/**/*.test
 webjs check  [--fix]                                  # convention validator; --fix applies safe rewrites
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to `prisma` (saas template only)
+webjs ui init                                         # shadcn-style component CLI (proxies to @webjskit/ui)
+webjs ui add <names...>                               # copy components from the registry into your project
+webjs ui list                                         # list available components
+webjs ui view <name>                                  # print a component's source
 ```
+
+`@webjskit/ui` is preinstalled with `@webjskit/cli`, so `webjs ui …` works
+without an extra install. Non-webjs projects can use the standalone binary:
+`npx webjsui add button card …`. The components are framework-agnostic web
+components — they work in any project with Tailwind v4 and `@webjskit/core`
+installed.
 
 `PORT` env is honoured by `dev` and `start` when `--port` is absent — the
 default deployment pattern for Railway / Fly / Render.

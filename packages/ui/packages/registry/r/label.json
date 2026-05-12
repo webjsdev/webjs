@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "label",
+  "type": "registry:ui",
+  "registryDependencies": [
+    "lib-utils"
+  ],
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/label.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { unsafeHTML } from '@webjskit/core/directives';\nimport { cn } from '../lib/utils.ts';\n\nexport class UiLabel extends WebComponent {\n  static properties = { htmlFor: { type: String, attribute: 'for' } };\n  declare htmlFor: string;\n  private _slot = '';\n\n  constructor() { super(); this.htmlFor = ''; }\n  connectedCallback() { if (!this._slot) this._slot = this.innerHTML; super.connectedCallback(); }\n\n  render() {\n    return html`<label\n      data-slot=\"label\"\n      for=${this.htmlFor || null}\n      class=${cn('flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50')}\n    >${unsafeHTML(this._slot)}</label>`;\n  }\n}\nUiLabel.register('ui-label');\n"
+    }
+  ]
+}

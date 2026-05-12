@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.webjs.com/schema/registry-item.json",
+  "name": "alert",
+  "type": "registry:ui",
+  "dependencies": [
+    "@webjskit/core"
+  ],
+  "files": [
+    {
+      "path": "components/alert.ts",
+      "type": "registry:ui",
+      "content": "import { WebComponent, html } from '@webjskit/core';\nimport { unsafeHTML } from '@webjskit/core/directives';\nimport { cn } from '../lib/utils.ts';\n\n/**\n * Alert family — <ui-alert>, <ui-alert-title>, <ui-alert-description>.\n *\n *   <ui-alert variant=\"destructive\">\n *     <ui-alert-title>Heads up</ui-alert-title>\n *     <ui-alert-description>Something broke.</ui-alert-description>\n *   </ui-alert>\n */\n\nconst base =\n  'relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current';\n\nconst variants = {\n  default: 'bg-card text-card-foreground',\n  destructive:\n    'bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current',\n} as const;\n\nexport type AlertVariant = keyof typeof variants;\n\nexport class UiAlert extends WebComponent {\n  static properties = {\n    variant: { type: String, reflect: true },\n  };\n  declare variant: AlertVariant;\n\n  private _slot = '';\n\n  constructor() {\n    super();\n    this.variant = 'default';\n  }\n\n  connectedCallback() {\n    if (!this._slot) this._slot = this.innerHTML;\n    super.connectedCallback();\n  }\n\n  render() {\n    return html`<div\n      data-slot=\"alert\"\n      role=\"alert\"\n      data-variant=${this.variant}\n      class=${cn(base, variants[this.variant] || variants.default)}\n    >${unsafeHTML(this._slot)}</div>`;\n  }\n}\nUiAlert.register('ui-alert');\n\nexport class UiAlertTitle extends WebComponent {\n  private _slot = '';\n  connectedCallback() {\n    if (!this._slot) this._slot = this.innerHTML;\n    super.connectedCallback();\n  }\n  render() {\n    return html`<div\n      data-slot=\"alert-title\"\n      class=${cn('col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight')}\n    >${unsafeHTML(this._slot)}</div>`;\n  }\n}\nUiAlertTitle.register('ui-alert-title');\n\nexport class UiAlertDescription extends WebComponent {\n  private _slot = '';\n  connectedCallback() {\n    if (!this._slot) this._slot = this.innerHTML;\n    super.connectedCallback();\n  }\n  render() {\n    return html`<div\n      data-slot=\"alert-description\"\n      class=${cn(\n        'col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed',\n      )}\n    >${unsafeHTML(this._slot)}</div>`;\n  }\n}\nUiAlertDescription.register('ui-alert-description');\n"
+    }
+  ]
+}
