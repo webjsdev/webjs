@@ -1,31 +1,30 @@
 import { WebComponent, html } from '@webjskit/core';
-import '../../../components/ui/button.ts';
-import '../../../components/ui/input.ts';
-import '../../../components/ui/label.ts';
-import '../../../components/ui/card.ts';
-import '../../../components/ui/alert.ts';
+import { buttonClass } from '../../../components/ui/button.ts';
+import { inputClass } from '../../../components/ui/input.ts';
+import { labelClass } from '../../../components/ui/label.ts';
+import {
+  cardClass,
+  cardHeaderClass,
+  cardContentClass,
+} from '../../../components/ui/card.ts';
+import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.ts';
 
 /**
  * `<auth-forms>` — tabbed sign-in / sign-up.
  *
- * Migrated to `@webjskit/ui` primitives:
- *  - <ui-card> + <ui-card-header>/<ui-card-content> wraps the whole form
- *  - <ui-label> + <ui-input> replaces hand-rolled label/input pairs
- *  - <ui-button> replaces the submit button
- *  - <ui-alert variant="destructive"> shows server-side errors
- *
- * The tab switcher (Sign in / Create account) is intentionally kept as
- * a custom pill control — `<ui-tabs>` is structured for separate tab
- * panels, whereas here both tabs share the same form fields with only
- * a `mode` toggle, so the custom switcher remains a better fit.
+ * Uses the Webjs UI two-tier composition:
+ *  - Tier-1 helpers (cardClass, inputClass, labelClass, buttonClass,
+ *    alertClass) spread onto native <div>, <input>, <label>, <button>.
+ *  - The Sign in / Create account switcher is hand-rolled (two pill
+ *    buttons toggling a `mode` property). `<ui-tabs>` would also work
+ *    but is designed for separate panels — both modes here share a
+ *    single form with only the field set differing, so a custom switcher
+ *    is the better fit.
  */
 type Mode = 'login' | 'signup';
 type State = { busy: boolean; error: string | null };
 
 export class AuthForms extends WebComponent {
-  // `mode` is a reactive property so the parent page can pick which tab
-  // loads initially via `<auth-forms mode="signup">` — see login/page.ts
-  // which flips to signup when the URL has `?tab=signup`.
   static properties = {
     then: { type: String },
     mode: { type: String },
@@ -67,51 +66,52 @@ export class AuthForms extends WebComponent {
     const mode = this.mode;
     const { busy, error } = this.state;
     const submitLabel = busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account');
+    const pillBase =
+      'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150';
+    const pillActive = `${pillBase} bg-bg-elev text-fg shadow-sm`;
+    const pillInactive = `${pillBase} bg-transparent text-fg-muted`;
     return html`
-      <ui-card>
-        <ui-card-header>
+      <div class=${cardClass()}>
+        <div class=${cardHeaderClass()}>
           <div class="grid grid-cols-2 p-1 rounded-full bg-bg-subtle border border-border" role="tablist">
             <button role="tab"
-                    class="${mode === 'login'
-                      ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
-                      : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
+                    class=${mode === 'login' ? pillActive : pillInactive}
                     @click=${() => { this.mode = 'login'; this.setState({ error: null }); }}>Sign in</button>
             <button role="tab"
-                    class="${mode === 'signup'
-                      ? 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-bg-elev text-fg shadow-sm'
-                      : 'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150 bg-transparent text-fg-muted'}"
+                    class=${mode === 'signup' ? pillActive : pillInactive}
                     @click=${() => { this.mode = 'signup'; this.setState({ error: null }); }}>Create account</button>
           </div>
-        </ui-card-header>
-        <ui-card-content>
+        </div>
+        <div class=${cardContentClass()}>
           <form class="grid gap-4" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
             ${mode === 'signup'
               ? html`<div class="grid gap-1.5">
-                  <ui-label for="auth-name">Name (optional)</ui-label>
-                  <ui-input id="auth-name" name="name" autocomplete="name"></ui-input>
+                  <label class=${labelClass()} for="auth-name">Name (optional)</label>
+                  <input class=${inputClass()} id="auth-name" name="name" autocomplete="name">
                 </div>`
               : ''}
             <div class="grid gap-1.5">
-              <ui-label for="auth-email">Email</ui-label>
-              <ui-input id="auth-email" type="email" name="email" autocomplete="email" required></ui-input>
+              <label class=${labelClass()} for="auth-email">Email</label>
+              <input class=${inputClass()} id="auth-email" type="email" name="email" autocomplete="email" required>
             </div>
             <div class="grid gap-1.5">
-              <ui-label for="auth-password">Password</ui-label>
-              <ui-input id="auth-password"
-                        type="password"
-                        name="password"
-                        autocomplete=${mode === 'login' ? 'current-password' : 'new-password'}
-                        required></ui-input>
+              <label class=${labelClass()} for="auth-password">Password</label>
+              <input class=${inputClass()}
+                     id="auth-password"
+                     type="password"
+                     name="password"
+                     autocomplete=${mode === 'login' ? 'current-password' : 'new-password'}
+                     required>
             </div>
-            <ui-button type="submit" variant="default" ?disabled=${busy} class="mt-2">${submitLabel}</ui-button>
+            <button type="submit" class="${buttonClass()} mt-2" ?disabled=${busy}>${submitLabel}</button>
             ${error
-              ? html`<ui-alert variant="destructive">
-                  <ui-alert-description>${error}</ui-alert-description>
-                </ui-alert>`
+              ? html`<div class=${alertClass({ variant: 'destructive' })}>
+                  <div class=${alertDescriptionClass()}>${error}</div>
+                </div>`
               : ''}
           </form>
-        </ui-card-content>
-      </ui-card>
+        </div>
+      </div>
     `;
   }
 }
