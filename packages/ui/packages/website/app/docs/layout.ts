@@ -61,7 +61,7 @@ export default async function DocsLayout({ children }: { children: unknown }) {
   return html`
     <style>${SIDENAV_STYLES.text}</style>
     <div class="grid lg:grid-cols-[220px_1fr] gap-8 -mt-10">
-      <aside class="docs-sidenav hidden lg:block sticky top-4 self-start h-[calc(100vh-2rem)] overflow-y-auto py-10 text-sm">
+      <aside class="docs-sidenav hidden lg:block sticky top-4 self-start h-[calc(100vh-2rem)] overflow-x-hidden overflow-y-auto py-10 text-sm">
         <div class="font-semibold mb-2 text-fg">Getting Started</div>
         <nav class="flex flex-col gap-0.5 mb-6">
           <a href="/docs" class=${linkClass}>Introduction</a>
