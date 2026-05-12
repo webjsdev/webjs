@@ -9,12 +9,16 @@ A webjs app — dogfoods the framework.
 
 | Path | Serves |
 |---|---|
-| `GET /r/index.json` | Flat list of every registry item |
-| `GET /r/registry.json` | Full manifest |
+| `GET /r` | Full manifest with every item's content inlined |
+| `GET /r/index.json` | Flat metadata-only list of every registry item |
 | `GET /r/<name>.json` | One registry item (with inlined `content`) |
-| `GET /r/themes/<name>.json` | One base-colour theme |
+| `GET /r/registry.json` | Alias for `/r` (full manifest) |
 | `GET /docs/components/<name>` | Docs page for a single component (preview + props + install) |
 | `GET /` | Index of all components |
+
+Registry JSON is composed on demand from `packages/ui/packages/registry/`
+sources by `app/_lib/registry.server.ts`. There is no build step and no
+`r/` output to commit.
 
 ## Dev
 
@@ -22,6 +26,6 @@ A webjs app — dogfoods the framework.
 npm run dev      # http://localhost:5001
 ```
 
-The dev server reads `packages/ui-registry/r/*.json` directly. Make sure to run
-`npm run build` inside `packages/ui-registry` first (or use the root `ui:build`
-script).
+A `predev` hook runs `scripts/copy-registry.js`, which mirrors the
+registry's component sources into `components/ui/` and `lib/utils.ts`
+so the docs preview pages can import them directly.
