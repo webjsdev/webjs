@@ -84,6 +84,34 @@ node_modules/@webjskit/
 Reaching straight for the source is the fastest way to resolve "why
 doesn't X work?" — no documentation guesswork, no stale blog posts.
 
+## Editor TS plugins (`ts-lit-plugin` + `@webjskit/ts-plugin`) — a pair
+
+This scaffold's `tsconfig.json` lists **two** `tsserver` plugins. They
+are editor-only — neither is required for the framework to run — but
+they work as a pair, so install both or neither:
+
+```jsonc
+// tsconfig.json (already wired by the scaffold)
+"plugins": [
+  { "name": "ts-lit-plugin", "strict": true },
+  { "name": "@webjskit/ts-plugin" }
+]
+```
+
+- `ts-lit-plugin` provides type-checking + diagnostics + go-to-def
+  inside `` html`…` `` and `` css`…` `` tagged templates. Without it,
+  attribute values are unchecked and there's no template intelligence.
+- `@webjskit/ts-plugin` **wraps** `ts-lit-plugin`. It loads
+  `ts-lit-plugin` from `node_modules` at startup, proxies its output,
+  silences its "Unknown tag/attribute" diagnostics for webjs-registered
+  elements, and adds attribute auto-complete sourced from each
+  component's `static properties`. Without `ts-lit-plugin` underneath,
+  there's nothing to wrap.
+
+The scaffold lists both as `devDependencies` and the order in `plugins`
+matters — `ts-lit-plugin` first. See [docs.webjs.com → Editor
+setup](https://docs.webjs.com/docs/editor-setup) for the full walkthrough.
+
 ## File conventions
 
 ```

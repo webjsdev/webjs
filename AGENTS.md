@@ -1408,10 +1408,24 @@ renders it (via `renderToString` if a template), parses it into a DOM
 environment, and returns the first child element. `waitForUpdate(el)`
 yields two microtasks so setState-triggered re-renders settle.
 
-### TypeScript editor plugin — `@webjskit/ts-plugin`
+### TypeScript editor plugins — `ts-lit-plugin` + `@webjskit/ts-plugin` (a pair)
 
-The scaffold adds `@webjskit/ts-plugin` + `ts-lit-plugin` to `tsconfig.json`'s
-`compilerOptions.plugins`. Together they give VS Code / Neovim:
+**Both plugins are editor-only — neither is required for the framework
+to run.** The framework's runtime (renderer, hydration, SSR, the dev
+server) has no dependency on them; they exist purely to give VS Code /
+Neovim / any tsserver-backed editor proper intelligence inside
+`` html`…` `` and `` css`…` `` templates.
+
+**Install both or neither — they go together.** `ts-lit-plugin` provides
+the underlying template-literal intelligence; `@webjskit/ts-plugin`
+*wraps* it to add webjs-aware behaviour (it physically loads
+`ts-lit-plugin` from `node_modules` and proxies its output). With only
+`ts-lit-plugin` installed, every webjs custom tag gets red-squiggled
+as "Unknown tag". With only `@webjskit/ts-plugin` installed, there's
+nothing to wrap. The scaffold installs both as devDependencies and
+wires both into `tsconfig.json` automatically.
+
+Together they give VS Code / Neovim:
 
 - Type-check + diagnostics for attribute *values* inside `` html`` `` tagged
   templates (`ts-lit-plugin`).
