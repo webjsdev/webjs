@@ -61,7 +61,7 @@ export default async function Home() {
     <section class="py-16">
       <div class="grid md:grid-cols-3 gap-6">
         <div>
-          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">01 · Composition</div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-brand mb-3">01 · Composition</div>
           <h3 class="text-lg font-semibold mb-2">Class helpers, not wrappers</h3>
           <p class="text-sm text-fg-muted leading-relaxed">
             Tier‑1 components are pure functions returning Tailwind class strings. AI
@@ -70,7 +70,7 @@ export default async function Home() {
           </p>
         </div>
         <div>
-          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">02 · Native semantics</div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-brand mb-3">02 · Native semantics</div>
           <h3 class="text-lg font-semibold mb-2">Real elements, real forms</h3>
           <p class="text-sm text-fg-muted leading-relaxed">
             A button is a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;button&gt;</code>.
@@ -80,7 +80,7 @@ export default async function Home() {
           </p>
         </div>
         <div>
-          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-accent mb-3">03 · Zero dependencies</div>
+          <div class="text-xs font-mono font-semibold uppercase tracking-widest text-brand mb-3">03 · Zero dependencies</div>
           <h3 class="text-lg font-semibold mb-2">Auditable in an afternoon</h3>
           <p class="text-sm text-fg-muted leading-relaxed">
             No Radix, no clsx, no tailwind‑merge, no Floating UI, no Sonner.
@@ -155,7 +155,7 @@ npx webjsui add button card dialog</code></pre>
       </p>
       <div class="grid md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-border bg-bg-elev p-6">
-          <div class="text-xs font-mono uppercase tracking-widest text-accent mb-2">Tier 1</div>
+          <div class="text-xs font-mono uppercase tracking-widest text-brand mb-2">Tier 1</div>
           <h3 class="text-lg font-semibold mb-2">Class‑helper functions</h3>
           <p class="text-sm text-fg-muted mb-4">
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">buttonClass</code>,
@@ -170,7 +170,7 @@ npx webjsui add button card dialog</code></pre>
           </div>
         </div>
         <div class="rounded-lg border border-border bg-bg-elev p-6">
-          <div class="text-xs font-mono uppercase tracking-widest text-accent mb-2">Tier 2</div>
+          <div class="text-xs font-mono uppercase tracking-widest text-brand mb-2">Tier 2</div>
           <h3 class="text-lg font-semibold mb-2">Stateful custom elements</h3>
           <p class="text-sm text-fg-muted mb-4">
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dialog&gt;</code>,
