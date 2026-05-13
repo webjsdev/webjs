@@ -118,9 +118,16 @@ export default function Layout({ children }: { children: any }) {
         transition: background var(--t) cubic-bezier(0.3, 0, 0.3, 1),
                     color var(--t) cubic-bezier(0.3, 0, 0.3, 1);
       }
-      a { color: var(--accent); text-decoration: none; }
-      a:hover { color: var(--accent-hover); }
       ::selection { background: var(--accent-tint); color: var(--fg); }
+
+      /* Prose links inside .prose blocks get the brand-warm accent.
+         Note: do NOT add unscoped 'a { color: ... }' rules here —
+         they would override Tailwind utility classes (utilities live
+         inside @layer utilities; outside-layer rules win), silently
+         breaking every text-fg / text-fg-muted class on the chrome
+         (header logo, nav links, footer links). */
+      .prose a { color: var(--accent); text-decoration: none; }
+      .prose a:hover { color: var(--accent-hover); text-decoration: underline; }
 
       /* ui-* component preview background — always darker than the page
          for clear differentiation against the chrome regardless of mode. */
@@ -189,20 +196,18 @@ export default function Layout({ children }: { children: any }) {
       </a>
     </div>
 
-    <header class="border-b">
-      <div class="max-w-5xl mx-auto flex flex-wrap min-h-14 items-center px-4 sm:px-6 py-2 gap-x-4 gap-y-2 sm:gap-6">
-        <a class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
-          <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
-          Webjs UI
-        </a>
-        <nav class="flex items-center gap-4">
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/">Components</a>
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
-          <a class="hidden sm:inline text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
-          <theme-toggle></theme-toggle>
-        </nav>
-      </div>
+    <header class="flex flex-wrap items-center justify-between gap-y-2 max-w-5xl mx-auto px-6 py-4">
+      <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
+        <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
+        Webjs UI
+      </a>
+      <nav class="flex flex-wrap items-center gap-4">
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/">Components</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
+        <a class="hidden sm:inline text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+        <theme-toggle></theme-toggle>
+      </nav>
     </header>
 
     <main class="max-w-5xl mx-auto px-6 py-10">${children}</main>
