@@ -5,12 +5,39 @@ const env = (globalThis as any).process?.env ?? {};
 const WEBSITE_URL = env.WEBSITE_URL || 'https://webjs.dev';
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.dev';
 
-export const metadata = {
-  title: 'Webjs UI — AI-first component library',
-  description: 'An AI-first component library. Two-tier composition — class-helper functions for visuals, custom elements only where state matters. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla — any project with Tailwind v4.',
-  themeColor: '#1c1613',
-  openGraph: { type: 'website', title: 'Webjs UI', description: 'AI-first component library' },
-};
+const TITLE = 'Webjs UI — AI-first component library';
+const DESCRIPTION =
+  'An AI-first component library. Two-tier composition — class-helper functions for visuals, custom elements only where state matters. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla — any project with Tailwind v4.';
+
+// Per-request metadata so the OG image URL can be absolute (scrapers
+// require http(s)). Mirrors website/app/layout.ts's generateMetadata
+// pattern verbatim — same shape, same fields, content swapped for UI.
+export function generateMetadata(ctx: { url: string }) {
+  const origin = new URL(ctx.url).origin;
+  const image = `${origin}/public/og.png`;
+  return {
+    title: TITLE,
+    description: DESCRIPTION,
+    themeColor: '#1c1613',
+    openGraph: {
+      type: 'website',
+      title: TITLE,
+      description: DESCRIPTION,
+      url: origin,
+      image,
+      'image:width': '1200',
+      'image:height': '630',
+      'image:alt': 'Webjs UI — AI-first component library',
+      'site_name': 'Webjs UI',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: TITLE,
+      description: DESCRIPTION,
+      image,
+    },
+  };
+}
 
 export default function Layout({ children }: { children: any }) {
   // Don't wrap in <!doctype><html><head><body> — the framework's SSR pipeline
