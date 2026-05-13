@@ -107,18 +107,33 @@ function installStyles(): void {
 
 let scrollLockCount = 0;
 let savedOverflow = '';
+let savedPaddingRight = '';
 
 function lockScroll(): void {
   if (scrollLockCount === 0) {
+    // Measure the vertical scrollbar's width BEFORE hiding it. When the body
+    // switches to `overflow: hidden` the OS-painted scrollbar disappears and
+    // the viewport gains back its width — without compensation, every
+    // element constrained to `100vw` (or the body itself, which fills the
+    // viewport) reflows ~15px to the right and the page visibly jumps.
+    // Reserving the same width as inline padding-right keeps the content
+    // pinned in place. Restored on unlock so apps that author their own
+    // body padding aren't permanently shifted.
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     savedOverflow = document.body.style.overflow;
+    savedPaddingRight = document.body.style.paddingRight;
     document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
   }
   scrollLockCount++;
 }
 
 function unlockScroll(): void {
   scrollLockCount = Math.max(0, scrollLockCount - 1);
-  if (scrollLockCount === 0) document.body.style.overflow = savedOverflow;
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = savedOverflow;
+    document.body.style.paddingRight = savedPaddingRight;
+  }
 }
 
 // --------------------------------------------------------------------------
