@@ -16,7 +16,7 @@ export default async function Home() {
         class="mt-6 font-bold text-fg max-w-3xl"
         style="font-family: var(--font-serif); font-size: var(--fs-display); line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance;"
       >
-        Web components library<br />written for AI agents.
+        A component library<br />written for AI agents.
       </h1>
       <p
         class="text-fg-muted max-w-[60ch]"
@@ -194,18 +194,18 @@ npx webjsui add button card dialog</code></pre>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         ${ui.map(
-          (it) => html`
+    (it) => html`
             <a
               href="/docs/components/${it.name}"
               class="block rounded-lg border border-border bg-bg-elev p-4 transition-colors hover:bg-bg-subtle hover:border-border-strong"
             >
               <div class="font-medium text-fg">${it.name}</div>
               ${it.description
-                ? html`<div class="text-xs text-fg-muted mt-1 line-clamp-2 leading-relaxed">${it.description}</div>`
-                : ''}
+        ? html`<div class="text-xs text-fg-muted mt-1 line-clamp-2 leading-relaxed">${it.description}</div>`
+        : ''}
             </a>
           `,
-        )}
+  )}
       </div>
     </section>
   `;
