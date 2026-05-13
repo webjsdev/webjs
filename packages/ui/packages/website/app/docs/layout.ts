@@ -50,13 +50,25 @@ export default async function DocsLayout({ children }: { children: unknown }) {
   const all = await loadRegistryIndex();
   const components = all.filter((i) => i.type === 'registry:ui');
 
-  // Shared link styling: padded, rounded, with a noticeable hover background.
-  // The negative -mx-2 + matching px-2 extends the hover hit-area without
-  // shifting the text. Using `bg-fg/10` (semi-transparent foreground) instead
-  // of `bg-accent` because shadcn's accent in light mode is oklch(0.97 0 0) —
-  // near-white against a white page background, almost invisible on hover.
+  // Shared link styling: padded, rounded, with a clearly visible hover
+  // surface. `-mx-2` lets the rounded hover background extend slightly
+  // past the column's text alignment for a shadcn-style pill that hugs
+  // the sidebar's left edge instead of floating inside it.
+  //
+  // Why not `hover:bg-accent`: in ui-website's @theme block, `bg-accent`
+  // is deliberately remapped to `--accent-shadcn` so the component
+  // PREVIEWS render shadcn's neutral hover state. That same remap makes
+  // chrome `bg-accent` resolve to oklch(0.97 0 0) — near-white on a
+  // near-white page bg, basically invisible on hover.
+  //
+  // Why `bg-bg-subtle` instead of a translucent `bg-fg/10`: a defined
+  // theme token reads as a solid, padded surface against the page bg in
+  // both light + dark, and the rounded-md corners stay crisp. The 10%
+  // foreground tint we used before was so subtle in light mode that the
+  // padded+rounded shape didn't register visually — the hover looked
+  // like a thin color smudge sized to the text, not a button.
   const linkClass =
-    'block py-1.5 px-2 -mx-2 rounded-md text-fg-muted hover:bg-fg/10 hover:text-fg transition-colors';
+    'block py-2 px-3 -mx-2 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors';
 
   return html`
     <style>${SIDENAV_STYLES.text}</style>
