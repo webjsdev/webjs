@@ -7,7 +7,7 @@ export default async function Home() {
 
   return html`
     <!-- Hero -->
-    <section class="pt-16 pb-20">
+    <section class="pt-2 pb-20 md:pt-16">
       <div class="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elev px-3 py-1 text-xs font-medium text-fg-muted">
         <span class="size-1.5 rounded-full bg-accent"></span>
         AI-first component library
