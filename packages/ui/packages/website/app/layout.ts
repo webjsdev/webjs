@@ -220,9 +220,9 @@ export default function Layout({ children }: { children: any }) {
 
     <footer class="border-t mt-20 py-8 text-center" style="color: var(--fg-subtle); font-size: 13px">
       <div class="max-w-5xl mx-auto px-6">
-        <a href="https://webjs.dev" target="_blank">Webjs</a> ·
-        <a href=${DOCS_URL} target="_blank">Docs</a> ·
-        <a href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+        <a class="text-brand no-underline hover:underline" href="https://webjs.dev" target="_blank">Webjs</a> ·
+        <a class="text-brand no-underline hover:underline" href=${DOCS_URL} target="_blank">Docs</a> ·
+        <a class="text-brand no-underline hover:underline" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
       </div>
     </footer>
   `;
