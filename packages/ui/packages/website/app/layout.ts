@@ -129,12 +129,18 @@ export default function Layout({ children }: { children: any }) {
       .prose a { color: var(--accent); text-decoration: none; }
       .prose a:hover { color: var(--accent-hover); text-decoration: underline; }
 
-      /* ui-* component preview background — always darker than the page
-         for clear differentiation against the chrome regardless of mode. */
+      /* Code-block surface — always dark regardless of theme (mirrors how
+         the shadcn website renders <pre> blocks: a dedicated dark surface
+         that reads consistently against any page background). Padding +
+         radius are part of the surface, not the wrapper — without them
+         the dark rectangle bleeds to the card edges in light mode. */
       .bg-code, pre.bg-muted, pre {
         background: oklch(0.18 0.01 55);
         color: oklch(0.92 0.008 80);
         border: 1px solid color-mix(in oklch, oklch(0.18 0.01 55) 80%, var(--border));
+        border-radius: 8px;
+        padding: 16px;
+        overflow-x: auto;
       }
       pre code { color: inherit; font-family: var(--font-mono); font-size: 12.5px; }
 
