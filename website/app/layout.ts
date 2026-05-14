@@ -130,7 +130,14 @@ export default function RootLayout({ children }: { children: unknown }) {
           --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
         }
       }
+      /* Explicit dark toggle MUST also flip color-scheme so the browser
+         paints UA-controlled chrome (native select popups, scrollbars,
+         system-color keywords Canvas/CanvasText/Highlight, native
+         validation bubbles) in dark. Without this the page-level CSS
+         tokens darken but every browser-painted UI element stays in the
+         OS-preferred scheme. */
       :root[data-theme='dark'] {
+        color-scheme: dark;
         --fg:            oklch(0.96 0.015 60);
         --fg-muted:      oklch(0.72 0.02 60);
         --fg-subtle:     oklch(0.55 0.02 60);
@@ -146,6 +153,12 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-tint:   oklch(0.78 0.14 55 / 0.12);
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
         --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
+      }
+
+      /* Explicit light toggle on a dark OS — same UA-chrome problem in
+         the other direction. */
+      :root[data-theme='light'] {
+        color-scheme: light;
       }
 
       html, body { margin: 0; }
