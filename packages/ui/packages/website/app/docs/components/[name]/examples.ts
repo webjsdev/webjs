@@ -473,6 +473,15 @@ const EXAMPLES: Record<string, string> = {
         <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
         <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
         <ui-dropdown-menu-item>Billing</ui-dropdown-menu-item>
+        <ui-dropdown-menu-sub>
+          <ui-dropdown-menu-sub-trigger>Invite users</ui-dropdown-menu-sub-trigger>
+          <ui-dropdown-menu-sub-content>
+            <ui-dropdown-menu-item>Email</ui-dropdown-menu-item>
+            <ui-dropdown-menu-item>Message</ui-dropdown-menu-item>
+            <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
+            <ui-dropdown-menu-item>More…</ui-dropdown-menu-item>
+          </ui-dropdown-menu-sub-content>
+        </ui-dropdown-menu-sub>
         <ui-dropdown-menu-item>Settings</ui-dropdown-menu-item>
         <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
         <ui-dropdown-menu-item variant="destructive">Sign out</ui-dropdown-menu-item>
