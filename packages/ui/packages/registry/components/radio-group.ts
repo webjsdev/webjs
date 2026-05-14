@@ -23,16 +23,50 @@
  */
 import { cn } from '../lib/utils.ts';
 
-const DOT_SVG =
+// Two SVGs, one per theme. The dot needs to contrast with the radio's
+// inner surface — and that surface flips between themes:
+//
+//   light: input bg is `bg-transparent` (so the page bg shows through;
+//          page bg is near-white) → dot must be DARK to be visible.
+//   dark : input bg is `dark:bg-input/30` (a translucent white over the
+//          near-black page bg; resolves to near-black) → dot must be
+//          LIGHT to be visible.
+//
+// Hardcoding a single dark-coloured dot (the original implementation)
+// painted invisibly on the near-black dark-mode surface, making the
+// :checked state indistinguishable from unchecked. Same pattern the
+// checkbox fix uses (CHECKMARK_LIGHT / CHECKMARK_DARK) — `currentColor`
+// in a data:url SVG used as background-image does not inherit from the
+// host element, so we ship two SVGs and toggle them via a theme
+// selector.
+const DOT_LIGHT =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.205 0 0)'/></svg>\")";
+const DOT_DARK =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.985 0 0)'/></svg>\")";
 
 const RADIO_CLASS =
   'aspect-square size-4 shrink-0 appearance-none rounded-full border border-input bg-transparent shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40';
 
+// Three sibling rule blocks for theme selection — mirrors the
+// checkbox.ts pattern in this same registry:
+//   - prefers-color-scheme: dark (OS preference, gated by
+//     :not([data-theme='light']):not(.light) so an explicit-light
+//     toggle still wins over the OS)
+//   - :root[data-theme='dark'] (explicit data-attribute toggle)
+//   - :root.dark (explicit class toggle, shadcn convention)
 const STYLES = `
 input[type="radio"][data-slot="radio"]:checked {
-  background-image: ${DOT_SVG};
+  background-image: ${DOT_LIGHT};
   background-size: 100%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not(.light) input[type="radio"][data-slot="radio"]:checked {
+    background-image: ${DOT_DARK};
+  }
+}
+:root[data-theme='dark'] input[type="radio"][data-slot="radio"]:checked,
+:root.dark input[type="radio"][data-slot="radio"]:checked {
+  background-image: ${DOT_DARK};
 }
 `;
 
