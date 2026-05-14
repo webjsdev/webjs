@@ -64,7 +64,23 @@ export const dropdownMenuCheckboxItemClass = (): string =>
 export const dropdownMenuRadioItemClass = (): string =>
   "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
-export const dropdownMenuLabelClass = (): string => 'px-2 py-1.5 text-sm font-medium data-[inset]:pl-8';
+// Label reads as a section header above a group of items. Shadcn's
+// default (text-sm font-medium, same as items minus font-weight) was
+// too subtle: at 14px, a 500-vs-400 weight difference is barely
+// perceptible, so "My Account" looked like just another item with
+// slightly bolder text. Tighten the typography hierarchy:
+//   text-xs        — shrink relative to items so the label registers
+//                    as supplementary metadata, not content
+//   font-semibold  — recover the visual weight lost by going smaller
+//   text-muted-foreground — different colour role from items, which
+//                    is the strongest cue available for "this is not
+//                    a clickable row, it's a label". Combined with
+//                    the trailing <separator> already shipped in the
+//                    docs example, the items group reads cleanly.
+// pt-2 (vs py-1.5) adds a touch of top breathing room — labels feel
+// off-balance flush against the menu's top edge.
+export const dropdownMenuLabelClass = (): string =>
+  'px-2 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground data-[inset]:pl-8';
 
 export const dropdownMenuSeparatorClass = (): string => '-mx-1 my-1 h-px bg-border';
 
