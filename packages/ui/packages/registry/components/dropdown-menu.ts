@@ -328,10 +328,20 @@ export class UiDropdownMenuItem extends Base {
     // pointerenter -> focus(), the two converge and arrow keys
     // continue from wherever the mouse last pointed.
     this.addEventListener('pointerenter', this._onPointerEnter);
+    // Mirror native :focus to a data-highlighted attribute so shadcn
+    // class strings using `data-[highlighted]:bg-accent` (Radix's
+    // roving-focus marker) work verbatim on our items. Our own
+    // styling already uses :focus + :hover for the highlight (see
+    // dropdownMenuItemClass) — this attr is purely for shadcn
+    // selector portability.
+    this.addEventListener('focus', this._onFocus);
+    this.addEventListener('blur', this._onBlur);
   }
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
     this.removeEventListener('pointerenter', this._onPointerEnter);
+    this.removeEventListener('focus', this._onFocus);
+    this.removeEventListener('blur', this._onBlur);
   }
   private _onClick = (): void => {
     if (this.hasAttribute('data-disabled')) return;
@@ -340,6 +350,12 @@ export class UiDropdownMenuItem extends Base {
   private _onPointerEnter = (): void => {
     if (this.hasAttribute('data-disabled')) return;
     this.focus();
+  };
+  private _onFocus = (): void => {
+    this.setAttribute('data-highlighted', '');
+  };
+  private _onBlur = (): void => {
+    this.removeAttribute('data-highlighted');
   };
 }
 defineElement('ui-dropdown-menu-item', UiDropdownMenuItem);

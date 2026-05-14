@@ -65,14 +65,33 @@ export class UiProgress extends Base {
   }
 
   private _reflect(): void {
-    const value = Number(this.getAttribute('value') ?? '0');
+    const rawValue = this.getAttribute('value');
+    const value = Number(rawValue ?? '0');
     const max = Number(this.getAttribute('max') ?? '100');
     const clamped = Math.max(0, Math.min(max, isFinite(value) ? value : 0));
     const pct = max > 0 ? (clamped / max) * 100 : 0;
     this.setAttribute('aria-valuenow', String(clamped));
     this.setAttribute('aria-valuemin', '0');
     this.setAttribute('aria-valuemax', String(max));
+    // Radix/shadcn data-attribute portability — class strings like
+    //   data-[state=loading]:animate-pulse
+    //   data-[state=indeterminate]:bg-muted
+    // can target our progress now. State = indeterminate when `value`
+    // is absent/null (matches Radix), loading while strictly less than
+    // max, complete on reach.
+    const state =
+      rawValue === null || rawValue === '' || !isFinite(value)
+        ? 'indeterminate'
+        : clamped >= max
+          ? 'complete'
+          : 'loading';
+    this.setAttribute('data-state', state);
+    this.setAttribute('data-value', String(clamped));
+    this.setAttribute('data-max', String(max));
     if (this._indicator) {
+      this._indicator.setAttribute('data-state', state);
+      this._indicator.setAttribute('data-value', String(clamped));
+      this._indicator.setAttribute('data-max', String(max));
       this._indicator.style.transform = `translateX(-${100 - pct}%)`;
     }
   }
