@@ -23,8 +23,16 @@
  */
 import { cn } from '../lib/utils.ts';
 
+// cursor-pointer is on the BASE so every variant (default, outline,
+// ghost, link, …) gets the right hover affordance. Native <button>
+// defaults to the OS arrow cursor in Chromium and Firefox — fine for
+// native chrome but unusual for app buttons; shadcn's modern Button
+// has long since gravitated toward an explicit cursor-pointer in the
+// real world (see the open issue shadcn-ui/ui#1791). disabled:pointer-
+// events-none below already suppresses cursor on disabled buttons by
+// virtue of the element not receiving pointer events at all.
 const BASE =
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
 const VARIANTS = {
   default: 'bg-primary text-primary-foreground hover:bg-primary/90',
