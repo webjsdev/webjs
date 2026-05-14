@@ -9,12 +9,19 @@
  * Usage:
  *   <div class=${nativeSelectWrapperClass()}>
  *     <select class=${nativeSelectClass()} name="plan">
- *       <option class=${nativeSelectOptionClass()}>Basic</option>
- *       <option class=${nativeSelectOptionClass()}>Pro</option>
+ *       <option>Basic</option>
+ *       <option>Pro</option>
  *     </select>
  *     <!-- chevron icon, decorative -->
  *     <svg class="${nativeSelectIconClass()}" aria-hidden="true">…</svg>
  *   </div>
+ *
+ * Bare <option> elements paint correctly out of the box — importing
+ * this module installs a stylesheet that forces Canvas/CanvasText on
+ * every <option> inside the wrapper, so the dropdown reads in both
+ * light and dark themes regardless of OS preference. The class-helper
+ * nativeSelectOptionClass() is still exported for advanced overrides
+ * that need to inline-set the same colours.
  *
  * Design tokens used: --input, --background, --primary, --primary-foreground,
  * --muted-foreground, --ring, --destructive.
@@ -22,6 +29,47 @@
 import { cn } from '../lib/utils.ts';
 
 export type NativeSelectSize = 'default' | 'sm';
+
+// Auto-apply Canvas/CanvasText to options inside any native-select
+// wrapper. Without this, an <option> with no explicit bg paints
+// transparent on top of the browser-popup background; in dark mode
+// (when color-scheme: dark is set on <html>) Chrome's popup is dark,
+// the option's transparent bg lets the popup colour through, and the
+// inherited text colour from the <select> matches that dark popup —
+// the option disappears, only the focused/selected one stays visible
+// because the browser overlays its own highlight on it.
+//
+// The class-helper nativeSelectOptionClass() still exists for advanced
+// overrides, but installing the rule here removes the easy-to-forget
+// requirement that every <option> carry the class. Mirrors the
+// install pattern used by checkbox.ts for :checked styles.
+//
+// `.group\\/native-select` matches the wrapper class emitted by
+// nativeSelectWrapperClass() — the literal class name in the DOM is
+// `group/native-select`, escaped here for CSS selector syntax.
+const STYLES = `
+.group\\/native-select select option,
+.group\\/native-select select optgroup {
+  background-color: Canvas;
+  color: CanvasText;
+}
+`;
+
+let installed = false;
+export function installNativeSelectStyles(): void {
+  if (installed || typeof document === 'undefined') return;
+  if (document.getElementById('ui-native-select-styles')) {
+    installed = true;
+    return;
+  }
+  const style = document.createElement('style');
+  style.id = 'ui-native-select-styles';
+  style.textContent = STYLES;
+  document.head.appendChild(style);
+  installed = true;
+}
+
+if (typeof document !== 'undefined') installNativeSelectStyles();
 
 export const nativeSelectWrapperClass = (): string =>
   'group/native-select relative w-fit has-[select:disabled]:opacity-50';
