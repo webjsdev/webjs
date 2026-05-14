@@ -146,23 +146,31 @@ export default function Layout({ children }: { children: any }) {
                     color var(--t) cubic-bezier(0.3, 0, 0.3, 1);
       }
       /* Global selection: warm orange tint on chrome. Note we DO NOT
-         force a `color` here. The earlier rule forced selected text to
-         `var(--fg)` (dark in light mode), which collided with the bare
-         `pre` rule below — that block paints code blocks always-dark
+         force a color here. The earlier rule forced selected text to
+         var(--fg) (dark in light mode), which collided with the bare
+         pre rule below — that block paints code blocks always-dark
          regardless of theme, so its content uses a light cream
          foreground. Forcing dark fg on selected pre text in light
          mode painted dark-on-dark and the selection appeared empty.
          Letting the browser keep each element's native fg colour
          on selection works against both the light chrome and the
-         dark code-block surface. */
+         dark code-block surface.
+
+         IMPORTANT: do NOT wrap the identifiers above in U+0060
+         (the GRAVE ACCENT character). This CSS comment lives inside
+         an html tagged template literal — that character here closes
+         the template at JS-parse time, before the HTML parser ever
+         sees the style block. It caused a prod 500 once; don't
+         re-introduce it. (Caught via
+         [[feedback_html_template_no_backticks]].) */
       ::selection { background: var(--accent-tint); }
 
       /* Code-block selection needs a much stronger tint because the
-         pre surface is always dark (~oklch 0.18) — `--accent-tint`'s
+         pre surface is always dark (~oklch 0.18) — --accent-tint at
          8% alpha is invisible composited over it. A 35% mix reads
          cleanly on the dark surface while keeping the light cream
-         text legible. Targets `pre ::selection` (descendants) so it
-         applies to text wrapped in `<code>` / `<span>` inside the
+         text legible. Targets pre ::selection (descendants) so it
+         applies to text wrapped in <code> / <span> inside the
          pre, which is the common Highlight.js / Shiki output. */
       pre ::selection, pre::selection {
         background: color-mix(in oklch, var(--accent) 35%, transparent);
