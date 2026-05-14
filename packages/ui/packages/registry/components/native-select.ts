@@ -30,26 +30,41 @@ import { cn } from '../lib/utils.ts';
 
 export type NativeSelectSize = 'default' | 'sm';
 
-// Auto-apply Canvas/CanvasText to options inside any native-select
-// wrapper. Without this, an <option> with no explicit bg paints
-// transparent on top of the browser-popup background; in dark mode
-// (when color-scheme: dark is set on <html>) Chrome's popup is dark,
-// the option's transparent bg lets the popup colour through, and the
-// inherited text colour from the <select> matches that dark popup —
-// the option disappears, only the focused/selected one stays visible
-// because the browser overlays its own highlight on it.
+// Auto-apply Canvas/CanvasText to every <option> on the page. Without
+// this, an <option> with no explicit bg paints transparent on top of
+// the browser-popup background; in dark mode (when color-scheme: dark
+// is set on <html>) Chrome's popup is dark, the option's transparent
+// bg lets the popup colour through, and the inherited text colour
+// from the <select> matches that dark popup — the option disappears,
+// only the focused/selected one stays visible because the browser
+// overlays its own highlight on it.
 //
-// The class-helper nativeSelectOptionClass() still exists for advanced
-// overrides, but installing the rule here removes the easy-to-forget
-// requirement that every <option> carry the class. Mirrors the
-// install pattern used by checkbox.ts for :checked styles.
+// Original selector required the option to be inside a
+// `.group/native-select` wrapper, on the assumption every user would
+// follow the documented Usage block above. But it's easy to write a
+// bare <select class=${nativeSelectClass()}> without the wrapper
+// (legitimate when you don't need the chevron icon — the popover and
+// hover-card docs examples both do this), in which case the rule
+// never matched and the dropdown reverted to invisible-options.
+// Broadening to `select option, select optgroup` makes the fix work
+// everywhere the user has imported native-select, with no required
+// wrapper. The Canvas/CanvasText pair is a safe default: they ARE
+// the system colours the browser would have painted anyway when no
+// rule applied; we just stop relying on inheritance to pull through.
+// Selector specificity is 0,0,2 (two elements), so any user who
+// genuinely needs custom <option> colours can override with a single
+// class anywhere in their cascade (e.g. `.my-select option { ... }`
+// at 0,1,2 wins).
 //
-// `.group\\/native-select` matches the wrapper class emitted by
-// nativeSelectWrapperClass() — the literal class name in the DOM is
-// `group/native-select`, escaped here for CSS selector syntax.
+// `nativeSelectOptionClass()` and `nativeSelectOptGroupClass()` stay
+// exported for users who want to opt into the same colours via the
+// class helper instead of the global rule. They emit the same
+// `bg-[Canvas] text-[CanvasText]` Tailwind utilities — redundant if
+// this stylesheet is installed, but harmless and matches the broader
+// shadcn convention of "every part has a class helper".
 const STYLES = `
-.group\\/native-select select option,
-.group\\/native-select select optgroup {
+select option,
+select optgroup {
   background-color: Canvas;
   color: CanvasText;
 }
