@@ -69,16 +69,29 @@ function installStyles(): void {
 
 let scrollLockCount = 0;
 let savedOverflow = '';
+let savedPaddingRight = '';
 function lockScroll(): void {
   if (scrollLockCount === 0) {
+    // Reserve the gutter the OS scrollbar was occupying so the body doesn't
+    // visibly widen when `overflow: hidden` removes it. See dialog.ts for
+    // the full rationale — kept in lockstep here because alert-dialog
+    // intentionally re-implements the lock (rather than importing from
+    // dialog.ts) so users can `webjs ui add alert-dialog` without pulling
+    // in the full dialog component.
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     savedOverflow = document.body.style.overflow;
+    savedPaddingRight = document.body.style.paddingRight;
     document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
   }
   scrollLockCount++;
 }
 function unlockScroll(): void {
   scrollLockCount = Math.max(0, scrollLockCount - 1);
-  if (scrollLockCount === 0) document.body.style.overflow = savedOverflow;
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = savedOverflow;
+    document.body.style.paddingRight = savedPaddingRight;
+  }
 }
 
 export class UiAlertDialog extends Base {
