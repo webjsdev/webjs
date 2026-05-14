@@ -931,6 +931,65 @@ test('ssrPage: error.js that itself throws falls through to the default 500', as
   } finally { console.error = prev; }
 });
 
+test('ssrPage: page throws + NO error.js boundary → default 500', async () => {
+  // The user-incident scenario: a route has no error.js at all
+  // (route.errors is empty) and the page throws. Framework should
+  // produce its terse built-in 500 page rather than crashing the
+  // whole request. Verifies the for-loop at ssr.js:98 is safe over
+  // an empty errors[] array and falls through to the default body.
+  const { route, appDir } = await makeRoute({
+    pageSrc: `export default function Page() { throw new Error('no-boundary'); }\n`,
+  });
+  const prev = console.error;
+  console.error = () => {};
+  try {
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    assert.equal(resp.status, 500);
+    const body = await resp.text();
+    assert.ok(body.includes('Something went wrong'));
+    // The thrown error.message is NOT leaked in prod when no boundary
+    // handles it — only the framework's terse default body shows.
+    assert.ok(!body.includes('no-boundary'));
+  } finally { console.error = prev; }
+});
+
+test('ssrPage: error.js fails to LOAD (syntax error) → falls through to default 500', async () => {
+  // Distinct from "error.js renders then throws" (already covered
+  // above). This exercises the loadModule() throw path inside the
+  // for-loop at ssr.js:98 — when the boundary file itself can't be
+  // imported (bad syntax, missing dep, broken template literal,
+  // etc.), the inner catch should swallow the load failure and
+  // continue to the next boundary, eventually reaching the default
+  // 500 body. This is the exact failure mode that bit the
+  // ui.webjs.dev deploy when a stray backtick closed the html
+  // tagged template literal at parse time.
+  const sub = mkdtempSync(join(tmpDir, 'errload-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+
+  const pageFile = join(appDir, 'page.js');
+  writeFileSync(pageFile,
+    `export default function Page() { throw new Error('SENTINEL_PAGE_ERR_zq7'); }\n`);
+
+  // Intentionally malformed module — JS parse failure on import.
+  const errorFile = join(appDir, 'error.js');
+  writeFileSync(errorFile, `export default function Err({ error } { return; }\n`);
+
+  const route = { file: pageFile, layouts: [], errors: [errorFile], metadataFiles: [] };
+  const prev = console.error;
+  console.error = () => {};
+  try {
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    assert.equal(resp.status, 500);
+    const body = await resp.text();
+    assert.ok(body.includes('Something went wrong'));
+    // Prod default body shouldn't leak the original error message.
+    // The sentinel string is unique to the thrown error so a substring
+    // match would never come from incidental shell content.
+    assert.ok(!body.includes('SENTINEL_PAGE_ERR_zq7'));
+  } finally { console.error = prev; }
+});
+
 test('ssrPage: dev=true exposes the error stack, prod hides it', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:
