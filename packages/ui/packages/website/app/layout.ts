@@ -118,7 +118,18 @@ export default function Layout({ children }: { children: any }) {
           --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
         }
       }
+      /* Explicit dark toggle MUST also flip color-scheme so the browser
+         paints UA-controlled chrome (native select popups, scrollbars,
+         system-color keywords Canvas/CanvasText/Highlight, native
+         validation bubbles) in dark. Without this the page-level CSS
+         tokens darken but every browser-painted UI element stays in the
+         OS-preferred scheme — most visibly, the native-select dropdown
+         paints near-white and bg-[Canvas] options blend invisibly into
+         it (only the hover/selected option shows up). The :root default
+         declares color-scheme: light dark, so this override is required
+         only when the OS preference disagrees with the explicit toggle. */
       :root[data-theme='dark'] {
+        color-scheme: dark;
         --fg:            oklch(0.96 0.015 60);
         --fg-muted:      oklch(0.72 0.02 60);
         --fg-subtle:     oklch(0.55 0.02 60);
@@ -134,6 +145,14 @@ export default function Layout({ children }: { children: any }) {
         --accent-tint:   oklch(0.78 0.14 55 / 0.12);
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
         --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
+      }
+
+      /* Explicit light toggle on a dark OS — same UA-chrome problem in
+         the other direction. Without color-scheme: light here, a user
+         on a dark OS who picks the light theme gets light page tokens
+         but dark browser chrome (dark scrollbars, dark native popups). */
+      :root[data-theme='light'] {
+        color-scheme: light;
       }
 
       html, body { margin: 0; }
