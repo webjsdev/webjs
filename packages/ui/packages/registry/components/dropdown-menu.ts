@@ -41,14 +41,28 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 export const dropdownMenuContentClass = (): string =>
   'z-50 max-h-[--available-height] min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md';
 
+// Each item class adds `:hover` variants of every `:focus` rule so the
+// accent highlight paints under the cursor regardless of focus state.
+// Shadcn's React build doesn't need this because Radix moves keyboard
+// focus to whatever item the cursor is over (roving focus), so `:focus`
+// alone covers both keyboard nav AND hover. We mimic that for the
+// custom-element item (UiDropdownMenuItem.connectedCallback wires a
+// pointerenter -> focus() handler below), but the checkbox-item /
+// radio-item class helpers are applied to raw markup that we don't
+// control, so the only way to guarantee a hover highlight there is to
+// stamp `hover:bg-accent hover:text-accent-foreground` directly into
+// the class string. Doing the same for the regular item is harmless
+// (the focus path also applies, identical colours, no visual diff)
+// and keeps the three classes consistent.
+
 export const dropdownMenuItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/10 data-[variant=destructive]:hover:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 dark:data-[variant=destructive]:hover:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
 export const dropdownMenuCheckboxItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
 
 export const dropdownMenuRadioItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export const dropdownMenuLabelClass = (): string => 'px-2 py-1.5 text-sm font-medium data-[inset]:pl-8';
 
@@ -209,13 +223,26 @@ export class UiDropdownMenuItem extends Base {
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuItemClass(), userClass);
     this.addEventListener('click', this._onClick);
+    // Move keyboard focus to whichever item the cursor is over —
+    // matches Radix's roving-focus pattern. Without this the menu has
+    // two parallel cursors (arrow-key focus + mouse hover) that drift
+    // apart: a user who arrow-navigated to item B then mouse-hovers
+    // item D sees BOTH highlighted (B via :focus, D via :hover). With
+    // pointerenter -> focus(), the two converge and arrow keys
+    // continue from wherever the mouse last pointed.
+    this.addEventListener('pointerenter', this._onPointerEnter);
   }
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    this.removeEventListener('pointerenter', this._onPointerEnter);
   }
   private _onClick = (): void => {
     if (this.hasAttribute('data-disabled')) return;
     (this.closest('ui-dropdown-menu') as UiDropdownMenu | null)?.hide();
+  };
+  private _onPointerEnter = (): void => {
+    if (this.hasAttribute('data-disabled')) return;
+    this.focus();
   };
 }
 defineElement('ui-dropdown-menu-item', UiDropdownMenuItem);
