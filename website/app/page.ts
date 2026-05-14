@@ -286,9 +286,9 @@ export default function LandingPage() {
             SSR pages with web components, server actions, Prisma, auth,
             WebSockets, streaming. Everything you need for a complete app.
           </p>
-          <pre>app/page.ts          → SSR page
-app/api/posts/route.ts → REST endpoint
-components/counter.ts  → interactive UI
+          <pre>app/page.ts             → SSR page
+app/api/posts/route.ts  → REST endpoint
+components/counter.ts   → interactive UI
 actions/posts.server.ts → server action</pre>
         </div>
         <div class="mode-card">
