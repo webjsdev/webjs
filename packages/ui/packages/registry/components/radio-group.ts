@@ -87,7 +87,23 @@ export function installRadioStyles(): void {
 if (typeof document !== 'undefined') installRadioStyles();
 
 /** Tailwind classes for a `<div role="radiogroup">` container. */
-export const radioGroupClass = (): string => 'grid gap-3';
+export type RadioGroupOrientation = 'vertical' | 'horizontal';
+
+/**
+ * Container for a group of native <input type="radio"> elements.
+ *
+ * Vertical (default) — stacked column, gap-3. Matches Radix
+ * RadioGroup.Root's default + the most common shadcn snippet.
+ *
+ * Horizontal — flex row that wraps. Picks `flex flex-wrap gap-x-6
+ * gap-y-3` so multi-line wraps still have vertical breathing room.
+ */
+export function radioGroupClass(opts: { orientation?: RadioGroupOrientation } = {}): string {
+  const orientation = opts.orientation ?? 'vertical';
+  return orientation === 'horizontal'
+    ? 'flex flex-wrap gap-x-6 gap-y-3'
+    : 'grid gap-3';
+}
 
 /** Tailwind classes for a styled `<input type="radio">`. Add `data-slot="radio"` for the indicator dot. */
 export function radioClass(): string {

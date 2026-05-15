@@ -391,9 +391,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
   'radio-group': {
+    variants: ['vertical', 'horizontal'],
+    variantsLabel: 'Orientation',
     subcomponents: [
-      { name: 'radioGroupClass()', description: 'Apply to <div role="radiogroup">.' },
+      { name: 'radioGroupClass({ orientation })', description: 'Apply to <div role="radiogroup">.' },
       { name: 'radioClass()', description: 'Apply to native <input type="radio" data-slot="radio">. Dot SVG auto-paints via :checked.' },
+    ],
+    props: [
+      { name: 'orientation', type: '"vertical" | "horizontal"', default: '"vertical"', description: 'Vertical stacks rows in a grid (Radix default). Horizontal lays radios in a wrapping flex row.' },
     ],
   },
   input: { subcomponents: [{ name: 'inputClass()', description: 'Apply to native <input>.' }] },
