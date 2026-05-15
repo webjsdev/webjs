@@ -121,6 +121,28 @@ export class UiSonner extends Base {
     toaster.remove = (id) => this._remove(id);
   }
 
+  /**
+   * Publish a toast directly to THIS viewport. Use when you have a
+   * specific <ui-sonner> reference and want to bypass the singleton
+   * `toaster.add` routing (which always points to the last-mounted
+   * viewport). Primary use case: docs demos that mount one viewport
+   * per position and want each demo button to fire into its own
+   * viewport. App code should normally call the global `toast()` /
+   * `toast.success()` / etc. — they route via the singleton.
+   */
+  addToast(message: string, opts: ToastOptions = {}, type: ToastType = 'default'): string | number {
+    const id = opts.id ?? nextId++;
+    this._add({
+      id,
+      type,
+      message,
+      description: opts.description,
+      duration: opts.duration ?? (type === 'loading' ? 0 : 4000),
+      action: opts.action,
+    });
+    return id;
+  }
+
   private _add(item: ToastItem): void {
     this._items.push(item);
     this._render();
