@@ -440,13 +440,18 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
   card: {
+    sizes: ['default', 'sm'],
+    sizesPreviewMode: 'cards',
     subcomponents: [
-      { name: 'cardClass()', description: 'Container.' },
-      { name: 'cardHeaderClass()', description: 'Header row.' },
-      { name: 'cardTitleClass() / cardDescriptionClass()', description: 'Prose inside the header.' },
+      { name: 'cardClass({ size })', description: 'Container. size="sm" yields gap-3/py-3; default is gap-6/py-6.' },
+      { name: 'cardHeaderClass()', description: 'Header row. Picks up tighter padding when parent card has data-size="sm".' },
+      { name: 'cardTitleClass() / cardDescriptionClass()', description: 'Prose inside the header. Title shrinks to text-sm under data-size="sm".' },
       { name: 'cardActionClass()', description: 'Right-aligned action area inside the header.' },
-      { name: 'cardContentClass()', description: 'Body padding.' },
-      { name: 'cardFooterClass()', description: 'Footer row.' },
+      { name: 'cardContentClass()', description: 'Body padding. Tighter under data-size="sm".' },
+      { name: 'cardFooterClass()', description: 'Footer row. Tighter under data-size="sm".' },
+    ],
+    props: [
+      { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'Pass to cardClass AND set data-size on the same host so child helpers (header / title / content / footer) pick up the compact layout via group-data-[size=…]/card.' },
     ],
   },
   checkbox: {
