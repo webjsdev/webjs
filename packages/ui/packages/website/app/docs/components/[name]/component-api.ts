@@ -403,15 +403,18 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   sonner: {
-    // Toast TYPE is the rendering enum — each card under "Variants"
-    // fires the matching imperative API (toast.success, toast.error,
-    // etc.) so the icon + colour treatment for each type is visible.
-    // We don't preview the `position` enum as cards because every
-    // <ui-sonner> is viewport-pinned via position:fixed — six side-
-    // by-side preview cards would all collapse to the same screen
-    // corner. position is documented in the Props table only.
+    // Toast TYPE goes in the variants slot — each card fires the
+    // matching imperative API so the icon + colour treatment for each
+    // type is visible.
     variants: ['default', 'success', 'error', 'info', 'warning', 'loading'],
     variantsLabel: 'Toast types',
+    // Position reuses the sizes slot with a custom label. Each card
+    // mounts its own <ui-sonner position="..."> + a Show button that
+    // calls the viewport's addToast() method directly (bypassing the
+    // singleton toaster.add routing). Combined mode works because
+    // each button is self-labelled "Show top-left" etc.
+    sizes: ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'],
+    sizesLabel: 'Position',
     subcomponents: [
       { name: '<ui-sonner>', description: 'Toast viewport — position attribute. Mount once per page.' },
       { name: 'toast(msg, opts?)', description: 'Imperative API. Variants: toast.success / toast.error / toast.info / toast.warning / toast.loading / toast.promise / toast.dismiss.' },

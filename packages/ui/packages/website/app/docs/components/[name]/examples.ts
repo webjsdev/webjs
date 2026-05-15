@@ -855,6 +855,30 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   },
 };
 
+// Position demos for sonner — each card mounts its own <ui-sonner> at
+// the target position and the Show button calls .addToast() on THAT
+// specific viewport (via the public per-instance method, bypassing the
+// singleton toaster.add routing). This works around the multi-viewport
+// collision: each card's button only ever publishes into its own
+// sibling viewport, so the toast lands at the demonstrated position
+// every time regardless of which other viewports the page hosts.
+SIZE_EXAMPLES.sonner = (() => {
+  const make = (position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => `
+    <div class="flex items-center gap-3">
+      <ui-sonner position="${position}"></ui-sonner>
+      <button class="${buttonClass({ variant: 'outline' })}" onclick="this.previousElementSibling.addToast('${position} toast')">Show ${position}</button>
+    </div>
+  `;
+  return {
+    'top-left': make('top-left'),
+    'top-center': make('top-center'),
+    'top-right': make('top-right'),
+    'bottom-left': make('bottom-left'),
+    'bottom-center': make('bottom-center'),
+    'bottom-right': make('bottom-right'),
+  };
+})();
+
 // Variant examples for sonner are TYPE demos — each card fires the
 // matching imperative API so the user sees the icon + colour treatment
 // for that toast type.
