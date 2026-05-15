@@ -1,5 +1,10 @@
 import { html, unsafeHTML, notFound } from '@webjskit/core';
-import { getExample, getVariantExamples, getSizeExamples } from './examples.ts';
+import {
+  getExample,
+  getVariantExamples,
+  getSizeExamples,
+  getIconSizeExamples,
+} from './examples.ts';
 import { getComponentApi, type ComponentApi } from './component-api.ts';
 import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 
@@ -81,6 +86,49 @@ function combineExamples(keys: string[], examples: Record<string, string>): stri
     .join('\n');
 }
 
+function startCase(s: string): string {
+  return s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Render a value-keyed preview section in one of two modes.
+// 'combined' — one preview pane with every value rendered side by side.
+// 'cards'    — one preview pane per value, each with a heading above.
+// The cards mode is for cases where the example markup is identical
+// across values and only the visual style differs (e.g. tabs default vs
+// underline both render the same Account/Password tabs).
+function renderValueSection(
+  heading: string,
+  keys: string[],
+  examples: Record<string, string>,
+  mode: 'combined' | 'cards' = 'combined',
+) {
+  if (mode === 'cards') {
+    return html`
+      <section class="mb-12">
+        <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${heading}</h2>
+        <div class="grid gap-4">
+          ${keys.map((k) =>
+            examples[k]
+              ? html`
+                  <div>
+                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(k)}</h3>
+                    ${previewPane(examples[k])}
+                  </div>
+                `
+              : '',
+          )}
+        </div>
+      </section>
+    `;
+  }
+  return html`
+    <section class="mb-12">
+      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${heading}</h2>
+      ${previewPane(combineExamples(keys, examples))}
+    </section>
+  `;
+}
+
 export default async function ComponentDoc({ params }: { params: { name: string } }) {
   const item = await loadRegistryItem(params.name);
   if (!item) throw notFound();
@@ -92,6 +140,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
   const api: ComponentApi | null = getComponentApi(params.name);
   const variantExamples = getVariantExamples(params.name);
   const sizeExamples = getSizeExamples(params.name);
+  const iconSizeExamples = getIconSizeExamples(params.name);
 
   return html`
     <a href="/" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -148,34 +197,35 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     </section>
 
     ${
-      api?.variants && variantExamples
-        ? html`
-          <section class="mb-12">
-            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.variantsLabel ?? 'Variants'}</h2>
-            <!--
-              Combined preview pane — all variants laid out in a single
-              flex-wrap row. Previously each variant was its own card with
-              a heading, but that was visually heavy for components like
-              button (6 variants × dedicated cards = 6 near-identical
-              previews stacked vertically). Shadcn's docs use the same
-              "all variants in one Size example" pattern. The API
-              Reference table below lists the variant keys + types for
-              anyone who needs to know which is which.
-            -->
-            ${previewPane(combineExamples(api.variants, variantExamples))}
-          </section>
-        `
+      api?.variants && variantExamples && !api.hideVariantsSection
+        ? renderValueSection(
+            api.variantsLabel ?? 'Variants',
+            api.variants,
+            variantExamples,
+            api.variantsPreviewMode ?? 'combined',
+          )
         : ''
     }
 
     ${
-      api?.sizes && sizeExamples
-        ? html`
-          <section class="mb-12">
-            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.sizesLabel ?? 'Sizes'}</h2>
-            ${previewPane(combineExamples(api.sizes, sizeExamples))}
-          </section>
-        `
+      api?.sizes && sizeExamples && !api.hideSizesSection
+        ? renderValueSection(
+            api.sizesLabel ?? 'Sizes',
+            api.sizes,
+            sizeExamples,
+            api.sizesPreviewMode ?? 'combined',
+          )
+        : ''
+    }
+
+    ${
+      api?.iconSizes && iconSizeExamples
+        ? renderValueSection(
+            api.iconSizesLabel ?? 'Icon',
+            api.iconSizes,
+            iconSizeExamples,
+            'combined',
+          )
         : ''
     }
 
