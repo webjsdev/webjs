@@ -62,6 +62,7 @@ import {
   tableCellClass,
 } from '../../../../components/ui/table.ts';
 import { toggleClass } from '../../../../components/ui/toggle.ts';
+import { tabsListClass } from '../../../../components/ui/tabs.ts';
 import {
   breadcrumbListClass,
   breadcrumbItemClass,
@@ -507,4 +508,140 @@ const HYPHENATED_ALIASES: Record<string, string> = {
 export function getExample(name: string): string | null {
   const key = HYPHENATED_ALIASES[name] || name;
   return EXAMPLES[key] || null;
+}
+
+// ---------------------------------------------------------------------------
+// Per-variant + per-size example snippets — one per key, used by the
+// component docs page to render a stack of <ComponentPreview>-style cards
+// under "Variants" and "Sizes" headings, mirroring shadcn's docs.
+//
+// Keys match COMPONENT_API[name].variants / .sizes in component-api.ts.
+// Lookups go through getVariantExamples(name) / getSizeExamples(name)
+// which also handles the hyphen-aliased keys (alert-dialog, etc.).
+// ---------------------------------------------------------------------------
+
+// 24x24 lucide-style settings cog used by the icon-size button samples.
+const ICON_SETTINGS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+
+const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
+  button: {
+    default: `<button class="${buttonClass({ variant: 'default' })}">Button</button>`,
+    destructive: `<button class="${buttonClass({ variant: 'destructive' })}">Button</button>`,
+    outline: `<button class="${buttonClass({ variant: 'outline' })}">Button</button>`,
+    secondary: `<button class="${buttonClass({ variant: 'secondary' })}">Button</button>`,
+    ghost: `<button class="${buttonClass({ variant: 'ghost' })}">Button</button>`,
+    link: `<button class="${buttonClass({ variant: 'link' })}">Button</button>`,
+  },
+  badge: {
+    default: `<span class="${badgeClass({ variant: 'default' })}">Badge</span>`,
+    secondary: `<span class="${badgeClass({ variant: 'secondary' })}">Badge</span>`,
+    destructive: `<span class="${badgeClass({ variant: 'destructive' })}">Badge</span>`,
+    outline: `<span class="${badgeClass({ variant: 'outline' })}">Badge</span>`,
+    ghost: `<span class="${badgeClass({ variant: 'ghost' })}">Badge</span>`,
+    link: `<span class="${badgeClass({ variant: 'link' })}">Badge</span>`,
+  },
+  alert: {
+    default: `
+      <div class="${alertClass({ variant: 'default' })} max-w-md">
+        <h5 class="${alertTitleClass()}">Heads up!</h5>
+        <p class="${alertDescriptionClass()}">You can add components to your app using the CLI.</p>
+      </div>
+    `,
+    destructive: `
+      <div class="${alertClass({ variant: 'destructive' })} max-w-md">
+        <h5 class="${alertTitleClass()}">Error</h5>
+        <p class="${alertDescriptionClass()}">Your session has expired. Please log in again.</p>
+      </div>
+    `,
+  },
+  toggle: {
+    default: `<button class="${toggleClass({ variant: 'default' })}" data-state="on" aria-pressed="true">B</button>`,
+    outline: `<button class="${toggleClass({ variant: 'outline' })}" data-state="on" aria-pressed="true">B</button>`,
+  },
+  tabs: {
+    default: `
+      <ui-tabs value="account" class="w-full max-w-sm">
+        <ui-tabs-list variant="default">
+          <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
+          <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
+        </ui-tabs-list>
+      </ui-tabs>
+    `,
+    underline: `
+      <ui-tabs value="account" class="w-full max-w-sm">
+        <ui-tabs-list variant="underline">
+          <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
+          <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
+        </ui-tabs-list>
+      </ui-tabs>
+    `,
+  },
+};
+
+const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
+  button: {
+    default: `<button class="${buttonClass({ size: 'default' })}">Button</button>`,
+    xs: `<button class="${buttonClass({ size: 'xs' })}">Button</button>`,
+    sm: `<button class="${buttonClass({ size: 'sm' })}">Button</button>`,
+    lg: `<button class="${buttonClass({ size: 'lg' })}">Button</button>`,
+    icon: `<button class="${buttonClass({ size: 'icon' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-xs': `<button class="${buttonClass({ size: 'icon-xs' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-sm': `<button class="${buttonClass({ size: 'icon-sm' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-lg': `<button class="${buttonClass({ size: 'icon-lg' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+  },
+  avatar: {
+    sm: `<span class="${avatarClass({ size: 'sm' })}" data-size="sm"><span class="${avatarFallbackClass()}">V</span></span>`,
+    default: `<span class="${avatarClass({ size: 'default' })}" data-size="default"><span class="${avatarFallbackClass()}">V</span></span>`,
+    lg: `<span class="${avatarClass({ size: 'lg' })}" data-size="lg"><span class="${avatarFallbackClass()}">V</span></span>`,
+  },
+  switch: {
+    default: `
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" data-slot="switch" class="${switchInputClass()}" checked>
+        <span class="${switchTrackClass({ size: 'default' })}"></span>
+        <span class="${labelClass()}">Default</span>
+      </label>
+    `,
+    sm: `
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" data-slot="switch" class="${switchInputClass()}" checked>
+        <span class="${switchTrackClass({ size: 'sm' })}"></span>
+        <span class="${labelClass()}">Small</span>
+      </label>
+    `,
+  },
+  toggle: {
+    default: `<button class="${toggleClass({ size: 'default' })}" aria-pressed="false" data-state="off">Bold</button>`,
+    sm: `<button class="${toggleClass({ size: 'sm' })}" aria-pressed="false" data-state="off">Bold</button>`,
+    lg: `<button class="${toggleClass({ size: 'lg' })}" aria-pressed="false" data-state="off">Bold</button>`,
+  },
+  'native-select': {
+    default: `
+      <div class="${nativeSelectWrapperClass()}">
+        <select class="${nativeSelectClass()}" data-size="default">
+          <option>Default</option><option>Other</option>
+        </select>
+        <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    `,
+    sm: `
+      <div class="${nativeSelectWrapperClass()}">
+        <select class="${nativeSelectClass()}" data-size="sm">
+          <option>Small</option><option>Other</option>
+        </select>
+        <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    `,
+  },
+};
+
+export function getVariantExamples(name: string): Record<string, string> | null {
+  const key = HYPHENATED_ALIASES[name] || name;
+  return VARIANT_EXAMPLES[key] || VARIANT_EXAMPLES[name] || null;
+}
+
+export function getSizeExamples(name: string): Record<string, string> | null {
+  // SIZE_EXAMPLES keyed by the hyphenated component name (no underscore
+  // aliasing needed since none of the keys here are TS reserved words).
+  return SIZE_EXAMPLES[name] || null;
 }
