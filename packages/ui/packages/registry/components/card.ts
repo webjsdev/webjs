@@ -23,16 +23,46 @@
  * Design tokens used: --card, --card-foreground, --muted-foreground, --border.
  */
 
-/** Card root. `data-slot="card"` recommended on the host. */
-export const cardClass = (): string =>
-  'flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm';
+export type CardSize = 'default' | 'sm';
 
-/** Card header — supports an optional `CardAction` slot via grid layout. */
+/**
+ * Card root. shadcn ships `size?: "default" | "sm"` on Card across
+ * 14/15 style families (only new-york-v4 omits it). The class string
+ * uses `group/card` so the header / title / content / footer helpers
+ * can read the parent card's data-size and adjust their own padding
+ * + gap.
+ *
+ * USAGE: pass size to cardClass AND set data-size="<size>" on the
+ * same host element so the group-data-[size=...]/card child rules
+ * fire. Set `data-slot="card"` for shadcn parity.
+ *
+ *   <div class=${cardClass({ size: 'sm' })} data-slot="card" data-size="sm">
+ *     <div class=${cardHeaderClass()}>...</div>
+ *     ...
+ *   </div>
+ *
+ * Sizes:
+ *   default — gap-6 / py-6 (shadcn new-york-v4 default)
+ *   sm      — gap-3 / py-3 (shadcn radix-nova + base-* defaults)
+ */
+export const cardClass = (opts: { size?: CardSize } = {}): string => {
+  const size = opts.size ?? 'default';
+  const base =
+    'group/card flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm';
+  return size === 'sm' ? base + ' gap-3 py-3' : base + ' gap-6 py-6';
+};
+
+/**
+ * Card header — supports an optional `CardAction` slot via grid layout.
+ * group-data-[size=sm]/card rules pick up the compact layout when the
+ * root card carries data-size="sm".
+ */
 export const cardHeaderClass = (): string =>
-  '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6';
+  '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 group-data-[size=sm]/card:px-4 group-data-[size=sm]/card:gap-1 group-data-[size=sm]/card:[.border-b]:pb-3';
 
-/** Card title — heading text within the header. */
-export const cardTitleClass = (): string => 'leading-none font-semibold';
+/** Card title — heading text within the header. Smaller when card is data-size="sm". */
+export const cardTitleClass = (): string =>
+  'leading-none font-semibold group-data-[size=sm]/card:text-sm';
 
 /** Card description — subdued caption beneath the title. */
 export const cardDescriptionClass = (): string => 'text-sm text-muted-foreground';
@@ -41,8 +71,10 @@ export const cardDescriptionClass = (): string => 'text-sm text-muted-foreground
 export const cardActionClass = (): string =>
   'col-start-2 row-span-2 row-start-1 self-start justify-self-end';
 
-/** Card content — the main body region. */
-export const cardContentClass = (): string => 'px-6';
+/** Card content — the main body region. Tighter padding when card is data-size="sm". */
+export const cardContentClass = (): string =>
+  'px-6 group-data-[size=sm]/card:px-4';
 
-/** Card footer — trailing controls or actions. */
-export const cardFooterClass = (): string => 'flex items-center px-6 [.border-t]:pt-6';
+/** Card footer — trailing controls or actions. Tighter padding when card is data-size="sm". */
+export const cardFooterClass = (): string =>
+  'flex items-center px-6 [.border-t]:pt-6 group-data-[size=sm]/card:px-4 group-data-[size=sm]/card:[.border-t]:pt-3';
