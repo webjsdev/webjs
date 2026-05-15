@@ -203,13 +203,15 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: '<ui-alert-dialog>', description: 'Root — owns the open state.' },
       { name: '<ui-alert-dialog-trigger>', description: 'Opens the dialog on click.' },
       { name: '<ui-alert-dialog-content>', description: 'Modal panel — role="alertdialog", focus trap, no escape/overlay-close.' },
-      { name: '<ui-alert-dialog-action>', description: 'Primary action button. Closes the dialog on click.' },
-      { name: '<ui-alert-dialog-cancel>', description: 'Cancel button. Closes the dialog on click.' },
+      { name: '<ui-alert-dialog-action>', description: 'Primary action button — applies buttonClass automatically. Accepts `variant` (default "default") and `size` (default "default"). Closes the dialog on click.' },
+      { name: '<ui-alert-dialog-cancel>', description: 'Cancel button — applies buttonClass automatically. Accepts `variant` (default "outline") and `size` (default "default"). Closes the dialog on click.' },
       { name: 'alertDialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / OverlayClass()', description: 'Class helpers for the static prose layout.' },
     ],
     props: [
       { name: 'open', type: 'boolean (attribute)', default: 'false' },
       { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'On <ui-alert-dialog-content>. Reflected to data-size.' },
+      { name: 'variant', type: 'ButtonVariant', default: '"default" (Action), "outline" (Cancel)', description: 'On Action / Cancel. Forwarded to buttonClass on the host.' },
+      { name: 'size (button)', type: 'ButtonSize', default: '"default"', description: 'On Action / Cancel. Forwarded to buttonClass.' },
     ],
   },
 
