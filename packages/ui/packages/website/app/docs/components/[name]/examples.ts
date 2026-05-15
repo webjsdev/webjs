@@ -217,8 +217,8 @@ const EXAMPLES: Record<string, string> = {
   avatar: `
     <div class="flex items-center gap-3">
       <span class="${avatarClass()}" data-size="default" data-slot="avatar">
-        <img class="${avatarImageClass()}" src="https://github.com/shadcn.png" alt="">
-        <span class="${avatarFallbackClass()}">SC</span>
+        <img class="${avatarImageClass()}" src="https://github.com/vivek7405.png" alt="Avatar of Vivek, webjs project owner">
+        <span class="${avatarFallbackClass()}">V</span>
       </span>
       <div class="${avatarGroupClass()}">
         <span class="${avatarClass()}" data-size="default" data-slot="avatar">
