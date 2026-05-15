@@ -98,6 +98,11 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   badge: {
     variants: ['default', 'secondary', 'destructive', 'outline', 'ghost', 'link'],
+    // Hero preview shows all 6 variants side-by-side with name labels —
+    // dedicated Variants section would be a literal duplicate. Same
+    // pattern as button. API Reference table at the bottom still lists
+    // every variant key + type.
+    hideVariantsSection: true,
     subcomponents: [{ name: 'badgeClass({ variant })', description: 'Apply to a span, link, or button.' }],
     props: [
       {

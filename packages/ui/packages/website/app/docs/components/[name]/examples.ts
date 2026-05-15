@@ -121,8 +121,10 @@ const EXAMPLES: Record<string, string> = {
     <div class="flex flex-wrap items-center gap-2">
       <span class="${badgeClass()}">Default</span>
       <span class="${badgeClass({ variant: 'secondary' })}">Secondary</span>
-      <span class="${badgeClass({ variant: 'outline' })}">Outline</span>
       <span class="${badgeClass({ variant: 'destructive' })}">Destructive</span>
+      <span class="${badgeClass({ variant: 'outline' })}">Outline</span>
+      <span class="${badgeClass({ variant: 'ghost' })}">Ghost</span>
+      <span class="${badgeClass({ variant: 'link' })}">Link</span>
     </div>
   `,
 
