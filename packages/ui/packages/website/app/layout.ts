@@ -219,10 +219,25 @@ export default function Layout({ children }: { children: any }) {
       }
       pre code { color: inherit; font-family: var(--font-mono); font-size: 12.5px; }
 
-      .border, .border-b, .border-t { border-color: var(--border); border-style: solid; border-width: 0; }
-      .border { border-width: 1px; }
-      .border-b { border-bottom-width: 1px; }
-      .border-t { border-top-width: 1px; }
+      /* Default border-color for chrome-level .border / .border-b / .border-t
+         elements. Wrapped in @layer base so it sits BELOW Tailwind v4's
+         @layer utilities — any Tailwind color utility (border-transparent,
+         border-input, etc.) wins via the cascade layer order
+         (theme < base < components < utilities), regardless of source
+         position or selector specificity. Without this wrapping, the
+         broad rule was unlayered and therefore stronger than every
+         Tailwind utility — tabs triggers using "border border-transparent"
+         couldn't override the chrome's border colour.
+
+         (Do not put U+0060 GRAVE ACCENT characters in this comment —
+         this is inside the layout's html tagged template. See
+         [[feedback-html-template-no-backticks]].) */
+      @layer base {
+        .border, .border-b, .border-t { border-color: var(--border); border-style: solid; border-width: 0; }
+        .border { border-width: 1px; }
+        .border-b { border-bottom-width: 1px; }
+        .border-t { border-top-width: 1px; }
+      }
 
       /* Docs prose: serif headings + body, matching webjs's editorial tone. */
       .prose h1 { font: 700 var(--fs-h1)/1.15 var(--font-serif); letter-spacing: -0.025em; color: var(--accent); margin: 0 0 16px; }
