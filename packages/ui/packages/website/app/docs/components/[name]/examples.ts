@@ -896,12 +896,29 @@ SIZE_EXAMPLES.sonner = (() => {
 // place users expect from the default. (Proper multi-viewport
 // routing is a separate concern in sonner.ts, deferred.)
 VARIANT_EXAMPLES.sonner = (() => {
-  const make = (type: 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading') => `
-    <div class="flex items-center gap-3">
-      <ui-sonner position="bottom-right"></ui-sonner>
-      <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
-    </div>
-  `;
+  // Loading toasts default to duration: 0 (sticky) per sonner
+  // convention — they're meant to be replaced by a follow-up
+  // toast.success / toast.error via toast.promise. A bare
+  // toast.loading() in a docs preview would never disappear. So
+  // the loading card demos the realistic flow: toast.promise with
+  // a fake 2-second Promise that resolves to success. The user
+  // sees the loading toast appear, then auto-transition.
+  const make = (type: 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading') => {
+    if (type === 'loading') {
+      return `
+        <div class="flex items-center gap-3">
+          <ui-sonner position="bottom-right"></ui-sonner>
+          <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast.promise(new Promise(r => setTimeout(r, 2000)), { loading: 'Loading…', success: 'Done!', error: 'Failed' }))">Show loading</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="flex items-center gap-3">
+        <ui-sonner position="bottom-right"></ui-sonner>
+        <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
+      </div>
+    `;
+  };
   return {
     default: make('default'),
     success: make('success'),
