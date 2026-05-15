@@ -245,7 +245,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     props: [
       { name: 'open', type: 'boolean (attribute)', default: 'false' },
       { name: 'variant', type: '"default" | "destructive"', default: '"default"', description: 'On <ui-dropdown-menu-item>.' },
-      { name: 'inset', type: 'boolean (attribute)', default: 'false', description: 'On items — left-pad for icon alignment.' },
+      { name: 'inset', type: 'boolean (attribute)', default: 'false', description: 'On <ui-dropdown-menu-item>, <ui-dropdown-menu-label>, and <ui-dropdown-menu-sub-trigger> — left-pad for icon alignment so the row aligns with sibling items that have leading icons.' },
       { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom" (content) / "right" (sub-content)' },
       { name: 'align', type: '"start" | "center" | "end"', default: '"start"' },
     ],
