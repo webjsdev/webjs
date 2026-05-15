@@ -316,13 +316,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     variants: ['default', 'outline'],
     sizes: ['default', 'sm', 'lg'],
     subcomponents: [
-      { name: '<ui-toggle-group>', description: 'Root — type="single | multiple", variant, size, value.' },
+      { name: '<ui-toggle-group>', description: 'Root — type="single | multiple", variant, size, spacing, value.' },
       { name: '<ui-toggle-group-item>', description: 'One toggle button in the group.' },
     ],
     props: [
       { name: 'type', type: '"single" | "multiple"', default: '"single"' },
       { name: 'variant', type: '"default" | "outline"', default: '"default"' },
       { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"' },
+      { name: 'spacing', type: '"0" | "default"', default: '"0"', description: '"0" joins items into a single rounded bar (shared edges); "default" gaps each item with gap-1 + rounded borders.' },
       { name: 'value', type: 'string | string[]', description: 'Controlled active value(s).' },
     ],
     events: [{ name: 'ui-value-change', detail: '{ value: string | string[] }' }],
