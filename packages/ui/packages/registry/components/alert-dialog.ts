@@ -36,6 +36,7 @@
  * Design tokens used: --background, --border, --muted-foreground.
  */
 import { cn, Base, defineElement } from '../lib/utils.ts';
+import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
   'group/alert-dialog-content fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadcn-lg shadow-lg duration-200 data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg';
@@ -186,13 +187,45 @@ export class UiAlertDialogOverlay extends Base {
 }
 defineElement('ui-alert-dialog-overlay', UiAlertDialogOverlay);
 
+// shadcn's <AlertDialogAction> and <AlertDialogCancel> ARE button-styled
+// elements with forwarded `variant` and `size` props from the Button
+// component. We mirror that: the host element itself receives
+// buttonClass({variant, size}) so users can write
+//   <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
+// and get the right visuals without wrapping a <button>. Cancel defaults
+// to variant="outline" (matches shadcn); Action defaults to "default".
+//
+// Back-compat: if the consumer provided a child <button> (the legacy
+// wrap-a-button pattern), we don't restyle the host — their button keeps
+// its own buttonClass call and the host stays a transparent wrapper.
+
+function applyAlertDialogButton(host: HTMLElement, defaultVariant: ButtonVariant): void {
+  if (host.querySelector(':scope > button')) return;
+  const variant = (host.getAttribute('variant') ?? defaultVariant) as ButtonVariant;
+  const size = (host.getAttribute('size') ?? 'default') as ButtonSize;
+  const userClass = host.getAttribute('class') ?? '';
+  host.className = cn(buttonClass({ variant, size }), userClass);
+  host.setAttribute('role', 'button');
+  if (!host.hasAttribute('tabindex')) host.setAttribute('tabindex', '0');
+}
+
+function alertDialogButtonKeydown(this: HTMLElement, e: KeyboardEvent): void {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    this.click();
+  }
+}
+
 export class UiAlertDialogCancel extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'alert-dialog-cancel');
+    applyAlertDialogButton(this, 'outline');
     this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
   private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
 }
@@ -201,10 +234,13 @@ defineElement('ui-alert-dialog-cancel', UiAlertDialogCancel);
 export class UiAlertDialogAction extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'alert-dialog-action');
+    applyAlertDialogButton(this, 'default');
     this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
   private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
 }
