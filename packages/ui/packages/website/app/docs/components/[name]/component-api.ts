@@ -31,6 +31,41 @@ export interface ComponentApi {
   /** Optional heading override for the sizes section. Defaults to "Sizes". */
   sizesLabel?: string;
   /**
+   * Icon-only sizes (e.g. button's icon / icon-xs / icon-sm / icon-lg)
+   * that visually need to be demoed without text labels. Rendered as a
+   * separate "Icon" section after "Sizes" — mirrors shadcn's split of
+   * Size + Icon examples on the button page. Keys must have matching
+   * entries in ICON_SIZE_EXAMPLES.
+   */
+  iconSizes?: string[];
+  /** Optional heading override for the icon-sizes section. Defaults to "Icon". */
+  iconSizesLabel?: string;
+  /**
+   * Suppress the Variants section even when `variants` is defined.
+   * Useful when the hero preview already shows every variant side-by-
+   * side and a separate section would just duplicate it (e.g. button).
+   * The metadata stays — the API Reference table still lists the
+   * variant keys + types — only the live-preview section is hidden.
+   */
+  hideVariantsSection?: boolean;
+  /** Same idea, for the Sizes section. */
+  hideSizesSection?: boolean;
+  /**
+   * 'combined' (default) — every variant rendered into one flex-wrap
+   * preview pane. Use when each variant's example markup is self-
+   * explanatory (e.g. button text reads "Default" / "Destructive" /
+   * etc., so the user sees each variant labelled by name).
+   *
+   * 'cards' — each variant gets its own preview pane with a heading
+   * above it. Use when the example markup is identical across
+   * variants and only the visual style differs — without per-variant
+   * headings the user can't tell which is which. Tabs is the canonical
+   * case: each variant renders the same Account/Password tabs UI;
+   * only the styling differs.
+   */
+  variantsPreviewMode?: 'combined' | 'cards';
+  sizesPreviewMode?: 'combined' | 'cards';
+  /**
    * Compound subcomponents (Tier-2 tag names or Tier-1 class-helper
    * names). Listed in the API Reference table under "Parts".
    */
@@ -76,7 +111,17 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   button: {
     variants: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],
-    sizes: ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg'],
+    // Hide the Variants section — the hero preview already shows all 6
+    // variants side-by-side with their names. Repeating them in a
+    // dedicated section would just be a second copy of the same thing.
+    // The API Reference table at the bottom still lists every variant
+    // key + type for anyone who wants the precise enum.
+    hideVariantsSection: true,
+    // Text-button sizes only — icon sizes split into iconSizes below so
+    // each section's preview is internally consistent (text buttons of
+    // varying heights vs cog icons of varying box sizes).
+    sizes: ['default', 'xs', 'sm', 'lg'],
+    iconSizes: ['icon-xs', 'icon-sm', 'icon', 'icon-lg'],
     subcomponents: [{ name: 'buttonClass({ variant, size })', description: 'Apply to a native <button> or any element you want to look like one.' }],
     props: [
       {
@@ -141,6 +186,10 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   tabs: {
     variants: ['default', 'underline'],
+    // Each variant renders the same Account/Password tab UI — only
+    // the styling differs (filled list vs underline-indicator). Use
+    // per-variant cards with headings so users can tell which is which.
+    variantsPreviewMode: 'cards',
     subcomponents: [
       { name: '<ui-tabs>', description: 'Owns the active value + orientation.' },
       { name: '<ui-tabs-list>', description: 'Trigger row. Accepts variant="default | underline".' },
@@ -399,6 +448,9 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   'radio-group': {
     variants: ['vertical', 'horizontal'],
     variantsLabel: 'Orientation',
+    // Same Basic/Pro/Enterprise content per orientation — header
+    // disambiguates which is which.
+    variantsPreviewMode: 'cards',
     subcomponents: [
       { name: 'radioGroupClass({ orientation })', description: 'Apply to <div role="radiogroup">.' },
       { name: 'radioClass()', description: 'Apply to native <input type="radio" data-slot="radio">. Dot SVG auto-paints via :checked.' },
@@ -424,6 +476,9 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     // cards, matching shadcn's docs vocabulary.
     variants: ['horizontal', 'vertical'],
     variantsLabel: 'Orientation',
+    // Surrounding markup differs but orientation is the point — header
+    // disambiguates which axis each card demos.
+    variantsPreviewMode: 'cards',
     subcomponents: [{ name: 'separatorClass({ orientation })', description: 'Apply to <div role="separator">.' }],
     props: [{ name: 'orientation', type: '"horizontal" | "vertical"', default: '"horizontal"' }],
   },
@@ -445,6 +500,9 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     // section demos both as full mini-paginations.
     sizes: ['default', 'icon'],
     sizesLabel: 'Sizes',
+    // Full mini-pagination per size is a wide block; cards lay them
+    // out vertically with headings so each is readable.
+    sizesPreviewMode: 'cards',
     subcomponents: [
       { name: 'paginationClass() / ContentClass()', description: 'Outer <nav> + <ul>.' },
       { name: 'paginationLinkClass({ isActive, size })', description: 'Numbered page link.' },
