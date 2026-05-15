@@ -269,12 +269,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: '<ui-dialog>', description: 'Root — owns the open state.' },
       { name: '<ui-dialog-trigger>', description: 'Opens the dialog on click.' },
       { name: '<ui-dialog-content>', description: 'Modal panel — focus trap, Escape to close, body-scroll lock. Auto-injects an X close button in the top-right corner unless show-close-button="false".' },
+      { name: '<ui-dialog-footer show-close-button>', description: 'Footer row. Optionally auto-appends a "Close" outline button when show-close-button is set.' },
       { name: '<ui-dialog-close>', description: 'Close button — wrap any element to close on click.' },
       { name: 'dialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / ContentClass() / OverlayClass() / CloseButtonClass()', description: 'Class helpers for prose layout + close-button positioning.' },
     ],
     props: [
       { name: 'open', type: 'boolean (attribute)', default: 'false' },
-      { name: 'show-close-button', type: '"true" | "false" (attribute)', default: '"true"', description: 'On <ui-dialog-content>. Set to "false" to opt out of the auto-injected X close button (matches shadcn DialogContent showCloseButton prop).' },
+      { name: 'show-close-button (on content)', type: '"true" | "false" (attribute)', default: '"true"', description: 'On <ui-dialog-content>. Set to "false" to opt out of the auto-injected X close button in the top-right corner (matches shadcn DialogContent showCloseButton prop).' },
+      { name: 'show-close-button (on footer)', type: 'boolean (attribute)', default: 'absent', description: 'On <ui-dialog-footer>. When present, auto-appends an outline-styled "Close" button to the footer (matches shadcn DialogFooter showCloseButton).' },
     ],
   },
 

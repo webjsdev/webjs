@@ -50,6 +50,7 @@
  */
 
 import { cn, Base, defineElement } from '../lib/utils.ts';
+import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers for static subparts. Compose with plain elements.
@@ -390,3 +391,34 @@ export class UiDialogClose extends Base {
   };
 }
 defineElement('ui-dialog-close', UiDialogClose);
+
+// --------------------------------------------------------------------------
+// <ui-dialog-footer> — applies dialogFooterClass + optionally auto-injects
+// a "Close" button via show-close-button="true". Shadcn ships
+// showCloseButton on DialogFooter across all 15 styles (default false)
+// so users can opt into a stock Close action without authoring the
+// markup themselves. Mirrors the auto-X injection on <ui-dialog-content>.
+// --------------------------------------------------------------------------
+
+export class UiDialogFooter extends Base {
+  connectedCallback(): void {
+    this.setAttribute('data-slot', 'dialog-footer');
+    const userClass = this.getAttribute('class') ?? '';
+    this.className = cn(dialogFooterClass(), userClass);
+    // Auto-inject a "Close" button when show-close-button="true" (or just
+    // the bare boolean attribute). Skip if the user already authored
+    // their own <ui-dialog-close> as a direct child — back-compat with
+    // hand-authored footers.
+    const showClose = this.hasAttribute('show-close-button')
+      && this.getAttribute('show-close-button') !== 'false';
+    if (showClose && !this.querySelector(':scope > ui-dialog-close')) {
+      const closeEl = document.createElement('ui-dialog-close');
+      const btn = document.createElement('button');
+      btn.className = buttonClass({ variant: 'outline' });
+      btn.textContent = 'Close';
+      closeEl.appendChild(btn);
+      this.appendChild(closeEl);
+    }
+  }
+}
+defineElement('ui-dialog-footer', UiDialogFooter);
