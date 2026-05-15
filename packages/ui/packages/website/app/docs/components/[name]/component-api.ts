@@ -388,6 +388,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'variant', type: '"default" | "outline"', default: '"default"' },
       { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"' },
       { name: 'spacing', type: '"0" | "default"', default: '"0"', description: '"0" joins items into a single rounded bar (shared edges); "default" gaps each item with gap-1 + rounded borders.' },
+      { name: 'orientation', type: '"horizontal" | "vertical"', default: '"horizontal"', description: 'Reflected to data-orientation. Vertical stacks items in a column via flex-col.' },
       { name: 'value', type: 'string | string[]', description: 'Controlled active value(s).' },
     ],
     events: [{ name: 'ui-value-change', detail: '{ value: string | string[] }' }],

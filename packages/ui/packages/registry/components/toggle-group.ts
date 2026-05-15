@@ -37,11 +37,11 @@ import { cn, Base, defineElement } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
 const ROOT_BASE =
-  'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs';
+  'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
 
 export class UiToggleGroup extends Base {
   static get observedAttributes(): string[] {
-    return ['value', 'variant', 'size', 'spacing', 'type'];
+    return ['value', 'variant', 'size', 'spacing', 'type', 'orientation'];
   }
 
   connectedCallback(): void {
@@ -50,6 +50,10 @@ export class UiToggleGroup extends Base {
     if (!this.hasAttribute('variant')) this.setAttribute('variant', 'default');
     if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
     if (!this.hasAttribute('spacing')) this.setAttribute('spacing', '0');
+    // shadcn's radix-* and base-* styles all expose orientation;
+    // default "horizontal" matches Radix ToggleGroup.Root.
+    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'horizontal');
+    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
     this.setAttribute('role', 'group');
     this._applyClass();
     this._reflect();
@@ -59,7 +63,10 @@ export class UiToggleGroup extends Base {
     this.removeEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
   }
 
-  attributeChangedCallback(): void {
+  attributeChangedCallback(name: string): void {
+    if (name === 'orientation') {
+      this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
+    }
     this._applyClass();
     this._reflect();
   }
