@@ -46,19 +46,30 @@ function installStyles(): void {
 
 export class UiAccordion extends Base {
   static get observedAttributes(): string[] {
-    return ['value', 'type', 'collapsible'];
+    return ['value', 'type', 'collapsible', 'orientation'];
   }
   connectedCallback(): void {
     installStyles();
     this.setAttribute('data-slot', 'accordion');
     if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
+    // Radix Accordion.Root supports orientation="horizontal" too. Reflect
+    // to data-orientation so Tailwind `data-[orientation=…]:` selectors
+    // and a11y screen readers both see the value. Default "vertical"
+    // matches Radix.
+    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'vertical');
+    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'vertical');
     this.addEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
     queueMicrotask(() => this._sync());
   }
   disconnectedCallback(): void {
     this.removeEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
   }
-  attributeChangedCallback(): void {
+  attributeChangedCallback(name: string): void {
+    // Keep data-orientation in lockstep with the orientation attribute
+    // so toggling the attr at runtime updates the Tailwind selectors.
+    if (name === 'orientation') {
+      this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'vertical');
+    }
     this._sync();
   }
 
