@@ -183,6 +183,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     props: [
       { name: 'type', type: '"single" | "multiple"', default: '"single"' },
       { name: 'collapsible', type: 'boolean (attribute)', default: 'false', description: 'On type="single" — allow closing the open item.' },
+      { name: 'orientation', type: '"vertical" | "horizontal"', default: '"vertical"', description: 'Reflected to data-orientation on the host so Tailwind data-[orientation=…]:… selectors fire.' },
       { name: 'value', type: 'string | string[]', description: 'Controlled active item(s).' },
     ],
     events: [
