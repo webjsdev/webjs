@@ -363,6 +363,11 @@ defineElement('ui-dropdown-menu-item', UiDropdownMenuItem);
 export class UiDropdownMenuLabel extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'dropdown-menu-label');
+    // `inset` mirrors the existing item behaviour — shadcn exposes the
+    // same boolean on Label so the indent column for icon-aligned items
+    // stays consistent. The label class already includes
+    // data-[inset]:pl-8 so only the attribute reflection is missing.
+    if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuLabelClass(), userClass);
   }
@@ -505,6 +510,9 @@ export class UiDropdownMenuSubTrigger extends Base {
     this.setAttribute('role', 'menuitem');
     this.setAttribute('tabindex', '-1');
     this.setAttribute('aria-haspopup', 'menu');
+    // `inset` is already reflected here (and is the only of the three
+    // inset-aware elements that had it before this change — see
+    // UiDropdownMenuItem + UiDropdownMenuLabel above for the other two).
     if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuSubTriggerClass(), userClass);
