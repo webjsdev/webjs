@@ -68,11 +68,23 @@ export const dropdownMenuContentClass = (): string =>
 export const dropdownMenuItemClass = (): string =>
   "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/10 data-[variant=destructive]:hover:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 dark:data-[variant=destructive]:hover:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
+// Inset is universal across shadcn's radix-* style families on these
+// two helpers — same boolean already plumbed on Item / Label /
+// SubTrigger as full custom elements above. CheckboxItem and
+// RadioItem are class-helper functions applied to user-authored
+// markup, so there's no JS to mirror `inset` to data-inset; the user
+// adds the `data-inset` attribute themselves on the element. The
+// helper includes `data-[inset]:pl-8` in the class string so the
+// rule fires when the user opts in. CheckboxItem already has pl-8
+// baseline (to reserve room for the indicator); inset is a no-op
+// for the inset case visually — kept for shadcn parity so a future
+// indicator-less subitem keeps lining up with sibling Items that
+// have leading icons.
 export const dropdownMenuCheckboxItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0";
 
 export const dropdownMenuRadioItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8";
 
 // Label reads as a section header above a group of items. Shadcn's
 // default (text-sm font-medium, same as items minus font-weight) was
