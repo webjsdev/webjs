@@ -142,7 +142,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
       api?.variants && variantExamples
         ? html`
           <section class="mb-12">
-            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Variants</h2>
+            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.variantsLabel ?? 'Variants'}</h2>
             <div class="grid gap-4">
               ${api.variants.map((v: string) =>
                 variantExamples[v]
@@ -164,7 +164,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
       api?.sizes && sizeExamples
         ? html`
           <section class="mb-12">
-            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Sizes</h2>
+            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.sizesLabel ?? 'Sizes'}</h2>
             <div class="grid gap-4">
               ${api.sizes.map((s: string) =>
                 sizeExamples[s]
