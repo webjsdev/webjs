@@ -52,15 +52,18 @@ export function generateMetadata({ params }: { params: { name: string } }) {
 }
 
 // Helper — renders a single preview pane around an example snippet.
-// Used by the hero preview, the per-variant cards, and the per-size cards.
+// Used by the hero preview AND by the combined Variants/Sizes panes.
 // Light DOM is required because ui-* custom elements capture their innerHTML
 // in connectedCallback (which doesn't run during SSR). unsafeHTML defers
 // rendering to the browser where the upgrade fires correctly.
+//
+// flex-wrap so multi-value combined panes (e.g. all 8 button sizes or all 6
+// button variants) lay out in a row and wrap when narrow. gap-4 spaces them.
 function previewPane(snippet: string, opts: { minH?: string } = {}) {
   const minH = opts.minH ?? '160px';
   return html`
     <div
-      class="rounded-lg border p-8 flex items-center justify-center gap-4 bg-background text-foreground"
+      class="rounded-lg border p-8 flex flex-wrap items-center justify-center gap-4 bg-background text-foreground"
       style="min-height: ${minH}"
     >
       ${unsafeHTML(snippet)}
@@ -68,8 +71,14 @@ function previewPane(snippet: string, opts: { minH?: string } = {}) {
   `;
 }
 
-function startCase(s: string): string {
-  return s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+// Concatenate all defined values from a variant/size example map into one
+// snippet for the combined preview pane. Skips keys missing from the
+// examples map so a stale metadata entry doesn't blank the pane.
+function combineExamples(keys: string[], examples: Record<string, string>): string {
+  return keys
+    .map((k) => examples[k])
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
+    .join('\n');
 }
 
 export default async function ComponentDoc({ params }: { params: { name: string } }) {
@@ -143,18 +152,17 @@ export default async function ComponentDoc({ params }: { params: { name: string 
         ? html`
           <section class="mb-12">
             <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.variantsLabel ?? 'Variants'}</h2>
-            <div class="grid gap-4">
-              ${api.variants.map((v: string) =>
-                variantExamples[v]
-                  ? html`
-                      <div>
-                        <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(v)}</h3>
-                        ${previewPane(variantExamples[v])}
-                      </div>
-                    `
-                  : '',
-              )}
-            </div>
+            <!--
+              Combined preview pane — all variants laid out in a single
+              flex-wrap row. Previously each variant was its own card with
+              a heading, but that was visually heavy for components like
+              button (6 variants × dedicated cards = 6 near-identical
+              previews stacked vertically). Shadcn's docs use the same
+              "all variants in one Size example" pattern. The API
+              Reference table below lists the variant keys + types for
+              anyone who needs to know which is which.
+            -->
+            ${previewPane(combineExamples(api.variants, variantExamples))}
           </section>
         `
         : ''
@@ -165,18 +173,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
         ? html`
           <section class="mb-12">
             <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${api.sizesLabel ?? 'Sizes'}</h2>
-            <div class="grid gap-4">
-              ${api.sizes.map((s: string) =>
-                sizeExamples[s]
-                  ? html`
-                      <div>
-                        <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(s)}</h3>
-                        ${previewPane(sizeExamples[s])}
-                      </div>
-                    `
-                  : '',
-              )}
-            </div>
+            ${previewPane(combineExamples(api.sizes, sizeExamples))}
           </section>
         `
         : ''
