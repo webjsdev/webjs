@@ -1,5 +1,6 @@
 import { html, unsafeHTML, notFound } from '@webjskit/core';
-import { getExample } from './examples.ts';
+import { getExample, getVariantExamples, getSizeExamples } from './examples.ts';
+import { getComponentApi, type ComponentApi } from './component-api.ts';
 import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,27 @@ export function generateMetadata({ params }: { params: { name: string } }) {
   return { title: `${params.name} — Webjs UI` };
 }
 
+// Helper — renders a single preview pane around an example snippet.
+// Used by the hero preview, the per-variant cards, and the per-size cards.
+// Light DOM is required because ui-* custom elements capture their innerHTML
+// in connectedCallback (which doesn't run during SSR). unsafeHTML defers
+// rendering to the browser where the upgrade fires correctly.
+function previewPane(snippet: string, opts: { minH?: string } = {}) {
+  const minH = opts.minH ?? '160px';
+  return html`
+    <div
+      class="rounded-lg border p-8 flex items-center justify-center gap-4 bg-background text-foreground"
+      style="min-height: ${minH}"
+    >
+      ${unsafeHTML(snippet)}
+    </div>
+  `;
+}
+
+function startCase(s: string): string {
+  return s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default async function ComponentDoc({ params }: { params: { name: string } }) {
   const item = await loadRegistryItem(params.name);
   if (!item) throw notFound();
@@ -58,6 +80,9 @@ export default async function ComponentDoc({ params }: { params: { name: string 
   const npmDeps = (item.dependencies || []).filter((d: string) => d !== '@webjskit/core');
   const registryDeps = item.registryDependencies || [];
   const example = getExample(params.name);
+  const api: ComponentApi | null = getComponentApi(params.name);
+  const variantExamples = getVariantExamples(params.name);
+  const sizeExamples = getSizeExamples(params.name);
 
   return html`
     <a href="/" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -93,9 +118,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
               component fresh, connectedCallback captures innerHTML correctly, and
               the rendered output looks right.
             -->
-            <div class="rounded-lg border p-8 flex items-center justify-center min-h-[280px] bg-background text-foreground">
-              ${unsafeHTML(example)}
-            </div>
+            ${previewPane(example, { minH: '280px' })}
           </section>
         `
         : html`
@@ -114,6 +137,160 @@ export default async function ComponentDoc({ params }: { params: { name: string 
       <p class="mt-3 text-sm text-muted-foreground">Webjs users — also available as:</p>
       <pre class="rounded-lg p-4 overflow-x-auto mt-1"><code>webjs ui add ${item.name}</code></pre>
     </section>
+
+    ${
+      api?.variants && variantExamples
+        ? html`
+          <section class="mb-12">
+            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Variants</h2>
+            <div class="grid gap-4">
+              ${api.variants.map((v: string) =>
+                variantExamples[v]
+                  ? html`
+                      <div>
+                        <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(v)}</h3>
+                        ${previewPane(variantExamples[v])}
+                      </div>
+                    `
+                  : '',
+              )}
+            </div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      api?.sizes && sizeExamples
+        ? html`
+          <section class="mb-12">
+            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Sizes</h2>
+            <div class="grid gap-4">
+              ${api.sizes.map((s: string) =>
+                sizeExamples[s]
+                  ? html`
+                      <div>
+                        <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(s)}</h3>
+                        ${previewPane(sizeExamples[s])}
+                      </div>
+                    `
+                  : '',
+              )}
+            </div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      api && (api.props?.length || api.subcomponents?.length || api.events?.length)
+        ? html`
+          <section class="mb-12">
+            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">API Reference</h2>
+
+            ${
+              api.subcomponents?.length
+                ? html`
+                  <div class="mb-6">
+                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Parts</h3>
+                    <div class="rounded-lg border overflow-hidden">
+                      <table class="w-full text-sm">
+                        <thead style="background: var(--bg-subtle)">
+                          <tr class="text-left">
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Name</th>
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${api.subcomponents.map(
+                            (p) => html`
+                              <tr class="border-t">
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${p.name}</code></td>
+                                <td class="px-3 py-2 align-top text-muted-foreground">${p.description}</td>
+                              </tr>
+                            `,
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `
+                : ''
+            }
+
+            ${
+              api.props?.length
+                ? html`
+                  <div class="mb-6">
+                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Props</h3>
+                    <div class="rounded-lg border overflow-hidden">
+                      <table class="w-full text-sm">
+                        <thead style="background: var(--bg-subtle)">
+                          <tr class="text-left">
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Prop</th>
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Type</th>
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Default</th>
+                            ${api.props.some((p) => p.description)
+                              ? html`<th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>`
+                              : ''}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${api.props.map(
+                            (p) => html`
+                              <tr class="border-t">
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${p.name}</code></td>
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${p.type}</code></td>
+                                <td class="px-3 py-2 align-top text-muted-foreground">${p.default ?? '—'}</td>
+                                ${api.props!.some((q) => q.description)
+                                  ? html`<td class="px-3 py-2 align-top text-muted-foreground">${p.description ?? ''}</td>`
+                                  : ''}
+                              </tr>
+                            `,
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `
+                : ''
+            }
+
+            ${
+              api.events?.length
+                ? html`
+                  <div>
+                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Events</h3>
+                    <div class="rounded-lg border overflow-hidden">
+                      <table class="w-full text-sm">
+                        <thead style="background: var(--bg-subtle)">
+                          <tr class="text-left">
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Name</th>
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Detail</th>
+                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${api.events.map(
+                            (e) => html`
+                              <tr class="border-t">
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${e.name}</code></td>
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${e.detail ?? '—'}</code></td>
+                                <td class="px-3 py-2 align-top text-muted-foreground">${e.description ?? ''}</td>
+                              </tr>
+                            `,
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `
+                : ''
+            }
+          </section>
+        `
+        : ''
+    }
 
     <section>
       <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Source — <code class="text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-subtle)">components/ui/${item.name}.ts</code></h2>
