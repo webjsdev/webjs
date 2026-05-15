@@ -576,6 +576,60 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
       </ui-tabs>
     `,
   },
+  // dropdown-menu's variant lives on <ui-dropdown-menu-item>. Wrap a
+  // single item in a popover-styled card so the colour difference
+  // (default foreground vs destructive red) is visible without forcing
+  // the reader to open a full menu.
+  'dropdown-menu': {
+    default: `
+      <div class="rounded-md border bg-popover p-1 text-popover-foreground shadow-md min-w-[12rem]">
+        <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
+      </div>
+    `,
+    destructive: `
+      <div class="rounded-md border bg-popover p-1 text-popover-foreground shadow-md min-w-[12rem]">
+        <ui-dropdown-menu-item variant="destructive">Sign out</ui-dropdown-menu-item>
+      </div>
+    `,
+  },
+  // toggle-group variant + size are root-level attributes that
+  // propagate to items. Each card shows a full 3-item group so the
+  // cascade is visible.
+  'toggle-group': {
+    default: `
+      <ui-toggle-group type="single" variant="default" value="bold">
+        <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+        <ui-toggle-group-item value="underline">U</ui-toggle-group-item>
+      </ui-toggle-group>
+    `,
+    outline: `
+      <ui-toggle-group type="single" variant="outline" value="bold">
+        <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+        <ui-toggle-group-item value="underline">U</ui-toggle-group-item>
+      </ui-toggle-group>
+    `,
+  },
+  // separator's variants ARE orientations. Each card wraps the
+  // separator in enough surrounding markup to make the axis obvious
+  // (label above/below for horizontal, labels left/right for vertical).
+  separator: {
+    horizontal: `
+      <div class="w-64">
+        <div class="text-sm pb-2">Section A</div>
+        <div class="${separatorClass({ orientation: 'horizontal' })}" role="separator"></div>
+        <div class="text-sm pt-2">Section B</div>
+      </div>
+    `,
+    vertical: `
+      <div class="flex h-12 items-center gap-3">
+        <div class="text-sm">Left</div>
+        <div class="${separatorClass({ orientation: 'vertical' })}" role="separator"></div>
+        <div class="text-sm">Right</div>
+      </div>
+    `,
+  },
 };
 
 const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
@@ -631,6 +685,30 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
         </select>
         <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </div>
+    `,
+  },
+  // toggle-group size attribute propagates to every item.
+  'toggle-group': {
+    default: `
+      <ui-toggle-group type="single" size="default" value="bold">
+        <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+        <ui-toggle-group-item value="underline">U</ui-toggle-group-item>
+      </ui-toggle-group>
+    `,
+    sm: `
+      <ui-toggle-group type="single" size="sm" value="bold">
+        <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+        <ui-toggle-group-item value="underline">U</ui-toggle-group-item>
+      </ui-toggle-group>
+    `,
+    lg: `
+      <ui-toggle-group type="single" size="lg" value="bold">
+        <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+        <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+        <ui-toggle-group-item value="underline">U</ui-toggle-group-item>
+      </ui-toggle-group>
     `,
   },
 };
