@@ -561,9 +561,16 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
       </div>
     `,
   },
+  // <ui-toggle> for interactivity AND to show the variant-specific
+  // styling (default = transparent until pressed; outline = always
+  // shows border + shadow). Previously these were static <button>s
+  // both stuck in data-state=on, which painted bg-accent on both —
+  // visually identical. Now they start unpressed so the structural
+  // differences (border on outline, none on default) are visible,
+  // and clicking each toggles the pressed state.
   toggle: {
-    default: `<button class="${toggleClass({ variant: 'default' })}" data-state="on" aria-pressed="true">Default</button>`,
-    outline: `<button class="${toggleClass({ variant: 'outline' })}" data-state="on" aria-pressed="true">Outline</button>`,
+    default: `<ui-toggle variant="default" aria-label="Toggle default">Default</ui-toggle>`,
+    outline: `<ui-toggle variant="outline" aria-label="Toggle outline">Outline</ui-toggle>`,
   },
   tabs: {
     default: `
@@ -713,10 +720,14 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </label>
     `,
   },
+  // Same <ui-toggle> rationale as variants — interactive + the size
+  // attribute propagates via the class helper called from
+  // _applyClass(). Outline variant chosen so the size diff (border
+  // box height) reads at a glance.
   toggle: {
-    sm: `<button class="${toggleClass({ size: 'sm' })}" aria-pressed="false" data-state="off">sm</button>`,
-    default: `<button class="${toggleClass({ size: 'default' })}" aria-pressed="false" data-state="off">default</button>`,
-    lg: `<button class="${toggleClass({ size: 'lg' })}" aria-pressed="false" data-state="off">lg</button>`,
+    sm: `<ui-toggle variant="outline" size="sm" aria-label="Toggle sm">sm</ui-toggle>`,
+    default: `<ui-toggle variant="outline" size="default" aria-label="Toggle default">default</ui-toggle>`,
+    lg: `<ui-toggle variant="outline" size="lg" aria-label="Toggle lg">lg</ui-toggle>`,
   },
   'native-select': {
     default: `
@@ -800,34 +811,6 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
           </div>
         </ui-alert-dialog-content>
       </ui-alert-dialog>
-    `,
-  },
-  // pagination size = forwarded ButtonSize on paginationLinkClass.
-  // "icon" (the default) is square + compact; "default" gives padded
-  // text buttons. Show a full mini-pagination per size so the cascade
-  // through prev/page/next is clear.
-  pagination: {
-    icon: `
-      <nav class="${paginationClass()}">
-        <ul class="${paginationContentClass()}">
-          <li><a class="${paginationPreviousClass()}" href="#">Previous</a></li>
-          <li><a class="${paginationLinkClass({ size: 'icon' })}" href="#">1</a></li>
-          <li><a class="${paginationLinkClass({ isActive: true, size: 'icon' })}" href="#">2</a></li>
-          <li><a class="${paginationLinkClass({ size: 'icon' })}" href="#">3</a></li>
-          <li><a class="${paginationNextClass()}" href="#">Next</a></li>
-        </ul>
-      </nav>
-    `,
-    default: `
-      <nav class="${paginationClass()}">
-        <ul class="${paginationContentClass()}">
-          <li><a class="${paginationPreviousClass()}" href="#">Previous</a></li>
-          <li><a class="${paginationLinkClass({ size: 'default' })}" href="#">1</a></li>
-          <li><a class="${paginationLinkClass({ isActive: true, size: 'default' })}" href="#">2</a></li>
-          <li><a class="${paginationLinkClass({ size: 'default' })}" href="#">3</a></li>
-          <li><a class="${paginationNextClass()}" href="#">Next</a></li>
-        </ul>
-      </nav>
     `,
   },
 };
