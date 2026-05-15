@@ -286,15 +286,16 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'dropdown-menu': {
-    // The `variant` here is on <ui-dropdown-menu-item> rather than the
-    // root. Each card renders a real interactive <ui-dropdown-menu> +
-    // trigger so users can open the menu and see the item painted with
-    // its variant styling — matches the hero preview's interaction
-    // pattern. Cards mode (not combined) because two trigger buttons
-    // labelled "Open default" / "Open destructive" wouldn't be
-    // visually self-distinct in a single row without per-card headings.
+    // The `variant` here is on <ui-dropdown-menu-item> — not on the
+    // root component — so a top-level "Variants" section misrepresents
+    // the API surface. Keep the variant keys in metadata (the API
+    // Reference table documents them as part of <ui-dropdown-menu-item>'s
+    // props), but hide the preview section. The hero already shows
+    // both default items (Profile / Billing / Settings) AND a
+    // destructive item (Sign out) inside one realistic menu, which
+    // covers both variants in context.
     variants: ['default', 'destructive'],
-    variantsPreviewMode: 'cards',
+    hideVariantsSection: true,
     subcomponents: [
       { name: '<ui-dropdown-menu>', description: 'Root — owns the open state and document-level event handlers.' },
       { name: '<ui-dropdown-menu-trigger>', description: 'Toggles the menu.' },
