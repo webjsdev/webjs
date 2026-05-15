@@ -298,7 +298,7 @@ export default function Layout({ children }: { children: any }) {
         Webjs UI
       </a>
       <nav class="flex flex-wrap items-center gap-4">
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/">Components</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs/components/accordion">Components</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
         <a class="hidden sm:inline text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
