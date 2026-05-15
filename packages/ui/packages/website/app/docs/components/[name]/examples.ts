@@ -746,35 +746,46 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </ui-toggle-group>
     `,
   },
-  // alert-dialog size demos render the content panel statically — full
-  // modal mechanics (overlay, focus trap, body scroll lock) would each
-  // take over the entire viewport and stack badly. data-size="default"
-  // /"sm" carries the same class hooks the live dialog uses, so the
-  // panel widths render identically to a real open dialog.
+  // alert-dialog size preview cards render a real <ui-alert-dialog>
+  // each, behind its own trigger button. Clicking the button opens
+  // the modal; otherwise it stays closed so the docs page doesn't
+  // show floating dialogs at idle. Also demonstrates the new
+  // <ui-alert-dialog-action variant="destructive"> + <-cancel> auto-
+  // styled button forwarding.
   'alert-dialog': {
     default: `
-      <div class="${alertDialogContentClass()}" data-size="default" style="position: relative; transform: none; top: 0; left: 0; max-width: 100%;">
-        <div class="${alertDialogHeaderClass()}">
-          <h2 class="${alertDialogTitleClass()}">Are you absolutely sure?</h2>
-          <p class="${alertDialogDescriptionClass()}">This action cannot be undone. This will permanently delete your account.</p>
-        </div>
-        <div class="${alertDialogFooterClass()}">
-          <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
-          <button class="${buttonClass({ variant: 'destructive' })}">Delete</button>
-        </div>
-      </div>
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger>
+          <button class="${buttonClass({ variant: 'outline' })}">Open default</button>
+        </ui-alert-dialog-trigger>
+        <ui-alert-dialog-content size="default">
+          <div class="${alertDialogHeaderClass()}">
+            <h2 class="${alertDialogTitleClass()}">Are you absolutely sure?</h2>
+            <p class="${alertDialogDescriptionClass()}">This action cannot be undone. This will permanently delete your account.</p>
+          </div>
+          <div class="${alertDialogFooterClass()}">
+            <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
+            <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
+          </div>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
     `,
     sm: `
-      <div class="${alertDialogContentClass()}" data-size="sm" style="position: relative; transform: none; top: 0; left: 0; max-width: 100%;">
-        <div class="${alertDialogHeaderClass()}">
-          <h2 class="${alertDialogTitleClass()}">Delete file?</h2>
-          <p class="${alertDialogDescriptionClass()}">Move "report.pdf" to trash?</p>
-        </div>
-        <div class="${alertDialogFooterClass()}">
-          <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
-          <button class="${buttonClass({ variant: 'destructive' })}">Delete</button>
-        </div>
-      </div>
+      <ui-alert-dialog>
+        <ui-alert-dialog-trigger>
+          <button class="${buttonClass({ variant: 'outline' })}">Open sm</button>
+        </ui-alert-dialog-trigger>
+        <ui-alert-dialog-content size="sm">
+          <div class="${alertDialogHeaderClass()}">
+            <h2 class="${alertDialogTitleClass()}">Delete file?</h2>
+            <p class="${alertDialogDescriptionClass()}">Move "report.pdf" to trash?</p>
+          </div>
+          <div class="${alertDialogFooterClass()}">
+            <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
+            <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
+          </div>
+        </ui-alert-dialog-content>
+      </ui-alert-dialog>
     `,
   },
   // pagination size = forwarded ButtonSize on paginationLinkClass.
