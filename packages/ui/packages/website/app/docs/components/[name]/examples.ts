@@ -577,6 +577,40 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
       </ui-tabs>
     `,
   },
+  'radio-group': {
+    vertical: `
+      <div role="radiogroup" class="${radioGroupClass({ orientation: 'vertical' })}">
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-v" id="plan-v-basic" data-slot="radio" class="${radioClass()}" checked>
+          <label class="${labelClass()}" for="plan-v-basic">Basic</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-v" id="plan-v-pro" data-slot="radio" class="${radioClass()}">
+          <label class="${labelClass()}" for="plan-v-pro">Pro</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-v" id="plan-v-enterprise" data-slot="radio" class="${radioClass()}">
+          <label class="${labelClass()}" for="plan-v-enterprise">Enterprise</label>
+        </div>
+      </div>
+    `,
+    horizontal: `
+      <div role="radiogroup" class="${radioGroupClass({ orientation: 'horizontal' })}">
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-h" id="plan-h-basic" data-slot="radio" class="${radioClass()}" checked>
+          <label class="${labelClass()}" for="plan-h-basic">Basic</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-h" id="plan-h-pro" data-slot="radio" class="${radioClass()}">
+          <label class="${labelClass()}" for="plan-h-pro">Pro</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="radio" name="plan-h" id="plan-h-enterprise" data-slot="radio" class="${radioClass()}">
+          <label class="${labelClass()}" for="plan-h-enterprise">Enterprise</label>
+        </div>
+      </div>
+    `,
+  },
   // dropdown-menu's variant lives on <ui-dropdown-menu-item>. Wrap a
   // single item in a popover-styled card so the colour difference
   // (default foreground vs destructive red) is visible without forcing
