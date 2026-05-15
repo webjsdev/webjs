@@ -762,6 +762,29 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </div>
     `,
   },
+  // Card size cascades through Header / Title / Content / Footer via
+  // group-data-[size=...]/card. Set data-size on the host so the
+  // child helpers pick up the compact layout.
+  card: {
+    default: `
+      <div class="${cardClass({ size: 'default' })} w-72" data-slot="card" data-size="default">
+        <div class="${cardHeaderClass()}">
+          <div class="${cardTitleClass()}">Notifications</div>
+          <div class="${cardDescriptionClass()}">You have 3 unread.</div>
+        </div>
+        <div class="${cardContentClass()}">Default size — gap-6 / py-6 / px-6.</div>
+      </div>
+    `,
+    sm: `
+      <div class="${cardClass({ size: 'sm' })} w-72" data-slot="card" data-size="sm">
+        <div class="${cardHeaderClass()}">
+          <div class="${cardTitleClass()}">Notifications</div>
+          <div class="${cardDescriptionClass()}">You have 3 unread.</div>
+        </div>
+        <div class="${cardContentClass()}">Small size — gap-3 / py-3 / px-4.</div>
+      </div>
+    `,
+  },
   // toggle-group size attribute propagates to every item.
   'toggle-group': {
     default: `
