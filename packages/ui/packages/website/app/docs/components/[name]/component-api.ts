@@ -494,15 +494,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
   pagination: {
-    // `size` on paginationLinkClass — forwarded to buttonClass. Default
-    // "icon" gives the typical compact page-number style; "default"
-    // produces wider buttons with readable text padding. The Sizes
-    // section demos both as full mini-paginations.
-    sizes: ['default', 'icon'],
-    sizesLabel: 'Sizes',
-    // Full mini-pagination per size is a wide block; cards lay them
-    // out vertically with headings so each is readable.
-    sizesPreviewMode: 'cards',
+    // No Sizes section: `size` on paginationLinkClass is a forwarded
+    // ButtonSize prop with a sensible default of "icon" (compact
+    // square — the canonical pagination look). Demoing competing
+    // "default" vs "icon" pagination layouts misrepresents the API:
+    // text-padded pagination links aren't a real use case shadcn
+    // showcases either. The `size` prop is still documented in the
+    // Props table for advanced users; it just doesn't warrant a
+    // dedicated preview section.
     subcomponents: [
       { name: 'paginationClass() / ContentClass()', description: 'Outer <nav> + <ul>.' },
       { name: 'paginationLinkClass({ isActive, size })', description: 'Numbered page link.' },
@@ -511,7 +510,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
     props: [
       { name: 'isActive', type: 'boolean', description: 'On paginationLinkClass — marks the current page.' },
-      { name: 'size', type: 'ButtonSize', default: '"icon"', description: 'Forwarded to buttonClass. "icon" (default) is the compact square style; "default" gives padded text buttons.' },
+      { name: 'size', type: 'ButtonSize', default: '"icon"', description: 'Forwarded to buttonClass. The default "icon" gives the compact square page-number style typical of pagination. Override only if you need a non-standard look.' },
     ],
   },
 };
