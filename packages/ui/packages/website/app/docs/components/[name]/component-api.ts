@@ -19,8 +19,17 @@
 export interface ComponentApi {
   /** Display variants, in source order. Triggers the "Variants" section. */
   variants?: string[];
+  /**
+   * Optional heading override for the variants section. Defaults to
+   * "Variants". Set this when the values aren't visual variants in the
+   * usual sense — e.g. `separator` uses "Orientation" because its
+   * horizontal/vertical options are layout axes, not aesthetic styles.
+   */
+  variantsLabel?: string;
   /** Display sizes, in source order. Triggers the "Sizes" section. */
   sizes?: string[];
+  /** Optional heading override for the sizes section. Defaults to "Sizes". */
+  sizesLabel?: string;
   /**
    * Compound subcomponents (Tier-2 tag names or Tier-1 class-helper
    * names). Listed in the API Reference table under "Parts".
@@ -208,6 +217,11 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'dropdown-menu': {
+    // The `variant` here is on <ui-dropdown-menu-item> rather than the
+    // root — the preview cards under "Variants" demonstrate one item
+    // each so the colour difference (default foreground vs destructive
+    // red) is visible without forcing the reader to open a full menu.
+    variants: ['default', 'destructive'],
     subcomponents: [
       { name: '<ui-dropdown-menu>', description: 'Root — owns the open state and document-level event handlers.' },
       { name: '<ui-dropdown-menu-trigger>', description: 'Toggles the menu.' },
@@ -288,6 +302,11 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'toggle-group': {
+    // variant and size are root-level <ui-toggle-group> attributes that
+    // propagate to every <ui-toggle-group-item>. Preview cards show a
+    // full 3-item group per variant / size so the cascade is visible.
+    variants: ['default', 'outline'],
+    sizes: ['default', 'sm', 'lg'],
     subcomponents: [
       { name: '<ui-toggle-group>', description: 'Root — type="single | multiple", variant, size, value.' },
       { name: '<ui-toggle-group-item>', description: 'One toggle button in the group.' },
@@ -363,6 +382,13 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
   separator: {
+    // "horizontal" / "vertical" aren't visual variants in the usual
+    // sense — they're layout axes. variantsLabel overrides the
+    // section heading so /docs/components/separator shows
+    // "Orientation" rather than "Variants" above the two preview
+    // cards, matching shadcn's docs vocabulary.
+    variants: ['horizontal', 'vertical'],
+    variantsLabel: 'Orientation',
     subcomponents: [{ name: 'separatorClass({ orientation })', description: 'Apply to <div role="separator">.' }],
     props: [{ name: 'orientation', type: '"horizontal" | "vertical"', default: '"horizontal"' }],
   },
