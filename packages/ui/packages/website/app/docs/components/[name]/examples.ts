@@ -550,13 +550,13 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   alert: {
     default: `
       <div class="${alertClass({ variant: 'default' })} max-w-md">
-        <h5 class="${alertTitleClass()}">Heads up!</h5>
+        <h5 class="${alertTitleClass()}">Default</h5>
         <p class="${alertDescriptionClass()}">You can add components to your app using the CLI.</p>
       </div>
     `,
     destructive: `
       <div class="${alertClass({ variant: 'destructive' })} max-w-md">
-        <h5 class="${alertTitleClass()}">Error</h5>
+        <h5 class="${alertTitleClass()}">Destructive</h5>
         <p class="${alertDescriptionClass()}">Your session has expired. Please log in again.</p>
       </div>
     `,
