@@ -857,13 +857,24 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
 
 // Variant examples for sonner are TYPE demos — each card fires the
 // matching imperative API so the user sees the icon + colour treatment
-// for that toast type. <ui-sonner> is mounted once inside each card;
-// each Show button triggers one toast. Position is intentionally
-// excluded from card previews (every <ui-sonner> is viewport-pinned).
+// for that toast type.
+//
+// IMPORTANT: <ui-sonner>'s connectedCallback overwrites the singleton
+// `toaster.add` reference (see sonner.ts:120) — the LAST viewport to
+// connect wins for every subsequent toast() call, including ones from
+// buttons in OTHER cards (and the hero). Earlier each card used
+// position="top-center", which meant: user clicks "Show toast" on the
+// hero (which has its own position="bottom-right" viewport mounted
+// FIRST), but the toast appears at top-center because one of the
+// variant-card viewports mounted later. Fixing the visible symptom
+// by pinning every viewport on this page to bottom-right so it
+// doesn't matter which one wins — toasts always appear in the same
+// place users expect from the default. (Proper multi-viewport
+// routing is a separate concern in sonner.ts, deferred.)
 VARIANT_EXAMPLES.sonner = (() => {
   const make = (type: 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading') => `
     <div class="flex items-center gap-3">
-      <ui-sonner position="top-center"></ui-sonner>
+      <ui-sonner position="bottom-right"></ui-sonner>
       <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
     </div>
   `;
