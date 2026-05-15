@@ -280,10 +280,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   'dropdown-menu': {
     // The `variant` here is on <ui-dropdown-menu-item> rather than the
-    // root — the preview cards under "Variants" demonstrate one item
-    // each so the colour difference (default foreground vs destructive
-    // red) is visible without forcing the reader to open a full menu.
+    // root. Each card renders a real interactive <ui-dropdown-menu> +
+    // trigger so users can open the menu and see the item painted with
+    // its variant styling — matches the hero preview's interaction
+    // pattern. Cards mode (not combined) because two trigger buttons
+    // labelled "Open default" / "Open destructive" wouldn't be
+    // visually self-distinct in a single row without per-card headings.
     variants: ['default', 'destructive'],
+    variantsPreviewMode: 'cards',
     subcomponents: [
       { name: '<ui-dropdown-menu>', description: 'Root — owns the open state and document-level event handlers.' },
       { name: '<ui-dropdown-menu-trigger>', description: 'Toggles the menu.' },
@@ -369,6 +373,12 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     // full 3-item group per variant / size so the cascade is visible.
     variants: ['default', 'outline'],
     sizes: ['default', 'sm', 'lg'],
+    // Items always read B / I / U regardless of variant or size — the
+    // example content is identical across cards, so per-card headings
+    // ("Default" / "Outline" / "sm" / "default" / "lg") are the only
+    // way to disambiguate which is which.
+    variantsPreviewMode: 'cards',
+    sizesPreviewMode: 'cards',
     subcomponents: [
       { name: '<ui-toggle-group>', description: 'Root — type="single | multiple", variant, size, spacing, value.' },
       { name: '<ui-toggle-group-item>', description: 'One toggle button in the group.' },

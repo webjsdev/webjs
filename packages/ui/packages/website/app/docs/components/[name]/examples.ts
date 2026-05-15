@@ -624,20 +624,35 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
       </div>
     `,
   },
-  // dropdown-menu's variant lives on <ui-dropdown-menu-item>. Wrap a
-  // single item in a popover-styled card so the colour difference
-  // (default foreground vs destructive red) is visible without forcing
-  // the reader to open a full menu.
+  // Each variant card renders a real interactive <ui-dropdown-menu>
+  // with a trigger button — clicking opens the actual menu (matches
+  // the hero preview's pattern). Previously these were STATIC popover
+  // cards with bare <ui-dropdown-menu-item> orphans floating inside —
+  // the click handler couldn't close any enclosing menu (there was
+  // none), the popover positioning code didn't run, and roving focus
+  // had nothing to rove on. Now each card is an authentic mini-menu
+  // with one item, and the per-card heading ("Default" / "Destructive")
+  // names the variant the inner item is using.
   'dropdown-menu': {
     default: `
-      <div class="rounded-md border bg-popover p-1 text-popover-foreground shadow-md min-w-[12rem]">
-        <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
-      </div>
+      <ui-dropdown-menu>
+        <ui-dropdown-menu-trigger>
+          <button class="${buttonClass({ variant: 'outline' })}">Open menu</button>
+        </ui-dropdown-menu-trigger>
+        <ui-dropdown-menu-content align="start">
+          <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
     `,
     destructive: `
-      <div class="rounded-md border bg-popover p-1 text-popover-foreground shadow-md min-w-[12rem]">
-        <ui-dropdown-menu-item variant="destructive">Sign out</ui-dropdown-menu-item>
-      </div>
+      <ui-dropdown-menu>
+        <ui-dropdown-menu-trigger>
+          <button class="${buttonClass({ variant: 'outline' })}">Open menu</button>
+        </ui-dropdown-menu-trigger>
+        <ui-dropdown-menu-content align="start">
+          <ui-dropdown-menu-item variant="destructive">Sign out</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
     `,
   },
   // toggle-group variant + size are root-level attributes that
