@@ -306,12 +306,44 @@ defineElement('ui-dialog-trigger', UiDialogTrigger);
 // dialogContentClass() to its host, merging with any user-provided class.
 // --------------------------------------------------------------------------
 
+// Class helper for the auto-injected close button. shadcn ships an X
+// pinned to the top-right of every DialogContent; we mirror that so the
+// `<ui-dialog-content show-close-button>` toggle has a default visual
+// to inject. Class includes focus/hover states + the data-state-keyed
+// fade matched to shadcn's DialogClose.
+export const dialogCloseButtonClass = (): string =>
+  "absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+
+// Inline X (lucide-style) auto-appended into <ui-dialog-content> when
+// show-close-button is enabled (the default — matches shadcn).
+const DIALOG_CLOSE_X_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
+
 export class UiDialogContent extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'dialog-content');
     this.setAttribute('tabindex', '-1');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dialogContentClass(), userClass);
+    // shadcn auto-injects an X in the top-right corner of every
+    // DialogContent, opt-out via `showCloseButton={false}`. Mirror the
+    // same default. The injected element is a real <ui-dialog-close>
+    // (defined below) so clicking it goes through the existing
+    // close-on-click path and ARIA wiring stays consistent.
+    //
+    // Skip if the user explicitly disabled it OR if they've already
+    // authored their own <ui-dialog-close> as a direct child (legacy
+    // hand-authored close-X pattern). A <ui-dialog-close> nested
+    // deeper (e.g. inside the footer as a Cancel button) does NOT
+    // suppress the X — it's a different role.
+    const showCloseButton = this.getAttribute('show-close-button') !== 'false';
+    if (showCloseButton && !this.querySelector(':scope > ui-dialog-close')) {
+      const closeEl = document.createElement('ui-dialog-close');
+      closeEl.setAttribute('aria-label', 'Close');
+      closeEl.className = dialogCloseButtonClass();
+      closeEl.innerHTML = DIALOG_CLOSE_X_SVG;
+      this.appendChild(closeEl);
+    }
   }
 }
 defineElement('ui-dialog-content', UiDialogContent);
