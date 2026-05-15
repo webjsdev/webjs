@@ -191,6 +191,13 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'alert-dialog': {
+    // size lives on <ui-alert-dialog-content>. The component reflects
+    // a `size` attribute into `data-size`, so users can write
+    // <ui-alert-dialog-content size="sm">. The preview cards under
+    // "Sizes" render the content panel statically (without the modal
+    // overlay) so both sizes are visible side-by-side without the user
+    // having to open two dialogs.
+    sizes: ['default', 'sm'],
     subcomponents: [
       { name: '<ui-alert-dialog>', description: 'Root — owns the open state.' },
       { name: '<ui-alert-dialog-trigger>', description: 'Opens the dialog on click.' },
@@ -201,7 +208,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
     props: [
       { name: 'open', type: 'boolean (attribute)', default: 'false' },
-      { name: 'data-size', type: '"default" | "sm"', default: '"default"', description: 'On the <ui-alert-dialog-content> — webjs extension.' },
+      { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'On <ui-alert-dialog-content>. Reflected to data-size.' },
     ],
   },
 
@@ -321,15 +328,31 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   sonner: {
+    // Toast TYPE is the rendering enum — each card under "Variants"
+    // fires the matching imperative API (toast.success, toast.error,
+    // etc.) so the icon + colour treatment for each type is visible.
+    // We don't preview the `position` enum as cards because every
+    // <ui-sonner> is viewport-pinned via position:fixed — six side-
+    // by-side preview cards would all collapse to the same screen
+    // corner. position is documented in the Props table only.
+    variants: ['default', 'success', 'error', 'info', 'warning', 'loading'],
+    variantsLabel: 'Toast types',
     subcomponents: [
       { name: '<ui-sonner>', description: 'Toast viewport — position attribute. Mount once per page.' },
-      { name: 'toast()', description: 'Imperative API. Variants: toast.success / toast.error / toast.promise.' },
+      { name: 'toast(msg, opts?)', description: 'Imperative API. Variants: toast.success / toast.error / toast.info / toast.warning / toast.loading / toast.promise / toast.dismiss.' },
     ],
     props: [
       {
         name: 'position',
-        type: '"top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center" | "bottom-center"',
+        type: '"top-left" | "top-right" | "top-center" | "bottom-left" | "bottom-right" | "bottom-center"',
         default: '"bottom-right"',
+        description: 'On <ui-sonner>. Viewport corner the toasts stack toward.',
+      },
+      {
+        name: 'duration',
+        type: 'number (ms)',
+        default: '4000 (0 for loading toasts)',
+        description: 'On any toast call. 0 = persistent.',
       },
     ],
   },
@@ -404,6 +427,12 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
   pagination: {
+    // `size` on paginationLinkClass — forwarded to buttonClass. Default
+    // "icon" gives the typical compact page-number style; "default"
+    // produces wider buttons with readable text padding. The Sizes
+    // section demos both as full mini-paginations.
+    sizes: ['default', 'icon'],
+    sizesLabel: 'Sizes',
     subcomponents: [
       { name: 'paginationClass() / ContentClass()', description: 'Outer <nav> + <ul>.' },
       { name: 'paginationLinkClass({ isActive, size })', description: 'Numbered page link.' },
@@ -412,7 +441,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
     props: [
       { name: 'isActive', type: 'boolean', description: 'On paginationLinkClass — marks the current page.' },
-      { name: 'size', type: 'ButtonSize', default: '"icon"' },
+      { name: 'size', type: 'ButtonSize', default: '"icon"', description: 'Forwarded to buttonClass. "icon" (default) is the compact square style; "default" gives padded text buttons.' },
     ],
   },
 };

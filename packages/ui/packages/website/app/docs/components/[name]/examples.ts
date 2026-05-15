@@ -94,6 +94,7 @@ import {
   popoverDescriptionClass,
 } from '../../../../components/ui/popover.ts';
 import {
+  alertDialogContentClass,
   alertDialogHeaderClass,
   alertDialogTitleClass,
   alertDialogDescriptionClass,
@@ -711,7 +712,88 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </ui-toggle-group>
     `,
   },
+  // alert-dialog size demos render the content panel statically — full
+  // modal mechanics (overlay, focus trap, body scroll lock) would each
+  // take over the entire viewport and stack badly. data-size="default"
+  // /"sm" carries the same class hooks the live dialog uses, so the
+  // panel widths render identically to a real open dialog.
+  'alert-dialog': {
+    default: `
+      <div class="${alertDialogContentClass()}" data-size="default" style="position: relative; transform: none; top: 0; left: 0; max-width: 100%;">
+        <div class="${alertDialogHeaderClass()}">
+          <h2 class="${alertDialogTitleClass()}">Are you absolutely sure?</h2>
+          <p class="${alertDialogDescriptionClass()}">This action cannot be undone. This will permanently delete your account.</p>
+        </div>
+        <div class="${alertDialogFooterClass()}">
+          <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
+          <button class="${buttonClass({ variant: 'destructive' })}">Delete</button>
+        </div>
+      </div>
+    `,
+    sm: `
+      <div class="${alertDialogContentClass()}" data-size="sm" style="position: relative; transform: none; top: 0; left: 0; max-width: 100%;">
+        <div class="${alertDialogHeaderClass()}">
+          <h2 class="${alertDialogTitleClass()}">Delete file?</h2>
+          <p class="${alertDialogDescriptionClass()}">Move "report.pdf" to trash?</p>
+        </div>
+        <div class="${alertDialogFooterClass()}">
+          <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
+          <button class="${buttonClass({ variant: 'destructive' })}">Delete</button>
+        </div>
+      </div>
+    `,
+  },
+  // pagination size = forwarded ButtonSize on paginationLinkClass.
+  // "icon" (the default) is square + compact; "default" gives padded
+  // text buttons. Show a full mini-pagination per size so the cascade
+  // through prev/page/next is clear.
+  pagination: {
+    icon: `
+      <nav class="${paginationClass()}">
+        <ul class="${paginationContentClass()}">
+          <li><a class="${paginationPreviousClass()}" href="#">Previous</a></li>
+          <li><a class="${paginationLinkClass({ size: 'icon' })}" href="#">1</a></li>
+          <li><a class="${paginationLinkClass({ isActive: true, size: 'icon' })}" href="#">2</a></li>
+          <li><a class="${paginationLinkClass({ size: 'icon' })}" href="#">3</a></li>
+          <li><a class="${paginationNextClass()}" href="#">Next</a></li>
+        </ul>
+      </nav>
+    `,
+    default: `
+      <nav class="${paginationClass()}">
+        <ul class="${paginationContentClass()}">
+          <li><a class="${paginationPreviousClass()}" href="#">Previous</a></li>
+          <li><a class="${paginationLinkClass({ size: 'default' })}" href="#">1</a></li>
+          <li><a class="${paginationLinkClass({ isActive: true, size: 'default' })}" href="#">2</a></li>
+          <li><a class="${paginationLinkClass({ size: 'default' })}" href="#">3</a></li>
+          <li><a class="${paginationNextClass()}" href="#">Next</a></li>
+        </ul>
+      </nav>
+    `,
+  },
 };
+
+// Variant examples for sonner are TYPE demos — each card fires the
+// matching imperative API so the user sees the icon + colour treatment
+// for that toast type. <ui-sonner> is mounted once inside each card;
+// each Show button triggers one toast. Position is intentionally
+// excluded from card previews (every <ui-sonner> is viewport-pinned).
+VARIANT_EXAMPLES.sonner = (() => {
+  const make = (type: 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading') => `
+    <div class="flex items-center gap-3">
+      <ui-sonner position="top-center"></ui-sonner>
+      <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
+    </div>
+  `;
+  return {
+    default: make('default'),
+    success: make('success'),
+    error: make('error'),
+    info: make('info'),
+    warning: make('warning'),
+    loading: make('loading'),
+  };
+})();
 
 export function getVariantExamples(name: string): Record<string, string> | null {
   const key = HYPHENATED_ALIASES[name] || name;
