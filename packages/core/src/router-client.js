@@ -1,11 +1,11 @@
 /**
- * Turbo-Drive-style client router for webjs.
+ * Client router for webjs — nested-layout-aware partial swap.
  *
  * Intercepts same-origin link clicks and form submissions, fetches the
- * target page's HTML via `fetch()`, swaps the `<body>` content + merges
- * `<head>`, and updates the URL via `history.pushState`. No white flash
- * between pages — the transition looks like an SPA while keeping the
- * full SSR model.
+ * target page's HTML via `fetch()`, finds the deepest layout boundary
+ * shared by both the current and incoming pages, and replaces ONLY the
+ * children of that boundary. Outer layout DOM (header, sidenav, footer)
+ * stays mounted — no re-render, no flicker, scroll positions preserved.
  *
  * To enable, import this module from a layout or boot script:
  *
@@ -13,30 +13,51 @@
  *
  * Or call `enableClientRouter()` for programmatic control.
  *
- * What it does:
- *   1. Intercepts clicks on `<a>` tags (same origin, no target, no download,
- *      no modifier keys, no `data-no-router` attribute).
- *   2. `fetch()`es the target URL.
- *   3. Parses the response HTML.
- *   4. Merges `<head>` (adds new, removes stale, updates changed `<title>`).
- *   5. Replaces `<body>` innerHTML.
- *   6. Runs any new `<script>` tags (module and classic).
- *   7. Dispatches `webjs:navigate` event on `document`.
- *   8. Scrolls to top (or to `#hash` if present).
- *   9. Manages browser history via `pushState` / `popstate`.
+ * Mechanism — auto-derived from folder structure:
+ *   1. SSR injects `<!--wj:children:<segment-path>-->...<!--/wj:children-->`
+ *      comment markers around each layout's `${children}` interpolation
+ *      (one pair per layout in the chain).
+ *   2. On link click, walk both the live DOM and the incoming HTML for
+ *      these markers and build path → range maps.
+ *   3. Find the longest shared marker path. That's the deepest layout
+ *      both pages have in common.
+ *   4. Replace nodes between that marker pair in the live DOM with the
+ *      equivalent range from the incoming HTML, using a keyed reconciler
+ *      that preserves input values, scroll, popover state, and the
+ *      identity of any matched DOM nodes.
+ *   5. Merge head, re-run scripts, upgrade custom elements, pushState.
  *
- * What it doesn't do:
- *   - Preserve component state across navigations (shadow DOM is rebuilt).
- *   - Handle file downloads, mailto:, tel:, or external links.
- *   - Intercept programmatic `location.href = ...` (those are full navigations).
- *     Use `navigate(url)` from this module instead.
+ * Optimizations bundled into the same response cycle:
+ *   - `X-Webjs-Have` request header lists the marker paths the client
+ *     already has. Server walks the target's layout chain, skips
+ *     layouts at-or-above the deepest match, returns only the
+ *     divergent fragment (wrapped in the deepest shared marker). Real
+ *     wire-byte savings — the layout chain is never re-serialized for
+ *     same-shell navigations.
+ *   - URL-keyed snapshot cache (Turbo SnapshotCache pattern). Back/
+ *     forward via popstate restores from cache instantly, then
+ *     revalidates in the background.
+ *   - Per-segment loading templates: SSR emits each segment's
+ *     loading.ts content as `<template id="wj-loading:<path>">`. On
+ *     nav-start the client clones the deepest matching template into
+ *     the swap slot so users see an instant skeleton instead of stale
+ *     content.
+ *
+ * Escape hatch:
+ *   `<webjs-frame id="...">` — declarative partial-swap region NOT
+ *   tied to a folder layout. If a link's enclosing `closest('webjs-frame')`
+ *   matches a frame in the incoming HTML, the frame swap takes
+ *   precedence over the layout-marker mechanism. Use for ad-hoc
+ *   widgets (tabs, lazy-loaded cards) where the swap region isn't a
+ *   folder route segment.
  */
 
 /**
  * Parse HTML into a Document. Prefers Document.parseHTMLUnsafe (processes
- * Declarative Shadow DOM) over DOMParser (does NOT process DSD). Without
- * the DSD-aware parser, custom elements in the parsed HTML won't have
- * shadow roots — their layout/styles are missing on client navigation.
+ * Declarative Shadow DOM) over DOMParser (does NOT process DSD).
+ *
+ * @param {string} html
+ * @returns {Document | null}
  */
 function parseHTML(html) {
   if (typeof Document !== 'undefined' && typeof Document.parseHTMLUnsafe === 'function') {
@@ -51,10 +72,9 @@ function parseHTML(html) {
 let enabled = false;
 
 /**
- * Global MutationObserver that upgrades any custom element inserted into the
- * document. This is the safety net — if replaceChildren, View Transitions,
- * or any other DOM operation inserts elements that the browser fails to
- * auto-upgrade, this observer catches them.
+ * Global MutationObserver that upgrades any custom element inserted into
+ * the document. Safety net: if our diff / replaceChildren / View
+ * Transitions ever leave an un-upgraded element behind, this catches it.
  */
 let upgradeObserver = null;
 function ensureUpgradeObserver() {
@@ -102,24 +122,29 @@ export async function navigate(url, opts) {
     location.href = url;
     return;
   }
-  await performNavigation(target.href, opts?.replace ?? false);
+  await performNavigation(target.href, opts?.replace ?? false, null);
+}
+
+/**
+ * Invalidate a cached snapshot. Call after a server action mutates data
+ * that affects a cached page so the next visit refetches.
+ *
+ * @param {string} [url]  Specific URL to invalidate, or omit to clear all.
+ */
+export function revalidate(url) {
+  if (url == null) snapshotCache.clear();
+  else snapshotCache.delete(new URL(url, location.href).pathname + new URL(url, location.href).search);
 }
 
 // Auto-enable on import (standard Turbo-Drive convention).
 enableClientRouter();
 
 /* ====================================================================
- * Internal
+ * Click + popstate handlers
  * ==================================================================== */
 
 /**
- * Pathnames with these extensions are never HTML pages. The client router
- * should let the browser handle them natively — so PDFs open in a viewer,
- * JSON/XML feeds render as text, archives trigger the download prompt,
- * and images open in a new tab. Intercepting would fetch-and-swap binary
- * bytes as HTML, producing a blank/garbled page with no way to recover.
- *
- * This is intentionally conservative — anything not listed still routes.
+ * Pathnames with these extensions are never HTML pages.
  */
 const NON_HTML_EXTENSIONS = /\.(?:pdf|zip|tar|gz|7z|rar|dmg|exe|msi|deb|rpm|apk|ipa|xlsx?|docx?|pptx?|csv|odt|ods|odp|rtf|epub|mobi|xml|json|rss|atom|txt|md|wasm|mp3|mp4|mov|avi|webm|ogg|flac|wav|m4a|m4v|mkv|png|jpe?g|gif|webp|avif|bmp|ico|svg|tiff?|heic)$/i;
 
@@ -129,9 +154,6 @@ function onClick(e) {
   if (e.defaultPrevented || e.button !== 0) return;
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
-  // Use composedPath() to find the <a> element — this crosses shadow DOM
-  // boundaries. e.target alone is retargeted to the shadow host, so links
-  // inside shadow roots (nav bars, sidebars) would never be found.
   const anchor = findAnchorInPath(e);
   if (!anchor) return;
   if (anchor.hasAttribute('download')) return;
@@ -143,26 +165,28 @@ function onClick(e) {
 
   const url = new URL(href);
   if (url.origin !== location.origin) return;
-  // Skip hash-only changes on the same page.
   if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
-  // Skip paths whose extension clearly isn't an HTML page — let the
-  // browser handle downloads / feeds / images natively.
   if (NON_HTML_EXTENSIONS.test(url.pathname)) return;
 
   e.preventDefault();
-  performNavigation(href, false);
+  // Identify the active <webjs-frame> via closest() — null if the click
+  // wasn't inside any frame. The frame escape-hatch takes precedence
+  // over the auto-derived layout markers when both are present.
+  const frameId = activeFrameId(anchor);
+  performNavigation(href, false, frameId);
 }
 
 /** @param {PopStateEvent} _e */
 function onPopState(_e) {
-  performNavigation(location.href, true);
+  // popstate has no DOM anchor, so no frame context — restore via cache or
+  // refetch the whole document.
+  performNavigation(location.href, true, null);
 }
 
 /**
  * Find the nearest <a> in the event's composed path. composedPath() crosses
  * shadow DOM boundaries — essential because nav links typically live inside
- * the layout shell's shadow root. e.target alone is retargeted to the shadow
- * host and would miss the <a> entirely.
+ * the layout shell's shadow root.
  *
  * @param {MouseEvent} e
  * @returns {HTMLAnchorElement | null}
@@ -175,174 +199,646 @@ function findAnchorInPath(e) {
 }
 
 /**
+ * Find the id of the innermost <webjs-frame> enclosing `el`, walking up
+ * through normal DOM and any shadow boundaries it crosses. Returns null
+ * if the element is not inside any frame.
+ *
+ * @param {Element | null} el
+ * @returns {string | null}
+ */
+function activeFrameId(el) {
+  /** @type {Element | null} */
+  let cur = el;
+  while (cur) {
+    const frame = cur.closest('webjs-frame');
+    if (frame && frame.id) return frame.id;
+    // Cross shadow boundary upwards if necessary.
+    const root = cur.getRootNode();
+    if (root && /** @type any */ (root).host) {
+      cur = /** @type any */ (root).host;
+    } else {
+      break;
+    }
+  }
+  return null;
+}
+
+/* ====================================================================
+ * Marker discovery (the heart of the partial-swap mechanism)
+ * ==================================================================== */
+
+/**
+ * Walk a node tree collecting wj:children marker pairs into a Map
+ * keyed by segment path.
+ *
+ * Markers are HTML comments emitted by SSR around each layout's
+ * children interpolation:
+ *   <!--wj:children:/docs-->
+ *     <page content>
+ *   <!--/wj:children-->
+ *
+ * The walk uses a stack to track nested marker pairs — a path can
+ * appear multiple times in a document only if a layout transitively
+ * includes itself (pathological; we take the outermost).
+ *
+ * @param {ParentNode} root
+ * @returns {Map<string, { start: Comment, end: Comment }>}
+ */
+export function collectChildrenSlots(root) {
+  /** @type {Map<string, { start: Comment, end: Comment }>} */
+  const slots = new Map();
+  /** @type {{ path: string, start: Comment }[]} */
+  const stack = [];
+
+  // Plain recursive comment walk — TreeWalker/NodeFilter aren't available
+  // in every DOM polyfill (notably linkedom in tests). Iterative depth-
+  // first traversal keeps us portable across linkedom + native + jsdom.
+  /** @param {Node} node */
+  function visit(node) {
+    if (node.nodeType === 8 /* COMMENT_NODE */) {
+      const c = /** @type {Comment} */ (node);
+      const data = c.data;
+      const open = /^wj:children:(.+)$/.exec(data);
+      if (open) {
+        stack.push({ path: open[1], start: c });
+        return;
+      }
+      if (data.trim() === '/wj:children') {
+        const frame = stack.pop();
+        if (frame && !slots.has(frame.path)) {
+          slots.set(frame.path, { start: frame.start, end: c });
+        }
+        return;
+      }
+      return;
+    }
+    if (node.hasChildNodes && node.hasChildNodes()) {
+      for (let child = node.firstChild; child; child = child.nextSibling) {
+        visit(child);
+      }
+    }
+  }
+  visit(/** @type {Node} */ (root));
+  return slots;
+}
+
+/**
+ * Pick the longest path that exists in both maps.
+ *
+ * Path comparison is plain string equality (matches Next.js's
+ * `matchSegment`). Longest wins so the swap is as scoped as possible.
+ *
+ * @param {Map<string, unknown>} here
+ * @param {Map<string, unknown>} there
+ * @returns {string | null}
+ */
+export function longestSharedPath(here, there) {
+  let best = null;
+  for (const p of here.keys()) {
+    if (!there.has(p)) continue;
+    if (best === null || p.length > best.length) best = p;
+  }
+  return best;
+}
+
+/* ====================================================================
+ * Snapshot cache (Turbo SnapshotCache pattern)
+ * ==================================================================== */
+
+const SNAPSHOT_CAP = 16;
+/** @type {Map<string, string>} */
+const snapshotCache = new Map();
+
+/**
+ * Cache the current document's HTML keyed by URL. Used on back/forward
+ * navigation for instant restore (then revalidated in the background).
+ *
+ * @param {string} url
+ */
+function snapshotCurrent(url) {
+  const key = cacheKey(url);
+  // Move-to-front for LRU.
+  if (snapshotCache.has(key)) snapshotCache.delete(key);
+  snapshotCache.set(key, document.documentElement.outerHTML);
+  while (snapshotCache.size > SNAPSHOT_CAP) {
+    const oldest = snapshotCache.keys().next().value;
+    snapshotCache.delete(oldest);
+  }
+}
+
+/**
+ * Look up a cached snapshot by URL.
+ *
+ * @param {string} url
+ * @returns {string | null}
+ */
+function snapshotGet(url) {
+  const key = cacheKey(url);
+  const v = snapshotCache.get(key);
+  if (v == null) return null;
+  // Move-to-front.
+  snapshotCache.delete(key);
+  snapshotCache.set(key, v);
+  return v;
+}
+
+/** @param {string} url */
+function cacheKey(url) {
+  const u = new URL(url, location.href);
+  return u.pathname + u.search;
+}
+
+/* ====================================================================
+ * Navigation
+ * ==================================================================== */
+
+/**
  * @param {string} href
  * @param {boolean} isPopState
+ * @param {string | null} frameId  Active <webjs-frame> id, or null.
  */
-async function performNavigation(href, isPopState) {
+async function performNavigation(href, isPopState, frameId) {
   const url = new URL(href);
+
+  // Snapshot the current page for cache-on-back semantics.
+  snapshotCurrent(location.href);
 
   // Show a subtle loading indicator.
   document.documentElement.setAttribute('data-navigating', '');
 
+  // Optimistic loading: clone the per-segment loading.ts template (if
+  // any) into the deepest current children-slot so the user sees an
+  // instant skeleton instead of stale content. Saved so we can restore
+  // it if the fetch fails.
+  let optimisticState = null;
+  if (!isPopState) optimisticState = applyOptimisticLoading();
+
   try {
-    const resp = await fetch(href, {
-      headers: { 'x-webjs-router': '1' },
-      credentials: 'same-origin',
-    });
-    if (!resp.ok) {
-      // Fall back to full navigation on error.
-      location.href = href;
-      return;
-    }
-    // Content-Type guard — if the server didn't return HTML, the router
-    // can't swap it safely. Common mismatches:
-    //   • API routes: application/json, application/vnd.api+json
-    //   • Feeds:      application/xml, text/xml, application/rss+xml
-    //   • Downloads:  application/pdf, application/zip, etc.
-    //   • SSE:        text/event-stream (would hang on resp.text())
-    // Fall back to a full navigation so the browser handles the MIME
-    // natively (viewer, download prompt, JSON tree, etc.).
-    const ctype = resp.headers.get('content-type') || '';
-    if (!/^text\/html\b/i.test(ctype)) {
-      location.href = href;
-      return;
-    }
-    const html = await resp.text();
-    const doc = parseHTML(html);
-    if (!doc) {
-      location.href = href;
-      return;
-    }
-
-    // Swap content: if both pages share the same layout shell (e.g.
-    // <blog-shell>), swap ONLY the slot content (page-specific light DOM).
-    // The layout (header, sidebar, footer, theme toggle) stays completely
-    // mounted — no DOM touch, no style recalc, no flicker.
-    //
-    // We deliberately DON'T call mergeHead or reactivateScripts when the
-    // layout is shared: the import map stays, cached modules stay, the
-    // layout's scripts already ran. Only the <title> is updated.
-    const currentShell = findLayoutShell(document.body);
-    const newShell = findLayoutShell(doc.body);
-
-    if (currentShell && newShell &&
-        (currentShell.tagName === newShell.tagName ||
-         (currentShell.getAttribute('data-layout') && currentShell.getAttribute('data-layout') === newShell.getAttribute('data-layout')))) {
-      // Same layout — update title + add any new head elements (modulepreloads,
-      // scripts for newly-needed components). DON'T remove existing head
-      // elements — runtime-generated content like Tailwind CSS must survive.
-      addNewHeadElements(doc.head);
-
-      // For data-layout shells, swap only the <main> element's children
-      // (header and footer stay mounted). For custom element shells with
-      // shadow DOM, swap all non-DSD children (the old slot content).
-      const currentMain = currentShell.hasAttribute('data-layout')
-        ? currentShell.querySelector('main')
-        : currentShell;
-      const newMain = newShell.hasAttribute('data-layout')
-        ? newShell.querySelector('main')
-        : newShell;
-      const target = currentMain || currentShell;
-      const source = newMain || newShell;
-      const children = [...source.childNodes].filter(
-        (n) => !(n instanceof HTMLTemplateElement && /** @type any */ (n).getAttribute('shadowrootmode'))
-      );
-      swapSlotContent(target, children);
-      // Forward any streamed Suspense resolvers that sit outside the layout
-      // wrapper (they're emitted at body level, after </div>). Without this,
-      // the new page's fallback boundary never gets its deferred content.
-      forwardSuspenseResolvers(doc.body);
-    } else {
-      // Different layout structure — full swap.
-      // Move nodes directly from the parsed doc (preserves DSD shadow roots)
-      // instead of re-serializing via innerHTML (which drops shadow roots).
-      mergeHead(doc.head);
-      const newChildren = [...doc.body.childNodes];
-      const doSwap = () => {
-        document.body.replaceChildren(...newChildren);
-        reactivateScripts(document.body);
-        upgradeCustomElements(document.body);
-      };
-      if (/** @type any */ (document).startViewTransition) {
-        const t = /** @type any */ (document).startViewTransition(doSwap);
-        t.finished.then(() => upgradeCustomElements(document.body)).catch(() => {});
-      } else {
-        doSwap();
+    // popstate: try cache first, then refetch in background. Instant restore.
+    if (isPopState) {
+      const cached = snapshotGet(href);
+      if (cached) {
+        const cachedDoc = parseHTML(cached);
+        if (cachedDoc) {
+          applySwap(cachedDoc, frameId, /* revalidating */ true);
+          // Fire-and-forget revalidation.
+          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState).catch(() => {});
+          return;
+        }
       }
     }
 
-    // Update URL.
-    if (!isPopState) {
-      history.pushState(null, '', href);
-    }
-
-    // Scroll.
-    if (url.hash) {
-      const target = document.getElementById(url.hash.slice(1));
-      if (target) target.scrollIntoView();
-      else window.scrollTo(0, 0);
-    } else {
-      window.scrollTo(0, 0);
-    }
-
-    // Dispatch event for app-level hooks.
-    document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: href } }));
-  } catch {
-    // Network error — fall back to full navigation.
-    location.href = href;
+    await fetchAndApply(href, frameId, !isPopState, optimisticState);
   } finally {
     document.documentElement.removeAttribute('data-navigating');
   }
 }
 
-
 /**
- * Swap the light-DOM children of the layout shell.
+ * Build the X-Webjs-Have header value from the live DOM's marker paths.
+ * Comma-separated, in document order (no canonicalization needed; the
+ * server intersects with the target's layout chain).
  *
- * replaceChildren is a single atomic DOM operation — the browser doesn't
- * paint between removing old and inserting new. Uses View Transitions API
- * when available for a smooth cross-fade visual effect.
- *
- * @param {Element} shell
- * @param {ChildNode[]} children
+ * @returns {string}
  */
-function swapSlotContent(shell, children) {
-  shell.replaceChildren(...children);
-  reactivateScripts(shell);
-  upgradeCustomElements(shell);
-  // Schedule a deferred upgrade pass — some browsers delay custom element
-  // upgrades when elements are inserted during layout/paint. A microtask
-  // pass catches any stragglers.
-  queueMicrotask(() => upgradeCustomElements(shell));
+function buildHaveHeader() {
+  const slots = collectChildrenSlots(document.body);
+  return [...slots.keys()].join(',');
 }
 
 /**
- * Walk body's direct children looking for the layout shell.
+ * Fetch the target URL and apply the swap.
  *
- * Detection order:
- *   1. An element with `data-layout` attribute (light DOM shells).
- *   2. A custom element (tag name with a hyphen: <blog-shell>, etc.).
- *
- * Skips <script>, <style>, text nodes, and comments.
- *
- * @param {HTMLElement} body
- * @returns {Element | null}
+ * @param {string} href
+ * @param {string | null} frameId
+ * @param {boolean} recordHistory
+ * @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null} optimisticState
  */
-function findLayoutShell(body) {
-  // data-layout attribute (light DOM convention)
-  const marked = body.querySelector(':scope > [data-layout]');
-  if (marked) return marked;
-  // Custom element fallback (shadow DOM convention)
-  for (const child of body.children) {
-    if (child.tagName.includes('-')) return child;
+async function fetchAndApply(href, frameId, recordHistory, optimisticState) {
+  let html;
+  try {
+    const headers = { 'x-webjs-router': '1' };
+    const have = buildHaveHeader();
+    if (have) headers['x-webjs-have'] = have;
+    if (frameId) headers['x-webjs-frame'] = frameId;
+
+    const resp = await fetch(href, { headers, credentials: 'same-origin' });
+    if (!resp.ok) { location.href = href; return; }
+    const ctype = resp.headers.get('content-type') || '';
+    if (!/^text\/html\b/i.test(ctype)) { location.href = href; return; }
+    html = await resp.text();
+  } catch {
+    // Network error — restore optimistic content, then fall back to a full nav.
+    restoreOptimistic(optimisticState);
+    location.href = href;
+    return;
   }
+
+  const doc = parseHTML(html);
+  if (!doc) { location.href = href; return; }
+
+  applySwap(doc, frameId, false);
+
+  if (recordHistory) history.pushState(null, '', href);
+
+  // Scroll: anchor → into-view; otherwise window-top.
+  const url = new URL(href);
+  if (url.hash) {
+    const t = document.getElementById(url.hash.slice(1));
+    if (t) t.scrollIntoView();
+    else window.scrollTo(0, 0);
+  } else {
+    window.scrollTo(0, 0);
+  }
+
+  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: href, frameId } }));
+}
+
+/**
+ * Apply the swap from a parsed incoming Document onto the live document.
+ * Picks the most-scoped match: explicit webjs-frame > deepest shared
+ * layout marker > full body swap.
+ *
+ * @param {Document} doc
+ * @param {string | null} frameId
+ * @param {boolean} revalidating  Restore from cache — already-matched markers may stomp inflight state; signal helps loading templates skip.
+ */
+function applySwap(doc, frameId, revalidating) {
+  // 1. webjs-frame escape hatch.
+  if (frameId) {
+    const target = document.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
+    const source = doc.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
+    if (target && source) {
+      // ADD-ONLY head merge: preserve runtime-generated head content
+      // (Tailwind CSS injection, etc.) that the outer layout's scripts
+      // already produced.
+      addNewHeadElements(doc.head);
+      diffChildren(target, source);
+      reactivateScripts(target);
+      upgradeCustomElements(target);
+      forwardSuspenseResolvers(doc.body);
+      return;
+    }
+  }
+
+  // 2. Auto-derived layout-marker swap.
+  const here = collectChildrenSlots(document.body);
+  const there = collectChildrenSlots(doc.body);
+  const sharedPath = longestSharedPath(here, there);
+
+  if (sharedPath) {
+    // ADD-ONLY head merge for the same reason — outer layout stays
+    // mounted, its head-bound runtime state must not be invalidated.
+    addNewHeadElements(doc.head);
+    swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
+    forwardSuspenseResolvers(doc.body);
+    return;
+  }
+
+  // 3. Full body swap fallback. Use full head merge — different root
+  // layout, so stale head elements should be removed.
+  mergeHead(doc.head);
+  const newChildren = [...doc.body.childNodes];
+  const doSwap = () => {
+    document.body.replaceChildren(...newChildren);
+    reactivateScripts(document.body);
+    upgradeCustomElements(document.body);
+  };
+  if (/** @type any */ (document).startViewTransition) {
+    const t = /** @type any */ (document).startViewTransition(doSwap);
+    t.finished.then(() => upgradeCustomElements(document.body)).catch(() => {});
+  } else {
+    doSwap();
+  }
+}
+
+/**
+ * Replace nodes between `target.start` and `target.end` (exclusive) in the
+ * live document with the nodes between `source.start` and `source.end` in
+ * the parsed Document. Uses a keyed reconciler that preserves DOM
+ * identity for matched elements + their live attributes (scroll, value,
+ * etc.).
+ *
+ * @param {{ start: Comment, end: Comment } | undefined} target
+ * @param {{ start: Comment, end: Comment } | undefined} source
+ * @param {Document} _doc
+ */
+function swapMarkerRange(target, source, _doc) {
+  if (!target || !source) return;
+
+  // Build a parent-with-matching-children pair for the keyed differ.
+  // The differ wants two parents — synthesize a transient parent for
+  // the slice of `source` so we can diff in-place against `target.start`
+  // / `target.end` siblings on the live document.
+  const liveParent = target.start.parentNode;
+  if (!liveParent) return;
+
+  // Collect current children (nodes between start and end, exclusive).
+  /** @type {Node[]} */
+  const liveSlice = [];
+  for (let n = target.start.nextSibling; n && n !== target.end; n = n.nextSibling) {
+    liveSlice.push(n);
+  }
+
+  // Collect incoming children, importing into the live document.
+  /** @type {Node[]} */
+  const incomingSlice = [];
+  for (let n = source.start.nextSibling; n && n !== source.end; n = n.nextSibling) {
+    incomingSlice.push(document.importNode(n, true));
+  }
+
+  // Run the keyed diff.
+  reconcileSiblings(liveParent, target.start, target.end, liveSlice, incomingSlice);
+
+  // Upgrade + activate scripts in the just-swapped range.
+  for (let n = target.start.nextSibling; n && n !== target.end; n = n.nextSibling) {
+    if (n.nodeType === 1) {
+      reactivateScripts(/** @type {Element} */ (n));
+      upgradeCustomElements(/** @type {Element} */ (n));
+    }
+  }
+}
+
+/**
+ * Coarse keyed reconciliation between liveSlice and incomingSlice,
+ * positioned in liveParent between `startMarker` and `endMarker`.
+ *
+ * Algorithm (Remix v3 inspired, pared down):
+ *   - Match elements by (tagName + key) where key = data-key || id.
+ *   - For each pair: diff attributes, recurse into children.
+ *   - Unmatched live elements: remove.
+ *   - Unmatched incoming elements: insert in the right slot.
+ *   - Live attributes (value, checked, open, scroll-position) are
+ *     preserved on matched elements regardless of server HTML.
+ *
+ * This is intentionally simple — when no keys are present, the diff
+ * matches by position only and falls back to replaceChildren-like
+ * semantics for the unkeyed range. Apps that want stronger
+ * preservation add `data-key` to elements they care about.
+ *
+ * @param {Node} parent
+ * @param {Comment} startMarker
+ * @param {Comment} endMarker
+ * @param {Node[]} live
+ * @param {Node[]} incoming
+ */
+function reconcileSiblings(parent, startMarker, endMarker, live, incoming) {
+  // Index live elements by (tag + key) for keyed match.
+  /** @type {Map<string, Element>} */
+  const keyedLive = new Map();
+  for (const n of live) {
+    if (n.nodeType !== 1) continue;
+    const k = keyOf(/** @type {Element} */ (n));
+    if (k) keyedLive.set(k, /** @type {Element} */ (n));
+  }
+
+  // Walk incoming, placing nodes in order between markers.
+  /** @type {Node} */
+  let insertBefore = endMarker;
+  // First pass: build the final ordered list of nodes (reusing matched live).
+  /** @type {Node[]} */
+  const finalNodes = [];
+  for (const inc of incoming) {
+    if (inc.nodeType === 1) {
+      const k = keyOf(/** @type {Element} */ (inc));
+      if (k && keyedLive.has(k)) {
+        const reused = keyedLive.get(k);
+        diffElementInPlace(reused, /** @type {Element} */ (inc));
+        finalNodes.push(reused);
+        keyedLive.delete(k);
+        continue;
+      }
+    }
+    finalNodes.push(inc);
+  }
+
+  // Remove live nodes that weren't reused.
+  for (const n of live) {
+    if (n.parentNode === parent) {
+      if (n.nodeType === 1 && finalNodes.includes(n)) continue;
+      parent.removeChild(n);
+    }
+  }
+
+  // Insert final nodes in order before the end marker.
+  for (const n of finalNodes) {
+    parent.insertBefore(n, insertBefore);
+  }
+}
+
+/**
+ * Diff one matched element in place: copy attributes from `src` to `dst`,
+ * preserve live attributes, recurse into children.
+ *
+ * @param {Element} dst  The element to update (live DOM).
+ * @param {Element} src  The element to copy from (incoming HTML).
+ */
+function diffElementInPlace(dst, src) {
+  if (dst.tagName !== src.tagName) {
+    dst.replaceWith(src);
+    return;
+  }
+  // Update attributes from src; remove ones not in src.
+  const srcAttrs = new Set();
+  for (const attr of src.attributes) {
+    srcAttrs.add(attr.name);
+    if (LIVE_ATTRS.has(attr.name)) continue;
+    if (dst.getAttribute(attr.name) !== attr.value) {
+      dst.setAttribute(attr.name, attr.value);
+    }
+  }
+  for (const attr of [...dst.attributes]) {
+    if (LIVE_ATTRS.has(attr.name)) continue;
+    if (!srcAttrs.has(attr.name)) dst.removeAttribute(attr.name);
+  }
+  // For form-control-like elements, preserve live IDL state.
+  // (`value`, `checked`, `open`, etc. — see LIVE_ATTRS below for full list.)
+  // The attribute version is skipped above; we deliberately do nothing
+  // here so the user's typing / checking is never blown away.
+
+  // Recurse into children: collect both sides, run reconcileSiblings on
+  // them with synthetic boundary markers. Cheap implementation: use
+  // virtual ranges instead of inserting real comment markers.
+  reconcileChildren(dst, src);
+}
+
+/**
+ * Reconcile dst's children to match src's children, in-place.
+ *
+ * @param {Element} dst
+ * @param {Element} src
+ */
+function reconcileChildren(dst, src) {
+  const liveChildren = [...dst.childNodes];
+  const incomingChildren = [...src.childNodes].map((n) => document.importNode(n, true));
+
+  // Build keyed map of live children for reuse.
+  /** @type {Map<string, Element>} */
+  const keyedLive = new Map();
+  for (const n of liveChildren) {
+    if (n.nodeType !== 1) continue;
+    const k = keyOf(/** @type {Element} */ (n));
+    if (k) keyedLive.set(k, /** @type {Element} */ (n));
+  }
+
+  /** @type {Node[]} */
+  const finalNodes = [];
+  for (let i = 0; i < incomingChildren.length; i++) {
+    const inc = incomingChildren[i];
+    if (inc.nodeType === 1) {
+      const k = keyOf(/** @type {Element} */ (inc));
+      if (k && keyedLive.has(k)) {
+        const reused = keyedLive.get(k);
+        diffElementInPlace(reused, /** @type {Element} */ (inc));
+        finalNodes.push(reused);
+        keyedLive.delete(k);
+        continue;
+      }
+      // Positional match: same tag, same index, neither has a key.
+      const livePeer = liveChildren[i];
+      if (livePeer && livePeer.nodeType === 1 &&
+          !keyOf(/** @type {Element} */ (livePeer)) &&
+          /** @type {Element} */ (livePeer).tagName === /** @type {Element} */ (inc).tagName) {
+        diffElementInPlace(/** @type {Element} */ (livePeer), /** @type {Element} */ (inc));
+        finalNodes.push(livePeer);
+        continue;
+      }
+    } else if (inc.nodeType === 3) {
+      // Text node: positional reuse for stable identity.
+      const livePeer = liveChildren[i];
+      if (livePeer && livePeer.nodeType === 3) {
+        if (livePeer.nodeValue !== inc.nodeValue) livePeer.nodeValue = inc.nodeValue;
+        finalNodes.push(livePeer);
+        continue;
+      }
+    } else if (inc.nodeType === 8) {
+      // Comment: positional reuse.
+      const livePeer = liveChildren[i];
+      if (livePeer && livePeer.nodeType === 8) {
+        if (livePeer.nodeValue !== inc.nodeValue) livePeer.nodeValue = inc.nodeValue;
+        finalNodes.push(livePeer);
+        continue;
+      }
+    }
+    finalNodes.push(inc);
+  }
+
+  // Mutate dst to contain finalNodes in order, preserving reused references.
+  // Walk forward, inserting each node before the (potentially moved) next sibling.
+  const finalSet = new Set(finalNodes);
+  for (const n of liveChildren) {
+    if (!finalSet.has(n) && n.parentNode === dst) dst.removeChild(n);
+  }
+  for (let i = 0; i < finalNodes.length; i++) {
+    const n = finalNodes[i];
+    if (n.parentNode !== dst || dst.childNodes[i] !== n) {
+      dst.insertBefore(n, dst.childNodes[i] || null);
+    }
+  }
+}
+
+/**
+ * Get the diff key for an element: `data-key` if present, else `id`.
+ * Returns null for elements with no stable key.
+ *
+ * @param {Element} el
+ * @returns {string | null}
+ */
+function keyOf(el) {
+  const k = el.getAttribute('data-key');
+  if (k) return `${el.tagName}:k:${k}`;
+  if (el.id) return `${el.tagName}:i:${el.id}`;
   return null;
 }
 
 /**
- * Add-only head merge for same-layout navigations. Updates the title and
- * adds new elements (modulepreloads, scripts) without removing existing
- * ones — runtime-generated content like Tailwind CSS styles must survive.
+ * Attribute names whose live DOM state must NEVER be overwritten by
+ * incoming server HTML during a partial swap. The server emits these
+ * with their initial-render value; the user may have typed/clicked
+ * between renders. Preserving them keeps focus, typing, open state,
+ * and popover state intact across navigation.
+ */
+const LIVE_ATTRS = new Set([
+  // Form controls
+  'value', 'checked', 'selected', 'indeterminate', 'disabled',
+  // Disclosure / popover
+  'open', 'popover',
+]);
+
+/* ====================================================================
+ * Optimistic loading (per-segment loading.ts templates)
+ * ==================================================================== */
+
+/**
+ * Look for `<template id="wj-loading:<deepest-current-path>">` in the
+ * document; if present, clone its content into the deepest current
+ * children-slot. Returns state needed to restore on fetch failure.
+ *
+ * @returns {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null}
+ */
+function applyOptimisticLoading() {
+  const slots = collectChildrenSlots(document.body);
+  if (slots.size === 0) return null;
+  // Pick the deepest current slot (longest path).
+  let deepest = null;
+  for (const p of slots.keys()) {
+    if (deepest === null || p.length > deepest.length) deepest = p;
+  }
+  if (deepest === null) return null;
+  const tpl = document.getElementById(`wj-loading:${deepest}`);
+  if (!(tpl instanceof HTMLTemplateElement)) return null;
+
+  const slot = slots.get(deepest);
+  /** @type {Node[]} */
+  const oldChildren = [];
+  for (let n = slot.start.nextSibling; n && n !== slot.end; n = n.nextSibling) {
+    oldChildren.push(n);
+  }
+  // Replace slot contents with the loading template.
+  const range = document.createRange();
+  range.setStartAfter(slot.start);
+  range.setEndBefore(slot.end);
+  range.deleteContents();
+  slot.start.parentNode.insertBefore(tpl.content.cloneNode(true), slot.end);
+  return { slot, oldChildren };
+}
+
+/** @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null} state */
+function restoreOptimistic(state) {
+  if (!state) return;
+  const { slot, oldChildren } = state;
+  if (slot.start.parentNode !== slot.end.parentNode) return;
+  const range = document.createRange();
+  range.setStartAfter(slot.start);
+  range.setEndBefore(slot.end);
+  range.deleteContents();
+  for (const n of oldChildren) slot.start.parentNode.insertBefore(n, slot.end);
+}
+
+/* ====================================================================
+ * Diff helper for the webjs-frame escape hatch
+ * ==================================================================== */
+
+/**
+ * Diff children of two elements (used by the webjs-frame swap path).
+ *
+ * @param {Element} dst
+ * @param {Element} src
+ */
+function diffChildren(dst, src) {
+  reconcileChildren(dst, src);
+}
+
+/* ====================================================================
+ * Head merge
+ * ==================================================================== */
+
+/**
+ * Add-only head merge for partial (marker + frame) swaps. Updates the
+ * title and adds new elements (modulepreloads, scripts) without
+ * removing existing ones — runtime-generated content like Tailwind's
+ * injected CSS must survive across navigations that keep the outer
+ * layout mounted.
  *
  * @param {HTMLHeadElement} newHead
  */
@@ -374,14 +870,11 @@ function addNewHeadElements(newHead) {
 function mergeHead(newHead) {
   const currentHead = document.head;
 
-  // Update <title>.
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
 
-  // Collect keyed elements (by outerHTML for stable identity).
   const currentSet = new Set();
   for (const el of currentHead.children) {
-    // Keep import maps, base — don't touch them.
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     currentSet.add(el.outerHTML);
@@ -394,7 +887,6 @@ function mergeHead(newHead) {
     newSet.add(el.outerHTML);
   }
 
-  // Remove elements no longer in the new head (except persistent ones).
   for (const el of [...currentHead.children]) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
@@ -402,14 +894,12 @@ function mergeHead(newHead) {
     if (!newSet.has(el.outerHTML)) el.remove();
   }
 
-  // Add elements in the new head that aren't in current.
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
     if (!currentSet.has(el.outerHTML)) {
       if (el.tagName === 'SCRIPT') {
-        // Scripts must be recreated (not cloned) to execute.
         const script = document.createElement('script');
         for (const attr of el.attributes) script.setAttribute(attr.name, attr.value);
         script.textContent = el.textContent;
@@ -421,36 +911,17 @@ function mergeHead(newHead) {
   }
 }
 
-/**
- * Explicitly upgrade custom elements inside a container.
- *
- * `Document.parseHTMLUnsafe()` creates elements in a detached document whose
- * `customElements` registry is empty. When those nodes are moved to the live
- * document via `replaceChildren`, the browser *should* upgrade them — but in
- * practice (Chromium) the upgrade can fail silently for elements that were
- * already "constructed" as plain HTMLElement in the parsed document. Calling
- * `customElements.upgrade()` forces the browser to run the proper constructor
- * and trigger `connectedCallback` → `_activate()` → first render.
- *
- * The call is a no-op on elements that are already upgraded, so it's safe to
- * call unconditionally on every custom element in the subtree.
- *
- * @param {Element} container
- */
+/* ====================================================================
+ * Custom-element upgrade + script reactivation
+ * ==================================================================== */
+
+/** @param {Element} container */
 function upgradeCustomElements(container) {
   if (typeof customElements === 'undefined') return;
   upgradeTree(container);
 }
 
-/**
- * Recursively upgrade custom elements, traversing into shadow roots.
- * `querySelectorAll('*')` only searches the light DOM — it won't find
- * elements like `<theme-toggle>` inside `<blog-shell>`'s shadow root.
- * This recursive walker ensures every nested custom element is upgraded
- * regardless of DOM boundary.
- *
- * @param {Element | DocumentFragment} root
- */
+/** @param {Element | DocumentFragment} root */
 function upgradeTree(root) {
   const els = root instanceof Element
     ? [root, ...root.querySelectorAll('*')]
@@ -458,19 +929,15 @@ function upgradeTree(root) {
   for (const el of els) {
     if (el.tagName && el.tagName.includes('-')) {
       customElements.upgrade(el);
-      // After upgrade, the element may now have a shadow root with
-      // nested custom elements — recurse into it.
       if (el.shadowRoot) upgradeTree(el.shadowRoot);
     }
   }
 }
 
 /**
- * Copy streamed Suspense resolver templates + scripts from the fetched
- * document body onto the live document body. The `<template>` elements carry
- * a `data-webjs-resolve="<id>"` attribute; the suspense boot's
- * MutationObserver watches for them and replaces the matching
- * `<webjs-boundary id="<id>">` with the template content.
+ * Forward streamed Suspense resolver templates from the fetched body to
+ * the live body. Needed when the new page emits a Suspense boundary that
+ * resolves later.
  *
  * @param {HTMLElement} fetchedBody
  */
@@ -480,33 +947,39 @@ function forwardSuspenseResolvers(fetchedBody) {
   }
 }
 
-/** Re-run `<script>` tags in a container (innerHTML doesn't execute them). */
+/** @param {Element} container */
 function reactivateScripts(container) {
   for (const old of container.querySelectorAll('script')) {
     const script = document.createElement('script');
-    for (const attr of old.attributes) {
-      script.setAttribute(attr.name, attr.value);
-    }
+    for (const attr of old.attributes) script.setAttribute(attr.name, attr.value);
     script.textContent = old.textContent;
     old.replaceWith(script);
   }
 }
 
-// Internal helpers re-exported for unit testing (underscore prefix signals
-// "not part of the public API — may change without notice").
+/* ====================================================================
+ * Internal exports for unit testing
+ * ==================================================================== */
+
 export {
-  findLayoutShell as _findLayoutShell,
   addNewHeadElements as _addNewHeadElements,
   mergeHead as _mergeHead,
   reactivateScripts as _reactivateScripts,
   findAnchorInPath as _findAnchorInPath,
+  activeFrameId as _activeFrameId,
+  collectChildrenSlots as _collectChildrenSlots,
+  longestSharedPath as _longestSharedPath,
+  keyOf as _keyOf,
+  diffElementInPlace as _diffElementInPlace,
+  reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
+  snapshotCache as _snapshotCache,
+  LIVE_ATTRS as _LIVE_ATTRS,
 };
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
- * href should bypass the router (let the browser handle it natively).
- * Exposed for unit testing.
+ * href should bypass the router. Exposed for unit testing.
  *
  * @param {string} pathname
  * @returns {boolean}
