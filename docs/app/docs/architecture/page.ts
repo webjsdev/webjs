@@ -49,7 +49,7 @@ export default function Architecture() {
     <p>The <code>webjs</code> command-line tool:</p>
     <ul>
       <li><code>webjs dev</code> — dev server with file watching + live reload via SSE</li>
-      <li><code>webjs start</code> — production server (optional <code>--http2 --cert --key</code>; no build step — serves source directly)</li>
+      <li><code>webjs start</code> — production server, speaks plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2); no build step — serves source directly</li>
       <li><code>webjs db generate/migrate/studio</code> — Prisma CLI wrappers</li>
     </ul>
 

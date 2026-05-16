@@ -19,10 +19,10 @@ export default function Configuration() {
     </ul>
 
     <h3>webjs start</h3>
-    <pre>webjs start [--port 3000] [--http2 --cert &lt;path&gt; --key &lt;path&gt;]</pre>
+    <pre>webjs start [--port 3000]</pre>
     <ul>
-      <li><code>--port</code> — production server port</li>
-      <li><code>--http2 --cert &lt;pem&gt; --key &lt;pem&gt;</code> — serve HTTP/2 over TLS (falls back to H1.1 if cert/key missing)</li>
+      <li><code>--port</code> — production server port (also honors the <code>PORT</code> env var; default 3000)</li>
+      <li>Speaks plain HTTP/1.1; TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
       <li>gzip/brotli compression enabled by default</li>
       <li>Static file ETag + Cache-Control headers</li>
       <li>Graceful shutdown on SIGTERM/SIGINT</li>

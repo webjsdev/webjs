@@ -588,14 +588,13 @@ revert a newer settled page. Window scroll position is captured on
 snapshot and restored on back/forward cache hits — inner scrollables
 keep their `scrollTop` natively via outer-layout DOM identity.
 
-**Production requires HTTP/2 at the edge.** The per-file ESM model
-depends on multiplex to be competitive with bundling. webjs warns at
-boot in prod mode if `--http2` isn't set, and again on the first
-HTTP/1.1 request without recognizable reverse-proxy headers. Either
-run `webjs start --http2 --cert <pem> --key <pem>` or front a proxy
-(Cloudflare/nginx/Caddy/Fly/Railway/Render) that terminates HTTP/2 to
-the browser. Set `WEBJS_NO_HTTP2_WARNING=1` to silence the advisories
-when your proxy is correctly configured.
+**Production benefits from HTTP/2 at the edge.** The per-file ESM
+model rides HTTP/2 multiplex to be competitive with bundling. PaaS
+edges (Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify,
+Heroku) serve HTTP/2 to clients automatically — no framework
+configuration. Bare-VM self-hosters should put nginx / Caddy /
+Traefik in front. `webjs start` itself only speaks plain HTTP/1.1;
+TLS termination is the proxy's job.
 
 For the 1% case where you want a partial-swap region NOT tied to a
 folder layout (an in-page widget that should swap on click), wrap it
@@ -662,9 +661,8 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 ## CLI reference
 
 ```sh
-webjs dev    [--port N] [--appDir <dir>]              # dev server with live reload
-webjs start  [--port N] [--appDir <dir>]              # prod server. No build step — source IS the runtime
-             [--http2 --cert <path> --key <path>]       # HTTP/2 + TLS (recommended in prod)
+webjs dev    [--port N]                               # dev server with live reload
+webjs start  [--port N]                               # prod server. No build step — source IS the runtime; speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
 webjs check  [--fix]                                  # convention validator
 webjs create <name> [--template api|saas]             # scaffold a new app

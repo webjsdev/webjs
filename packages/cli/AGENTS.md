@@ -43,7 +43,7 @@ README.md                npm-facing package readme.
 | Command | Implementation |
 |---|---|
 | `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })` |
-| `webjs start` | `startServer({ dev: false })` (HTTP/2 + TLS optional via `--http2 --cert --key`) |
+| `webjs start` | `startServer({ dev: false })` — plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjskit/server/check` |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
