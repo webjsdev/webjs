@@ -21,6 +21,11 @@ webjs start [--port 3000]</pre>
     </ul>
 
     <h2>No build step</h2>
+    <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
+      <p style="margin:0 0 .5rem;font-weight:600">Required for production: HTTP/2 at the edge</p>
+      <p style="margin:0">webjs's no-build, per-file-ESM model depends on HTTP/2 multiplex to be competitive with bundling — without it, the many small module fetches per page serialize into a head-of-line-blocked queue. Either run <code>webjs start --http2 --cert &lt;pem&gt; --key &lt;pem&gt;</code> to terminate HTTP/2 directly, or — more commonly — put a reverse proxy in front of <code>webjs start</code> that speaks HTTP/2 to the browser (Cloudflare, nginx, Caddy, Fly, Railway, Render all do this automatically).</p>
+      <p style="margin:.5rem 0 0">webjs will log a warning at boot in production mode without <code>--http2</code>, and again on the first HTTP/1.1 request without recognizable reverse-proxy headers. Set <code>WEBJS_NO_HTTP2_WARNING=1</code> to silence either if your proxy is correctly configured.</p>
+    </div>
     <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code> — there is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
     <ul>
       <li>The browser fetches each module via the import graph, resolved through an <code>&lt;script type="importmap"&gt;</code> emitted in the document head.</li>
@@ -271,7 +276,7 @@ pm2 start "webjs start" --name my-app</pre>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
-      <li>Use a reverse proxy or run <code>webjs start --http2 ...</code> directly — HTTP/2 multiplex is what makes per-file ESM as fast as bundling.</li>
+      <li><strong>HTTP/2 at the edge is required.</strong> Either run <code>webjs start --http2 --cert &lt;pem&gt; --key &lt;pem&gt;</code> directly, or run plain <code>webjs start</code> behind a reverse proxy that terminates HTTP/2. webjs warns at boot and on the first HTTP/1.1 request if neither is detected.</li>
       <li>Set up log aggregation (webjs outputs structured JSON in production).</li>
     </ul>
   `;

@@ -588,6 +588,15 @@ revert a newer settled page. Window scroll position is captured on
 snapshot and restored on back/forward cache hits — inner scrollables
 keep their `scrollTop` natively via outer-layout DOM identity.
 
+**Production requires HTTP/2 at the edge.** The per-file ESM model
+depends on multiplex to be competitive with bundling. webjs warns at
+boot in prod mode if `--http2` isn't set, and again on the first
+HTTP/1.1 request without recognizable reverse-proxy headers. Either
+run `webjs start --http2 --cert <pem> --key <pem>` or front a proxy
+(Cloudflare/nginx/Caddy/Fly/Railway/Render) that terminates HTTP/2 to
+the browser. Set `WEBJS_NO_HTTP2_WARNING=1` to silence the advisories
+when your proxy is correctly configured.
+
 For the 1% case where you want a partial-swap region NOT tied to a
 folder layout (an in-page widget that should swap on click), wrap it
 in `<webjs-frame id="...">`. The router's `closest('webjs-frame')`

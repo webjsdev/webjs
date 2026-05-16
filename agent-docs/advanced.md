@@ -71,6 +71,28 @@ Content-hashed cache-busting and granular cache invalidation come from
 the same per-file model: edit one file, only that file's URL hash
 changes, only that one re-downloads.
 
+### HTTP/2 advisory warnings
+
+Because the no-build model depends on HTTP/2 at the edge to be
+competitive with bundling, webjs surfaces the assumption at runtime:
+
+- **Boot-time advisory** — in prod mode, if `--http2 --cert --key` are
+  not all provided, log a warning at `server.listen()` callback time
+  with concrete remediation (run `--http2 ...` directly, or front a
+  reverse proxy).
+- **Request-time peek** — on the first prod request, if
+  `req.httpVersion === '1.1'` AND no recognizable reverse-proxy
+  headers (`x-forwarded-*`, `forwarded`, `via`, `cf-connecting-ip`,
+  `fly-forwarded-port`, `x-real-ip`) are present, log a warning once.
+  Catches the case where a proxy is in front but downgrading to
+  HTTP/1.1 between the proxy and clients (which would otherwise be
+  silently slow).
+
+Both advisories are silenced by `WEBJS_NO_HTTP2_WARNING=1`. The
+request-time advisory also self-silences once any common proxy
+header arrives — false negatives are possible with exotic proxies
+that set no recognizable headers, hence the env-var escape hatch.
+
 ## Rate limiting — `rateLimit()`
 
 Fixed-window limiter shaped as middleware. Place in `middleware.ts` at
