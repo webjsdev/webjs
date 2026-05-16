@@ -23,7 +23,8 @@ export {
   stringify, parse,
   serialize, deserialize,
 } from './src/serialize.js';
-export { enableClientRouter, disableClientRouter, navigate } from './src/router-client.js';
+export { enableClientRouter, disableClientRouter, navigate, revalidate } from './src/router-client.js';
+export { WebjsFrame } from './src/webjs-frame.js';
 
 // Directives — also available via '@webjskit/core/directives'
 export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';

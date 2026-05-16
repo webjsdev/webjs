@@ -1,3 +1,8 @@
+// Importing this side-effect-registers <webjs-frame> so apps that
+// `import '@webjskit/core/client-router'` get the escape-hatch element
+// available without a second import.
+import './webjs-frame.js';
+
 /**
  * Client router for webjs — nested-layout-aware partial swap.
  *
