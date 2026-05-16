@@ -36,8 +36,7 @@ webjs create <name> --template api   # backend-only API app
 webjs create <name> --template saas  # auth + dashboard + Prisma User model
 
 webjs dev                      # dev server with live reload
-webjs start                    # production server
-webjs build                    # production bundle
+webjs start                    # production server (no build step — serves source directly)
 webjs check                    # validate project conventions
 webjs test                     # run server + browser tests
 webjs db <prisma-subcommand>   # prisma passthrough (saas template)

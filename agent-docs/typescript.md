@@ -1,13 +1,12 @@
 # TypeScript without a build step + full-stack type safety
 
 Files ending in `.ts` / `.mts` are supported everywhere `.js` / `.mjs`
-are — same routing conventions, same server-action behaviour, same
-bundle participation. No `tsc` run is part of the user-visible workflow:
+are — same routing conventions, same server-action behaviour. No `tsc`
+run is part of the user-visible workflow; no separate build step:
 
 - **Editor** (VS Code) runs the TypeScript language server continuously. Red-squiggle on wrong types.
 - **CI** (optional) runs `tsc --noEmit` against `tsconfig.json`. Type-check only.
-- **Dev server** (runtime, both directions): the server registers an esbuild ESM loader hook at startup (`module.register()`) so every `.ts` import — server-side (SSR pages, layouts, actions, routes) or browser-fetched (`/components/foo.ts`) — flows through the same `esbuild.transform()` call (~0.5–1ms per file, cached by mtime). SSR + hydration must produce equivalent JS.
-- **`webjs build`**: same esbuild for optional production bundle.
+- **Dev + prod server** (runtime, both directions): the server registers an esbuild ESM loader hook at startup (`module.register()`) so every `.ts` import — server-side (SSR pages, layouts, actions, routes) or browser-fetched (`/components/foo.ts`) — flows through the same `esbuild.transform()` call (~0.5–1ms per file, cached by mtime). SSR + hydration produce equivalent JS. The same loader runs in `webjs dev` and `webjs start`; there is no separate compile step in between.
 
 ## TypeScript feature support
 

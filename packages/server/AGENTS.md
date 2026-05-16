@@ -51,7 +51,6 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
-| `build.js` | `buildBundle()` — optional esbuild bundle for prod (`webjs build`) |
 | `esbuild-loader.js` | Node `module.register()` hook for server-side `.ts` imports |
 | `fs-walk.js` | Async recursive directory walker |
 | `logger.js` | `defaultLogger` (JSON-shaped in prod, pretty in dev) |

@@ -1,8 +1,8 @@
 # AGENTS.md — @webjskit/cli
 
-The webjs **command-line interface** — `webjs dev` / `start` / `build`
-/ `test` / `check` / `create` / `db` — plus the scaffold templates
-shipped into every new app.
+The webjs **command-line interface** — `webjs dev` / `start` / `test`
+/ `check` / `create` / `db` — plus the scaffold templates shipped
+into every new app.
 
 Framework-wide rules (workflow, JSDoc-in-`packages/`, no-build,
 commit conventions, autonomous-mode behaviour, scaffold rules) live
@@ -44,7 +44,6 @@ README.md                npm-facing package readme.
 |---|---|
 | `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })` |
 | `webjs start` | `startServer({ dev: false })` (HTTP/2 + TLS optional via `--http2 --cert --key`) |
-| `webjs build` | `buildBundle()` from `@webjskit/server` |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjskit/server/check` |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |

@@ -12,7 +12,6 @@
     "webjs:dev": "webjs dev --port 5001",
     "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
-    "build": "node scripts/copy-registry.js && webjs build",
     "preview:build": "node scripts/copy-registry.js"
   },
   "dependencies": {

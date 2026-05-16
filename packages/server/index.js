@@ -22,7 +22,6 @@ export { cache } from './src/cache-fn.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';
 export { broadcast } from './src/broadcast.js';
 export { json, readBody } from './src/json.js';
-export { buildBundle } from './src/build.js';
 export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
