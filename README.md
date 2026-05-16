@@ -172,6 +172,13 @@ proxy (Cloudflare, nginx, Caddy, Fly, Railway, Render) and run
 `webjs start` on plain HTTP behind it — the proxy gives you HTTP/2 to
 the browser for free.
 
+**HTTP/2 is required for production performance.** Without it, the
+per-file ESM model serializes through HTTP/1.1's 6-connection limit.
+webjs warns at boot in prod mode if `--http2` isn't set, and again on
+the first HTTP/1.1 request that arrives without recognizable
+reverse-proxy headers — both can be silenced with
+`WEBJS_NO_HTTP2_WARNING=1` when your proxy is correctly configured.
+
 Health: `GET /__webjs/health`. Graceful shutdown on `SIGTERM`.
 
 Embed in Express/Fastify/Bun/Deno:
