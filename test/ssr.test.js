@@ -761,6 +761,81 @@ test('ssrPage: emits wj:children comment marker around the page slot for each la
   assert.ok(idxPage < idxClose, 'close marker follows page content');
 });
 
+test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', async () => {
+  // The client tells the server "I already have layouts at / and /docs"
+  // via the X-Webjs-Have header. Server must short-circuit at /docs —
+  // emit only the page content wrapped in the /docs marker pair, never
+  // re-render the docs layout's outer markup (header/sidenav/etc.).
+  const { route, appDir, tmpDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>page body</p>\`; }\n`,
+    layoutSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Layout({ children }) {\n` +
+      `  return html\`<div class="HEAVY-OUTER-LAYOUT">\${children}</div>\`;\n` +
+      `}\n`,
+  });
+
+  const url = new URL('http://localhost/');
+  const req = new Request(url.toString(), {
+    headers: { 'x-webjs-have': '/' },
+  });
+  const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
+  const body = await resp.text();
+
+  // The outer layout's distinctive markup must NOT appear — it was skipped.
+  assert.ok(!body.includes('HEAVY-OUTER-LAYOUT'),
+    `outer layout should be skipped, but body contains it. got: ${body.slice(0, 500)}`);
+  // The page content is still present, wrapped in the matched marker.
+  assert.ok(body.includes('<!--wj:children:/-->'), 'matched marker present');
+  assert.ok(body.includes('page body'), 'page content present');
+});
+
+test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () => {
+  // Two-level layout chain: root and docs. Client has both.
+  // Server should match at /docs (deepest), not / (shallower).
+  const sub = mkdtempSync(join(tmpDir, 'have-deepest-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(join(appDir, 'docs'), { recursive: true });
+  const rootLayout = join(appDir, 'layout.js');
+  const docsLayout = join(appDir, 'docs', 'layout.js');
+  const pageFile = join(appDir, 'docs', 'page.js');
+  writeFileSync(rootLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Root({ children }) { return html\`<div class="ROOT">\${children}</div>\`; }\n`);
+  writeFileSync(docsLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Docs({ children }) { return html\`<div class="DOCS">\${children}</div>\`; }\n`);
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Page() { return html\`<p>sub page</p>\`; }\n`);
+
+  const route = {
+    file: pageFile,
+    // layouts[0] = outermost (root), layouts[N-1] = innermost
+    layouts: [rootLayout, docsLayout],
+    errors: [],
+    metadataFiles: [],
+  };
+
+  const url = new URL('http://localhost/docs');
+  const req = new Request(url.toString(), {
+    headers: { 'x-webjs-have': '/,/docs' },
+  });
+  const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
+  const body = await resp.text();
+
+  // Both outer layouts must be skipped — body has neither's distinctive markup.
+  assert.ok(!body.includes('ROOT'), `root layout skipped; got: ${body.slice(0, 600)}`);
+  assert.ok(!body.includes('DOCS'), `docs layout skipped; got: ${body.slice(0, 600)}`);
+  // Marker for /docs is present (deepest match).
+  assert.ok(body.includes('<!--wj:children:/docs-->'),
+    `deepest matched marker /docs present, got: ${body.slice(0, 600)}`);
+  // Page content is there.
+  assert.ok(body.includes('sub page'), 'page content present');
+});
+
 test('ssrPage: no children-slot markers when route has no layouts', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:

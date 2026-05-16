@@ -34,7 +34,18 @@ export async function ssrPage(route, params, url, opts) {
 
   try {
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set() };
-    const body = await renderChain(route, ctx, opts.dev, suspenseCtx);
+    // Parse the partial-nav "have" header from the client. The header
+    // lists comma-separated marker paths the client already has rendered
+    // in its DOM. The server walks the target route's layout chain
+    // innermost → outermost and SHORT-CIRCUITS at the first match —
+    // returning only the content below that layout, wrapped in the
+    // matched layout's marker pair. Real wire-byte savings: the outer
+    // layouts' HTML is never re-serialized for same-shell navigations.
+    const haveHeader = opts.req?.headers.get('x-webjs-have') || '';
+    const have = haveHeader
+      ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
+      : null;
+    const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have);
     // When a production bundle is available, skip the per-file module imports
     // in the shell and load the bundle instead — that's a single request for
     // all components + page side-effects.
@@ -174,7 +185,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   });
 }
 
-async function renderChain(route, ctx, dev, suspenseCtx) {
+async function renderChain(route, ctx, dev, suspenseCtx, have) {
   const page = await loadModule(route.file, dev);
   if (!page.default) throw new Error(`Page ${route.file} must have a default export`);
   let tree = await page.default(ctx);
@@ -203,10 +214,20 @@ async function renderChain(route, ctx, dev, suspenseCtx) {
   // anything inside it: sidenavs, sticky headers, inner scroll
   // containers). Auto-derived from folder structure — no opt-in
   // required from layout authors.
+  // X-Webjs-Have optimization: iterate from innermost → outermost and
+  // SHORT-CIRCUIT at the first layout whose segment path the client
+  // already has rendered. Wrap the accumulated inner tree in that
+  // layout's marker pair (so the client can identify the splice
+  // target) and return — outer layouts are not rendered at all,
+  // saving CPU and wire bytes.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
+    const segmentPath = layoutSegmentPath(route.layouts[i]);
+    if (have && have.has(segmentPath)) {
+      tree = wrapWithChildrenMarker(tree, segmentPath);
+      return await renderToString(tree, { ssr: true, suspenseCtx });
+    }
     const mod = await loadModule(route.layouts[i], dev);
     if (!mod.default) continue;
-    const segmentPath = layoutSegmentPath(route.layouts[i]);
     tree = await mod.default({
       ...ctx,
       children: wrapWithChildrenMarker(tree, segmentPath),
