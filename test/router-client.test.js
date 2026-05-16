@@ -1,23 +1,37 @@
 /**
- * Unit tests for router-client internals (data-layout detection, add-only
- * head merge, mergeHead with script recreation). Uses linkedom for a
- * DOM-compatible environment.
+ * Unit tests for router-client internals — the nested-layout-aware
+ * partial-swap mechanism.
  *
- * The router-client auto-enables on import (enableClientRouter() at EOM),
- * so we set up globals BEFORE the import.
+ * Coverage:
+ *   - collectChildrenSlots:   walk wj:children comment markers in DOM
+ *   - longestSharedPath:      pick deepest path in both maps
+ *   - keyOf:                  data-key / id → key for keyed diff
+ *   - diffElementInPlace:     attribute diff + live-attr preservation
+ *   - reconcileChildren:      keyed + positional child reuse
+ *   - navigate (full):        marker-based partial swap end-to-end
+ *   - navigate fallbacks:     non-HTML response, fetch error, !ok, parse null
+ *   - addNewHeadElements:     add-only head merge (Tailwind survives)
+ *   - mergeHead:              full-merge head (used on full body swap)
+ *   - findAnchorInPath:       anchor discovery through composedPath
+ *   - activeFrameId:          <webjs-frame> escape hatch via closest()
+ *   - isNonHtmlPath:          pathname extension guard
+ *   - onPopState:             history back/forward triggers nav
+ *
+ * The router-client auto-enables on import (enableClientRouter() at
+ * end of module), so we set up DOM globals BEFORE the import.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
 
-let _find, _addNewHead, _merge, _isNonHtmlPath, navigate,
-  _reactivateScripts, _findAnchorInPath, _onPopState,
-  enableClientRouter, disableClientRouter;
+let _collect, _longest, _keyOf, _diffEl, _reconcile,
+  _addNewHead, _merge, _isNonHtmlPath, navigate,
+  _reactivateScripts, _findAnchorInPath, _activeFrameId, _onPopState,
+  _snapshotCache, _LIVE_ATTRS,
+  enableClientRouter, disableClientRouter, revalidate;
 
 before(async () => {
   const { window } = parseHTML('<!doctype html><html><head></head><body></body></html>');
-  // Copy the needed DOM constructors/globals onto the Node globalThis so
-  // the router-client module can resolve them.
   globalThis.document = window.document;
   globalThis.window = window;
   globalThis.DocumentFragment = window.DocumentFragment;
@@ -32,49 +46,274 @@ before(async () => {
   globalThis.customElements = window.customElements;
   globalThis.CustomEvent = window.CustomEvent;
   globalThis.DOMParser = window.DOMParser;
+  // linkedom doesn't expose CSS.escape; provide a minimal polyfill so
+  // the webjs-frame querySelector branch works in tests.
+  globalThis.CSS = globalThis.CSS || {
+    escape(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, (m) => `\\${m}`); },
+  };
 
   ({
-    _findLayoutShell: _find,
+    _collectChildrenSlots: _collect,
+    _longestSharedPath: _longest,
+    _keyOf,
+    _diffElementInPlace: _diffEl,
+    _reconcileChildren: _reconcile,
     _addNewHeadElements: _addNewHead,
     _mergeHead: _merge,
     _isNonHtmlPath,
     _reactivateScripts,
     _findAnchorInPath,
+    _activeFrameId,
     _onPopState,
+    _snapshotCache,
+    _LIVE_ATTRS,
     navigate,
+    revalidate,
     enableClientRouter,
     disableClientRouter,
   } = await import('../packages/core/src/router-client.js'));
 });
 
-test('findLayoutShell: detects data-layout element on direct body child', () => {
-  const body = document.createElement('body');
-  body.innerHTML = '<div data-layout="app/layout">inner</div>';
-  const shell = _find(body);
-  assert.ok(shell);
-  assert.equal(shell.getAttribute('data-layout'), 'app/layout');
+/* ====================================================================
+ * collectChildrenSlots — marker discovery
+ * ==================================================================== */
+
+/** Helper: parse an HTML body string into a real body element via DOMParser. */
+function bodyFrom(html) {
+  const doc = new globalThis.DOMParser().parseFromString(
+    `<!doctype html><html><body>${html}</body></html>`,
+    'text/html'
+  );
+  return doc.body;
+}
+
+test('collectChildrenSlots: single-layout pair builds one entry', () => {
+  const body = bodyFrom(
+    '<header>hdr</header>' +
+    '<!--wj:children:/-->' +
+    '<p>page</p>' +
+    '<!--/wj:children-->'
+  );
+  const slots = _collect(body);
+  assert.equal(slots.size, 1);
+  assert.ok(slots.has('/'));
+  const { start, end } = slots.get('/');
+  assert.equal(start.nodeType, 8);
+  assert.equal(end.nodeType, 8);
+  assert.equal(start.data, 'wj:children:/');
 });
 
-test('findLayoutShell: falls back to first custom element if no data-layout', () => {
-  const body = document.createElement('body');
-  body.innerHTML = '<div>ignored</div><blog-shell>hi</blog-shell>';
-  const shell = _find(body);
-  assert.ok(shell);
-  assert.equal(shell.tagName.toLowerCase(), 'blog-shell');
+test('collectChildrenSlots: nested layouts build two entries (outer + inner)', () => {
+  const body = bodyFrom(
+    '<header>root</header>' +
+    '<!--wj:children:/-->' +
+      '<aside>docs sidenav</aside>' +
+      '<!--wj:children:/docs-->' +
+        '<h1>page A</h1>' +
+      '<!--/wj:children-->' +
+    '<!--/wj:children-->'
+  );
+  const slots = _collect(body);
+  assert.equal(slots.size, 2);
+  assert.ok(slots.has('/'));
+  assert.ok(slots.has('/docs'));
 });
 
-test('findLayoutShell: returns null when no shell is present', () => {
-  const body = document.createElement('body');
-  body.innerHTML = '<p>just plain html</p>';
-  assert.equal(_find(body), null);
+test('collectChildrenSlots: no markers → empty map (no crash)', () => {
+  const body = bodyFrom('<p>just a page</p>');
+  const slots = _collect(body);
+  assert.equal(slots.size, 0);
 });
 
-test('findLayoutShell: data-layout takes precedence over custom element', () => {
-  const body = document.createElement('body');
-  body.innerHTML = '<div data-layout="x">A</div><blog-shell>B</blog-shell>';
-  const shell = _find(body);
-  assert.equal(shell.getAttribute('data-layout'), 'x');
+test('collectChildrenSlots: stale closing marker without open is ignored', () => {
+  // Defensive: a malformed `<!--/wj:children-->` without a matching opener
+  // shouldn't crash the walker.
+  const body = bodyFrom('<p>x</p><!--/wj:children--><p>y</p>');
+  const slots = _collect(body);
+  assert.equal(slots.size, 0);
 });
+
+test('collectChildrenSlots: route-group paths preserve their (group) segments', () => {
+  // Two different `(group)` layouts at the same URL produce DIFFERENT
+  // marker paths, so the client never falsely matches them as shared.
+  const body = bodyFrom(
+    '<!--wj:children:/(marketing)/about-->' +
+    '<p>about</p>' +
+    '<!--/wj:children-->'
+  );
+  const slots = _collect(body);
+  assert.ok(slots.has('/(marketing)/about'));
+  assert.ok(!slots.has('/about'));
+});
+
+/* ====================================================================
+ * longestSharedPath
+ * ==================================================================== */
+
+test('longestSharedPath: picks the longest path present in both maps', () => {
+  const here = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
+  const there = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
+  assert.equal(_longest(here, there), '/docs/components');
+});
+
+test('longestSharedPath: cross-layout nav drops to shallowest common ancestor', () => {
+  // /docs/components/a → /about: only root layout is shared.
+  const here = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
+  const there = new Map([['/', null]]);
+  assert.equal(_longest(here, there), '/');
+});
+
+test('longestSharedPath: no overlap → null', () => {
+  const here = new Map([['/blog', null]]);
+  const there = new Map([['/admin', null]]);
+  assert.equal(_longest(here, there), null);
+});
+
+test('longestSharedPath: empty maps → null', () => {
+  assert.equal(_longest(new Map(), new Map()), null);
+});
+
+/* ====================================================================
+ * keyOf
+ * ==================================================================== */
+
+test('keyOf: data-key takes precedence', () => {
+  const el = document.createElement('li');
+  el.setAttribute('data-key', 'k1');
+  el.id = 'i1';
+  assert.equal(_keyOf(el), 'LI:k:k1');
+});
+
+test('keyOf: id is the fallback when no data-key', () => {
+  const el = document.createElement('section');
+  el.id = 'foo';
+  assert.equal(_keyOf(el), 'SECTION:i:foo');
+});
+
+test('keyOf: no key → null (positional match only)', () => {
+  const el = document.createElement('p');
+  assert.equal(_keyOf(el), null);
+});
+
+/* ====================================================================
+ * diffElementInPlace — attribute diffing + live-attr preservation
+ * ==================================================================== */
+
+test('diffElementInPlace: copies non-live attributes from src to dst', () => {
+  const dst = document.createElement('div');
+  dst.setAttribute('class', 'old');
+  dst.setAttribute('data-stale', 'yes');
+  const src = document.createElement('div');
+  src.setAttribute('class', 'new');
+  src.setAttribute('data-fresh', 'yes');
+  _diffEl(dst, src);
+  assert.equal(dst.getAttribute('class'), 'new');
+  assert.equal(dst.getAttribute('data-fresh'), 'yes');
+  assert.equal(dst.getAttribute('data-stale'), null,
+    'attribute not present in src should be removed');
+});
+
+test('diffElementInPlace: PRESERVES live attribute `value` on input', () => {
+  // User typed something into the input between renders — the server-
+  // rendered HTML has the initial value, but the live DOM has the user's
+  // input. Diff must leave the live attribute untouched.
+  const dst = document.createElement('input');
+  dst.setAttribute('type', 'text');
+  dst.setAttribute('value', 'user-typed');
+  const src = document.createElement('input');
+  src.setAttribute('type', 'text');
+  src.setAttribute('value', 'server-default');
+  _diffEl(dst, src);
+  assert.equal(dst.getAttribute('value'), 'user-typed',
+    'live `value` must survive partial-swap navigation');
+});
+
+test('diffElementInPlace: PRESERVES live attribute `open` on details', () => {
+  const dst = document.createElement('details');
+  dst.setAttribute('open', '');
+  const src = document.createElement('details');
+  // Server has it closed; user opened it locally.
+  _diffEl(dst, src);
+  assert.ok(dst.hasAttribute('open'), 'user-opened <details> must stay open');
+});
+
+test('diffElementInPlace: PRESERVES `checked` on checkbox', () => {
+  const dst = document.createElement('input');
+  dst.setAttribute('type', 'checkbox');
+  dst.setAttribute('checked', '');
+  const src = document.createElement('input');
+  src.setAttribute('type', 'checkbox');
+  _diffEl(dst, src);
+  assert.ok(dst.hasAttribute('checked'),
+    'user-checked checkbox state preserved');
+});
+
+test('diffElementInPlace: LIVE_ATTRS list covers all expected fields', () => {
+  for (const name of ['value', 'checked', 'selected', 'indeterminate', 'disabled', 'open', 'popover']) {
+    assert.ok(_LIVE_ATTRS.has(name), `live-attr list must include "${name}"`);
+  }
+});
+
+test('diffElementInPlace: different tag → replaceWith (no in-place reuse)', () => {
+  const parent = document.createElement('div');
+  const dst = document.createElement('span');
+  parent.appendChild(dst);
+  const src = document.createElement('strong');
+  _diffEl(dst, src);
+  assert.equal(parent.firstChild.tagName, 'STRONG',
+    'mismatched tags swap out the element');
+});
+
+/* ====================================================================
+ * reconcileChildren — keyed reuse + positional reuse
+ * ==================================================================== */
+
+test('reconcileChildren: matches by data-key, reuses the DOM node', () => {
+  const dst = document.createElement('ul');
+  dst.innerHTML =
+    '<li data-key="a" data-state="OLD">A</li>' +
+    '<li data-key="b" data-state="OLD">B</li>';
+  const a = dst.children[0];
+  const src = document.createElement('ul');
+  src.innerHTML =
+    '<li data-key="b" data-state="NEW">B</li>' +
+    '<li data-key="a" data-state="NEW">A</li>';
+
+  _reconcile(dst, src);
+
+  // The "a" element is reused — same node reference after reconciliation,
+  // but reordered.
+  const liveItems = [...dst.querySelectorAll('li')];
+  assert.equal(liveItems.length, 2);
+  assert.equal(liveItems[0].getAttribute('data-key'), 'b');
+  assert.equal(liveItems[1].getAttribute('data-key'), 'a');
+  assert.equal(liveItems[1], a, 'matched element kept its identity');
+});
+
+test('reconcileChildren: text node positional reuse', () => {
+  const dst = document.createElement('span');
+  dst.appendChild(document.createTextNode('old'));
+  const src = document.createElement('span');
+  src.appendChild(document.createTextNode('new'));
+  _reconcile(dst, src);
+  assert.equal(dst.firstChild.nodeType, 3);
+  assert.equal(dst.textContent, 'new');
+});
+
+test('reconcileChildren: unmatched live children are removed', () => {
+  const dst = document.createElement('div');
+  dst.innerHTML = '<p id="keep">keep</p><p id="drop">drop</p>';
+  const src = document.createElement('div');
+  src.innerHTML = '<p id="keep">keep</p>';
+  _reconcile(dst, src);
+  const ps = [...dst.querySelectorAll('p')];
+  assert.equal(ps.length, 1);
+  assert.equal(ps[0].id, 'keep');
+});
+
+/* ====================================================================
+ * addNewHeadElements — add-only head merge (Tailwind survives)
+ * ==================================================================== */
 
 test('addNewHeadElements: updates <title> from new head', () => {
   document.head.innerHTML = '<title>Old</title>';
@@ -98,17 +337,17 @@ test('addNewHeadElements: adds NEW link/style elements, preserves existing', () 
 
   _addNewHead(newHead);
 
-  // Runtime-generated CSS must survive.
+  // Runtime-generated CSS must survive (this is why we use add-only on
+  // partial swaps — Tailwind runtime injects its CSS as a <style>, and
+  // a full mergeHead would remove it).
   assert.ok(
     document.head.querySelector('#runtime-css'),
     'runtime CSS element should not be removed'
   );
-  // New modulepreload link should be added.
   assert.ok(
     document.head.querySelector('link[rel="modulepreload"][href="/new-module.js"]'),
     'new modulepreload should be added'
   );
-  // Existing link should stay (not duplicated).
   const existing = document.head.querySelectorAll('link[href="/existing.css"]');
   assert.equal(existing.length, 1);
 });
@@ -121,7 +360,6 @@ test('addNewHeadElements: skips importmap/base/title for addition', () => {
     '<base href="/app/">' +
     '<title>title</title>';
   _addNewHead(newHead);
-  // Importmap and base in new head must NOT be cloned across.
   const importMaps = document.head.querySelectorAll('script[type="importmap"]');
   assert.equal(importMaps.length, 1, 'existing importmap untouched');
   const bases = document.head.querySelectorAll('base');
@@ -141,6 +379,10 @@ test('addNewHeadElements: script elements are recreated (not cloned) to execute'
   assert.notStrictEqual(added, s, 'script element should be a new node, not a clone');
   assert.equal(added.getAttribute('type'), 'module');
 });
+
+/* ====================================================================
+ * mergeHead — full-merge head (used on full body swap)
+ * ==================================================================== */
 
 test('mergeHead: removes elements not in the new head', () => {
   document.head.innerHTML =
@@ -167,10 +409,7 @@ test('mergeHead: preserves importmap and base across full merges', () => {
   const newHead = document.createElement('head');
   newHead.innerHTML = '<link rel="stylesheet" href="/y.css">';
   _merge(newHead);
-  assert.ok(
-    document.head.querySelector('script[type="importmap"]'),
-    'importmap kept'
-  );
+  assert.ok(document.head.querySelector('script[type="importmap"]'), 'importmap kept');
   assert.ok(document.head.querySelector('base'), 'base kept');
   assert.ok(!document.head.querySelector('link[href="/x.css"]'), 'x.css removed');
   assert.ok(document.head.querySelector('link[href="/y.css"]'), 'y.css added');
@@ -190,7 +429,9 @@ test('mergeHead: re-creates script elements so they execute', () => {
   assert.equal(added.getAttribute('type'), 'module');
 });
 
-/* ------------ extension-based skip (pre-emptive) ------------ */
+/* ====================================================================
+ * isNonHtmlPath
+ * ==================================================================== */
 
 test('isNonHtmlPath: skips downloads and documents', () => {
   assert.equal(_isNonHtmlPath('/exports/report.pdf'), true);
@@ -218,28 +459,34 @@ test('isNonHtmlPath: does NOT skip normal page paths', () => {
   assert.equal(_isNonHtmlPath('/'), false);
   assert.equal(_isNonHtmlPath('/blog/post-slug'), false);
   assert.equal(_isNonHtmlPath('/dashboard'), false);
-  // A route that happens to include a dot in a segment but no extension.
   assert.equal(_isNonHtmlPath('/users/john.smith/profile'), false);
 });
 
-/* ------------ Content-Type guard on navigate() ------------ */
+/* ====================================================================
+ * navigate — Content-Type guard + fallback paths
+ * ==================================================================== */
 
-function installNavigationMocks({ contentType, body = '', ok = true }) {
+function installNavigationMocks({ contentType, body = '', ok = true, captureHeaders = false }) {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;
   const originalHistory = globalThis.history;
   const originalScrollTo = globalThis.scrollTo;
   /** @type {{ href: string | null, assigns: string[] }} */
   const redirect = { href: null, assigns: [] };
+  /** @type {{ url: string | null, headers: Record<string,string> | null }} */
+  const captured = { url: null, headers: null };
 
-  globalThis.fetch = async () => ({
-    ok,
-    status: ok ? 200 : 500,
-    headers: { get: (k) => (k.toLowerCase() === 'content-type' ? contentType : null) },
-    text: async () => body,
-  });
+  globalThis.fetch = async (url, init) => {
+    captured.url = String(url);
+    captured.headers = init && init.headers ? { ...init.headers } : null;
+    return {
+      ok,
+      status: ok ? 200 : 500,
+      headers: { get: (k) => (k.toLowerCase() === 'content-type' ? contentType : null) },
+      text: async () => body,
+    };
+  };
 
-  // Replace location with a spy that captures href assignments.
   globalThis.location = /** @type any */ ({
     origin: 'http://localhost',
     href: 'http://localhost/',
@@ -252,15 +499,12 @@ function installNavigationMocks({ contentType, body = '', ok = true }) {
     set(v) { redirect.href = v; redirect.assigns.push(v); },
   });
 
-  // Stubs for APIs the happy-path swap calls — without them the swap
-  // throws, the catch-all falls back to location.href, and we can't
-  // distinguish "Content-Type guard fired" from "environment is missing
-  // browser APIs".
   globalThis.history = /** @type any */ ({ pushState: () => {}, replaceState: () => {} });
   globalThis.scrollTo = /** @type any */ (() => {});
 
   return {
     redirect,
+    captured,
     restore() {
       globalThis.fetch = originalFetch;
       globalThis.location = originalLocation;
@@ -279,9 +523,7 @@ test('navigate: JSON response triggers full-page fallback (no DOM swap)', async 
     await navigate('http://localhost/api/posts');
     assert.equal(redirect.href, 'http://localhost/api/posts',
       'JSON response should trigger location.href assignment');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 });
 
 test('navigate: text/event-stream triggers full-page fallback', async () => {
@@ -292,9 +534,7 @@ test('navigate: text/event-stream triggers full-page fallback', async () => {
   try {
     await navigate('http://localhost/events');
     assert.equal(redirect.href, 'http://localhost/events');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 });
 
 test('navigate: application/pdf triggers full-page fallback', async () => {
@@ -305,52 +545,42 @@ test('navigate: application/pdf triggers full-page fallback', async () => {
   try {
     await navigate('http://localhost/docs/report');
     assert.equal(redirect.href, 'http://localhost/docs/report');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 });
 
 test('navigate: text/html response proceeds with router swap (no fallback)', async () => {
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html; charset=utf-8',
-    body: '<!doctype html><html><head><title>ok</title></head><body><div data-layout="x">content</div></body></html>',
+    body:
+      '<!doctype html><html><head><title>ok</title></head><body>' +
+      '<!--wj:children:/-->content<!--/wj:children-->' +
+      '</body></html>',
   });
   try {
+    document.body.innerHTML = '<!--wj:children:/-->old<!--/wj:children-->';
     await navigate('http://localhost/ok');
-    assert.equal(redirect.href, null,
-      'text/html response should not trigger location.href fallback');
+    assert.equal(redirect.href, null, 'text/html response should not trigger location.href fallback');
   } finally {
     restore();
+    document.body.innerHTML = '';
   }
 });
 
 test('navigate: response without content-type falls back safely', async () => {
-  const { redirect, restore } = installNavigationMocks({
-    contentType: '',
-    body: '',
-  });
+  const { redirect, restore } = installNavigationMocks({ contentType: '', body: '' });
   try {
     await navigate('http://localhost/weird');
-    assert.equal(redirect.href, 'http://localhost/weird',
-      'missing Content-Type is not assumed to be HTML');
-  } finally {
-    restore();
-  }
+    assert.equal(redirect.href, 'http://localhost/weird');
+  } finally { restore(); }
 });
-
-/* ------------ navigate: external origin → real location ------------ */
 
 test('navigate: cross-origin URL delegates to location.href (no fetch)', async () => {
   const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: '' });
   try {
     await navigate('https://other-site.test/x');
     assert.equal(redirect.href, 'https://other-site.test/x');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 });
-
-/* ------------ navigate: fetch error → real location ------------ */
 
 test('navigate: fetch rejection falls back to full page navigation', async () => {
   const originalFetch = globalThis.fetch;
@@ -382,70 +612,185 @@ test('navigate: non-ok response falls back to full page navigation', async () =>
   try {
     await navigate('http://localhost/missing');
     assert.equal(redirect.href, 'http://localhost/missing');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 });
 
-/* ------------ navigate: same-layout vs different-layout swap ------------ */
+/* ====================================================================
+ * navigate — partial-swap end-to-end
+ * ==================================================================== */
 
-test('navigate: same-layout swap preserves header/footer, swaps <main> only', async () => {
+test('navigate: marker-based partial swap preserves outer layout DOM', async () => {
+  // Two-layer layout: root has <header>, <main>, <footer>; the page
+  // content lives inside the docs layout's children-slot. After
+  // navigating between two pages that both nest under root + docs,
+  // the <header> and <main> wrappers AND the docs sidenav must
+  // remain identically mounted — same DOM nodes, no re-render.
   document.body.innerHTML =
-    '<div data-layout="root">' +
-      '<header>H</header>' +
-      '<main><p>old-page</p></main>' +
-      '<footer>F</footer>' +
-    '</div>';
+    '<header id="hdr">root header</header>' +
+    '<main>' +
+      '<!--wj:children:/-->' +
+        '<aside id="sidenav">docs sidenav</aside>' +
+        '<section>' +
+          '<!--wj:children:/docs-->' +
+            '<h1>page A</h1>' +
+          '<!--/wj:children-->' +
+        '</section>' +
+      '<!--/wj:children-->' +
+    '</main>' +
+    '<footer id="ftr">root footer</footer>';
+
+  const headerBefore = document.getElementById('hdr');
+  const sidenavBefore = document.getElementById('sidenav');
+
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<div data-layout="root">' +
-        '<header>H</header>' +
-        '<main><p>new-page</p></main>' +
-        '<footer>F</footer>' +
-      '</div></body></html>',
+      '<header>root header</header>' +
+      '<main>' +
+        '<!--wj:children:/-->' +
+          '<aside>docs sidenav</aside>' +
+          '<section>' +
+            '<!--wj:children:/docs-->' +
+              '<h1>page B</h1>' +
+            '<!--/wj:children-->' +
+          '</section>' +
+        '<!--/wj:children-->' +
+      '</main>' +
+      '<footer>root footer</footer>' +
+      '</body></html>',
   });
+
   try {
-    await navigate('http://localhost/page2');
-    const main = document.querySelector('main');
-    assert.ok(main.textContent.includes('new-page'));
-    // header/footer still mounted
-    assert.ok(document.querySelector('header'));
-    assert.ok(document.querySelector('footer'));
+    await navigate('http://localhost/docs/components/b');
+
+    // Outer header / footer DOM nodes are the SAME objects — not re-rendered.
+    assert.equal(document.getElementById('hdr'), headerBefore,
+      'outer header DOM identity preserved across nav');
+    assert.equal(document.getElementById('sidenav'), sidenavBefore,
+      'docs sidenav DOM identity preserved (its scrollTop, focus, etc. survive)');
+    // Inner content actually swapped.
+    const h1 = document.querySelector('h1');
+    assert.ok(h1, 'page heading exists after nav');
+    assert.equal(h1.textContent, 'page B', 'inner content updated');
   } finally {
     restore();
     document.body.innerHTML = '';
   }
 });
 
-test('navigate: different-layout swap replaces the body content', async () => {
+test('navigate: deepest shared marker wins (inner swap, not outer)', async () => {
+  // /docs/components/a → /docs/components/b: both share / AND /docs.
+  // The router must pick /docs (deeper), not / (shallower).
   document.body.innerHTML =
-    '<div data-layout="public"><p>old</p></div>';
+    '<!--wj:children:/-->' +
+      '<aside class="docs-shell"></aside>' +
+      '<!--wj:children:/docs-->old<!--/wj:children-->' +
+    '<!--/wj:children-->';
+  const sidenav = document.querySelector('.docs-shell');
+
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<div data-layout="admin"><p>new-admin</p></div>' +
+      '<!--wj:children:/-->' +
+        '<aside class="docs-shell">REPLACED</aside>' +
+        '<!--wj:children:/docs-->new<!--/wj:children-->' +
+      '<!--/wj:children-->' +
+      '</body></html>',
+  });
+
+  try {
+    await navigate('http://localhost/docs/components/b');
+    // The shallower /-marker was ALSO present in both, but the deeper
+    // /docs marker wins — so the sidenav inside the /-slot but outside
+    // the /docs-slot is left untouched.
+    assert.equal(document.querySelector('.docs-shell'), sidenav,
+      'deeper match preserves outer-slot DOM');
+    assert.equal(document.querySelector('.docs-shell').textContent, '',
+      'sidenav text was NOT replaced with the incoming "REPLACED" text');
+  } finally {
+    restore();
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: cross-layout nav falls through to full body swap', async () => {
+  // /docs/x → /admin/y: no shared marker path → full body swap.
+  document.body.innerHTML = '<!--wj:children:/docs-->old<!--/wj:children-->';
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/admin--><p>new</p><!--/wj:children-->' +
       '</body></html>',
   });
   try {
-    await navigate('http://localhost/admin');
-    // Different-layout branch may use startViewTransition when available;
-    // under linkedom it uses the synchronous fallback. Either way, the old
-    // public layout should be gone from the body after the nav.
-    assert.ok(!document.body.textContent.includes('old'),
-      'old public-layout content cleared after navigate');
+    await navigate('http://localhost/admin/y');
+    assert.ok(document.body.textContent.includes('new'));
+    assert.ok(!document.body.textContent.includes('old'));
   } finally {
     restore();
     document.body.innerHTML = '';
   }
 });
 
-/* ------------ parseHTML returning null, hash scroll, View Transitions ------------ */
+test('navigate: sends X-Webjs-Have header listing current marker paths', async () => {
+  document.body.innerHTML =
+    '<!--wj:children:/-->' +
+      '<!--wj:children:/docs-->page<!--/wj:children-->' +
+    '<!--/wj:children-->';
+  const mocks = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/-->' +
+        '<!--wj:children:/docs-->page2<!--/wj:children-->' +
+      '<!--/wj:children-->' +
+      '</body></html>',
+  });
+  try {
+    await navigate('http://localhost/docs/components/b');
+    const have = mocks.captured.headers && mocks.captured.headers['x-webjs-have'];
+    assert.ok(have, 'X-Webjs-Have header should be set');
+    assert.ok(have.includes('/'), 'X-Webjs-Have includes root path');
+    assert.ok(have.includes('/docs'), 'X-Webjs-Have includes /docs path');
+  } finally {
+    mocks.restore();
+    document.body.innerHTML = '';
+  }
+});
+
+/* ====================================================================
+ * navigate — Suspense resolver forwarding (partial swap)
+ * ==================================================================== */
+
+test('navigate: marker-based swap forwards <template data-webjs-resolve> nodes', async () => {
+  document.body.innerHTML =
+    '<!--wj:children:/--><p>old</p><!--/wj:children-->';
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/--><p>new</p><!--/wj:children-->' +
+      '<template data-webjs-resolve="s1"><p>resolved</p></template>' +
+      '</body></html>',
+  });
+  try {
+    await navigate('http://localhost/with-suspense');
+    const tpl = document.body.querySelector('template[data-webjs-resolve="s1"]');
+    assert.ok(tpl, 'Suspense resolver template should be copied to live body');
+  } finally {
+    restore();
+    document.body.innerHTML = '';
+  }
+});
+
+/* ====================================================================
+ * navigate — parseHTML returning null, hash scroll
+ * ==================================================================== */
 
 test('navigate: unparseable HTML body falls back to full navigation', async () => {
-  // Force parseHTML() to return null by removing both hooks.
   const origDP = globalThis.DOMParser;
   const origDoc = globalThis.Document;
   globalThis.DOMParser = undefined;
@@ -466,7 +811,7 @@ test('navigate: unparseable HTML body falls back to full navigation', async () =
 
 test('navigate: hash portion triggers scroll (target found or top)', async () => {
   document.body.innerHTML =
-    '<div data-layout="root"><main><section id="anchor">A</section></main></div>';
+    '<!--wj:children:/--><section id="anchor">A</section><!--/wj:children-->';
   let scrolledToTop = false;
   let scrolledIntoView = false;
   globalThis.scrollTo = () => { scrolledToTop = true; };
@@ -476,7 +821,7 @@ test('navigate: hash portion triggers scroll (target found or top)', async () =>
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<div data-layout="root"><main><section id="anchor">A</section></main></div>' +
+      '<!--wj:children:/--><section id="anchor">A</section><!--/wj:children-->' +
       '</body></html>',
   });
   try {
@@ -493,110 +838,28 @@ test('navigate: hash portion triggers scroll (target found or top)', async () =>
   }
 });
 
-test('navigate: different-layout branch uses startViewTransition when available', async () => {
-  // Different layout = different tag names AND different data-layout values.
-  document.body.innerHTML = '<public-shell data-layout="public"><p>old</p></public-shell>';
-  let swapRan = false;
-  Object.defineProperty(document, 'startViewTransition', {
-    configurable: true,
-    value: (cb) => {
-      swapRan = true;
-      cb();
-      return { finished: Promise.resolve() };
-    },
-  });
-  const { restore } = installNavigationMocks({
-    contentType: 'text/html',
-    body:
-      '<!doctype html><html><head></head><body>' +
-      '<admin-shell data-layout="admin"><p>new</p></admin-shell>' +
-      '</body></html>',
-  });
-  try {
-    await navigate('http://localhost/other');
-    assert.ok(swapRan, 'startViewTransition callback should have fired');
-  } finally {
-    restore();
-    delete document.startViewTransition;
-    document.body.innerHTML = '';
-  }
-});
+/* ====================================================================
+ * activeFrameId — <webjs-frame> escape hatch detection
+ * ==================================================================== */
 
-/* ------------ forwardSuspenseResolvers (exposed via same-layout swap) ------------ */
-
-test('navigate: same-layout swap forwards <template data-webjs-resolve> nodes', async () => {
+test('activeFrameId: returns id of nearest enclosing webjs-frame', () => {
   document.body.innerHTML =
-    '<div data-layout="root"><main><p>old</p></main></div>';
-  const { restore } = installNavigationMocks({
-    contentType: 'text/html',
-    body:
-      '<!doctype html><html><head></head><body>' +
-      '<div data-layout="root"><main><p>new</p></main></div>' +
-      '<template data-webjs-resolve="s1"><p>resolved</p></template>' +
-      '</body></html>',
-  });
-  try {
-    await navigate('http://localhost/with-suspense');
-    const tpl = document.body.querySelector('template[data-webjs-resolve="s1"]');
-    assert.ok(tpl, 'Suspense resolver template should be copied to live body');
-  } finally {
-    restore();
-    document.body.innerHTML = '';
-  }
+    '<webjs-frame id="outer">' +
+      '<webjs-frame id="inner"><a id="L" href="/x">L</a></webjs-frame>' +
+    '</webjs-frame>';
+  const a = document.getElementById('L');
+  assert.equal(_activeFrameId(a), 'inner', 'innermost frame wins');
 });
 
-/* ------------ onClick: interception of <a> clicks ------------ */
-
-test('onClick: same-origin link click is intercepted and fetched via router', async () => {
-  // enableClientRouter() auto-runs on import, so a 'click' listener is already
-  // installed in capture phase on the document.
-  document.body.innerHTML =
-    '<div data-layout="root"><main><a href="/other">Go</a></main></div>';
-  let fetched = null;
-  globalThis.fetch = async (url) => {
-    fetched = String(url);
-    return {
-      ok: true,
-      status: 200,
-      headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'text/html' : null) },
-      text: async () =>
-        '<!doctype html><html><head></head><body>' +
-        '<div data-layout="root"><main><p>new</p></main></div>' +
-        '</body></html>',
-    };
-  };
-  const origLoc = globalThis.location;
-  const loc = /** @type any */ ({
-    origin: 'http://localhost',
-    href: 'http://localhost/',
-    pathname: '/',
-    search: '',
-  });
-  globalThis.location = loc;
-  globalThis.history = /** @type any */ ({ pushState: () => {} });
-  globalThis.scrollTo = () => {};
-  try {
-    const a = document.querySelector('a');
-    // linkedom: a.href returns the full URL with our overridden location.origin.
-    // Ensure a.href → 'http://localhost/other' for the origin check to match.
-    a.setAttribute('href', 'http://localhost/other');
-    // linkedom doesn't expose MouseEvent; fabricate a MouseEvent-shaped object.
-    const ev = new window.Event('click', { bubbles: true, cancelable: true });
-    Object.defineProperty(ev, 'button', { value: 0 });
-    Object.defineProperty(ev, 'composedPath', {
-      value: () => [a],
-    });
-    a.dispatchEvent(ev);
-    await new Promise((r) => setTimeout(r, 5));
-    assert.ok(fetched && fetched.includes('/other'),
-      `router should have fetched /other; saw: ${fetched}`);
-  } finally {
-    document.body.innerHTML = '';
-    globalThis.location = origLoc;
-  }
+test('activeFrameId: returns null when not inside any webjs-frame', () => {
+  document.body.innerHTML = '<a id="L" href="/x">L</a>';
+  const a = document.getElementById('L');
+  assert.equal(_activeFrameId(a), null);
 });
 
-// ---- reactivateScripts ----
+/* ====================================================================
+ * reactivateScripts + findAnchorInPath
+ * ==================================================================== */
 
 test('reactivateScripts: recreates <script> elements so they execute', () => {
   const container = document.createElement('div');
@@ -604,7 +867,7 @@ test('reactivateScripts: recreates <script> elements so they execute', () => {
   const before = container.querySelector('#s1');
   _reactivateScripts(container);
   const after = container.querySelector('#s1');
-  assert.ok(after, 'script still in container after reactivate');
+  assert.ok(after);
   assert.notEqual(before, after, 'script node was replaced, not kept');
   assert.equal(after.textContent, 'window.__rs = 1;');
 });
@@ -618,8 +881,6 @@ test('reactivateScripts: preserves attributes on the recreated node', () => {
   assert.equal(s.getAttribute('src'), '/x.js');
   assert.equal(s.getAttribute('data-flag'), 'a');
 });
-
-// ---- findAnchorInPath ----
 
 test('findAnchorInPath: returns the nearest anchor in composedPath()', () => {
   document.body.innerHTML = '<a href="/to"><span id="inner">click</span></a>';
@@ -636,32 +897,27 @@ test('findAnchorInPath: returns null when no anchor is in the path', () => {
   assert.equal(_findAnchorInPath(e), null);
 });
 
-// ---- disableClientRouter ----
+/* ====================================================================
+ * enable / disable idempotence
+ * ==================================================================== */
 
 test('disableClientRouter: is a no-op when router is already disabled', () => {
-  // router-client auto-enables on import; call disable twice to exercise
-  // both the "was enabled → teardown" and "already disabled → early return".
   disableClientRouter();
-  disableClientRouter(); // second call hits `if (!enabled) return`
-  // Re-enable to restore state for any subsequent tests.
+  disableClientRouter();
   enableClientRouter();
 });
 
 test('disableClientRouter: enableClientRouter is idempotent', () => {
-  // disable → enable → enable again: second enable hits the
-  // `if (enabled || typeof document === 'undefined') return` early-return.
   disableClientRouter();
   enableClientRouter();
-  enableClientRouter(); // idempotent
-  // No assertion needed — we just want the coverage path for the
-  // "already enabled" guard. If the second call double-attached
-  // listeners, subsequent tests would misbehave.
+  enableClientRouter();
 });
 
-// ---- onPopState ----
+/* ====================================================================
+ * onPopState — back/forward triggers router nav
+ * ==================================================================== */
 
 test('onPopState: triggers a router navigation to location.href', async () => {
-  // Stub performNavigation indirectly by stubbing fetch + location.
   const origLoc = globalThis.location;
   const origFetch = globalThis.fetch;
   let fetched = null;
@@ -674,19 +930,45 @@ test('onPopState: triggers a router navigation to location.href', async () => {
   });
   globalThis.fetch = async (url) => {
     fetched = String(url);
-    return new Response('<!doctype html><html><body><div data-layout="x">popped</div></body></html>', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-    });
+    return new Response(
+      '<!doctype html><html><body>' +
+      '<!--wj:children:/-->popped<!--/wj:children-->' +
+      '</body></html>',
+      { status: 200, headers: { 'content-type': 'text/html' } }
+    );
   };
   try {
-    document.body.innerHTML = '<div data-layout="x">before</div>';
+    document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
     _onPopState({});
-    // Let the async navigation settle.
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(fetched, 'http://localhost/popped');
   } finally {
     globalThis.location = origLoc;
     globalThis.fetch = origFetch;
   }
+});
+
+/* ====================================================================
+ * revalidate — snapshot-cache invalidation
+ * ==================================================================== */
+
+test('revalidate(url): removes one URL from the snapshot cache', () => {
+  const origLoc = globalThis.location;
+  globalThis.location = /** @type any */ ({ href: 'http://localhost/' });
+  try {
+    _snapshotCache.set('/a', 'snap-a');
+    _snapshotCache.set('/b', 'snap-b');
+    revalidate('http://localhost/a');
+    assert.ok(!_snapshotCache.has('/a'), '/a evicted');
+    assert.ok(_snapshotCache.has('/b'), '/b still cached');
+  } finally {
+    globalThis.location = origLoc;
+  }
+});
+
+test('revalidate(): clears the entire snapshot cache when called with no args', () => {
+  _snapshotCache.set('/a', 'snap-a');
+  _snapshotCache.set('/b', 'snap-b');
+  revalidate();
+  assert.equal(_snapshotCache.size, 0);
 });
