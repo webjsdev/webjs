@@ -195,22 +195,78 @@ async function renderChain(route, ctx, dev, suspenseCtx) {
     } catch { /* loading file failed — skip, render page directly */ }
   }
 
+  // Wrap each layout's `${children}` interpolation in
+  // `<!--wj:children:<segment-path>-->...<!--/wj:children-->` comment
+  // markers. The client router walks both old + new DOM for these
+  // markers and swaps only the children-slot of the deepest shared
+  // layout — preserving outer-layout DOM (and the scroll position of
+  // anything inside it: sidenavs, sticky headers, inner scroll
+  // containers). Auto-derived from folder structure — no opt-in
+  // required from layout authors.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
     const mod = await loadModule(route.layouts[i], dev);
     if (!mod.default) continue;
-    tree = await mod.default({ ...ctx, children: tree });
+    const segmentPath = layoutSegmentPath(route.layouts[i]);
+    tree = await mod.default({
+      ...ctx,
+      children: wrapWithChildrenMarker(tree, segmentPath),
+    });
   }
-  let body = await renderToString(tree, { ssr: true, suspenseCtx });
-  // Wrap the outermost layout's output in a data-layout element so the
-  // client router can detect same-layout navigations and swap only the
-  // page content (keeping header/footer/nav mounted). The layout identity
-  // is derived from the outermost layout file path.
-  if (route.layouts.length > 0) {
-    const layoutId = route.layouts[0].replace(/^.*\/app\//, '').replace(/\.[jt]sx?$/, '');
-    body = `<div data-layout="${layoutId}">${body}</div>`;
-  }
-  return body;
+  return await renderToString(tree, { ssr: true, suspenseCtx });
 }
+
+/**
+ * Derive a layout's segment path from its file path. The path identifies
+ * the layout's slot in the layout chain for partial-nav marker matching.
+ *
+ *   app/layout.ts                          → '/'
+ *   app/docs/layout.ts                     → '/docs'
+ *   app/docs/components/layout.ts          → '/docs/components'
+ *   app/(marketing)/about/layout.ts        → '/(marketing)/about'
+ *
+ * Route groups `(marketing)` are KEPT in the path. They don't appear in
+ * URLs but DO scope distinct layouts — two routes at the same URL prefix
+ * served by different `(group)` layouts must produce different markers
+ * so the client doesn't falsely identify them as a shared layout.
+ *
+ * @param {string} layoutFile  Absolute path to the layout source file.
+ * @returns {string}
+ */
+function layoutSegmentPath(layoutFile) {
+  const p = layoutFile
+    .replace(/^.*\/app\//, '')
+    .replace(/\/?layout\.[jt]sx?$/, '');
+  return p === '' ? '/' : '/' + p;
+}
+
+/**
+ * Wrap a TemplateResult-or-renderable child in the partial-nav children
+ * marker pair. Returns a synthetic TemplateResult — server `renderToString`
+ * walks `.strings` and `.values` exactly the same way as for the `html` tag.
+ *
+ * The marker text lives in `strings` (static template parts), NOT in
+ * `values` — `values` get HTML-escaped on render, comments wouldn't survive.
+ *
+ * @param {unknown} tree  A TemplateResult, string, array, or Promise.
+ * @param {string} segmentPath  The layout's segment path, used as marker id.
+ * @returns {{ _$webjs: 'template', strings: string[], values: unknown[] }}
+ */
+function wrapWithChildrenMarker(tree, segmentPath) {
+  return {
+    _$webjs: 'template',
+    strings: [
+      `<!--wj:children:${segmentPath}-->`,
+      `<!--/wj:children-->`,
+    ],
+    values: [tree],
+  };
+}
+
+// Re-export for unit testing.
+export {
+  layoutSegmentPath as _layoutSegmentPath,
+  wrapWithChildrenMarker as _wrapWithChildrenMarker,
+};
 
 /**
  * @param {import('./router.js').PageRoute} route
@@ -302,16 +358,7 @@ function hoistHeadTags(headHtml, bodyHtml) {
   // <script>…</script> and <style>…</style> are paired; <link …> is void.
   const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
 
-  // Step over an optional leading <div data-layout="…"> wrapper. The SSR
-  // pipeline wraps every layout's output in one of these so the client
-  // router can detect same-layout navigations; without this peek-through,
-  // any head-bound tag emitted at the top of a layout template would never
-  // be hoisted (it would always sit inside the wrapper).
-  const wrapRe = /^(\s*<div\s+data-layout="[^"]*">\s*)/;
-  const wm = wrapRe.exec(bodyHtml);
-  const prefix = wm ? wm[1] : '';
-  let remaining = wm ? bodyHtml.slice(wm[0].length) : bodyHtml;
-
+  let remaining = bodyHtml;
   let m;
   while ((m = re.exec(remaining)) !== null) {
     hoisted.push(m[1]);
@@ -319,7 +366,7 @@ function hoistHeadTags(headHtml, bodyHtml) {
   }
   if (!hoisted.length) return { head: headHtml, body: bodyHtml };
   const newHead = headHtml.replace('</head>', hoisted.join('\n') + '\n</head>');
-  return { head: newHead, body: prefix + remaining };
+  return { head: newHead, body: remaining };
 }
 
 // Internal helper re-exported for unit testing.
@@ -339,14 +386,6 @@ export { hoistHeadTags as _hoistHeadTags };
  * try this would produce nested-shell garbage; `webjs check` flags
  * them via the `shell-in-non-root-layout` rule.
  *
- * Peeks past an optional leading `<div data-layout="…">` wrapper —
- * `renderChain` always wraps the outermost layout's output in one so
- * the client router can detect same-layout navigations. Without this
- * peek-through, a user-supplied shell would always sit inside the
- * wrapper and never be detected. When a shell is found, the
- * data-layout attribute is propagated to the user's <body> via the
- * returned `dataLayoutAttr` field so the client router still works.
- *
  * @param {string} body
  * @returns {{
  *   htmlAttrs: string,
@@ -354,26 +393,13 @@ export { hoistHeadTags as _hoistHeadTags };
  *   userHead: string,
  *   bodyAttrs: string,
  *   userBody: string,
- *   dataLayoutAttr: string,
  * } | null}
  */
 function extractUserShell(body) {
-  // Strip an optional outer `<div data-layout="…">…</div>` wrapper. We
-  // only strip if it's a single wrapping div whose contents are the
-  // entire body — the case `renderChain` produces.
-  const wrapRe = /^(\s*)<div\s+(data-layout="[^"]*")>\s*([\s\S]*?)\s*<\/div>\s*$/i;
-  const wm = body.match(wrapRe);
-  let dataLayoutAttr = '';
-  let inner = body;
-  if (wm) {
-    dataLayoutAttr = wm[2];
-    inner = wm[3];
-  }
-
   // Tolerant: allow optional whitespace, optional <!doctype>, then <html ...>.
   // Capture html attributes (anything between <html and >).
   const htmlOpen = /^\s*(?:<!doctype[^>]*>\s*)?<html\b([^>]*)>\s*([\s\S]*)<\/html>\s*$/i;
-  const m = inner.match(htmlOpen);
+  const m = body.match(htmlOpen);
   if (!m) return null;
   const htmlAttrs = m[1] || '';
   const shellInner = m[2];
@@ -395,7 +421,6 @@ function extractUserShell(body) {
     userBody: bodyMatch
       ? bodyMatch[2]
       : (headMatch ? shellInner.replace(headMatch[0], '') : shellInner).trim(),
-    dataLayoutAttr,
   };
 }
 
@@ -450,16 +475,11 @@ function buildDocumentParts(body, wrapOpts) {
     const composedHead = [headInner, shell.userHead.trim(), hoist.tags.join('\n')]
       .filter(Boolean)
       .join('\n');
-    // Re-apply the data-layout marker inside the user's <body> so the
-    // client router can still detect same-layout navigations.
-    const bodyInner = shell.dataLayoutAttr
-      ? `<div ${shell.dataLayoutAttr}>${hoist.body}</div>`
-      : hoist.body;
     const prefix =
       `<!doctype html>\n<html${shell.htmlAttrs}>\n<head${shell.headAttrs}>\n` +
       composedHead +
       `\n</head>\n<body${shell.bodyAttrs}>\n`;
-    return { prefix, streamBody: bodyInner, closer: `\n</body>\n</html>` };
+    return { prefix, streamBody: hoist.body, closer: `\n</body>\n</html>` };
   }
   // No user shell — framework owns the wrapper.
   const headHtml = wrapHead(wrapOpts);
@@ -493,19 +513,13 @@ function wrapInDocument(body, opts) {
 function collectHoistedHeadTags(bodyHtml) {
   const tags = [];
   const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
-  // Walk past an optional leading <div data-layout="..."> wrapper, same as
-  // hoistHeadTags() does. Without this, head-bound tags emitted at the top
-  // of a layout template would always sit inside the wrapper and never lift.
-  const wrapRe = /^(\s*<div\s+data-layout="[^"]*">\s*)/;
-  const wm = wrapRe.exec(bodyHtml);
-  const prefix = wm ? wm[1] : '';
-  let remaining = wm ? bodyHtml.slice(wm[0].length) : bodyHtml;
+  let remaining = bodyHtml;
   let m;
   while ((m = re.exec(remaining)) !== null) {
     tags.push(m[1]);
     remaining = remaining.slice(m[0].length);
   }
-  return { tags, body: prefix + remaining };
+  return { tags, body: remaining };
 }
 
 /**
