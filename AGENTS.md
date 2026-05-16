@@ -276,6 +276,9 @@ import { html, css, WebComponent, render, renderToString } from '@webjskit/core'
 | `Suspense({fallback, children})` | Streaming boundary. |
 | `connectWS(url, handlers)` | Client WebSocket with auto-reconnect, JSON, queued sends. |
 | `richFetch<T>(url, init?)` | Content-negotiated fetch with rich-type encoding. |
+| `navigate(url, opts?)` | Programmatic client-router nav. Pushes history; `{replace}` swaps in place. |
+| `revalidate(url?)` | Evict snapshot-cache for one URL or clear the whole cache. Call after server-action mutations. |
+| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region for non-layout cases. |
 
 ### Directives — `import { … } from '@webjskit/core/directives'`
 
@@ -553,6 +556,31 @@ When to extract: 1× inline; 2-3× identical → helper; 1-2 prop variation → 
 Custom CSS is fully supported (no Tailwind hard dependency) — light-DOM
 components MUST follow the class-prefix rule. See `agent-docs/styling.md`
 for vanilla-CSS-only opt-out conventions (page/layout/component scope classes).
+
+---
+
+## Client navigation (auto-magic — nothing to opt into)
+
+Nested layouts auto-emit `<!--wj:children:<segment-path>-->` comment
+markers around each `${children}` interpolation. The client router
+walks both old + new DOMs for these markers and replaces only the
+inside of the deepest shared layout's children slot. **Outer-layout
+DOM identity is preserved across navigation** — sidenav scroll, input
+values, `<details>` open state all survive without authors writing
+anything.
+
+Wire-byte optimization is also automatic: the router sends an
+`X-Webjs-Have` header listing the marker paths it has; the server
+short-circuits at the deepest match and returns only the divergent
+fragment.
+
+For the 1% case where you want a partial-swap region NOT tied to a
+folder layout (an in-page widget that should swap on click), wrap it
+in `<webjs-frame id="...">`. The router's `closest('webjs-frame')`
+detection takes precedence over the layout markers when both are
+present.
+
+See `agent-docs/advanced.md` Client router section for the full mechanism.
 
 ---
 

@@ -1,8 +1,37 @@
 # SSR partial navigation — design note
 
-**Status:** proposed
-**Motivating bug:** ui-website docs sidenav loses scroll on every link click because the docs layout sits 2 levels deep under the root layout, beyond `findLayoutShell`'s body-direct-child probe.
-**Current workaround in prod:** `app/docs/layout.ts` saves/restores `.docs-sidenav` `scrollTop` via `sessionStorage` on every `webjs:navigate` event. Works, hacky.
+**Status:** SHIPPED (feature/nested-layout-partial-swap, 2026-05-16).
+The mechanism described below is implemented and tested. This document
+is preserved as the design record; runtime reference for callers lives
+in `agent-docs/advanced.md` (Client router section) and the framework
+API table in `AGENTS.md`.
+
+**Motivating bug (resolved):** ui-website docs sidenav lost scroll on
+every link click because the docs layout sat 2 levels deep under the
+root layout, beyond `findLayoutShell`'s body-direct-child probe.
+**Previous workaround (now deleted):** `app/docs/layout.ts` saved /
+restored `.docs-sidenav` `scrollTop` via `sessionStorage` on every
+`webjs:navigate` event. Removed in the same PR as the framework fix.
+
+---
+
+**What actually shipped vs. what's below:**
+- The recommendation in this doc was `<webjs-frame>` as the primary
+  primitive. During design discussion the decision evolved to make
+  layout-marker discovery **auto-derived from folder structure** — so
+  layout authors write nothing. `<webjs-frame>` ships as the escape
+  hatch for non-layout partial-swap regions (rare).
+- The marker format is `<!--wj:children:<segment-path>-->` comment
+  pairs (Remix v3 lineage), not the `<webjs-frame>`-element approach
+  sketched below.
+- Wire-byte optimization, snapshot cache, keyed DOM diff with live-
+  attribute preservation, and per-segment `<template id="wj-loading:...">`
+  cloning all shipped in the same PR (originally deferred as v2+).
+
+The original `<webjs-frame>`-centric sketch below is preserved as
+historical context.
+
+---
 
 ## Goal
 

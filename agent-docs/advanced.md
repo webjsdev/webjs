@@ -83,26 +83,90 @@ export default rateLimit({
 
 **Scaling:** in-memory by default. `setStore(redisStore({ url: process.env.REDIS_URL }))` shares limits across instances.
 
-## Client router — Turbo Drive-style
+## Client router — nested-layout-aware partial swap
 
-`import '@webjskit/core/client-router'` enables SPA-style navigation. Intercepts same-origin `<a>` clicks (incl. inside shadow DOM via `composedPath()`), fetches target HTML, swaps DOM.
+`import '@webjskit/core/client-router'` enables SPA-style navigation that
+preserves outer-layout DOM identity at any depth. Intercepts same-origin
+`<a>` clicks (incl. inside shadow DOM via `composedPath()`), fetches the
+target HTML, and replaces only the inside of the deepest shared layout —
+outer header / sidenav / footer DOM nodes are never re-rendered, so
+scroll positions, input values, and `<details>` open state survive
+navigation automatically.
 
 ### How it works
 
-1. Fetches the URL via `fetch()`.
-2. Parses with `Document.parseHTMLUnsafe()` (preserves Declarative Shadow DOM).
-3. If both pages share the same layout shell (e.g. `<blog-shell>`), swap only slot content — layout stays mounted.
-4. Otherwise replace entire `<body>` and merge `<head>`.
-5. Upgrade custom elements, re-run scripts, `pushState`, scroll to top.
-6. Dispatch `webjs:navigate` event on `document`.
+1. SSR injects `<!--wj:children:<segment-path>-->...<!--/wj:children-->`
+   comment markers around each layout's `${children}` interpolation —
+   one pair per layout in the chain. Auto-derived from folder
+   structure; layout authors write nothing extra.
+2. On click, the router walks both the live DOM and the incoming HTML
+   for these markers and builds `Map<path, {start, end}>`.
+3. Picks the **longest shared path** — the deepest layout boundary
+   both pages have in common.
+4. Replaces nodes between that marker pair using a keyed `data-key`
+   reconciler — elements with matching tag + matching key are reused
+   with in-place attribute diffing. **Live attributes** (`value`,
+   `checked`, `selected`, `indeterminate`, `disabled`, `open`,
+   `popover`) are NEVER overwritten by the server HTML.
+5. Merges `<head>` (add-only on partial swaps so runtime-injected
+   styles like Tailwind survive; full merge on root-layout-change
+   fallback), re-runs `<script>` elements, `customElements.upgrade()`s
+   the swapped subtree, `pushState`s the URL, scrolls.
+6. Dispatches `webjs:navigate` event on `document`.
+
+### Wire-byte optimization
+
+The router sends `X-Webjs-Have: <paths>` listing the marker paths it
+already has rendered. The server walks the target route's layout chain
+innermost → outermost and **short-circuits at the first match** — the
+inner tree is wrapped in that layout's marker pair and returned. Outer
+layouts are not loaded, not rendered, not re-serialized. Real savings
+on every same-shell navigation.
+
+### Snapshot cache + revalidation
+
+URL-keyed `Map<url, snapshot>` (LRU, cap 16) — back/forward via
+popstate restores from cache instantly, then refetches in the
+background.
+
+```js
+import { revalidate } from '@webjskit/core';
+revalidate('/products/123');  // evict one URL
+revalidate();                 // clear the entire cache
+```
+
+Call `revalidate(path)` after a server action mutates data that
+affects a cached page.
+
+### Per-segment loading skeletons
+
+Each `loading.{js,ts}` in the route chain is rendered into a hidden
+`<template id="wj-loading:<segment-path>">`. On nav-start, the client
+clones the deepest matching template into the swap slot — users see
+an instant per-segment skeleton during the fetch.
 
 ### Programmatic navigation
 
 ```js
-import { navigate } from '@webjskit/core/client-router';
+import { navigate } from '@webjskit/core';
 await navigate('/about');                    // push history
 await navigate('/login', { replace: true }); // replace
 ```
+
+### `<webjs-frame>` escape hatch
+
+For partial-swap regions NOT tied to a folder layout (a marketing-page
+widget, tabbed UI, etc.), wrap the region in a frame:
+
+```ts
+html`<webjs-frame id="activity">…contents…</webjs-frame>`
+```
+
+On click, the router walks `closest('webjs-frame')` from the click
+target. If a frame is found AND the response contains a matching
+`<webjs-frame id="...">`, the swap is scoped to that frame's children
+— takes precedence over the layout-marker mechanism. Otherwise the
+router falls through to the layout-marker path.
 
 ### Opt out per link
 
@@ -111,8 +175,8 @@ await navigate('/login', { replace: true }); // replace
 ```
 
 Use `data-no-router` for:
-- **Auth flows** — `/logout`, OAuth redirects. Full reload wipes in-memory module state (cached user data, tokens). Surviving state after logout is a real bug class.
-- **Print views / embed pages**.
+- **Auth flows** — `/logout`, OAuth redirects. Full reload wipes in-memory module state.
+- **Print views / embed pages.**
 - **Experimental routes** with a different client runtime.
 
 ### Auto-skipped (no `data-no-router` needed)
