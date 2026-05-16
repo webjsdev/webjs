@@ -134,23 +134,19 @@ test('hoistHeadTags: does NOT lift <link> after normal content', () => {
   assert.equal(body, bodyHtml);
 });
 
-test('hoistHeadTags: peeks through leading <div data-layout> wrapper', () => {
-  // The SSR pipeline wraps layout output in <div data-layout="…">; head
-  // tags emitted at the top of a layout template still need to land in
-  // <head>, with the wrapper preserved around the remaining body content.
+test('hoistHeadTags: lifts head-bound tags at the top of body (no wrapper now)', () => {
+  // The SSR pipeline no longer wraps layout output in a wrapping div —
+  // partial-nav uses inline comment markers instead. Head-bound tags
+  // emitted at the top of a layout template lift directly into <head>.
   const bodyHtml =
-    '<div data-layout="layout">' +
     '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
     '<script>var t=1;</script>' +
-    '<main>page</main>' +
-    '</div>';
+    '<main>page</main>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
   assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
   assert.ok(head.includes('<script>var t=1;</script>'));
-  assert.ok(body.startsWith('<div data-layout="layout">'),
-    `wrapper preserved at start of body, got: ${body.slice(0, 80)}`);
-  assert.ok(body.includes('<main>page</main></div>'),
-    'body keeps page content + closing wrapper');
+  assert.ok(body.startsWith('<main>page</main>'),
+    `body starts with the first non-head content, got: ${body.slice(0, 80)}`);
   assert.ok(!body.includes('rel="icon"'), 'icon link removed from body');
 });
 
@@ -258,12 +254,13 @@ test('buildDocumentParts: passes through user shell with no <head> at all', () =
   assert.match(prefix, /<title>X<\/title>/);
 });
 
-test('buildDocumentParts: peeks past the data-layout wrapper to find user shell', () => {
-  // renderChain wraps every layout's output in <div data-layout="…">; the
-  // shell detection must still work end-to-end through that wrapper.
-  const wrappedShell =
-    `<div data-layout="layout"><!doctype html><html lang="es" data-theme="dark"><head></head><body class="bg-test"><main>page</main></body></html></div>`;
-  const { prefix, streamBody } = _buildDocumentParts(wrappedShell, {
+test('buildDocumentParts: user shell is detected directly (no wrapper to peek past)', () => {
+  // The renderChain output goes directly into the shell extractor — partial
+  // -nav uses inline comment markers, not a wrapping div. extractUserShell
+  // sees the user's <!doctype><html> shell at the top of body.
+  const userShellBody =
+    `<!doctype html><html lang="es" data-theme="dark"><head></head><body class="bg-test"><main>page</main></body></html>`;
+  const { prefix, streamBody } = _buildDocumentParts(userShellBody, {
     metadata: { title: 'X' },
     moduleUrls: [],
     dev: false,
@@ -272,9 +269,7 @@ test('buildDocumentParts: peeks past the data-layout wrapper to find user shell'
   // User shell attributes preserved.
   assert.match(prefix, /<html lang="es" data-theme="dark">/);
   assert.match(prefix, /<body class="bg-test">/);
-  // The data-layout marker reappears INSIDE the user's <body> so the
-  // client router can still detect same-layout navigations.
-  assert.match(streamBody, /<div data-layout="layout">/);
+  // User body content preserved.
   assert.match(streamBody, /<main>page<\/main>/);
 });
 
@@ -732,7 +727,11 @@ test('ssrPage: page metadata.cacheControl is honoured', async () => {
   assert.equal(resp.headers.get('cache-control'), 'public, max-age=60');
 });
 
-test('ssrPage: layout output is wrapped with data-layout attribute', async () => {
+test('ssrPage: emits wj:children comment marker around the page slot for each layout', async () => {
+  // Each layout's ${children} interpolation is wrapped in a
+  // <!--wj:children:<segment-path>--> ... <!--/wj:children--> comment pair
+  // by renderChain. The client router walks both old + new DOM for these
+  // markers and swaps only the deepest shared layout's children slot.
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
@@ -746,15 +745,23 @@ test('ssrPage: layout output is wrapped with data-layout attribute', async () =>
   const url = new URL('http://localhost/');
   const resp = await ssrPage(route, {}, url, { dev: false, appDir });
   const body = await resp.text();
-  assert.ok(body.includes('data-layout="layout"'),
-    `expected data-layout wrapper, got: ${body.slice(0, 400)}`);
-  const idxWrap = body.indexOf('data-layout=');
+  // Marker for the root layout, segment path '/'.
+  assert.ok(body.includes('<!--wj:children:/-->'),
+    `expected open marker for root layout, got: ${body.slice(0, 600)}`);
+  assert.ok(body.includes('<!--/wj:children-->'),
+    `expected close marker, got: ${body.slice(0, 600)}`);
+  // The shell wraps the marker, not the other way around: the layout
+  // markup is OUTSIDE its own children-slot marker.
   const idxShell = body.indexOf('class="shell"');
-  assert.ok(idxWrap >= 0 && idxShell >= 0);
-  assert.ok(idxWrap < idxShell, 'wrapper element precedes layout content');
+  const idxOpen = body.indexOf('<!--wj:children:/-->');
+  const idxPage = body.indexOf('page content');
+  const idxClose = body.indexOf('<!--/wj:children-->');
+  assert.ok(idxShell < idxOpen, 'layout markup precedes marker');
+  assert.ok(idxOpen < idxPage, 'open marker precedes page content');
+  assert.ok(idxPage < idxClose, 'close marker follows page content');
 });
 
-test('ssrPage: no data-layout wrapper when route has no layouts', async () => {
+test('ssrPage: no children-slot markers when route has no layouts', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
@@ -763,8 +770,8 @@ test('ssrPage: no data-layout wrapper when route has no layouts', async () => {
   const url = new URL('http://localhost/');
   const resp = await ssrPage(route, {}, url, { dev: false, appDir });
   const body = await resp.text();
-  assert.ok(!body.includes('data-layout='),
-    `no layouts → no wrapper, got: ${body.slice(0, 400)}`);
+  assert.ok(!body.includes('wj:children:'),
+    `no layouts → no markers, got: ${body.slice(0, 400)}`);
 });
 
 test('ssrPage: modulepreload never points at server-only files', async () => {
