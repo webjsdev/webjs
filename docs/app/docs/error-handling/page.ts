@@ -17,7 +17,13 @@ export default function ErrorHandling() {
     <h2>When NOT to use</h2>
     <ul>
       <li>For 404 pages — use <code>not-found.ts</code> instead, or throw <code>notFound()</code> from a page function.</li>
-      <li>For form validation errors — handle those in your component state, not error boundaries.</li>
+      <li>
+        For form validation errors — two valid patterns, neither uses error boundaries:
+        <ul>
+          <li><strong>JS-side</strong>: handle validation in the component's submit handler, keep errors in component state.</li>
+          <li><strong>Server-rendered (Rails / Django / Laravel style)</strong>: have the server return <code>422 Unprocessable Entity</code> with the form re-rendered, errors visible inline. The client router applies any HTML response in place regardless of status code, so the user sees the validated form without a full page reload and without losing their typed values. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</li>
+        </ul>
+      </li>
     </ul>
 
     <h2>Route-level error boundaries</h2>
