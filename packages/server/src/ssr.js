@@ -224,7 +224,8 @@ async function renderChain(route, ctx, dev, suspenseCtx, have) {
     const segmentPath = layoutSegmentPath(route.layouts[i]);
     if (have && have.has(segmentPath)) {
       tree = wrapWithChildrenMarker(tree, segmentPath);
-      return await renderToString(tree, { ssr: true, suspenseCtx });
+      const body = await renderToString(tree, { ssr: true, suspenseCtx });
+      return body + (await loadingTemplates(route, ctx, dev));
     }
     const mod = await loadModule(route.layouts[i], dev);
     if (!mod.default) continue;
@@ -233,7 +234,56 @@ async function renderChain(route, ctx, dev, suspenseCtx, have) {
       children: wrapWithChildrenMarker(tree, segmentPath),
     });
   }
-  return await renderToString(tree, { ssr: true, suspenseCtx });
+  const body = await renderToString(tree, { ssr: true, suspenseCtx });
+  return body + (await loadingTemplates(route, ctx, dev));
+}
+
+/**
+ * Render each `loading.{js,ts}` in the route's chain into a hidden
+ * `<template id="wj-loading:<segment-path>">`. The client router clones
+ * the deepest matching template into the swap slot on nav-start, giving
+ * users an instant per-segment skeleton instead of stale content.
+ *
+ * Each loading file's segment path is the URL prefix it serves — same
+ * derivation as layoutSegmentPath but stripping `loading.ext` instead.
+ *
+ * Errors loading a single file are swallowed so a broken loading.ts in
+ * one segment doesn't break the whole response.
+ *
+ * @param {{ loadings?: string[] }} route
+ * @param {Record<string,unknown>} ctx
+ * @param {boolean} dev
+ * @returns {Promise<string>}
+ */
+async function loadingTemplates(route, ctx, dev) {
+  if (!route.loadings || route.loadings.length === 0) return '';
+  /** @type {string[]} */
+  const parts = [];
+  for (const file of route.loadings) {
+    try {
+      const mod = await loadModule(file, dev);
+      if (!mod.default) continue;
+      const tree = await mod.default(ctx);
+      const html = await renderToString(tree, { ssr: true });
+      const segmentPath = loadingSegmentPath(file);
+      parts.push(`<template id="wj-loading:${segmentPath}">${html}</template>`);
+    } catch { /* skip broken loading file */ }
+  }
+  return parts.join('');
+}
+
+/**
+ * Like layoutSegmentPath but for `loading.{js,ts}` files. Strips the
+ * `loading.ext` filename from the URL path under app/.
+ *
+ * @param {string} loadingFile
+ * @returns {string}
+ */
+function loadingSegmentPath(loadingFile) {
+  const p = loadingFile
+    .replace(/^.*\/app\//, '')
+    .replace(/\/?loading\.[jt]sx?$/, '');
+  return p === '' ? '/' : '/' + p;
 }
 
 /**

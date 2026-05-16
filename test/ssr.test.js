@@ -836,6 +836,56 @@ test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () 
   assert.ok(body.includes('sub page'), 'page content present');
 });
 
+test('ssrPage: emits <template id="wj-loading:<path>"> for each loading.ts in the chain', async () => {
+  // Two-level loading chain: app/loading.ts and app/docs/loading.ts.
+  // Both should emit hidden <template> elements at the end of body
+  // keyed by their segment path. The client router clones the
+  // deepest matching template on nav-start for an instant per-segment
+  // skeleton.
+  const sub = mkdtempSync(join(tmpDir, 'loading-templates-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(join(appDir, 'docs'), { recursive: true });
+  const rootLayout = join(appDir, 'layout.js');
+  const docsLayout = join(appDir, 'docs', 'layout.js');
+  const rootLoading = join(appDir, 'loading.js');
+  const docsLoading = join(appDir, 'docs', 'loading.js');
+  const pageFile = join(appDir, 'docs', 'page.js');
+  writeFileSync(rootLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function R({ children }) { return html\`<div>\${children}</div>\`; }\n`);
+  writeFileSync(docsLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function D({ children }) { return html\`<div>\${children}</div>\`; }\n`);
+  writeFileSync(rootLoading,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function L() { return html\`<div class="ROOT-SKELETON">root skeleton</div>\`; }\n`);
+  writeFileSync(docsLoading,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function L() { return html\`<div class="DOCS-SKELETON">docs skeleton</div>\`; }\n`);
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function P() { return html\`<p>page</p>\`; }\n`);
+
+  const route = {
+    file: pageFile,
+    layouts: [rootLayout, docsLayout],
+    loadings: [rootLoading, docsLoading],
+    errors: [],
+    metadataFiles: [],
+  };
+
+  const url = new URL('http://localhost/docs');
+  const resp = await ssrPage(route, {}, url, { dev: false, appDir });
+  const body = await resp.text();
+
+  assert.ok(body.includes('<template id="wj-loading:/"'),
+    `expected root loading template, got: ${body.slice(-500)}`);
+  assert.ok(body.includes('<template id="wj-loading:/docs"'),
+    `expected docs loading template, got: ${body.slice(-500)}`);
+  assert.ok(body.includes('ROOT-SKELETON'), 'root loading content present');
+  assert.ok(body.includes('DOCS-SKELETON'), 'docs loading content present');
+});
+
 test('ssrPage: no children-slot markers when route has no layouts', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:
