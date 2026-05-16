@@ -334,5 +334,38 @@ TodoApp.register('todo-app');
 //   -H 'Content-Type: application/json' \\
 //   -d '{"text":"Buy milk"}'
 // => {"id":1,"text":"Buy milk","done":false,"createdAt":"2026-04-15T..."}</pre>
+
+    <h2>Plain HTML forms as an alternative</h2>
+    <p>Server actions called via JS RPC are the right tool when you need typed return values back in the component (the createPost example above returns a <code>Post</code> object). For the simpler "submit form → server processes → render new page" flow, plain HTML forms pointed at a <code>route.ts</code> handler are often a cleaner fit:</p>
+    <pre>// app/posts/route.ts
+import { redirect } from '@webjskit/core';
+import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+
+export async function POST(req: Request) {
+  const form = await req.formData();
+  const result = await createPost({
+    title: String(form.get('title') ?? ''),
+    body: String(form.get('body') ?? ''),
+  });
+  // Validation failure -> return HTML with errors visible.
+  // The client router applies any HTML response in place regardless of
+  // status, so the user sees errors without losing their typed input
+  // and without a full page reload.
+  if (!result.success) {
+    return new Response(renderPostFormHTML(result.errors, form), {
+      status: 422,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+  }
+  // Success -> PRG redirect; fetch auto-follows, history records /posts/&lt;id&gt;
+  redirect(\`/posts/\${result.data.id}\`);
+}</pre>
+    <pre>&lt;!-- The form: standard HTML, no JS handler needed --&gt;
+&lt;form action="/posts" method="post"&gt;
+  &lt;input name="title" required /&gt;
+  &lt;textarea name="body" required&gt;&lt;/textarea&gt;
+  &lt;button&gt;Publish&lt;/button&gt;
+&lt;/form&gt;</pre>
+    <p>The router intercepts the submit, sends the POST, applies the response — 2xx with redirect for success, 4xx HTML for validation errors. Works without JavaScript (just slower; full page reload), and ramps up to partial-swap when the client router is active. Both ends of the progressive-enhancement spectrum from one piece of code. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</p>
   `;
 }

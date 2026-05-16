@@ -148,6 +148,23 @@ export default function DashboardLayout({ children }: { children: unknown }) {
       <code>url</code> context as the page, plus the <code>children</code> prop.
     </p>
 
+    <h3>Layouts and client navigation</h3>
+    <p>
+      Nested layouts double as <strong>partial-swap boundaries</strong> for the client
+      router. The SSR pipeline auto-emits
+      <code>&lt;!--wj:children:&lt;segment-path&gt;--&gt;</code> comment markers around each
+      layout's <code>\${children}</code> interpolation. When a user clicks a link, the
+      router picks the deepest layout the source and target pages share and swaps only
+      <em>its</em> children — the outer layouts' DOM (and any state inside them: sidenav
+      scroll, input values, mounted custom elements) stays mounted. Authors write
+      nothing extra; the marker emission is invisible.
+    </p>
+    <p>
+      See the <a href="/docs/client-router">client router</a> docs for the full
+      mechanism, including form submissions, snapshot cache, and the
+      <code>&lt;webjs-frame&gt;</code> escape hatch.
+    </p>
+
     <!-- ===== DYNAMIC ROUTES ===== -->
     <h2>Dynamic Routes</h2>
     <p>
@@ -483,9 +500,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
     <!-- ===== NAVIGATION HELPERS ===== -->
     <h2>Navigation Helpers</h2>
     <p>
-      webjs provides two server-side navigation helpers, imported from <code>'@webjskit/core'</code>.
-      Both work by throwing a sentinel error that the SSR pipeline catches — never wrap
-      them in a try/catch.
+      webjs exports four navigation primitives from <code>'@webjskit/core'</code> —
+      two for the server (sentinel-throw helpers) and two for the client (programmatic
+      nav + cache invalidation).
     </p>
 
     <h3><code>notFound()</code></h3>
@@ -519,9 +536,33 @@ export default async function ProtectedPage() {
 }</pre>
 
     <p>
-      Both helpers can be called from pages, layouts, and <code>generateMetadata</code>
-      functions — anywhere in the server-side rendering chain.
+      Both server helpers can be called from pages, layouts, and
+      <code>generateMetadata</code> functions — anywhere in the server-side rendering
+      chain.
     </p>
+
+    <h3><code>navigate(url, opts?)</code></h3>
+    <p>
+      Programmatic client-side navigation. Use instead of
+      <code>location.href = ...</code> to keep the partial-swap behavior. Pushes a
+      history entry by default; pass <code>{ replace: true }</code> to replace.
+    </p>
+    <pre>import { navigate } from '@webjskit/core';
+await navigate('/about');
+await navigate('/login', { replace: true });</pre>
+
+    <h3><code>revalidate(url?)</code></h3>
+    <p>
+      Evict a cached snapshot from the client router's back/forward cache. Call after
+      a JS-initiated server-action mutation so the next visit to that URL refetches
+      instead of restoring stale data. Omit the argument to clear the whole cache.
+      Form submissions through the router clear the cache automatically on mutating
+      methods — you only need <code>revalidate()</code> for mutations that bypass the
+      form pipeline.
+    </p>
+    <pre>import { revalidate } from '@webjskit/core';
+revalidate('/products/123');  // evict one URL
+revalidate();                 // clear the whole cache</pre>
 
     <!-- ===== LOADING ===== -->
     <h2>Loading UI (<code>loading.ts</code>)</h2>
@@ -544,11 +585,18 @@ export default function Loading() {
 }</pre>
 
     <p>
-      webjs automatically wraps the page in a Suspense boundary with the loading content as the fallback. The page content streams in when ready, replacing the loading UI. webjs recognizes <code>loading.ts</code> files in the route table and
-      associates them with their routes (outermost to innermost, mirroring the layout
-      chain), but the automatic Suspense wrapping is not yet active. The file is included
-      in the route scan today so your loading UIs are ready when streaming Suspense
-      support is completed.
+      webjs automatically wraps the sibling page in a Suspense boundary with the
+      loading content as the fallback. The page content streams in when ready,
+      replacing the loading UI — no manual <code>Suspense()</code> call required.
+    </p>
+    <p>
+      On client-side navigation, the same <code>loading.ts</code> is also cloned into
+      the swap slot for instant feedback. The SSR pipeline emits each segment's
+      loading template as a hidden
+      <code>&lt;template id="wj-loading:&lt;segment-path&gt;"&gt;</code>; the router
+      clones the deepest matching template into the active swap region the moment a
+      link is clicked. See the
+      <a href="/docs/loading-states">Loading States</a> page for the full mechanism.
     </p>
 
     <!-- ===== SUMMARY ===== -->

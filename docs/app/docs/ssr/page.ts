@@ -173,7 +173,7 @@ export const metadata = {
     </ul>
     <p>This breaks the ES module waterfall. Without modulepreload, the browser would discover each component's import only after parsing its parent module. With the hints in the <code>&lt;head&gt;</code>, the browser begins fetching all modules in parallel immediately.</p>
     <p>Component preload discovery works because <code>Class.register('tag')</code> records the module URL alongside the tag name. During <code>injectDSD</code>, every custom element tag that matched is added to a <code>usedComponents</code> set. After rendering, the set is converted to <code>&lt;link&gt;</code> tags.</p>
-    <p>In production bundle mode (when <code>.webjs/bundle.js</code> exists), all per-file preloads are replaced by a single <code>&lt;link rel="modulepreload" href="/__webjs/bundle.js"&gt;</code>.</p>
+    <p>The per-file modulepreload model is what makes webjs's no-build, ESM-native architecture competitive with bundling: the SSR pass knows every module the page needs, the browser fetches them in parallel over an HTTP/2 connection, granular cache invalidation means edits only invalidate the changed file. Same model as Rails 7+ with importmap-rails.</p>
 
     <h2>103 Early Hints</h2>
     <p>Before SSR even starts, the server sends HTTP 103 Early Hints to the browser with the same modulepreload URLs that will appear in the <code>&lt;head&gt;</code>. This uses the Node.js <code>res.writeEarlyHints()</code> API. The browser can begin DNS resolution, TLS negotiation, and module fetching while the server is still executing page code and rendering templates.</p>
