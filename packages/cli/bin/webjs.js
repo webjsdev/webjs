@@ -13,9 +13,8 @@ const TEMPLATES = ['full-stack', 'api', 'saas'];
 
 const USAGE = `webjs — commands:
   webjs dev   [--port 3000]                       Start dev server with live reload
-  webjs start [--port 3000]                       Start production server (serves source directly; no build required)
-              [--http2 --cert <path> --key <path>]  Serve HTTP/2 over TLS (falls back to h1.1)
-  webjs build                                     Optional: bundle client modules into a single file (advanced/perf opt-in)
+  webjs start [--port 3000]                       Start production server (serves source directly; no build step)
+              [--http2 --cert <path> --key <path>]  Serve HTTP/2 over TLS (recommended in production)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
   webjs create <name> [--template full-stack|api|saas]  Scaffold a new webjs app
@@ -86,19 +85,6 @@ async function main() {
       const cert = flag(rest, '--cert');
       const key = flag(rest, '--key');
       await startServer({ appDir: process.cwd(), port, dev: false, http2, cert, key });
-      break;
-    }
-    case 'build': {
-      const { buildBundle } = await import('@webjskit/server');
-      const t = Date.now();
-      const result = await buildBundle({
-        appDir: process.cwd(),
-        minify: rest.includes('--no-minify') ? false : true,
-        sourcemap: rest.includes('--no-sourcemap') ? false : true,
-      });
-      if (result.bundleFile) {
-        console.log(`webjs: bundled ${result.entries.length} entries → ${result.bundleFile} (${Date.now() - t}ms)`);
-      }
       break;
     }
     case 'db': {

@@ -19,7 +19,7 @@ import { transitiveDeps } from './module-graph.js';
  * @param {import('./router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, bundle?: boolean, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string> }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string> }} opts
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
@@ -46,31 +46,28 @@ export async function ssrPage(route, params, url, opts) {
       ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
       : null;
     const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have);
-    // When a production bundle is available, skip the per-file module imports
-    // in the shell and load the bundle instead — that's a single request for
-    // all components + page side-effects.
-    const moduleUrls = opts.bundle
-      ? ['/__webjs/bundle.js']
-      : [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
-    // Emit <link rel="modulepreload"> for every custom element that actually
-    // rendered PLUS their transitive dependencies (from the module graph).
-    // Skipped in bundle mode (the bundle already contains them).
-    // URLs are deduplicated so the browser never sees the same preload twice.
-    // Lazy components are excluded from preloads and instead loaded via
-    // IntersectionObserver when they enter the viewport.
-    const { eager: eagerComponents, lazy: lazyComponents } = opts.bundle
-      ? { eager: [], lazy: {} }
-      : componentPreloads(suspenseCtx.usedComponents, opts.appDir);
-    const preloads = opts.bundle
-      ? []
-      : deduplicatedPreloads(
-          eagerComponents,
-          moduleUrls,
-          opts.moduleGraph,
-          [route.file, ...route.layouts],
-          opts.appDir,
-          opts.serverFiles,
-        );
+    // Module URLs for the page + every layout in its chain. These ride
+    // the importmap; the browser fetches each file as it walks the
+    // import graph. Combined with the modulepreload hints below, this
+    // is the Rails 7+ / Hotwire pattern: per-file ESM, no bundling,
+    // HTTP/2 multiplex on the wire.
+    const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
+    // Emit <link rel="modulepreload"> for every custom element that
+    // actually rendered PLUS their transitive dependencies (from the
+    // module graph). URLs are deduplicated so the browser never sees
+    // the same preload twice. Lazy components are excluded from
+    // preloads and instead loaded via IntersectionObserver when they
+    // enter the viewport.
+    const { eager: eagerComponents, lazy: lazyComponents } =
+      componentPreloads(suspenseCtx.usedComponents, opts.appDir);
+    const preloads = deduplicatedPreloads(
+      eagerComponents,
+      moduleUrls,
+      opts.moduleGraph,
+      [route.file, ...route.layouts],
+      opts.appDir,
+      opts.serverFiles,
+    );
     // Extract CSP nonce from request headers (if present).
     const nonce = opts.req ? getNonce(opts.req) : undefined;
     const wrapOpts = {

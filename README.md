@@ -156,10 +156,21 @@ export async function listPosts() {
 
 ## Production
 
+No build step. The same source files that ran in `webjs dev` run in
+production — served as native ES modules via importmap, with
+`<link rel="modulepreload">` hints emitted at SSR time so the browser
+fetches the page's modules in parallel over a single HTTP/2 connection.
+Same model as Rails 7+ with `importmap-rails`.
+
 ```sh
-webjs build                     # optional: bundle for fewer HTTP requests
-webjs start --port 8080         # JSON logs, gzip/brotli, ETag, streaming
+webjs start --port 8080                            # JSON logs, gzip/brotli, ETag, streaming
+webjs start --http2 --cert cert.pem --key key.pem  # HTTP/2 over TLS (recommended)
 ```
+
+For most production deploys you terminate TLS + HTTP/2 at a reverse
+proxy (Cloudflare, nginx, Caddy, Fly, Railway, Render) and run
+`webjs start` on plain HTTP behind it — the proxy gives you HTTP/2 to
+the browser for free.
 
 Health: `GET /__webjs/health`. Graceful shutdown on `SIGTERM`.
 

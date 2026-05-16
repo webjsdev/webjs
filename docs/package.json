@@ -9,8 +9,7 @@
     "start": "webjs start",
     "webjs:dev": "webjs dev --port 4000",
     "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
-    "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
-    "build": "webjs build"
+    "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
   },
   "dependencies": {
     "@webjskit/cli": "^0.4.0",

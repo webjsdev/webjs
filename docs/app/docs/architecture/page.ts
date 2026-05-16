@@ -42,7 +42,6 @@ export default function Architecture() {
       <li><code>cookies()</code> / <code>headers()</code> — request context via AsyncLocalStorage</li>
       <li><code>json()</code> / <code>readBody()</code> — content-negotiated JSON helpers</li>
       <li><code>rateLimit()</code> — in-memory fixed-window rate limiter</li>
-      <li><code>buildBundle()</code> — optional esbuild production bundle</li>
       <li>CSRF, compression, graceful shutdown, health probes, logger</li>
     </ul>
 
@@ -50,8 +49,7 @@ export default function Architecture() {
     <p>The <code>webjs</code> command-line tool:</p>
     <ul>
       <li><code>webjs dev</code> — dev server with file watching + live reload via SSE</li>
-      <li><code>webjs start</code> — production server (optional <code>--http2 --cert --key</code>)</li>
-      <li><code>webjs build</code> — optional esbuild bundle for production</li>
+      <li><code>webjs start</code> — production server (optional <code>--http2 --cert --key</code>; no build step — serves source directly)</li>
       <li><code>webjs db generate/migrate/studio</code> — Prisma CLI wrappers</li>
     </ul>
 

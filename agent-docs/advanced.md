@@ -42,18 +42,34 @@ Five stacked zero-build optimizations:
    package is bundled into a single ESM file via esbuild and served at
    `/__webjs/vendor/<pkg>.js`. The import map is populated automatically.
 
-## Bundling — `webjs build` (optional)
+## No-build production model
 
-Runs esbuild over every client-facing module and writes
-`.webjs/bundle.js`. Prod serves the bundle with
-`Cache-Control: immutable, max-age=1y`. One bundle per app (no per-route
-split in v1).
+webjs has no bundler and no `webjs build` step. The same `.js` / `.ts`
+source files that run in dev are served as-is to the browser in
+production. The Rails 7+ / Hotwire pattern:
 
-```sh
-webjs build                        # default: minified + sourcemap
-webjs build --no-minify            # debugging
-webjs build --no-sourcemap         # smaller deploy
-```
+- **Importmap-driven**: bare-specifier imports (`from "react"`) are
+  resolved via `<script type="importmap">` emitted into the document
+  head. Each package is auto-bundled once at server startup (`vendor.js`)
+  and served at `/__webjs/vendor/<pkg>.js`.
+- **Per-file ESM serving**: every app `.js` / `.ts` becomes its own HTTP
+  resource. The browser walks the import graph and fetches each module
+  on demand.
+- **`<link rel="modulepreload">` hints at SSR time**: for every component
+  the route uses + its transitive deps from the module graph. The
+  browser parallelizes fetches instead of waterfalling through nested
+  imports. This is what eliminates the perceived gap vs a bundle.
+- **HTTP/2 multiplex** is what makes per-file serving competitive: one
+  TCP+TLS handshake, many module fetches in parallel over the same
+  connection. Run `webjs start --http2 --cert ... --key ...` to
+  terminate HTTP/2 directly, or — more commonly — put a reverse proxy
+  (Cloudflare / nginx / Caddy / Fly / Railway / Render) in front of
+  plain HTTP `webjs start` and let the proxy speak HTTP/2 to the
+  browser.
+
+Content-hashed cache-busting and granular cache invalidation come from
+the same per-file model: edit one file, only that file's URL hash
+changes, only that one re-downloads.
 
 ## Rate limiting — `rateLimit()`
 

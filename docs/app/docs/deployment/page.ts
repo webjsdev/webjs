@@ -17,22 +17,19 @@ webjs start [--port 3000]</pre>
     <p>Key differences:</p>
     <ul>
       <li><strong>Dev:</strong> chokidar watches your source tree and triggers live reload via SSE. TypeScript files are served with <code>Cache-Control: no-cache</code>. Errors include full stack traces. No compression.</li>
-      <li><strong>Prod:</strong> no file watcher, no SSE endpoint. Static files get ETags and <code>Cache-Control: public, max-age=3600</code>. Bundle and vendor files get <code>max-age=31536000, immutable</code>. Gzip and Brotli compression are enabled. Error responses omit stack traces.</li>
+      <li><strong>Prod:</strong> no file watcher, no SSE endpoint. Static files get ETags and <code>Cache-Control: public, max-age=3600</code>. Auto-vendored npm packages get <code>max-age=31536000, immutable</code>. Gzip and Brotli compression are enabled. Error responses omit stack traces.</li>
     </ul>
 
-    <h2>webjs build (Optional)</h2>
-    <p>The build step is optional. Without it, webjs serves ES modules individually (one HTTP request per component file). With it, all client-side code is bundled into a single <code>.webjs/bundle.js</code>.</p>
-    <pre># Bundle for production (uses esbuild)
-webjs build [--no-minify] [--no-sourcemap]</pre>
-    <p>The build:</p>
+    <h2>No build step</h2>
+    <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code> — there is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
     <ul>
-      <li>Scans <code>app/</code> for pages, layouts, and <code>components/</code> for web components.</li>
-      <li>Produces a single <code>.webjs/bundle.js</code> (+ sourcemap) that includes all client-side modules and their transitive dependencies.</li>
-      <li>Server-only files (<code>.server.ts</code>, <code>route.ts</code>, <code>middleware.ts</code>) are never included.</li>
-      <li>In production, SSR pages load <code>/__webjs/bundle.js</code> instead of individual modules, collapsing dozens of requests into one.</li>
+      <li>The browser fetches each module via the import graph, resolved through an <code>&lt;script type="importmap"&gt;</code> emitted in the document head.</li>
+      <li>For every page render, the SSR pipeline emits <code>&lt;link rel="modulepreload"&gt;</code> hints for the components on that page plus their transitive dependencies — the browser fetches them in parallel instead of waterfall-ing through nested imports.</li>
+      <li>HTTP/2 multiplex over a single connection is what makes per-file serving as fast as (or faster than) bundling. Run <code>webjs start --http2 --cert ... --key ...</code> to terminate HTTP/2 directly, or — more commonly — put a reverse proxy (Cloudflare, nginx, Caddy, Fly, Railway, Render) in front of plain HTTP <code>webjs start</code>; the proxy speaks HTTP/2 to the browser for free.</li>
+      <li>Bare-specifier imports (<code>from "react"</code>) are auto-bundled per-package at server startup and served at <code>/__webjs/vendor/&lt;pkg&gt;.js</code> — these are immutable URLs that cache aggressively.</li>
+      <li>TypeScript files are transformed by esbuild on first request and cached by mtime. Same loader in dev and prod.</li>
     </ul>
-    <p>esbuild is bundled with <code>@webjskit/server</code> — no separate install needed. <code>webjs build</code> runs immediately after a fresh scaffold.</p>
-    <p>For small apps (under ~20 components), unbundled serving in production is perfectly viable. The build step is an optimisation, not a requirement.</p>
+    <p>Granular cache invalidation is a real benefit: edit one component, only that file's content hash changes, only that one re-downloads on the user's next visit. A bundler would invalidate the entire bundle on any change.</p>
 
     <h2>Production Features</h2>
 
@@ -40,7 +37,7 @@ webjs build [--no-minify] [--no-sourcemap]</pre>
     <p>In production mode, webjs automatically negotiates <code>Accept-Encoding</code> and compresses responses with Brotli (quality 4) or Gzip (level 6). Compression applies to text-based content types: HTML, JavaScript, JSON, CSS, SVG, XML. Binary assets (images, fonts) are served uncompressed.</p>
 
     <h3>ETags and Cache Headers</h3>
-    <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. The production bundle (<code>.webjs/bundle.js</code>) and auto-vendored npm packages are served with <code>max-age=31536000, immutable</code> since their content is addressed by hash. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
+    <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. Auto-vendored npm packages at <code>/__webjs/vendor/&lt;pkg&gt;.js</code> are served with <code>max-age=31536000, immutable</code> since their content is addressed by hash. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
 
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
@@ -189,15 +186,12 @@ API_KEY="sk-..."</pre>
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies (no native build step needed — webjs ships no bundler)
 COPY package.json package-lock.json ./
-RUN npm ci --production
+RUN npm ci --omit=dev
 
-# Copy app source
+# Copy app source as-is; the server serves it directly
 COPY . .
-
-# Optional: build the client bundle
-RUN webjs build
 
 EXPOSE 3000
 HEALTHCHECK CMD curl -f http://localhost:3000/__webjs/health || exit 1
@@ -205,31 +199,14 @@ HEALTHCHECK CMD curl -f http://localhost:3000/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine — esbuild ships its own native binary, so no extra system packages are required.</li>
-      <li>Run <code>npm ci --production</code> to skip dev dependencies. esbuild is a dependency of <code>@webjskit/server</code>, so it's always available for <code>webjs build</code> without extra setup.</li>
+      <li><code>node:slim</code> works fine — esbuild ships its own native binary, used at runtime for <code>.ts</code> transformation. No extra system packages.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjskit/server</code> (which depends on esbuild) is a runtime dependency, so the TS loader stays available in production.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
+      <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
     </ul>
-    <h3>Multi-Stage Build</h3>
-    <pre>FROM node:23-slim AS builder
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-RUN npx prisma generate
-RUN webjs build
 
-FROM node:23-slim
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --production
-COPY --from=builder /app/.webjs .webjs
-COPY --from=builder /app/node_modules/.prisma node_modules/.prisma
-COPY . .
-EXPOSE 3000
-CMD ["npx", "webjs", "start"]</pre>
-
-    <h2>Reverse Proxy (nginx / Caddy)</h2>
+    <h2>Reverse Proxy (nginx / Caddy) — recommended for HTTP/2</h2>
     <p>For production deployments, a reverse proxy handles TLS termination, HTTP/2, static asset caching, and load balancing. webjs runs as an HTTP/1.1 upstream; the proxy speaks HTTP/2 to clients.</p>
 
     <h3>nginx</h3>
@@ -288,13 +265,13 @@ pm2 start "webjs start" --name my-app</pre>
     <h2>Deployment Checklist</h2>
     <ul>
       <li>Node 20.6+ installed (required for the esbuild loader hook).</li>
-      <li><code>npm ci --production</code> to install only production dependencies.</li>
+      <li><code>npm ci --omit=dev</code> to install only runtime dependencies.</li>
       <li>Run <code>npx prisma generate</code> if you use Prisma.</li>
-      <li>Optionally run <code>webjs build</code> for a single-file client bundle.</li>
+      <li>No build step. Source <code>.js</code> / <code>.ts</code> files are deployed as-is and transformed on first request.</li>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
-      <li>Use a reverse proxy for TLS termination and HTTP/2 in production.</li>
+      <li>Use a reverse proxy or run <code>webjs start --http2 ...</code> directly — HTTP/2 multiplex is what makes per-file ESM as fast as bundling.</li>
       <li>Set up log aggregation (webjs outputs structured JSON in production).</li>
     </ul>
   `;

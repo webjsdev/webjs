@@ -654,8 +654,8 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
 ```sh
 webjs dev    [--port N] [--appDir <dir>]              # dev server with live reload
-webjs start  [--port N] [--appDir <dir>]              # prod server. Reads PORT; default 3000
-webjs build  [--appDir <dir>]                         # (optional) esbuild bundle
+webjs start  [--port N] [--appDir <dir>]              # prod server. No build step — source IS the runtime
+             [--http2 --cert <path> --key <path>]       # HTTP/2 + TLS (recommended in prod)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
 webjs check  [--fix]                                  # convention validator
 webjs create <name> [--template api|saas]             # scaffold a new app
@@ -742,7 +742,8 @@ HelloWorld.register('hello-world');
 
 Not in v1; do not implement as part of other tasks:
 
-- **Per-route code splitting.** One bundle per app today.
+- **Bundling of any kind.** webjs is a **no-build framework** — `.js` / `.ts` files are served directly to the browser via importmap + per-file ESM. Same model as Rails 7+ (Hotwire + importmap-rails). Production performance comes from HTTP/2 multiplex + `<link rel="modulepreload">` hints emitted at SSR time, not from concatenation. **Do not propose a bundler; do not add a `webjs build` command.** If a large-app perf problem materializes, it gets solved by tightening the modulepreload graph or by adopting per-route splitting natively in the browser (importmap scopes), not by reintroducing a build step.
+- **Per-route code splitting.** Downstream of the no-build invariant. The browser already fetches each module lazily as the import graph reaches it; modulepreload hints are emitted per-route at SSR time.
 - **Vite-grade HMR with state preservation.** Web components can only be `customElements.define`d once — full-page reload instead. Data reloads are near-instant via chokidar → SSE.
 - **React Server Components Flight protocol.** Server actions cover "call a server function from the client"; Flight duplicates years of React work. Use `Suspense` + streaming instead.
 - **Edge-runtime bundling / full portability.** See `agent-docs/deployment.md`.

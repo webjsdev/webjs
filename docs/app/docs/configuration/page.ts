@@ -29,14 +29,6 @@ export default function Configuration() {
       <li>JSON logger (structured, one line per event)</li>
     </ul>
 
-    <h3>webjs build</h3>
-    <pre>webjs build [--no-minify] [--no-sourcemap]</pre>
-    <ul>
-      <li>Bundles all client-facing modules (components, pages, layouts) into <code>.webjs/bundle.js</code> via esbuild</li>
-      <li>Optional — the framework works without it (no-build by default)</li>
-      <li>If the bundle exists, production mode serves it instead of per-file imports</li>
-    </ul>
-
     <h3>webjs db</h3>
     <pre>webjs db generate     # prisma generate
 webjs db migrate &lt;name&gt;  # prisma migrate dev

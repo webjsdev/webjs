@@ -696,24 +696,6 @@ test('handle: TS source responses share an mtime-keyed cache (second req is fast
 
 /* ------------ prod bundle serving ------------ */
 
-test('handle: /__webjs/bundle.js is served when a prod bundle exists', async () => {
-  const appDir = makeApp({
-    'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    '.webjs/bundle.js': `console.log('bundle');\n`,
-    '.webjs/bundle.js.map': `{"version":3,"sources":[]}`,
-  });
-  const app = await createRequestHandler({ appDir, dev: false });
-  const resp = await app.handle(new Request('http://x/__webjs/bundle.js'));
-  assert.equal(resp.status, 200);
-  const body = await resp.text();
-  assert.ok(body.includes("console.log('bundle')"));
-
-  const mapResp = await app.handle(new Request('http://x/__webjs/bundle.js.map'));
-  assert.equal(mapResp.status, 200);
-});
-
 /* ------------ startServer: real HTTP server (toWebRequest / sendWebResponse) ------------ */
 
 test('startServer: boots on an ephemeral port and serves a page', async () => {

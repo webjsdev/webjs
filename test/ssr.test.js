@@ -1314,15 +1314,3 @@ test('ssrPage: response attaches a csrf set-cookie when request has no token', a
 
 /* ------------ bundle mode skips per-file preloads ------------ */
 
-test('ssrPage: bundle=true emits /__webjs/bundle.js import and no per-file preloads', async () => {
-  const { route, appDir } = await makeRoute({
-    pageSrc:
-      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
-      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
-  });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, bundle: true });
-  const body = await resp.text();
-  assert.ok(body.includes('/__webjs/bundle.js'), 'bundle import present');
-  const pageImports = body.match(/modulepreload[^>]*href="[^"]*page\.js"/g) || [];
-  assert.equal(pageImports.length, 0, 'no per-file preloads in bundle mode');
-});
