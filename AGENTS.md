@@ -569,10 +569,24 @@ DOM identity is preserved across navigation** — sidenav scroll, input
 values, `<details>` open state all survive without authors writing
 anything.
 
+Form submissions (`<form action="..." method="...">`) ride the same
+pipeline. GET forms promote `FormData` to the query string; non-GET
+forms send `FormData` as the request body and clear the snapshot cache
+on success (since other URLs may now reflect stale state). Forms that
+already `e.preventDefault()` in their `@submit` handler (e.g.
+server-action RPC) are untouched. `data-no-router` opts out per form
+or per submitter.
+
 Wire-byte optimization is also automatic: the router sends an
 `X-Webjs-Have` header listing the marker paths it has; the server
 short-circuits at the deepest match and returns only the divergent
 fragment.
+
+Rapid clicks are safe: each navigation `abort()`s the previous fetch
+and bumps a monotonic nav-token, so a slow late response can never
+revert a newer settled page. Window scroll position is captured on
+snapshot and restored on back/forward cache hits — inner scrollables
+keep their `scrollTop` natively via outer-layout DOM identity.
 
 For the 1% case where you want a partial-swap region NOT tied to a
 folder layout (an in-page widget that should swap on click), wrap it

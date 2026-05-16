@@ -27,7 +27,9 @@ import { parseHTML } from 'linkedom';
 let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _addNewHead, _merge, _isNonHtmlPath, navigate,
   _reactivateScripts, _findAnchorInPath, _activeFrameId, _onPopState,
-  _snapshotCache, _LIVE_ATTRS,
+  _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
+  _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
+  _restoreOptimistic, _navToken, _bumpNavToken,
   enableClientRouter, disableClientRouter, revalidate;
 
 before(async () => {
@@ -67,6 +69,14 @@ before(async () => {
     _onPopState,
     _snapshotCache,
     _LIVE_ATTRS,
+    _blurOutgoingFocus,
+    _onSubmit,
+    _getSubmitMethod,
+    _getSubmitAction,
+    _buildSubmitFormData,
+    _restoreOptimistic,
+    _navToken,
+    _bumpNavToken,
     navigate,
     revalidate,
     enableClientRouter,
@@ -603,16 +613,116 @@ test('navigate: fetch rejection falls back to full page navigation', async () =>
   }
 });
 
-test('navigate: non-ok response falls back to full page navigation', async () => {
+test('navigate: non-ok HTML response is rendered in place (validation errors, 404 pages, etc.)', async () => {
+  // Phase 4: 4xx/5xx responses with HTML bodies are no longer
+  // full-page-fallback'd. The server-rendered validation pattern
+  // (POST → 422 with form + errors re-rendered) and "soft 404 pages"
+  // both depend on this. Matches Turbo Drive's
+  // formSubmissionFailedWithResponse behavior.
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
-    body: '<html></html>',
+    body: '<!doctype html><html><body><h1 id="err-marker">Validation failed</h1></body></html>',
     ok: false,
   });
   try {
+    document.body.innerHTML = '<p>old</p>';
     await navigate('http://localhost/missing');
-    assert.equal(redirect.href, 'http://localhost/missing');
+    // No full-page fallback — location.href was NOT reassigned.
+    assert.equal(redirect.href, null,
+      'HTML 4xx/5xx should render in place, not full-nav-fallback');
+    // The new body is in place.
+    assert.ok(document.getElementById('err-marker'),
+      "non-ok response's HTML body was applied");
   } finally { restore(); }
+});
+
+test('navigate: non-ok response with NON-HTML body falls back to full nav', async () => {
+  // 500 returning `{"error": "..."}` (JSON) is not something we can
+  // render as a page. Hand off to the browser.
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'application/json',
+    body: '{"error":"boom"}',
+    ok: false,
+  });
+  try {
+    await navigate('http://localhost/api-error');
+    assert.equal(redirect.href, 'http://localhost/api-error');
+  } finally { restore(); }
+});
+
+test('navigate: 204 No Content stays on current page (records history, no DOM swap)', async () => {
+  // Server returning 204 = "I processed your request, no new page to
+  // show." Common for autosave-style submissions where the user stays
+  // put.
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  let redirected = null;
+  /** @type {{url:string|null}} */
+  const pushed = { url: null };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 204,
+    redirected: false,
+    url: 'http://localhost/save',
+    headers: { get: () => 'text/html' },
+    text: async () => '',
+  });
+  globalThis.location = /** @type any */ ({ origin: 'http://localhost', href: 'http://localhost/' });
+  Object.defineProperty(globalThis.location, 'href', {
+    configurable: true, get() { return 'http://localhost/'; },
+    set(v) { redirected = v; },
+  });
+  globalThis.history = /** @type any */ ({
+    pushState: (_a, _b, url) => { pushed.url = url; },
+    replaceState: () => {},
+  });
+  globalThis.scrollTo = /** @type any */ (() => {});
+  document.body.innerHTML = '<p id="keep">original</p>';
+  try {
+    await navigate('http://localhost/save');
+    assert.equal(redirected, null, 'no full-page fallback');
+    assert.ok(document.getElementById('keep'),
+      'DOM untouched — 204 means stay on current page');
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.location = originalLocation;
+  }
+});
+
+test('navigate: server-side redirect records the final URL in history (PRG pattern)', async () => {
+  // POST → server redirects to GET /dashboard (303 See Other) →
+  // fetch auto-follows → we need to record /dashboard, not /signup.
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  /** @type {{url:string|null}} */
+  const pushed = { url: null };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    redirected: true,
+    url: 'http://localhost/dashboard',
+    headers: { get: () => 'text/html' },
+    text: async () => '<!doctype html><html><body><h1 id="dash">Dashboard</h1></body></html>',
+  });
+  globalThis.location = /** @type any */ ({ origin: 'http://localhost', href: 'http://localhost/' });
+  Object.defineProperty(globalThis.location, 'href', {
+    configurable: true, get() { return 'http://localhost/'; }, set() {},
+  });
+  globalThis.history = /** @type any */ ({
+    pushState: (_a, _b, url) => { pushed.url = url; },
+    replaceState: () => {},
+  });
+  globalThis.scrollTo = /** @type any */ (() => {});
+  try {
+    await navigate('http://localhost/signup');
+    assert.equal(pushed.url, 'http://localhost/dashboard',
+      'history recorded the final (post-redirect) URL, not the originally-requested one');
+    assert.ok(document.getElementById('dash'),
+      'final page body was applied');
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.location = originalLocation;
+  }
 });
 
 /* ====================================================================
@@ -971,4 +1081,301 @@ test('revalidate(): clears the entire snapshot cache when called with no args', 
   _snapshotCache.set('/b', 'snap-b');
   revalidate();
   assert.equal(_snapshotCache.size, 0);
+});
+
+/* ====================================================================
+ * blurOutgoingFocus — clear stuck focus on the previously-activated
+ * element so it doesn't paint a :focus-visible ring when the window
+ * regains focus.
+ * ==================================================================== */
+
+/** Stub document.activeElement to return the given element. */
+function withActiveElement(el, fn) {
+  const desc = Object.getOwnPropertyDescriptor(document, 'activeElement');
+  Object.defineProperty(document, 'activeElement', { configurable: true, get: () => el });
+  try { fn(); } finally {
+    if (desc) Object.defineProperty(document, 'activeElement', desc);
+    else delete document.activeElement;
+  }
+}
+
+test('blurOutgoingFocus: calls .blur() on the previously-active element', () => {
+  document.body.innerHTML = '<a id="link" href="/x">link</a>';
+  const link = document.getElementById('link');
+  let blurred = false;
+  link.blur = () => { blurred = true; };
+  withActiveElement(link, () => _blurOutgoingFocus());
+  assert.equal(blurred, true, 'sidenav link is blurred after swap');
+});
+
+test('blurOutgoingFocus: no-op when active element is <body>', () => {
+  // After certain DOM mutations the browser parks focus on <body>;
+  // calling blur() there would be redundant and might dispatch a
+  // useless blur event.
+  let blurCalls = 0;
+  document.body.blur = () => { blurCalls++; };
+  withActiveElement(document.body, () => _blurOutgoingFocus());
+  assert.equal(blurCalls, 0, '<body> is not blurred');
+});
+
+test('blurOutgoingFocus: no-op when there is no active element', () => {
+  // Just verify it doesn't throw when activeElement is null/undefined.
+  withActiveElement(null, () => _blurOutgoingFocus());
+  withActiveElement(undefined, () => _blurOutgoingFocus());
+});
+
+test('blurOutgoingFocus: no-op when active element has no blur() method', () => {
+  // Pathological case — exotic node types without blur. Should not throw.
+  withActiveElement({ /* no blur method */ }, () => _blurOutgoingFocus());
+});
+
+/* ====================================================================
+ * Form submission — getSubmitMethod / getSubmitAction
+ * ==================================================================== */
+
+/** Build a form element in the test document for inspection. */
+function formFrom(html) {
+  document.body.innerHTML = html;
+  return document.querySelector('form');
+}
+
+test('getSubmitMethod: submitter formmethod overrides form method', () => {
+  const form = formFrom('<form method="post"><button formmethod="put">x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitMethod(form, submitter), 'put');
+});
+
+test('getSubmitMethod: falls back to form method when submitter has no formmethod', () => {
+  const form = formFrom('<form method="POST"><button>x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitMethod(form, submitter), 'post');
+});
+
+test('getSubmitMethod: defaults to get when neither has a method', () => {
+  const form = formFrom('<form><button>x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitMethod(form, submitter), 'get');
+});
+
+test('getSubmitMethod: tolerates null submitter (programmatic submit)', () => {
+  const form = formFrom('<form method="post"></form>');
+  assert.equal(_getSubmitMethod(form, null), 'post');
+});
+
+test('getSubmitAction: submitter formaction overrides form action', () => {
+  const form = formFrom('<form action="/a"><button formaction="/b">x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitAction(form, submitter), '/b');
+});
+
+test('getSubmitAction: falls back to form action when submitter has none', () => {
+  const form = formFrom('<form action="/here"><button>x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitAction(form, submitter), '/here');
+});
+
+test('getSubmitAction: empty submitter formaction is honored (means submit-to-self)', () => {
+  // Per HTML5 spec, a present-but-empty formaction means "use the form's
+  // action URL". We return empty string here; the caller resolves via
+  // `new URL('', location.href)` which gives the current document URL.
+  const form = formFrom('<form action="/elsewhere"><button formaction="">x</button></form>');
+  const submitter = form.querySelector('button');
+  assert.equal(_getSubmitAction(form, submitter), '');
+});
+
+/* ====================================================================
+ * Form submission — onSubmit filter rules
+ * ==================================================================== */
+
+/**
+ * Construct a fake SubmitEvent for the given form. We can't use a real
+ * SubmitEvent in linkedom (it's undefined there), but onSubmit only
+ * reads `defaultPrevented`, `target`, `submitter`, and `preventDefault`
+ * — easy to fake.
+ */
+function fakeSubmitEvent(form, submitter) {
+  let prevented = false;
+  return {
+    defaultPrevented: false,
+    target: form,
+    submitter: submitter || null,
+    preventDefault() { prevented = true; this.defaultPrevented = true; },
+    _wasPrevented() { return prevented; },
+  };
+}
+
+test('onSubmit: ignores forms with data-no-router (lets browser submit)', () => {
+  const form = formFrom('<form action="/x" method="post" data-no-router></form>');
+  const e = fakeSubmitEvent(form);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false,
+    "data-no-router form is NOT intercepted; browser handles it natively");
+});
+
+test('onSubmit: ignores forms with target=_blank (popup)', () => {
+  const form = formFrom('<form action="/x" method="post" target="_blank"></form>');
+  const e = fakeSubmitEvent(form);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false, 'popup target left to browser');
+});
+
+test('onSubmit: ignores submissions with method="dialog"', () => {
+  const form = formFrom('<form action="/x" method="dialog"></form>');
+  const e = fakeSubmitEvent(form);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false, 'native dialog dismissal not routed');
+});
+
+test('onSubmit: ignores cross-origin actions', () => {
+  const form = formFrom('<form action="https://other.example.com/x" method="post"></form>');
+  const e = fakeSubmitEvent(form);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false, 'cross-origin → full browser submit');
+});
+
+test('onSubmit: ignores file-download actions (non-HTML extensions)', () => {
+  const form = formFrom('<form action="/data.pdf" method="get"></form>');
+  const e = fakeSubmitEvent(form);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false, 'PDF action → browser handles download');
+});
+
+test('onSubmit: ignores already-prevented events (server-action RPC stub got first)', () => {
+  const form = formFrom('<form action="/x" method="post"></form>');
+  const e = fakeSubmitEvent(form);
+  e.defaultPrevented = true; // simulate a user @submit handler already running
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false,
+    "router does not double-prevent — user handler owns the event");
+});
+
+test('onSubmit: ignores submitter with data-no-router (per-button escape)', () => {
+  const form = formFrom('<form action="/x" method="post"><button data-no-router>x</button></form>');
+  const submitter = form.querySelector('button');
+  const e = fakeSubmitEvent(form, submitter);
+  _onSubmit(e);
+  assert.equal(e._wasPrevented(), false, 'submitter-level opt-out');
+});
+
+/* ====================================================================
+ * restoreOptimistic — nav-token race guard
+ * ==================================================================== */
+
+test('restoreOptimistic: stale token is a no-op (newer nav already settled)', () => {
+  // Set up a real marker pair in the document so the function has
+  // somewhere to restore into.
+  document.body.innerHTML =
+    '<!--wj:children:/-->' +
+    '<p id="loading">loading</p>' +
+    '<!--/wj:children-->';
+  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/');
+  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children');
+
+  // Construct stale state — token from a navigation that already passed.
+  const staleToken = _navToken();
+  _bumpNavToken();          // simulate a newer navigation taking over
+  _bumpNavToken();          // ...and another, just to be safe
+
+  const oldChild = document.createElement('p');
+  oldChild.id = 'old-content';
+  oldChild.textContent = 'old';
+
+  _restoreOptimistic({ slot: { start, end }, oldChildren: [oldChild], token: staleToken });
+
+  // Loading element must STILL be there — restore should have been
+  // skipped because token is stale.
+  assert.ok(document.getElementById('loading'),
+    'newer nav owns the page — stale restore must not revert it');
+  assert.equal(document.getElementById('old-content'), null,
+    'stale oldChildren must not be inserted');
+});
+
+test('restoreOptimistic: current token applies the restore', () => {
+  document.body.innerHTML =
+    '<!--wj:children:/-->' +
+    '<p id="loading2">loading</p>' +
+    '<!--/wj:children-->';
+  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/');
+  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children');
+
+  const oldChild = document.createElement('p');
+  oldChild.id = 'restored';
+  oldChild.textContent = 'restored';
+
+  _restoreOptimistic({ slot: { start, end }, oldChildren: [oldChild], token: _navToken() });
+
+  assert.equal(document.getElementById('loading2'), null,
+    'loading content was replaced');
+  assert.ok(document.getElementById('restored'),
+    'oldChildren restored when token is current');
+});
+
+/* ====================================================================
+ * revalidate — falsy-arg semantics (Phase 3)
+ * ==================================================================== */
+
+test("revalidate(''): empty-string url clears the entire cache", () => {
+  _snapshotCache.set('/a', 'snap-a');
+  _snapshotCache.set('/b', 'snap-b');
+  revalidate('');
+  assert.equal(_snapshotCache.size, 0,
+    "empty string is treated as 'no specific URL' — clear everything");
+});
+
+test('revalidate(null) / revalidate(undefined): both clear entire cache', () => {
+  _snapshotCache.set('/a', 'snap-a');
+  revalidate(null);
+  assert.equal(_snapshotCache.size, 0);
+  _snapshotCache.set('/a', 'snap-a');
+  revalidate(undefined);
+  assert.equal(_snapshotCache.size, 0);
+});
+
+/* ====================================================================
+ * addNewHeadElements — importmap mismatch warning (Phase 3)
+ * ==================================================================== */
+
+/** Capture console.warn calls into an array. */
+function captureWarn(fn) {
+  const calls = [];
+  const orig = console.warn;
+  console.warn = (...args) => calls.push(args.join(' '));
+  try { fn(); } finally { console.warn = orig; }
+  return calls;
+}
+
+test('addNewHeadElements: warns when incoming importmap differs from current', () => {
+  document.head.innerHTML = '<script type="importmap">{"imports":{"a":"/a.js"}}</script>';
+  const newHead = new globalThis.DOMParser().parseFromString(
+    '<!doctype html><html><head><script type="importmap">{"imports":{"a":"/v2/a.js"}}</script></head><body></body></html>',
+    'text/html'
+  ).head;
+
+  const warnings = captureWarn(() => _addNewHead(newHead));
+  assert.equal(warnings.length, 1, 'one warning emitted');
+  assert.match(warnings[0], /importmap/, 'warning mentions importmap');
+});
+
+test('addNewHeadElements: silent when incoming importmap matches current', () => {
+  const map = '{"imports":{"a":"/a.js"}}';
+  document.head.innerHTML = `<script type="importmap">${map}</script>`;
+  const newHead = new globalThis.DOMParser().parseFromString(
+    `<!doctype html><html><head><script type="importmap">${map}</script></head><body></body></html>`,
+    'text/html'
+  ).head;
+
+  const warnings = captureWarn(() => _addNewHead(newHead));
+  assert.equal(warnings.length, 0, 'no warning when importmaps are identical');
+});
+
+test('addNewHeadElements: silent when current page has no importmap', () => {
+  document.head.innerHTML = '';
+  const newHead = new globalThis.DOMParser().parseFromString(
+    '<!doctype html><html><head><script type="importmap">{"imports":{}}</script></head><body></body></html>',
+    'text/html'
+  ).head;
+
+  const warnings = captureWarn(() => _addNewHead(newHead));
+  assert.equal(warnings.length, 0,
+    "no current importmap to conflict with — silent (the new map still won't be injected, but that's separate)");
 });
