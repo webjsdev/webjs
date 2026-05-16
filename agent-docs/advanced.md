@@ -153,6 +153,83 @@ await navigate('/about');                    // push history
 await navigate('/login', { replace: true }); // replace
 ```
 
+### Form submissions
+
+`<form action="..." method="...">` submissions are intercepted alongside
+link clicks and routed through the same partial-swap pipeline.
+Submitter attributes (`formmethod` / `formaction` / `formenctype` on a
+clicked `<button>`) take precedence over the form's own — per the HTML5
+form-submission algorithm.
+
+- **GET** — `FormData` is promoted to the URL query string (replacing
+  any existing `?...` on `action`), then the URL is fetched and applied
+  exactly like a link click.
+- **POST / PUT / PATCH / DELETE** — `FormData` is sent as the request
+  body. After a successful response the snapshot cache is cleared (the
+  submission may have mutated server state that other cached URLs
+  depend on; back/forward must refetch, not restore stale).
+
+Forms calling a server action via `@submit=${e => this.handleSubmit(e)}`
++ `e.preventDefault()` are unaffected — the router only intercepts when
+`event.defaultPrevented` is false. Opt out per form or per submitter
+with `data-no-router`:
+
+```html
+<form action="/legacy" data-no-router>...</form>
+<form action="/x"><button data-no-router>Full reload</button></form>
+```
+
+Auto-skipped (no `data-no-router` needed):
+- `method="dialog"` (browser-native dialog dismissal)
+- `target` / `formtarget` ≠ `_self` (iframe / popup)
+- Cross-origin `action`
+- Non-HTML extensions on `action` (`.pdf`, etc.)
+
+### Non-2xx HTML responses are rendered in place
+
+A response with a `text/html` body is applied to the DOM regardless of
+status code:
+
+- **2xx** — normal navigation.
+- **4xx (e.g. 422)** — server-rendered validation errors. The form is
+  re-rendered with `value` attributes preserving what the user typed,
+  inline error messages visible, no full-page reload. Standard Rails /
+  Django / Laravel / Phoenix pattern.
+- **5xx with HTML** — error page rendered in place (not a flash of
+  blank then reload).
+
+Non-HTML responses (JSON error envelopes, downloads, opaque) fall back
+to `location.href = url` and let the browser handle them.
+
+**204 No Content** = "stay on current page" (autosave-style
+submissions). DOM is untouched; history records the requested URL.
+
+**Server-side redirects** (3xx that `fetch()` follows automatically)
+record the **final** URL in history, not the originally-requested one
+— the Post-Redirect-Get pattern works correctly.
+
+### Concurrent navigations + cancellation
+
+Each navigation/submission `abort()`s any in-flight fetch from the prior
+one — Turbo Drive's `navigator.stop()` pattern. Rapid clicks won't
+produce N parallel requests competing to be applied last. A monotonic
+nav-token additionally short-circuits any response that arrives after a
+newer navigation has settled, so a slow first request that races past
+its abort cannot revert the newer page.
+
+### Scroll restoration on back/forward
+
+On snapshot, the router records `{ window.scrollX, window.scrollY }`
+alongside the HTML. On popstate cache-hit, the cached DOM is applied
+and scroll is restored to where the user left it. The background
+revalidation fetch that follows does **not** scroll, so the restored
+position survives the refresh. Cache miss → browser-native scroll
+restoration takes over.
+
+Inner scroll containers (e.g. `.docs-sidenav`) are preserved
+automatically by the outer-layout-DOM-identity invariant — they stay
+mounted across nav and keep their `scrollTop` natively.
+
 ### `<webjs-frame>` escape hatch
 
 For partial-swap regions NOT tied to a folder layout (a marketing-page

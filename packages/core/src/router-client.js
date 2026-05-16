@@ -77,6 +77,26 @@ function parseHTML(html) {
 let enabled = false;
 
 /**
+ * AbortController for the currently in-flight fetch. A new navigation /
+ * submission `abort()`s this and replaces it — Turbo Drive's
+ * `navigator.stop()` pattern. Aborting in-flight requests on rapid
+ * link clicks avoids late responses clobbering newer settled state.
+ *
+ * @type {AbortController | null}
+ */
+let activeAbortController = null;
+
+/**
+ * Monotonic counter incremented at the start of every navigation. Each
+ * async path captures the value at its entry point and compares before
+ * applying side effects (swap, restore-optimistic). A mismatch means a
+ * newer nav superseded this one — bail out silently. Belt-and-suspenders
+ * on top of AbortController: covers paths where a response has already
+ * resolved past the await but a newer nav started before applySwap ran.
+ */
+let currentNavigationToken = 0;
+
+/**
  * Global MutationObserver that upgrades any custom element inserted into
  * the document. Safety net: if our diff / replaceChildren / View
  * Transitions ever leave an un-upgraded element behind, this catches it.
@@ -104,6 +124,7 @@ export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
   enabled = true;
   document.addEventListener('click', onClick, true);
+  document.addEventListener('submit', onSubmit, true);
   window.addEventListener('popstate', onPopState);
   ensureUpgradeObserver();
 }
@@ -113,6 +134,7 @@ export function disableClientRouter() {
   if (!enabled) return;
   enabled = false;
   document.removeEventListener('click', onClick, true);
+  document.removeEventListener('submit', onSubmit, true);
   window.removeEventListener('popstate', onPopState);
 }
 
@@ -137,8 +159,13 @@ export async function navigate(url, opts) {
  * @param {string} [url]  Specific URL to invalidate, or omit to clear all.
  */
 export function revalidate(url) {
-  if (url == null) snapshotCache.clear();
-  else snapshotCache.delete(new URL(url, location.href).pathname + new URL(url, location.href).search);
+  // Falsy `url` (undefined, null, empty string) clears everything.
+  // Loose `== null` would have left `revalidate('')` to silently no-op,
+  // because `new URL('', location.href)` is a valid relative URL and the
+  // resulting cache key rarely matches anything.
+  if (!url) { snapshotCache.clear(); return; }
+  const u = new URL(url, location.href);
+  snapshotCache.delete(u.pathname + u.search);
 }
 
 // Auto-enable on import (standard Turbo-Drive convention).
@@ -186,6 +213,112 @@ function onPopState(_e) {
   // popstate has no DOM anchor, so no frame context — restore via cache or
   // refetch the whole document.
   performNavigation(location.href, true, null);
+}
+
+/**
+ * Intercept form submissions. Capture phase so we run before user
+ * `@submit` handlers in component templates — they can call
+ * `e.preventDefault()` or `e.stopImmediatePropagation()` first if they
+ * want to handle the submission themselves (server-action RPC stubs do
+ * this).
+ *
+ * Filtering mirrors Turbo's `form_submit_observer.js`:
+ *   - `data-no-router` on form or submitter → full browser submit.
+ *   - `formmethod="dialog"` → native <dialog> dismissal, never routed.
+ *   - `target` / `formtarget` that isn't `_self` → iframe / popup target.
+ *   - Cross-origin or non-HTML-extension action → let the browser handle.
+ *
+ * Submitter attributes (`formmethod`, `formaction`, `formenctype`) take
+ * precedence over the form's own — HTML5 form-submission algorithm.
+ *
+ * @param {SubmitEvent} e
+ */
+function onSubmit(e) {
+  if (!enabled) return;
+  if (e.defaultPrevented) return;
+
+  const form = /** @type {HTMLFormElement | null} */ (e.target);
+  // Duck-type check rather than `instanceof HTMLFormElement` — linkedom
+  // and other non-browser DOMs don't always mark form elements as
+  // instances of the window's HTMLFormElement class.
+  if (!form || form.nodeType !== 1 || form.tagName !== 'FORM') return;
+  if (form.hasAttribute('data-no-router')) return;
+
+  const submitter = /** @type {HTMLElement | null} */ (e.submitter ?? null);
+  if (submitter && submitter.hasAttribute('data-no-router')) return;
+
+  const target = (submitter && submitter.getAttribute('formtarget'))
+    || form.getAttribute('target')
+    || '';
+  if (target && target !== '_self') return;
+
+  const method = getSubmitMethod(form, submitter);
+  if (method === 'dialog') return;
+
+  const action = getSubmitAction(form, submitter);
+  /** @type {URL} */ let url;
+  try { url = new URL(action, location.href); }
+  catch { return; }
+  if (url.origin !== location.origin) return;
+  if (NON_HTML_EXTENSIONS.test(url.pathname)) return;
+
+  const body = buildSubmitFormData(form, submitter);
+
+  e.preventDefault();
+  const frameId = activeFrameId(form);
+  performSubmission(url.href, method, body, frameId);
+}
+
+/**
+ * Method resolution: submitter's `formmethod` wins over form's `method`.
+ * Returns lowercase.
+ *
+ * @param {HTMLFormElement} form
+ * @param {HTMLElement | null} submitter
+ */
+function getSubmitMethod(form, submitter) {
+  const v = (submitter && submitter.getAttribute('formmethod'))
+    || form.getAttribute('method')
+    || 'get';
+  return v.toLowerCase();
+}
+
+/**
+ * Action resolution: submitter's `formaction` wins over form's `action`.
+ * Empty string is valid (means submit-to-current-url).
+ *
+ * @param {HTMLFormElement} form
+ * @param {HTMLElement | null} submitter
+ */
+function getSubmitAction(form, submitter) {
+  if (submitter && submitter.hasAttribute('formaction')) {
+    return submitter.getAttribute('formaction') || '';
+  }
+  return form.getAttribute('action') || form.action || location.href;
+}
+
+/**
+ * Build FormData honoring the submitter's name=value (per HTML5 form
+ * submission algorithm). Modern browsers + the `FormData(form, submitter)`
+ * ctor handle this automatically; older Safari needs a manual append.
+ *
+ * @param {HTMLFormElement} form
+ * @param {HTMLElement | null} submitter
+ * @returns {FormData}
+ */
+function buildSubmitFormData(form, submitter) {
+  try {
+    return new FormData(form, /** @type any */ (submitter || undefined));
+  } catch {
+    const fd = new FormData(form);
+    if (submitter && submitter.getAttribute('name')) {
+      fd.append(
+        /** @type {string} */ (submitter.getAttribute('name')),
+        submitter.getAttribute('value') || '',
+      );
+    }
+    return fd;
+  }
 }
 
 /**
@@ -311,12 +444,19 @@ export function longestSharedPath(here, there) {
  * ==================================================================== */
 
 const SNAPSHOT_CAP = 16;
-/** @type {Map<string, string>} */
+/** @typedef {{ html: string, scrollX: number, scrollY: number }} Snapshot */
+/** @type {Map<string, Snapshot | string>} */
 const snapshotCache = new Map();
 
 /**
- * Cache the current document's HTML keyed by URL. Used on back/forward
- * navigation for instant restore (then revalidated in the background).
+ * Cache the current document's HTML + window scroll position keyed by
+ * URL. Used on back/forward navigation: the cached DOM restores
+ * instantly, scroll position restores to whatever the user left it at.
+ *
+ * Turbo Drive captures `window.pageXOffset/pageYOffset` on every scroll
+ * event into history state. Webjs captures lazily at snapshot time —
+ * one read per nav rather than one per scroll event. Sufficient because
+ * we only need the position at the moment of leaving.
  *
  * @param {string} url
  */
@@ -324,7 +464,13 @@ function snapshotCurrent(url) {
   const key = cacheKey(url);
   // Move-to-front for LRU.
   if (snapshotCache.has(key)) snapshotCache.delete(key);
-  snapshotCache.set(key, document.documentElement.outerHTML);
+  /** @type {Snapshot} */
+  const snap = {
+    html: document.documentElement.outerHTML,
+    scrollX: typeof window !== 'undefined' ? window.scrollX || 0 : 0,
+    scrollY: typeof window !== 'undefined' ? window.scrollY || 0 : 0,
+  };
+  snapshotCache.set(key, snap);
   while (snapshotCache.size > SNAPSHOT_CAP) {
     const oldest = snapshotCache.keys().next().value;
     snapshotCache.delete(oldest);
@@ -332,10 +478,12 @@ function snapshotCurrent(url) {
 }
 
 /**
- * Look up a cached snapshot by URL.
+ * Look up a cached snapshot by URL. Returns a normalized Snapshot or
+ * null. Tolerates legacy string entries (e.g. from test fixtures that
+ * `_snapshotCache.set('/x', 'snap')`).
  *
  * @param {string} url
- * @returns {string | null}
+ * @returns {Snapshot | null}
  */
 function snapshotGet(url) {
   const key = cacheKey(url);
@@ -344,6 +492,7 @@ function snapshotGet(url) {
   // Move-to-front.
   snapshotCache.delete(key);
   snapshotCache.set(key, v);
+  if (typeof v === 'string') return { html: v, scrollX: 0, scrollY: 0 };
   return v;
 }
 
@@ -363,13 +512,29 @@ function cacheKey(url) {
  * @param {string | null} frameId  Active <webjs-frame> id, or null.
  */
 async function performNavigation(href, isPopState, frameId) {
-  const url = new URL(href);
+  // Cancel any in-flight fetch — Turbo Drive's navigator.stop().
+  if (activeAbortController) activeAbortController.abort();
+  activeAbortController = new AbortController();
+  const signal = activeAbortController.signal;
+  // Bump nav generation. Captured below + by anything we await into.
+  const myToken = ++currentNavigationToken;
 
   // Snapshot the current page for cache-on-back semantics.
   snapshotCurrent(location.href);
 
-  // Show a subtle loading indicator.
-  document.documentElement.setAttribute('data-navigating', '');
+  // Show a subtle loading indicator, but only if the nav takes long
+  // enough to be worth showing one. Setting an attribute on <html>
+  // invalidates global style computation — which forces CSS like
+  // `color-mix(in oklch, …)` to re-resolve. For values that use
+  // wide-gamut color spaces the re-resolution can switch between
+  // equivalent representations (oklch ↔ oklab) and fire any
+  // `transition` rules listening on that property, producing a
+  // visible flash on every nav. Defer the attribute set so quick
+  // navs (sub-150ms) never set it at all.
+  let navigatingFlagTimer = setTimeout(() => {
+    document.documentElement.setAttribute('data-navigating', '');
+    navigatingFlagTimer = null;
+  }, 150);
 
   // Optimistic loading: clone the per-segment loading.ts template (if
   // any) into the deepest current children-slot so the user sees an
@@ -383,19 +548,100 @@ async function performNavigation(href, isPopState, frameId) {
     if (isPopState) {
       const cached = snapshotGet(href);
       if (cached) {
-        const cachedDoc = parseHTML(cached);
+        const cachedDoc = parseHTML(cached.html);
         if (cachedDoc) {
           applySwap(cachedDoc, frameId, /* revalidating */ true);
-          // Fire-and-forget revalidation.
-          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState).catch(() => {});
+          // Restore window scroll to where the user left it.
+          if (typeof window !== 'undefined') {
+            window.scrollTo(cached.scrollX, cached.scrollY);
+          }
+          // Fire-and-forget revalidation. Uses a fresh AbortController
+          // since this background fetch is allowed to overlap with the
+          // next foreground nav (it'll get aborted if a new nav lands).
+          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState, 'GET', null, signal, myToken)
+            .catch(() => {});
           return;
         }
       }
     }
 
-    await fetchAndApply(href, frameId, !isPopState, optimisticState);
+    await fetchAndApply(href, frameId, !isPopState, optimisticState, 'GET', null, signal, myToken);
   } finally {
-    document.documentElement.removeAttribute('data-navigating');
+    if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
+    // Only clear the navigating flag if WE are still the active nav.
+    // A newer nav has its own flag lifecycle.
+    if (myToken === currentNavigationToken) {
+      document.documentElement.removeAttribute('data-navigating');
+    }
+  }
+}
+
+/**
+ * Submit a form via the partial-swap pipeline. Mirrors performNavigation
+ * but routes the FormData body. GET submissions promote the body to a
+ * query string (HTML form-submission algorithm); non-GET submissions
+ * send the body as-is.
+ *
+ * Mutating methods (anything except GET/HEAD) clear the whole snapshot
+ * cache after a successful response — Turbo's `clearSnapshotCache()` on
+ * `!isSafe` (`navigator.js:71-88`). Other URLs in the cache may have
+ * been server-side-mutated by this submission; refusing to clear would
+ * serve stale content on subsequent back/forward.
+ *
+ * @param {string} href     Absolute target URL.
+ * @param {string} method   Lowercased HTTP verb.
+ * @param {FormData} body
+ * @param {string | null} frameId
+ */
+async function performSubmission(href, method, body, frameId) {
+  if (activeAbortController) activeAbortController.abort();
+  activeAbortController = new AbortController();
+  const signal = activeAbortController.signal;
+  const myToken = ++currentNavigationToken;
+
+  const isSafe = method === 'get' || method === 'head';
+  let url = new URL(href, location.href);
+  if (isSafe) {
+    // Promote body to query string per the HTML5 form-submission
+    // algorithm. The form's own `action` query is replaced — same as
+    // a native GET-form submission.
+    url.search = '';
+    for (const [k, v] of body) {
+      url.searchParams.append(k, typeof v === 'string' ? v : v.name);
+    }
+  }
+
+  snapshotCurrent(location.href);
+
+  let navigatingFlagTimer = setTimeout(() => {
+    document.documentElement.setAttribute('data-navigating', '');
+    navigatingFlagTimer = null;
+  }, 150);
+
+  const optimisticState = applyOptimisticLoading();
+
+  try {
+    await fetchAndApply(
+      url.href,
+      frameId,
+      /* recordHistory */ true,
+      optimisticState,
+      isSafe ? 'GET' : method.toUpperCase(),
+      isSafe ? null : body,
+      signal,
+      myToken,
+    );
+    // Mutating submissions invalidate cached versions of other URLs —
+    // do this *after* the response applies so the new page itself is
+    // snapshotted on the next nav, not pre-emptively wiped.
+    if (!isSafe && myToken === currentNavigationToken) {
+      snapshotCache.clear();
+    }
+  } finally {
+    if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
+    if (myToken === currentNavigationToken) {
+      document.documentElement.removeAttribute('data-navigating');
+    }
   }
 }
 
@@ -417,46 +663,109 @@ function buildHaveHeader() {
  * @param {string} href
  * @param {string | null} frameId
  * @param {boolean} recordHistory
- * @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null} optimisticState
+ * @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null} optimisticState
+ * @param {string} [method]  HTTP verb (uppercase). Default 'GET'.
+ * @param {BodyInit | null} [body]  Request body for non-GET methods.
+ * @param {AbortSignal | null} [signal]  Abort signal — newer nav cancels this fetch.
+ * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
  */
-async function fetchAndApply(href, frameId, recordHistory, optimisticState) {
+async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
+  method = method || 'GET';
+  const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
+  /** @type {string} */
+  let finalUrl = href;
   try {
     const headers = { 'x-webjs-router': '1' };
     const have = buildHaveHeader();
     if (have) headers['x-webjs-have'] = have;
     if (frameId) headers['x-webjs-frame'] = frameId;
 
-    const resp = await fetch(href, { headers, credentials: 'same-origin' });
-    if (!resp.ok) { location.href = href; return; }
+    /** @type {RequestInit} */
+    const init = { method, headers, credentials: 'same-origin' };
+    if (signal) init.signal = signal;
+    if (body != null && method !== 'GET' && method !== 'HEAD') init.body = body;
+
+    const resp = await fetch(href, init);
     const ctype = resp.headers.get('content-type') || '';
-    if (!/^text\/html\b/i.test(ctype)) { location.href = href; return; }
+    const isHTML = /^text\/html\b/i.test(ctype);
+    // Server-side redirect (PRG, auth-gate, etc.) — fetch followed it
+    // automatically. Record the FINAL URL in history, not the
+    // originally-requested one, so back/forward + bookmarking work.
+    if (resp.redirected && resp.url) finalUrl = resp.url;
+
+    // Empty-body status codes (204 No Content, 205 Reset Content):
+    // server-rendered "stay on current page" pattern. Don't try to
+    // swap an empty document over the live one. We DO still record
+    // history for the originating URL — same as a normal navigation
+    // that decided to short-circuit.
+    if (resp.status === 204 || resp.status === 205) {
+      if (myToken === currentNavigationToken && recordHistory) {
+        history.pushState(null, '', finalUrl);
+      }
+      return;
+    }
+
+    // Non-HTML response (JSON error, file download, opaque) — let the
+    // browser handle it. Same for non-OK responses that aren't HTML
+    // (a 500 returning `{"error": "..."}` shouldn't be rendered as a
+    // page).
+    if (!isHTML) {
+      if (myToken === currentNavigationToken) location.href = href;
+      return;
+    }
+
+    // HTML body of ANY status — 2xx, 4xx validation errors, 5xx error
+    // pages — is parsed and applied in place. Matches Turbo Drive's
+    // `formSubmissionFailedWithResponse` behavior
+    // (turbo/src/core/drive/navigator.js:92-107). Critical for the
+    // standard server-rendered validation pattern: 422 + re-rendered
+    // form with errors keeps the user's typed input and shows context.
     html = await resp.text();
-  } catch {
-    // Network error — restore optimistic content, then fall back to a full nav.
+  } catch (err) {
+    // Aborted by a newer navigation — let it run, don't fall back.
+    if (err && /** @type any */ (err).name === 'AbortError') return;
+    // Stale (a newer nav started before we got the network error) —
+    // the newer nav owns the page now; don't clobber it.
+    if (myToken !== currentNavigationToken) return;
     restoreOptimistic(optimisticState);
     location.href = href;
     return;
   }
+
+  // A newer navigation started while we awaited the response body —
+  // bail before we overwrite its work.
+  if (myToken !== currentNavigationToken) return;
 
   const doc = parseHTML(html);
   if (!doc) { location.href = href; return; }
 
   applySwap(doc, frameId, false);
 
-  if (recordHistory) history.pushState(null, '', href);
+  if (recordHistory) history.pushState(null, '', finalUrl);
 
-  // Scroll: anchor → into-view; otherwise window-top.
-  const url = new URL(href);
-  if (url.hash) {
-    const t = document.getElementById(url.hash.slice(1));
-    if (t) t.scrollIntoView();
-    else window.scrollTo(0, 0);
-  } else {
-    window.scrollTo(0, 0);
+  // Scroll only for foreground (history-recording) navigations. When
+  // `recordHistory` is false we're either:
+  //   (a) the background revalidation after a cached popstate restore
+  //       — performNavigation already set scroll from the cached
+  //       position; we must NOT clobber it here.
+  //   (b) a cache-miss popstate — modern browsers fire scroll-
+  //       restoration themselves before dispatching popstate, so
+  //       leaving scroll alone preserves the browser-native UX.
+  if (recordHistory) {
+    // Use the final URL (after any server-side redirect) so hash
+    // anchors point at the document we actually rendered.
+    const url = new URL(finalUrl);
+    if (url.hash) {
+      const t = document.getElementById(url.hash.slice(1));
+      if (t) t.scrollIntoView();
+      else window.scrollTo(0, 0);
+    } else {
+      window.scrollTo(0, 0);
+    }
   }
 
-  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: href, frameId } }));
+  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId } }));
 }
 
 /**
@@ -482,6 +791,7 @@ function applySwap(doc, frameId, revalidating) {
       reactivateScripts(target);
       upgradeCustomElements(target);
       forwardSuspenseResolvers(doc.body);
+      blurOutgoingFocus();
       return;
     }
   }
@@ -497,6 +807,7 @@ function applySwap(doc, frameId, revalidating) {
     addNewHeadElements(doc.head);
     swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
     forwardSuspenseResolvers(doc.body);
+    blurOutgoingFocus();
     return;
   }
 
@@ -508,6 +819,7 @@ function applySwap(doc, frameId, revalidating) {
     document.body.replaceChildren(...newChildren);
     reactivateScripts(document.body);
     upgradeCustomElements(document.body);
+    blurOutgoingFocus();
   };
   if (/** @type any */ (document).startViewTransition) {
     const t = /** @type any */ (document).startViewTransition(doSwap);
@@ -515,6 +827,34 @@ function applySwap(doc, frameId, revalidating) {
   } else {
     doSwap();
   }
+}
+
+/**
+ * After a swap, blur whatever element the user activated to trigger the
+ * navigation (the clicked sidenav link, the submitted form button, etc.).
+ *
+ * Why: browsers paint `:focus-visible` rings when the window regains
+ * focus on whatever has focus at that moment. A click leaves focus on
+ * the clicked element, so without this blur the user sees a stuck focus
+ * ring on the sidenav link every time they switch workspaces and come
+ * back — even though they navigated minutes ago.
+ *
+ * We do NOT programmatically move focus to the new page's h1/h2.
+ * That'd just relocate the same problem (focus ring on the heading
+ * after a workspace switch) and steals focus from sighted users.
+ * Screen-reader users navigate by heading via their own shortcuts
+ * (`h` in NVDA/JAWS), so they don't need us to do it for them.
+ *
+ * No-op when focus is on `<body>` (browser default after `removeChild`
+ * of a focused node) or when the active element survived the swap and
+ * was inside the new content (means the swap was internal to a region
+ * the user was already interacting with — don't fight them).
+ */
+function blurOutgoingFocus() {
+  const a = document.activeElement;
+  if (!a || a === document.body || a === document.documentElement) return;
+  if (typeof (/** @type any */ (a).blur) !== 'function') return;
+  /** @type any */ (a).blur();
 }
 
 /**
@@ -779,7 +1119,12 @@ const LIVE_ATTRS = new Set([
  * document; if present, clone its content into the deepest current
  * children-slot. Returns state needed to restore on fetch failure.
  *
- * @returns {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null}
+ * The returned state carries the nav-token in effect at swap time;
+ * `restoreOptimistic` verifies the token still matches before reverting,
+ * so a slow nav A's late failure cannot revert a faster nav B's
+ * already-settled state.
+ *
+ * @returns {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null}
  */
 function applyOptimisticLoading() {
   const slots = collectChildrenSlots(document.body);
@@ -805,12 +1150,15 @@ function applyOptimisticLoading() {
   range.setEndBefore(slot.end);
   range.deleteContents();
   slot.start.parentNode.insertBefore(tpl.content.cloneNode(true), slot.end);
-  return { slot, oldChildren };
+  return { slot, oldChildren, token: currentNavigationToken };
 }
 
-/** @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[] } | null} state */
+/** @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null} state */
 function restoreOptimistic(state) {
   if (!state) return;
+  // A newer nav superseded the one that captured this state — don't
+  // revert; that newer nav owns the page now.
+  if (state.token !== currentNavigationToken) return;
   const { slot, oldChildren } = state;
   if (slot.start.parentNode !== slot.end.parentNode) return;
   const range = document.createRange();
@@ -855,7 +1203,23 @@ function addNewHeadElements(newHead) {
   for (const el of document.head.children) currentSet.add(el.outerHTML);
 
   for (const el of newHead.children) {
-    if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
+    if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') {
+      // Skip — partial swaps keep the outer layout mounted, so the
+      // existing importmap stays authoritative. Warn if the incoming
+      // map differs: importmaps are immutable once a script has run
+      // (modern browsers ignore subsequent <script type=importmap>),
+      // so a mismatch means module resolution on this page won't match
+      // what SSR rendered against.
+      const incoming = (el.textContent || '').trim();
+      if (incoming) {
+        const current = document.querySelector('script[type="importmap"]');
+        const currentText = current ? (current.textContent || '').trim() : '';
+        if (currentText && currentText !== incoming && typeof console !== 'undefined') {
+          console.warn('[webjs] incoming page has a different importmap; keeping the current page\'s map. Cross-layout module aliasing may be inconsistent.');
+        }
+      }
+      continue;
+    }
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
     if (!currentSet.has(el.outerHTML)) {
@@ -980,7 +1344,18 @@ export {
   onPopState as _onPopState,
   snapshotCache as _snapshotCache,
   LIVE_ATTRS as _LIVE_ATTRS,
+  blurOutgoingFocus as _blurOutgoingFocus,
+  onSubmit as _onSubmit,
+  getSubmitMethod as _getSubmitMethod,
+  getSubmitAction as _getSubmitAction,
+  buildSubmitFormData as _buildSubmitFormData,
+  restoreOptimistic as _restoreOptimistic,
 };
+
+/** Test-only: read the monotonic navigation-token counter. */
+export function _navToken() { return currentNavigationToken; }
+/** Test-only: bump the navigation-token counter (simulates a fresh nav). */
+export function _bumpNavToken() { return ++currentNavigationToken; }
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
