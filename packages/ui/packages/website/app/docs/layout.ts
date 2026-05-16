@@ -107,44 +107,5 @@ export default async function DocsLayout({ children }: { children: unknown }) {
       </aside>
       <div class="min-w-0 py-10">${children}</div>
     </div>
-    <!--
-      Persist sidenav scroll position across client-router navigations.
-      webjs's router does a full body swap when layouts don't share a
-      custom-element shell — so the .docs-sidenav element gets
-      re-mounted at scrollTop: 0 each time a sidebar link is clicked,
-      defeating the point of an independently-scrollable sidebar. Save
-      scrollTop to sessionStorage before the navigation happens (we
-      hook the link click which fires BEFORE the router intercepts),
-      then restore on initial page load AND after every
-      webjs:navigate event.
-    -->
-    <script>
-      (function () {
-        var KEY = 'docs-sidenav-scroll';
-        function sidenav() { return document.querySelector('.docs-sidenav'); }
-        function restore() {
-          var s = sidenav(); if (!s) return;
-          var v = sessionStorage.getItem(KEY);
-          if (v != null) s.scrollTop = Number(v) || 0;
-        }
-        // Save on any sidenav link click (capture phase to run before
-        // the router intercepts and starts navigating away).
-        document.addEventListener('click', function (e) {
-          var s = sidenav(); if (!s) return;
-          if (!s.contains(e.target)) return;
-          if (!e.target.closest || !e.target.closest('a')) return;
-          sessionStorage.setItem(KEY, String(s.scrollTop));
-        }, true);
-        // Restore on first paint + after every router-driven swap.
-        restore();
-        document.addEventListener('webjs:navigate', function () {
-          // The router has already rendered the new body — restore
-          // synchronously, then again on next frame as a safety net
-          // for layouts where the aside renders just after this event.
-          restore();
-          requestAnimationFrame(restore);
-        });
-      })();
-    </script>
   `;
 }
