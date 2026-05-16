@@ -22,15 +22,14 @@ webjs start [--port 3000]</pre>
 
     <h2>No build step</h2>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
-      <p style="margin:0 0 .5rem;font-weight:600">Required for production: HTTP/2 at the edge</p>
-      <p style="margin:0">webjs's no-build, per-file-ESM model depends on HTTP/2 multiplex to be competitive with bundling — without it, the many small module fetches per page serialize into a head-of-line-blocked queue. Either run <code>webjs start --http2 --cert &lt;pem&gt; --key &lt;pem&gt;</code> to terminate HTTP/2 directly, or — more commonly — put a reverse proxy in front of <code>webjs start</code> that speaks HTTP/2 to the browser (Cloudflare, nginx, Caddy, Fly, Railway, Render all do this automatically).</p>
-      <p style="margin:.5rem 0 0">webjs will log a warning at boot in production mode without <code>--http2</code>, and again on the first HTTP/1.1 request without recognizable reverse-proxy headers. Set <code>WEBJS_NO_HTTP2_WARNING=1</code> to silence either if your proxy is correctly configured.</p>
+      <p style="margin:0 0 .5rem;font-weight:600">Recommended for production: HTTP/2 at the edge</p>
+      <p style="margin:0">webjs's no-build, per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free</strong> — Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM / single-server deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1 — TLS termination is the proxy's responsibility, not the framework's.</p>
     </div>
     <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code> — there is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
     <ul>
       <li>The browser fetches each module via the import graph, resolved through an <code>&lt;script type="importmap"&gt;</code> emitted in the document head.</li>
       <li>For every page render, the SSR pipeline emits <code>&lt;link rel="modulepreload"&gt;</code> hints for the components on that page plus their transitive dependencies — the browser fetches them in parallel instead of waterfall-ing through nested imports.</li>
-      <li>HTTP/2 multiplex over a single connection is what makes per-file serving as fast as (or faster than) bundling. Run <code>webjs start --http2 --cert ... --key ...</code> to terminate HTTP/2 directly, or — more commonly — put a reverse proxy (Cloudflare, nginx, Caddy, Fly, Railway, Render) in front of plain HTTP <code>webjs start</code>; the proxy speaks HTTP/2 to the browser for free.</li>
+      <li>HTTP/2 multiplex at the edge makes per-file serving as fast as (or faster than) bundling. <code>webjs start</code> speaks plain HTTP/1.1 to its upstream; let a reverse proxy (PaaS edge, nginx, Caddy, Traefik) terminate HTTP/2 to the browser.</li>
       <li>Bare-specifier imports (<code>from "react"</code>) are auto-bundled per-package at server startup and served at <code>/__webjs/vendor/&lt;pkg&gt;.js</code> — these are immutable URLs that cache aggressively.</li>
       <li>TypeScript files are transformed by esbuild on first request and cached by mtime. Same loader in dev and prod.</li>
     </ul>
@@ -73,15 +72,17 @@ readinessProbe:
   initialDelaySeconds: 3
   periodSeconds: 5</pre>
 
-    <h2>HTTP/2</h2>
-    <p>webjs supports HTTP/2 over TLS via the <code>--http2</code> flag with a certificate and key:</p>
-    <pre>webjs start --http2 --cert /path/to/cert.pem --key /path/to/key.pem</pre>
-    <p>The HTTP/2 server is created with <code>allowHTTP1: true</code>, so HTTP/1.1 clients fall back gracefully. If <code>--http2</code> is specified without <code>--cert</code>/<code>--key</code>, webjs logs a warning and falls back to plain HTTP/1.1.</p>
+    <h2>HTTP/2 — at the edge, not in webjs</h2>
+    <p>webjs delegates TLS termination + HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1; ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
+    <ul>
+      <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration; you get HTTP/2 to the browser the moment you deploy.</li>
+      <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination; they handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
+    </ul>
     <p>HTTP/2 benefits for webjs apps:</p>
     <ul>
-      <li>Multiplexed streams eliminate head-of-line blocking for unbundled ES module serving (many small files in parallel).</li>
-      <li>Header compression (HPACK) reduces overhead for API-heavy apps.</li>
-      <li>Server push is not used; 103 Early Hints are used instead (see below).</li>
+      <li>Multiplexed streams eliminate head-of-line blocking for per-file ES module serving (many small files in parallel over one connection).</li>
+      <li>Header compression (HPACK) amortizes header overhead across the many module fetches a typical page issues.</li>
+      <li>Server push is not used; <code>103 Early Hints</code> are used instead (see below). Most major edges (Cloudflare, fly-proxy, Fastly) forward these to the browser.</li>
     </ul>
 
     <h2>103 Early Hints</h2>
@@ -276,7 +277,7 @@ pm2 start "webjs start" --name my-app</pre>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
-      <li><strong>HTTP/2 at the edge is required.</strong> Either run <code>webjs start --http2 --cert &lt;pem&gt; --key &lt;pem&gt;</code> directly, or run plain <code>webjs start</code> behind a reverse proxy that terminates HTTP/2. webjs warns at boot and on the first HTTP/1.1 request if neither is detected.</li>
+      <li><strong>HTTP/2 at the edge is recommended.</strong> PaaS deploys (Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, Heroku) give you HTTP/2 to the browser automatically. For bare-VM deploys, front <code>webjs start</code> with nginx, Caddy, or Traefik.</li>
       <li>Set up log aggregation (webjs outputs structured JSON in production).</li>
     </ul>
   `;

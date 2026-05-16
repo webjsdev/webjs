@@ -26,8 +26,11 @@ Five stacked zero-build optimizations:
    The SSR pass knows every custom element in the final HTML; a startup
    module-graph scan adds their transitive import dependencies too. All
    preload hints are deduplicated and emitted in `<head>`.
-2. **HTTP/2 (ALPN over TLS).** `webjs start --http2 --cert … --key …` serves
-   everything over one multiplexed connection.
+2. **HTTP/2 multiplex at the edge.** `webjs start` itself speaks plain
+   HTTP/1.1; PaaS edges (Railway, Fly, Render, Vercel, Cloudflare Pages,
+   Netlify, Heroku) and reverse proxies (nginx, Caddy, Traefik) speak
+   HTTP/2 to the browser and proxy 1.1 to the container — many module
+   fetches in parallel over one TCP+TLS connection.
 3. **103 Early Hints.** Before SSR starts computing the response, the
    server sends `103 Interim Response` with the page's module URLs as
    `rel=modulepreload`. Chrome/Edge and edge proxies (Cloudflare, fly-proxy,
@@ -61,37 +64,15 @@ production. The Rails 7+ / Hotwire pattern:
   imports. This is what eliminates the perceived gap vs a bundle.
 - **HTTP/2 multiplex** is what makes per-file serving competitive: one
   TCP+TLS handshake, many module fetches in parallel over the same
-  connection. Run `webjs start --http2 --cert ... --key ...` to
-  terminate HTTP/2 directly, or — more commonly — put a reverse proxy
-  (Cloudflare / nginx / Caddy / Fly / Railway / Render) in front of
-  plain HTTP `webjs start` and let the proxy speak HTTP/2 to the
-  browser.
+  connection. `webjs start` itself speaks plain HTTP/1.1 — TLS + HTTP/2
+  is the proxy's job. PaaS edges (Railway, Fly, Render, Vercel,
+  Cloudflare Pages, Netlify, Heroku) do this automatically. For bare-VM
+  deploys, put nginx, Caddy, or Traefik in front.
 
 Content-hashed cache-busting and granular cache invalidation come from
 the same per-file model: edit one file, only that file's URL hash
 changes, only that one re-downloads.
 
-### HTTP/2 advisory warnings
-
-Because the no-build model depends on HTTP/2 at the edge to be
-competitive with bundling, webjs surfaces the assumption at runtime:
-
-- **Boot-time advisory** — in prod mode, if `--http2 --cert --key` are
-  not all provided, log a warning at `server.listen()` callback time
-  with concrete remediation (run `--http2 ...` directly, or front a
-  reverse proxy).
-- **Request-time peek** — on the first prod request, if
-  `req.httpVersion === '1.1'` AND no recognizable reverse-proxy
-  headers (`x-forwarded-*`, `forwarded`, `via`, `cf-connecting-ip`,
-  `fly-forwarded-port`, `x-real-ip`) are present, log a warning once.
-  Catches the case where a proxy is in front but downgrading to
-  HTTP/1.1 between the proxy and clients (which would otherwise be
-  silently slow).
-
-Both advisories are silenced by `WEBJS_NO_HTTP2_WARNING=1`. The
-request-time advisory also self-silences once any common proxy
-header arrives — false negatives are possible with exotic proxies
-that set no recognizable headers, hence the env-var escape hatch.
 
 ## Rate limiting — `rateLimit()`
 
