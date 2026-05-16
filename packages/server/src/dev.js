@@ -220,6 +220,7 @@ export async function startServer(opts) {
   // Compression default: on in prod, off in dev (cheaper to debug raw bytes).
   const compress = opts.compress ?? !dev;
   const logger = opts.logger || defaultLogger({ dev });
+  const peekHttp = makeRequestHttpPeek(dev, opts, logger);
 
   /** @type {Set<import('node:http').ServerResponse>} */
   const sseClients = new Set();
@@ -293,6 +294,8 @@ export async function startServer(opts) {
         }
       }
 
+      peekHttp(req);
+
       const webReq = toWebRequest(req, url);
       const resp = await app.handle(webReq);
       await sendWebResponse(res, resp, req, { compress });
@@ -313,6 +316,7 @@ export async function startServer(opts) {
       `webjs ${dev ? 'dev' : 'prod'} server ready on ${scheme}://localhost:${port}` +
       (scheme === 'https' ? ' (HTTP/2)' : '')
     );
+    maybeWarnNoHttp2(dev, opts, logger);
   });
 
   const shutdown = gracefulShutdown(server, sseClients, logger);
@@ -778,6 +782,92 @@ async function fileResponse(abs, opts) {
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
 }
+
+/**
+ * Boot-time advisory: warn once at startup if running in prod mode
+ * without `--http2`. webjs's no-build, per-file-ESM model assumes
+ * HTTP/2 multiplex at the edge — without it, dozens of small module
+ * fetches become a serial bottleneck.
+ *
+ * Suppression: set `WEBJS_NO_HTTP2_WARNING=1` if you're behind a
+ * reverse proxy that speaks HTTP/2 to clients and the noise is
+ * unwanted (the request-time peek will also stop warning once a
+ * proxy header has been seen — see `maybeWarnHttp11Request`).
+ *
+ * @param {boolean} dev
+ * @param {{ http2?: boolean }} opts
+ * @param {{ info: Function, warn: Function }} logger
+ */
+function maybeWarnNoHttp2(dev, opts, logger) {
+  if (dev) return;
+  if (opts.http2 && opts.cert && opts.key) return;
+  if (process.env.WEBJS_NO_HTTP2_WARNING === '1') return;
+  logger.warn(
+    'webjs: serving plain HTTP. webjs depends on HTTP/2 multiplex ' +
+    'for production performance — without it, the per-file ESM model ' +
+    'becomes a serial bottleneck on slow connections. Either run ' +
+    '`webjs start --http2 --cert <pem> --key <pem>`, or put a reverse ' +
+    'proxy (Cloudflare/nginx/Caddy/Fly/Railway/Render) in front that ' +
+    'terminates HTTP/2 to the browser. Set WEBJS_NO_HTTP2_WARNING=1 ' +
+    'to silence this message if your proxy is correctly configured.'
+  );
+}
+
+/**
+ * Build a per-server request-time advisory. Fires at most ONCE per
+ * server instance: when running in prod over HTTP/1.1 with no
+ * recognizable reverse-proxy headers in front, log a warning.
+ *
+ * Catches the "deployed direct without a proxy and forgot --http2"
+ * case that `maybeWarnNoHttp2` covers at startup, but ALSO catches
+ * the case where a proxy is present and downgrading to HTTP/1.1
+ * (which would otherwise be silently slow).
+ *
+ * Heuristic: presence of any of the common reverse-proxy headers
+ * (x-forwarded-*, forwarded, via, cf-connecting-ip, fly-forwarded-port,
+ * x-real-ip) is taken as evidence that a proxy is in front. False
+ * negatives are possible with exotic proxies that don't set these
+ * headers; users can silence with `WEBJS_NO_HTTP2_WARNING=1`.
+ *
+ * @param {boolean} dev
+ * @param {{ http2?: boolean, cert?: string, key?: string }} opts
+ * @param {{ info: Function, warn: Function }} logger
+ * @returns {(req: { httpVersion?: string, headers: Record<string, string|string[]|undefined> }) => void}
+ */
+function makeRequestHttpPeek(dev, opts, logger) {
+  let warned = false;
+  return function maybeWarnHttp11Request(req) {
+    if (dev || warned) return;
+    if (opts.http2 && opts.cert && opts.key) return;
+    if (process.env.WEBJS_NO_HTTP2_WARNING === '1') { warned = true; return; }
+    if (req.httpVersion !== '1.1') return;
+    // Reverse proxy in front? Trust that it speaks HTTP/2 to clients.
+    for (const h of PROXY_HEADER_NAMES) {
+      if (req.headers[h] != null) { warned = true; return; }
+    }
+    warned = true;
+    logger.warn(
+      'webjs: first prod request arrived over HTTP/1.1 with no reverse-' +
+      'proxy headers present. webjs depends on HTTP/2 multiplex at the ' +
+      'edge for production performance. Either run with `--http2 --cert ' +
+      '<pem> --key <pem>`, or put a reverse proxy ' +
+      '(Cloudflare/nginx/Caddy/Fly/Railway/Render) in front that ' +
+      'terminates HTTP/2 to the browser. Set WEBJS_NO_HTTP2_WARNING=1 ' +
+      'to silence this message.'
+    );
+  };
+}
+
+const PROXY_HEADER_NAMES = [
+  'x-forwarded-for',
+  'x-forwarded-proto',
+  'x-forwarded-host',
+  'forwarded',
+  'via',
+  'cf-connecting-ip',
+  'fly-forwarded-port',
+  'x-real-ip',
+];
 
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript. Types are stripped via
