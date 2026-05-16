@@ -14,7 +14,6 @@ const TEMPLATES = ['full-stack', 'api', 'saas'];
 const USAGE = `webjs — commands:
   webjs dev   [--port 3000]                       Start dev server with live reload
   webjs start [--port 3000]                       Start production server (serves source directly; no build step)
-              [--http2 --cert <path> --key <path>]  Serve HTTP/2 over TLS (recommended in production)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
   webjs create <name> [--template full-stack|api|saas]  Scaffold a new webjs app
@@ -81,10 +80,7 @@ async function main() {
     case 'start': {
       const { startServer } = await import('@webjskit/server');
       const port = Number(flag(rest, '--port', process.env.PORT || 3000));
-      const http2 = rest.includes('--http2');
-      const cert = flag(rest, '--cert');
-      const key = flag(rest, '--key');
-      await startServer({ appDir: process.cwd(), port, dev: false, http2, cert, key });
+      await startServer({ appDir: process.cwd(), port, dev: false });
       break;
     }
     case 'db': {

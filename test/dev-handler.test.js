@@ -826,30 +826,6 @@ test('startServer: prod /__webjs/events → 404', async () => {
   }
 });
 
-test('startServer: http2 requested without cert/key falls back to HTTP/1.1', async () => {
-  const appDir = makeApp({
-    'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-  });
-  const warnings = [];
-  const logger = {
-    info: () => {},
-    warn: (m) => warnings.push(m),
-    error: () => {},
-  };
-  const { server, close } = await startServer({ appDir, dev: false, port: 0, logger, http2: true });
-  try {
-    assert.ok(warnings.some(w => /http2/i.test(w) || /HTTP\/1/.test(w)),
-      `expected a fallback warning, got: ${warnings.join('|')}`);
-    const addr = server.address();
-    const resp = await fetch(`http://127.0.0.1:${addr.port}/`);
-    assert.equal(resp.status, 200);
-  } finally {
-    await close();
-  }
-});
-
 /* ------------ isCompressible / getSetCookie preservation ------------ */
 
 test('startServer: non-text content-type is NOT compressed even with gzip offered', async () => {
