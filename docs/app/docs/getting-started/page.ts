@@ -65,9 +65,9 @@ webjs create my-app --template saas</pre>
     "start": "webjs start"
   },
   "dependencies": {
-    "@webjskit/cli": "0.1.0",
-    "@webjskit/core": "0.1.0",
-    "@webjskit/server": "0.1.0"
+    "@webjskit/cli": "latest",
+    "@webjskit/core": "latest",
+    "@webjskit/server": "latest"
   }
 }</pre>
 
