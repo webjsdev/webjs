@@ -72,5 +72,29 @@ this.setState({ name: 'updated' });
       <li><code>attributeChangedCallback(name, old, new)</code> — observed attribute changed</li>
       <li><code>static observedAttributes</code> — declares which attributes to watch</li>
     </ul>
+
+    <h2>SSR vs Browser: which hooks run where</h2>
+
+    <p>The SSR pipeline runs each component to produce its first-paint HTML. It calls a deliberately narrow subset of the lifecycle — everything else runs only in the browser after the script loads.</p>
+
+    <table>
+      <thead>
+        <tr><th>Hook</th><th>Server (SSR)</th><th>Browser</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>constructor()</code></td><td>✅</td><td>✅</td></tr>
+        <tr><td>attribute application (via <code>static properties</code> converters)</td><td>✅</td><td>✅</td></tr>
+        <tr><td><code>render()</code></td><td>✅</td><td>✅</td></tr>
+        <tr><td><code>connectedCallback()</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td><code>disconnectedCallback()</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td><code>firstUpdated()</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td><code>attributeChangedCallback()</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td>controllers' <code>beforeRender</code> / <code>afterRender</code></td><td>❌</td><td>✅</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers); read the value and <code>setState</code> to refine the initial render after hydration.</p>
+
+    <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full pattern, including how to push server-known data through the page function instead of fetching in browser-only hooks.</p>
   `;
 }
