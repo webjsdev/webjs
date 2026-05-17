@@ -47,6 +47,7 @@ function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
 import { setVendorEntries } from './importmap.js';
+import { urlFromRequest } from './forwarded.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -257,7 +258,7 @@ export async function startServer(opts) {
 
   const server = makeHttpServer(async (req, res) => {
     try {
-      const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+      const url = urlFromRequest(req);
 
       // SSE — handled specially; doesn't fit the req→Response model.
       if (url.pathname === '/__webjs/events') {

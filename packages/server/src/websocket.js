@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws';
 import { pathToFileURL } from 'node:url';
 import { matchApi } from './router.js';
+import { urlFromRequest } from './forwarded.js';
 
 /**
  * WebSocket support.
@@ -38,7 +39,7 @@ export function attachWebSocket(server, getRouteTable, opts) {
 
   server.on('upgrade', async (req, socket, head) => {
     try {
-      const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+      const url = urlFromRequest(req);
       const table = getRouteTable();
       const match = matchApi(table, url.pathname);
 
