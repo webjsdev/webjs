@@ -1,9 +1,11 @@
 import { html } from '@webjskit/core';
 import { loadRegistryIndex } from './_lib/registry.server.ts';
+import { splitByTier } from './_lib/tier.ts';
 
 export default async function Home() {
   const items = await loadRegistryIndex();
   const ui = items.filter((i) => i.type === 'registry:ui');
+  const { tier1, tier2 } = splitByTier(ui);
 
   return html`
     <!-- Hero -->
@@ -186,14 +188,57 @@ npx webjsui add button card dialog</code></pre>
       </div>
     </section>
 
-    <!-- Components grid -->
+    <!-- Components grid (split by tier) -->
     <section class="py-16">
-      <div class="flex items-baseline justify-between mb-6">
+      <div class="flex items-baseline justify-between mb-2">
         <h2 class="text-2xl font-semibold">All components</h2>
         <span class="text-sm text-fg-muted">${ui.length} primitives</span>
       </div>
+      <p class="text-sm text-fg-muted mb-8">
+        Grouped by composition tier. Pick Tier 1 by default — Tier 2
+        only when the browser doesn't ship the behavior natively.
+      </p>
+
+      <!-- Tier 1 -->
+      <div class="flex items-baseline justify-between mb-3">
+        <div class="flex items-baseline gap-3">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 1</span>
+          <h3 class="text-lg font-semibold">Class‑helper functions</h3>
+        </div>
+        <span class="text-xs text-fg-muted">${tier1.length} components</span>
+      </div>
+      <p class="text-sm text-fg-muted mb-4">
+        Apply <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">*Class()</code> to a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;button&gt;</code> / <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;input&gt;</code> / <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;div&gt;</code>. Native semantics, native a11y, native form submission.
+      </p>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-12">
+        ${tier1.map(
+    (it) => html`
+            <a
+              href="/docs/components/${it.name}"
+              class="block rounded-lg border border-border bg-bg-elev p-4 transition-colors hover:bg-bg-subtle hover:border-border-strong"
+            >
+              <div class="font-medium text-fg">${it.name}</div>
+              ${it.description
+        ? html`<div class="text-xs text-fg-muted mt-1 line-clamp-2 leading-relaxed">${it.description}</div>`
+        : ''}
+            </a>
+          `,
+  )}
+      </div>
+
+      <!-- Tier 2 -->
+      <div class="flex items-baseline justify-between mb-3">
+        <div class="flex items-baseline gap-3">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 2</span>
+          <h3 class="text-lg font-semibold">Stateful custom elements</h3>
+        </div>
+        <span class="text-xs text-fg-muted">${tier2.length} components</span>
+      </div>
+      <p class="text-sm text-fg-muted mb-4">
+        <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-X&gt;</code> tags that manage open/close, keyboard nav, focus trap, escape, click‑outside. Import once in your layout.
+      </p>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        ${ui.map(
+        ${tier2.map(
     (it) => html`
             <a
               href="/docs/components/${it.name}"
