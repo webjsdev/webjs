@@ -120,7 +120,7 @@ npx webjsui add button card dialog</code></pre>
       <div class="grid md:grid-cols-2 gap-4">
         <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A form field</div>
-          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;form</span> class<span class="text-fg-subtle">=</span>\${stackClass(<span class="text-accent">'sm'</span>)}<span class="text-fg-subtle">&gt;</span>
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;form</span> class<span class="text-fg-subtle">=</span>\${stackClass({ gap: <span class="text-accent">'sm'</span> })}<span class="text-fg-subtle">&gt;</span>
   <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${fieldClass()}<span class="text-fg-subtle">&gt;</span>
     <span class="text-fg-subtle">&lt;label</span> class<span class="text-fg-subtle">=</span>\${labelClass()} <span class="text-fg-subtle">for="email"&gt;</span>Email<span class="text-fg-subtle">&lt;/label&gt;</span>
     <span class="text-fg-subtle">&lt;input</span> class<span class="text-fg-subtle">=</span>\${inputClass()} <span class="text-fg-subtle">id="email" type="email" required /&gt;</span>

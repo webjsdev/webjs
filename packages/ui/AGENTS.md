@@ -256,7 +256,7 @@ and typography rhythm.
 |---|---|---|
 | `fieldClass()` | `grid gap-2` | Vertical rhythm: label ↔ input ↔ hint |
 | `fieldRowClass()` | `flex items-center gap-3` | Horizontal label-and-input |
-| `stackClass(gap)` | `grid gap-{3\|6\|8}` | Multiple form fields stacked |
+| `stackClass({ gap })` | `grid gap-{3\|6\|8}` | Multiple form fields stacked |
 | `formClass()` | `grid gap-6` | `<form>` body rhythm |
 | `sectionClass()` | `grid gap-8` | Page sections |
 | `fieldLabelClass()` | label typography | `<label>` text style |

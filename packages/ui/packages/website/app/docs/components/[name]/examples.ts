@@ -390,7 +390,7 @@ const EXAMPLES: Record<string, string> = {
           <h3 class="${popoverTitleClass()}">Filter</h3>
           <p class="${popoverDescriptionClass()}">Tag and status.</p>
         </div>
-        <div class="${stackClass('sm')} mt-3">
+        <div class="${stackClass({ gap: 'sm' })} mt-3">
           <label class="${labelClass()}">Status</label>
           <select class="${nativeSelectClass()}"><option>Open</option><option>Closed</option></select>
         </div>
