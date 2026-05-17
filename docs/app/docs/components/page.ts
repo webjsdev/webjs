@@ -329,6 +329,71 @@ Card.register('my-card');
       </tbody>
     </table>
 
+    <h2>SSR and the first paint</h2>
+
+    <p>Every web component on a page runs through the SSR pipeline. For each rendered tag, the server:</p>
+
+    <ol>
+      <li>Calls <code>new Cls()</code> — the constructor runs.</li>
+      <li>Applies the element's attributes to the instance (via <code>static properties</code> converters).</li>
+      <li>Calls <code>instance.render()</code> and awaits the resulting template.</li>
+      <li>Inlines the rendered HTML as the element's children (light DOM) or wraps it in <code>&lt;template shadowrootmode="open"&gt;</code> (shadow DOM).</li>
+    </ol>
+
+    <p><strong>The server does NOT call <code>connectedCallback</code>, <code>firstUpdated</code>, or any other lifecycle hook.</strong> Those run only after the script loads in the browser. This is intentional — the server runs many components for many concurrent requests, and lifecycle hooks frequently touch <code>window</code>, <code>document</code>, <code>localStorage</code>, observers, and timers that don't exist server-side.</p>
+
+    <h3>Rule: SSR-meaningful state goes in the constructor</h3>
+
+    <p>Whatever state should appear in the first paint MUST be set in the constructor (after <code>super()</code>) or be derivable from <code>static properties</code> + the tag's attributes. The SSR pipeline reads exactly these values.</p>
+
+    <pre>// ❌ first paint is empty — initial state set in browser-only hook
+class Cart extends WebComponent {
+  declare items: Item[];
+
+  connectedCallback() {                       // ← server never runs this
+    super.connectedCallback();
+    this.items = readFromLocalStorage();
+    this.requestUpdate();
+  }
+
+  render() { return html\`&lt;ul&gt;\${this.items.map(/* … */)}&lt;/ul&gt;\`; }
+}</pre>
+
+    <pre>// ✅ SSR-safe — sensible default in the constructor;
+//    browser hook refines after hydration
+class Cart extends WebComponent {
+  declare items: Item[];
+
+  constructor() {
+    super();
+    this.items = [];                          // ← SSR uses this
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    const stored = readFromLocalStorage();
+    if (stored) this.setState({ items: stored }); // browser-only refinement
+  }
+
+  render() { return html\`&lt;ul&gt;\${this.items.map(/* … */)}&lt;/ul&gt;\`; }
+}</pre>
+
+    <h3>Where each kind of data belongs</h3>
+
+    <table>
+      <thead>
+        <tr><th>Data source</th><th>Where to read it</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Database, session, cookies, request headers</td><td>Page function (server). Pass to the component as an attribute or property.</td></tr>
+        <tr><td>Initial state / defaults known at coding time</td><td>Component's <code>constructor()</code> after <code>super()</code>.</td></tr>
+        <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code> — then <code>setState</code> to refine.</td></tr>
+        <tr><td>Flash-sensitive (theme, RTL direction)</td><td>Synchronous inline <code>&lt;script&gt;</code> in the root layout's <code>&lt;head&gt;</code> that writes attributes to <code>document.documentElement</code> before custom elements upgrade.</td></tr>
+      </tbody>
+    </table>
+
+    <p>This is the design rule that makes <a href="/docs/progressive-enhancement">progressive enhancement</a> work in webjs: the component's HTML lands in the response, with the right content, before any script runs.</p>
+
     <h2>Slots: Content Projection</h2>
     <p>Slots are how a parent passes content into a shadow DOM component. If you are coming from React, think of the default slot as <code>children</code>.</p>
 

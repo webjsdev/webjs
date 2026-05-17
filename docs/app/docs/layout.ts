@@ -27,6 +27,7 @@ const NAV_SECTIONS = [
       { href: '/docs/lifecycle', label: 'Lifecycle Hooks' },
       { href: '/docs/directives', label: 'Directives' },
       { href: '/docs/ssr', label: 'Server-Side Rendering' },
+      { href: '/docs/progressive-enhancement', label: 'Progressive Enhancement' },
       { href: '/docs/styling', label: 'Styling' },
       { href: '/docs/suspense', label: 'Streaming & Suspense' },
       { href: '/docs/loading-states', label: 'Loading States' },

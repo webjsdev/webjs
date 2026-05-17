@@ -661,6 +661,86 @@ via bearer tokens, API keys, or auth middleware.
 
 ---
 
+## Progressive enhancement (write HTML-first)
+
+<!-- OVERRIDE -->
+
+webjs pages work without JavaScript by design. Read-paths render to
+real HTML on the server; write-paths run through plain `<form>` +
+server actions; navigation is a real `<a href>`. Every web component
+is SSR'd too — its `render()` runs on the server, so the component's
+initial markup is in the response before any script loads. With JS
+disabled, a display-only custom element looks correct, and an
+interactive one (counter, dropdown, tabs) still paints its initial
+state — only the *interactivity itself* (the +/- click, the open/close
+toggle, the tab switch) requires JS.
+
+**Default rules:**
+- **Forms must work as plain HTML POSTs.** Use `<form action=…>` bound
+  to a server action — never `fetch` + a JS click handler for the
+  happy path. The framework upgrades the form to a partial-swap
+  submission automatically when the client router is active; with JS
+  disabled, the same form does a full-page POST and works identically
+  end-to-end.
+- **Links must be real `<a href="…">`.** Don't roll a JS-only click
+  handler for navigation. The client router intercepts `<a>` clicks and
+  enhances them into SPA transitions; without JS, the browser navigates
+  the old-fashioned way.
+- **Custom elements are the only place JS is allowed to be required.**
+  If a feature works without state (a styled card, a layout, a list,
+  a marketing section), it should not be a custom element with
+  lifecycle. Use a plain function returning `html\`…\`` or a Tier-1
+  Webjs-UI class helper (`buttonClass`, `cardClass`).
+- **Test JS-off explicitly before marking a feature done.** Open the
+  page in a browser with JS disabled (DevTools → Settings → Debugger
+  → "Disable JavaScript") and exercise the user's read + write paths.
+  If a write fails without JS, you've reached for `fetch` where a
+  server action would have done the job.
+- **Don't gate read-paths on hydration.** Never write components whose
+  SSR'd HTML is empty or wrong on purpose with the expectation that
+  JS will fill it in. The first paint must be the right content.
+
+**SSR-meaningful component state.** The SSR pipeline constructs the
+component, applies its attributes, and calls `render()` — but does NOT
+call `connectedCallback`, `firstUpdated`, or any other browser-only
+lifecycle hook. Whatever state should appear on first paint MUST be
+set in the constructor (after `super()`) or be derivable from
+`static properties` + attributes on the rendered tag.
+
+```ts
+class Cart extends WebComponent {
+  static properties = { items: { type: Array } };
+  declare items: Item[];
+
+  constructor() {
+    super();
+    this.items = [];                 // ← SSR uses this for first paint
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Browser-only refinement: read localStorage, then setState
+    const stored = readFromLocalStorage();
+    if (stored) this.setState({ items: stored });
+  }
+
+  render() {
+    return html`<ul>${this.items.map(/* … */)}</ul>`;
+  }
+}
+```
+
+Where the data lives, where to read it:
+
+| Data source | Where to read it |
+|---|---|
+| Database, session, cookies, request headers | Page function (server). Pass to component as attribute / property. |
+| Component's own initial defaults | Component `constructor()` after `super()`. |
+| Browser-only: `localStorage`, viewport, `matchMedia`, `navigator.*` | Component `connectedCallback()` — then `setState` to refine. |
+| Theme color, RTL direction (flash-sensitive) | Synchronous inline `<script>` in root layout that sets `document.documentElement` attributes before custom elements upgrade. |
+
+---
+
 ## Server actions
 
 <!-- OVERRIDE -->

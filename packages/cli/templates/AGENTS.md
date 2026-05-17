@@ -208,6 +208,12 @@ visual consistency, and form submission semantics for free —
 `<input class=${inputClass()}>` is a real `<input>`, with native
 autofill, browser validation, and `<form>` submission unchanged.
 
+Because Tier-1 helpers wrap *real* HTML elements, a `buttonClass()`
+button inside a `<form action="/posts" method="post">` participates
+in the client router's partial-swap submission automatically — no JS
+handler, no `fetch`. See *Client navigation patterns* below for the
+full form-submission + 4xx-HTML-render-in-place pattern.
+
 For modals, dropdowns, tooltips, tab strips, accordions: use the
 Tier-2 `<ui-X>` custom element tags after importing the corresponding
 module.
@@ -311,6 +317,12 @@ export class Counter extends WebComponent {
   static styles = css`button { padding: 8px 12px; }`;   // shadow-DOM only
   // static shadow = true;          // opt into shadow DOM (default: light DOM)
   // static lazy = true;             // download JS only when scrolled into view
+  declare count: number;             // TypeScript-only typed accessor
+
+  constructor() {
+    super();
+    this.count = 0;                  // SSR-meaningful default — see below
+  }
 
   render() {
     return html`
@@ -322,6 +334,35 @@ export class Counter extends WebComponent {
 }
 Counter.register('my-counter');
 ```
+
+**Progressive-enhancement rule for components.** Every webjs component
+is SSR'd — the server constructs the component, applies attributes,
+and runs `render()`. With JS disabled, the component's initial HTML
+still paints (an unstyled counter still shows the number; only the
+click handler is inert). Two consequences for how you write code:
+
+1. **Defaults for the first paint go in `constructor()`** (after
+   `super()`), never as class-field initializers (which break
+   reactivity) and never in `connectedCallback` (which the server
+   doesn't run). For Web Component properties with `declare`, set the
+   default in the constructor.
+2. **`connectedCallback` is browser-only.** Use it for
+   `localStorage`, viewport size, online status, or anything that
+   genuinely can't be known on the server. Read the value, then
+   `setState({...})` to refine the render. The SSR'd first paint
+   shows the constructor default; the browser refines after
+   hydration.
+3. **Server-known data goes through the page function**, not into
+   `connectedCallback`. Fetch in the page (which runs on the server),
+   pass the result down as a prop/attribute. SSR applies attributes
+   before `render()`, so the first paint has the right value with no
+   flash.
+4. **For write-paths, prefer `<form>` + server action over `fetch`.**
+   Plain forms POST without JS; the client router upgrades them to
+   partial-swaps automatically when scripts are active. One
+   implementation covers both.
+
+See [Progressive Enhancement](https://docs.webjs.dev/docs/progressive-enhancement) for the full design rationale.
 
 ## Server action pattern
 
@@ -339,6 +380,133 @@ export async function createPost(input: { title: string; body: string }) {
 
 Import it from a client component — the framework rewrites it into a
 type-safe RPC stub automatically.
+
+## Client navigation patterns (auto-magic)
+
+The client router enables itself when the scaffolded root layout imports
+`@webjskit/core/client-router`. After that, **every `<a href>` and
+`<form action>` on the page is enhanced into a partial-swap navigation
+or submission automatically**. You don't call a router API. Write
+standard HTML; the swap happens.
+
+What this changes for how you write apps:
+
+### 1. Put shared chrome in `layout.ts`, not in every page
+
+When you navigate from `/posts` to `/posts/123`, the framework swaps
+only the deepest layout's `${'${children}'}` slot — outer layouts stay
+mounted. The sidenav's scroll position, an open `<details>`, a focused
+input, an inflight `<video>` — all preserved across the navigation
+without you writing any code.
+
+The rule: anything that should persist across navigations within a
+section lives in that section's `layout.ts`. Page-specific content
+lives in `page.ts`. Don't duplicate a sidenav into every page.
+
+### 2. Forms POST through `<form action>` (no `fetch` for write-paths)
+
+A `<form action=${'${createPost}'} method="post">` works as a plain
+HTML form when JS is disabled and as a partial-swap submission when JS
+is active. **The same form covers both paths.** Don't reach for
+`fetch` + a click handler unless you genuinely need to.
+
+### 3. Server-side validation: re-render the form with errors
+
+The router applies any `text/html` response to the DOM regardless of
+status code (4xx, 422, etc.). This is the Rails / Django / Phoenix
+server-side validation pattern. Pair a `<form action="/posts" method="post">`
+with a `route.ts` POST handler:
+
+```ts
+// app/posts/route.ts
+import { redirect, html } from '@webjskit/core';
+import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+
+export async function POST(req: Request) {
+  const form = await req.formData();
+  const result = await createPost({
+    title: String(form.get('title') ?? ''),
+    body:  String(form.get('body')  ?? ''),
+  });
+  if (!result.success) {
+    // Re-render the form page with the user's input + inline errors.
+    // The client router applies this HTML in place; no full reload.
+    return new Response(renderNewPostForm(result.errors, form), {
+      status: 422,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+  }
+  // Success → PRG redirect; fetch follows, history records /posts/<id>
+  redirect(`/posts/${result.data.id}`);
+}
+```
+
+```html
+<!-- The form: standard HTML, no JS handler needed -->
+<form action="/posts" method="post">
+  <input name="title" required />
+  <textarea name="body" required></textarea>
+  <button>Publish</button>
+</form>
+```
+
+With JS active: router intercepts the submit, sends the POST, applies
+the response in place — 2xx + redirect for success, 4xx HTML for
+errors. With JS disabled: browser performs the same POST as a normal
+form submission and renders the response page. Same code, both paths.
+
+(For RPC-style server actions that return typed values to client
+components — see *Server action pattern* above. The HTML-form pattern
+here is for the "submit → server processes → render new page" flow.)
+
+### 4. `<webjs-frame id="...">` for non-layout swap regions
+
+For a widget that should swap on click but isn't a route boundary
+(e.g. a tab strip inside a page), wrap it:
+
+```ts
+return html`
+  <nav>
+    <a href=${'${path + "?tab=overview"}'}>Overview</a>
+    <a href=${'${path + "?tab=stats"}'}>Stats</a>
+  </nav>
+  <webjs-frame id="tab-content">
+    ${'${tab === "stats" ? renderStats() : renderOverview()}'}
+  </webjs-frame>
+`;
+```
+
+The router's `closest('webjs-frame')` detection takes precedence over
+layout markers. Only the frame's content swaps. Use this sparingly —
+folder-based layouts handle 99% of cases.
+
+### 5. `loading.ts` for per-segment skeletons
+
+Drop a `loading.ts` in any route segment. The framework auto-wraps the
+sibling `page.ts` in a Suspense boundary with `loading.ts`'s default
+export as the fallback. On navigation, the client router clones the
+deepest matching loading template into the swap slot immediately —
+the user sees a skeleton during the fetch, then the real content.
+
+### 6. `error.ts` for per-segment error boundaries
+
+Drop an `error.ts` in any route segment. Render-time exceptions in
+that segment's tree are caught and rendered through `error.ts`'s
+default export, scoped to that boundary (outer layouts stay alive).
+
+### What you do NOT need to write
+
+- Manual fetch / DOM-swap code for SPA-style navigation
+- An "active link" highlight handler — use `aria-current="page"`
+  derived from the request URL on the server
+- Loading spinners on `<a>` clicks — `loading.ts` handles it
+- Cancellation when the user clicks faster than the network — the
+  router's nav-token + AbortController combo guarantees stale
+  responses never overwrite a newer settled page
+- Scroll-position save/restore for back/forward — the snapshot cache
+  handles window scroll; inner scrollables persist via DOM identity
+
+Full reference: see the [Client Router docs](https://docs.webjs.dev/docs/client-router) and the framework AGENTS.md "Client navigation" section.
 
 ## Metadata (per-page)
 
@@ -432,6 +600,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
 4. Use `setState()` — never mutate `this.state` directly.
 5. Pages / layouts / metadata routes default-export a server-only function.
 6. One exported function per action / query file. Name the file after it.
+7. **Components must render meaningful HTML on first paint** (SSR
+   uses constructor defaults + attributes — `connectedCallback` is
+   browser-only). Never fetch initial data in `connectedCallback` /
+   `firstUpdated`; fetch in the page function (server) and pass it as
+   a prop. See *Component pattern* above.
 
 ## Workflow expectations for AI agents
 
