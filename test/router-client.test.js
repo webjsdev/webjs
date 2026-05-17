@@ -30,6 +30,7 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
+  _currentPageUrl, _setCurrentPageUrl,
   enableClientRouter, disableClientRouter, revalidate;
 
 before(async () => {
@@ -77,6 +78,8 @@ before(async () => {
     _restoreOptimistic,
     _navToken,
     _bumpNavToken,
+    _currentPageUrl,
+    _setCurrentPageUrl,
     navigate,
     revalidate,
     enableClientRouter,
@@ -1378,4 +1381,179 @@ test('addNewHeadElements: silent when current page has no importmap', () => {
   const warnings = captureWarn(() => _addNewHead(newHead));
   assert.equal(warnings.length, 0,
     "no current importmap to conflict with — silent (the new map still won't be injected, but that's separate)");
+});
+
+/* ====================================================================
+ * Back-button scroll restoration (the bug: snapshotCurrent on popstate
+ * was overwriting the cached snapshot we wanted to read, because
+ * `location.href` has already advanced to the destination URL when
+ * popstate fires).
+ * ==================================================================== */
+
+test('enableClientRouter: sets history.scrollRestoration = "manual"', () => {
+  // Start from a known state. enableClientRouter is idempotent — it
+  // early-returns if `enabled` is already true (which it is, since the
+  // module auto-enables on import). Cycle off-then-on to exercise it.
+  const origScrollRestoration = globalThis.history?.scrollRestoration;
+  const origHistory = globalThis.history;
+  /** @type {{ scrollRestoration: string, pushState: Function, replaceState: Function }} */
+  const mockHistory = { scrollRestoration: 'auto', pushState: () => {}, replaceState: () => {} };
+  globalThis.history = /** @type any */ (mockHistory);
+  try {
+    disableClientRouter();
+    enableClientRouter();
+    assert.equal(mockHistory.scrollRestoration, 'manual',
+      'router takes control of scroll restoration so the browser ' +
+      'doesn\'t race with our snapshot-based scroll restore');
+  } finally {
+    globalThis.history = origHistory;
+    if (origScrollRestoration !== undefined) {
+      globalThis.history.scrollRestoration = origScrollRestoration;
+    }
+    enableClientRouter(); // re-enable for subsequent tests
+  }
+});
+
+test('disableClientRouter: restores the previous history.scrollRestoration value', () => {
+  const origHistory = globalThis.history;
+  /** @type {any} */
+  const mockHistory = { scrollRestoration: 'auto', pushState: () => {}, replaceState: () => {} };
+  globalThis.history = mockHistory;
+  try {
+    disableClientRouter();
+    enableClientRouter();           // captures 'auto', sets 'manual'
+    assert.equal(mockHistory.scrollRestoration, 'manual');
+    disableClientRouter();           // should restore 'auto'
+    assert.equal(mockHistory.scrollRestoration, 'auto',
+      'disable restores the value enable captured, so the browser\'s ' +
+      'default scroll-restoration behavior is back in effect');
+  } finally {
+    globalThis.history = origHistory;
+    enableClientRouter();
+  }
+});
+
+test('currentPageUrl: tracker exists and can be read/written via test helpers', () => {
+  const prev = _currentPageUrl();
+  _setCurrentPageUrl('http://localhost/sentinel');
+  try {
+    assert.equal(_currentPageUrl(), 'http://localhost/sentinel');
+  } finally {
+    _setCurrentPageUrl(prev);
+  }
+});
+
+test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the destination URL', async () => {
+  // The bug: on popstate the browser updates location.href to the
+  // destination BEFORE firing the event. snapshotCurrent(location.href)
+  // therefore overwrites the cached snapshot we wanted to read — with
+  // the CURRENT (about-to-be-left) DOM under the destination URL key.
+  // The fix uses `currentPageUrl` (the page actually being left), not
+  // `location.href`, so the destination's cached snapshot survives.
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const prevPageUrl = _currentPageUrl();
+
+  // Seed the destination's cached snapshot — what we want preserved.
+  const goodSnapshot = {
+    html: '<!doctype html><html><head><title>Original A</title></head>' +
+          '<body><!--wj:children:/-->original-a-content<!--/wj:children--></body></html>',
+    scrollX: 0,
+    scrollY: 800,
+  };
+  _snapshotCache.set('/a', goodSnapshot);
+
+  // Simulate: user is currently on /b (page about to be left), browser
+  // popstate has updated location.href to /a (the destination), our
+  // popstate handler is about to run.
+  globalThis.location = /** @type any */ ({
+    href: 'http://localhost/a',
+    pathname: '/a',
+    origin: 'http://localhost',
+    search: '',
+    hash: '',
+  });
+  _setCurrentPageUrl('http://localhost/b');
+
+  // Mock fetch so the background revalidation doesn't actually run.
+  globalThis.fetch = async () => new Response('<html></html>', {
+    status: 200, headers: { 'content-type': 'text/html' },
+  });
+
+  document.body.innerHTML = '<!--wj:children:/-->b-content<!--/wj:children-->';
+
+  try {
+    _onPopState({});
+    await new Promise((r) => setTimeout(r, 5));
+
+    // The /a snapshot must NOT have been overwritten with the b-content
+    // DOM the user was looking at when the popstate fired.
+    const after = _snapshotCache.get('/a');
+    assert.ok(after, '/a cache entry still exists');
+    assert.equal(
+      typeof after === 'object' ? after.html : after,
+      goodSnapshot.html,
+      'destination URL\'s cached snapshot survived the popstate handler ' +
+      '— this was the bug: previously the snapshot got overwritten with ' +
+      'the page being LEFT, keyed under the destination URL'
+    );
+  } finally {
+    _snapshotCache.delete('/a');
+    _snapshotCache.delete('/b');
+    _setCurrentPageUrl(prevPageUrl);
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('popstate: page being LEFT is snapshotted under its own URL (so forward-nav can restore it)', async () => {
+  // Companion to the previous test. When the user pops from /b back to
+  // /a, the framework should snapshot /b (with its current scroll) so
+  // that if the user then forward-navigates back to /b, the snapshot
+  // is there for instant restore. Keyed under /b (the URL being left),
+  // NOT /a (location.href after popstate).
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const prevPageUrl = _currentPageUrl();
+
+  // Seed BOTH:
+  //  - /a snapshot (so cache-hit path runs, exercising the "snapshot
+  //    leaving page" step before returning)
+  //  - clear /b snapshot so we can verify it was newly written
+  _snapshotCache.set('/a', {
+    html: '<!doctype html><html><body><!--wj:children:/-->a<!--/wj:children--></body></html>',
+    scrollX: 0, scrollY: 0,
+  });
+  _snapshotCache.delete('/b');
+
+  globalThis.location = /** @type any */ ({
+    href: 'http://localhost/a', pathname: '/a', origin: 'http://localhost',
+    search: '', hash: '',
+  });
+  _setCurrentPageUrl('http://localhost/b');
+
+  globalThis.fetch = async () => new Response('<html></html>', {
+    status: 200, headers: { 'content-type': 'text/html' },
+  });
+
+  document.body.innerHTML = '<!--wj:children:/-->b-content<!--/wj:children-->';
+
+  try {
+    _onPopState({});
+    await new Promise((r) => setTimeout(r, 5));
+
+    const bSnap = _snapshotCache.get('/b');
+    assert.ok(bSnap, '/b was snapshotted (the page the user just left)');
+    const html = typeof bSnap === 'object' ? bSnap.html : bSnap;
+    assert.match(html, /b-content/,
+      "/b's snapshot contains the b-content DOM the user was looking " +
+      'at when they hit back — required so a future forward-nav can ' +
+      'restore /b instantly');
+  } finally {
+    _snapshotCache.delete('/a');
+    _snapshotCache.delete('/b');
+    _setCurrentPageUrl(prevPageUrl);
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+  }
 });

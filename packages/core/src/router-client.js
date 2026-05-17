@@ -119,6 +119,33 @@ function ensureUpgradeObserver() {
   upgradeObserver.observe(document.body, { childList: true, subtree: true });
 }
 
+/**
+ * The URL the user is currently viewing — tracked separately from
+ * `location.href` because on `popstate` the browser updates
+ * `location.href` to the destination URL BEFORE firing the event,
+ * which means snapshotting "the current page" naively keys against
+ * the wrong URL (the page being arrived at, not the page being left).
+ *
+ * Updated after every successful navigation completes. Used by
+ * `snapshotCurrent` to key the snapshot under the URL the user is
+ * actually leaving.
+ *
+ * @type {string | null}
+ */
+let currentPageUrl = null;
+
+/**
+ * Previous value of `history.scrollRestoration` (so we can restore it
+ * when the router is disabled). The browser's default behavior of
+ * auto-restoring scroll on popstate races with the SPA's own scroll
+ * restoration — disabled here so webjs is the sole authority on scroll
+ * during navigation. Same pattern as Turbo Drive's
+ * `assumeControlOfScrollRestoration()` (turbo/src/core/drive/history.js).
+ *
+ * @type {ScrollRestoration | null}
+ */
+let prevScrollRestoration = null;
+
 /** Enable the client router. Idempotent. */
 export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
@@ -127,6 +154,15 @@ export function enableClientRouter() {
   document.addEventListener('submit', onSubmit, true);
   window.addEventListener('popstate', onPopState);
   ensureUpgradeObserver();
+  // Take control of scroll restoration so the browser doesn't fight
+  // the SPA's own snapshot-based restore on popstate.
+  if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
+    prevScrollRestoration = history.scrollRestoration;
+    history.scrollRestoration = 'manual';
+  }
+  // Seed the "current page" tracker so the first navigation can
+  // snapshot the page the user is leaving.
+  if (typeof location !== 'undefined') currentPageUrl = location.href;
 }
 
 /** Disable the client router. */
@@ -136,6 +172,11 @@ export function disableClientRouter() {
   document.removeEventListener('click', onClick, true);
   document.removeEventListener('submit', onSubmit, true);
   window.removeEventListener('popstate', onPopState);
+  if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
+    history.scrollRestoration = prevScrollRestoration;
+    prevScrollRestoration = null;
+  }
+  currentPageUrl = null;
 }
 
 /**
@@ -519,8 +560,13 @@ async function performNavigation(href, isPopState, frameId) {
   // Bump nav generation. Captured below + by anything we await into.
   const myToken = ++currentNavigationToken;
 
-  // Snapshot the current page for cache-on-back semantics.
-  snapshotCurrent(location.href);
+  // Snapshot the page the user is LEAVING (with its scroll position)
+  // so back/forward navigation can restore it. We key under
+  // `currentPageUrl` rather than `location.href` because on popstate
+  // the browser has already updated `location.href` to the destination
+  // URL — using it as the key would clobber the cached snapshot we're
+  // about to read in the popstate-restore branch below.
+  if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
   // Show a subtle loading indicator, but only if the nav takes long
   // enough to be worth showing one. Setting an attribute on <html>
@@ -572,6 +618,9 @@ async function performNavigation(href, isPopState, frameId) {
     // A newer nav has its own flag lifecycle.
     if (myToken === currentNavigationToken) {
       document.documentElement.removeAttribute('data-navigating');
+      // Record where the user is NOW so the next navigation can
+      // snapshot under the right URL key.
+      if (typeof location !== 'undefined') currentPageUrl = location.href;
     }
   }
 }
@@ -611,7 +660,11 @@ async function performSubmission(href, method, body, frameId) {
     }
   }
 
-  snapshotCurrent(location.href);
+  // Snapshot the page being submitted from (form submissions are
+  // always foreground / never popstate, so `currentPageUrl` already
+  // matches `location.href` — but use the tracker for consistency
+  // with performNavigation).
+  if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
   let navigatingFlagTimer = setTimeout(() => {
     document.documentElement.setAttribute('data-navigating', '');
@@ -641,6 +694,7 @@ async function performSubmission(href, method, body, frameId) {
     if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
     if (myToken === currentNavigationToken) {
       document.documentElement.removeAttribute('data-navigating');
+      if (typeof location !== 'undefined') currentPageUrl = location.href;
     }
   }
 }
@@ -1356,6 +1410,10 @@ export {
 export function _navToken() { return currentNavigationToken; }
 /** Test-only: bump the navigation-token counter (simulates a fresh nav). */
 export function _bumpNavToken() { return ++currentNavigationToken; }
+/** Test-only: read the "current page URL" tracker (used for snapshot keying). */
+export function _currentPageUrl() { return currentPageUrl; }
+/** Test-only: set the tracker (simulates being on a specific page). */
+export function _setCurrentPageUrl(u) { currentPageUrl = u; }
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
