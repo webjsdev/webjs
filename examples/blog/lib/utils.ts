@@ -202,9 +202,20 @@ export const fieldClass = () => 'grid gap-2';
 /** Horizontal field layout — label on the left, control on the right. */
 export const fieldRowClass = () => 'flex items-center gap-3';
 
-/** Stack of form fields. `sm` for tight groupings, `lg` for spaced-out sections. */
-export const stackClass = (gap: 'sm' | 'md' | 'lg' = 'md'): string =>
-  gap === 'sm' ? 'grid gap-3' : gap === 'lg' ? 'grid gap-8' : 'grid gap-6';
+/** Gap step for `stackClass({ gap })`. */
+export type StackGap = 'sm' | 'md' | 'lg';
+
+/**
+ * Stack of form fields. `sm` for tight groupings, `lg` for spaced-out sections.
+ *
+ * Object-arg shape matches the rest of the kit (`buttonClass({ variant, size })`,
+ * `badgeClass({ variant })`, etc.) — predictable across all helpers and
+ * extensible if a second dimension (e.g. `direction`) is ever added.
+ */
+export const stackClass = (opts: { gap?: StackGap } = {}): string => {
+  const gap = opts.gap ?? 'md';
+  return gap === 'sm' ? 'grid gap-3' : gap === 'lg' ? 'grid gap-8' : 'grid gap-6';
+};
 
 /** Form body — same rhythm as a `lg` stack; semantic name for `<form>` content. */
 export const formClass = () => 'grid gap-6';
