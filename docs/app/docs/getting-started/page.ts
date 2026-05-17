@@ -128,6 +128,7 @@ Counter.register('my-counter');</pre>
       <li><strong>TypeScript:</strong> The dev server registers an esbuild loader hook at startup. Every <code>.ts</code> import — server-side or browser-fetched — flows through esbuild's <code>transform()</code>. Same transformer for SSR and hydration, ~1ms/file, cached by mtime.</li>
       <li><strong>SSR:</strong> Pages are rendered to HTML strings on the server. Light-DOM components serialize as plain children with a <code>&lt;!--webjs-hydrate--&gt;</code> marker; shadow-DOM components (opt-in) emit Declarative Shadow DOM so scoped styles paint before JS loads.</li>
       <li><strong>Hydration:</strong> When JS loads, custom elements upgrade and become interactive. The fine-grained renderer preserves focus, cursor position, and form state across state updates.</li>
+      <li><strong>Progressive enhancement:</strong> Pages and every custom element are SSR'd — each component's <code>render()</code> runs on the server, so its initial HTML is in the response before any script loads. With JS disabled: content reads, <code>&lt;a&gt;</code> links navigate, <code>&lt;form&gt;</code> + server actions submit, and even an interactive component (counter, dropdown, tabs) paints its initial state correctly. JS is opt-in <em>per interactive behavior</em>, not per component: a counter renders as "0" without JS — only the +/- click handling needs scripts. See <a href="/docs/progressive-enhancement">Progressive Enhancement</a>.</li>
     </ul>
 
     <h2>Next Steps</h2>

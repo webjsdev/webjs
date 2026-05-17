@@ -176,6 +176,17 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 - **SSR + CSR by default.** Pages are server-rendered (real HTML).
   Interactive web components render as light DOM by default; shadow DOM
   is opt-in via `static shadow = true` with Declarative Shadow DOM SSR.
+- **Progressive enhancement is the default architecture.** Pages and
+  every web component are SSR'd — each component's `render()` runs on
+  the server so its initial HTML is in the response. With JS disabled:
+  content reads, `<a>` links navigate, `<form>` server actions submit,
+  display-only custom elements render correctly. JavaScript is opt-in
+  *per interactive behavior*: when you add `@click=${…}`, `setState()`,
+  or any stateful logic, you're asking for JS to handle that
+  interactivity — the component's *initial* paint is HTML either way.
+  Never write features whose first paint depends on hydration, and
+  never use `fetch` + JS handlers for write-paths where a `<form>` +
+  server action would do the job.
 - **Tailwind CSS is the default styling convention.** Custom CSS still
   works — light-DOM components authoring CSS MUST prefix selectors with
   the component tag.
@@ -389,6 +400,49 @@ for post-render side effects.
 **ReactiveControllers** — composable lifecycle logic via `host.addController(this)`.
 Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers.
 See `agent-docs/components.md` for the full pattern.
+
+### SSR-safe state defaults (progressive enhancement)
+
+The SSR pipeline does this for every web component on a page (see
+`packages/core/src/render-server.js:229-293` `injectDSD`):
+
+1. `new Cls()` — runs the constructor
+2. applies the element's attributes to the instance
+3. calls `instance.render()` — synchronously or `await`s the Promise
+4. inlines the rendered HTML as the element's children (light DOM) or
+   wraps it in `<template shadowrootmode="open">…</template>` (shadow DOM)
+
+**It does NOT call `connectedCallback`, `firstUpdated`, or any other
+browser-only lifecycle hook.** Those run only after the script loads
+in the browser.
+
+The rule for AI agents writing components:
+
+- **Defaults that should appear in the first paint go in the
+  constructor.** Set `this.state = { … }` and `this.someProp = default`
+  in `constructor()` after `super()`. The SSR pipeline uses these
+  exact values for the first render.
+- **Browser-only data** (a user's `localStorage`, viewport size,
+  online status, timezone, current scroll position, `navigator.userAgent`,
+  `matchMedia(...)`) goes in `connectedCallback`. Read the value, then
+  call `setState({ … })` to refine the render. The SSR'd HTML shows the
+  sensible default; the browser refines it after hydration.
+- **Server-known data** (session, accept-language, theme cookie, the
+  request URL) goes through the page function — pass it down as a
+  prop/attribute on the component. SSR applies attributes BEFORE
+  calling `render()`, so the first paint has the right value with zero
+  flash.
+- **For values where flicker is unacceptable** (theme color, RTL
+  direction), use a synchronous inline `<script>` in the root layout's
+  `<head>` to set the final value on `document.documentElement` before
+  custom elements upgrade. CSS reads from that attribute and paints
+  once. See the bootstrap script in scaffolded `app/layout.ts`.
+
+**Anti-pattern (never write this):** a component whose first paint is
+empty / placeholder because the real data is fetched in
+`connectedCallback` or `firstUpdated`. That defeats SSR and breaks
+progressive enhancement. Fetch on the server in the page function
+instead, and pass the data down.
 
 ### Light DOM (default) vs Shadow DOM (opt-in)
 
