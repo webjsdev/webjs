@@ -1,5 +1,6 @@
 import { html, css } from '@webjskit/core';
 import { loadRegistryIndex } from '../_lib/registry.server.ts';
+import { splitByTier } from '../_lib/tier.ts';
 
 // Subtle, hover-revealed scrollbar for the sidenav.
 //
@@ -49,6 +50,7 @@ const SIDENAV_STYLES = css`
 export default async function DocsLayout({ children }: { children: unknown }) {
   const all = await loadRegistryIndex();
   const components = all.filter((i) => i.type === 'registry:ui');
+  const { tier1, tier2 } = splitByTier(components);
 
   // Shared link styling: padded, rounded, with a clearly visible hover
   // surface. `-mx-2` lets the rounded hover background extend slightly
@@ -98,9 +100,21 @@ export default async function DocsLayout({ children }: { children: unknown }) {
           <a href="/docs" class=${linkClass}>Introduction</a>
           <a href="/" class=${linkClass}>All components</a>
         </nav>
-        <div class="font-semibold mb-2 text-fg">Components <span class="font-normal text-xs text-fg-subtle">(${components.length})</span></div>
+        <div class="flex items-baseline justify-between mb-2">
+          <div class="font-semibold text-fg">Tier 1 <span class="font-normal text-xs text-fg-subtle">Class helpers</span></div>
+          <span class="text-xs text-fg-subtle">${tier1.length}</span>
+        </div>
+        <nav class="flex flex-col gap-0.5 mb-6">
+          ${tier1.map(
+            (c) => html`<a href="/docs/components/${c.name}" class=${linkClass}>${c.name}</a>`,
+          )}
+        </nav>
+        <div class="flex items-baseline justify-between mb-2">
+          <div class="font-semibold text-fg">Tier 2 <span class="font-normal text-xs text-fg-subtle">Custom elements</span></div>
+          <span class="text-xs text-fg-subtle">${tier2.length}</span>
+        </div>
         <nav class="flex flex-col gap-0.5">
-          ${components.map(
+          ${tier2.map(
             (c) => html`<a href="/docs/components/${c.name}" class=${linkClass}>${c.name}</a>`,
           )}
         </nav>
