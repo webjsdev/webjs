@@ -609,6 +609,13 @@ async function performNavigation(href, isPopState, frameId) {
           return;
         }
       }
+      // Cache-miss popstate. Browser-native scroll restoration is
+      // disabled (we set scrollRestoration='manual') — so without
+      // explicit handling, scroll would just stay where the user was
+      // on the page they popped FROM. Scroll to top as the reasonable
+      // default; fetchAndApply skips its own scroll handling when
+      // recordHistory=false (which is the case here).
+      if (typeof window !== 'undefined') window.scrollTo(0, 0);
     }
 
     await fetchAndApply(href, frameId, !isPopState, optimisticState, 'GET', null, signal, myToken);
