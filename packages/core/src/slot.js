@@ -99,14 +99,23 @@ export function installSlotPolyfills() {
   NATIVE_assignedSlot_desc = Object.getOwnPropertyDescriptor(Element.prototype, 'assignedSlot');
 
   HTMLSlotElement.prototype.assignedNodes = function patchedAssignedNodes(options) {
-    if (this.hasAttribute(LIGHT_SLOT_ATTR)) {
+    // Two conditions must both hold for the polyfill to take over:
+    //   1. The slot carries the framework's data-webjs-light marker.
+    //   2. The slot is NOT currently inside a shadow root.
+    // Slots that end up in a shadow tree (their host has a ShadowRoot)
+    // delegate to native projection, which the browser performs from the
+    // host's light-DOM children. discoverSlots cannot tell at template
+    // compile time whether the template will be cloned into a light or
+    // shadow render root (templates cache by strings identity), so the
+    // shadow-vs-light determination has to happen on every API call.
+    if (this.hasAttribute(LIGHT_SLOT_ATTR) && !isInShadowRoot(this)) {
       return lightAssignedNodes(this, options);
     }
     return NATIVE_assignedNodes ? NATIVE_assignedNodes.call(this, options) : [];
   };
 
   HTMLSlotElement.prototype.assignedElements = function patchedAssignedElements(options) {
-    if (this.hasAttribute(LIGHT_SLOT_ATTR)) {
+    if (this.hasAttribute(LIGHT_SLOT_ATTR) && !isInShadowRoot(this)) {
       return lightAssignedNodes(this, options).filter((n) => n.nodeType === 1);
     }
     return NATIVE_assignedElements ? NATIVE_assignedElements.call(this, options) : [];
@@ -129,6 +138,28 @@ export function installSlotPolyfills() {
 
 // First-chance install at module load.
 installSlotPolyfills();
+
+/**
+ * True when the given node lives inside a shadow root (so native browser
+ * slot projection applies). A ShadowRoot exposes its owning element as
+ * `host`; the document does not. Walks the parentNode chain manually
+ * with a depth cap to avoid hangs on accidentally cyclic DOMs (e.g.,
+ * test fixtures that wire two slots into each other).
+ *
+ * @param {Node} node
+ * @returns {boolean}
+ */
+function isInShadowRoot(node) {
+  let n = node;
+  for (let depth = 0; depth < 128; depth++) {
+    const parent = n.parentNode;
+    if (!parent) return false;
+    if (parent === n) return false;
+    if (/** @type {any} */ (parent).host) return true;
+    n = parent;
+  }
+  return false;
+}
 
 /**
  * Resolve assigned nodes for a light-DOM slot. Per spec, returns []
@@ -361,13 +392,21 @@ export function attachSlotObservers(host) {
     for (const r of records) {
       if (r.type === 'childList') {
         for (const node of r.addedNodes) {
+          // A new child appeared directly under host (not via slot.append
+          // inside our own projection routine, which appends deep inside
+          // the rendered template and isn't visible with subtree:false).
+          // Record it in the assignment table and let projection move it.
           if (node.parentElement === host) {
             appendToMap(state.assignedByName, slotNameOf(node), node);
-            host.removeChild(node);
             dirty = true;
           }
         }
         for (const node of r.removedNodes) {
+          // Skip when the node is still inside the host's subtree. That
+          // means projection moved it from host's direct children into
+          // a slot deeper down; the assignment table should keep the
+          // entry. Only treat as a user-removal when the node truly left.
+          if (host.contains(node)) continue;
           if (removeFromAssignments(state, node)) dirty = true;
         }
       } else if (r.type === 'attributes' && r.attributeName === 'slot') {
