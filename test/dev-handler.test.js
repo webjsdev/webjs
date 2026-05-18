@@ -149,9 +149,15 @@ test('handle: .ts source served as JS with esbuild-stripped types', async () => 
 });
 
 test('handle: .ts source supports non-erasable TS (enum, parameter properties)', async () => {
-  // Proves the browser-bound transform uses esbuild: Node's built-in
-  // stripper would reject this syntax. SSR-side imports use the same
-  // esbuild loader so both paths produce equivalent JS.
+  // Proves the browser-bound transform falls back to esbuild when
+  // Node's built-in stripper (module.stripTypeScriptTypes) rejects
+  // non-erasable syntax. The fallback emits an inline sourcemap so
+  // DevTools can still resolve positions for the regenerated JS.
+  // Server-side imports of the same file go through Node's native
+  // strip-types path; this works for erasable TS but errors at load
+  // time for non-erasable syntax. App code is held to erasable TS
+  // via tsconfig's erasableSyntaxOnly; this fallback exists for
+  // third-party .ts dependencies that publish non-erasable source.
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/advanced.ts': `

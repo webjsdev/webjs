@@ -62,10 +62,11 @@ preservation. The convention check warns about this.
 
 ## Import convention
 
-Use explicit `.ts` extensions in imports. The esbuild loader hook
-expects file URLs ending in `.ts` / `.mts`. For mixed codebases, `.js`
-imports that point at a `.ts` sibling also resolve in the dev server.
-Still prefer explicit `.ts`.
+Use explicit `.ts` extensions in imports. Node 24+'s built-in
+type-stripping and the dev server's HTTP handler both key on the
+file URL ending in `.ts` / `.mts`. For mixed codebases, `.js` imports
+that point at a `.ts` sibling also resolve in the dev server. Still
+prefer explicit `.ts`.
 
 ```ts
 // modules/posts/queries/list-posts.server.ts

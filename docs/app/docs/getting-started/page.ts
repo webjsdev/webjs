@@ -9,7 +9,7 @@ export default function GettingStarted() {
 
     <h2>Prerequisites</h2>
     <ul>
-      <li><strong>Node.js 20.6+</strong>: needed for <code>module.register()</code>, the API webjs uses to install its esbuild TypeScript loader at startup.</li>
+      <li><strong>Node.js 24+</strong>: webjs uses Node's built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>), which is default-on and stable from Node 24.</li>
       <li><strong>npm</strong> (or any package manager).</li>
     </ul>
 
@@ -125,7 +125,7 @@ Counter.register('my-counter');</pre>
 
     <h2>How It Works</h2>
     <ul>
-      <li><strong>TypeScript:</strong> The dev server registers an esbuild loader hook at startup. Every <code>.ts</code> import, whether server-side or browser-fetched, flows through esbuild's <code>transform()</code>. Same transformer for SSR and hydration, ~1ms/file, cached by mtime.</li>
+      <li><strong>TypeScript:</strong> Node 24+ strips types natively via <code>module.stripTypeScriptTypes</code> (whitespace replacement, byte-exact line + column preservation, no sourcemap shipped). Every <code>.ts</code> file, whether server-side or browser-fetched, goes through the same stripper, so SSR and hydration produce identical JS. The transform is cached by mtime. For the rare third-party <code>.ts</code> dependency using non-erasable syntax (<code>enum</code>, <code>namespace</code>, parameter properties), the dev server transparently falls back to <code>esbuild.transform</code> with an inline sourcemap.</li>
       <li><strong>SSR:</strong> Pages are rendered to HTML strings on the server. Light-DOM components serialize as plain children with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Shadow-DOM components (opt-in) emit Declarative Shadow DOM so scoped styles paint before JS loads.</li>
       <li><strong>Hydration:</strong> When JS loads, custom elements upgrade and become interactive. The fine-grained renderer preserves focus, cursor position, and form state across state updates.</li>
       <li><strong>Progressive enhancement:</strong> Pages and every custom element are SSR'd. Each component's <code>render()</code> runs on the server, so its initial HTML is in the response before any script loads. With JS disabled: content reads, <code>&lt;a&gt;</code> links navigate, <code>&lt;form&gt;</code> + server actions submit, and even an interactive component (counter, dropdown, tabs) paints its initial state correctly. JS is opt-in <em>per interactive behavior</em>, not per component: a counter renders as "0" without JS, and only the +/- click handling needs scripts. See <a href="/docs/progressive-enhancement">Progressive Enhancement</a>.</li>
