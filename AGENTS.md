@@ -706,7 +706,7 @@ See `agent-docs/advanced.md` Client router section for the full mechanism.
     import type { Thing } from './thing.ts';
     ```
 
-    The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position preservation, no sourcemap shipped to the browser). If you disable `erasableSyntaxOnly` and use non-erasable syntax, the dev server falls back to esbuild on those specific files and emits an inline sourcemap, costing ~3x wire bytes per request and losing strict stack-trace position accuracy. The `erasable-typescript-only` convention check enforces the flag.
+    The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position preservation, no sourcemap shipped to the browser). Implementation backing: Node ships the [`amaro`](https://github.com/nodejs/amaro) package internally for this transform. If the framework ever runs on a non-Node runtime (Bun, Deno), it will need `amaro` installed directly or an equivalent position-preserving stripper. If you disable `erasableSyntaxOnly` and use non-erasable syntax, the dev server falls back to esbuild on those specific files and emits an inline sourcemap, costing ~3x wire bytes per request and losing strict stack-trace position accuracy. The `erasable-typescript-only` convention check enforces the flag.
 
 11. **No em-dashes (U+2014) anywhere in the repo, no hyphen or semicolon used as a pause-punctuation substitute, and no colon attached to a code-shaped left-hand side.** Prose, comments, code, JSON descriptions, commit messages: rewrite the sentence so no pause-punctuation crutch is needed.
 

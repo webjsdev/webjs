@@ -12,6 +12,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // `module.stripTypeScriptTypes` for the same transform, so SSR and
 // hydration produce identical JS.
 //
+// Runtime backing: Node ships `stripTypeScriptTypes` via the `amaro`
+// package internally (wraps SWC's WASM TypeScript transform in a
+// position-preserving strip-only mode). If the framework ever needs
+// to run on Bun, Deno, or another runtime that does NOT expose the
+// equivalent built-in, we will need to install `amaro` directly (or
+// an equivalent: Sucrase preserves lines but not columns; SWC's
+// strip-only also works). The fast-path `stripTs` helper would
+// change one import line; the fallback path (esbuild) stays.
+//
 // Suppress the one-shot ExperimentalWarning that Node prints the
 // first time `stripTypeScriptTypes` is called. The API is committed
 // per Node 24's release notes; the warning is a holdover. We keep
