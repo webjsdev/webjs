@@ -1,6 +1,6 @@
 {
   "name": "@webjskit/core",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "description": "webjs core runtime - html/css tags, WebComponent base, isomorphic renderers",
   "types": "./index.d.ts",
@@ -35,9 +35,6 @@
   "homepage": "https://github.com/vivek7405/webjs#readme",
   "bugs": "https://github.com/vivek7405/webjs/issues",
   "license": "MIT",
-  "engines": {
-    "node": ">=24.0.0"
-  },
   "keywords": [
     "webjs",
     "web-components",
