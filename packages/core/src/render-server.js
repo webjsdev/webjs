@@ -278,13 +278,27 @@ async function injectDSD(html, ctx) {
           text: `${opening}<template shadowrootmode="open">${styleStr}${innerProcessed}</template>`,
         });
       } else {
-        // Light DOM. Always run the slot pipeline so behaviour matches
-        // shadow DOM regardless of whether the rendered template
-        // contains explicit <slot> elements. Authored children with no
-        // matching <slot> are dropped from output, matching shadow-DOM
-        // projection rules exactly: light children of a host are
-        // visible only if (and where) the component's render projects
-        // them through a slot.
+        // Light DOM. When the component has a non-empty rendered template,
+        // run the slot pipeline so behaviour matches shadow DOM: authored
+        // children are visible only where projected through <slot>; any
+        // child without a matching slot is dropped.
+        //
+        // When rendered template is empty (Base-extending decorator
+        // components that have no render() method, or render() that
+        // returns an empty template), the host acts as a transparent
+        // wrapper: authored children stay in place adjacent to the
+        // (empty) hydration marker. This preserves the kit's
+        // decorator-pattern components (those extending Base from the
+        // ui package's lib/utils.ts) without forcing a render() rewrite.
+        const renderedIsEmpty = rawInner.trim() === '';
+        if (renderedIsEmpty) {
+          edits.push({
+            start: m.index,
+            end: m.index + match.length,
+            text: `${opening}<!--webjs-hydrate-->`,
+          });
+          continue;
+        }
         //
         // 1. Find the matching closing tag in the source HTML (depth-
         //    tracked for nested same-tag elements).
