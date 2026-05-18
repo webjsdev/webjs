@@ -50,7 +50,6 @@ const INSTANCE = Symbol.for('webjs.instance');
  *   name?: string,
  *   statics?: string[],
  *   group?: number[],
- *   fallbackTemplate?: DocumentFragment,
  * }} PartDescriptor
  *
  * @typedef {{
@@ -371,10 +370,17 @@ function discoverSlots(root, parts) {
     slot.setAttribute(LIGHT_SLOT_ATTR, '');
     const partIdx = parts.length;
     slot.setAttribute(`data-${MARKER}${partIdx}`, '');
-    const fallbackTemplate = document.createDocumentFragment();
-    while (slot.firstChild) fallbackTemplate.appendChild(slot.firstChild);
-    parts.push({ kind: 'slot', path: [], fallbackTemplate });
+    parts.push({ kind: 'slot', path: [] });
   }
+  // NOTE: fallback content stays IN the slot's children in the cached
+  // template. Each clone gets its own copy. For shadow-DOM components,
+  // native browser projection uses those children as fallback content
+  // when no light child matches. For light-DOM components, the slot's
+  // apply step (run after the cloned template is in the live tree)
+  // moves the cloned fallback into a per-instance holding fragment
+  // owned by slot.js, so the slot is empty and ready to receive
+  // projected children. Doing the strip at apply time, not at compile
+  // time, lets a single cached template serve both DOM modes.
 }
 
 /**
@@ -492,25 +498,11 @@ function bindPart(p, root) {
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
-    // Build a per-instance holding fragment by cloning the PartDescriptor's
-    // fallback template (captured once at compile time). slot.js swaps
-    // this fragment in via SLOT_FALLBACK_FRAG when projection state
-    // transitions to "fallback". The cloned slot in `root` starts empty
-    // (discoverSlots() moved the original children to the template), so
-    // there is nothing to extract from the slot itself.
-    //
-    // Hydration case: if the slot already carries data-projection="actual"
-    // from the SSR pipeline, its children are the SSR-projected nodes and
-    // must be left in place. The component lifecycle (component.js) calls
-    // adoptSSRAssignments() to record those children in the host state
-    // so the first projection pass is a no-op.
-    const frag = document.createDocumentFragment();
-    if (p.fallbackTemplate) {
-      for (const node of p.fallbackTemplate.childNodes) {
-        frag.appendChild(node.cloneNode(true));
-      }
-    }
-    /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
+    // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
+    // time so we know whether the slot is light or shadow at the point
+    // where the decision matters. At bind time the cloned slot still
+    // holds its fallback content from the template clone; we just
+    // record the slot ref.
     return { kind: 'slot', slotEl, applied: false };
   }
   throw new Error(`unknown part kind ${/** @type any */(p).kind}`);
@@ -600,27 +592,40 @@ function applyPart(part, value, _prev, allValues) {
     case 'slot': {
       // Slot parts have no template-hole value to apply. The "apply" is
       // a one-shot trigger that runs after the template fragment has
-      // been inserted into the host's render root (so the slot can find
-      // its host by walking parents). Subsequent re-renders are
-      // observer-driven from slot.js, not value-driven.
+      // been inserted into the host's render root. At this point the
+      // slot's parent chain reveals whether it lives inside a shadow
+      // root (browser native projection) or in light DOM (framework
+      // projection). For shadow-DOM slots we leave the cloned fallback
+      // in place. For light-DOM slots we move the fallback into a
+      // per-slot holding fragment owned by slot.js (via the
+      // SLOT_FALLBACK_FRAG symbol) so the slot can receive projected
+      // children, and we kick off projection.
       //
       // For NESTED templates (a slot inside `${cond ? html`<slot/>` : ''}`),
-      // the slot's parent chain at apply time leads up through an
-      // unattached fragment that has not yet been inserted into the
-      // host's render root by the outer createInstance. findSlotHost
-      // returns null in that case. We retry on the next microtask, by
-      // which point the outer's replaceChildren has placed the entire
-      // tree (including this nested slot) into the host.
+      // the slot's parent chain at first apply may still lead through
+      // an unattached fragment. findSlotHost returns null then; we
+      // retry on the next microtask, by which point the outer's
+      // replaceChildren has placed the entire tree into the host.
       if (part.applied) break;
-      part.applied = true;
-      const directHost = findSlotHost(part.slotEl);
+      const slotEl = part.slotEl;
+      const finalize = () => {
+        part.applied = true;
+        const host = findSlotHost(slotEl);
+        if (!host) return; // truly orphan slot
+        // Shadow DOM: native projection. Leave fallback in place.
+        if (isInShadowRootEl(slotEl)) return;
+        // Light DOM: harvest the cloned fallback into a holding
+        // fragment, then trigger projection.
+        const frag = document.createDocumentFragment();
+        while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
+        /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
+        scheduleProjection(host);
+      };
+      const directHost = findSlotHost(slotEl);
       if (directHost) {
-        scheduleProjection(directHost);
+        finalize();
       } else {
-        queueMicrotask(() => {
-          const h = findSlotHost(part.slotEl);
-          if (h) scheduleProjection(h);
-        });
+        queueMicrotask(finalize);
       }
       break;
     }
@@ -645,6 +650,26 @@ function findSlotHost(slotEl) {
     p = p.parentElement;
   }
   return null;
+}
+
+/**
+ * True when an element is inside a shadow root (so native browser slot
+ * projection applies). Mirrors slot.js's helper; duplicated here to
+ * avoid the round trip through the slot.js public surface for this
+ * hot path.
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isInShadowRootEl(el) {
+  let n = /** @type {Node} */ (el);
+  for (let depth = 0; depth < 128; depth++) {
+    const parent = n.parentNode;
+    if (!parent) return false;
+    if (parent === n) return false;
+    if (/** @type any */ (parent).host) return true;
+    n = parent;
+  }
+  return false;
 }
 
 /**
