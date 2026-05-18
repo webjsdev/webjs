@@ -229,12 +229,17 @@ async function renderTemplate(tr, ctx) {
 async function injectDSD(html, ctx) {
   const tags = allTags();
   if (!tags.length) return html;
+  // Sort longest tag name first so the regex alternation tries the most
+  // specific match before its prefixes. Combined with the (?=[\s>/])
+  // lookahead this prevents `my-card` from spuriously matching the prefix
+  // of `<my-card-2>` (or `slot-ssr-1` matching `<slot-ssr-14>`, etc).
   // Attribute section is "anything that isn't `>`, with quoted values as a
   // single unit" so slashes in URL-valued attrs (e.g. then="/dashboard") don't
   // prevent the match. Non-greedy so self-closing `/>` still captures into the
   // third group.
+  const sortedTags = [...tags].sort((a, b) => b.length - a.length);
   const pattern = new RegExp(
-    `<(${tags.map(escapeRegex).join('|')})((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
+    `<(${sortedTags.map(escapeRegex).join('|')})(?=[\\s>/])((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
     'g'
   );
   /** @type {{start:number, end:number, text:string}[]} */

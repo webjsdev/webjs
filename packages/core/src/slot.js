@@ -36,8 +36,11 @@
 // Module-scope constants
 // ---------------------------------------------------------------------------
 
-const inBrowser =
-  typeof HTMLElement !== 'undefined' && typeof HTMLSlotElement !== 'undefined';
+function detectBrowser() {
+  return typeof HTMLElement !== 'undefined' && typeof HTMLSlotElement !== 'undefined';
+}
+
+let inBrowser = detectBrowser();
 
 /**
  * Symbol-keyed slot state stored on each light-DOM WebComponent host.
@@ -67,32 +70,46 @@ export const SLOT_FALLBACK_FRAG = Symbol('webjs.slot.fallbackFrag');
 const FLATTEN_MAX_DEPTH = 64;
 
 // ---------------------------------------------------------------------------
-// Saved native references (browser-only)
+// Saved native references and prototype polyfills
+//
+// Module-load tries to install polyfills immediately. In a pure Node
+// process without a DOM library, HTMLSlotElement is undefined and the
+// install is a no-op. Tests that set up linkedom AFTER module load can
+// call installSlotPolyfills() explicitly to re-attempt the install.
+// Subsequent calls are idempotent; native references are captured only
+// on the first successful install.
 // ---------------------------------------------------------------------------
 
-const NATIVE_assignedNodes = inBrowser ? HTMLSlotElement.prototype.assignedNodes : null;
-const NATIVE_assignedElements = inBrowser ? HTMLSlotElement.prototype.assignedElements : null;
-const NATIVE_assignedSlot_desc = inBrowser
-  ? Object.getOwnPropertyDescriptor(Element.prototype, 'assignedSlot')
-  : null;
+let NATIVE_assignedNodes = null;
+let NATIVE_assignedElements = null;
+let NATIVE_assignedSlot_desc = null;
+let polyfillsInstalled = false;
 
-// ---------------------------------------------------------------------------
-// Prototype polyfills
-// ---------------------------------------------------------------------------
+/**
+ * Install the slot DOM-API polyfills on HTMLSlotElement.prototype and
+ * Element.prototype if the current realm has those globals. Idempotent.
+ * No-op when the realm has no DOM (server-side import-only path).
+ */
+export function installSlotPolyfills() {
+  if (polyfillsInstalled) return;
+  inBrowser = detectBrowser();
+  if (!inBrowser) return;
+  NATIVE_assignedNodes = HTMLSlotElement.prototype.assignedNodes;
+  NATIVE_assignedElements = HTMLSlotElement.prototype.assignedElements;
+  NATIVE_assignedSlot_desc = Object.getOwnPropertyDescriptor(Element.prototype, 'assignedSlot');
 
-if (inBrowser) {
   HTMLSlotElement.prototype.assignedNodes = function patchedAssignedNodes(options) {
     if (this.hasAttribute(LIGHT_SLOT_ATTR)) {
       return lightAssignedNodes(this, options);
     }
-    return NATIVE_assignedNodes.call(this, options);
+    return NATIVE_assignedNodes ? NATIVE_assignedNodes.call(this, options) : [];
   };
 
   HTMLSlotElement.prototype.assignedElements = function patchedAssignedElements(options) {
     if (this.hasAttribute(LIGHT_SLOT_ATTR)) {
       return lightAssignedNodes(this, options).filter((n) => n.nodeType === 1);
     }
-    return NATIVE_assignedElements.call(this, options);
+    return NATIVE_assignedElements ? NATIVE_assignedElements.call(this, options) : [];
   };
 
   Object.defineProperty(Element.prototype, 'assignedSlot', {
@@ -107,7 +124,11 @@ if (inBrowser) {
       return findLightAssignedSlot(this);
     },
   });
+  polyfillsInstalled = true;
 }
+
+// First-chance install at module load.
+installSlotPolyfills();
 
 /**
  * Resolve assigned nodes for a light-DOM slot. Per spec, returns []
