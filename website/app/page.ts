@@ -138,9 +138,10 @@ export default function LandingPage() {
         margin: 0 auto;
         padding: 0 var(--sp-5) var(--sp-8);
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: var(--sp-4);
       }
+      @media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
       .feature {
         padding: var(--sp-5);
         background: var(--bg-elev);
