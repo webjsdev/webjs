@@ -22,7 +22,7 @@ test('register: rejects non-string tag', () => {
   assert.throws(() => register(/** @type any */ (null), A), /must contain a hyphen/);
 });
 
-test('register: upserts — second registration for same tag replaces class', () => {
+test('register: upserts: second registration for same tag replaces class', () => {
   register('rx-one', A);
   assert.equal(lookup('rx-one'), A);
   register('rx-one', B);
@@ -33,7 +33,7 @@ test('register: upsert preserves previously-primed moduleUrl', () => {
   primeModuleUrl('rx-two', '/components/rx-two.js');
   register('rx-two', A);
   // primeModuleUrl created an entry with cls=null + moduleUrl set.
-  // Then register() should update cls without wiping moduleUrl — the
+  // Then register() should update cls without wiping moduleUrl: the
   // branch exercised here is the "entry exists → mutate in place" path.
   register('rx-two', B);
   assert.equal(lookup('rx-two'), B);
@@ -94,7 +94,7 @@ test('allTags: includes every registered tag', () => {
 
 test('primeModuleUrl: creates an entry with no cls when called before register()', () => {
   primeModuleUrl('rx-prime', '/components/rx-prime.js');
-  // No cls yet — but isLazy returns false (no entry has lazy flag).
+  // No cls yet: but isLazy returns false (no entry has lazy flag).
   assert.equal(isLazy('rx-prime'), false);
   // lookupModuleUrl via lookup+allTags shouldn't crash.
   assert.ok(allTags().includes('rx-prime'));
@@ -130,7 +130,7 @@ test('registry is shared across module instances via globalThis (dual-instance b
     // Both instances must agree the tag is registered.
     assert.ok(a.allTags().includes('rx-shared-tag'));
     assert.ok(b.allTags().includes('rx-shared-tag'),
-      'instance B must see registrations made via instance A — registry is shared');
+      'instance B must see registrations made via instance A: registry is shared');
     assert.equal(b.lookup('rx-shared-tag'), Shared);
     assert.equal(b.tagOf(Shared), 'rx-shared-tag');
   } finally {

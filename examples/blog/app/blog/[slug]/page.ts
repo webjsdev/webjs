@@ -12,8 +12,8 @@ type Ctx = { params: { slug: string } };
 export async function generateMetadata({ params }: Ctx) {
   const post = await getPost({ slug: params.slug });
   return post
-    ? { title: `${post.title} — webjs blog` }
-    : { title: 'Not found — webjs blog' };
+    ? { title: `${post.title}: webjs blog` }
+    : { title: 'Not found: webjs blog' };
 }
 
 export default async function PostPage({ params }: Ctx) {

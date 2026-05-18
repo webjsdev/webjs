@@ -1,8 +1,8 @@
 /**
- * webjs/core — public surface.
+ * webjs/core public surface.
  *
  * Isomorphic: this module is safe to import on both server and client.
- * The client renderer is lazy-loaded by the WebComponent base; the server
+ * The client renderer is lazy-loaded by the WebComponent base. The server
  * renderer is only reached on the server.
  */
 
@@ -26,11 +26,11 @@ export {
 export { enableClientRouter, disableClientRouter, navigate, revalidate } from './src/router-client.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 
-// Directives — also available via '@webjskit/core/directives'
+// Directives, also available via '@webjskit/core/directives'
 export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';
 
-// Context Protocol — also available via '@webjskit/core/context'
+// Context Protocol, also available via '@webjskit/core/context'
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
 
-// Task controller — also available via '@webjskit/core/task'
+// Task controller, also available via '@webjskit/core/task'
 export { Task, TaskStatus } from './src/task.js';

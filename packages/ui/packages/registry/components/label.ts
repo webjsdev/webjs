@@ -1,5 +1,5 @@
 /**
- * Label — styled native `<label>` via a class-helper function. Use with a real
+ * Label: styled native `<label>` via a class-helper function. Use with a real
  * `<label for="...">` so click-to-focus, `htmlFor`/`for` linking, and screen
  * reader association all work natively.
  *

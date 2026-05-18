@@ -24,9 +24,9 @@ export default async function Home() {
         class="text-fg-muted max-w-[60ch]"
         style="margin-top: var(--sp-5); font-size: var(--fs-lede); line-height: 1.55;"
       >
-        ${ui.length} primitives designed for the agent era — copy‑paste source code,
+        ${ui.length} primitives designed for the agent era: copy‑paste source code,
         full native HTML semantics, shadcn API parity, zero third‑party dependencies.
-        Works in webjs, Next, Astro, Vite, Lit, vanilla — any project with Tailwind v4.
+        Works in webjs, Next, Astro, Vite, Lit, vanilla, any project with Tailwind v4.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a
@@ -67,8 +67,8 @@ export default async function Home() {
           <h3 class="text-lg font-semibold mb-2">Class helpers, not wrappers</h3>
           <p class="text-sm text-fg-muted leading-relaxed">
             Tier‑1 components are pure functions returning Tailwind class strings. AI
-            agents compose with raw native HTML they already know — no DSL, no JSX
-            translation, no projection complexity.
+            agents compose with raw native HTML they already know, with no DSL, no JSX
+            translation, and no projection complexity.
           </p>
         </div>
         <div>
@@ -77,7 +77,7 @@ export default async function Home() {
           <p class="text-sm text-fg-muted leading-relaxed">
             A button is a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;button&gt;</code>.
             A checkbox is a real <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;input&gt;</code>.
-            Form submission, autofill, browser validation, screen readers — all work
+            Form submission, autofill, browser validation, screen readers: all work
             natively, never proxied.
           </p>
         </div>
@@ -197,7 +197,7 @@ npx webjsui add button card dialog</code></pre>
         <span class="text-sm text-fg-muted">${ui.length} primitives</span>
       </div>
       <p class="text-sm text-fg-muted mb-8">
-        Grouped by composition tier. Pick Tier 1 by default — Tier 2
+        Grouped by composition tier. Pick Tier 1 by default. Reach for Tier 2
         only when the browser doesn't ship the behavior natively.
       </p>
 

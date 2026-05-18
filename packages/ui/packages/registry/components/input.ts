@@ -1,5 +1,5 @@
 /**
- * Input — styled native `<input>` via a class-helper function. Works with
+ * Input: styled native `<input>` via a class-helper function. Works with
  * every native input type (text, email, password, number, search, tel, url,
  * date, time, file, color, …). Form submission, autocomplete, browser
  * validation, and password managers all work because it IS the native input.

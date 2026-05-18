@@ -1,11 +1,11 @@
 /**
- * Separator — horizontal or vertical divider. Pure class helper. For
+ * Separator: horizontal or vertical divider. Pure class helper. For
  * accessibility, set `role="separator"` (or `role="none"` for purely
  * decorative use) and `aria-orientation` on the element.
  *
  * shadcn parity:
  *   orientation: horizontal (default) | vertical
- *   decorative: true (default — uses `role="none"`)
+ *   decorative: true (default: uses `role="none"`)
  *
  * Usage:
  *   <div role="none" class=${separatorClass()} data-orientation="horizontal"></div>
@@ -24,7 +24,7 @@ export type SeparatorOrientation = 'horizontal' | 'vertical';
 
 export function separatorClass(_opts: { orientation?: SeparatorOrientation } = {}): string {
   // Orientation is driven by the `data-orientation` attribute on the element,
-  // not by class variants — matches shadcn. The opts arg is reserved for
+  // not by class variants: matches shadcn. The opts arg is reserved for
   // future variants (e.g. dashed) and to keep the signature stable.
   return cn(BASE);
 }

@@ -3,10 +3,10 @@ import '../../components/theme-toggle.ts';
 import '../../components/doc-search.ts';
 
 /**
- * Docs sub-layout — sidebar + content shell. Light DOM throughout.
+ * Docs sub-layout: sidebar + content shell. Light DOM throughout.
  * Styling via Tailwind utility classes. Content typography for doc
  * pages lives in the .prose-docs rules in the <style> block (doc page
- * bodies are plain HTML — no component wrapper — so we style <h1>,
+ * bodies are plain HTML: no component wrapper: so we style <h1>,
  * <p>, <pre>, etc. scoped under .prose-docs).
  */
 const NAV_SECTIONS = [
@@ -39,7 +39,7 @@ const NAV_SECTIONS = [
     title: 'Data & Backend',
     items: [
       { href: '/docs/server-actions', label: 'Server Actions' },
-      { href: '/docs/expose', label: 'expose() — REST Endpoints' },
+      { href: '/docs/expose', label: 'expose(): REST Endpoints' },
       { href: '/docs/api-routes', label: 'API Routes' },
       { href: '/docs/websockets', label: 'WebSockets' },
       { href: '/docs/database', label: 'Database (Prisma)' },
@@ -83,7 +83,7 @@ const NAV_SECTIONS = [
 export default function DocsLayout({ children }: { children: unknown }) {
   return html`
     <style>
-      /* Content typography for doc pages — scoped under .prose-docs so
+      /* Content typography for doc pages, scoped under .prose-docs so
          the same element tags inside sidebar / components stay unaffected. */
       .prose-docs h1 {
         font: 700 var(--fs-h1)/1.1 var(--font-serif);
@@ -150,7 +150,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
       .prose-docs th, .prose-docs td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
       .prose-docs th { font-weight: 600; background: var(--bg-subtle); }
 
-      /* Sidebar scrollbar — hide until hover */
+      /* Sidebar scrollbar: hide until hover */
       .docs-sidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 300ms; }
       .docs-sidebar:hover { scrollbar-color: var(--border-strong) transparent; }
       .docs-sidebar::-webkit-scrollbar { width: 6px; }
@@ -159,7 +159,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
       .docs-sidebar:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
       .docs-sidebar::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); }
 
-      /* Mobile sidenav drawer — slides in from the left at <=860px.
+      /* Mobile sidenav drawer: slides in from the left at <=860px.
          Toggled via [data-menu-open] on <body>. */
       .menu-backdrop { display: none; }
       @media (max-width: 860px) {

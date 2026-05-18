@@ -1,5 +1,5 @@
 /**
- * Tabs — sectioned content with keyboard navigation.
+ * Tabs: sectioned content with keyboard navigation.
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
  *
@@ -20,17 +20,17 @@
  *   </ui-tabs>
  *
  * Attributes on <ui-tabs>:
- *   `value`       — string. Currently-active tab value (reflected, controlled).
- *   `orientation` — "horizontal" (default) | "vertical".
+ *   `value`:      string. Currently-active tab value (reflected, controlled).
+ *   `orientation`: "horizontal" (default) | "vertical".
  *
  * Events:
- *   `ui-value-change` on <ui-tabs> — `{ detail: { value } }` after a change.
+ *   `ui-value-change` on <ui-tabs>: `{ detail: { value } }` after a change.
  *
  * Keyboard (on focused trigger):
- *   ArrowRight/ArrowLeft  — next/previous (horizontal)
- *   ArrowDown/ArrowUp     — next/previous (vertical)
- *   Home/End              — first/last
- *   Enter/Space           — activate
+ *   ArrowRight/ArrowLeft  next/previous (horizontal)
+ *   ArrowDown/ArrowUp     next/previous (vertical)
+ *   Home/End              first/last
+ *   Enter/Space           activate
  *
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
@@ -62,7 +62,7 @@ export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string 
 
 const TABS_TRIGGER_CLASS = [
   // cursor-pointer + select-none are mandatory here because the trigger
-  // is a custom element (<ui-tabs-trigger>), not a <button> — the host
+  // is a custom element (<ui-tabs-trigger>), not a <button>: the host
   // is a generic block by default, so the browser would otherwise paint
   // the I-beam text cursor over the label and let users drag-select
   // tab text mid-click. shadcn's tabs use <button role="tab"> in React,
@@ -71,7 +71,7 @@ const TABS_TRIGGER_CLASS = [
   "relative inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer select-none items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=underline]/tabs-list:data-[state=active]:shadow-none dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   // These two rows mirror shadcn's tabs.tsx EXACTLY (modulo our
   // `variant=line` → `variant=underline` rename). Critical: the
-  // border-input rule on active is `dark:` only — light-mode active
+  // border-input rule on active is `dark:` only: light-mode active
   // tabs get bg-background + shadow-sm and NO border. Earlier we
   // tried adding the border in light mode for visibility but it made
   // the underline variant look like outline AND made the default
@@ -85,7 +85,7 @@ const TABS_TRIGGER_CLASS = [
 const TABS_CONTENT_CLASS = 'flex-1 outline-none';
 
 // --------------------------------------------------------------------------
-// Visibility CSS — inactive content is hidden via data-state.
+// Visibility CSS: inactive content is hidden via data-state.
 // --------------------------------------------------------------------------
 
 const STYLES = `
@@ -102,7 +102,7 @@ function installStyles(): void {
 }
 
 // --------------------------------------------------------------------------
-// <ui-tabs> — owns active `value` and `orientation`, broadcasts to children.
+// <ui-tabs> owns active `value` and `orientation`, broadcasts to children.
 // --------------------------------------------------------------------------
 
 export class UiTabs extends Base {
@@ -161,7 +161,7 @@ export class UiTabs extends Base {
 defineElement('ui-tabs', UiTabs);
 
 // --------------------------------------------------------------------------
-// <ui-tabs-list> — container for triggers. Applies role="tablist".
+// <ui-tabs-list> is the container for triggers. Applies role="tablist".
 // --------------------------------------------------------------------------
 
 export class UiTabsList extends Base {
@@ -177,7 +177,7 @@ export class UiTabsList extends Base {
 defineElement('ui-tabs-list', UiTabsList);
 
 // --------------------------------------------------------------------------
-// <ui-tabs-trigger value="..."> — tab button. Click + keyboard nav.
+// <ui-tabs-trigger value="..."> is the tab button. Click + keyboard nav.
 // --------------------------------------------------------------------------
 
 export class UiTabsTrigger extends Base {
@@ -235,7 +235,7 @@ export class UiTabsTrigger extends Base {
 defineElement('ui-tabs-trigger', UiTabsTrigger);
 
 // --------------------------------------------------------------------------
-// <ui-tabs-content value="..."> — panel content. Shown when value matches.
+// <ui-tabs-content value="..."> is the panel content. Shown when value matches.
 // --------------------------------------------------------------------------
 
 export class UiTabsContent extends Base {

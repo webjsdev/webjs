@@ -9,7 +9,7 @@ type ChatMessage =
   | { kind: 'join' | 'leave'; count: number };
 
 /**
- * `<chat-box>` — terminal-leaning live chat panel against /api/chat.
+ * `<chat-box>`: terminal-leaning live chat panel against /api/chat.
  */
 export class ChatBox extends WebComponent {
 
@@ -68,7 +68,7 @@ export class ChatBox extends WebComponent {
         </div>
         <div class="h-[220px] overflow-y-auto p-4 text-sm leading-relaxed font-sans scroll-smooth bg-bg-sunken">
           ${lines.length === 0
-            ? html`<p class="m-0 text-fg-subtle italic">No messages yet — say something.</p>`
+            ? html`<p class="m-0 text-fg-subtle italic">No messages yet: say something.</p>`
             : lines.map((l) =>
                 l.kind === 'meta'
                   ? html`<p class="m-0 mb-2 text-fg"><em class="font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-fg-subtle not-italic">${l.text}</em></p>`

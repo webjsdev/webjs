@@ -35,7 +35,7 @@ class StudentCard extends WebComponent {
   static properties = { student: { type: Object } };
   declare student: Student;
   render() {
-    // this.student is a real Student — method access, property access, all typed.
+    // this.student is a real Student: method access, property access, all typed.
     const _s: string = this.student.name;
     return html`<p>${this.student.name}</p>`;
   }

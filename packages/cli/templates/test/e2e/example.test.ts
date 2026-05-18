@@ -1,5 +1,5 @@
 /**
- * Example E2E test — replace with tests for your user flows.
+ * Example E2E test: replace with tests for your user flows.
  *
  * Run:  WEBJS_E2E=1 webjs test
  * Or:   WEBJS_E2E=1 node --test test/e2e/*.test.ts

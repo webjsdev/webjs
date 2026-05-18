@@ -3,8 +3,8 @@
  *
  * At startup, scans the app directory and builds an in-memory map of
  * `file → Set<imported files>`. The SSR pipeline queries this graph to
- * emit *complete* modulepreload hints — including transitive dependencies
- * of components — so the browser can fetch the entire tree in parallel
+ * emit *complete* modulepreload hints: including transitive dependencies
+ * of components: so the browser can fetch the entire tree in parallel
  * rather than discovering imports one waterfall at a time.
  *
  * The graph is file-path-based (absolute paths). URLs are derived when
@@ -133,9 +133,9 @@ function resolveImport(spec, fromFile, appDir) {
   } else {
     target = resolve(base, spec);
   }
-  // Exact match check — we can't use async `stat` in a sync resolver, so we
+  // Exact match check: we can't use async `stat` in a sync resolver, so we
   // store the resolved path optimistically. The graph is advisory (for preload
-  // hints), not load-bearing, so a wrong entry is harmless — the browser will
+  // hints), not load-bearing, so a wrong entry is harmless: the browser will
   // just get a redundant preload that 404s and is ignored.
   return target;
 }

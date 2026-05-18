@@ -1,5 +1,5 @@
 /**
- * storeSessionStorage + session() middleware tests — exercises the
+ * storeSessionStorage + session() middleware tests: exercises the
  * Redis/store-backed session path and the cookie/sign flow. Uses the
  * in-memory memoryStore directly since the backing-store API is
  * identical across memoryStore and redisStore; the Redis client path

@@ -1,11 +1,11 @@
 /**
- * Blog runtime smoke test — boots `webjs dev` against examples/blog/ and
+ * Blog runtime smoke test: boots `webjs dev` against examples/blog/ and
  * asserts every migrated surface still renders correctly.
  *
  * Unlike the puppeteer-based `test/e2e.test.mjs` (gated behind
  * WEBJS_E2E=1, requires Chromium), this is a fetch-only test that always
  * runs as part of `npm test`. The trade-off: no JS execution, no
- * hydration check — just SSR HTML + HTTP status assertions. Catches the
+ * hydration check: just SSR HTML + HTTP status assertions. Catches the
  * specific regression classes the recent Tier-1/Tier-2 migration would
  * introduce:
  *   - stale `<ui-button>`/`<ui-card>`/etc. tags in any migrated page
@@ -129,11 +129,11 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
   test('/ui-demo renders BOTH class-helper output AND Tier-2 ui-dialog', async () => {
     const html = await fetch(baseUrl + '/ui-demo').then((r) => r.text());
 
-    // Tier 1 — cardClass + buttonClass output present.
+    // Tier 1: cardClass + buttonClass output present.
     assert.match(html, /rounded-xl border bg-card/, 'cardClass output present');
     assert.match(html, /bg-primary text-primary-foreground hover:bg-primary/, 'buttonClass output present');
 
-    // Tier 2 — <ui-dialog> + subparts rendered as custom elements.
+    // Tier 2: <ui-dialog> + subparts rendered as custom elements.
     for (const tag of ['ui-dialog', 'ui-dialog-trigger', 'ui-dialog-content']) {
       assert.match(html, new RegExp(`<${tag}\\b`), `expected <${tag}> on /ui-demo`);
     }

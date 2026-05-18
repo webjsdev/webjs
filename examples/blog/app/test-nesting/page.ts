@@ -6,7 +6,7 @@ export const metadata = { title: 'Nested DSD Test' };
 
 /**
  * Test page exercising all four shadow/light DOM nesting combinations.
- * Used by e2e tests — the _test-nesting folder is private (underscore prefix)
+ * Used by e2e tests: the _test-nesting folder is private (underscore prefix)
  * but still routable for direct access.
  */
 export default function NestingTestPage() {

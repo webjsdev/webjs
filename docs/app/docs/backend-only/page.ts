@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Backend-Only Mode — webjs' };
+export const metadata = { title: 'Backend-Only Mode | webjs' };
 
 export default function BackendOnly() {
   return html`
@@ -90,7 +90,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     <h2>Middleware for Auth, CORS, Rate Limiting</h2>
     <p>Middleware works identically in backend-only mode. Place <code>middleware.ts</code> files at the root or in any segment directory:</p>
-    <pre>// middleware.ts (root) — logging for every request
+    <pre>// middleware.ts (root): logging for every request
 export default async function logger(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
@@ -100,7 +100,7 @@ export default async function logger(
   console.log(\`\${req.method} \${new URL(req.url).pathname} \${resp.status} \${Date.now() - start}ms\`);
   return resp;
 }</pre>
-    <pre>// app/middleware.ts — CORS for all routes under app/
+    <pre>// app/middleware.ts: CORS for all routes under app/
 export default async function cors(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
@@ -120,7 +120,7 @@ export default async function cors(
   resp.headers.set('access-control-allow-origin', '*');
   return resp;
 }</pre>
-    <pre>// app/api/auth/middleware.ts — rate limit auth endpoints
+    <pre>// app/api/auth/middleware.ts: rate limit auth endpoints
 import { rateLimit } from '@webjskit/server';
 
 export default rateLimit({ window: '10s', max: 5 });</pre>
@@ -255,22 +255,22 @@ fastify.listen({ port: 3000 });</pre>
     <h2>Comparison with Express/Fastify</h2>
     <p>Here is what webjs gives you compared to a traditional Node.js API framework:</p>
     <ul>
-      <li><strong>File-based routing</strong> — no manual <code>app.get()</code> / <code>app.post()</code> registration. Drop a <code>route.ts</code> in a folder and it is live.</li>
-      <li><strong>Nested middleware</strong> — middleware scoped to route subtrees, not global or per-route.</li>
-      <li><strong>TypeScript first</strong> — no build step, no compilation, no config. <code>.ts</code> files run directly.</li>
-      <li><strong>Rich wire format</strong> — webjs's built-in serializer round-trips <code>Date</code>/<code>Map</code>/<code>Set</code>/<code>BigInt</code>/<code>TypedArray</code>/<code>Blob</code>/<code>File</code>/<code>FormData</code> and reference cycles.</li>
-      <li><strong>WebSocket support</strong> — export a <code>WS</code> function from a route file, no separate setup.</li>
-      <li><strong>Health probes</strong> — built-in, zero config.</li>
-      <li><strong>expose()</strong> — turn server functions into REST endpoints with validation and CORS.</li>
-      <li><strong>Graceful shutdown</strong> — handles SIGINT/SIGTERM, drains connections, hard-exits on timeout.</li>
-      <li><strong>Compression and ETags</strong> — built-in, negotiated automatically.</li>
+      <li><strong>File-based routing</strong>: no manual <code>app.get()</code> / <code>app.post()</code> registration. Drop a <code>route.ts</code> in a folder and it is live.</li>
+      <li><strong>Nested middleware</strong>: middleware scoped to route subtrees, not global or per-route.</li>
+      <li><strong>TypeScript first</strong>: no build step, no compilation, no config. <code>.ts</code> files run directly.</li>
+      <li><strong>Rich wire format</strong>: webjs's built-in serializer round-trips <code>Date</code>/<code>Map</code>/<code>Set</code>/<code>BigInt</code>/<code>TypedArray</code>/<code>Blob</code>/<code>File</code>/<code>FormData</code> and reference cycles.</li>
+      <li><strong>WebSocket support</strong>: export a <code>WS</code> function from a route file, no separate setup.</li>
+      <li><strong>Health probes</strong>: built-in, zero config.</li>
+      <li><strong>expose()</strong>: turn server functions into REST endpoints with validation and CORS.</li>
+      <li><strong>Graceful shutdown</strong>: handles SIGINT/SIGTERM, drains connections, hard-exits on timeout.</li>
+      <li><strong>Compression and ETags</strong>: built-in, negotiated automatically.</li>
     </ul>
     <p>What webjs does not give you:</p>
     <ul>
-      <li><strong>Massive middleware ecosystem</strong> — Express has thousands of middleware packages (passport, multer, helmet, etc.). webjs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
-      <li><strong>Years of battle-testing</strong> — Express and Fastify have been production-proven at enormous scale. webjs is new.</li>
-      <li><strong>Plugin system</strong> — Fastify's plugin architecture for encapsulated contexts does not have a webjs equivalent. The middleware chain and file conventions are the extension points.</li>
-      <li><strong>Advanced schema validation</strong> — Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> option on <code>expose()</code> with zod, valibot, or any library.</li>
+      <li><strong>Massive middleware ecosystem</strong>: Express has thousands of middleware packages (passport, multer, helmet, etc.). webjs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
+      <li><strong>Years of battle-testing</strong>: Express and Fastify have been production-proven at enormous scale. webjs is new.</li>
+      <li><strong>Plugin system</strong>: Fastify's plugin architecture for encapsulated contexts does not have a webjs equivalent. The middleware chain and file conventions are the extension points.</li>
+      <li><strong>Advanced schema validation</strong>: Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> option on <code>expose()</code> with zod, valibot, or any library.</li>
     </ul>
 
     <h2>Example: Complete API-Only Setup</h2>

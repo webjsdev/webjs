@@ -1,5 +1,5 @@
 /**
- * Unit tests for CORS header handling in actions.js — exercised by
+ * Unit tests for CORS header handling in actions.js: exercised by
  * `expose()`d REST endpoints. Covers corsHeadersFor / buildPreflightResponse
  * / withCors across wildcard, allow-list, credentials, and mismatch cases.
  */

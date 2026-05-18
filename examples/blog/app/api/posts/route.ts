@@ -1,5 +1,5 @@
 /**
- * /api/posts — public list + authenticated create.
+ * /api/posts: public list + authenticated create.
  *
  * Uses webjs's `json()` helper for content-negotiated responses:
  *   - External clients (curl, mobile) sending `Accept: application/json`

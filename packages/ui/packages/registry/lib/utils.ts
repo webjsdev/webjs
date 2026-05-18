@@ -42,7 +42,7 @@ function walk(value: ClassValue, out: string[]): void {
   }
 }
 
-// Conflict groups: classes with the same group key — last one wins.
+// Conflict groups: classes with the same group key: last one wins.
 // Covers ~95% of in-component overrides the registry exposes.
 //
 // IMPORTANT: text-size (text-sm, text-xs, text-base, text-lg, …) and
@@ -95,13 +95,13 @@ function dedupeUtilities(input: string): string {
 }
 
 function variantPrefix(token: string): string {
-  // capture leading variants like `hover:`, `dark:`, `md:` — overrides only conflict within the same variant set
+  // capture leading variants like `hover:`, `dark:`, `md:`: overrides only conflict within the same variant set
   const i = token.lastIndexOf(':');
   return i === -1 ? '' : token.slice(0, i + 1);
 }
 
 // ---------------------------------------------------------------------------
-// Custom-element base — SSR-safe. In the browser `Base = HTMLElement`. On
+// Custom-element base: SSR-safe. In the browser `Base = HTMLElement`. On
 // the server (Node, during SSR) `HTMLElement` is undefined; we substitute
 // a stub class so that `class Foo extends Base { … }` doesn't throw at
 // module-load time. The stub's methods are never actually called server-side
@@ -138,7 +138,7 @@ class ServerHTMLElementStub {
   dispatchEvent(): boolean {
     return true;
   }
-  // Tree-walk APIs no-op into null — components that call them server-side
+  // Tree-walk APIs no-op into null: components that call them server-side
   // simply see "no children / no siblings", which is acceptable for SSR.
   closest(): null {
     return null;
@@ -178,7 +178,7 @@ class ServerHTMLElementStub {
   }
 }
 
-/** SSR-safe base class — `HTMLElement` in browser, a thin stub in Node. */
+/** SSR-safe base class: `HTMLElement` in browser, a thin stub in Node. */
 export const Base: typeof HTMLElement = (HasHTMLElement
   ? HTMLElement
   : (ServerHTMLElementStub as unknown as typeof HTMLElement)) as typeof HTMLElement;
@@ -191,15 +191,15 @@ export function defineElement(name: string, cls: CustomElementConstructor): void
 }
 
 // ---------------------------------------------------------------------------
-// Layout helpers — encode the design-system rhythm (spacing between label /
+// Layout helpers: encode the design-system rhythm (spacing between label /
 // input / hint, between form fields, between sections). Change one helper to
-// retune the whole app — call sites stay readable inline Tailwind.
+// retune the whole app: call sites stay readable inline Tailwind.
 // ---------------------------------------------------------------------------
 
 /** Vertical rhythm inside a single form field: label ↔ control ↔ hint/error. */
 export const fieldClass = () => 'grid gap-2';
 
-/** Horizontal field layout — label on the left, control on the right. */
+/** Horizontal field layout: label on the left, control on the right. */
 export const fieldRowClass = () => 'flex items-center gap-3';
 
 /** Gap step for `stackClass({ gap })`. */
@@ -209,7 +209,7 @@ export type StackGap = 'sm' | 'md' | 'lg';
  * Stack of form fields. `sm` for tight groupings, `lg` for spaced-out sections.
  *
  * Object-arg shape matches the rest of the kit (`buttonClass({ variant, size })`,
- * `badgeClass({ variant })`, etc.) — predictable across all helpers and
+ * `badgeClass({ variant })`, etc.): predictable across all helpers and
  * extensible if a second dimension (e.g. `direction`) is ever added.
  */
 export const stackClass = (opts: { gap?: StackGap } = {}): string => {
@@ -217,17 +217,17 @@ export const stackClass = (opts: { gap?: StackGap } = {}): string => {
   return gap === 'sm' ? 'grid gap-3' : gap === 'lg' ? 'grid gap-8' : 'grid gap-6';
 };
 
-/** Form body — same rhythm as a `lg` stack; semantic name for `<form>` content. */
+/** Form body: same rhythm as a `lg` stack; semantic name for `<form>` content. */
 export const formClass = () => 'grid gap-6';
 
 /** Top-level section separation (between form groups, between sections of a page). */
 export const sectionClass = () => 'grid gap-8';
 
 // ---------------------------------------------------------------------------
-// Typography helpers — fixed text styles used across the design system.
+// Typography helpers: fixed text styles used across the design system.
 // ---------------------------------------------------------------------------
 
-/** Form-field label — `<label>` text style. */
+/** Form-field label: `<label>` text style. */
 export const fieldLabelClass = () =>
   'text-sm leading-none font-medium select-none group-data-[disabled=true]/field:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50';
 
@@ -237,5 +237,5 @@ export const hintClass = () => 'text-sm text-muted-foreground';
 /** Tertiary help text (smaller than hint). */
 export const helpClass = () => 'text-xs text-muted-foreground';
 
-/** Validation error text — replaces hint when the field is invalid. */
+/** Validation error text: replaces hint when the field is invalid. */
 export const errorClass = () => 'text-sm font-medium text-destructive';

@@ -2,7 +2,7 @@
  * NextAuth/Auth.js-style authentication for webjs.
  *
  * JWT or database sessions, Credentials + OAuth (Google, GitHub) providers.
- * Uses Web Crypto HMAC-SHA256 — no external dependencies.
+ * Uses Web Crypto HMAC-SHA256: no external dependencies.
  *
  * @module auth
  */
@@ -128,7 +128,7 @@ async function decodeJwt(token, secret) {
  */
 
 /**
- * Credentials provider — email/password or custom logic.
+ * Credentials provider: email/password or custom logic.
  * @param {{ authorize: (creds: Record<string,unknown>) => Promise<Record<string,unknown>|null> }} opts
  * @returns {ProviderConfig}
  */

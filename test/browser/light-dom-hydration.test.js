@@ -1,5 +1,5 @@
 /**
- * Light DOM hydration tests — runs in a REAL browser via WTR + Playwright.
+ * Light DOM hydration tests: runs in a REAL browser via WTR + Playwright.
  * Verifies that the client renderer correctly handles server-rendered
  * light DOM content (marked by <!--webjs-hydrate-->).
  *
@@ -24,7 +24,7 @@ suite('Light DOM hydration', () => {
     el.innerHTML = '<!--webjs-hydrate--><p>hello world</p>';
     assert.ok(el.querySelector('p'), 'SSR content should exist');
 
-    // Client render — removes marker, renders normally
+    // Client render: removes marker, renders normally
     render(html`<p>hello ${'world'}</p>`, el);
 
     assert.ok(el.querySelector('p'), '<p> should exist after render');
@@ -78,14 +78,14 @@ suite('Light DOM hydration', () => {
 });
 
 /**
- * MutationObserver safety net — when the router inserts custom elements via
+ * MutationObserver safety net: when the router inserts custom elements via
  * replaceChildren or DOM moves, the browser doesn't always auto-upgrade them.
- * The router's global MutationObserver fixes that — test that importing the
+ * The router's global MutationObserver fixes that: test that importing the
  * router-client module sets up the observer and elements get upgraded.
  */
 suite('Custom element upgrade safety net', () => {
   test('importing router-client upgrades custom elements inserted later', async () => {
-    // Import router-client (auto-enables on import — sets up MutationObserver).
+    // Import router-client (auto-enables on import: sets up MutationObserver).
     await import('../../packages/core/src/router-client.js');
 
     // Define a custom element AFTER the router is enabled.
@@ -101,7 +101,7 @@ suite('Custom element upgrade safety net', () => {
 
     // Simulate router-style insertion: create the element via innerHTML of a
     // host that starts detached, then attach the host. replaceChildren also
-    // works — the key is that the element isn't created via
+    // works: the key is that the element isn't created via
     // `document.createElement` (which auto-upgrades synchronously).
     const host = document.createElement('div');
     document.body.appendChild(host);

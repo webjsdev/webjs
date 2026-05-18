@@ -31,10 +31,10 @@
  *
  *
  * `cors` toggles browser CORS support for cross-origin callers:
- *   - `true`             — allow any origin (`*`), reflects requested headers
- *   - string             — allow that single origin (sets `Access-Control-Allow-Credentials: true`)
- *   - string[]           — allow-list; non-matching origins are not granted
- *   - { origin, credentials, maxAge, headers } — full control
+ *   - `true`             - allow any origin (`*`), reflects requested headers
+ *   - string             - allow that single origin (sets `Access-Control-Allow-Credentials: true`)
+ *   - string[]           - allow-list; non-matching origins are not granted
+ *   - { origin, credentials, maxAge, headers }: full control
  *
  * When CORS is enabled, an `OPTIONS` preflight at the same path is auto-served
  * with `Access-Control-Allow-Methods: <route's method>, OPTIONS`.
@@ -51,7 +51,7 @@ export function expose(pattern, fn, opts) {
   const match = /^\s*([A-Z]+)\s+(\/\S*)\s*$/.exec(pattern);
   if (!match) {
     throw new Error(
-      `expose(): bad pattern ${JSON.stringify(pattern)} — expected "METHOD /path"`
+      `expose(): bad pattern ${JSON.stringify(pattern)}: expected "METHOD /path"`
     );
   }
   const [, method, path] = match;

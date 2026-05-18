@@ -1,5 +1,5 @@
 /**
- * Integration tests for `createRequestHandler` — exercises the core
+ * Integration tests for `createRequestHandler`: exercises the core
  * request → Response pipeline in packages/server/src/dev.js against a
  * minimal app fixture written to a tmpdir. Uses Web-standard Request/
  * Response so the tests don't need a real HTTP server.
@@ -83,7 +83,7 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/__webjs/core/../../etc/passwd'));
-  // Either 403 (traversal detected) or 404 (normalised outside dir) — both safe.
+  // Either 403 (traversal detected) or 404 (normalised outside dir): both safe.
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
 });
 
@@ -91,7 +91,7 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
 
 test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', async () => {
   // Use the repo root as appDir so node_modules is resolvable via the
-  // monorepo hoisting chain — bundlePackage() uses createRequire against
+  // monorepo hoisting chain: bundlePackage() uses createRequire against
   // the appDir's package.json.
   const repoRoot = resolve(__dirname, '..');
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
@@ -149,7 +149,7 @@ test('handle: .ts source served as JS with esbuild-stripped types', async () => 
 });
 
 test('handle: .ts source supports non-erasable TS (enum, parameter properties)', async () => {
-  // Proves the browser-bound transform uses esbuild — Node's built-in
+  // Proves the browser-bound transform uses esbuild: Node's built-in
   // stripper would reject this syntax. SSR-side imports use the same
   // esbuild loader so both paths produce equivalent JS.
   const appDir = makeApp({
@@ -188,7 +188,7 @@ test('handle: /foo.js falls through to sibling foo.ts when .js is missing', asyn
   assert.equal(resp.status, 200);
   const code = await resp.text();
   // esbuild may rewrite `export const foo` to a trailing `export { foo };`
-  // — both forms should mention the identifier.
+  // - both forms should mention the identifier.
   assert.ok(/greeting/.test(code), `missing greeting in ${code.slice(0, 200)}`);
   assert.ok(/["']hello["']/.test(code));
 });
@@ -270,7 +270,7 @@ test('handle: request to /__webjs/* path always prefers JSON 404', async () => {
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  // Unknown __webjs path — not a vendor, not a core, not health…
+  // Unknown __webjs path: not a vendor, not a core, not health…
   const resp = await app.handle(new Request('http://x/__webjs/no-such-thing'));
   assert.equal(resp.status, 404);
   assert.ok(resp.headers.get('content-type').includes('application/json'));
@@ -869,7 +869,7 @@ test('startServer: multiple set-cookie headers are preserved through getSetCooki
     const addr = server.address();
     const resp = await fetch(`http://127.0.0.1:${addr.port}/api/multi`);
     assert.equal(resp.status, 200);
-    // Node's fetch concatenates set-cookie with ", " — getSetCookie() splits back.
+    // Node's fetch concatenates set-cookie with ", ": getSetCookie() splits back.
     const cookies = resp.headers.getSetCookie ? resp.headers.getSetCookie() : [];
     if (cookies.length) {
       assert.equal(cookies.length, 2);

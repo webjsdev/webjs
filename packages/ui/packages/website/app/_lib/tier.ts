@@ -14,7 +14,7 @@
 import type { RegistryItem } from './registry.server.ts';
 
 /**
- * The 9 Tier-2 components — stateful custom elements (`<ui-X>` tags)
+ * The 9 Tier-2 components, stateful custom elements (`<ui-X>` tags)
  * that manage focus, keyboard nav, open/close state, etc. Everything
  * else with `type === 'registry:ui'` is Tier 1.
  *
@@ -44,7 +44,7 @@ export type Tier = 'tier-1' | 'tier-2';
 
 /**
  * Classify a `registry:ui` item. Caller should ensure the item is of
- * `type === 'registry:ui'` — themes / lib items don't have a tier.
+ * `type === 'registry:ui'`, themes / lib items don't have a tier.
  */
 export function tierOf(item: Pick<RegistryItem, 'name'>): Tier {
   return TIER_2_NAMES.has(item.name) ? 'tier-2' : 'tier-1';

@@ -6,8 +6,8 @@ import { stringify, parse } from '@webjskit/core';
  * decode values on the RPC wire.
  *
  * **AI hint:** The default serializer uses webjs's built-in
- * (`@webjskit/core` `stringify` / `parse`) so rich types — Date, Map, Set,
- * BigInt, TypedArrays, Blob/File/FormData, cycles — survive the
+ * (`@webjskit/core` `stringify` / `parse`) so rich types: Date, Map, Set,
+ * BigInt, TypedArrays, Blob/File/FormData, cycles: survive the
  * client/server round-trip. To swap in a different wire format (e.g.
  * plain JSON, msgpack), call `setSerializer()` with an object that
  * implements `serialize`, `deserialize`, and `contentType`.
@@ -18,7 +18,7 @@ import { stringify, parse } from '@webjskit/core';
  *   an `await arrayBuffer()` step.
  * @property {(str: string) => unknown} deserialize
  *   Decode a string produced by `serialize` back to the original value.
- *   Sync — binary is already inlined as base64 in the wire format.
+ *   Sync: binary is already inlined as base64 in the wire format.
  * @property {string} contentType
  *   The MIME content-type header value to use for RPC responses.
  */

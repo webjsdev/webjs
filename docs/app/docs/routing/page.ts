@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Routing — webjs' };
+export const metadata = { title: 'Routing | webjs' };
 
 export default function Routing() {
   return html`
@@ -8,20 +8,20 @@ export default function Routing() {
     <p>
       webjs uses <strong>file-based routing</strong>. Every file under your project's
       <code>app/</code> directory maps to a URL based on its folder path. There is no
-      central route configuration file — the file system <em>is</em> the router.
+      central route configuration file. The file system <em>is</em> the router.
     </p>
 
     <blockquote>
-      The conventions — <code>page.ts</code>, <code>layout.ts</code>,
+      The conventions (<code>page.ts</code>, <code>layout.ts</code>,
       <code>route.ts</code>, <code>[param]</code> folders, <code>(group)</code> folders,
-      <code>not-found.ts</code>, <code>error.ts</code>, and <code>loading.ts</code> — are
+      <code>not-found.ts</code>, <code>error.ts</code>, and <code>loading.ts</code>) are
       adapted for a no-build, web-components-first architecture and will feel familiar
       if you have used the NextJs App Router.
     </blockquote>
 
     <h2>File Conventions at a Glance</h2>
     <pre>app/
-├── layout.ts          # root layout — wraps every page
+├── layout.ts          # root layout, wraps every page
 ├── page.ts            # home page → /
 ├── not-found.ts       # 404 fallback
 ├── error.ts           # root error boundary
@@ -51,7 +51,7 @@ export default function Routing() {
     <p>
       Files can use <code>.ts</code>, <code>.js</code>, <code>.mts</code>, or
       <code>.mjs</code> extensions. TypeScript files run via the dev server's
-      esbuild loader hook — no build step required.
+      esbuild loader hook, no build step required.
     </p>
 
     <!-- ===== PAGES ===== -->
@@ -60,7 +60,7 @@ export default function Routing() {
       A <code>page.ts</code> file makes a route publicly accessible. Its
       <strong>default export</strong> is an async function that receives a context object
       with <code>params</code>, <code>searchParams</code>, and <code>url</code>. The
-      function runs <strong>only on the server</strong> during SSR — it never ships to the
+      function runs <strong>only on the server</strong> during SSR. It never ships to the
       browser.
     </p>
 
@@ -86,13 +86,13 @@ export default async function BlogPost({ params, searchParams, url }: Ctx) {
 }</pre>
 
     <ul>
-      <li><strong><code>params</code></strong> — an object of dynamic route segments (e.g. <code>{ slug: "hello-world" }</code>).</li>
-      <li><strong><code>searchParams</code></strong> — an object of query-string key/value pairs (e.g. <code>{ page: "2" }</code>).</li>
-      <li><strong><code>url</code></strong> — the full request URL as a string.</li>
+      <li><strong><code>params</code></strong>: an object of dynamic route segments (e.g. <code>{ slug: "hello-world" }</code>).</li>
+      <li><strong><code>searchParams</code></strong>: an object of query-string key/value pairs (e.g. <code>{ page: "2" }</code>).</li>
+      <li><strong><code>url</code></strong>: the full request URL as a string.</li>
     </ul>
 
     <p>
-      The function can be <code>async</code> — you can <code>await</code> database
+      The function can be <code>async</code>. You can <code>await</code> database
       queries, fetch calls, or any server-side work directly inside the page function.
       Return an <code>html\`...\`</code> tagged template literal (a <code>TemplateResult</code>)
       and webjs will render it to HTML on the server.
@@ -155,7 +155,7 @@ export default function DashboardLayout({ children }: { children: unknown }) {
       <code>&lt;!--wj:children:&lt;segment-path&gt;--&gt;</code> comment markers around each
       layout's <code>\${children}</code> interpolation. When a user clicks a link, the
       router picks the deepest layout the source and target pages share and swaps only
-      <em>its</em> children — the outer layouts' DOM (and any state inside them: sidenav
+      <em>its</em> children. The outer layouts' DOM (and any state inside them: sidenav
       scroll, input values, mounted custom elements) stays mounted. Authors write
       nothing extra; the marker emission is invisible.
     </p>
@@ -259,11 +259,11 @@ export default function FilesPage({ params }: { params: { path: string } }) {
 
     <pre>app/
 ├── _lib/
-│   ├── db.ts           # not a route — safe to import from pages
+│   ├── db.ts           # not a route, safe to import from pages
 │   └── auth.ts
 ├── _components/
 │   └── header.ts       # colocated components, not routed
-└── page.ts             # / — can import from _lib/ and _components/</pre>
+└── page.ts             # /, can import from _lib/ and _components/</pre>
 
     <!-- ===== API ROUTES ===== -->
     <h2>API Routes / Route Handlers (<code>route.ts</code>)</h2>
@@ -275,7 +275,7 @@ export default function FilesPage({ params }: { params: { path: string } }) {
     </p>
 
     <p>
-      Route handlers can live <strong>anywhere</strong> under <code>app/</code> — not
+      Route handlers can live <strong>anywhere</strong> under <code>app/</code>, not
       just inside <code>app/api/</code>. The <code>api/</code> prefix is a convention,
       not a requirement.
     </p>
@@ -338,7 +338,7 @@ import type { WebSocket } from 'ws';
 
 const clients = new Set&lt;WebSocket&gt;();
 
-// Regular HTTP handler — still works alongside WS
+// Regular HTTP handler, still works alongside WS
 export function GET() {
   return new Response(
     \`Connected clients: \${clients.size}\`,
@@ -346,7 +346,7 @@ export function GET() {
   );
 }
 
-// WebSocket handler — called on upgrade
+// WebSocket handler, called on upgrade
 export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;string, string&gt; }) {
   clients.add(ws);
 
@@ -396,7 +396,7 @@ export default function NotFound() {
 
     <p>
       If no <code>not-found.ts</code> exists, webjs renders a default
-      <code>&lt;h1&gt;404 — Not found&lt;/h1&gt;</code> page.
+      <code>&lt;h1&gt;404 Not Found&lt;/h1&gt;</code> page.
     </p>
 
     <!-- ===== ERROR BOUNDARIES ===== -->
@@ -405,11 +405,11 @@ export default function NotFound() {
       An <code>error.ts</code> file acts as an <strong>error boundary</strong>. When an
       uncaught error occurs during page rendering, webjs walks up the folder tree looking
       for the <strong>nearest</strong> <code>error.ts</code> and renders it instead. This
-      means error boundaries are nested — a deeply-placed <code>error.ts</code> catches
+      means error boundaries are nested. A deeply-placed <code>error.ts</code> catches
       errors for its subtree without affecting the rest of the site.
     </p>
 
-    <pre>// app/error.ts — root error boundary
+    <pre>// app/error.ts: root error boundary
 import { html } from '@webjskit/core';
 
 export default function ErrorBoundary({ error }: { error: unknown }) {
@@ -434,7 +434,7 @@ export default function ErrorBoundary({ error }: { error: unknown }) {
       The error boundary receives the context object (<code>params</code>,
       <code>searchParams</code>, <code>url</code>) along with the <code>error</code>
       property. Errors from <code>notFound()</code> and <code>redirect()</code> are
-      <strong>not</strong> caught by error boundaries — those are handled specially by the
+      <strong>not</strong> caught by error boundaries. Those are handled specially by the
       framework.
     </p>
 
@@ -451,7 +451,7 @@ export default function ErrorBoundary({ error }: { error: unknown }) {
 import { html } from '@webjskit/core';
 
 export const metadata = {
-  title: 'About — My App',
+  title: 'About | My App',
   description: 'Learn more about our company.',
   openGraph: {
     title: 'About Us',
@@ -474,8 +474,8 @@ import { html } from '@webjskit/core';
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await db.posts.findBySlug(params.slug);
   return post
-    ? { title: \`\${post.title} — My Blog\` }
-    : { title: 'Not found — My Blog' };
+    ? { title: \`\${post.title} | My Blog\` }
+    : { title: 'Not found | My Blog' };
 }
 
 export default async function PostPage({ params }: { params: { slug: string } }) {
@@ -489,18 +489,18 @@ export default async function PostPage({ params }: { params: { slug: string } })
       its layout's metadata. Supported fields include:
     </p>
     <ul>
-      <li><code>title</code> — sets <code>&lt;title&gt;</code></li>
-      <li><code>description</code> — sets <code>&lt;meta name="description"&gt;</code></li>
-      <li><code>viewport</code> — sets <code>&lt;meta name="viewport"&gt;</code> (defaults to <code>width=device-width,initial-scale=1</code>)</li>
-      <li><code>themeColor</code> — sets <code>&lt;meta name="theme-color"&gt;</code></li>
-      <li><code>openGraph</code> — an object of Open Graph properties (keys become <code>og:key</code>)</li>
-      <li><code>preload</code> — an array of <code>&lt;link rel="preload"&gt;</code> entries (e.g. fonts, images)</li>
+      <li><code>title</code>: sets <code>&lt;title&gt;</code></li>
+      <li><code>description</code>: sets <code>&lt;meta name="description"&gt;</code></li>
+      <li><code>viewport</code>: sets <code>&lt;meta name="viewport"&gt;</code> (defaults to <code>width=device-width,initial-scale=1</code>)</li>
+      <li><code>themeColor</code>: sets <code>&lt;meta name="theme-color"&gt;</code></li>
+      <li><code>openGraph</code>: an object of Open Graph properties (keys become <code>og:key</code>)</li>
+      <li><code>preload</code>: an array of <code>&lt;link rel="preload"&gt;</code> entries (e.g. fonts, images)</li>
     </ul>
 
     <!-- ===== NAVIGATION HELPERS ===== -->
     <h2>Navigation Helpers</h2>
     <p>
-      webjs exports four navigation primitives from <code>'@webjskit/core'</code> —
+      webjs exports four navigation primitives from <code>'@webjskit/core'</code> -
       two for the server (sentinel-throw helpers) and two for the client (programmatic
       nav + cache invalidation).
     </p>
@@ -537,7 +537,7 @@ export default async function ProtectedPage() {
 
     <p>
       Both server helpers can be called from pages, layouts, and
-      <code>generateMetadata</code> functions — anywhere in the server-side rendering
+      <code>generateMetadata</code> functions, anywhere in the server-side rendering
       chain.
     </p>
 
@@ -557,7 +557,7 @@ await navigate('/login', { replace: true });</pre>
       a JS-initiated server-action mutation so the next visit to that URL refetches
       instead of restoring stale data. Omit the argument to clear the whole cache.
       Form submissions through the router clear the cache automatically on mutating
-      methods — you only need <code>revalidate()</code> for mutations that bypass the
+      methods. You only need <code>revalidate()</code> for mutations that bypass the
       form pipeline.
     </p>
     <pre>import { revalidate } from '@webjskit/core';
@@ -572,7 +572,7 @@ revalidate();                 // clear the whole cache</pre>
       UI that will be shown while the page's async content is being resolved.
     </p>
 
-    <pre>// app/dashboard/loading.ts  (reserved — future Suspense integration)
+    <pre>// app/dashboard/loading.ts  (reserved for future Suspense integration)
 import { html } from '@webjskit/core';
 
 export default function Loading() {
@@ -587,7 +587,7 @@ export default function Loading() {
     <p>
       webjs automatically wraps the sibling page in a Suspense boundary with the
       loading content as the fallback. The page content streams in when ready,
-      replacing the loading UI — no manual <code>Suspense()</code> call required.
+      replacing the loading UI. No manual <code>Suspense()</code> call required.
     </p>
     <p>
       On client-side navigation, the same <code>loading.ts</code> is also cloned into
@@ -603,10 +603,10 @@ export default function Loading() {
     <h2>Route Resolution Order</h2>
     <p>When a request arrives, webjs resolves it in this order:</p>
     <ul>
-      <li><strong>1. Static file</strong> — if a file exists in the project's public/static directory, it is served directly.</li>
-      <li><strong>2. API route</strong> — <code>route.ts</code> handlers are matched against the URL. WebSocket upgrades also match here.</li>
-      <li><strong>3. Page route</strong> — <code>page.ts</code> files are matched. Static routes take priority over dynamic, and dynamic over catch-all.</li>
-      <li><strong>4. Not found</strong> — if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>
+      <li><strong>1. Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
+      <li><strong>2. API route</strong>: <code>route.ts</code> handlers are matched against the URL. WebSocket upgrades also match here.</li>
+      <li><strong>3. Page route</strong>: <code>page.ts</code> files are matched. Static routes take priority over dynamic, and dynamic over catch-all.</li>
+      <li><strong>4. Not found</strong>: if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>
     </ul>
 
     <h2>Quick Reference</h2>

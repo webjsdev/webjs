@@ -1,4 +1,4 @@
-# Metadata API — full field reference
+# Metadata API: full field reference
 
 Page modules export `metadata` (static) or `generateMetadata(ctx)`
 (request-scoped). Values flow into `<head>` at SSR time and merge across
@@ -8,9 +8,9 @@ nested layouts (deeper wins). Surface is Next.js-compatible.
 export const metadata = {
   // ----- Identity -----
   title: 'Blog post title',                          // → <title>
-  // OR { template, default, absolute } — template propagates from
-  // outer layouts; deeper plain-string titles get wrapped via "%s".
-  // title: { template: '%s — webjs', default: 'webjs', absolute: 'standalone title' },
+  // OR { template, default, absolute }. The template propagates from
+  // outer layouts, and deeper plain-string titles get wrapped via "%s".
+  // title: { template: '%s | webjs', default: 'webjs', absolute: 'standalone title' },
   description: 'Short summary',                      // → <meta name="description">
   keywords: ['ai', 'web components'],                // → <meta name="keywords"> (or single string)
   authors: [{ name: 'Vivek', url: 'https://...' }],  // → <meta name="author"> (+ optional <link rel="author">)
@@ -29,7 +29,7 @@ export const metadata = {
   // ----- Viewport / theme -----
   viewport: 'width=device-width,initial-scale=1',    // string OR object
   // viewport: { width: 'device-width', initialScale: 1, maximumScale: 5, userScalable: true },
-  // (or split-export: `export const viewport = { … }` — Next.js 14+ style)
+  // (or split-export: `export const viewport = { … }`, the Next.js 14+ style)
   themeColor: '#1c1613',                             // → <meta name="theme-color">
   colorScheme: 'light dark',                         // → <meta name="color-scheme">
 
@@ -117,7 +117,7 @@ export const metadata = {
 ```ts
 export function generateMetadata(ctx: { url: string; params: Record<string,string> }) {
   return {
-    title: `Post — ${ctx.params.slug}`,
+    title: `Post: ${ctx.params.slug}`,
     metadataBase: new URL(ctx.url).origin,
   };
 }
@@ -140,4 +140,4 @@ export const viewport = {
 ## Special: `cacheControl`
 
 Emitted as a **response header**, not a `<meta>` tag. Pages default to
-`no-store` for safety; opt into caching by setting this explicitly.
+`no-store` for safety. Opt into caching by setting this explicitly.

@@ -4,7 +4,7 @@
  * The 6 non-neutral themes are synthesized on demand by the website composer
  * (no committed JSON, no build step). This test pins the data shape +
  * merger semantics so a regression there doesn't silently ship broken themes
- * — the failure mode otherwise is `webjsui init --base-color stone` writing
+ * - the failure mode otherwise is `webjsui init --base-color stone` writing
  * neutral CSS, which is hard to spot.
  */
 import { test } from 'node:test';

@@ -1,5 +1,5 @@
 /**
- * Utilities used by routes inside app/. Lives under _utils/ — any folder
+ * Utilities used by routes inside app/. Lives under _utils/: any folder
  * whose name starts with `_` is private: the router ignores it completely,
  * so this file cannot accidentally become a route.
  */

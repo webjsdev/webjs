@@ -1,6 +1,6 @@
 /**
  * Coverage for render-server.js paths not exercised by the existing
- * renderToString tests — renderToStream, streamRender/streamTemplate
+ * renderToString tests: renderToStream, streamRender/streamTemplate
  * state machine, repeat() in SSR, Suspense in SSR both with and
  * without ctx.
  */
@@ -218,7 +218,7 @@ test('renderToStream: unquoted attribute with hole renders as quoted attr', asyn
   assert.match(out, /value="hi"/);
 });
 
-test('renderToStream: boolean attr (?disabled) — true emits attribute, false omits', async () => {
+test('renderToStream: boolean attr (?disabled): true emits attribute, false omits', async () => {
   const on = await streamText(renderToStream(
     html`<button ?disabled=${true}>x</button>`, { ssr: false }));
   assert.match(on, /<button\s+disabled=""\s*>/);

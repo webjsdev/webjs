@@ -1,5 +1,5 @@
 /**
- * AlertDialog — modal requiring explicit Cancel / Action confirmation.
+ * AlertDialog, modal requiring explicit Cancel / Action confirmation.
  * Variant of Dialog: role="alertdialog", no Escape-to-close, no
  * overlay-click-to-close. Built on the native <dialog> element.
  *
@@ -7,11 +7,11 @@
  *
  * The custom element wraps <ui-alert-dialog-content> inside a native
  * <dialog> on connection and calls showModal() to open. Native Escape
- * behavior is cancelled via the dialog's `cancel` event — the user
+ * behavior is cancelled via the dialog's `cancel` event, the user
  * MUST choose Cancel or Action. No click-to-close on the backdrop
  * (matches shadcn).
  *
- * The previous version's hand-rolled focus management is gone — the
+ * The previous version's hand-rolled focus management is gone, the
  * native <dialog>'s focus trap and focus-restore behavior cover it.
  *
  * shadcn parity:
@@ -124,7 +124,7 @@ export class UiAlertDialog extends Base {
   // Cancel the native Escape-to-close. The browser fires a `cancel` event
   // when the user presses Escape on an open dialog; preventDefault stops
   // the subsequent close. No click-to-close on the backdrop either (intentional
-  // omission — alert dialogs require an explicit Cancel/Action choice).
+  // omission, alert dialogs require an explicit Cancel/Action choice).
   private _onNativeCancel = (e: Event): void => e.preventDefault();
   private _onNativeClose = (): void => {
     if (this.isOpen) this.removeAttribute('open');

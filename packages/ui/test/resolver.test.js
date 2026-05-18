@@ -19,7 +19,7 @@ function stubFetch() {
 }
 function restoreFetch() { globalThis.fetch = origFetch; }
 
-test('resolveTree — resolves transitive registry deps in install order', async () => {
+test('resolveTree: resolves transitive registry deps in install order', async () => {
   stubFetch();
   try {
     const tree = await resolveTree(['dialog'], 'http://test/r');
@@ -27,7 +27,7 @@ test('resolveTree — resolves transitive registry deps in install order', async
   } finally { restoreFetch(); }
 });
 
-test('resolveTree — dedupes shared deps', async () => {
+test('resolveTree: dedupes shared deps', async () => {
   stubFetch();
   try {
     const tree = await resolveTree(['button', 'dialog'], 'http://test/r');
@@ -37,7 +37,7 @@ test('resolveTree — dedupes shared deps', async () => {
   } finally { restoreFetch(); }
 });
 
-test('collectNpmDeps — flattens and dedupes', async () => {
+test('collectNpmDeps: flattens and dedupes', async () => {
   stubFetch();
   try {
     const tree = await resolveTree(['dialog', 'popover'], 'http://test/r');

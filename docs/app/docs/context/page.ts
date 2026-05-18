@@ -1,32 +1,32 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Context Protocol — webjs' };
+export const metadata = { title: 'Context Protocol | webjs' };
 
 export default function Context() {
   return html`
     <h1>Context Protocol</h1>
-    <p>The context protocol lets you share data across deeply nested components without threading attributes through every intermediate element. It uses DOM events under the hood, which means it works across shadow DOM boundaries — a provider at the top of the tree can reach consumers buried many levels deep.</p>
+    <p>The context protocol lets you share data across deeply nested components without threading attributes through every intermediate element. It uses DOM events under the hood, which means it works across shadow DOM boundaries, so a provider at the top of the tree can reach consumers buried many levels deep.</p>
 
     <pre>import { createContext, ContextProvider, ContextConsumer } from '@webjskit/core/context';</pre>
 
     <h2>When to Use Context</h2>
     <p>Context is the right tool when:</p>
     <ul>
-      <li><strong>Theme / dark mode</strong> — a setting at the app root that dozens of components read.</li>
-      <li><strong>Auth state</strong> — the current user object needed by nav bars, comment forms, profile widgets, etc.</li>
-      <li><strong>Locale / i18n</strong> — language preference that affects every text-rendering component.</li>
-      <li><strong>Feature flags</strong> — runtime configuration that controls conditional rendering deep in the tree.</li>
+      <li><strong>Theme / dark mode</strong>: a setting at the app root that dozens of components read.</li>
+      <li><strong>Auth state</strong>: the current user object needed by nav bars, comment forms, profile widgets, etc.</li>
+      <li><strong>Locale / i18n</strong>: language preference that affects every text-rendering component.</li>
+      <li><strong>Feature flags</strong>: runtime configuration that controls conditional rendering deep in the tree.</li>
     </ul>
 
     <p>Context is <strong>not</strong> the right tool when:</p>
     <ul>
-      <li>Data changes on every render — use component state instead.</li>
-      <li>Only one component needs the data — pass it as an attribute or property.</li>
-      <li>Data is page-level — use an async page function to fetch it on the server.</li>
+      <li>Data changes on every render. Use component state instead.</li>
+      <li>Only one component needs the data. Pass it as an attribute or property.</li>
+      <li>Data is page-level. Use an async page function to fetch it on the server.</li>
     </ul>
 
     <h2>Creating a Context</h2>
-    <p><code>createContext(name)</code> returns a unique context key. The name is for debugging — uniqueness comes from the object identity.</p>
+    <p><code>createContext(name)</code> returns a unique context key. The name is for debugging, while uniqueness comes from the object identity.</p>
 
     <pre>// contexts/theme.ts (or .js)
 import { createContext } from '@webjskit/core/context';
@@ -139,7 +139,7 @@ ThemedCard.register('themed-card');</pre>
       <li>If <code>subscribe: false</code>, the provider responds with the current value and the event stops.</li>
     </ol>
 
-    <p>This means context works with any DOM tree structure — including components from different libraries — as long as they follow the same context protocol. There is no framework-specific wiring.</p>
+    <p>This means context works with any DOM tree structure (including components from different libraries) as long as they follow the same context protocol. There is no framework-specific wiring.</p>
 
     <h2>Multiple Contexts</h2>
     <p>A single component can provide or consume multiple contexts:</p>
@@ -190,7 +190,7 @@ AppRoot.register('app-root');</pre>
   &lt;/dark-section&gt;
 &lt;/app-root&gt;</pre>
 
-    <p>This mirrors how CSS custom properties cascade — inner values shadow outer ones.</p>
+    <p>This mirrors how CSS custom properties cascade. Inner values shadow outer ones.</p>
 
     <h2>Full Example: Auth Context</h2>
     <p>A complete provider + consumer pair for authentication state:</p>
@@ -251,9 +251,9 @@ UserMenu.register('user-menu');</pre>
 
     <h2>Next Steps</h2>
     <ul>
-      <li><a href="/docs/controllers">Reactive Controllers</a> — the general pattern that ContextProvider and ContextConsumer are built on</li>
-      <li><a href="/docs/task">Task Controller</a> — async data fetching with loading/error states</li>
-      <li><a href="/docs/components">Components</a> — the full component API</li>
+      <li><a href="/docs/controllers">Reactive Controllers</a>: the general pattern that ContextProvider and ContextConsumer are built on</li>
+      <li><a href="/docs/task">Task Controller</a>: async data fetching with loading/error states</li>
+      <li><a href="/docs/components">Components</a>: the full component API</li>
     </ul>
   `;
 }

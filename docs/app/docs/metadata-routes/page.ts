@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Metadata Routes — webjs' };
+export const metadata = { title: 'Metadata Routes | webjs' };
 
 export default function MetadataRoutes() {
   return html`
@@ -16,7 +16,7 @@ export default function MetadataRoutes() {
 
     <h2>When NOT to use</h2>
     <ul>
-      <li>For static files that never change — put them in <code>public/</code> instead (e.g. <code>public/favicon.ico</code>).</li>
+      <li>For static files that never change. Put them in <code>public/</code> instead (e.g. <code>public/favicon.ico</code>).</li>
     </ul>
 
     <h2>Supported files</h2>
@@ -76,7 +76,7 @@ export default function manifest() {
 
     <pre>// app/blog/[slug]/page.ts
 export const metadata = {
-  title: 'My Post — Blog',
+  title: 'My Post | Blog',
   description: 'A post about webjs',
   openGraph: { title: 'My Post', type: 'article' },
 };</pre>
@@ -85,15 +85,15 @@ export const metadata = {
 
     <h2>Constraints</h2>
     <ul>
-      <li>Metadata route files must live at the root or in static segments — not inside <code>[dynamic]</code> folders.</li>
+      <li>Metadata route files must live at the root or in static segments, not inside <code>[dynamic]</code> folders.</li>
       <li>They are scanned at server startup, not on every request.</li>
     </ul>
 
     <h2>Next steps</h2>
     <ul>
-      <li><a href="/docs/routing">Routing</a> — file conventions for pages and layouts</li>
-      <li><a href="/docs/ssr">Server-Side Rendering</a> — how metadata is injected into HTML</li>
-      <li><a href="/docs/deployment">Deployment</a> — serving metadata in production</li>
+      <li><a href="/docs/routing">Routing</a>: file conventions for pages and layouts</li>
+      <li><a href="/docs/ssr">Server-Side Rendering</a>: how metadata is injected into HTML</li>
+      <li><a href="/docs/deployment">Deployment</a>: serving metadata in production</li>
     </ul>
   `;
 }

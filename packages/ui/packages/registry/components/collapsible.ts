@@ -1,9 +1,9 @@
 /**
- * Collapsible — togglable content panel built on native <details>/<summary>.
+ * Collapsible, togglable content panel built on native <details>/<summary>.
  *
  * Tier-1 component (no custom element). The browser handles open/close
  * state, keyboard activation (Enter/Space on <summary>), focus management,
- * and disclosure-widget accessibility — nothing for us to ship in JS.
+ * and disclosure-widget accessibility, nothing for us to ship in JS.
  *
  * shadcn parity:
  *   Collapsible         → <details class=${collapsibleClass()}>

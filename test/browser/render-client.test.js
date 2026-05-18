@@ -1,5 +1,5 @@
 /**
- * Client-side renderer tests — runs in a REAL browser via WTR + Playwright.
+ * Client-side renderer tests: runs in a REAL browser via WTR + Playwright.
  * No fake DOM (linkedom/jsdom). Full Shadow DOM, events, and layout support.
  */
 import { html } from '../../packages/core/src/html.js';

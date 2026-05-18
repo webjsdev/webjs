@@ -1,5 +1,5 @@
 /**
- * Table — semantic table with shadcn styling. Pure class helpers; use with
+ * Table: semantic table with shadcn styling. Pure class helpers; use with
  * native `<table>`, `<thead>`, `<tbody>`, `<tfoot>`, `<tr>`, `<th>`, `<td>`,
  * `<caption>`. Native semantics + accessibility tree work out of the box.
  *

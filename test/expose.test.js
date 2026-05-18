@@ -85,7 +85,7 @@ test('action scanner discovers expose()d routes and invokes them over HTTP', asy
     assert.equal(addRes.status, 200);
     assert.equal(await addRes.json(), 5);
 
-    // GET /api/value/42 — path param converted to string
+    // GET /api/value/42: path param converted to string
     const get = matchExposedAction(idx, 'GET', '/api/value/42');
     assert.ok(get);
     assert.deepEqual(get.params, { id: '42' });

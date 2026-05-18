@@ -1,5 +1,5 @@
 /**
- * handleApi() dispatcher tests — exercises every branch of
+ * handleApi() dispatcher tests: exercises every branch of
  * packages/server/src/api.js (method dispatch, 405 with allow header,
  * plain-object → Response.json shortcut, params injection, dev cache bust).
  *

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { TaskStatus, Task } from '../packages/core/src/task.js';
 
 // ---------------------------------------------------------------------------
-// Helpers — mock host
+// Helpers: mock host
 // ---------------------------------------------------------------------------
 
 function createMockHost() {
@@ -31,7 +31,7 @@ test('TaskStatus: has correct enum values', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Task — lifecycle
+// Task: lifecycle
 // ---------------------------------------------------------------------------
 
 test('Task: starts in INITIAL state', () => {
@@ -256,18 +256,18 @@ test('Task: auto-run triggers when args change on beforeRender', async () => {
     autoRun: true,
   });
 
-  // First beforeRender — prevArgs is null so it always runs.
+  // First beforeRender: prevArgs is null so it always runs.
   task.beforeRender();
   // run() is async, give it a tick to settle.
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(runCount, 1);
 
-  // Same args — should not re-run.
+  // Same args: should not re-run.
   task.beforeRender();
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(runCount, 1);
 
-  // Changed args — should re-run.
+  // Changed args: should re-run.
   currentQuery = 'bar';
   task.beforeRender();
   await new Promise((r) => setTimeout(r, 10));

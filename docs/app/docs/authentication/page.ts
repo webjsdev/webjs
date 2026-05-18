@@ -1,32 +1,32 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Authentication — webjs' };
+export const metadata = { title: 'Authentication | webjs' };
 
 export default function Authentication() {
   return html`
     <h1>Authentication</h1>
-    <p>webjs doesn't ship an auth library — it provides the primitives you need to build session-based authentication cleanly. The blog example demonstrates a complete implementation using scrypt password hashing, session tokens in cookies, and middleware-based route protection.</p>
+    <p>webjs doesn't ship an auth library. It provides the primitives you need to build session-based authentication cleanly. The blog example demonstrates a complete implementation using scrypt password hashing, session tokens in cookies, and middleware-based route protection.</p>
 
     <h2>Architecture</h2>
     <pre>lib/
-  password.ts   — hashPassword() / verifyPassword() via scrypt
-  session.ts    — createSession() / destroySession() / getUserByToken()
-                  + cookie header helpers
+  password.ts   : hashPassword() / verifyPassword() via scrypt
+  session.ts    : createSession() / destroySession() / getUserByToken()
+                  plus cookie header helpers
 modules/auth/
   actions/
-    signup.server.ts   — register + create session
-    login.server.ts    — verify credentials + create session
-    logout.server.ts   — destroy session
+    signup.server.ts   : register and create session
+    login.server.ts    : verify credentials and create session
+    logout.server.ts   : destroy session
   queries/
-    current-user.server.ts  — read user from request cookies
+    current-user.server.ts  : read user from request cookies
 app/
   api/auth/
-    signup/route.ts    — POST handler, sets Set-Cookie
-    login/route.ts     — POST handler, sets Set-Cookie
-    logout/route.ts    — POST handler, clears cookie
-    middleware.ts      — rate limit on auth endpoints
+    signup/route.ts    : POST handler, sets Set-Cookie
+    login/route.ts     : POST handler, sets Set-Cookie
+    logout/route.ts    : POST handler, clears cookie
+    middleware.ts      : rate limit on auth endpoints
   dashboard/
-    middleware.ts      — require auth, redirect to /login</pre>
+    middleware.ts      : require auth, redirect to /login</pre>
 
     <h2>Password Hashing</h2>
     <pre>// lib/password.ts
@@ -78,7 +78,7 @@ export async function currentUser() {
   const token = cookies().get(SESSION_COOKIE);
   return getUserByToken(token);
 }</pre>
-    <p>The <code>cookies()</code> helper from <code>@webjskit/server</code> reads the in-flight Request via AsyncLocalStorage — no parameter passing needed.</p>
+    <p>The <code>cookies()</code> helper from <code>@webjskit/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed.</p>
 
     <h2>Route Protection via Middleware</h2>
     <pre>// app/dashboard/middleware.ts
@@ -110,7 +110,7 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
 
     <h2>CSRF Protection</h2>
     <p>Server actions (called via the auto-generated RPC stub) are automatically CSRF-protected with a double-submit cookie. The SSR response sets a <code>webjs_csrf</code> cookie, and the stub echoes it in an <code>x-webjs-csrf</code> header. Mismatch → 403.</p>
-    <p>API routes (<code>route.ts</code>) are NOT automatically CSRF-protected — they're intended for external consumers. If you need CSRF on a route handler, check the cookie/header manually in middleware.</p>
+    <p>API routes (<code>route.ts</code>) are NOT automatically CSRF-protected, since they're intended for external consumers. If you need CSRF on a route handler, check the cookie/header manually in middleware.</p>
 
     <h2>Login Form Component</h2>
     <p>The blog's <code>&lt;auth-forms&gt;</code> component demonstrates a tabbed login/signup form that POSTs to the API routes, receives a Set-Cookie session header, and redirects to the dashboard. See <code>modules/auth/components/auth-forms.ts</code> in the blog example for the complete implementation.</p>

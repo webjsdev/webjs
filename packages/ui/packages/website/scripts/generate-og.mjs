@@ -10,7 +10,7 @@
  * Run with:
  *   node scripts/generate-og.mjs
  *
- * Requires `rsvg-convert` on PATH (librsvg) — installed system-wide on
+ * Requires `rsvg-convert` on PATH (librsvg): installed system-wide on
  * the dev machine. Produces:
  *   public/og.svg   (vector source, committed for diff-friendly edits)
  *   public/og.png   (1200x630, committed and referenced from layout.ts)
@@ -82,14 +82,14 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <text x="64" y="478">Zero third-party deps. Copy-paste source. Works anywhere.</text>
   </g>
 
-  <!-- Rubric (small, mono, uppercase, tracked-out) — bottom-left -->
+  <!-- Rubric (small, mono, uppercase, tracked-out): bottom-left -->
   <g font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
      font-weight="600" letter-spacing="2">
     <text x="64" y="568" fill="${ACCENT}">●</text>
     <text x="86" y="568" fill="${FG_MUTED}">COMPOSITION-FIRST  ·  NATIVE SEMANTICS  ·  ZERO DEPS</text>
   </g>
 
-  <!-- Domain badge — bottom-right -->
+  <!-- Domain badge: bottom-right -->
   <text x="${W - 64}" y="568" text-anchor="end"
         font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
         font-weight="600" letter-spacing="2" fill="${FG_SUBTLE}">UI.WEBJS.DEV</text>
@@ -102,7 +102,7 @@ writeFileSync(svgPath, svg);
 
 // Convert SVG → PNG at native 1200x630. rsvg-convert respects font fallbacks
 // declared in the SVG (Liberation Serif, Liberation Sans, JetBrains Mono
-// Nerd Font) — all guaranteed on the dev machine via fontconfig.
+// Nerd Font): all guaranteed on the dev machine via fontconfig.
 execFileSync('rsvg-convert', ['-w', String(W), '-h', String(H), svgPath, '-o', pngPath]);
 console.log(`Wrote ${svgPath}`);
 console.log(`Wrote ${pngPath} (${W}x${H})`);

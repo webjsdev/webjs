@@ -16,12 +16,12 @@ import {
 } from '../../components/ui/alert.ts';
 import { inputClass } from '../../components/ui/input.ts';
 import { labelClass } from '../../components/ui/label.ts';
-// Tier-2 components are real custom elements — register by side-effect import.
+// Tier-2 components are real custom elements: register by side-effect import.
 import '../../components/ui/dialog.ts';
 
 export const metadata = {
   title: 'UI Demo · webjs',
-  description: 'A showcase of the Webjs UI two-tier composition — class helpers on native elements + custom elements where state matters.',
+  description: 'A showcase of the Webjs UI two-tier composition: class helpers on native elements + custom elements where state matters.',
 };
 
 export default function UiDemo() {
@@ -37,7 +37,7 @@ export default function UiDemo() {
         custom elements for state the browser doesn't give you natively.
       </p>
 
-      <h2 class="text-2xl font-semibold mb-4">Tier 1 — class helpers on native elements</h2>
+      <h2 class="text-2xl font-semibold mb-4">Tier 1: class helpers on native elements</h2>
 
       <div class=${cardClass()}>
         <div class=${cardHeaderClass()}>
@@ -61,7 +61,7 @@ export default function UiDemo() {
         </div>
       </div>
 
-      <h2 class="text-2xl font-semibold mt-12 mb-4">Tier 2 — stateful custom elements</h2>
+      <h2 class="text-2xl font-semibold mt-12 mb-4">Tier 2: stateful custom elements</h2>
 
       <ui-dialog>
         <ui-dialog-trigger>
@@ -86,7 +86,7 @@ export default function UiDemo() {
       </ui-dialog>
 
       <p class="mt-12 text-sm text-fg-subtle">
-        Tier-1 helpers compile to plain Tailwind class strings at SSR time —
+        Tier-1 helpers compile to plain Tailwind class strings at SSR time -
         no client-side runtime. Tier-2 elements register with
         <code class="font-mono text-xs">customElements.define</code> and
         decorate their host (no shadow DOM by default), so Tailwind utilities

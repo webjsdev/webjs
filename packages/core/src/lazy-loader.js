@@ -6,7 +6,7 @@
  * deferred and the module is only fetched when the element enters the
  * viewport (or is within a generous margin of it).
  *
- * Usage (automatic — the SSR pipeline sets this up):
+ * Usage (automatic: the SSR pipeline sets this up):
  *
  *   <script type="module">
  *     import { observeLazy } from '@webjskit/core/lazy-loader';
@@ -60,7 +60,7 @@ export function observeLazy(entries) {
   }
 
   if (typeof IntersectionObserver === 'undefined') {
-    // No IO support — load everything immediately (SSR-only / old browser).
+    // No IO support: load everything immediately (SSR-only / old browser).
     for (const url of pending.values()) loadModule(url);
     pending.clear();
     return;
@@ -68,7 +68,7 @@ export function observeLazy(entries) {
 
   if (!observer) {
     observer = new IntersectionObserver(onIntersect, {
-      // Load when within 200px of the viewport — gives the module time
+      // Load when within 200px of the viewport: gives the module time
       // to fetch before the element is fully visible.
       rootMargin: '200px',
     });

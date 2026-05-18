@@ -1,11 +1,11 @@
-/* Tailwind CSS v4 input file — compiled to public/tailwind.css by the
+/* Tailwind CSS v4 input file - compiled to public/tailwind.css by the
  * `css:watch` / `css:build` npm scripts. Authors shouldn't edit
  * public/tailwind.css directly; it's generated and gitignored. */
 @import "tailwindcss";
 
 /* Scan the new shadcn-style component sources so their utility classes
  * make it into the generated bundle. (Tailwind v4 already scans the
- * project tree by default — this @source is belt-and-braces.) */
+ * project tree by default - this @source is belt-and-braces.) */
 @source "../components/ui/*.ts";
 
 /* @theme maps our design-token CSS custom properties (defined on
@@ -37,13 +37,13 @@
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
 
-  /* Fluid type scale — used via text-display, text-h1, text-h2, text-lede. */
+  /* Fluid type scale - used via text-display, text-h1, text-h2, text-lede. */
   --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
   --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
   --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
   --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.2rem);
 
-  /* Custom motion durations — used via duration-fast / duration-slow. */
+  /* Custom motion durations - used via duration-fast / duration-slow. */
   --duration-fast: 140ms;
   --duration-slow: 380ms;
 }

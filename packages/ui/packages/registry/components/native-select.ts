@@ -1,5 +1,5 @@
 /**
- * NativeSelect — styled native `<select>`. Uses `appearance: none` to hide
+ * NativeSelect: styled native `<select>`. Uses `appearance: none` to hide
  * the platform-native dropdown chevron and overlays an SVG chevron on top.
  * Best mobile UX (native picker), full keyboard support, form submission
  * works natively. No JS.
@@ -16,7 +16,7 @@
  *     <svg class="${nativeSelectIconClass()}" aria-hidden="true">…</svg>
  *   </div>
  *
- * Bare <option> elements paint correctly out of the box — importing
+ * Bare <option> elements paint correctly out of the box: importing
  * this module installs a stylesheet that forces Canvas/CanvasText on
  * every <option> inside the wrapper, so the dropdown reads in both
  * light and dark themes regardless of OS preference. The class-helper
@@ -35,7 +35,7 @@ export type NativeSelectSize = 'default' | 'sm';
 // the browser-popup background; in dark mode (when color-scheme: dark
 // is set on <html>) Chrome's popup is dark, the option's transparent
 // bg lets the popup colour through, and the inherited text colour
-// from the <select> matches that dark popup — the option disappears,
+// from the <select> matches that dark popup: the option disappears,
 // only the focused/selected one stays visible because the browser
 // overlays its own highlight on it.
 //
@@ -43,7 +43,7 @@ export type NativeSelectSize = 'default' | 'sm';
 // `.group/native-select` wrapper, on the assumption every user would
 // follow the documented Usage block above. But it's easy to write a
 // bare <select class=${nativeSelectClass()}> without the wrapper
-// (legitimate when you don't need the chevron icon — the popover and
+// (legitimate when you don't need the chevron icon: the popover and
 // hover-card docs examples both do this), in which case the rule
 // never matched and the dropdown reverted to invisible-options.
 // Broadening to `select option, select optgroup` makes the fix work
@@ -59,7 +59,7 @@ export type NativeSelectSize = 'default' | 'sm';
 // `nativeSelectOptionClass()` and `nativeSelectOptGroupClass()` stay
 // exported for users who want to opt into the same colours via the
 // class helper instead of the global rule. They emit the same
-// `bg-[Canvas] text-[CanvasText]` Tailwind utilities — redundant if
+// `bg-[Canvas] text-[CanvasText]` Tailwind utilities: redundant if
 // this stylesheet is installed, but harmless and matches the broader
 // shadcn convention of "every part has a class helper".
 const STYLES = `
@@ -100,6 +100,6 @@ export function nativeSelectClass(): string {
 export const nativeSelectIconClass = (): string =>
   'pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground opacity-50 select-none';
 
-/** Option / optgroup styling — forces themed background even in dark mode. */
+/** Option / optgroup styling: forces themed background even in dark mode. */
 export const nativeSelectOptionClass = (): string => 'bg-[Canvas] text-[CanvasText]';
 export const nativeSelectOptGroupClass = (): string => 'bg-[Canvas] text-[CanvasText]';

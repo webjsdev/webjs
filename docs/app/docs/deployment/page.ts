@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Deployment — webjs' };
+export const metadata = { title: 'Deployment | webjs' };
 
 export default function Deployment() {
   return html`
@@ -9,10 +9,10 @@ export default function Deployment() {
 
     <h2>Dev vs Prod</h2>
     <p>webjs has two modes, controlled by the CLI command:</p>
-    <pre># Development — live reload, no compression, no caching, verbose errors
+    <pre># Development: live reload, no compression, no caching, verbose errors
 webjs dev [--port 3000]
 
-# Production — compression, ETags, cache headers, graceful shutdown
+# Production: compression, ETags, cache headers, graceful shutdown
 webjs start [--port 3000]</pre>
     <p>Key differences:</p>
     <ul>
@@ -23,14 +23,14 @@ webjs start [--port 3000]</pre>
     <h2>No build step</h2>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
       <p style="margin:0 0 .5rem;font-weight:600">Recommended for production: HTTP/2 at the edge</p>
-      <p style="margin:0">webjs's no-build, per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free</strong> — Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM / single-server deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1 — TLS termination is the proxy's responsibility, not the framework's.</p>
+      <p style="margin:0">webjs's no-build, per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM / single-server deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1, so TLS termination is the proxy's responsibility, not the framework's.</p>
     </div>
-    <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code> — there is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
+    <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code>. There is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
     <ul>
       <li>The browser fetches each module via the import graph, resolved through an <code>&lt;script type="importmap"&gt;</code> emitted in the document head.</li>
-      <li>For every page render, the SSR pipeline emits <code>&lt;link rel="modulepreload"&gt;</code> hints for the components on that page plus their transitive dependencies — the browser fetches them in parallel instead of waterfall-ing through nested imports.</li>
-      <li>HTTP/2 multiplex at the edge makes per-file serving as fast as (or faster than) bundling. <code>webjs start</code> speaks plain HTTP/1.1 to its upstream; let a reverse proxy (PaaS edge, nginx, Caddy, Traefik) terminate HTTP/2 to the browser.</li>
-      <li>Bare-specifier imports (<code>from "react"</code>) are auto-bundled per-package at server startup and served at <code>/__webjs/vendor/&lt;pkg&gt;.js</code> — these are immutable URLs that cache aggressively.</li>
+      <li>For every page render, the SSR pipeline emits <code>&lt;link rel="modulepreload"&gt;</code> hints for the components on that page plus their transitive dependencies, so the browser fetches them in parallel instead of waterfall-ing through nested imports.</li>
+      <li>HTTP/2 multiplex at the edge makes per-file serving as fast as (or faster than) bundling. <code>webjs start</code> speaks plain HTTP/1.1 to its upstream. Let a reverse proxy (PaaS edge, nginx, Caddy, Traefik) terminate HTTP/2 to the browser.</li>
+      <li>Bare-specifier imports (<code>from "react"</code>) are auto-bundled per-package at server startup and served at <code>/__webjs/vendor/&lt;pkg&gt;.js</code>. These are immutable URLs that cache aggressively.</li>
       <li>TypeScript files are transformed by esbuild on first request and cached by mtime. Same loader in dev and prod.</li>
     </ul>
     <p>Granular cache invalidation is a real benefit: edit one component, only that file's content hash changes, only that one re-downloads on the user's next visit. A bundler would invalidate the entire bundle on any change.</p>
@@ -72,17 +72,17 @@ readinessProbe:
   initialDelaySeconds: 3
   periodSeconds: 5</pre>
 
-    <h2>HTTP/2 — at the edge, not in webjs</h2>
-    <p>webjs delegates TLS termination + HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1; ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
+    <h2>HTTP/2: at the edge, not in webjs</h2>
+    <p>webjs delegates TLS termination + HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
     <ul>
-      <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration; you get HTTP/2 to the browser the moment you deploy.</li>
-      <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination; they handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
+      <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration: you get HTTP/2 to the browser the moment you deploy.</li>
+      <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination. They handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
     </ul>
     <p>HTTP/2 benefits for webjs apps:</p>
     <ul>
       <li>Multiplexed streams eliminate head-of-line blocking for per-file ES module serving (many small files in parallel over one connection).</li>
       <li>Header compression (HPACK) amortizes header overhead across the many module fetches a typical page issues.</li>
-      <li>Server push is not used; <code>103 Early Hints</code> are used instead (see below). Most major edges (Cloudflare, fly-proxy, Fastly) forward these to the browser.</li>
+      <li>Server push is not used. <code>103 Early Hints</code> are used instead (see below). Most major edges (Cloudflare, fly-proxy, Fastly) forward these to the browser.</li>
     </ul>
 
     <h2>103 Early Hints</h2>
@@ -176,8 +176,8 @@ Deno.serve({ port: 3000 }, (req) =&gt; app.handle(req));</pre>
     <h2>Environment Variables</h2>
     <p>webjs reads the following environment variables:</p>
     <ul>
-      <li><strong>PORT</strong> — server port (default: 3000). Overridden by <code>--port</code> CLI flag.</li>
-      <li><strong>NODE_ENV</strong> — not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
+      <li><strong>PORT</strong>: server port (default: 3000). Overridden by <code>--port</code> CLI flag.</li>
+      <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
     </ul>
     <p>For app-specific environment variables, use <code>process.env</code> in server-side code (pages, server actions, middleware, API routes). These are never exposed to the client.</p>
     <pre># .env (load with dotenv or your deployment platform)
@@ -192,7 +192,7 @@ API_KEY="sk-..."</pre>
 
 WORKDIR /app
 
-# Install dependencies (no native build step needed — webjs ships no bundler)
+# Install dependencies (no native build step needed, since webjs ships no bundler)
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -205,15 +205,15 @@ HEALTHCHECK CMD curl -f http://localhost:3000/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine — esbuild ships its own native binary, used at runtime for <code>.ts</code> transformation. No extra system packages.</li>
+      <li><code>node:slim</code> works fine. esbuild ships its own native binary, used at runtime for <code>.ts</code> transformation. No extra system packages.</li>
       <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjskit/server</code> (which depends on esbuild) is a runtime dependency, so the TS loader stays available in production.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
     </ul>
 
-    <h2>Reverse Proxy (nginx / Caddy) — recommended for HTTP/2</h2>
-    <p>For production deployments, a reverse proxy handles TLS termination, HTTP/2, static asset caching, and load balancing. webjs runs as an HTTP/1.1 upstream; the proxy speaks HTTP/2 to clients.</p>
+    <h2>Reverse Proxy (nginx / Caddy), recommended for HTTP/2</h2>
+    <p>For production deployments, a reverse proxy handles TLS termination, HTTP/2, static asset caching, and load balancing. webjs runs as an HTTP/1.1 upstream, and the proxy speaks HTTP/2 to clients.</p>
 
     <h3>nginx</h3>
     <pre>upstream webjs {
@@ -245,6 +245,7 @@ server {
     reverse_proxy localhost:3000
 }</pre>
     <p>Caddy automatically provisions TLS certificates via Let's Encrypt and enables HTTP/2. It also handles WebSocket upgrades transparently.</p>
+
 
     <h2>Process Managers</h2>
     <p>For non-containerised deployments, use a process manager to keep webjs running:</p>

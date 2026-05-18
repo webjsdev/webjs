@@ -1,5 +1,5 @@
 /**
- * Pagination — page navigation. Pure class helpers; pagination links use
+ * Pagination: page navigation. Pure class helpers; pagination links use
  * `buttonClass()` so visual matches buttons exactly.
  *
  * shadcn parity: Pagination, PaginationContent, PaginationItem, PaginationLink,

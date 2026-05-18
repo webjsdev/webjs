@@ -1,17 +1,17 @@
 /**
- * Tooltip — hover/focus-triggered floating tip. The tooltip content uses
+ * Tooltip, hover/focus-triggered floating tip. The tooltip content uses
  * the native Popover API in `popover="manual"` mode so it renders in the
  * top layer (no z-index wars) while the custom element retains control of
  * the hover-with-delay state machine.
  *
  * shadcn parity:
  *   Tooltip, TooltipTrigger, TooltipContent, TooltipProvider.
- *   delay-duration       attribute (ms, default 700)  — initial hover delay
- *   skip-delay-duration  attribute (ms, default 300)  — window after a tooltip
+ *   delay-duration       attribute (ms, default 700) , initial hover delay
+ *   skip-delay-duration  attribute (ms, default 300) , window after a tooltip
  *                                                      closes during which the
  *                                                      next tooltip skips its
  *                                                      delay-duration
- *   side / align / side-offset / align-offset — placement (positionFloating)
+ *   side / align / side-offset / align-offset, placement (positionFloating)
  *
  * Usage:
  *   <ui-tooltip delay-duration="500" skip-delay-duration="300">
@@ -57,7 +57,7 @@ function installStyles(): void {
 // Module-level "last close" timestamp, shared across every <ui-tooltip> on
 // the page. When the next tooltip is hovered within `skip-delay-duration`
 // ms of this stamp, it skips its `delay-duration` wait and opens
-// immediately — matching shadcn's TooltipProvider.skipDelayDuration.
+// immediately, matching shadcn's TooltipProvider.skipDelayDuration.
 let lastTooltipHideAt = 0;
 
 export class UiTooltip extends Base {

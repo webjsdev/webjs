@@ -1,7 +1,7 @@
 /**
  * Tests for the hand-rolled `cn()` helper that lives in
  * `packages/registry/lib/utils.ts`. We exercise the dedupe groups that
- * components actually rely on — specifically the `text-size` vs `text-color`
+ * components actually rely on: specifically the `text-size` vs `text-color`
  * split that regressed once when both buckets were collapsed into a single
  * `text-` group (text-sm got eaten by text-primary-foreground).
  *
@@ -48,14 +48,14 @@ test('cn: text-size and text-color are SEPARATE groups (regression: text-sm surv
   assert.match(result, /text-primary-foreground/, 'text-primary-foreground must survive');
 });
 
-test('cn: dedupes only same group — h-9 vs h-12 (last wins) but h-9 + w-full coexist', () => {
+test('cn: dedupes only same group: h-9 vs h-12 (last wins) but h-9 + w-full coexist', () => {
   assert.equal(cn('h-9', 'h-12'), 'h-12');
   const out = cn('h-9', 'w-full');
   assert.match(out, /h-9/);
   assert.match(out, /w-full/);
 });
 
-test('cn: padding subgroups — px-4 + py-2 coexist; px-4 + px-6 collapses to px-6', () => {
+test('cn: padding subgroups: px-4 + py-2 coexist; px-4 + px-6 collapses to px-6', () => {
   assert.equal(cn('px-4', 'px-6'), 'px-6');
   const out = cn('px-4', 'py-2');
   assert.match(out, /px-4/);

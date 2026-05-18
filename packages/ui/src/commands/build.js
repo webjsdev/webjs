@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
 
 export const build = new Command()
   .name('build')
-  .description('Build a custom registry — read registry.json, inline file contents, emit r/*.json')
+  .description('Build a custom registry: read registry.json, inline file contents, emit r/*.json')
   .argument('[file]', 'registry manifest path', 'registry.json')
   .option('-o, --output <dir>', 'output directory', './r')
   .option('-c, --cwd <cwd>', 'the working directory', process.cwd())

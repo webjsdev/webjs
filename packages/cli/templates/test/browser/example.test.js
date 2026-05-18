@@ -1,5 +1,5 @@
 /**
- * Example browser test — runs in real Chromium via WTR + Playwright.
+ * Example browser test: runs in real Chromium via WTR + Playwright.
  *
  * Run:  webjs test --browser
  *       npx wtr

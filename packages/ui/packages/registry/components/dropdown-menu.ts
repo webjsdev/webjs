@@ -1,5 +1,5 @@
 /**
- * DropdownMenu — popover-style menu of actions. Hand-rolled keyboard nav
+ * DropdownMenu, popover-style menu of actions. Hand-rolled keyboard nav
  * and positioning.
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/menu/
@@ -69,7 +69,7 @@ export const dropdownMenuItemClass = (): string =>
   "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/10 data-[variant=destructive]:hover:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 dark:data-[variant=destructive]:hover:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
 // Inset is universal across shadcn's radix-* style families on these
-// two helpers — same boolean already plumbed on Item / Label /
+// two helpers, same boolean already plumbed on Item / Label /
 // SubTrigger as full custom elements above. CheckboxItem and
 // RadioItem are class-helper functions applied to user-authored
 // markup, so there's no JS to mirror `inset` to data-inset; the user
@@ -77,7 +77,7 @@ export const dropdownMenuItemClass = (): string =>
 // helper includes `data-[inset]:pl-8` in the class string so the
 // rule fires when the user opts in. CheckboxItem already has pl-8
 // baseline (to reserve room for the indicator); inset is a no-op
-// for the inset case visually — kept for shadcn parity so a future
+// for the inset case visually, kept for shadcn parity so a future
 // indicator-less subitem keeps lining up with sibling Items that
 // have leading icons.
 export const dropdownMenuCheckboxItemClass = (): string =>
@@ -91,15 +91,15 @@ export const dropdownMenuRadioItemClass = (): string =>
 // too subtle: at 14px, a 500-vs-400 weight difference is barely
 // perceptible, so "My Account" looked like just another item with
 // slightly bolder text. Tighten the typography hierarchy:
-//   text-xs        — shrink relative to items so the label registers
+//   text-xs       , shrink relative to items so the label registers
 //                    as supplementary metadata, not content
-//   font-semibold  — recover the visual weight lost by going smaller
-//   text-muted-foreground — different colour role from items, which
+//   font-semibold , recover the visual weight lost by going smaller
+//   text-muted-foreground, different colour role from items, which
 //                    is the strongest cue available for "this is not
 //                    a clickable row, it's a label". Combined with
 //                    the trailing <separator> already shipped in the
 //                    docs example, the items group reads cleanly.
-// pt-2 (vs py-1.5) adds a touch of top breathing room — labels feel
+// pt-2 (vs py-1.5) adds a touch of top breathing room, labels feel
 // off-balance flush against the menu's top edge.
 export const dropdownMenuLabelClass = (): string =>
   'px-2 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground data-[inset]:pl-8';
@@ -118,7 +118,7 @@ export const dropdownMenuSubTriggerClass = (): string =>
   "flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm select-none outline-hidden focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>svg:last-child]:ml-auto";
 
 // Sub-content uses shadow-lg (vs the root content's shadow-md) so submenus
-// visually stack above their parent — matches shadcn.
+// visually stack above their parent, matches shadcn.
 export const dropdownMenuSubContentClass = (): string =>
   'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
 
@@ -245,7 +245,7 @@ export class UiDropdownMenu extends Base {
       return;
     }
 
-    // Scope arrow nav to the "active context" — the nearest content or
+    // Scope arrow nav to the "active context", the nearest content or
     // sub-content panel owning the focused element. Without this, pressing
     // ArrowDown while a sub-trigger is focused would walk into the
     // submenu's items as if they were siblings of the parent items, since
@@ -285,7 +285,7 @@ export class UiDropdownMenu extends Base {
       items[items.length - 1].focus();
     } else if (e.key === 'ArrowRight') {
       // Open the submenu owned by the focused sub-trigger and move
-      // focus to its first item — matches Radix/shadcn.
+      // focus to its first item, matches Radix/shadcn.
       if (active?.tagName === 'UI-DROPDOWN-MENU-SUB-TRIGGER') {
         e.preventDefault();
         const sub = active.parentElement as UiDropdownMenuSub | null;
@@ -382,7 +382,7 @@ export class UiDropdownMenuItem extends Base {
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuItemClass(), userClass);
     this.addEventListener('click', this._onClick);
-    // Move keyboard focus to whichever item the cursor is over —
+    // Move keyboard focus to whichever item the cursor is over , 
     // matches Radix's roving-focus pattern. Without this the menu has
     // two parallel cursors (arrow-key focus + mouse hover) that drift
     // apart: a user who arrow-navigated to item B then mouse-hovers
@@ -394,7 +394,7 @@ export class UiDropdownMenuItem extends Base {
     // class strings using `data-[highlighted]:bg-accent` (Radix's
     // roving-focus marker) work verbatim on our items. Our own
     // styling already uses :focus + :hover for the highlight (see
-    // dropdownMenuItemClass) — this attr is purely for shadcn
+    // dropdownMenuItemClass), this attr is purely for shadcn
     // selector portability.
     this.addEventListener('focus', this._onFocus);
     this.addEventListener('blur', this._onBlur);
@@ -425,7 +425,7 @@ defineElement('ui-dropdown-menu-item', UiDropdownMenuItem);
 export class UiDropdownMenuLabel extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'dropdown-menu-label');
-    // `inset` mirrors the existing item behaviour — shadcn exposes the
+    // `inset` mirrors the existing item behaviour, shadcn exposes the
     // same boolean on Label so the indent column for icon-aligned items
     // stays consistent. The label class already includes
     // data-[inset]:pl-8 so only the attribute reflection is missing.
@@ -464,7 +464,7 @@ export class UiDropdownMenuGroup extends Base {
 defineElement('ui-dropdown-menu-group', UiDropdownMenuGroup);
 
 // --------------------------------------------------------------------------
-// Submenu — Sub / SubTrigger / SubContent (shadcn parity)
+// Submenu, Sub / SubTrigger / SubContent (shadcn parity)
 // --------------------------------------------------------------------------
 
 // Right-chevron auto-injected on every <ui-dropdown-menu-sub-trigger> if the
@@ -493,7 +493,7 @@ export class UiDropdownMenuSub extends Base {
     this.setAttribute('data-slot', 'dropdown-menu-sub');
     this._reflect();
     // pointerleave fires once when the cursor leaves the element AND all
-    // its descendants — so moving from trigger to sub-content (both
+    // its descendants, so moving from trigger to sub-content (both
     // children of <ui-dropdown-menu-sub>) doesn't trigger a close, but
     // moving off the whole submenu does. position: fixed on the sub-
     // content doesn't change DOM lineage; events still bubble correctly.
@@ -560,7 +560,7 @@ export class UiDropdownMenuSub extends Base {
     // Same positionFloating used by the root content + popover. Side
     // defaults to 'right' (submenus open beside their trigger);
     // align: 'start' lines the submenu top with the trigger top.
-    // sideOffset defaults to -4 — a slight inward overlap bridges the
+    // sideOffset defaults to -4, a slight inward overlap bridges the
     // mouse-travel gap between trigger and panel so the cursor doesn't
     // trigger pointerleave by passing through a 1px seam.
     queueMicrotask(() => {
@@ -585,7 +585,7 @@ export class UiDropdownMenuSubTrigger extends Base {
     this.setAttribute('tabindex', '-1');
     this.setAttribute('aria-haspopup', 'menu');
     // `inset` is already reflected here (and is the only of the three
-    // inset-aware elements that had it before this change — see
+    // inset-aware elements that had it before this change, see
     // UiDropdownMenuItem + UiDropdownMenuLabel above for the other two).
     if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
     const userClass = this.getAttribute('class') ?? '';

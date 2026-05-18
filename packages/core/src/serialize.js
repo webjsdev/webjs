@@ -1,5 +1,5 @@
 /**
- * webjs serializer — JSON-friendly encoding for rich JS types.
+ * webjs serializer: JSON-friendly encoding for rich JS types.
  *
  * Replaces superjson with a pure-ESM, dependency-free implementation
  * tuned to the wire surface that React Server Actions support, plus a
@@ -32,16 +32,16 @@
  *
  * ## Public API
  *
- *   stringify(v)        async — JSON.stringify(serialize(v))
- *   serialize(v)        async — produces JSON-safe value
+ *   stringify(v)        async: JSON.stringify(serialize(v))
+ *   serialize(v)        async: produces JSON-safe value
  *
- *   parse(s)            sync  — deserialize(JSON.parse(s))
- *   deserialize(v)      sync  — inverse of serialize
+ *   parse(s)            sync:  deserialize(JSON.parse(s))
+ *   deserialize(v)      sync:  inverse of serialize
  *
  * The serializer is async because Blob / File / FormData require
  * `await blob.arrayBuffer()` to read their bytes. For payloads that
  * don't include any binary types the cost is just a single Promise
- * tick (microseconds). Single async function keeps the API obvious —
+ * tick (microseconds). Single async function keeps the API obvious -
  * AI agents can't pick the wrong variant.
  *
  * (Built-in `JSON.stringify` / `JSON.parse` are unaffected and remain
@@ -67,7 +67,7 @@ export async function stringify(value) {
 }
 
 /**
- * Inverse of `stringify`. Synchronous — no async types need awaiting
+ * Inverse of `stringify`. Synchronous: no async types need awaiting
  * during decode (binary is already inlined as base64).
  *
  * @param {string} text
@@ -182,7 +182,7 @@ function encodeOne(v, ctx) {
     throw new TypeError('Cannot serialize a function.');
   }
 
-  // Object types — first check for repeat reference
+  // Object types: first check for repeat reference
   const id = ctx.idOf.get(v);
   if (id !== undefined && ctx.emitted.has(id)) {
     return { [TAG]: 'Ref', v: id };
@@ -219,7 +219,7 @@ function encodeOne(v, ctx) {
   } else if (Array.isArray(v)) {
     out = v.map((item) => encodeOne(item, ctx));
   } else {
-    // Plain object (or class instance — degrades to plain object,
+    // Plain object (or class instance: degrades to plain object,
     // matching React's behavior).
     out = {};
     for (const k in v) {

@@ -1,5 +1,5 @@
 /**
- * E2E test for the blog example — runs in a real browser via WTR + Playwright.
+ * E2E test for the blog example: runs in a real browser via WTR + Playwright.
  *
  * These tests navigate to the running blog app and verify real user flows:
  * SSR output, component hydration, navigation, theme toggle, etc.

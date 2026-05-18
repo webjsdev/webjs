@@ -3,7 +3,7 @@ import { WebComponent, html } from '@webjskit/core';
 type Result = { path: string; title: string; score: number; snippet: string };
 
 /**
- * `<doc-search>` — search input + dropdown results. Light DOM + Tailwind.
+ * `<doc-search>`: search input + dropdown results. Light DOM + Tailwind.
  */
 export class DocSearch extends WebComponent {
   declare state: { query: string; results: Result[]; loading: boolean; open: boolean };

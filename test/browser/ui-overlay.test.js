@@ -1,14 +1,14 @@
 /**
- * Browser tests for overlay Tier-2 @webjskit/ui custom elements — dialog,
+ * Browser tests for overlay Tier-2 @webjskit/ui custom elements: dialog,
  * popover, tooltip, dropdown-menu. Runs in real Chromium via WTR + Playwright.
  *
  * API conventions across all four (mirror what they actually implement, not
  * what shadcn's React API looks like):
- *   - `el.isOpen` — boolean getter (popover, dialog, tooltip). For dropdown-
+ *   - `el.isOpen`: boolean getter (popover, dialog, tooltip). For dropdown-
  *     menu and collapsible the state lives on the `open` HTML attribute, so
  *     `el.hasAttribute('open')` is the canonical read.
- *   - `el.show()` / `el.hide()` / `el.toggle()` — programmatic control.
- *   - Event `ui-open-change` with `detail: { open }` — fires from dialog,
+ *   - `el.show()` / `el.hide()` / `el.toggle()`: programmatic control.
+ *   - Event `ui-open-change` with `detail: { open }`: fires from dialog,
  *     popover, and collapsible. Tooltip and dropdown-menu do NOT emit this
  *     today, so tests for those use post-action state assertions instead.
  *   - Content is rendered INLINE as `:scope > ui-X-content` (not portaled to
@@ -126,7 +126,7 @@ suite('ui-dialog', () => {
     const content = dialog.querySelector(':scope > ui-dialog-content');
     assert.ok(content, 'content element exists in DOM');
     assert.equal(content.getAttribute('data-state'), 'closed');
-    // Content is hidden by CSS (display:none) — visible via computed style.
+    // Content is hidden by CSS (display:none): visible via computed style.
     assert.equal(getComputedStyle(content).display, 'none', 'content is display:none when closed');
     root.remove();
   });
@@ -255,7 +255,7 @@ suite('ui-tooltip', () => {
     `);
     const tip = root.querySelector('ui-tooltip');
     tip.show();
-    // setTimeout(0) fires on the next macrotask — wait a beat past microtasks.
+    // setTimeout(0) fires on the next macrotask: wait a beat past microtasks.
     await new Promise((r) => setTimeout(r, 5));
     assert.equal(tip.isOpen, true);
     assert.equal(tip.getAttribute('data-state'), 'open');
@@ -507,7 +507,7 @@ suite('ui-hover-card', () => {
   });
 
   test('show() with open-delay=0 opens immediately on next macrotask', async () => {
-    // Default open-delay is 700ms — too long for a tick(). Set to 0 to
+    // Default open-delay is 700ms: too long for a tick(). Set to 0 to
     // make the setTimeout fire on the next macrotask.
     const root = await mount(html`
       <ui-hover-card open-delay="0" close-delay="0">

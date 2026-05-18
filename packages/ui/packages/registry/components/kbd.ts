@@ -1,5 +1,5 @@
 /**
- * Kbd — keyboard chord display. Pure class helpers; use with native `<kbd>`.
+ * Kbd: keyboard chord display. Pure class helpers; use with native `<kbd>`.
  *
  * shadcn parity: Kbd, KbdGroup.
  *

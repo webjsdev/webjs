@@ -1,4 +1,4 @@
-# docker compose — runs website + docs + blog + ui-website as four services
+# docker compose - runs website + docs + blog + ui-website as four services
 # from a single image. Local parity with Railway deployment (same Dockerfile).
 #
 #   docker compose up --build
@@ -55,9 +55,9 @@ services:
     build: .
     working_dir: /app/packages/ui/packages/website
     # Registry host for @webjskit/ui:
-    #   GET /r/<name>.json   — single registry item (CLI fetches from here)
-    #   GET /r/index.json    — flat list of all items
-    #   GET /docs/components/<name> — per-component docs page
+    #   GET /r/<name>.json   - single registry item (CLI fetches from here)
+    #   GET /r/index.json    - flat list of all items
+    #   GET /docs/components/<name> - per-component docs page
     # The registry JSON is built at image time (see Dockerfile RUN step).
     command: ["node", "/app/node_modules/@webjskit/cli/bin/webjs.js", "start", "--port", "5001"]
     ports:

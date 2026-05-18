@@ -1,39 +1,39 @@
-# AGENTS.md — webjs blog example
+# AGENTS.md for the webjs blog example
 
 This is the reference app for the webjs framework. It exercises every
 feature the framework ships. Read this before editing any file.
 
 ## Framework source is in `node_modules/`
 
-You can — and should — read framework code directly when debugging. No
+You can and should read framework code directly when debugging. No
 build step, no minification: the JavaScript in `node_modules/@webjskit/*`
 is what runs. Quick map:
 
-- `node_modules/@webjskit/core/` — renderer, `WebComponent`, directives,
+- `node_modules/@webjskit/core/`: renderer, `WebComponent`, directives,
   client router, `Task`, context, testing helpers. See
   `node_modules/@webjskit/core/src/component.js` for lifecycle
-  behaviour; `render-client.js` for DOM patching; `router-client.js`
+  behaviour, `render-client.js` for DOM patching, `router-client.js`
   for navigation / View Transitions.
-- `node_modules/@webjskit/server/` — dev server, SSR, file router,
+- `node_modules/@webjskit/server/`: dev server, SSR, file router,
   server actions, WebSocket upgrade, `auth.js`, `session.js`,
   `cache.js`, `rate-limit.js`, `csrf.js`. `ssr.js` shows exactly how
   the metadata object becomes `<head>` tags.
-- `node_modules/@webjskit/cli/` — CLI commands + scaffold templates.
-- `node_modules/@webjskit/ts-plugin/` — tsserver plugin: go-to-definition
-  on tag names + `<webjs-tag>` "Unknown tag/attribute" diagnostic suppression
-  + attribute auto-complete sourced from `static properties` (gated on the
-  current file's import graph). Inside `` html`` `` templates.
+- `node_modules/@webjskit/cli/`: CLI commands + scaffold templates.
+- `node_modules/@webjskit/ts-plugin/`: tsserver plugin (go-to-definition
+  on tag names, `<webjs-tag>` "Unknown tag/attribute" diagnostic
+  suppression, attribute auto-complete sourced from `static properties`,
+  gated on the current file's import graph). Inside `` html`` `` templates.
 
-When in doubt, `grep -rn '<symbol>' node_modules/@webjskit/` — the
+When in doubt, `grep -rn '<symbol>' node_modules/@webjskit/`. The
 framework is plain JS with JSDoc types, small, and readable end-to-end.
 
 ## App layout
 
 ```
 app/                         thin route adapters
-  layout.ts                  root layout — light-DOM shell with <header>/<main>/<footer>,
-                              theme toggle, Tailwind tokens, open-graph metadata
-  page.ts                    / (home — post feed, counter, chat)
+  layout.ts                  root layout (light-DOM shell with <header>/<main>/<footer>,
+                              theme toggle, Tailwind tokens, open-graph metadata)
+  page.ts                    / (home, post feed, counter, chat)
   error.ts                   error boundary
   not-found.ts               404
   login/page.ts              /login (auth-forms component)
@@ -42,9 +42,9 @@ app/                         thin route adapters
     middleware.ts             auth gate (302 → /login if no session)
     page.ts                  /dashboard
     posts/new/page.ts        /dashboard/posts/new
-  (marketing)/about/page.ts  /about (route group — parens not in URL)
+  (marketing)/about/page.ts  /about (route group, parens not in URL)
   ui-demo/page.ts            /ui-demo (showcases the @webjskit/ui kit)
-  _utils/format.ts           private folder (underscore — not routable)
+  _utils/format.ts           private folder (underscore, not routable)
   api/
     hello/route.ts           GET /api/hello
     posts/route.ts           GET/POST /api/posts
@@ -95,21 +95,21 @@ prisma/schema.prisma         User, Session, Post, Comment
 ## Feature usage in this app
 
 ### Rate limiting
-`app/api/auth/middleware.ts` applies `rateLimit({ window: '10s', max: 5 })` to all auth endpoints — 5 requests per 10 seconds per IP. Exceeding returns 429 with `retry-after` header. Uses the global cache store (memory by default; call `setStore(redisStore({ url: process.env.REDIS_URL }))` at app startup to switch to Redis for cross-instance sharing).
+`app/api/auth/middleware.ts` applies `rateLimit({ window: '10s', max: 5 })` to all auth endpoints, capping requests at 5 per 10 seconds per IP. Exceeding returns 429 with `retry-after` header. Uses the global cache store (memory by default. Call `setStore(redisStore({ url: process.env.REDIS_URL }))` at app startup to switch to Redis for cross-instance sharing).
 
 ### Error boundaries
-`app/error.ts` catches any unhandled error during page rendering. Receives `{ error }` and renders a user-friendly error card. Nested error boundaries are supported — place `error.ts` deeper in the route tree to isolate failures.
+`app/error.ts` catches any unhandled error during page rendering. Receives `{ error }` and renders a user-friendly error card. Nested error boundaries are supported. Place `error.ts` deeper in the route tree to isolate failures.
 
 ### Client router
-The layout (`app/layout.ts`) imports `@webjskit/core/client-router` — all `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
+The layout (`app/layout.ts`) imports `@webjskit/core/client-router`. All `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
 
 ### Metadata
 Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `og:image` URL from `ctx.url.origin`. Sets `openGraph` + `twitter: { card: 'summary_large_image' }` so social shares render the 1200×630 `public/og.png` card.
 
 ### Middleware
-- `middleware.ts` (root) — request logging on every route.
-- `app/dashboard/middleware.ts` — auth gate: redirects to `/login` if no session.
-- `app/api/auth/middleware.ts` — rate limiting on auth endpoints.
+- `middleware.ts` (root): request logging on every route.
+- `app/dashboard/middleware.ts`: auth gate. Redirects to `/login` if no session.
+- `app/api/auth/middleware.ts`: rate limiting on auth endpoints.
 
 ### WebSockets
 - `app/api/chat/route.ts` exports `WS` for the live chat.
@@ -119,25 +119,25 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:
 
-- **Tier 1 — class helpers**: `buttonClass`, `cardClass`,
+- **Tier 1: class helpers.** `buttonClass`, `cardClass`,
   `cardHeaderClass`, `inputClass`, `labelClass`, `alertClass`,
   `badgeClass`, `separatorClass`. Pure functions returning Tailwind
-  class strings; apply to raw native elements (`<button>`, `<input>`,
-  `<div>`).
-- **Tier 2 — custom elements**: `<ui-dialog>` (and subparts). Real
+  class strings, applied to raw native elements (`<button>`,
+  `<input>`, `<div>`).
+- **Tier 2: custom elements.** `<ui-dialog>` (and subparts). Real
   custom elements for state the browser doesn't give you natively.
   Register via side-effect import in the consumer file.
 
-`/ui-demo` showcases both tiers side-by-side — open it during
+`/ui-demo` showcases both tiers side-by-side. Open it during
 development to see the patterns without hopping to the registry website.
 Real surfaces in this app:
 
-- `modules/auth/components/auth-forms.ts` — login/signup form uses
+- `modules/auth/components/auth-forms.ts`: login/signup form uses
   `cardClass`, `inputClass`, `labelClass`, `buttonClass`, `alertClass`.
-- `modules/posts/components/new-post.ts` — post composer uses
+- `modules/posts/components/new-post.ts`: post composer uses
   `cardClass`, `inputClass`, `labelClass`, `buttonClass`, `alertClass`
   on native elements, with a raw `<textarea>` for the body field.
-- `app/dashboard/page.ts` — dashboard uses `cardClass` for the post
+- `app/dashboard/page.ts`: dashboard uses `cardClass` for the post
   list and `buttonClass({ size: 'lg' })` for actions.
 
 Add more components via `webjs ui add <name>` (registry at
@@ -153,12 +153,12 @@ their custom element on import.
 - **Server-only imports** (prisma, node:crypto, etc.) only in `.server.ts` files or `lib/`.
 - **No barrel files.** Import from the specific file.
 - **Types per module** in `types.ts`. Shared types (ActionResult) live in `modules/auth/types.ts`.
-- **globalThis for dev singletons** (Prisma, WS clients, comment bus) — survives module cache-busting.
+- **globalThis for dev singletons** (Prisma, WS clients, comment bus): survives module cache-busting.
 
 ## Invariants
 
 1. Never import `@prisma/client` or `node:*` from components or pages.
-2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file — the tag is not a static field.
+2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
 4. Use `setState()`, not direct `this.state` mutation.
 5. Pages/layouts are server-only functions returning TemplateResult.

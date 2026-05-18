@@ -95,7 +95,7 @@ test('WebComponent.shadow defaults to false (light DOM is the default)', () => {
 
 test('component without explicit static shadow uses light DOM (inherits default)', async () => {
   class DefaultShadow extends WebComponent {
-    // No `static shadow =` declaration — should inherit WebComponent.shadow (false).
+    // No `static shadow =` declaration: should inherit WebComponent.shadow (false).
     render() { return html`<p>default</p>`; }
   }
   DefaultShadow.register('test-default-shadow');
@@ -108,7 +108,7 @@ test('component without explicit static shadow uses light DOM (inherits default)
 });
 
 test('component with shadow = "open" (truthy but not === true) stays light DOM', async () => {
-  // The DSD injection check is `shadow === true` — any other truthy value means light.
+  // The DSD injection check is `shadow === true`: any other truthy value means light.
   class NotTrueShadow extends WebComponent {
     static shadow = /** @type any */ ('open');
     render() { return html`<p>still light</p>`; }

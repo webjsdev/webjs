@@ -1,6 +1,6 @@
 /**
  * Node.js ESM loader hook that routes every server-side `.ts` / `.mts`
- * import through esbuild — the same transformer the dev server uses to
+ * import through esbuild: the same transformer the dev server uses to
  * serve TypeScript to the browser.
  *
  * Why: SSR and hydration must produce identical JS. Without this hook,
@@ -33,7 +33,7 @@ async function loadEsbuild() {
 }
 
 /**
- * Node loader `load` hook — called for every module Node evaluates
+ * Node loader `load` hook: called for every module Node evaluates
  * after `resolve` returns a URL. We only intercept file: URLs ending
  * in .ts / .mts; everything else delegates to the next loader.
  *

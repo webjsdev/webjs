@@ -1,5 +1,5 @@
 /**
- * `webjs create <name>` — scaffold a new webjs app with opinionated defaults.
+ * `webjs create <name>`: scaffold a new webjs app with opinionated defaults.
  *
  * Creates a directory with:
  *   - app/ with a root layout + page
@@ -79,7 +79,7 @@ async function copyUiComponents(appDir, names) {
  * @param {string} appDir
  */
 async function writeUiBootstrap(appDir) {
-  // 1) lib/utils.ts — the cn() helper
+  // 1) lib/utils.ts: the cn() helper
   const utilsSrc = join(UI_REGISTRY_ROOT, 'lib', 'utils.ts');
   if (existsSync(utilsSrc)) {
     const content = await readFile(utilsSrc, 'utf8');
@@ -87,7 +87,7 @@ async function writeUiBootstrap(appDir) {
     await writeFile(join(appDir, 'lib', 'utils.ts'), content);
   }
 
-  // 2) components.json — the same shape `webjsui init` writes for webjs
+  // 2) components.json: the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js).
   const componentsJson = {
     $schema: 'https://ui.webjs.dev/schema.json',
@@ -110,8 +110,8 @@ async function writeUiBootstrap(appDir) {
     JSON.stringify(componentsJson, null, 2) + '\n',
   );
 
-  // 3) app/globals.css — copy the neutral theme verbatim. components.json
-  // references this path; future `webjs ui add` calls append to it.
+  // 3) app/globals.css: copy the neutral theme verbatim. components.json
+  // references this path, and future `webjs ui add` calls append to it.
   const themeSrc = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
   if (existsSync(themeSrc)) {
     const css = await readFile(themeSrc, 'utf8');
@@ -141,7 +141,7 @@ async function readThemeCss() {
  */
 export async function scaffoldApp(name, cwd, opts = {}) {
   const template = opts.template || 'full-stack';
-  // Defence in depth — the CLI already validates this, but library
+  // Defence in depth. The CLI already validates this, but library
   // callers (tests, programmatic use) might pass anything.
   const VALID_TEMPLATES = ['full-stack', 'api', 'saas'];
   if (!VALID_TEMPLATES.includes(template)) {
@@ -207,7 +207,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // @webjskit/ts-plugin bundles ts-lit-plugin internally, so just one
       // plugin entry is needed in tsconfig (see below).
       '@webjskit/ts-plugin': 'latest',
-      // AI-first component library CLI — preinstalled so `webjs ui add button`
+      // AI-first component library CLI, preinstalled so `webjs ui add button`
       // works immediately after scaffold. Users can remove if they prefer
       // to add it later.
       '@webjskit/ui': 'latest',
@@ -232,7 +232,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       //     via Class.register('tag-name')
       //   • attribute auto-complete sourced from `static properties`
       //   • attribute-value type-check against `declare` annotations
-      // Editor-only — the framework runs without it.
+      // Editor-only. The framework runs without it.
       plugins: [
         { name: '@webjskit/ts-plugin' },
       ],
@@ -297,7 +297,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Example model — feel free to delete or extend.
+// Example model. Feel free to delete or extend.
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -374,7 +374,7 @@ export async function createUser(input: { name: string; email: string }) {
 }
 `);
     await writeFile(join(appDir, 'app', 'api', 'users', 'route.ts'), `/**
- * /api/users — thin route wrapper over typed server actions.
+ * /api/users: thin route wrapper over typed server actions.
  * Business logic lives in modules/users/, not here.
  */
 import { listUsers } from '../../../modules/users/queries/list-users.server.ts';
@@ -472,7 +472,7 @@ import '@webjskit/core/client-router';
 import '../components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
-//     class-helper FUNCTIONS — no custom element to register. Each page
+//     class-helper FUNCTIONS, with no custom element to register. Each page
 //     imports the specific helpers it needs (e.g.
 //     \`import { buttonClass } from '../components/ui/button.ts'\`).
 //   - Tier 2 (dialog, popover, tooltip, tabs, accordion, etc.) ARE custom
@@ -483,7 +483,7 @@ import '../components/theme-toggle.ts';
 // extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
 /**
- * Root layout — globals + chrome.
+ * Root layout: globals + chrome.
  *
  * Light DOM + Tailwind by default. Design tokens live in :root and are
  * mapped into the Tailwind palette via @theme, so classes like
@@ -491,7 +491,7 @@ import '../components/theme-toggle.ts';
  *
  * Nav + footer links repeat the same class bundle, so they're extracted
  * into small JS helpers below. Each helper runs at SSR time inside
- * html\\\`\\\`, producing static HTML in the response — no client runtime.
+ * html\\\`\\\`, producing static HTML in the response with no client runtime.
  */
 
 const navLink = (href: string, label: string) => html\`
@@ -512,7 +512,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     </script>
     <script src="/public/tailwind-browser.js"></script>
     <!--
-      Webjs UI theme — design tokens (--color-primary,
+      Webjs UI theme. Design tokens (--color-primary,
       --color-card, --radius, etc.) the ui-* components consume.
       The same content is also at app/globals.css; we inline it here so
       the Tailwind browser runtime resolves the tokens without a build step.
@@ -639,7 +639,7 @@ import { alertClass, alertTitleClass, alertDescriptionClass } from '../component
 import { separatorClass } from '../components/ui/separator.ts';
 
 export const metadata = {
-  title: '${name} — built with webjs',
+  title: '${name}: built with webjs',
 };
 
 export default function Home() {
@@ -664,7 +664,7 @@ export default function Home() {
         <h3 class=\${cardTitleClass()}>Web Components + Server Actions</h3>
         <p class=\${cardDescriptionClass()}>
           Drop a custom element anywhere. Call a server action like a local
-          function — webjs rewrites the import into a typed RPC stub.
+          function. webjs rewrites the import into a typed RPC stub.
         </p>
       </div>
       <div class=\${cardContentClass()}>
@@ -705,7 +705,7 @@ export default function Home() {
 type Theme = 'system' | 'light' | 'dark';
 
 /**
- * <theme-toggle> — light DOM component styled with Tailwind utilities.
+ * <theme-toggle> is a light-DOM component styled with Tailwind utilities.
  *
  * Light DOM is the default: no static shadow = true, no static styles.
  * Because this component has no custom CSS (only Tailwind classes,
@@ -773,7 +773,7 @@ ThemeToggle.register('theme-toggle');
   }
 
   // AGENTS.md is already in place via the shared `templateFiles` loop
-  // earlier in this function — no framework-root fallback needed.
+  // earlier in this function, so no framework-root fallback needed.
 
   // --- Git init + configure hooks directory ---
   const { execSync } = await import('node:child_process');
@@ -781,7 +781,7 @@ ThemeToggle.register('theme-toggle');
     execSync('git init', { cwd: appDir, stdio: 'pipe' });
     // Tell git to use .hooks/ as the hooks directory (tracked in the repo)
     execSync('git config core.hooksPath .hooks', { cwd: appDir, stdio: 'pipe' });
-  } catch { /* git not available — skip */ }
+  } catch { /* git not available: skip */ }
 
   // --- Print success ---
 
@@ -829,7 +829,7 @@ ThemeToggle.register('theme-toggle');
   const uiNote = isApi
     ? `# If you later add a UI to this API project:
   #   webjs ui init && webjs ui add button card dialog`
-    : `webjs ui add <name>     # optional — add more ui-* components later`;
+    : `webjs ui add <name>     # optional: add more ui-* components later`;
   console.log(`Next steps:
   cd ${name}
   npm install${isSaas ? '\n  npx prisma migrate dev --name init' : ''}
@@ -844,12 +844,12 @@ AI-driven development (enforced for all AI agents):
   ✓ No AI attribution in commit messages
   ✓ Convention validation via \`webjs check\`
 
-For AI agents — read this before editing scaffolded files:
+For AI agents, read this before editing scaffolded files:
   • The example layout / page / components / schema are REFERENCE ONLY.
     Replace them with the app the user actually asked for. Don't ship
     the scaffold's example User model or "Hello from …" page as the
     final product.
-  • Use Prisma + SQLite for app data — it's already wired up. Define
+  • Use Prisma + SQLite for app data. It's already wired up. Define
     real models in prisma/schema.prisma and run \`webjs db migrate\`.
     NEVER store app data in JSON files, in-memory arrays, or
     localStorage as a substitute for the database.

@@ -1,8 +1,8 @@
-# AGENTS.md — landing site
+# AGENTS.md for the landing site
 
 The webjs marketing / landing site, built on webjs itself. All
-framework-wide rules — file conventions, public API, workflow, scaffold
-rules, persistence rules, autonomous-mode behaviour — live in the
+framework-wide rules (file conventions, public API, workflow, scaffold
+rules, persistence rules, autonomous-mode behaviour) live in the
 **framework root [`../AGENTS.md`](../AGENTS.md)** and apply here. Read
 that first.
 
@@ -17,13 +17,13 @@ website/
                      header/footer chrome, Tailwind tokens)
     page.ts          /  → the entire one-page landing site.
                          Hero, features grid, code samples, agent
-                         badges, footer — all sections live here.
+                         badges, and footer all live here.
   components/
     theme-toggle.ts  light/dark cycle
   public/            favicon, og image, static assets
 ```
 
-The site is intentionally one page — long-form scroll. When you edit
+The site is intentionally one page in long-form scroll. When you edit
 copy, find the section in `app/page.ts` (search for the visible text
 that needs to change) and update inline.
 
@@ -40,21 +40,21 @@ the new components.
 
 ## Announcement banner
 
-The layout (`app/layout.ts`) renders a top-of-page announcement strip —
-`<div class="announce">` block — typically pointing at the current
-release or shipping highlight (e.g. "v1 — @webjskit/ui is live"). To
+The layout (`app/layout.ts`) renders a top-of-page announcement strip,
+a `<div class="announce">` block, typically pointing at the current
+release or shipping highlight (e.g. "v1: @webjskit/ui is live"). To
 swap the announcement target, edit the layout's `<div class="announce">`
-block; the banner shows on every page. Remove the block entirely to
+block. The banner shows on every page. Remove the block entirely to
 hide it.
 
 ## How to update headline / hero copy
 
-`app/page.ts` — the hero block is at the top of the default-exported
+`app/page.ts`: the hero block is at the top of the default-exported
 function. Edit the inline `<h1>` / `<p>` text.
 
 ## Style
 
-- Light DOM; Tailwind utilities; `@theme` tokens from the root layout
+- Light DOM, Tailwind utilities, `@theme` tokens from the root layout
   (same palette / type scale as the blog and docs).
 - Each section in `page.ts` is a `<section>` wrapper for predictable
   scroll anchors.

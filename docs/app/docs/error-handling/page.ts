@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Error Handling — webjs' };
+export const metadata = { title: 'Error Handling | webjs' };
 
 export default function ErrorHandling() {
   return html`
@@ -16,9 +16,9 @@ export default function ErrorHandling() {
 
     <h2>When NOT to use</h2>
     <ul>
-      <li>For 404 pages — use <code>not-found.ts</code> instead, or throw <code>notFound()</code> from a page function.</li>
+      <li>For 404 pages: use <code>not-found.ts</code> instead, or throw <code>notFound()</code> from a page function.</li>
       <li>
-        For form validation errors — two valid patterns, neither uses error boundaries:
+        For form validation errors there are two valid patterns, neither of which uses error boundaries:
         <ul>
           <li><strong>JS-side</strong>: handle validation in the component's submit handler, keep errors in component state.</li>
           <li><strong>Server-rendered (Rails / Django / Laravel style)</strong>: have the server return <code>422 Unprocessable Entity</code> with the form re-rendered, errors visible inline. The client router applies any HTML response in place regardless of status code, so the user sees the validated form without a full page reload and without losing their typed values. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</li>
@@ -29,7 +29,7 @@ export default function ErrorHandling() {
     <h2>Route-level error boundaries</h2>
     <p>Place an <code>error.ts</code> file at any level in the <code>app/</code> directory. When a page or layout at that level (or deeper) throws, the nearest <code>error.ts</code> is rendered instead.</p>
 
-    <pre>// app/error.ts — root error boundary
+    <pre>// app/error.ts: root error boundary
 import { html } from '@webjskit/core';
 
 export default function ErrorPage({ error }: { error: Error }) {
@@ -41,7 +41,7 @@ export default function ErrorPage({ error }: { error: Error }) {
 }</pre>
 
     <h3>Nesting</h3>
-    <p>Error boundaries are nested — the framework walks from the throwing component outward until it finds the nearest <code>error.ts</code>:</p>
+    <p>Error boundaries are nested. The framework walks from the throwing component outward until it finds the nearest <code>error.ts</code>:</p>
     <pre>app/
   error.ts              ← catches errors from any page
   blog/
@@ -51,7 +51,7 @@ export default function ErrorPage({ error }: { error: Error }) {
     <p>If <code>blog/error.ts</code> also throws, the parent <code>app/error.ts</code> catches it.</p>
 
     <h2>not-found.ts</h2>
-    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level — the nearest one wins:</p>
+    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins:</p>
 
     <pre>// app/not-found.ts
 import { html } from '@webjskit/core';
@@ -96,9 +96,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
     <h2>Next steps</h2>
     <ul>
-      <li><a href="/docs/routing">Routing</a> — file conventions for pages, layouts, and error boundaries</li>
-      <li><a href="/docs/loading-states">Loading States</a> — <code>loading.ts</code> for Suspense boundaries</li>
-      <li><a href="/docs/server-actions">Server Actions</a> — error handling in RPC calls</li>
+      <li><a href="/docs/routing">Routing</a>: file conventions for pages, layouts, and error boundaries</li>
+      <li><a href="/docs/loading-states">Loading States</a>: <code>loading.ts</code> for Suspense boundaries</li>
+      <li><a href="/docs/server-actions">Server Actions</a>: error handling in RPC calls</li>
     </ul>
   `;
 }

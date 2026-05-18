@@ -1,5 +1,5 @@
 /**
- * Context Protocol — cross-component data sharing without prop drilling.
+ * Context Protocol: cross-component data sharing without prop drilling.
  *
  * Implements the W3C Community Group Context Protocol so any web component
  * (not just webjs components) can participate as a provider or consumer.
@@ -11,7 +11,7 @@
  * props through every intermediate level.
  *
  * Prefer Context over module-level globals when the shared data is **scoped
- * to a subtree** — e.g. a specific page, panel, or dialog — and different
+ * to a subtree**: e.g. a specific page, panel, or dialog: and different
  * subtrees may hold different values for the same context key.
  *
  * ## When NOT to use
@@ -54,7 +54,7 @@
  * ThemedCard.register('themed-card');
  * ```
  *
- * `<themed-card>` can live at any depth under `<my-app>` — it finds the
+ * `<themed-card>` can live at any depth under `<my-app>`: it finds the
  * provider automatically via a bubbling `context-request` event that
  * crosses shadow-DOM boundaries (`composed: true`).
  *
@@ -75,7 +75,7 @@ const CONTEXT_KEY = Symbol.for('webjs.context');
 /**
  * Create a typed context key.
  *
- * The returned object is used as an identity token — two calls to
+ * The returned object is used as an identity token: two calls to
  * `createContext('theme')` produce **different** contexts even though
  * the debug name is the same. Store the key in a shared module and
  * import it from both provider and consumer.
@@ -201,7 +201,7 @@ export class ContextProvider {
    *
    * Every subscribing consumer's callback is invoked synchronously with
    * the new value. Each consumer then calls `host.requestUpdate()` to
-   * schedule a re-render — so one `setValue` batches all downstream
+   * schedule a re-render: so one `setValue` batches all downstream
    * re-renders via the microtask queue.
    *
    * @param {T} newValue
@@ -250,7 +250,7 @@ export class ContextProvider {
  * - Access the value via `consumer.value`. It is `undefined` until a
  *   provider responds.
  * - If no provider exists in the ancestor chain, `value` stays
- *   `undefined` — design your render method to handle that case.
+ *   `undefined`: design your render method to handle that case.
  *
  * @template T
  */
@@ -313,7 +313,7 @@ export class ContextConsumer {
         }
         // Trigger a re-render of the consuming component when the value
         // changes (skip on the very first delivery during connection,
-        // since the host will render after connectedCallback anyway —
+        // since the host will render after connectedCallback anyway -
         // but we still update to be safe with various host lifecycles).
         if (!Object.is(old, value) && typeof this._host.requestUpdate === 'function') {
           this._host.requestUpdate();

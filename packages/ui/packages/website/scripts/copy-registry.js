@@ -4,7 +4,7 @@
  * components/ui/ so the docs pages can import them and render live previews.
  *
  * We rewrite the relative path to `lib/utils.ts` from `../lib/utils.ts` (the
- * registry's local layout) to `../../lib/utils.ts` (the website's layout —
+ * registry's local layout) to `../../lib/utils.ts` (the website's layout -
  * `components/ui/<name>.ts` is one level deeper than `lib/utils.ts`).
  *
  * Run via `npm run preview:build` / automatically before `dev` and `start`.

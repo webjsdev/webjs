@@ -4,7 +4,7 @@
  * The runtime is packages/core/index.js (JSDoc-annotated JavaScript); this
  * overlay exists so TypeScript-based editors (tsserver under VS Code,
  * Neovim, Zed, WebStorm) resolve richer types than JSDoc alone can express
- * — specifically the generic component factory and property-descriptor
+ * - specifically the generic component factory and property-descriptor
  * inference helpers. Zero runtime cost.
  */
 

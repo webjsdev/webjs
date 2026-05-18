@@ -1,6 +1,6 @@
-# AGENTS.md — @webjskit/core
+# AGENTS.md for @webjskit/core
 
-The webjs **core runtime** — `html` / `css` tagged templates, the
+The webjs **core runtime**: `html` / `css` tagged templates, the
 `WebComponent` base class, isomorphic renderers, directives, the
 client router, the `Task` controller, the Context Protocol, and
 testing helpers.
@@ -32,7 +32,7 @@ the same output in all three.
 | `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming) |
 | `render-client.js` | Client-side patcher + hydration; the only file that touches `document` |
 | `directives.js` | `unsafeHTML`, `live` (and `isUnsafeHTML` / `isLive`) |
-| `repeat.js` | `repeat(items, keyFn, templateFn)` — keyed list reconciliation |
+| `repeat.js` | `repeat(items, keyFn, templateFn)` for keyed list reconciliation |
 | `suspense.js` | `Suspense()` boundary primitive |
 | `context.js` | Context Protocol: `createContext`, `ContextProvider`, `ContextConsumer`, `ContextRequestEvent` |
 | `task.js` | `Task` / `TaskStatus` controller for async data in components |
@@ -52,7 +52,7 @@ the same output in all three.
 See the [package.json `exports` field](./package.json) for subpaths:
 `@webjskit/core/client`, `/server`, `/component`, `/registry`,
 `/client-router`. Everything else is exposed via the main `index.js`
-re-exports — keep this list in sync if you add or remove a barrel
+re-exports. Keep this list in sync if you add or remove a barrel
 export.
 
 ## Package-specific invariants
@@ -64,7 +64,7 @@ export.
 3. **The renderer is the boundary between server and client.** Server
    code: `renderToString`, `renderToStream`. Client code: `render`.
    Never import client renderer code from server-only paths.
-4. **Custom-element tags must contain a hyphen** (HTML spec) — see
+4. **Custom-element tags must contain a hyphen** (HTML spec). See
    `registry.js` `register()`. The framework convention validator
    enforces this.
 5. **Reactive properties use `declare propName: Type` + constructor

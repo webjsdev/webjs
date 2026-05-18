@@ -70,7 +70,7 @@ test('adoptStyles: uses adoptedStyleSheets when available on the root', () => {
 test('adoptStyles: falls back to <style> tag when adoptedStyleSheets unavailable', () => {
   // Simulate a legacy root without adoptedStyleSheets. In this branch
   // the code calls `document.createElement('style')` and appends it to
-  // the root — we shim both.
+  // the root: we shim both.
   const appended = [];
   const el = { textContent: '' };
   const docBefore = globalThis.document;
@@ -80,7 +80,7 @@ test('adoptStyles: falls back to <style> tag when adoptedStyleSheets unavailable
   try {
     const root = /** @type any */ ({
       // Critically: NO adoptedStyleSheets property, NO CSSStyleSheet
-      // constructor reachability is still fine — the guard on line 32
+      // constructor reachability is still fine: the guard on line 32
       // is `'adoptedStyleSheets' in root`, which is false here.
       appendChild: (node) => { appended.push(node); },
     });

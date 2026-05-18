@@ -37,7 +37,7 @@ export async function ssrPage(route, params, url, opts) {
     // Parse the partial-nav "have" header from the client. The header
     // lists comma-separated marker paths the client already has rendered
     // in its DOM. The server walks the target route's layout chain
-    // innermost → outermost and SHORT-CIRCUITS at the first match —
+    // innermost → outermost and SHORT-CIRCUITS at the first match -
     // returning only the content below that layout, wrapped in the
     // matched layout's marker pair. Real wire-byte savings: the outer
     // layouts' HTML is never re-serialized for same-shell navigations.
@@ -153,7 +153,7 @@ export async function ssrNotFound(notFoundFile, opts) {
  */
 function htmlResponse(html, status, req, url, metadata) {
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
-  // Default: no caching. Pages are dynamic by default — the developer
+  // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
   if (req && !readToken(req)) {
@@ -166,13 +166,13 @@ function htmlResponse(html, status, req, url, metadata) {
 /* ------------ internals ------------ */
 
 async function ssrNotFoundHtml(notFoundFile, opts) {
-  let body = '<h1>404 — Not found</h1>';
+  let body = '<h1>404: Not found</h1>';
   if (notFoundFile) {
     try {
       const mod = await loadModule(notFoundFile, opts.dev);
       if (mod.default) body = await renderToString(await mod.default({}));
     } catch (e) {
-      body = `<h1>404 — Not found</h1><pre>${escapeHtml(String(e))}</pre>`;
+      body = `<h1>404: Not found</h1><pre>${escapeHtml(String(e))}</pre>`;
     }
   }
   return wrapInDocument(body, {
@@ -200,22 +200,22 @@ async function renderChain(route, ctx, dev, suspenseCtx, have) {
         const fallback = await loadingMod.default(ctx);
         tree = Suspense({ fallback, children: Promise.resolve(tree) });
       }
-    } catch { /* loading file failed — skip, render page directly */ }
+    } catch { /* loading file failed: skip, render page directly */ }
   }
 
   // Wrap each layout's `${children}` interpolation in
   // `<!--wj:children:<segment-path>-->...<!--/wj:children-->` comment
   // markers. The client router walks both old + new DOM for these
   // markers and swaps only the children-slot of the deepest shared
-  // layout — preserving outer-layout DOM (and the scroll position of
+  // layout: preserving outer-layout DOM (and the scroll position of
   // anything inside it: sidenavs, sticky headers, inner scroll
-  // containers). Auto-derived from folder structure — no opt-in
+  // containers). Auto-derived from folder structure: no opt-in
   // required from layout authors.
   // X-Webjs-Have optimization: iterate from innermost → outermost and
   // SHORT-CIRCUIT at the first layout whose segment path the client
   // already has rendered. Wrap the accumulated inner tree in that
   // layout's marker pair (so the client can identify the splice
-  // target) and return — outer layouts are not rendered at all,
+  // target) and return: outer layouts are not rendered at all,
   // saving CPU and wire bytes.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
     const segmentPath = layoutSegmentPath(route.layouts[i]);
@@ -241,7 +241,7 @@ async function renderChain(route, ctx, dev, suspenseCtx, have) {
  * the deepest matching template into the swap slot on nav-start, giving
  * users an instant per-segment skeleton instead of stale content.
  *
- * Each loading file's segment path is the URL prefix it serves — same
+ * Each loading file's segment path is the URL prefix it serves: same
  * derivation as layoutSegmentPath but stripping `loading.ext` instead.
  *
  * Errors loading a single file are swallowed so a broken loading.ts in
@@ -293,7 +293,7 @@ function loadingSegmentPath(loadingFile) {
  *   app/(marketing)/about/layout.ts        → '/(marketing)/about'
  *
  * Route groups `(marketing)` are KEPT in the path. They don't appear in
- * URLs but DO scope distinct layouts — two routes at the same URL prefix
+ * URLs but DO scope distinct layouts: two routes at the same URL prefix
  * served by different `(group)` layouts must produce different markers
  * so the client doesn't falsely identify them as a shared layout.
  *
@@ -309,11 +309,11 @@ function layoutSegmentPath(layoutFile) {
 
 /**
  * Wrap a TemplateResult-or-renderable child in the partial-nav children
- * marker pair. Returns a synthetic TemplateResult — server `renderToString`
+ * marker pair. Returns a synthetic TemplateResult: server `renderToString`
  * walks `.strings` and `.values` exactly the same way as for the `html` tag.
  *
  * The marker text lives in `strings` (static template parts), NOT in
- * `values` — `values` get HTML-escaped on render, comments wouldn't survive.
+ * `values`: `values` get HTML-escaped on render, comments wouldn't survive.
  *
  * @param {unknown} tree  A TemplateResult, string, array, or Promise.
  * @param {string} segmentPath  The layout's segment path, used as marker id.
@@ -346,7 +346,7 @@ async function collectMetadata(route, ctx, dev) {
   let meta = {};
   // Carry the title template forward across layers. Once an outer layout
   // sets `title: { template, default }`, every deeper layer that supplies
-  // a plain string title gets it transformed via the template — matching
+  // a plain string title gets it transformed via the template: matching
   // Next.js App Router semantics.
   /** @type {string | null} */
   let titleTemplate = null;
@@ -392,7 +392,7 @@ async function collectMetadata(route, ctx, dev) {
           if (typeof t.template === 'string') titleTemplate = t.template;
           if (typeof t.absolute === 'string') {
             resolved.title = t.absolute;
-            // `absolute` does NOT clear the template — Next.js propagates
+            // `absolute` does NOT clear the template: Next.js propagates
             // it for deeper segments below, but the *current* segment is
             // rendered absolute.
           } else if (typeof t.default === 'string') {
@@ -444,7 +444,7 @@ export { hoistHeadTags as _hoistHeadTags };
  * Detect a user-supplied <!doctype><html>…</html> shell at the top of
  * `body`. Returns the parsed parts when present; otherwise null.
  *
- * The framework owns the shell by default — it auto-emits
+ * The framework owns the shell by default: it auto-emits
  * `<!doctype><html lang="en"><head>…</head><body>` around every page.
  * But the *root layout* (only) may write its own shell to set
  * `<html lang>`, `<html dir>`, `<html data-*>`, `<body class>`, etc.
@@ -472,7 +472,7 @@ function extractUserShell(body) {
   const htmlAttrs = m[1] || '';
   const shellInner = m[2];
 
-  // <head> is optional inside the user's shell — if missing, the
+  // <head> is optional inside the user's shell: if missing, the
   // framework's head content stands alone. Same for <body>.
   const headRe = /<head\b([^>]*)>([\s\S]*?)<\/head>/i;
   const bodyRe = /<body\b([^>]*)>([\s\S]*?)<\/body>/i;
@@ -496,7 +496,7 @@ function extractUserShell(body) {
 export { extractUserShell as _extractUserShell };
 
 /**
- * Inner-only variant of wrapHead — returns just the meta/title/link/script
+ * Inner-only variant of wrapHead: returns just the meta/title/link/script
  * tags that should live INSIDE <head>, without the surrounding
  * <!doctype><html><head>…</head><body> shell. Used to splice into a
  * user-provided shell from `extractUserShell()`.
@@ -549,7 +549,7 @@ function buildDocumentParts(body, wrapOpts) {
       `\n</head>\n<body${shell.bodyAttrs}>\n`;
     return { prefix, streamBody: hoist.body, closer: `\n</body>\n</html>` };
   }
-  // No user shell — framework owns the wrapper.
+  // No user shell: framework owns the wrapper.
   const headHtml = wrapHead(wrapOpts);
   const { head, body: bodyOut } = hoistHeadTags(headHtml, body);
   return { prefix: head, streamBody: bodyOut, closer: `\n</body>\n</html>` };
@@ -989,7 +989,7 @@ ${suspenseBoot}
  * `register()` are skipped silently (no harm, just no preload hint).
  *
  * Returns separate eager and lazy lists. Lazy components (static lazy = true)
- * are NOT preloaded — they're loaded by the IntersectionObserver-based
+ * are NOT preloaded: they're loaded by the IntersectionObserver-based
  * lazy-loader when the element enters the viewport.
  *
  * @param {Set<string>} usedTags
@@ -1089,7 +1089,7 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
 function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
-  // Default: no caching. Pages are dynamic by default — the developer
+  // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
   if (req && !readToken(req)) {
@@ -1126,7 +1126,7 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
             })
           );
           for (const r of settled) {
-            // Emit just the <template> — the MutationObserver-based resolver
+            // Emit just the <template>: the MutationObserver-based resolver
             // in the boot script detects it and swaps it into the placeholder.
             // Falls back to the __webjsResolve global for browsers without MO.
             const chunk =
@@ -1192,7 +1192,7 @@ function escapeAttr(s) {
  *   width, height, initialScale, minimumScale, maximumScale,
  *   userScalable, viewportFit, interactiveWidget.
  * Other fields (themeColor, colorScheme) live on their own meta tags
- * and are handled by the caller — skipped here.
+ * and are handled by the caller: skipped here.
  *
  * @param {Record<string, unknown>} v
  * @returns {string}

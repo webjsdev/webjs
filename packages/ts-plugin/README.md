@@ -5,18 +5,18 @@ A TypeScript language-service plugin for webjs. Gives editors that speak
 Zed, WebStorm) three webjs-aware capabilities inside `` html`` `` tagged
 templates:
 
-1. **Go-to-definition** — `gd` / F12 / Ctrl+Click on `<my-counter>` jumps
+1. **Go-to-definition**: `gd` / F12 / Ctrl+Click on `<my-counter>` jumps
    to the class declaration. Same for class names inside
    `html\`class="…"\`` attributes (jumps to the matching `` css`` `` rule).
-2. **Diagnostic suppression** — drops `ts-lit-plugin`'s "Unknown tag" /
+2. **Diagnostic suppression**: drops `ts-lit-plugin`'s "Unknown tag" /
    "Unknown attribute" reports for elements that are reachable through
    the current file's import graph.
-3. **Attribute auto-complete** — inside `<my-counter |>`, completes the
+3. **Attribute auto-complete**: inside `<my-counter |>`, completes the
    keys of the component's `static properties = { … }` map.
-4. **Attribute-value type-check** — `<my-counter count=${expr}>`
+4. **Attribute-value type-check**: `<my-counter count=${expr}>`
    assignability-checks `typeof expr` against the prop's `declare`
    annotation. Works for primitives, string-literal unions, interfaces,
-   generics — anything the TypeScript checker understands. Static
+   and generics: anything the TypeScript checker understands. Static
    (non-interpolated) attribute text is deliberately not checked.
 
 ```ts
@@ -31,7 +31,7 @@ render(html`
 
 ## Why this exists
 
-`ts-lit-plugin` — the standard tsserver plugin for `` html`` `` intelligence —
+`ts-lit-plugin`, the standard tsserver plugin for `` html`` `` intelligence,
 recognises tag names through one of these static signals:
 
 - `customElements.define('my-el', MyEl)` direct calls
@@ -71,7 +71,7 @@ Add to `tsconfig.json`:
 }
 ```
 
-Plugin order matters — list `ts-lit-plugin` first so the webjs plugin
+Plugin order matters: list `ts-lit-plugin` first so the webjs plugin
 can wrap its output to suppress webjs-incompatible diagnostics and
 augment its completions.
 
@@ -95,7 +95,7 @@ editing through `import` / `export` declarations (transitively).
 
 A tag registered in some other file but not imported here would also
 fail at runtime, so the squiggle is the correct prompt to add the
-side-effect import. Go-to-definition is *not* gated on reachability —
+side-effect import. Go-to-definition is *not* gated on reachability:
 you can still navigate to a class even from a file that doesn't import
 it.
 

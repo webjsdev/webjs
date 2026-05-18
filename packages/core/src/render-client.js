@@ -25,7 +25,7 @@ import { isUnsafeHTML, isLive } from './directives.js';
  *   - Event listeners are attached once and retargeted when the handler
  *     reference changes (swap-in-place via a dispatch closure, so `addEventListener`
  *     isn't churned every render).
- *   - This is a conservative implementation; no keyed list diffing yet — array
+ *   - This is a conservative implementation; no keyed list diffing yet: array
  *     changes rebuild the whole text part.
  */
 
@@ -80,7 +80,7 @@ export function render(value, container) {
 
     // Light DOM hydration: if container has SSR content (marked by
     // <!--webjs-hydrate-->), remove the marker and proceed with normal
-    // rendering. The content will be replaced with identical output —
+    // rendering. The content will be replaced with identical output -
     // no visible flash because SSR and client render produce the same HTML.
     const firstChild = container.firstChild;
     if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
@@ -214,7 +214,7 @@ function compile(tr) {
           // Consume mixed-attribute chars without appending to html.
           // The attribute was replaced with a sentinel on the first hole.
           if (c === attrQuote) {
-            // Closing quote — finalize the attr-mixed part.
+            // Closing quote: finalize the attr-mixed part.
             if (mixedAttr) {
               const idx0 = mixedAttr.firstPartIdx;
               const group = [];
@@ -297,7 +297,7 @@ function compile(tr) {
         state = 'in-tag';
         attrName = '';
       } else if (state === 'attr-quoted' || state === 'attr-unquoted') {
-        // First hole inside a quoted attribute value — start mixed-attr tracking.
+        // First hole inside a quoted attribute value: start mixed-attr tracking.
         // Replace the entire attribute with a sentinel (same as regular attr).
         html = html.slice(0, attrStart);
         const sentinel = `data-${MARKER}${partIdx}`;
@@ -465,7 +465,7 @@ function clearInstance(inst, container) {
  * @param {unknown} _prev
  */
 function applyPart(part, value, _prev, allValues) {
-  // Unwrap live() — dirty-check against the live DOM value, not the
+  // Unwrap live() to dirty-check against the live DOM value, not the
   // last rendered value. Essential for <input> two-way binding.
   if (isLive(value)) {
     const liveVal = /** @type any */ (value).value;
@@ -506,7 +506,7 @@ function applyPart(part, value, _prev, allValues) {
       break;
     }
     case 'noop':
-      // intentionally empty — used for holes inside HTML comments
+      // intentionally empty: used for holes inside HTML comments
       break;
   }
 }
@@ -522,7 +522,7 @@ function applyPart(part, value, _prev, allValues) {
 function applyChild(part, value) {
   const marker = part.marker;
 
-  // unsafeHTML directive — inject raw HTML string as DOM nodes.
+  // unsafeHTML directive: inject raw HTML string as DOM nodes.
   if (isUnsafeHTML(value)) {
     teardownChild(part);
     const htmlStr = String(/** @type any */ (value).value ?? '');
@@ -536,7 +536,7 @@ function applyChild(part, value) {
     return;
   }
 
-  // Repeat directive — keyed reconciliation. Keep previous state when both
+  // Repeat directive: keyed reconciliation. Keep previous state when both
   // old and new are repeats; otherwise tear down and rebuild.
   if (isRepeat(value)) {
     if (part.child && /** @type any */ (part.child).kind === 'repeat') {
@@ -565,7 +565,7 @@ function applyChild(part, value) {
       removeBetween(inst.startNode, inst.endNode);
       part.child = undefined;
     } else {
-      // Previous was ChildNode[] — remove each node we inserted.
+      // Previous was ChildNode[]: remove each node we inserted.
       for (const n of /** @type ChildNode[] */ (part.child)) {
         if (n.parentNode) n.parentNode.removeChild(n);
       }

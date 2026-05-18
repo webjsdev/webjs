@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# pre-commit hook — blocks commits on main/master.
+# pre-commit hook - blocks commits on main/master.
 #
 # No AI agent, no editor, no human can commit to main directly.
 # Create a feature branch first. This is git-level enforcement.

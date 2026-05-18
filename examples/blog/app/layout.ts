@@ -10,7 +10,7 @@ const footerLink = (href: string, label: string) => html`
   <a href=${href} class="text-inherit no-underline transition-colors duration-fast hover:text-fg-muted">${label}</a>
 `;
 
-const TITLE = 'webjs blog — live demo';
+const TITLE = 'webjs blog: live demo';
 const DESCRIPTION = 'A live, full-stack webjs example: posts, comments, auth, and WebSocket chat.';
 
 export function generateMetadata(ctx: { url: string }) {
@@ -27,7 +27,7 @@ export function generateMetadata(ctx: { url: string }) {
       image,
       'image:width': '1200',
       'image:height': '630',
-      'image:alt': 'webjs blog — live demo',
+      'image:alt': 'webjs blog: live demo',
       'site_name': 'webjs · blog',
     },
     twitter: {
@@ -40,12 +40,12 @@ export function generateMetadata(ctx: { url: string }) {
 }
 
 /**
- * Root layout — globals + chrome.
+ * Root layout: globals + chrome.
  *
  * Three concerns, in document order:
  *  1. Inline `<script>` that syncs `<html data-theme>` from localStorage
  *     BEFORE any style applies (no FOUC).
- *  2. Generated Tailwind stylesheet (`public/tailwind.css`) — compiled
+ *  2. Generated Tailwind stylesheet (`public/tailwind.css`): compiled
  *     once in prod via `npm run start` or on-file-change in dev via
  *     `npm run dev`. The input lives in `public/input.css` and includes
  *     the `@theme` block that maps our design tokens into Tailwind's
@@ -108,7 +108,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --font-mono:   ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
       }
 
-      /* ---------- light — explicit toggle ---------- */
+      /* ---------- light: explicit toggle ---------- */
       :root[data-theme='light'] {
         --fg:            oklch(0.18 0.015 60);
         --fg-muted:      oklch(0.42 0.02 65);
@@ -125,7 +125,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-tint:   oklch(0.58 0.15 55 / 0.1);
       }
 
-      /* ---------- light — OS preference ---------- */
+      /* ---------- light: OS preference ---------- */
       @media (prefers-color-scheme: light) {
         :root:not([data-theme='dark']) {
           --fg:            oklch(0.18 0.015 60);
@@ -144,7 +144,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         }
       }
 
-      /* Body defaults — the <body> tag is emitted by the framework and can't
+      /* Body defaults. The <body> tag is emitted by the framework and can't
          be reached by utility classes. A tiny decorative overlay, scrollbar
          colours, and selection tint also live here (no utility equivalent). */
       html, body { margin: 0; }
@@ -176,7 +176,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       ::-webkit-scrollbar-track { background: transparent; }
 
       /* Mobile drawer + backdrop. Toggled via [data-menu-open] on <body>.
-         Desktop (>= 640px) hides the drawer entirely — desktop nav is inline. */
+         Desktop (>= 640px) hides the drawer entirely, and desktop nav is inline. */
       .menu-drawer {
         position: fixed;
         top: 0; right: 0;
@@ -253,7 +253,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     </aside>
 
     <div class="max-w-[760px] mx-auto px-4 sm:px-6 pt-4 text-[11px] leading-snug text-fg-subtle font-mono tracking-wide">
-      Demo app - data will be wiped between redeploys.
+      Demo app. Data will be wiped between redeploys.
     </div>
 
     <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-4 pb-12 min-h-screen">

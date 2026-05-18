@@ -1,5 +1,5 @@
 /**
- * /api/chat — global broadcast chat.
+ * /api/chat: global broadcast chat.
  * GET returns a status snapshot; WS upgrades to a live connection.
  */
 import type { WebSocket } from 'ws';
@@ -14,7 +14,7 @@ export async function GET() {
 
 export function WS(ws: WebSocket) {
   clients.add(ws);
-  // Broadcast to ALL clients INCLUDING the joiner — everyone needs the
+  // Broadcast to ALL clients INCLUDING the joiner: everyone needs the
   // updated count. Without this, the joining client shows "0 online".
   broadcast({ kind: 'join', count: clients.size });
   ws.on('message', (data) => {

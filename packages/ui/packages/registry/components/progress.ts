@@ -1,5 +1,5 @@
 /**
- * Progress — determinate progress bar.
+ * Progress: determinate progress bar.
  *
  * APG pattern: progressbar role + aria-valuenow.
  *
@@ -11,8 +11,8 @@
  *   <ui-progress value="100"></ui-progress>
  *
  * Attributes:
- *   `value` — number, 0–100. Defaults to 0.
- *   `max`   — number, default 100.
+ *   `value`: number, 0–100. Defaults to 0.
+ *   `max`:  number, default 100.
  *
  * The progress is implemented as a custom element because the fill width
  * is driven by a `transform: translateX(-${100 - value}%)` on a child div,
@@ -73,7 +73,7 @@ export class UiProgress extends Base {
     this.setAttribute('aria-valuenow', String(clamped));
     this.setAttribute('aria-valuemin', '0');
     this.setAttribute('aria-valuemax', String(max));
-    // Radix/shadcn data-attribute portability — class strings like
+    // Radix/shadcn data-attribute portability: class strings like
     //   data-[state=loading]:animate-pulse
     //   data-[state=indeterminate]:bg-muted
     // can target our progress now. State = indeterminate when `value`

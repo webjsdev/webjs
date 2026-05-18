@@ -173,7 +173,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const before = await page.evaluate(() => document.documentElement.dataset.theme);
     assert.equal(before, 'light', 'Theme should be light after reload');
 
-    // Click toggle: light → dark (light DOM — toggle + button live in document)
+    // Click toggle: light → dark (light DOM: toggle + button live in document)
     await page.evaluate(() => {
       const toggle = document.querySelector('theme-toggle');
       toggle?.querySelector('button')?.click();
@@ -273,7 +273,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   test('counter works after multiple navigations with random delays', { timeout: 120000 }, async () => {
     // This replicates the exact user-reported bug: navigate around the blog
     // for about a minute (with varied, realistic pauses between navigations),
-    // then come back to the landing page — the counter should still work.
+    // then come back to the landing page: the counter should still work.
     //
     // Delays are randomized between 3–10s to mimic real browsing behavior
     // where the user reads content, scrolls, and clicks at irregular intervals.
@@ -355,7 +355,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       if (!counter) return { exists: false };
       return {
         exists: true,
-        // Counter is light DOM — no shadowRoot; render root is the element itself.
+        // Counter is light DOM: no shadowRoot; render root is the element itself.
         hasRenderRoot: counter._renderRoot !== null && counter._renderRoot !== undefined,
         renderRootIsSelf: counter._renderRoot === counter,
         isConnected: counter._connected === true,
@@ -370,7 +370,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   });
 
   test('counter works after rapid back-and-forth navigation', async () => {
-    // Faster navigations — still should work with upgradeCustomElements
+    // Faster navigations: still should work with upgradeCustomElements
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(2000);
 
@@ -628,11 +628,11 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   // UI demo route (Webjs UI showcase)
   //
   // Verifies /ui-demo renders both tiers correctly:
-  //   - Tier 1 (button, card, input, label, alert, badge) — class-helper
+  //   - Tier 1 (button, card, input, label, alert, badge): class-helper
   //     functions on native elements. Asserts the helper output (e.g.
   //     "rounded-xl border bg-card", "bg-primary text-primary-foreground")
   //     is present in the rendered HTML.
-  //   - Tier 2 (dialog) — real <ui-dialog> custom element.
+  //   - Tier 2 (dialog): real <ui-dialog> custom element.
   // Also enforces the regression denylist: no <ui-button>/<ui-card>/
   // <ui-input>/<ui-alert>/<ui-badge> tags (Tier-1 is class-helper-only
   // after the migration).
@@ -640,7 +640,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
   test('/ui-demo route renders both tiers: class-helper output + ui-dialog', async () => {
     // After the Tier-1/Tier-2 migration: Tier-1 components (button, card,
-    // input, label, alert, badge) are class-helper functions — no
+    // input, label, alert, badge) are class-helper functions: no
     // <ui-button>/<ui-card> custom elements. They render as native
     // <button>/<div>/<input> with the helper's class string. Tier-2
     // components (dialog and friends) stay as <ui-X> custom elements.
@@ -708,7 +708,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   });
 
   // ---------------------------------------------------------------------------
-  // Migrated auth flow — <auth-forms> uses Tier-1 class helpers
+  // Migrated auth flow: <auth-forms> uses Tier-1 class helpers
   // (inputClass, labelClass, buttonClass) on raw native <input>/<label>/
   // <button> elements. No <ui-input>/<ui-button> custom elements after
   // the Tier-1/Tier-2 split.
@@ -935,7 +935,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const password = 'correct-horse-battery-staple';
 
     // 1) POST /api/auth/signup with a fresh email. Rate-limited to 5/10s
-    // — we do one request total per test run, so we're well under.
+    // - we do one request total per test run, so we're well under.
     const signupResp = await page.evaluate(async ({ email, password }) => {
       const r = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -981,7 +981,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   // ---------------------------------------------------------------------------
 
   test('client nav: layout header survives same-layout swap (no remount)', async () => {
-    // Same-layout nav should preserve the layout chrome — the header
+    // Same-layout nav should preserve the layout chrome: the header
     // DOM element is the same instance before and after. If the router
     // did a full page reload, a property stamped on the element would
     // be lost.
@@ -1007,7 +1007,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // /api/auth/* has `rateLimit({ window: '10s', max: 5 })`. Fire 6
     // login attempts with a bogus credential in quick succession.
     // Use Node's fetch (not page.evaluate) so we bypass puppeteer
-    // navigation timeouts — this is a pure HTTP-level test.
+    // navigation timeouts: this is a pure HTTP-level test.
     // The X-Forwarded-For header gives us a fresh IP bucket so earlier
     // tests in the suite don't consume our quota.
     const ip = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
@@ -1074,7 +1074,7 @@ async function clickNavLink(p, text) {
 }
 
 /**
- * Click the brand link ("webjs / blog") — the first <a> in the header that
+ * Click the brand link ("webjs / blog"): the first <a> in the header that
  * points at '/', sitting before the nav.
  * @param {import('puppeteer-core').Page} p
  */

@@ -1,12 +1,12 @@
 /**
- * Browser tests for stateful Tier-2 @webjskit/ui custom elements — those
+ * Browser tests for stateful Tier-2 @webjskit/ui custom elements: those
  * with internal state that mutates on interaction. Runs in real Chromium
  * via WTR + Playwright.
  *
  * Covers: tabs, accordion, collapsible, progress.
  *
  * Tier-1 components (switch, checkbox, radio-group, toggle) are class
- * helpers, not custom elements — their assertions live in
+ * helpers, not custom elements: their assertions live in
  * `packages/ui/test/class-helpers.test.js`.
  */
 import { html } from '../../packages/core/src/html.js';

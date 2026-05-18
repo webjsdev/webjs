@@ -12,11 +12,11 @@
  *   { key: 'posts', ttl: 60 }
  * );
  *
- * // Call it normally — first call hits DB, subsequent calls serve cache
+ * // Call it normally: first call hits DB, subsequent calls serve cache
  * const posts = await listPosts();
  * ```
  *
- * For page-level HTTP caching, use `metadata.cacheControl` instead —
+ * For page-level HTTP caching, use `metadata.cacheControl` instead -
  * that sets standard Cache-Control headers for browsers and CDNs.
  * This `cache()` is for server-side query result caching.
  *
@@ -53,7 +53,7 @@ export function cache(fn, opts) {
 
       const hit = await store.get(cacheKey);
       if (hit !== null) {
-        try { return JSON.parse(hit); } catch { /* corrupted — recompute */ }
+        try { return JSON.parse(hit); } catch { /* corrupted: recompute */ }
       }
 
       const result = await fn(...args);

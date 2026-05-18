@@ -1,4 +1,4 @@
-/* Tailwind CSS v4 input — compiled to public/tailwind.css. */
+/* Tailwind CSS v4 input - compiled to public/tailwind.css. */
 @import "tailwindcss";
 
 @source "../app/**/*.{ts,js,tsx,jsx}";
@@ -6,7 +6,7 @@
 @source "../components/**/*.{ts,js,tsx,jsx}";
 
 /* --------------------------------------------------------------------------
-   Webjs site theme — used by the docs chrome (header, nav, footer, prose).
+   Webjs site theme - used by the docs chrome (header, nav, footer, prose).
    -------------------------------------------------------------------------- */
 @theme {
   --color-fg:            var(--fg);
@@ -26,7 +26,7 @@
   --color-accent-fg:     var(--accent-fg);
   --color-accent-tint:   var(--accent-tint);
 
-  /* Brand-accent aliases — same warm-orange tokens as the chrome `accent`,
+  /* Brand-accent aliases - same warm-orange tokens as the chrome `accent`,
      but exposed under `brand` so they're NEVER overridden by the shadcn
      `--color-accent` redefinition below. Use `bg-brand`/`text-brand-fg`/
      `hover:bg-brand-hover` for marketing CTAs that must stay webjs-warm
@@ -40,13 +40,13 @@
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
 
-  /* Transition tokens — matched to webjs.dev. Generates Tailwind's
+  /* Transition tokens - matched to webjs.dev. Generates Tailwind's
      `duration-fast` and `duration-slow` utilities. */
   --duration-fast: 140ms;
   --duration-slow: 220ms;
 
   /* ------------------------------------------------------------------------
-     Shadcn theme tokens — used by the ui-* component previews.
+     Shadcn theme tokens - used by the ui-* component previews.
      These are SEPARATE from the webjs chrome tokens above so the docs site
      keeps its warm orange look while the component previews render with the
      standard shadcn neutral palette (what users will see in their own apps).
@@ -64,7 +64,7 @@
   --color-muted:                var(--muted);
   --color-muted-foreground:     var(--muted-foreground);
   /* `bg-accent` / `text-accent-foreground` (used by ghost / outline buttons,
-     hover states inside ui-* components) map to the shadcn neutral accent —
+     hover states inside ui-* components) map to the shadcn neutral accent -
      NOT the webjs warm brand accent. The brand accent stays available via
      raw `var(--accent)` for the docs chrome (headlines, announce banner). */
   --color-accent:               var(--accent-shadcn);
@@ -77,7 +77,7 @@
 
 /* --------------------------------------------------------------------------
    Shadcn theme variable values (neutral base, light + dark mode).
-   Mirrors what `webjsui init` writes into the user's app — ui-* components
+   Mirrors what `webjsui init` writes into the user's app - ui-* components
    reference these via Tailwind classes like `bg-primary`, `text-foreground`.
    -------------------------------------------------------------------------- */
 :root {
@@ -129,7 +129,7 @@
   }
 }
 
-/* Explicit toggle to dark — wins over the OS regardless of preference. */
+/* Explicit toggle to dark - wins over the OS regardless of preference. */
 :root[data-theme='dark'],
 :root.dark {
   --background:               oklch(0.145 0 0);

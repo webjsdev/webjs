@@ -33,7 +33,7 @@ function tmp() {
   return d;
 }
 
-test('init — writes components.json with project-detected defaults', async () => {
+test('init: writes components.json with project-detected defaults', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -49,7 +49,7 @@ test('init — writes components.json with project-detected defaults', async () 
   }
 });
 
-test('init — writes lib/utils.ts from registry', async () => {
+test('init: writes lib/utils.ts from registry', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -63,7 +63,7 @@ test('init — writes lib/utils.ts from registry', async () => {
   }
 });
 
-test('init — appends theme CSS to globals.css', async () => {
+test('init: appends theme CSS to globals.css', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -87,7 +87,7 @@ test('init — appends theme CSS to globals.css', async () => {
   }
 });
 
-test('init — theme is idempotent (doesn\'t append twice)', async () => {
+test('init: theme is idempotent (doesn\'t append twice)', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -105,7 +105,7 @@ test('init — theme is idempotent (doesn\'t append twice)', async () => {
   }
 });
 
-test('init — accepts --base-color override', async () => {
+test('init: accepts --base-color override', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -118,7 +118,7 @@ test('init — accepts --base-color override', async () => {
   }
 });
 
-test('init — accepts --css override', async () => {
+test('init: accepts --css override', async () => {
   stubFetch();
   const d = tmp();
   try {

@@ -1,5 +1,5 @@
 /**
- * HoverCard — popover-like panel triggered by hover with configurable
+ * HoverCard, popover-like panel triggered by hover with configurable
  * open/close delays. The content uses the native Popover API in
  * `popover="manual"` mode for top-layer rendering. The hover-with-linger
  * state machine remains JS.

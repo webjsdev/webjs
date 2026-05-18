@@ -97,7 +97,7 @@ test('nested-layout partial-swap: docs sidenav scroll + identity preserved', asy
       `expected sidenav scrollable; got scrollTop=${initialScrollTop}`);
 
     // 2. Click a sidebar link to a DIFFERENT component.
-    // The sidenav lists components — pick one we know exists.
+    // The sidenav lists components: pick one we know exists.
     const linkText = 'card';
     const link = sidenav.locator(`a:has-text("${linkText}")`).first();
     await link.waitFor({ state: 'attached' });
@@ -109,14 +109,14 @@ test('nested-layout partial-swap: docs sidenav scroll + identity preserved', asy
       location.pathname.endsWith('/card'),
       { timeout: 4000 }
     );
-    // Network might still be settling (revalidation, etc.) — wait briefly.
+    // Network might still be settling (revalidation, etc.): wait briefly.
     await page.waitForTimeout(100);
 
     // 3. The same sidenav DOM node should still carry our probe.
     const sidenavIdentityProbe = await page.locator('.docs-sidenav').first()
       .evaluate((el) => el.getAttribute('data-identity-probe'));
     assert.equal(sidenavIdentityProbe, 'before-nav',
-      'sidenav DOM identity preserved — partial swap did NOT re-render the docs layout');
+      'sidenav DOM identity preserved: partial swap did NOT re-render the docs layout');
 
     // 4. The scroll position survives.
     const scrollTopAfter = await page.locator('.docs-sidenav').first()
@@ -124,7 +124,7 @@ test('nested-layout partial-swap: docs sidenav scroll + identity preserved', asy
     assert.equal(scrollTopAfter, 200,
       `sidenav scroll preserved; expected 200, got ${scrollTopAfter}`);
 
-    // 5. The right-hand content actually changed — page heading reflects new component.
+    // 5. The right-hand content actually changed: page heading reflects new component.
     const heading = await page.locator('h1').first().textContent();
     assert.ok(/card/i.test(heading || ''),
       `expected heading to mention "Card", got: ${heading}`);

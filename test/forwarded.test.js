@@ -1,5 +1,5 @@
 /**
- * Tests for urlFromRequest — the helper that builds a URL from a Node
+ * Tests for urlFromRequest: the helper that builds a URL from a Node
  * IncomingMessage while honoring standard reverse-proxy headers.
  *
  * Real-world impact: every webjs app deployed behind a TLS-terminating
@@ -103,7 +103,7 @@ test('urlFromRequest: WEBJS_NO_TRUST_PROXY=1 disables proxy-header trust entirel
       'x-forwarded-proto': 'https',
       'x-forwarded-host': 'attacker.example.com',
     }));
-    // Forwarded values are ignored — fall back to Host header + http.
+    // Forwarded values are ignored: fall back to Host header + http.
     assert.equal(u.protocol, 'http:');
     assert.equal(u.host, 'real-host:3000');
   } finally {
