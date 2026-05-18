@@ -54,6 +54,15 @@ export const PROJECTION_ATTR = 'data-projection';
 export const PROJECTION_ACTUAL = 'actual';
 export const PROJECTION_FALLBACK = 'fallback';
 
+/**
+ * Symbol-keyed property on a slot element that holds a DocumentFragment
+ * containing the slot's fallback content (cloned from the compiled template
+ * by render-client.js at slot-part bind time). slot.js swaps these nodes
+ * into and out of the slot as the projection state toggles between
+ * "actual" and "fallback".
+ */
+export const SLOT_FALLBACK_FRAG = Symbol('webjs.slot.fallbackFrag');
+
 /** Maximum recursion depth for assignedNodes({flatten: true}); guards cycles. */
 const FLATTEN_MAX_DEPTH = 64;
 
@@ -575,7 +584,20 @@ function applyActualAssignment(state, slot, assigned) {
   const equal = !wasFallback && arraysEqual(prev, assigned);
   if (equal) return false;
 
-  while (slot.firstChild) slot.removeChild(slot.firstChild);
+  // Preserve fallback content. If the slot currently holds fallback nodes
+  // (either because we just hydrated from SSR's data-projection="fallback"
+  // or because the slot-part placed them there at bind time), move them
+  // back into the part-owned holding fragment so they survive for a later
+  // transition. Identified via the SLOT_FALLBACK_FRAG symbol that the
+  // slot-part wrote to the element.
+  const fallbackFrag = /** @type {DocumentFragment | undefined} */ (
+    /** @type {any} */ (slot)[SLOT_FALLBACK_FRAG]
+  );
+  if (wasFallback && fallbackFrag) {
+    while (slot.firstChild) fallbackFrag.appendChild(slot.firstChild);
+  } else {
+    while (slot.firstChild) slot.removeChild(slot.firstChild);
+  }
   for (const node of assigned) slot.appendChild(node);
   slot.setAttribute(PROJECTION_ATTR, PROJECTION_ACTUAL);
   state.lastSnapshot.set(slot, assigned.slice());
@@ -597,7 +619,12 @@ function applyActualAssignment(state, slot, assigned) {
 function applyFallback(state, slot) {
   const wasActual = slot.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL;
   slot.setAttribute(PROJECTION_ATTR, PROJECTION_FALLBACK);
-  if (!wasActual) return false;
+  if (!wasActual) {
+    // Already fallback. Make sure the fallback content is materialised
+    // in the slot if the slot-part has a holding fragment with nodes.
+    restoreFallbackInto(slot);
+    return false;
+  }
 
   const prev = state.lastSnapshot.get(slot) || [];
   if (prev.length > 0) {
@@ -606,7 +633,22 @@ function applyFallback(state, slot) {
   }
   state.lastSnapshot.delete(slot);
   while (slot.firstChild) slot.removeChild(slot.firstChild);
+  restoreFallbackInto(slot);
   return true;
+}
+
+/**
+ * Move the slot-part's holding fragment back into the slot. No-op if no
+ * fragment is attached or it is already empty.
+ *
+ * @param {HTMLSlotElement} slot
+ */
+function restoreFallbackInto(slot) {
+  const frag = /** @type {DocumentFragment | undefined} */ (
+    /** @type {any} */ (slot)[SLOT_FALLBACK_FRAG]
+  );
+  if (!frag || frag.childNodes.length === 0) return;
+  slot.appendChild(frag);
 }
 
 /**
