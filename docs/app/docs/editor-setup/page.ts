@@ -19,8 +19,8 @@ export default function EditorSetup() {
 
     <h2>Prerequisites</h2>
     <ul>
-      <li><strong>Node 20.6+</strong> for the esbuild loader hook the dev server registers at startup.</li>
-      <li><strong>TypeScript 5.6+</strong> as a dev dependency (<code>npm i -D typescript</code>). The framework itself has no TS dependency. You only need it for editor intellisense.</li>
+      <li><strong>Node 24+</strong> for the built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>). The framework requires it via <code>engines</code>.</li>
+      <li><strong>TypeScript 5.8+</strong> as a dev dependency (<code>npm i -D typescript</code>). Needed for the <code>erasableSyntaxOnly</code> compiler option that catches non-erasable syntax in the editor.</li>
       <li>A <code>tsconfig.json</code> in your app. The scaffold generates one.</li>
     </ul>
 
@@ -36,6 +36,7 @@ export default function EditorSetup() {
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
+    "erasableSyntaxOnly": true,
     "plugins": [
       { "name": "@webjskit/ts-plugin" }
     ]
@@ -45,7 +46,8 @@ export default function EditorSetup() {
     <ul>
       <li><code>moduleResolution: "NodeNext"</code>: required for the framework's <code>exports</code> map to resolve correctly.</li>
       <li><code>allowImportingTsExtensions: true</code>: lets you write <code>import { x } from './foo.ts'</code>, matching how webjs serves them.</li>
-      <li><code>noEmit: true</code>: TypeScript type-checks only. webjs transforms <code>.ts</code> via esbuild at import / request time.</li>
+      <li><code>noEmit: true</code>: TypeScript type-checks only. webjs strips types via Node's built-in stripper at import / request time.</li>
+      <li><code>erasableSyntaxOnly: true</code>: rejects non-erasable TypeScript (<code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators). Required because Node's stripper only supports erasable TS. See the <a href="/docs/typescript">TypeScript</a> page for the erasable equivalents.</li>
       <li><code>plugins</code>: one entry. <code>@webjskit/ts-plugin@0.4.0+</code> bundles <code>ts-lit-plugin</code> internally and loads it programmatically, so no separate <code>ts-lit-plugin</code> entry is needed.</li>
     </ul>
 

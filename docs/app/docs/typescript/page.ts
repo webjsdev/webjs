@@ -5,12 +5,12 @@ export const metadata = { title: 'TypeScript | webjs' };
 export default function TypeScript() {
   return html`
     <h1>TypeScript</h1>
-    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. The dev server transforms TypeScript via esbuild for both server-side imports and browser-bound modules. One transformer handles both, so SSR and hydration always produce equivalent JS. No compilation step, no output directory, full TypeScript feature support.</p>
+    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. The framework requires Node 24+, which strips TypeScript types natively (<code>process.features.typescript === 'strip'</code>). Server-side <code>.ts</code> imports work without any loader registration; browser-bound <code>.ts</code> requests go through <code>module.stripTypeScriptTypes</code> on the dev server. Both paths perform whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap is shipped and stack traces are byte-exact.</p>
 
     <h2>No-Build TypeScript</h2>
-    <p>When the dev server starts, it registers an esbuild loader hook with Node (<code>module.register()</code>). From that point on, every <code>.ts</code> import (whether from a server-side route file or a browser fetch of <code>/components/foo.ts</code>) flows through esbuild's <code>transform()</code> API. The transform takes roughly 1ms per file and the result is cached by file mtime, so subsequent loads are instant.</p>
-    <p>Because the same transformer runs on both sides, you can use any TypeScript feature esbuild supports (enums, decorators, parameter properties, namespaces, generics) without worrying about a mismatch between SSR and hydration. On the server side, your pages, layouts, server actions, and middleware run as-is. On the client side, browsers fetch <code>.ts</code> URLs and receive the transformed JS. The URL keeps its <code>.ts</code> extension. Only the response body is JS.</p>
-    <p>In production, the same esbuild loader runs in <code>webjs start</code>. Source <code>.ts</code> files are transformed on first request and cached by mtime. There is no separate compile or bundle step. Combined with the importmap + <code>modulepreload</code> hints emitted at SSR time, the per-file ESM model is competitive with bundling and gives you granular cache invalidation on incremental deploys.</p>
+    <p>Node 24+'s built-in type stripping does the heavy lifting. The dev server reads each <code>.ts</code> request from disk, runs <code>module.stripTypeScriptTypes</code>, and serves the result. Transform time is around 1ms per file; the result is cached by mtime, so subsequent loads are instant. SSR and hydration produce identical JS because both halves use the same stripper.</p>
+    <p>On the server side, your pages, layouts, server actions, and middleware run as-is. On the client side, browsers fetch <code>.ts</code> URLs and receive whitespace-stripped JS with no sourcemap appended. The URL keeps its <code>.ts</code> extension; only the response body changes. In production, <code>webjs start</code> uses the same code path, with the same mtime cache.</p>
+    <p>The "no build" promise is literal: every position in source maps to itself in runtime. DevTools shows accurate stack traces without consulting a sourcemap, and wire bytes drop by roughly 70% vs an esbuild-with-sourcemap pipeline.</p>
 
     <h2>Use .ts or .js: both are first-class</h2>
     <p>webjs treats <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> identically for routing and module resolution. The router recognises <code>page.ts</code> and <code>page.js</code> the same way. The action scanner recognises <code>create-post.server.ts</code> and <code>create-post.server.js</code>. Pick your preference and be consistent, or mix them freely across your project.</p>
@@ -30,7 +30,8 @@ export default function TypeScript() {
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "erasableSyntaxOnly": true
   },
   "include": [
     "app/**/*",
@@ -43,12 +44,13 @@ export default function TypeScript() {
 }</pre>
     <p>Key settings explained:</p>
     <ul>
-      <li><strong>noEmit: true</strong>: webjs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly.</li>
+      <li><strong>erasableSyntaxOnly: true</strong>: rejects non-erasable TypeScript syntax (<code>enum</code>, <code>namespace</code> with values, constructor parameter properties, legacy decorators, <code>import = require</code>) at compile time. Required because Node's built-in stripper only supports erasable TypeScript. Violations surface as red squiggles in the editor. See <strong>TypeScript Feature Support</strong> below for the erasable equivalents.</li>
+      <li><strong>noEmit: true</strong>: webjs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly via its built-in stripper.</li>
       <li><strong>allowImportingTsExtensions: true</strong>: lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the webjs convention (see below).</li>
       <li><strong>checkJs: true</strong>: type-check your <code>.js</code> files too, using JSDoc annotations. Enables a mixed codebase where both <code>.ts</code> and <code>.js</code> files participate in the same type graph.</li>
       <li><strong>allowJs: true</strong>: include <code>.js</code> files in the project. Required alongside <code>checkJs</code>.</li>
       <li><strong>module / moduleResolution: NodeNext</strong>: matches how Node resolves ESM imports, including <code>.ts</code> extensions.</li>
-      <li><strong>isolatedModules: true</strong>: ensures every file can be transpiled independently, matching esbuild's per-file transform model.</li>
+      <li><strong>isolatedModules: true</strong>: ensures every file can be transpiled independently, matching the per-file transform model of Node's stripper.</li>
     </ul>
 
     <h2>Import Convention: Explicit .ts Extensions</h2>
@@ -65,8 +67,8 @@ import { slugify } from '../utils/slugify.js';
 import { prisma } from '../lib/prisma';       // ERROR</pre>
     <p>This convention works because:</p>
     <ul>
-      <li>The webjs esbuild loader hook handles <code>.ts</code> imports server-side with full TypeScript feature support.</li>
-      <li>The browser dev server knows to look for <code>.ts</code> files and transforms them via the same esbuild instance before serving.</li>
+      <li>Node 24+ strips types from <code>.ts</code> imports server-side natively. No loader hook required.</li>
+      <li>The dev server reads <code>.ts</code> files from disk, runs <code>module.stripTypeScriptTypes</code>, and serves the result with position-preserving whitespace replacement.</li>
       <li>When the browser requests a <code>.js</code> file that doesn't exist but a sibling <code>.ts</code> does, webjs falls back to the <code>.ts</code> version automatically. This means libraries that import without extensions can still work.</li>
     </ul>
 
@@ -143,27 +145,36 @@ export function formatDate(post) {
 }</pre>
     <p>JSDoc-typed <code>.js</code> files and <code>.ts</code> files can import each other freely. The type checker treats them as part of the same project.</p>
 
-    <h2>TypeScript Feature Support</h2>
-    <p>Because webjs uses esbuild on both the server side (loader hook) and the browser side (per-request transform), you can use any TypeScript feature esbuild supports, including features that Node's built-in type stripper rejects:</p>
+    <h2>TypeScript Feature Support: Erasable Only</h2>
+    <p>webjs uses Node 24+'s built-in <code>module.stripTypeScriptTypes</code> as its primary stripper. That stripper only supports <strong>erasable TypeScript</strong>: type annotations, <code>interface</code>, <code>type</code>, <code>declare</code>, generics, <code>import type</code>, <code>as</code> casts, <code>satisfies</code>. Non-erasable syntax is rejected at compile time (via <code>erasableSyntaxOnly: true</code>) and at runtime.</p>
+    <p>What's not allowed, and what to write instead:</p>
     <ul>
-      <li><strong>Enums</strong>: <code>enum Direction { Up, Down }</code> compiles to a runtime object. Both string and numeric enums are supported.</li>
-      <li><strong>Namespaces</strong> with runtime value exports: <code>namespace Util { export const VERSION = '1.0'; }</code> compiles to an IIFE.</li>
-      <li><strong>Parameter properties</strong>: <code>constructor(public name: string)</code> desugars to <code>this.name = name</code> in the constructor body.</li>
-      <li><strong>Decorators</strong>: both legacy <code>experimentalDecorators</code> and Stage-3 standard decorators work.</li>
-      <li><strong>Generics</strong>, type aliases, interfaces, type assertions, satisfies, const assertions: all supported.</li>
+      <li><strong>Enums</strong> are not allowed. Use a <code>const</code> object plus a derived union type.</li>
+      <li><strong>Namespaces with values</strong> are not allowed. Use a plain object or an ES module.</li>
+      <li><strong>Constructor parameter properties</strong> are not allowed. Declare the field explicitly and assign in the constructor body.</li>
+      <li><strong>Legacy decorators with <code>emitDecoratorMetadata</code></strong> are not allowed. Stage-3 standard decorators work fine.</li>
+      <li><strong><code>import = require()</code></strong> is not allowed. Use standard ES import.</li>
+      <li><strong>Generics</strong>, type aliases, interfaces, type assertions, satisfies, const assertions: all supported (these are erasable).</li>
     </ul>
-    <p>That said, you may still prefer erasable TypeScript (no enums, no namespaces, no parameter properties) for stylistic reasons or if you also want your code to run unchanged with TypeScript's <code>erasableSyntaxOnly</code> mode or Node's built-in stripper. Most modern TypeScript codebases trend that way anyway:</p>
-    <pre>// Erasable equivalent of an enum:
+    <pre>// Not allowed (red squiggle with erasableSyntaxOnly):
+enum Direction { Up, Down, Left, Right }
+class User { constructor(public name: string) {} }
+namespace Util { export const VERSION = '1.0'; }
+
+// Erasable equivalents:
 const Direction = { Up: 'up', Down: 'down', Left: 'left', Right: 'right' } as const;
 type Direction = (typeof Direction)[keyof typeof Direction];
 
-// Erasable equivalent of parameter properties:
 class User {
   name: string;
   constructor(name: string) {
     this.name = name;
   }
-}</pre>
+}
+
+const Util = { VERSION: '1.0' };</pre>
+    <p>This constraint exists because Node's stripper performs whitespace replacement, not AST regeneration. <code>enum</code> requires emitting a real runtime object, which would change line numbers and require shipping a sourcemap. Banning it preserves the byte-exact position property.</p>
+    <p>If a third-party <code>.ts</code> dependency uses non-erasable syntax, the dev server transparently falls back to <code>esbuild.transform</code> for that specific file and emits an inline sourcemap so DevTools still resolves source positions. The fallback also triggers if you manually turn <code>erasableSyntaxOnly</code> off and use non-erasable syntax in your own code. Files taking the fallback cost roughly 3x wire bytes (sourcemap overhead) and lose strict position preservation. The <code>erasable-typescript-only</code> convention check warns when the flag is off.</p>
 
     <h2>Mixed Codebases</h2>
     <p><code>.js</code> and <code>.ts</code> files can coexist in the same webjs project and import each other without restriction:</p>
