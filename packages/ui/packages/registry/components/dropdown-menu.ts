@@ -122,11 +122,18 @@ export const dropdownMenuSubTriggerClass = (): string =>
 export const dropdownMenuSubContentClass = (): string =>
   'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
 
+// Content panels opt into the native Popover API in manual mode so they
+// render in the top layer (no z-index wars) while keyboard navigation,
+// outside-click dismissal, and submenu logic stay JS-driven. Visibility
+// is governed by `[popover]:not(:popover-open) { display: none }` (UA
+// default), backed by our explicit show/hide-popover calls. The legacy
+// `:not([open])` selectors are kept as a paint fallback for the moment
+// before the JS runs.
 const STYLES = `
 ui-dropdown-menu:not([open]) ui-dropdown-menu-content { display: none !important; }
-ui-dropdown-menu-content { display: block; position: fixed; }
+ui-dropdown-menu-content[popover] { display: block; position: fixed; margin: 0; padding: 0.25rem; border: 0; background: revert; color: revert; overflow: revert; }
 ui-dropdown-menu-sub:not([open]) ui-dropdown-menu-sub-content { display: none !important; }
-ui-dropdown-menu-sub-content { display: block; position: fixed; }
+ui-dropdown-menu-sub-content[popover] { display: block; position: fixed; margin: 0; padding: 0.25rem; border: 0; background: revert; color: revert; overflow: revert; }
 `;
 
 function installStyles(): void {
@@ -183,13 +190,25 @@ export class UiDropdownMenu extends Base {
       side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
       align: (content.getAttribute('align') ?? 'start') as PopoverAlign,
       sideOffset: Number(content.getAttribute('side-offset') ?? 4),
+      alignOffset: Number(content.getAttribute('align-offset') ?? 0),
     });
   }
   private _reflect(): void {
     const open = this.hasAttribute('open');
     this.setAttribute('data-state', open ? 'open' : 'closed');
     const content = this.querySelector<HTMLElement>(':scope > ui-dropdown-menu-content');
-    content?.setAttribute('data-state', open ? 'open' : 'closed');
+    if (!content) return;
+    content.setAttribute('data-state', open ? 'open' : 'closed');
+    // Delegate visibility + top-layer placement to the native Popover API.
+    // `popover="manual"` is set in UiDropdownMenuContent.connectedCallback.
+    if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
+      const isPopoverOpen = (content as HTMLElement & { matches: (s: string) => boolean }).matches(':popover-open');
+      if (open && !isPopoverOpen) {
+        (content as HTMLElement & { showPopover: () => void }).showPopover();
+      } else if (!open && isPopoverOpen) {
+        (content as HTMLElement & { hidePopover: () => void }).hidePopover();
+      }
+    }
   }
   private _setup(): void {
     queueMicrotask(() => {
@@ -207,7 +226,7 @@ export class UiDropdownMenu extends Base {
     document.removeEventListener('keydown', this._keyHandler);
     window.removeEventListener('resize', this._resizeHandler);
     window.removeEventListener('scroll', this._resizeHandler, true);
-    // Close any open submenus when the root closes — otherwise on re-open
+    // Close any open submenus when the root closes; otherwise on re-open
     // they'd still carry their `[open]` attribute and re-appear.
     this.querySelectorAll<UiDropdownMenuSub>(':scope ui-dropdown-menu-sub[open]').forEach(
       (sub) => sub.hide(),
@@ -294,6 +313,32 @@ export class UiDropdownMenu extends Base {
         sub?.hide();
         trigger?.focus();
       }
+    } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Typeahead. Accumulate printable characters into a buffer (cleared
+      // after 500ms of inactivity) and focus the first item whose
+      // text-value or textContent starts with the buffer. Matches
+      // shadcn/Radix's <DropdownMenuItem textValue> behavior.
+      this._typeahead(e, items);
+    }
+  }
+
+  private _typeBuffer = '';
+  private _typeBufferTimer: number | undefined;
+  private _typeahead(e: KeyboardEvent, items: HTMLElement[]): void {
+    this._typeBuffer = (this._typeBuffer + e.key).toLowerCase();
+    clearTimeout(this._typeBufferTimer);
+    this._typeBufferTimer = window.setTimeout(() => { this._typeBuffer = ''; }, 500);
+    const buffer = this._typeBuffer;
+    // textValue attribute overrides textContent so consumers can supply a
+    // typeahead string different from the visible label (e.g. an icon-only
+    // row labeled "Print" → text-value="print").
+    const match = items.find((it) => {
+      const text = (it.getAttribute('text-value') ?? it.textContent ?? '').trim().toLowerCase();
+      return text.startsWith(buffer);
+    });
+    if (match) {
+      e.preventDefault();
+      match.focus();
     }
   }
 }
@@ -315,6 +360,11 @@ export class UiDropdownMenuContent extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'dropdown-menu-content');
     this.setAttribute('role', 'menu');
+    // Opt into the native top-layer via the Popover API. Manual mode (vs
+    // auto) keeps the existing outside-click handler + Escape handler
+    // authoritative, so nested submenus don't accidentally close their
+    // parent when the auto light-dismiss fires.
+    if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuContentClass(), userClass);
   }
@@ -492,7 +542,18 @@ export class UiDropdownMenuSub extends Base {
     const trigger = this.querySelector<HTMLElement>(':scope > ui-dropdown-menu-sub-trigger');
     const content = this.querySelector<HTMLElement>(':scope > ui-dropdown-menu-sub-content');
     trigger?.setAttribute('data-state', open ? 'open' : 'closed');
-    content?.setAttribute('data-state', open ? 'open' : 'closed');
+    if (!content) return;
+    content.setAttribute('data-state', open ? 'open' : 'closed');
+    // Same top-layer wiring as the root content; manual mode so the
+    // parent menu's existing handlers stay authoritative.
+    if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
+      const isPopoverOpen = (content as HTMLElement & { matches: (s: string) => boolean }).matches(':popover-open');
+      if (open && !isPopoverOpen) {
+        (content as HTMLElement & { showPopover: () => void }).showPopover();
+      } else if (!open && isPopoverOpen) {
+        (content as HTMLElement & { hidePopover: () => void }).hidePopover();
+      }
+    }
   }
 
   _position(): void {
@@ -510,6 +571,7 @@ export class UiDropdownMenuSub extends Base {
         side: (content.getAttribute('side') ?? 'right') as PopoverSide,
         align: (content.getAttribute('align') ?? 'start') as PopoverAlign,
         sideOffset: Number(content.getAttribute('side-offset') ?? -4),
+        alignOffset: Number(content.getAttribute('align-offset') ?? 0),
       });
     });
   }
@@ -560,6 +622,7 @@ export class UiDropdownMenuSubContent extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'dropdown-menu-sub-content');
     this.setAttribute('role', 'menu');
+    if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dropdownMenuSubContentClass(), userClass);
   }

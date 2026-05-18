@@ -9,9 +9,10 @@ export default function Docs() {
       <p>
         Webjs UI is an <strong>AI-first component library</strong>. Two tiers: pure class-helper
         functions (<code>buttonClass()</code>, <code>cardClass()</code>, <code>inputClass()</code>)
-        you spread onto raw native elements, plus a small set of stateful custom elements
-        (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-popover&gt;</code>)
-        for state the browser doesn't give you natively. You install the CLI once and add components
+        you spread onto raw native elements (including <code>&lt;dialog&gt;</code>,
+        <code>&lt;details&gt;</code>, and the <code>popover</code> attribute), plus a small set of
+        stateful custom elements (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>,
+        <code>&lt;ui-dropdown-menu&gt;</code>) that own the behavior native HTML still lacks. You install the CLI once and add components
         to your project as you need them — the source is copied into your repo, so you own it and
         can edit it freely. Variant names and data-attribute conventions mirror shadcn so existing
         shadcn knowledge maps directly.

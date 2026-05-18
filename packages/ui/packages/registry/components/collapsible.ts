@@ -1,88 +1,60 @@
 /**
- * Collapsible — togglable content panel.
+ * Collapsible — togglable content panel built on native <details>/<summary>.
  *
- * shadcn parity: Collapsible, CollapsibleTrigger, CollapsibleContent.
+ * Tier-1 component (no custom element). The browser handles open/close
+ * state, keyboard activation (Enter/Space on <summary>), focus management,
+ * and disclosure-widget accessibility — nothing for us to ship in JS.
+ *
+ * shadcn parity:
+ *   Collapsible         → <details class=${collapsibleClass()}>
+ *   CollapsibleTrigger  → <summary class=${collapsibleTriggerClass()}>
+ *   CollapsibleContent  → wrap content in <div class=${collapsibleContentClass()}>
  *
  * Usage:
- *   <ui-collapsible>
- *     <ui-collapsible-trigger>
- *       <button class=${buttonClass({ variant: 'ghost' })}>Show details</button>
- *     </ui-collapsible-trigger>
- *     <ui-collapsible-content>
- *       <p>Hidden by default. Revealed on trigger click.</p>
- *     </ui-collapsible-content>
- *   </ui-collapsible>
+ *   <details class=${collapsibleClass()}>
+ *     <summary class=${collapsibleTriggerClass()}>
+ *       Show details
+ *       <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
+ *     </summary>
+ *     <div class=${collapsibleContentClass()}>
+ *       Hidden until <summary> is clicked, Enter/Space pressed, or the
+ *       <details> element's `open` property is set via JS.
+ *     </div>
+ *   </details>
  *
- * Attributes: `open` (boolean reflected).
- * Events: `ui-open-change`.
+ * Initial state: add `open` attribute on <details> to render expanded on
+ * first paint. Programmatic toggling: `el.open = true` / `el.open = false`.
+ *
+ * Migrated from the prior <ui-collapsible> custom element. Class helpers
+ * keep the same shadcn-style visuals; the trigger class hides the native
+ * disclosure marker so callers can render their own chevron if desired.
  */
-import { Base, defineElement } from '../lib/utils.ts';
 
-const STYLES = `
-ui-collapsible:not([open]) ui-collapsible-content { display: none !important; }
-ui-collapsible-content { display: block; }
-`;
+/**
+ * Root: marks the disclosure widget as a `group` so descendants can use
+ * Tailwind's `group-open:` variant to react to the `[open]` attribute
+ * (which `<details>` sets natively). No visual styling of its own.
+ */
+export const collapsibleClass = (): string => 'group';
 
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-collapsible-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-collapsible-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
+/**
+ * Trigger: hides the native ::marker (and the WebKit -details-marker shim)
+ * so the disclosure triangle does not appear; callers wrap their own
+ * chevron icon and rotate it on open via `group-open:rotate-180`.
+ *
+ * `disabled: true` returns the visual disabled state. Native <details>
+ * has no `disabled` attribute, so for full keyboard prevention add the
+ * standard `inert` attribute on the <details> element. shadcn's React
+ * `disabled` prop combines both visual and behavior; we split them.
+ */
+export const collapsibleTriggerClass = (opts: { disabled?: boolean } = {}): string => {
+  const base = 'flex w-full cursor-pointer list-none items-center justify-between gap-2 rounded-md text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50 marker:hidden [&::-webkit-details-marker]:hidden';
+  if (opts.disabled) return `${base} pointer-events-none cursor-not-allowed opacity-50`;
+  return base;
+};
 
-export class UiCollapsible extends Base {
-  static get observedAttributes(): string[] {
-    return ['open'];
-  }
-  connectedCallback(): void {
-    installStyles();
-    this.setAttribute('data-slot', 'collapsible');
-    this._reflect();
-  }
-  attributeChangedCallback(): void {
-    this._reflect();
-    this.dispatchEvent(
-      new CustomEvent('ui-open-change', { detail: { open: this.hasAttribute('open') }, bubbles: true }),
-    );
-  }
-  show(): void {
-    this.setAttribute('open', '');
-  }
-  hide(): void {
-    this.removeAttribute('open');
-  }
-  toggle(): void {
-    if (this.hasAttribute('open')) this.hide();
-    else this.show();
-  }
-  private _reflect(): void {
-    const open = this.hasAttribute('open');
-    this.setAttribute('data-state', open ? 'open' : 'closed');
-    const trigger = this.querySelector<HTMLElement>(':scope > ui-collapsible-trigger');
-    trigger?.setAttribute('aria-expanded', String(open));
-    const content = this.querySelector<HTMLElement>(':scope > ui-collapsible-content');
-    content?.setAttribute('data-state', open ? 'open' : 'closed');
-  }
-}
-defineElement('ui-collapsible', UiCollapsible);
-
-export class UiCollapsibleTrigger extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'collapsible-trigger');
-    this.addEventListener('click', this._onClick);
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-  }
-  private _onClick = (): void => (this.closest('ui-collapsible') as UiCollapsible | null)?.toggle();
-}
-defineElement('ui-collapsible-trigger', UiCollapsibleTrigger);
-
-export class UiCollapsibleContent extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'collapsible-content');
-  }
-}
-defineElement('ui-collapsible-content', UiCollapsibleContent);
+/**
+ * Content: <details> already hides children other than <summary> when
+ * not [open], so this is purely typographic spacing. No display rules.
+ */
+export const collapsibleContentClass = (): string => 'text-sm';

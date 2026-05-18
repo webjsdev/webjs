@@ -166,9 +166,10 @@ npx webjsui add button card dialog</code></pre>
             Apply to any native element. Same variants and sizes as shadcn.
           </p>
           <div class="text-xs text-fg-subtle">
-            20 components · button, card, badge, alert, input, textarea, label,
+            23 components · button, card, badge, alert, input, textarea, label,
             checkbox, switch, radio, native‑select, avatar, separator, skeleton,
-            aspect‑ratio, kbd, table, toggle, breadcrumb, pagination
+            aspect‑ratio, kbd, table, toggle, breadcrumb, pagination, popover,
+            accordion, collapsible
           </div>
         </div>
         <div class="rounded-lg border border-border bg-bg-elev p-6">
@@ -177,12 +178,13 @@ npx webjsui add button card dialog</code></pre>
           <p class="text-sm text-fg-muted mb-4">
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dialog&gt;</code>,
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-tabs&gt;</code>,
-            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-popover&gt;</code>…
-            Manage open/close, keyboard nav, focus trap, escape, click‑outside.
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dropdown-menu&gt;</code>…
+            Manage what the platform doesn't: keyboard nav for menus + tabs,
+            hover‑with‑delay for tooltips, toast queue.
           </p>
           <div class="text-xs text-fg-subtle">
-            12 components · dialog, alert‑dialog, popover, tooltip, hover‑card,
-            tabs, accordion, collapsible, dropdown‑menu, sonner, progress, toggle‑group
+            9 components · dialog, alert‑dialog, tooltip, hover‑card,
+            tabs, dropdown‑menu, sonner, progress, toggle‑group
           </div>
         </div>
       </div>
