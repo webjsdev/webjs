@@ -28,24 +28,13 @@
 import { cn, Base, defineElement } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
+// `fixed m-0` opts out of the UA `[popover]` defaults (the auto-centering
+// `margin: auto` in particular) so JS-computed top/left coordinates from
+// `positionFloating` land correctly. The shadcn visual layer (border, bg,
+// padding, shadow) is layered on top. UA `[popover]:not(:popover-open)
+// { display: none }` handles closed-state hiding for free.
 export const hoverCardContentClass = (): string =>
-  'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
-
-const STYLES = `
-ui-hover-card-content[popover] {
-  position: fixed;
-  margin: 0;
-}
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-hover-card-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-hover-card-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
+  'fixed z-50 w-64 m-0 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
 
 export class UiHoverCard extends Base {
   static get observedAttributes(): string[] {
@@ -55,7 +44,6 @@ export class UiHoverCard extends Base {
   private _hideTimer: number | undefined;
 
   connectedCallback(): void {
-    installStyles();
     this.setAttribute('data-slot', 'hover-card');
     this._reflect();
   }

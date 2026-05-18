@@ -26,33 +26,16 @@
 import { cn, Base, defineElement } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
+// The native UA stylesheet for `[popover]` paints a bordered, padded,
+// background-coloured panel centered with `margin: auto`. Every one of
+// those defaults fights our visual styling, so the class string opts
+// out of them with explicit Tailwind utilities (`m-0`, `border-0`) and
+// then layers the shadcn look on top. `fixed` keeps JS-computed top/left
+// coordinates working in the top layer. UA `[popover]:not(:popover-open)
+// { display: none }` continues to hide the element when closed, so no
+// extra CSS rule for that is needed.
 export const tooltipContentClass = (): string =>
-  'z-50 w-fit rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background';
-
-// `[popover]:not(:popover-open) { display: none }` is the UA default;
-// we add `position: fixed` so JS-computed top/left coordinates take effect
-// in the top layer. Authors who want CSS anchor positioning instead can
-// override at the call site.
-const STYLES = `
-ui-tooltip-content[popover] {
-  position: fixed;
-  margin: 0;
-  border: 0;
-  padding: revert;
-  background: revert;
-  color: revert;
-  overflow: visible;
-}
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-tooltip-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-tooltip-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
+  'fixed z-50 w-fit m-0 border-0 overflow-visible rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background';
 
 // Module-level "last close" timestamp, shared across every <ui-tooltip> on
 // the page. When the next tooltip is hovered within `skip-delay-duration`
@@ -68,7 +51,6 @@ export class UiTooltip extends Base {
   private _hideTimer: number | undefined;
 
   connectedCallback(): void {
-    installStyles();
     this.setAttribute('data-slot', 'tooltip');
     this._reflect();
   }
