@@ -36,5 +36,8 @@
     "server",
     "router",
     "dev-server"
-  ]
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
 }

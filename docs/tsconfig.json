@@ -9,7 +9,8 @@
     "allowJs": true,
     "checkJs": true,
     "allowImportingTsExtensions": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "erasableSyntaxOnly": true
   },
   "include": ["app/**/*", "components/**/*"],
   "exclude": ["node_modules", ".webjs"]

@@ -224,6 +224,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       noEmit: true,
       allowImportingTsExtensions: true,
       skipLibCheck: true,
+      // webjs uses Node's built-in type-stripping (`process.features.
+      // typescript === 'strip'`) which preserves source positions
+      // byte-exactly. The constraint is that TypeScript must be
+      // "erasable": no `enum`, no `namespace` with values, no
+      // constructor parameter properties, no legacy decorators with
+      // `emitDecoratorMetadata`. erasableSyntaxOnly makes the
+      // compiler reject those at edit time so violations surface as
+      // red squiggles instead of runtime ERR_UNSUPPORTED_TYPESCRIPT_
+      // SYNTAX errors. Use a `const` object + union for enum-shaped
+      // values; write fields + constructor assignments explicitly.
+      erasableSyntaxOnly: true,
       // @webjskit/ts-plugin gives the editor:
       //   • type-check + diagnostics inside html`` templates (via the
       //     ts-lit-plugin it bundles internally)

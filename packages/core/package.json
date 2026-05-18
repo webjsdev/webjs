@@ -35,6 +35,9 @@
   "homepage": "https://github.com/vivek7405/webjs#readme",
   "bugs": "https://github.com/vivek7405/webjs/issues",
   "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "keywords": [
     "webjs",
     "web-components",

@@ -1,20 +1,64 @@
 # TypeScript without a build step + full-stack type safety
 
 Files ending in `.ts` / `.mts` are supported everywhere `.js` / `.mjs`
-are: same routing conventions, same server-action behaviour. No `tsc`
+are. Same routing conventions, same server-action behaviour. No `tsc`
 run is part of the user-visible workflow, no separate build step:
 
-- **Editor** (VS Code) runs the TypeScript language server continuously. Red-squiggle on wrong types.
-- **CI** (optional) runs `tsc --noEmit` against `tsconfig.json`. Type-check only.
-- **Dev + prod server** (runtime, both directions): the server registers an esbuild ESM loader hook at startup (`module.register()`) so every `.ts` import, whether server-side (SSR pages, layouts, actions, routes) or browser-fetched (`/components/foo.ts`), flows through the same `esbuild.transform()` call (~0.5–1ms per file, cached by mtime). SSR + hydration produce equivalent JS. The same loader runs in `webjs dev` and `webjs start`. There is no separate compile step in between.
+- **Editor** (VS Code) runs the TypeScript language server continuously. Red-squiggle on wrong types, including non-erasable syntax (see below).
+- **CI** (optional) runs `tsc --noEmit` against `tsconfig.json`. Type-check only. Also catches non-erasable syntax via `erasableSyntaxOnly`.
+- **Dev + prod server** (runtime, both directions): Node 24+'s built-in TypeScript type-stripping handles server-side `.ts` imports automatically (`process.features.typescript === 'strip'`). Browser-bound `.ts` requests go through `module.stripTypeScriptTypes` on the dev server, which performs whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap needs to be shipped and stack traces are byte-exact. The transform is cached by mtime (~microseconds per cache hit). Implementation backing: Node ships the [`amaro`](https://github.com/nodejs/amaro) package internally, which wraps SWC's WASM TypeScript transform in a position-preserving strip-only mode. If the framework ever needs to run on a non-Node runtime (Bun, Deno) we will install `amaro` directly or an equivalent position-preserving stripper (Sucrase preserves lines but not columns; SWC's strip mode also works).
 
-## TypeScript feature support
+## TypeScript feature support: erasable only
 
-Because esbuild handles both server-side and browser-bound `.ts`,
-every TS feature esbuild supports works in webjs: enums, namespaces
-with runtime values, parameter properties, decorators (legacy and
-Stage-3), generics, type assertions. No "stick to erasable syntax"
-caveat.
+The framework uses Node 24+'s built-in `module.stripTypeScriptTypes`,
+which only supports **erasable TypeScript**: type annotations,
+`interface`, `type`, `declare`, generics, `import type`, `as` casts,
+and `satisfies`. Non-erasable syntax is rejected.
+
+Use the **erasable equivalents** instead:
+
+```ts
+// Not allowed (rejected at compile + runtime)
+enum Color { Red, Green, Blue }
+class Foo { constructor(public x: number) {} }
+namespace Util { export const helper = ...; }
+import = require('something');
+@legacyDecorator class C {}
+
+// Allowed (canonical erasable forms)
+const Color = { Red: 'Red', Green: 'Green', Blue: 'Blue' } as const;
+type Color = typeof Color[keyof typeof Color];
+
+class Foo {
+  x: number;
+  constructor(x: number) { this.x = x; }
+}
+
+const Util = { helper: ... };
+
+import { thing } from './thing.ts';
+```
+
+Enforce this at edit time by setting `erasableSyntaxOnly: true` in
+`tsconfig.json`. The TypeScript compiler then flags any non-erasable
+syntax as a red squiggle in the editor and `tsc --noEmit` error in CI.
+
+The `erasable-typescript-only` convention check verifies the flag is
+set. Run `webjs check` to confirm.
+
+### Fallback for third-party `.ts` dependencies
+
+If a third-party package ships `.ts` source using non-erasable
+syntax (rare; most npm packages publish compiled `.js`), the dev
+server transparently falls back to `esbuild.transform` for those
+specific files. The fallback emits an inline sourcemap so DevTools
+can still resolve source positions. Your own code never takes this
+path as long as `erasableSyntaxOnly` is set.
+
+If you manually turn `erasableSyntaxOnly` off and write non-erasable
+syntax in your own code, the same fallback fires: those files cost
+~3x wire bytes (sourcemap overhead) and lose strict position
+preservation. The convention check warns about this.
 
 ## Import convention
 
@@ -43,10 +87,16 @@ import { formatPost } from '../utils/slugify.ts';         // TS file
     "checkJs": true,
     "allowJs": true,
     "allowImportingTsExtensions": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "erasableSyntaxOnly": true
   }
 }
 ```
+
+The `erasableSyntaxOnly: true` line is the non-negotiable one. It
+aligns the TypeScript compiler's accepted syntax with what Node's
+strip-types accepts, so violations surface as editor diagnostics
+instead of runtime fallback to esbuild.
 
 ## Full-stack type safety
 
