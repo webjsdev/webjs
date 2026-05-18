@@ -605,7 +605,40 @@ composition, so a nested shell ends up dropped by the HTML parser.
    browser-only). Never fetch initial data in `connectedCallback` /
    `firstUpdated`. Fetch in the page function (server) and pass it as
    a prop. See *Component pattern* above.
-8. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used
+8. **Erasable TypeScript only.** Node 24+ strips types via
+   `module.stripTypeScriptTypes` (whitespace replacement, byte-exact
+   line and column position preservation, no sourcemap shipped to the
+   browser). Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so
+   the TS compiler rejects: `enum`, `namespace` with values,
+   constructor parameter properties, legacy decorators with
+   `emitDecoratorMetadata`, and `import = require`. Use the erasable
+   equivalents:
+
+   ```ts
+   // ❌ enum
+   enum Color { Red, Green, Blue }
+
+   // ✅ const object + union type
+   const Color = { Red: 'Red', Green: 'Green', Blue: 'Blue' } as const;
+   type Color = typeof Color[keyof typeof Color];
+
+   // ❌ parameter property
+   class Foo { constructor(public x: number) {} }
+
+   // ✅ explicit field + assignment
+   class Foo {
+     x: number;
+     constructor(x: number) { this.x = x; }
+   }
+   ```
+
+   If you turn `erasableSyntaxOnly` off and use non-erasable syntax,
+   the dev server falls back to esbuild and emits inline sourcemaps
+   for those specific files: roughly 3x wire bytes per request, and
+   stack-trace positions are no longer byte-exact. The
+   `erasable-typescript-only` convention check warns when the flag
+   is missing or set to false.
+9. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used
    as a pause-punctuation substitute.** Prose, comments, code, JSON
    descriptions, commit messages. Rewrite the sentence so no
    pause-punctuation crutch is needed. Banned as pause punctuation:

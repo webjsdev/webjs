@@ -30,7 +30,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 
 | File | What it owns |
 |---|---|
-| `dev.js` | The request handler. File serving, esbuild TS transform on `.ts` imports, **server-file guardrail**, live reload via SSE |
+| `dev.js` | The request handler. File serving, TypeScript stripping (Node 24+ built-in `module.stripTypeScriptTypes`, backed by the `amaro` package, with an esbuild fallback for non-erasable syntax), **server-file guardrail**, live reload via SSE |
 | `router.js` | Scans `app/` once, builds the route table, matches pages + APIs (`buildRouteTable`, `matchPage`, `matchApi`) |
 | `ssr.js` | SSR pipeline: nested layouts, metadata → `<head>`, Suspense streaming, error boundaries |
 | `actions.js` | `.server.js` / `.server.ts` scanner. Generates RPC stubs for browser-bound imports; exposes RPC endpoints; honours `expose()` |
@@ -51,7 +51,6 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
-| `esbuild-loader.js` | Node `module.register()` hook for server-side `.ts` imports |
 | `fs-walk.js` | Async recursive directory walker |
 | `logger.js` | `defaultLogger` (JSON-shaped in prod, pretty in dev) |
 
