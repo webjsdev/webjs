@@ -1,12 +1,12 @@
-# WebComponent — deep dive
+# WebComponent deep-dive
 
-## Property options — full detail
+## Property options in full detail
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
 | `type` | `Number\|String\|Boolean\|Object\|Array` | `String` | Used by the default attribute converter |
 | `reflect` | `boolean` | `false` | Property changes write back to the HTML attribute |
-| `state` | `boolean` | `false` | Internal-only — no attribute, not in `observedAttributes` |
+| `state` | `boolean` | `false` | Internal-only. No attribute, not in `observedAttributes` |
 | `hasChanged` | `(newVal, oldVal) => boolean` | strict `!==` | Custom change detection |
 | `converter` | `{ fromAttribute?, toAttribute? }` | type-based | Custom attribute ↔ property serialization |
 
@@ -18,16 +18,16 @@ the default attribute coercion. For anything the default can't parse correctly
 
 The framework installs reactive getter/setter on `this` inside the
 constructor via `Object.defineProperty`. Without `declare`, TypeScript
-emits `student = undefined` after `super()` — which under modern class-
+emits `student = undefined` after `super()`, which under modern class-
 field semantics uses `[[Define]]` to overwrite the accessor. Result:
 `this.student = …` no longer goes through the setter, no `requestUpdate`,
-no `hasChanged`, no reflect — reactivity silently breaks.
+no `hasChanged`, no reflect, and reactivity silently breaks.
 
 The `.d.ts` overlay shipped with the framework makes every other class
-member fully typed — only the reactive properties need the `declare`
+member fully typed, so only the reactive properties need the `declare`
 line, and only in TypeScript files.
 
-## ReactiveControllers — composable lifecycle
+## ReactiveControllers: composable lifecycle
 
 ```js
 class FetchController {
@@ -54,10 +54,10 @@ Use controllers when the same lifecycle logic (fetch, timer, subscription,
 resize observer) is needed in multiple unrelated components. The built-in
 `Task`, `ContextProvider`, and `ContextConsumer` are all controllers.
 
-## Light DOM (default) vs Shadow DOM (opt-in) — full detail
+## Light DOM (default) vs Shadow DOM (opt-in), full detail
 
 Light DOM is the default because global CSS and Tailwind utility classes
-apply directly — no `::part`, no `:host`, no CSS-var plumbing, no
+apply directly, with no `::part`, no `:host`, no CSS-var plumbing, no
 `adoptedStyleSheets` needed. The browser renders a plain element with
 normal children, and hydration replaces SSR content in place.
 
@@ -80,7 +80,7 @@ be prefixed with the component's tag name. Pick one of these two
 patterns per component:
 
 ```ts
-// Pattern A — BEM-ish class names prefixed with tag
+// Pattern A: BEM-ish class names prefixed with tag
 class MyCard extends WebComponent {
   render() {
     return html`
@@ -95,7 +95,7 @@ class MyCard extends WebComponent {
   }
 }
 
-// Pattern B — descendant selector rooted at the tag
+// Pattern B: descendant selector rooted at the tag
 class MyCard extends WebComponent {
   render() {
     return html`
@@ -111,7 +111,7 @@ class MyCard extends WebComponent {
 }
 ```
 
-Prefer Tailwind utility classes first — they're unique by construction.
+Prefer Tailwind utility classes first. They're unique by construction.
 Drop down to custom CSS only when Tailwind can't express it.
 
 ### When to opt in to shadow DOM

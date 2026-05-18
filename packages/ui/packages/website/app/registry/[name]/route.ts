@@ -11,7 +11,7 @@ const HEADERS = {
 };
 
 /**
- * GET /registry/<name>.json — returns the registry item for `<name>`.
+ * GET /registry/<name>.json: returns the registry item for `<name>`.
  *
  * One reserved slug:
  *   - `index` → flat list (same as `GET /registry/index.json` via the sibling route)

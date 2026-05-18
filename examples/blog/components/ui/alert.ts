@@ -1,5 +1,5 @@
 /**
- * Alert — informational banner. Composition of three class helpers.
+ * Alert: informational banner. Composition of three class helpers.
  *
  * shadcn parity:
  *   Alert (variant: default | destructive), AlertTitle, AlertDescription.
@@ -13,7 +13,7 @@
  *     </div>
  *   </div>
  *
- *   <!-- Destructive variant — accent stripe + colored title/description. -->
+ *   <!-- Destructive variant: accent stripe + colored title/description. -->
  *   <div role="alert" class=${alertClass({ variant: 'destructive' })}>
  *     <svg>…</svg>
  *     <div data-slot="alert-title" class=${alertTitleClass()}>Failed</div>

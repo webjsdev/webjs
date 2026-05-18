@@ -1,7 +1,7 @@
 import { WebComponent, html } from '@webjskit/core';
 
 /**
- * `<my-counter>` — demo counter with the current design system.
+ * `<my-counter>`: demo counter with the current design system.
  * Tabular monospace output; warm-accent focus ring.
  */
 export class Counter extends WebComponent {

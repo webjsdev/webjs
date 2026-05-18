@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# guard-branch-context.sh — Claude Code PreToolUse hook
+# guard-branch-context.sh - Claude Code PreToolUse hook
 #
 # Rules:
 #   - On main/master → ask (agent should create a feature branch first)
@@ -9,7 +9,7 @@
 
 INPUT=$(cat /dev/stdin)
 
-# Bypass mode — full autonomy
+# Bypass mode - full autonomy
 SETTINGS="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS" ]; then
   BYPASS=$(jq -r '.skipDangerousModePermissionPrompt // false' "$SETTINGS" 2>/dev/null)

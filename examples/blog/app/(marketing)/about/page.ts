@@ -1,12 +1,12 @@
 import { html } from '@webjskit/core';
 import { rubric, displayH1, codeChip } from '../../_utils/ui.ts';
 
-export const metadata = { title: 'About — webjs blog' };
+export const metadata = { title: 'About: webjs blog' };
 
 const FEATURES = [
   { label: 'SSR + DSD',            note: 'Real server HTML; shadow DOM upgrades on connect.' },
   { label: 'Streaming Suspense',   note: 'Fallback flushes immediately; deferred content streams in.' },
-  { label: 'Server actions',       note: 'Import a .server.js fn from a component — auto-RPCs.' },
+  { label: 'Server actions',       note: 'Import a .server.js fn from a component: auto-RPCs.' },
   { label: 'WebSockets',           note: 'Live chat and live comments via WS on route.js.' },
   { label: 'Session auth',         note: 'scrypt + cookie session, CSRF on RPC, rate-limited endpoints.' },
   { label: 'Fine-grained render',  note: 'Focus and selection survive state updates.' },
@@ -19,7 +19,7 @@ export default function About() {
     ${rubric('about')}
     ${displayH1('A full-stack demo, at framework scale.')}
     <p class="text-[1.15rem] leading-[1.5] font-sans text-fg-muted max-w-[56ch] m-0 mb-18">
-      A tiny blog built on <strong class="text-fg">webjs</strong> — a no-build, web-components-first,
+      A tiny blog built on <strong class="text-fg">webjs</strong>: a no-build, web-components-first,
       NextJs-inspired framework. Every feature the framework ships with is exercised
       here in under a thousand lines.
     </p>

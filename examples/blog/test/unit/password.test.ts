@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/password.ts — pure crypto, no database needed.
+ * Unit tests for lib/password.ts: pure crypto, no database needed.
  *
  * Run with Node >= 23.6 (native type-stripping):
  *   node --test test/unit/password.test.ts

@@ -5,7 +5,7 @@
  *   • its filename matches `.server.{js,ts,mjs,mts}`, OR
  *   • its source begins with a literal `'use server'` directive.
  *
- * For such files, every response body must be a generated RPC stub —
+ * For such files, every response body must be a generated RPC stub -
  * never the real module source. This guardrail is the last line of
  * defense against an accidental source leak (DB credentials, privileged
  * business logic, scrypt routines, etc.).
@@ -46,9 +46,9 @@ function assertIsStub(text) {
   // Confirm the real source is NOT present by checking secrets markers
   // that only show up in the scaffolded fixture source.
   assert.ok(!/SECRET_DB_PASSWORD/.test(text),
-    `stub leaked the source — found SECRET_DB_PASSWORD:\n${text.slice(0, 400)}`);
+    `stub leaked the source: found SECRET_DB_PASSWORD:\n${text.slice(0, 400)}`);
   assert.ok(!/fakePrismaClient/.test(text),
-    `stub leaked the source — found fakePrismaClient reference`);
+    `stub leaked the source: found fakePrismaClient reference`);
 }
 
 test('guardrail: .server.ts request returns RPC stub, never source', async () => {

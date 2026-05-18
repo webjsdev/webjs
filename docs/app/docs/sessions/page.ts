@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Sessions — webjs' };
+export const metadata = { title: 'Sessions | webjs' };
 
 export default function Sessions() {
   return html`
@@ -18,12 +18,12 @@ export default session({
   storage: cookieSessionStorage(),  // or storeSessionStorage() for Redis
 });</pre>
 
-    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly) — the key used to sign session cookies.</p>
+    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies.</p>
 
     <h2>SessionStorage Implementations</h2>
 
-    <h3>cookieSessionStorage() — default</h3>
-    <p>All session data lives in the cookie itself. Stateless — no server-side storage needed.</p>
+    <h3>cookieSessionStorage() (default)</h3>
+    <p>All session data lives in the cookie itself. Stateless, with no server-side storage needed.</p>
     <ul>
       <li>Scales horizontally with no shared storage.</li>
       <li>4 KB cookie size limit applies (after signing overhead).</li>
@@ -37,11 +37,11 @@ export default session({
   storage: cookieSessionStorage(),
 });</pre>
 
-    <h3>storeSessionStorage() — production</h3>
-    <p>Only a session ID is stored in the cookie. Session data lives in the global cache store — in-memory by default; switch to Redis for horizontal scaling by calling <code>setStore(redisStore({ url: process.env.REDIS_URL }))</code> once at app startup.</p>
+    <h3>storeSessionStorage() (production)</h3>
+    <p>Only a session ID is stored in the cookie. Session data lives in the global cache store, which is in-memory by default. Switch to Redis for horizontal scaling by calling <code>setStore(redisStore({ url: process.env.REDIS_URL }))</code> once at app startup.</p>
     <ul>
       <li>No payload size limit beyond store key size.</li>
-      <li>Server-side invalidation — delete the store entry and the session is gone.</li>
+      <li>Server-side invalidation: delete the store entry and the session is gone.</li>
       <li>For production, use with Redis: <code>setStore(redisStore(...))</code>.</li>
     </ul>
 
@@ -49,11 +49,11 @@ export default session({
 
 export default session({
   secret: process.env.SESSION_SECRET,
-  storage: storeSessionStorage(),  // uses getStore() — memory or Redis
+  storage: storeSessionStorage(),  // uses getStore(), memory or Redis
 });</pre>
 
     <h2>Session Class API</h2>
-    <p>Use <code>getSession(req)</code> in any server-side code — API routes, server actions, middleware:</p>
+    <p>Use <code>getSession(req)</code> in any server-side code (API routes, server actions, middleware):</p>
 
     <pre>import { getSession } from '@webjskit/server';
 
@@ -133,7 +133,7 @@ s.flash('success', 'Post published!');
 
 // In the page that renders after redirect:
 const s = getSession(req);
-const message = s.get('success');  // 'Post published!' — only this request</pre>
+const message = s.get('success');  // 'Post published!', only this request</pre>
 
     <h2>Session Options</h2>
     <p>The <code>session()</code> middleware accepts these options:</p>
@@ -151,9 +151,9 @@ const message = s.get('success');  // 'Post published!' — only this request</p
 
     <h2>Next Steps</h2>
     <ul>
-      <li><a href="/docs/cache">Caching</a> — the cache store that backs server-side sessions</li>
-      <li><a href="/docs/authentication">Authentication</a> — NextAuth-style auth built on top of sessions</li>
-      <li><a href="/docs/middleware">Middleware</a> — run session checks before route handlers</li>
+      <li><a href="/docs/cache">Caching</a>: the cache store that backs server-side sessions</li>
+      <li><a href="/docs/authentication">Authentication</a>: NextAuth-style auth built on top of sessions</li>
+      <li><a href="/docs/middleware">Middleware</a>: run session checks before route handlers</li>
     </ul>
   `;
 }

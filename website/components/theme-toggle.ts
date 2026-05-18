@@ -1,7 +1,7 @@
 import { WebComponent, html } from '@webjskit/core';
 
 /**
- * `<theme-toggle>` — three-state theme switcher: system → light → dark → system.
+ * `<theme-toggle>`: three-state theme switcher: system → light → dark → system.
  *
  * State is mirrored to localStorage (`webjs_theme`) and reflected as
  * `<html data-theme>`. The initial theme is set by the synchronous bootstrap

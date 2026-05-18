@@ -1,6 +1,6 @@
 # @webjskit/core
 
-Isomorphic core runtime for [webjs](https://github.com/vivek7405/webjs) — an
+Isomorphic core runtime for [webjs](https://github.com/vivek7405/webjs), the
 AI-first, web-components-first, no-build web framework.
 
 This package ships the tagged-template `html` / `css` helpers, the
@@ -8,7 +8,7 @@ This package ships the tagged-template `html` / `css` helpers, the
 Shadow DOM support), directives, context protocol, the `Task` controller, and
 the client-side navigation router.
 
-Not intended for direct install — you'll usually get it as a transitive dep
+Not intended for direct install. You'll usually get it as a transitive dep
 when you scaffold an app with [`@webjskit/cli`](https://www.npmjs.com/package/@webjskit/cli).
 
 ## Install

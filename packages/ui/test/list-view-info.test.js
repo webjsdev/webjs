@@ -39,7 +39,7 @@ function captureLog(fn) {
   return fn().finally(() => { console.log = origLog; }).then(() => out.join('\n'));
 }
 
-test('list — prints all registry:ui items', async () => {
+test('list: prints all registry:ui items', async () => {
   stubFetch();
   try {
     const output = await captureLog(() =>
@@ -47,12 +47,12 @@ test('list — prints all registry:ui items', async () => {
     );
     assert.match(output, /button/);
     assert.match(output, /card/);
-    // libs are filtered out — only ui-typed entries
+    // libs are filtered out: only ui-typed entries
     assert.doesNotMatch(output, /lib-utils/);
   } finally { globalThis.fetch = origFetch; }
 });
 
-test('list — filters by substring', async () => {
+test('list: filters by substring', async () => {
   stubFetch();
   try {
     const output = await captureLog(() =>
@@ -63,7 +63,7 @@ test('list — filters by substring', async () => {
   } finally { globalThis.fetch = origFetch; }
 });
 
-test('view — prints component source', async () => {
+test('view: prints component source', async () => {
   stubFetch();
   try {
     const output = await captureLog(() =>
@@ -74,7 +74,7 @@ test('view — prints component source', async () => {
   } finally { globalThis.fetch = origFetch; }
 });
 
-test('info — reports project type + missing config', async () => {
+test('info: reports project type + missing config', async () => {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-info-'));
   writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
   try {
@@ -86,7 +86,7 @@ test('info — reports project type + missing config', async () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('info — reports config when present', async () => {
+test('info: reports config when present', async () => {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-info-cfg-'));
   writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { next: '14.0.0' } }));
   writeFileSync(join(d, 'components.json'), JSON.stringify({

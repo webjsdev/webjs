@@ -2,7 +2,7 @@
  * Tests for the esbuild loader hook that webjs registers at server boot
  * to transform server-side `.ts` imports. The hook lives at
  * `packages/server/src/esbuild-loader.js` and ensures SSR + hydration
- * use the same TypeScript transformer (esbuild) — important because
+ * use the same TypeScript transformer (esbuild): important because
  * Node's built-in stripper rejects non-erasable syntax (enum, parameter
  * properties, decorators) while esbuild handles them, and a mismatch
  * surfaces as "works in browser, throws on server."

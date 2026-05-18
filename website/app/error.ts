@@ -5,14 +5,14 @@ import { html } from '@webjskit/core';
  * (or layout, or async hole) that is NOT a notFound() / redirect()
  * sentinel lands here. Receives the thrown value as ctx.error.
  *
- * Keep this file's import graph minimal — it MUST stay importable when
+ * Keep this file's import graph minimal: it MUST stay importable when
  * the rest of the app is broken, otherwise the framework falls through
  * to its built-in generic 500 ("Server error / Something went wrong").
  * Only @webjskit/core; no helpers, no custom elements, no shared
  * components.
  *
  * (Do not put U+0060 GRAVE ACCENT characters in comments inside the
- * html template body below — they close the tagged template literal
+ * html template body below: they close the tagged template literal
  * at JS-parse time and re-introduce the very 500 this file exists to
  * catch. See [[feedback-html-template-no-backticks]].)
  */

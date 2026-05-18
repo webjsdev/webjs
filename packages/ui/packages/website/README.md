@@ -3,7 +3,7 @@
 The HTTP host for the `@webjskit/ui` component registry, plus a docs site with one
 page per component.
 
-A webjs app — dogfoods the framework.
+A webjs app that dogfoods the framework.
 
 ## Routes
 
@@ -29,7 +29,7 @@ A `predev` hook runs `scripts/copy-registry.js`, which mirrors the
 registry's component sources into `components/ui/` and `lib/utils.ts`
 so the docs preview pages can import them directly.
 
-## ⚠️ Important — directory conventions (read before adding files)
+## ⚠️ Important: directory conventions (read before adding files)
 
 This package has an unusual layout that **does NOT match how a normal
 scaffolded webjs app is organised**. Putting a file in the wrong
@@ -37,22 +37,22 @@ directory will break a live deploy. The rule:
 
 | Directory | Tracked in git? | Purpose | Add hand-written files here? |
 |---|---|---|---|
-| `components/` (and `components/ui/`, `components/site/`) | **NO — gitignored** | Auto-populated at `predev`/`prestart` by `scripts/copy-registry.js`. Mirrors `../registry/components/*.ts` with relative-import paths rewritten so the docs preview pages can import them locally. | **NEVER.** Anything you write here is silently deleted/overwritten every dev cycle and won't make it into a deploy. |
-| `lib/` | **NO — gitignored** | Same as above for `../registry/lib/utils.ts`. | **NEVER.** Same reason. |
-| `app/_components/` | **YES — tracked** | Hand-written website-chrome custom elements (theme-toggle, etc.). The leading `_` makes it a webjs private folder (not routable). | **Yes — this is the place.** |
-| `app/`, `public/`, `scripts/`, etc. | **YES — tracked** | Normal webjs source. | Yes, the usual way. |
+| `components/` (and `components/ui/`, `components/site/`) | **NO: gitignored** | Auto-populated at `predev`/`prestart` by `scripts/copy-registry.js`. Mirrors `../registry/components/*.ts` with relative-import paths rewritten so the docs preview pages can import them locally. | **NEVER.** Anything you write here is silently deleted/overwritten every dev cycle and won't make it into a deploy. |
+| `lib/` | **NO: gitignored** | Same as above for `../registry/lib/utils.ts`. | **NEVER.** Same reason. |
+| `app/_components/` | **YES: tracked** | Hand-written website-chrome custom elements (theme-toggle, etc.). The leading `_` makes it a webjs private folder (not routable). | **Yes, this is the place.** |
+| `app/`, `public/`, `scripts/`, etc. | **YES: tracked** | Normal webjs source. | Yes, the usual way. |
 
 ### Why `components/` is gitignored
 
 The ui-website is **both** the publisher and a consumer of the
 component kit:
 
-1. **Publisher** — serves the registry JSON at
+1. **Publisher:** serves the registry JSON at
    `/registry/<name>.json` (the `@webjskit/ui` CLI fetches these).
    The canonical sources live in `../registry/components/*.ts`.
-2. **Consumer** — docs pages (`app/docs/components/[name]/page.ts`)
+2. **Consumer:** docs pages (`app/docs/components/[name]/page.ts`)
    import the actual components to render live previews. They import
-   from `'../../components/ui/<name>.ts'` — a path that must resolve
+   from `'../../components/ui/<name>.ts'`, a path that must resolve
    relative to the website's own directory depth.
 
 Each registry component's internal `import { cn } from '../lib/utils.ts'`
@@ -66,8 +66,8 @@ sources directly. `scripts/copy-registry.js` solves this by:
    (one extra `..` for the website's depth).
 3. Writing the rewritten file to `components/ui/<name>.ts`.
 
-The copies are pure derivatives — committing them creates two
-sources of truth that drift. Hence the wholesale `.gitignore` on
+The copies are pure derivatives. Committing them creates two
+sources of truth that drift, hence the wholesale `.gitignore` on
 `/components/` and `/lib/`.
 
 ### The trap (and why we hit it once)
@@ -92,9 +92,9 @@ behaves the way a shadcn user expects:
 - **Scaffolded apps** (`webjs create my-app`): `components/ui/` is
   normal tracked source. `webjs ui add dialog` adds files; users
   commit them. No prestart copy step.
-- **Example blog** (`examples/blog`): same — `components/ui/` is
+- **Example blog** (`examples/blog`): same: `components/ui/` is
   fully tracked, edited freely.
-- **Any user's app**: same — standard shadcn-style "you own the
+- **Any user's app**: same, standard shadcn-style "you own the
   source." Hand-written `components/theme-toggle.ts` works fine.
 
 So when working in `packages/ui/packages/website/`, mentally swap

@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: '@webjskit/ui — AI-first component library' };
+export const metadata = { title: '@webjskit/ui: AI-first component library' };
 
 export default function UiDocs() {
   return html`
@@ -10,7 +10,7 @@ export default function UiDocs() {
       functions (<code>buttonClass</code>, <code>cardClass</code>, <code>inputClass</code>) for
       visual primitives, plus a small set of stateful custom elements
       (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-popover&gt;</code>)
-      where state matters. Source-copied into your project — you own the code and edit it freely.
+      where state matters. Source-copied into your project so you own the code and edit it freely.
       Variant names, sizes, and data attributes mirror shadcn so existing shadcn knowledge maps
       directly. Works in any project with Tailwind v4 and the small <code>@webjskit/core</code>
       runtime: webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML.
@@ -26,13 +26,13 @@ export default function UiDocs() {
 webjs ui add button card dialog input label</pre>
 
     <h2>For everyone else (Next, Astro, Vite, SvelteKit, Lit, vanilla, …)</h2>
-    <p>Two npm installs — the CLI and the runtime base class — then run the CLI:</p>
+    <p>Two npm installs (the CLI and the runtime base class), then run the CLI:</p>
     <pre>npm install -D @webjskit/ui
 npm install @webjskit/core
 npx webjsui init
 npx webjsui add button card dialog</pre>
     <p>
-      The <code>webjsui</code> binary is standalone — it does NOT require <code>@webjskit/cli</code>.
+      The <code>webjsui</code> binary is standalone. It does NOT require <code>@webjskit/cli</code>.
       It auto-detects your project type (Next / Astro / Vite / Lit / plain) and picks sensible defaults.
     </p>
 
@@ -65,7 +65,7 @@ npx webjsui add button card dialog</pre>
 &lt;/ui-card&gt;</pre>
 
     <h2>Migrating from shadcn-react</h2>
-    <p>Translation is mechanical: <code>&lt;Button&gt;</code> → <code>&lt;ui-button&gt;</code>, <code>&lt;DialogContent&gt;</code> → <code>&lt;ui-dialog-content&gt;</code>. Variant and size props match exactly. Components project children via DOM nesting; there is no <code>asChild</code> / Radix Slot pattern — wrap an element directly instead.</p>
+    <p>Translation is mechanical: <code>&lt;Button&gt;</code> → <code>&lt;ui-button&gt;</code>, <code>&lt;DialogContent&gt;</code> → <code>&lt;ui-dialog-content&gt;</code>. Variant and size props match exactly. Components project children via DOM nesting. There is no <code>asChild</code> / Radix Slot pattern, so wrap an element directly instead.</p>
 
     <h2>What's in the registry?</h2>
     <p>~55 components matching shadcn's new-york-v4 style:</p>
@@ -79,7 +79,7 @@ npx webjsui add button card dialog</pre>
     </p>
 
     <h2>Why web components?</h2>
-    <p>Standards. Custom elements work in every framework that supports them — webjs, Next.js, Astro, Vite, Remix, SvelteKit, Nuxt, SolidStart, Lit projects, and plain HTML. One library, every host.</p>
+    <p>Standards. Custom elements work in every framework that supports them: webjs, Next.js, Astro, Vite, Remix, SvelteKit, Nuxt, SolidStart, Lit projects, and plain HTML. One library, every host.</p>
 
     <h2>For AI agents</h2>
     <p>

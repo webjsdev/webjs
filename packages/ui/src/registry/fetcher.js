@@ -18,7 +18,7 @@ export async function fetchRegistryItem(name, baseUrl = DEFAULT_REGISTRY_URL) {
   if (cache.has(url)) return cache.get(url);
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Failed to fetch registry item "${name}" from ${url} — HTTP ${res.status}`);
+    throw new Error(`Failed to fetch registry item "${name}" from ${url}: HTTP ${res.status}`);
   }
   const json = await res.json();
   const item = registryItemSchema.parse(json);
@@ -36,7 +36,7 @@ export async function fetchRegistryIndex(baseUrl = DEFAULT_REGISTRY_URL) {
   if (cache.has(url)) return cache.get(url);
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Failed to fetch registry index from ${url} — HTTP ${res.status}`);
+    throw new Error(`Failed to fetch registry index from ${url}: HTTP ${res.status}`);
   }
   const json = await res.json();
   const items = registryIndexSchema.parse(json);

@@ -4,7 +4,7 @@ import { inputClass } from '../../../components/ui/input.ts';
 import { labelClass } from '../../../components/ui/label.ts';
 import { cardClass, cardContentClass } from '../../../components/ui/card.ts';
 import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.ts';
-// Server action — dev server rewrites this import into an RPC stub for the
+// Server action: dev server rewrites this import into an RPC stub for the
 // browser. At type-check time TS resolves the real source so createPost's
 // input + return types flow across the RPC boundary.
 import { createPost } from '../actions/create-post.server.ts';
@@ -26,7 +26,7 @@ export class NewPost extends WebComponent {
 
   async onSubmit(e: SubmitEvent) {
     e.preventDefault();
-    // querySelector fallback — e.currentTarget can be null on some
+    // querySelector fallback: e.currentTarget can be null on some
     // re-render paths with light-DOM event delegation.
     const form = (e.currentTarget || this.querySelector('form')) as HTMLFormElement;
     if (!form) return;
@@ -71,7 +71,7 @@ export class NewPost extends WebComponent {
               <textarea id="new-post-body"
                         class="font-serif text-base leading-relaxed resize-y min-h-[220px] text-fg bg-transparent border border-border-strong rounded p-4 transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
                         name="body"
-                        placeholder="Write your post — markdown not required."
+                        placeholder="Write your post: markdown not required."
                         required></textarea>
             </div>
             <button type="submit" class="${buttonClass()} justify-self-start" ?disabled=${busy}>${busy ? 'Publishing…' : 'Publish'}</button>

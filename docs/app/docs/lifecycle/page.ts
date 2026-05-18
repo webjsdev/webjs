@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Lifecycle Hooks — webjs' };
+export const metadata = { title: 'Lifecycle Hooks | webjs' };
 
 export default function Lifecycle() {
   return html`
@@ -13,7 +13,7 @@ export default function Lifecycle() {
       <li>Controllers' <code>beforeRender()</code></li>
       <li><code>render()</code> + DOM commit (with error boundary)</li>
       <li>Controllers' <code>afterRender()</code></li>
-      <li><code>firstUpdated()</code> — once, on the first render only</li>
+      <li><code>firstUpdated()</code> runs once, on the first render only</li>
     </ol>
 
     <h2>render()</h2>
@@ -28,7 +28,7 @@ export default function Lifecycle() {
     &lt;ul&gt;\${filtered.map(i =&gt; html\`&lt;li&gt;\${i.name}&lt;/li&gt;\`)}&lt;/ul&gt;
   \`;
 }</pre>
-    <p>No <code>willUpdate</code> needed — compute derived state at the top of <code>render()</code>.</p>
+    <p>No <code>willUpdate</code> needed. Compute derived state at the top of <code>render()</code>.</p>
 
     <h2>setState(patch)</h2>
     <p>Shallow-merges the patch into <code>this.state</code> and schedules a microtask-batched re-render. Multiple <code>setState</code> calls within the same microtask are batched into one render.</p>
@@ -67,15 +67,15 @@ this.setState({ name: 'updated' });
     <h2>Native Web Component Callbacks</h2>
     <p>These are provided by <code>HTMLElement</code> itself and work as normal in webjs components:</p>
     <ul>
-      <li><code>connectedCallback()</code> — element added to DOM (call <code>super.connectedCallback()</code>)</li>
-      <li><code>disconnectedCallback()</code> — element removed from DOM</li>
-      <li><code>attributeChangedCallback(name, old, new)</code> — observed attribute changed</li>
-      <li><code>static observedAttributes</code> — declares which attributes to watch</li>
+      <li><code>connectedCallback()</code> fires when the element is added to DOM (call <code>super.connectedCallback()</code>)</li>
+      <li><code>disconnectedCallback()</code> fires when the element is removed from DOM</li>
+      <li><code>attributeChangedCallback(name, old, new)</code> fires when an observed attribute changes</li>
+      <li><code>static observedAttributes</code>: declares which attributes to watch</li>
     </ul>
 
     <h2>SSR vs Browser: which hooks run where</h2>
 
-    <p>The SSR pipeline runs each component to produce its first-paint HTML. It calls a deliberately narrow subset of the lifecycle — everything else runs only in the browser after the script loads.</p>
+    <p>The SSR pipeline runs each component to produce its first-paint HTML. It calls a deliberately narrow subset of the lifecycle. Everything else runs only in the browser after the script loads.</p>
 
     <table>
       <thead>
@@ -93,7 +93,7 @@ this.setState({ name: 'updated' });
       </tbody>
     </table>
 
-    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers); read the value and <code>setState</code> to refine the initial render after hydration.</p>
+    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and <code>setState</code> to refine the initial render after hydration.</p>
 
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full pattern, including how to push server-known data through the page function instead of fetching in browser-only hooks.</p>
   `;

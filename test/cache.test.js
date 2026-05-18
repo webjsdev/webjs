@@ -78,7 +78,7 @@ test('memoryStore get refreshes LRU order', async () => {
 });
 
 test('getStore returns a memoryStore by default', async () => {
-  // Reset to default by setting null-ish — we test via API
+  // Reset to default by setting null-ish: we test via API
   const store = getStore();
   await store.set('test-key', 'hello');
   assert.equal(await store.get('test-key'), 'hello');

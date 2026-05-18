@@ -2,12 +2,12 @@
  * Validates registry contents against expected invariants.
  *
  * Reads source files directly from `packages/registry/` (no build step
- * anymore — the website composes JSON on demand via _lib/registry.server.ts).
+ * anymore, the website composes JSON on demand via _lib/registry.server.ts).
  *
  * v1 architecture is two-tier:
- *   - Tier 1 — pure class-helper functions (button, card, badge, alert, …),
+ *   - Tier 1, pure class-helper functions (button, card, badge, alert, …),
  *     they import `cn` from `lib/utils.ts` and export named functions.
- *   - Tier 2 — stateful custom elements (dialog, tabs, popover, …), they
+ *   - Tier 2, stateful custom elements (dialog, tabs, popover, …), they
  *     import `Base` + `defineElement` and call `defineElement('ui-…', Class)`.
  *
  * Tests cover both shapes plus hallmark-class assertions to catch regressions
@@ -26,7 +26,7 @@ const MANIFEST_PATH = join(REGISTRY_DIR, 'registry.json');
 
 const skip = !existsSync(MANIFEST_PATH);
 
-// All v1 components — every one of these MUST exist in the registry and follow
+// All v1 components, every one of these MUST exist in the registry and follow
 // either the Tier-1 (class-helper) or Tier-2 (custom-element) shape.
 const V1_COMPONENTS = [
   'button', 'badge', 'alert', 'card',
@@ -40,7 +40,7 @@ const V1_COMPONENTS = [
   'dropdown-menu', 'sonner',
 ];
 
-// Components that are Tier 2 — must register a custom element.
+// Components that are Tier 2, must register a custom element.
 // popover, accordion, collapsible moved to Tier 1 once their sources
 // became pure class helpers on native HTML (Popover API,
 // <details>/<summary>). They no longer extend Base or call defineElement.
@@ -116,7 +116,7 @@ test('Tier-1 components export named class-helper functions ending in *Class', {
   }
 });
 
-test('button — variant + size class strings are present', { skip }, () => {
+test('button : variant + size class strings are present', { skip }, () => {
   const src = readSource('button');
   assert.match(src, /bg-primary/);
   assert.match(src, /bg-destructive/);
@@ -131,14 +131,14 @@ test('button — variant + size class strings are present', { skip }, () => {
   assert.match(src, /size-6/);     // icon-xs
 });
 
-test('card — exposes all 7 subpart class helpers (no custom elements)', { skip }, () => {
+test('card : exposes all 7 subpart class helpers (no custom elements)', { skip }, () => {
   const src = readSource('card');
   for (const fn of ['cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass', 'cardActionClass', 'cardContentClass', 'cardFooterClass']) {
     assert.match(src, new RegExp(`export\\s+const\\s+${fn}\\b`), `card missing ${fn}`);
   }
 });
 
-test('dialog — delegates to native <dialog> for modal behavior', { skip }, () => {
+test('dialog : delegates to native <dialog> for modal behavior', { skip }, () => {
   const src = readSource('dialog');
   assert.match(src, /'role',\s*'dialog'|"role",\s*"dialog"|role="dialog"/);
   assert.match(src, /aria-modal/);
@@ -148,7 +148,7 @@ test('dialog — delegates to native <dialog> for modal behavior', { skip }, () 
   assert.match(src, /defineElement\(['"]ui-dialog['"]/);
 });
 
-test('alert-dialog — uses alertdialog role, no overlay-click-to-close', { skip }, () => {
+test('alert-dialog : uses alertdialog role, no overlay-click-to-close', { skip }, () => {
   const src = readSource('alert-dialog');
   assert.match(src, /alertdialog/);
   assert.match(src, /No click-to-close/);
@@ -157,7 +157,7 @@ test('alert-dialog — uses alertdialog role, no overlay-click-to-close', { skip
   assert.match(src, /showModal/);
 });
 
-test('popover — tier-1 class helpers + positionFloating utility export', { skip }, () => {
+test('popover : tier-1 class helpers + positionFloating utility export', { skip }, () => {
   const src = readSource('popover');
   // No custom element: pure class helpers + a positioning utility for
   // sibling tier-2 components.
@@ -182,14 +182,14 @@ test('popover — tier-1 class helpers + positionFloating utility export', { ski
   assert.match(src, /popovertarget|popover\s+attribute|Popover API/i);
 });
 
-test('positionFloating — accepts alignOffset for tier-2 placement', { skip }, () => {
+test('positionFloating : accepts alignOffset for tier-2 placement', { skip }, () => {
   const src = readSource('popover');
   // The utility consumed by tooltip / hover-card / dropdown-menu must
   // accept alignOffset alongside sideOffset.
   assert.match(src, /alignOffset\??:\s*number/);
 });
 
-test('accordion / collapsible — disabled option on trigger class helper', { skip }, () => {
+test('accordion / collapsible : disabled option on trigger class helper', { skip }, () => {
   for (const name of ['accordion', 'collapsible']) {
     const src = readSource(name);
     assert.match(src, /disabled\??:\s*boolean/, `${name}: trigger class missing { disabled } option`);
@@ -198,7 +198,7 @@ test('accordion / collapsible — disabled option on trigger class helper', { sk
   }
 });
 
-test('tier-2 components — read align-offset attribute', { skip }, () => {
+test('tier-2 components : read align-offset attribute', { skip }, () => {
   for (const name of ['tooltip', 'hover-card', 'dropdown-menu']) {
     const src = readSource(name);
     assert.match(src, /align-offset/, `${name}: should read align-offset attribute`);
@@ -206,19 +206,19 @@ test('tier-2 components — read align-offset attribute', { skip }, () => {
   }
 });
 
-test('tooltip — skip-delay-duration attribute', { skip }, () => {
+test('tooltip : skip-delay-duration attribute', { skip }, () => {
   const src = readSource('tooltip');
   assert.match(src, /skip-delay-duration/);
   assert.match(src, /lastTooltipHideAt|lastHideAt|skipDelay/i);
 });
 
-test('dropdown-menu — typeahead via text-value', { skip }, () => {
+test('dropdown-menu : typeahead via text-value', { skip }, () => {
   const src = readSource('dropdown-menu');
   assert.match(src, /typeahead/i);
   assert.match(src, /text-value/);
 });
 
-test('accordion — tier-1 class helpers on native <details>/<summary>', { skip }, () => {
+test('accordion : tier-1 class helpers on native <details>/<summary>', { skip }, () => {
   const src = readSource('accordion');
   assert.doesNotMatch(src, /defineElement\(/);
   assert.match(src, /<details/);
@@ -231,14 +231,14 @@ test('accordion — tier-1 class helpers on native <details>/<summary>', { skip 
   assert.match(src, /collapsible/);
 });
 
-test('collapsible — tier-1 class helpers on native <details>/<summary>', { skip }, () => {
+test('collapsible : tier-1 class helpers on native <details>/<summary>', { skip }, () => {
   const src = readSource('collapsible');
   assert.doesNotMatch(src, /defineElement\(/);
   assert.match(src, /<details/);
   assert.match(src, /<summary/);
 });
 
-test('dropdown-menu / tooltip / hover-card — top-layer via popover attribute', { skip }, () => {
+test('dropdown-menu / tooltip / hover-card : top-layer via popover attribute', { skip }, () => {
   for (const name of ['dropdown-menu', 'tooltip', 'hover-card']) {
     const src = readSource(name);
     assert.match(src, /popover/i, `${name}: should reference the Popover API`);
@@ -246,14 +246,14 @@ test('dropdown-menu / tooltip / hover-card — top-layer via popover attribute',
   }
 });
 
-test('tabs — exposes Arrow-key navigation + roles', { skip }, () => {
+test('tabs : exposes Arrow-key navigation + roles', { skip }, () => {
   const src = readSource('tabs');
   assert.match(src, /ArrowLeft|ArrowRight|ArrowDown|ArrowUp/);
   assert.match(src, /tablist/);
   assert.match(src, /'role',\s*'tab'|"role",\s*"tab"/);
 });
 
-test('accordion — supports single/multiple + collapsible', { skip }, () => {
+test('accordion : supports single/multiple + collapsible', { skip }, () => {
   const src = readSource('accordion');
   assert.match(src, /'single'|"single"/);
   assert.match(src, /'multiple'|"multiple"/);

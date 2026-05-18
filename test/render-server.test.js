@@ -110,13 +110,13 @@ test('comment containing > does not exit early', async () => {
   assert.match(out, /<span>x<\/span>/);
 });
 
-test('<style> content is raw-text — angle brackets are not parsed as tags', async () => {
+test('<style> content is raw-text: angle brackets are not parsed as tags', async () => {
   const out = await renderToString(html`<style>a > b { color: ${'red'}; }</style><p>after</p>`);
   assert.match(out, /<style>a > b \{ color: red; \}<\/style>/);
   assert.match(out, /<p>after<\/p>/);
 });
 
-test('<script> content is raw-text — interpolated verbatim', async () => {
+test('<script> content is raw-text: interpolated verbatim', async () => {
   const out = await renderToString(html`<script>var x = ${42}; if (x < 10) {}</script><p>k</p>`);
   assert.match(out, /<script>var x = 42; if \(x < 10\) \{\}<\/script>/);
   assert.match(out, /<p>k<\/p>/);
@@ -128,7 +128,7 @@ test('uppercase </SCRIPT> still closes raw-text (case-insensitive)', async () =>
 });
 
 // ---------------------------------------------------------------------------
-// Nested DSD injection — all four shadow/light DOM combinations
+// Nested DSD injection: all four shadow/light DOM combinations
 // ---------------------------------------------------------------------------
 
 test('nested DSD: shadow parent → shadow child gets DSD with inline styles', async () => {
@@ -198,7 +198,7 @@ test('nested DSD: light parent → shadow child gets DSD with inline styles', as
 
   const out = await renderToString(html`<ls-parent></ls-parent>`);
 
-  // Parent is light DOM — hydration marker, no DSD template
+  // Parent is light DOM: hydration marker, no DSD template
   assert.match(out, /<ls-parent><!--webjs-hydrate-->/);
 
   // Shadow child inside light parent gets its own DSD with styles
@@ -222,14 +222,14 @@ test('nested DSD: light parent → light child gets hydration marker', async () 
 
   const out = await renderToString(html`<ll-parent></ll-parent>`);
 
-  // Both are light DOM — hydration markers, no DSD templates
+  // Both are light DOM: hydration markers, no DSD templates
   assert.match(out, /<ll-parent><!--webjs-hydrate-->/);
   assert.match(out, /<ll-child><!--webjs-hydrate--><em>inner light<\/em>/);
   assert.ok(!out.includes('<ll-child><template shadowrootmode'));
   assert.ok(!out.includes('<ll-parent><template shadowrootmode'));
 });
 
-test('nested DSD: three levels deep — shadow → shadow → shadow', async () => {
+test('nested DSD: three levels deep: shadow → shadow → shadow', async () => {
   class DeepLeaf extends WebComponent {
     static shadow = true;
     static styles = css`.leaf { color: green; }`;

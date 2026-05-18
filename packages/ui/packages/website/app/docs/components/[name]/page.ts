@@ -9,7 +9,7 @@ import { getComponentApi, type ComponentApi } from './component-api.ts';
 import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 
 // ---------------------------------------------------------------------------
-// Side-effect imports — load every ui-* component module so the custom
+// Side-effect imports: load every ui-* component module so the custom
 // elements register, and the preview pane can render any of them. Modules
 // are copied from the registry into `components/ui/` at prestart
 // (see `scripts/copy-registry.js`), so the same source webjs serves to the
@@ -23,7 +23,7 @@ import '../../../../components/ui/avatar.ts';
 import '../../../../components/ui/badge.ts';
 import '../../../../components/ui/breadcrumb.ts';
 import '../../../../components/ui/button.ts';
-// NOTE: calendar.ts is intentionally NOT imported here — its `default` import
+// NOTE: calendar.ts is intentionally NOT imported here: its `default` import
 // of `date-fns` doesn't round-trip through webjs's auto-vendor bundler, and
 // its SSR path calls DOM APIs that aren't available in linkedom. The
 // calendar example renders a static visual scaffold instead.
@@ -53,10 +53,10 @@ import '../../../../components/ui/toggle-group.ts';
 import '../../../../components/ui/tooltip.ts';
 
 export function generateMetadata({ params }: { params: { name: string } }) {
-  return { title: `${params.name} — Webjs UI` };
+  return { title: `${params.name}: Webjs UI` };
 }
 
-// Helper — renders a single preview pane around an example snippet.
+// Helper: renders a single preview pane around an example snippet.
 // Used by the hero preview AND by the combined Variants/Sizes panes.
 // Light DOM is required because ui-* custom elements capture their innerHTML
 // in connectedCallback (which doesn't run during SSR). unsafeHTML defers
@@ -91,8 +91,8 @@ function startCase(s: string): string {
 }
 
 // Render a value-keyed preview section in one of two modes.
-// 'combined' — one preview pane with every value rendered side by side.
-// 'cards'    — one preview pane per value, each with a heading above.
+// 'combined': one preview pane with every value rendered side by side.
+// 'cards':   one preview pane per value, each with a heading above.
 // The cards mode is for cases where the example markup is identical
 // across values and only the visual style differs (e.g. tabs default vs
 // underline both render the same Account/Password tabs).
@@ -192,7 +192,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     <section class="mb-12">
       <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Installation</h2>
       <pre class="rounded-lg p-4 overflow-x-auto"><code>npx webjsui add ${item.name}</code></pre>
-      <p class="mt-3 text-sm text-muted-foreground">Webjs users — also available as:</p>
+      <p class="mt-3 text-sm text-muted-foreground">Webjs users, also available as:</p>
       <pre class="rounded-lg p-4 overflow-x-auto mt-1"><code>webjs ui add ${item.name}</code></pre>
     </section>
 
@@ -288,7 +288,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
                               <tr class="border-t">
                                 <td class="px-3 py-2 align-top"><code class="text-xs">${p.name}</code></td>
                                 <td class="px-3 py-2 align-top"><code class="text-xs">${p.type}</code></td>
-                                <td class="px-3 py-2 align-top text-muted-foreground">${p.default ?? '—'}</td>
+                                <td class="px-3 py-2 align-top text-muted-foreground">${p.default ?? ''}</td>
                                 ${api.props!.some((q) => q.description)
                                   ? html`<td class="px-3 py-2 align-top text-muted-foreground">${p.description ?? ''}</td>`
                                   : ''}
@@ -322,7 +322,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
                             (e) => html`
                               <tr class="border-t">
                                 <td class="px-3 py-2 align-top"><code class="text-xs">${e.name}</code></td>
-                                <td class="px-3 py-2 align-top"><code class="text-xs">${e.detail ?? '—'}</code></td>
+                                <td class="px-3 py-2 align-top"><code class="text-xs">${e.detail ?? ''}</code></td>
                                 <td class="px-3 py-2 align-top text-muted-foreground">${e.description ?? ''}</td>
                               </tr>
                             `,
@@ -340,7 +340,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     }
 
     <section>
-      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Source — <code class="text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-subtle)">components/ui/${item.name}.ts</code></h2>
+      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Source: <code class="text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-subtle)">components/ui/${item.name}.ts</code></h2>
       <pre class="rounded-lg p-4 overflow-x-auto text-xs max-h-[480px] overflow-y-auto"><code>${source}</code></pre>
     </section>
   `;

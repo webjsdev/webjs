@@ -10,7 +10,7 @@ function tmp() {
   return d;
 }
 
-test('detectProject — webjs (has @webjskit/server in deps)', () => {
+test('detectProject: webjs (has @webjskit/server in deps)', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
@@ -18,7 +18,7 @@ test('detectProject — webjs (has @webjskit/server in deps)', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — next', () => {
+test('detectProject: next', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { next: '14.0.0' } }));
@@ -26,7 +26,7 @@ test('detectProject — next', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — vite', () => {
+test('detectProject: vite', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ devDependencies: { vite: '*' } }));
@@ -34,14 +34,14 @@ test('detectProject — vite', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — plain when no package.json', () => {
+test('detectProject: plain when no package.json', () => {
   const d = tmp();
   try {
     assert.equal(detectProject(d).type, 'plain');
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject — webjs uses app/globals.css', () => {
+test('defaultsForProject: webjs uses app/globals.css', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
@@ -51,7 +51,7 @@ test('defaultsForProject — webjs uses app/globals.css', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject — next uses @/ aliases', () => {
+test('defaultsForProject: next uses @/ aliases', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { next: '*' } }));

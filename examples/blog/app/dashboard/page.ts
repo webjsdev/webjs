@@ -11,7 +11,7 @@ import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
 import { rubric, clampH1, stat, accentLink } from '../_utils/ui.ts';
 
-export const metadata = { title: 'Dashboard — webjs blog' };
+export const metadata = { title: 'Dashboard: webjs blog' };
 
 export default async function Dashboard() {
   // Per-segment middleware.ts guarantees an authed user here.

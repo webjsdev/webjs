@@ -1,5 +1,5 @@
 /**
- * Extended coverage for createAuth() — Credentials variants, JWT +
+ * Extended coverage for createAuth(): Credentials variants, JWT +
  * database session strategies, Google/GitHub OAuth redirect + callback,
  * handler dispatch (GET/POST for /session, /signin, /callback,
  * /signout, /providers).

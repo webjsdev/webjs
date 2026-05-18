@@ -1,10 +1,10 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'expose() — REST Endpoints from Server Actions — webjs' };
+export const metadata = { title: 'expose(): REST Endpoints from Server Actions | webjs' };
 
 export default function Expose() {
   return html`
-    <h1>expose() — REST Endpoints</h1>
+    <h1>expose(): REST Endpoints</h1>
     <p><code>expose()</code> lets you tag a server action to also be reachable at a stable REST URL. The same function powers both the RPC call (from components) and the HTTP endpoint (for external consumers, webhooks, mobile apps).</p>
 
     <h2>When to use</h2>
@@ -16,8 +16,8 @@ export default function Expose() {
 
     <h2>When NOT to use</h2>
     <ul>
-      <li>For internal-only server actions that only your components call — plain server actions with RPC stubs are simpler and CSRF-protected.</li>
-      <li>For complex REST resources with multiple methods — use <code>app/api/**/route.ts</code> instead.</li>
+      <li>For internal-only server actions that only your components call. Plain server actions with RPC stubs are simpler and CSRF-protected.</li>
+      <li>For complex REST resources with multiple methods, use <code>app/api/**/route.ts</code> instead.</li>
     </ul>
 
     <h2>Basic usage</h2>
@@ -31,8 +31,8 @@ export const createPost = expose('POST /api/posts', async ({ title, body }) => {
 
     <p>This function is now callable two ways:</p>
     <ul>
-      <li><strong>From a component</strong> (RPC): <code>import { createPost } from '../actions/create-post.server.ts';</code> — auto-RPC stub, CSRF-protected.</li>
-      <li><strong>Over HTTP</strong>: <code>POST /api/posts</code> with JSON body — no CSRF (designed for external callers).</li>
+      <li><strong>From a component</strong> (RPC): <code>import { createPost } from '../actions/create-post.server.ts';</code> uses an auto-RPC stub and is CSRF-protected.</li>
+      <li><strong>Over HTTP</strong>: <code>POST /api/posts</code> with JSON body, with no CSRF (designed for external callers).</li>
     </ul>
 
     <h2>Input validation</h2>
@@ -64,7 +64,7 @@ export const createPost = expose(
 });</pre>
 
     <h2>Security</h2>
-    <p><strong>Important:</strong> <code>expose()</code>d endpoints are NOT CSRF-protected — they're designed for external consumers. You must handle authentication yourself:</p>
+    <p><strong>Important:</strong> <code>expose()</code>d endpoints are NOT CSRF-protected. They're designed for external consumers. You must handle authentication yourself:</p>
 
     <ul>
       <li>Require a bearer token or API key via <code>headers().get('authorization')</code>.</li>
@@ -74,10 +74,10 @@ export const createPost = expose(
 
     <h2>Next steps</h2>
     <ul>
-      <li><a href="/docs/server-actions">Server Actions</a> — the RPC system that expose() builds on</li>
-      <li><a href="/docs/api-routes">API Routes</a> — the alternative for complex REST resources</li>
-      <li><a href="/docs/rate-limiting">Rate Limiting</a> — protect exposed endpoints from abuse</li>
-      <li><a href="/docs/middleware">Middleware</a> — add auth to exposed routes</li>
+      <li><a href="/docs/server-actions">Server Actions</a>: the RPC system that expose() builds on</li>
+      <li><a href="/docs/api-routes">API Routes</a>: the alternative for complex REST resources</li>
+      <li><a href="/docs/rate-limiting">Rate Limiting</a>: protect exposed endpoints from abuse</li>
+      <li><a href="/docs/middleware">Middleware</a>: add auth to exposed routes</li>
     </ul>
   `;
 }

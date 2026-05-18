@@ -12,7 +12,7 @@
  * MDX.
  *
  * Keep `variants` / `sizes` arrays in the SAME order as the keys appear
- * in the source `VARIANTS` / `SIZES` consts in packages/registry — the
+ * in the source `VARIANTS` / `SIZES` consts in packages/registry, the
  * audit script and CLI list will eventually consume both.
  */
 
@@ -22,7 +22,7 @@ export interface ComponentApi {
   /**
    * Optional heading override for the variants section. Defaults to
    * "Variants". Set this when the values aren't visual variants in the
-   * usual sense — e.g. `separator` uses "Orientation" because its
+   * usual sense, e.g. `separator` uses "Orientation" because its
    * horizontal/vertical options are layout axes, not aesthetic styles.
    */
   variantsLabel?: string;
@@ -33,7 +33,7 @@ export interface ComponentApi {
   /**
    * Icon-only sizes (e.g. button's icon / icon-xs / icon-sm / icon-lg)
    * that visually need to be demoed without text labels. Rendered as a
-   * separate "Icon" section after "Sizes" — mirrors shadcn's split of
+   * separate "Icon" section after "Sizes", mirrors shadcn's split of
    * Size + Icon examples on the button page. Keys must have matching
    * entries in ICON_SIZE_EXAMPLES.
    */
@@ -44,21 +44,21 @@ export interface ComponentApi {
    * Suppress the Variants section even when `variants` is defined.
    * Useful when the hero preview already shows every variant side-by-
    * side and a separate section would just duplicate it (e.g. button).
-   * The metadata stays — the API Reference table still lists the
-   * variant keys + types — only the live-preview section is hidden.
+   * The metadata stays, the API Reference table still lists the
+   * variant keys + types, only the live-preview section is hidden.
    */
   hideVariantsSection?: boolean;
   /** Same idea, for the Sizes section. */
   hideSizesSection?: boolean;
   /**
-   * 'combined' (default) — every variant rendered into one flex-wrap
+   * 'combined' (default), every variant rendered into one flex-wrap
    * preview pane. Use when each variant's example markup is self-
    * explanatory (e.g. button text reads "Default" / "Destructive" /
    * etc., so the user sees each variant labelled by name).
    *
-   * 'cards' — each variant gets its own preview pane with a heading
+   * 'cards', each variant gets its own preview pane with a heading
    * above it. Use when the example markup is identical across
-   * variants and only the visual style differs — without per-variant
+   * variants and only the visual style differs, without per-variant
    * headings the user can't tell which is which. Tabs is the canonical
    * case: each variant renders the same Account/Password tabs UI;
    * only the styling differs.
@@ -77,7 +77,7 @@ export interface ComponentApi {
 }
 
 export const COMPONENT_API: Record<string, ComponentApi> = {
-  // ----- Tier 1 — class helpers -----
+  // ----- Tier 1, class helpers -----
 
   alert: {
     variants: ['default', 'destructive'],
@@ -98,7 +98,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   badge: {
     variants: ['default', 'secondary', 'destructive', 'outline', 'ghost', 'link'],
-    // Hero preview shows all 6 variants side-by-side with name labels —
+    // Hero preview shows all 6 variants side-by-side with name labels , 
     // dedicated Variants section would be a literal duplicate. Same
     // pattern as button. API Reference table at the bottom still lists
     // every variant key + type.
@@ -116,13 +116,13 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   button: {
     variants: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],
-    // Hide the Variants section — the hero preview already shows all 6
+    // Hide the Variants section, the hero preview already shows all 6
     // variants side-by-side with their names. Repeating them in a
     // dedicated section would just be a second copy of the same thing.
     // The API Reference table at the bottom still lists every variant
     // key + type for anyone who wants the precise enum.
     hideVariantsSection: true,
-    // Text-button sizes only — icon sizes split into iconSizes below so
+    // Text-button sizes only, icon sizes split into iconSizes below so
     // each section's preview is internally consistent (text buttons of
     // varying heights vs cog icons of varying box sizes).
     sizes: ['default', 'xs', 'sm', 'lg'],
@@ -148,12 +148,12 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     sizes: ['default', 'sm', 'lg'],
     subcomponents: [
       { name: 'toggleClass({ variant, size })', description: 'Apply to a native <button> for the controlled pattern.' },
-      { name: '<ui-toggle>', description: 'Stateful custom element — manages aria-pressed + data-state for you.' },
+      { name: '<ui-toggle>', description: 'Stateful custom element, manages aria-pressed + data-state for you.' },
     ],
     props: [
       { name: 'variant', type: '"default" | "outline"', default: '"default"' },
       { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"' },
-      { name: 'pressed', type: 'boolean (attribute)', default: 'false', description: 'On <ui-toggle> — initial pressed state.' },
+      { name: 'pressed', type: 'boolean (attribute)', default: 'false', description: 'On <ui-toggle>, initial pressed state.' },
       { name: 'disabled', type: 'boolean (attribute)', default: 'false' },
     ],
     events: [
@@ -164,7 +164,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   avatar: {
     sizes: ['default', 'sm', 'lg'],
     subcomponents: [
-      { name: 'avatarClass({ size })', description: 'Root container — circle with overflow clip.' },
+      { name: 'avatarClass({ size })', description: 'Root container, circle with overflow clip.' },
       { name: 'avatarImageClass()', description: 'Img child filling the avatar.' },
       { name: 'avatarFallbackClass()', description: 'Initials / icon shown when the image is missing.' },
       { name: 'avatarBadgeClass()', description: 'Small status dot positioned at the corner.' },
@@ -172,7 +172,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'avatarGroupCountClass()', description: 'Trailing "+N" indicator inside a group.' },
     ],
     props: [
-      { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"', description: 'webjs extension — shadcn has no size prop.' },
+      { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"', description: 'webjs extension, shadcn has no size prop.' },
     ],
   },
 
@@ -183,7 +183,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'switchTrackClass({ size })', description: 'Visible track with the sliding thumb pseudo-element.' },
     ],
     props: [
-      { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'webjs extension — shadcn has no size prop.' },
+      { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'webjs extension, shadcn has no size prop.' },
       { name: 'checked', type: 'boolean (on the <input>)', default: 'false' },
       { name: 'disabled', type: 'boolean', default: 'false' },
     ],
@@ -191,21 +191,21 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   tabs: {
     variants: ['default', 'underline'],
-    // Each variant renders the same Account/Password tab UI — only
+    // Each variant renders the same Account/Password tab UI, only
     // the styling differs (filled list vs underline-indicator). Use
     // per-variant cards with headings so users can tell which is which.
     variantsPreviewMode: 'cards',
     subcomponents: [
       { name: '<ui-tabs>', description: 'Owns the active value + orientation.' },
       { name: '<ui-tabs-list>', description: 'Trigger row. Accepts variant="default | underline".' },
-      { name: '<ui-tabs-trigger>', description: 'Tab button — value prop links to a matching content.' },
-      { name: '<ui-tabs-content>', description: 'Tab panel — value prop matches its trigger.' },
+      { name: '<ui-tabs-trigger>', description: 'Tab button, value prop links to a matching content.' },
+      { name: '<ui-tabs-content>', description: 'Tab panel, value prop matches its trigger.' },
       { name: 'tabsListClass({ variant })', description: 'Class helper for the list.' },
     ],
     props: [
-      { name: 'value', type: 'string', description: 'On <ui-tabs> — controlled active value.' },
+      { name: 'value', type: 'string', description: 'On <ui-tabs>, controlled active value.' },
       { name: 'orientation', type: '"horizontal" | "vertical"', default: '"horizontal"', description: 'On <ui-tabs>.' },
-      { name: 'variant', type: '"default" | "underline"', default: '"default"', description: 'On <ui-tabs-list> — webjs name for shadcn’s underline-style list.' },
+      { name: 'variant', type: '"default" | "underline"', default: '"default"', description: 'On <ui-tabs-list>, webjs name for shadcn’s underline-style list.' },
     ],
     events: [
       { name: 'ui-value-change', detail: '{ value: string }', description: 'Fired on <ui-tabs> when the active value changes.' },
@@ -218,14 +218,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'nativeSelectWrapperClass()', description: 'Relative wrapper that positions the chevron icon.' },
       { name: 'nativeSelectClass()', description: 'Apply to a native <select>.' },
       { name: 'nativeSelectIconClass()', description: 'Apply to the chevron <svg> rendered absolutely inside the wrapper.' },
-      { name: 'nativeSelectOptionClass()', description: 'Advanced override — auto-applied via stylesheet, exported for users who need to inline.' },
+      { name: 'nativeSelectOptionClass()', description: 'Advanced override, auto-applied via stylesheet, exported for users who need to inline.' },
     ],
     props: [
       { name: 'data-size', type: '"default" | "sm"', default: '"default"', description: 'Set on the <select> element.' },
     ],
   },
 
-  // ----- Tier 2 — stateful custom elements that don't take variant/size but have a rich prop surface -----
+  // ----- Tier 2, stateful custom elements that don't take variant/size but have a rich prop surface -----
 
   accordion: {
     subcomponents: [
@@ -239,8 +239,8 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     props: [
       { name: 'open', type: 'boolean (HTML attribute on <details>)', default: 'absent', description: 'Set on a <details> to render it expanded on first paint.' },
       { name: 'name', type: 'string (HTML attribute on <details>)', default: 'absent', description: 'Items sharing a name form an exclusive group (only one open at a time).' },
-      { name: 'disabled', type: 'boolean (argument to accordionTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention — native <details> has no `disabled` attribute.' },
-      { name: 'orientation="horizontal"', type: '— not supported', description: 'Native <details>/<summary> is always vertical (summary above, content below). For a horizontal disclosure, use <ui-tabs> instead.' },
+      { name: 'disabled', type: 'boolean (argument to accordionTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention, native <details> has no `disabled` attribute.' },
+      { name: 'orientation="horizontal"', type: ',  not supported', description: 'Native <details>/<summary> is always vertical (summary above, content below). For a horizontal disclosure, use <ui-tabs> instead.' },
     ],
   },
 
@@ -253,11 +253,11 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     // having to open two dialogs.
     sizes: ['default', 'sm'],
     subcomponents: [
-      { name: '<ui-alert-dialog>', description: 'Root — owns the open state.' },
+      { name: '<ui-alert-dialog>', description: 'Root, owns the open state.' },
       { name: '<ui-alert-dialog-trigger>', description: 'Opens the dialog on click.' },
       { name: '<ui-alert-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal() with role="alertdialog"; native Escape close is cancelled via the dialog cancel event, and backdrop click is intentionally not wired (user MUST choose Cancel or Action).' },
-      { name: '<ui-alert-dialog-action>', description: 'Primary action button — applies buttonClass automatically. Accepts `variant` (default "default") and `size` (default "default"). Closes the dialog on click.' },
-      { name: '<ui-alert-dialog-cancel>', description: 'Cancel button — applies buttonClass automatically. Accepts `variant` (default "outline") and `size` (default "default"). Closes the dialog on click.' },
+      { name: '<ui-alert-dialog-action>', description: 'Primary action button, applies buttonClass automatically. Accepts `variant` (default "default") and `size` (default "default"). Closes the dialog on click.' },
+      { name: '<ui-alert-dialog-cancel>', description: 'Cancel button, applies buttonClass automatically. Accepts `variant` (default "outline") and `size` (default "default"). Closes the dialog on click.' },
       { name: 'alertDialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / OverlayClass()', description: 'Class helpers for the static prose layout.' },
     ],
     props: [
@@ -270,11 +270,11 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   dialog: {
     subcomponents: [
-      { name: '<ui-dialog>', description: 'Root — owns the open state.' },
+      { name: '<ui-dialog>', description: 'Root, owns the open state.' },
       { name: '<ui-dialog-trigger>', description: 'Opens the dialog on click.' },
       { name: '<ui-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal(): top-layer rendering, focus trap, Escape to close, and ::backdrop overlay are all provided by the browser. We add body-scroll lock + auto-injected X close button in the top-right corner unless show-close-button="false".' },
       { name: '<ui-dialog-footer show-close-button>', description: 'Footer row. Optionally auto-appends a "Close" outline button when show-close-button is set.' },
-      { name: '<ui-dialog-close>', description: 'Close button — wrap any element to close on click.' },
+      { name: '<ui-dialog-close>', description: 'Close button, wrap any element to close on click.' },
       { name: 'dialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / ContentClass() / OverlayClass() / CloseButtonClass()', description: 'Class helpers for prose layout + close-button positioning.' },
     ],
     props: [
@@ -285,8 +285,8 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'dropdown-menu': {
-    // The `variant` here is on <ui-dropdown-menu-item> — not on the
-    // root component — so a top-level "Variants" section misrepresents
+    // The `variant` here is on <ui-dropdown-menu-item>, not on the
+    // root component, so a top-level "Variants" section misrepresents
     // the API surface. Keep the variant keys in metadata (the API
     // Reference table documents them as part of <ui-dropdown-menu-item>'s
     // props), but hide the preview section. The hero already shows
@@ -296,22 +296,22 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     variants: ['default', 'destructive'],
     hideVariantsSection: true,
     subcomponents: [
-      { name: '<ui-dropdown-menu>', description: 'Root — owns the open state and document-level event handlers.' },
+      { name: '<ui-dropdown-menu>', description: 'Root, owns the open state and document-level event handlers.' },
       { name: '<ui-dropdown-menu-trigger>', description: 'Toggles the menu.' },
-      { name: '<ui-dropdown-menu-content>', description: 'Popover panel — role="menu". Accepts side / align / side-offset.' },
+      { name: '<ui-dropdown-menu-content>', description: 'Popover panel, role="menu". Accepts side / align / side-offset.' },
       { name: '<ui-dropdown-menu-item>', description: 'Clickable row. variant="default | destructive", inset boolean.' },
-      { name: '<ui-dropdown-menu-label>', description: 'Section header — smaller, semibold, muted.' },
+      { name: '<ui-dropdown-menu-label>', description: 'Section header, smaller, semibold, muted.' },
       { name: '<ui-dropdown-menu-separator>', description: 'Horizontal divider.' },
       { name: '<ui-dropdown-menu-shortcut>', description: 'Keyboard shortcut hint, right-aligned.' },
       { name: '<ui-dropdown-menu-group>', description: 'Wraps a set of related items with role="group".' },
       { name: '<ui-dropdown-menu-sub>', description: 'Submenu root.' },
-      { name: '<ui-dropdown-menu-sub-trigger>', description: 'Item that opens a submenu — auto-injects a right chevron.' },
+      { name: '<ui-dropdown-menu-sub-trigger>', description: 'Item that opens a submenu, auto-injects a right chevron.' },
       { name: '<ui-dropdown-menu-sub-content>', description: 'Submenu popover panel.' },
     ],
     props: [
       { name: 'open', type: 'boolean (attribute)', default: 'false' },
       { name: 'variant', type: '"default" | "destructive"', default: '"default"', description: 'On <ui-dropdown-menu-item>.' },
-      { name: 'inset', type: 'boolean (attribute)', default: 'false', description: 'On <ui-dropdown-menu-item>, <ui-dropdown-menu-label>, and <ui-dropdown-menu-sub-trigger> — left-pad for icon alignment so the row aligns with sibling items that have leading icons.' },
+      { name: 'inset', type: 'boolean (attribute)', default: 'false', description: 'On <ui-dropdown-menu-item>, <ui-dropdown-menu-label>, and <ui-dropdown-menu-sub-trigger>, left-pad for icon alignment so the row aligns with sibling items that have leading icons.' },
       { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom" (content) / "right" (sub-content)' },
       { name: 'align', type: '"start" | "center" | "end"', default: '"start"' },
       { name: 'side-offset', type: 'number (px)', default: '4 (content) / -4 (sub-content)', description: 'Attribute on <ui-dropdown-menu-content> and <ui-dropdown-menu-sub-content>.' },
@@ -324,7 +324,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     subcomponents: [
       { name: '<button popovertarget="id">', description: 'Invoker. The browser toggles the matching popover on click and restores focus on close.' },
       { name: '<div popover id="id">', description: 'Floating panel. Native UA hides it until the invoker fires.' },
-      { name: 'popoverContentClass({ side, align, sideOffset })', description: 'Applied to the popover element. Same shape as shadcn `<PopoverContent>` placement props — side / align / sideOffset are encoded into CSS Anchor Positioning utilities.' },
+      { name: 'popoverContentClass({ side, align, sideOffset })', description: 'Applied to the popover element. Same shape as shadcn `<PopoverContent>` placement props, side / align / sideOffset are encoded into CSS Anchor Positioning utilities.' },
       { name: 'popoverHeaderClass() / TitleClass() / DescriptionClass()', description: 'Class helpers for prose inside the content.' },
       { name: 'positionFloating(trigger, content, opts)', description: 'Imperative positioning utility for callers that cannot yet rely on CSS anchor positioning. Also used internally by tooltip / hover-card / dropdown-menu.' },
     ],
@@ -334,16 +334,16 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'sideOffset', type: '0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24', default: '4', description: 'Argument to popoverContentClass. Pixels between the trigger and the popover. For other values, override margin-{top|bottom|left|right} via inline style.' },
       { name: 'alignOffset', type: '0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24', default: '0', description: 'Argument to popoverContentClass. Pixels offset along the align axis (no-op for align="center"). Emitted as a Tailwind translate utility.' },
       { name: 'popover', type: '"auto" | "manual" (HTML attribute)', default: '"auto"', description: 'Auto gets light dismiss + Escape close for free. Manual is JS-driven.' },
-      { name: 'popovertarget', type: 'string (HTML attribute on the invoker)', description: 'id of the popover element to toggle. Also wires the invoker as the implicit anchor — no anchor-name / position-anchor needed for the common case.' },
-      { name: 'anchor-name / position-anchor', type: 'CSS properties (inline style — optional)', description: 'Only needed when you have multiple invokers for the same popover or want to anchor to a different element than the invoker.' },
+      { name: 'popovertarget', type: 'string (HTML attribute on the invoker)', description: 'id of the popover element to toggle. Also wires the invoker as the implicit anchor, no anchor-name / position-anchor needed for the common case.' },
+      { name: 'anchor-name / position-anchor', type: 'CSS properties (inline style, optional)', description: 'Only needed when you have multiple invokers for the same popover or want to anchor to a different element than the invoker.' },
     ],
   },
 
   tooltip: {
     subcomponents: [
-      { name: '<ui-tooltip>', description: 'Root — delay-duration attribute controls hover delay.' },
+      { name: '<ui-tooltip>', description: 'Root, delay-duration attribute controls hover delay.' },
       { name: '<ui-tooltip-trigger>', description: 'Wraps the focusable target.' },
-      { name: '<ui-tooltip-content>', description: 'Floating label — side / align / side-offset.' },
+      { name: '<ui-tooltip-content>', description: 'Floating label, side / align / side-offset.' },
     ],
     props: [
       { name: 'delay-duration', type: 'number (ms)', default: '700', description: 'Hover dwell before the tooltip opens.' },
@@ -357,7 +357,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   'hover-card': {
     subcomponents: [
-      { name: '<ui-hover-card>', description: 'Root — open-delay / close-delay attributes.' },
+      { name: '<ui-hover-card>', description: 'Root, open-delay / close-delay attributes.' },
       { name: '<ui-hover-card-trigger>', description: 'Hoverable anchor.' },
       { name: '<ui-hover-card-content>', description: 'Floating card.' },
     ],
@@ -373,7 +373,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   collapsible: {
     subcomponents: [
-      { name: '<details>', description: 'Root — owns the open state natively. Click or Enter on the <summary> toggles.' },
+      { name: '<details>', description: 'Root, owns the open state natively. Click or Enter on the <summary> toggles.' },
       { name: '<summary>', description: 'Clickable header. Apply collapsibleTriggerClass() so the native disclosure triangle is hidden and the typography matches.' },
       { name: 'collapsibleClass()', description: 'Applied to the <details>. Marks the disclosure as a `group` so descendants react to `group-open:`.' },
       { name: 'collapsibleTriggerClass()', description: 'Applied to <summary>. Hides the native ::marker.' },
@@ -381,7 +381,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
     props: [
       { name: 'open', type: 'boolean (HTML attribute on <details>)', default: 'absent', description: 'Initial state. After mount, toggle via `el.open = true | false` or by clicking the summary.' },
-      { name: 'disabled', type: 'boolean (argument to collapsibleTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention — native <details> has no `disabled` attribute.' },
+      { name: 'disabled', type: 'boolean (argument to collapsibleTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention, native <details> has no `disabled` attribute.' },
     ],
   },
 
@@ -399,14 +399,14 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     // full 3-item group per variant / size so the cascade is visible.
     variants: ['default', 'outline'],
     sizes: ['default', 'sm', 'lg'],
-    // Items always read B / I / U regardless of variant or size — the
+    // Items always read B / I / U regardless of variant or size, the
     // example content is identical across cards, so per-card headings
     // ("Default" / "Outline" / "sm" / "default" / "lg") are the only
     // way to disambiguate which is which.
     variantsPreviewMode: 'cards',
     sizesPreviewMode: 'cards',
     subcomponents: [
-      { name: '<ui-toggle-group>', description: 'Root — type="single | multiple", variant, size, spacing, value.' },
+      { name: '<ui-toggle-group>', description: 'Root, type="single | multiple", variant, size, spacing, value.' },
       { name: '<ui-toggle-group-item>', description: 'One toggle button in the group.' },
     ],
     props: [
@@ -421,7 +421,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   sonner: {
-    // Toast TYPE goes in the variants slot — each card fires the
+    // Toast TYPE goes in the variants slot, each card fires the
     // matching imperative API so the icon + colour treatment for each
     // type is visible.
     variants: ['default', 'success', 'error', 'info', 'warning', 'loading'],
@@ -434,7 +434,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     sizes: ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'],
     sizesLabel: 'Position',
     subcomponents: [
-      { name: '<ui-sonner>', description: 'Toast viewport — position attribute. Mount once per page.' },
+      { name: '<ui-sonner>', description: 'Toast viewport, position attribute. Mount once per page.' },
       { name: 'toast(msg, opts?)', description: 'Imperative API. Variants: toast.success / toast.error / toast.info / toast.warning / toast.loading / toast.promise / toast.dismiss.' },
     ],
     props: [
@@ -453,7 +453,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
 
-  // ----- Tier 1 — pure class helpers, no variant/size, just prose -----
+  // ----- Tier 1, pure class helpers, no variant/size, just prose -----
 
   'aspect-ratio': {
     subcomponents: [{ name: 'aspectRatioClass()', description: 'Pairs with the standard Tailwind aspect-* utilities.' }],
@@ -493,7 +493,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   'radio-group': {
     variants: ['vertical', 'horizontal'],
     variantsLabel: 'Orientation',
-    // Same Basic/Pro/Enterprise content per orientation — header
+    // Same Basic/Pro/Enterprise content per orientation, header
     // disambiguates which is which.
     variantsPreviewMode: 'cards',
     subcomponents: [
@@ -515,13 +515,13 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
   separator: {
     // "horizontal" / "vertical" aren't visual variants in the usual
-    // sense — they're layout axes. variantsLabel overrides the
+    // sense, they're layout axes. variantsLabel overrides the
     // section heading so /docs/components/separator shows
     // "Orientation" rather than "Variants" above the two preview
     // cards, matching shadcn's docs vocabulary.
     variants: ['horizontal', 'vertical'],
     variantsLabel: 'Orientation',
-    // Surrounding markup differs but orientation is the point — header
+    // Surrounding markup differs but orientation is the point, header
     // disambiguates which axis each card demos.
     variantsPreviewMode: 'cards',
     subcomponents: [{ name: 'separatorClass({ orientation })', description: 'Apply to <div role="separator">.' }],
@@ -541,7 +541,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   pagination: {
     // No Sizes section: `size` on paginationLinkClass is a forwarded
     // ButtonSize prop with a sensible default of "icon" (compact
-    // square — the canonical pagination look). Demoing competing
+    // square, the canonical pagination look). Demoing competing
     // "default" vs "icon" pagination layouts misrepresents the API:
     // text-padded pagination links aren't a real use case shadcn
     // showcases either. The `size` prop is still documented in the
@@ -554,7 +554,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'paginationEllipsisClass()', description: 'Overflow indicator.' },
     ],
     props: [
-      { name: 'isActive', type: 'boolean', description: 'On paginationLinkClass — marks the current page.' },
+      { name: 'isActive', type: 'boolean', description: 'On paginationLinkClass, marks the current page.' },
       { name: 'size', type: 'ButtonSize', default: '"icon"', description: 'Forwarded to buttonClass. The default "icon" gives the compact square page-number style typical of pagination. Override only if you need a non-standard look.' },
     ],
   },

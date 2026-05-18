@@ -18,7 +18,7 @@ import { isUnsafeHTML, isLive } from './directives.js';
  * and their fallback HTML is emitted immediately. The caller is responsible
  * for streaming each resolved promise afterwards. Without a suspenseCtx,
  * Suspense still works but we fall back to emitting only the fallback
- * (the promise is dropped — appropriate for static pre-render).
+ * (the promise is dropped: appropriate for static pre-render).
  *
  * @typedef {{ pending: {id: string, promise: Promise<unknown>}[], nextId: number }} SuspenseCtx
  *
@@ -43,11 +43,11 @@ async function render(value, ctx) {
     value = await value;
     return render(value, ctx);
   }
-  // unsafeHTML — inject raw HTML string without escaping.
+  // unsafeHTML: inject raw HTML string without escaping.
   if (isUnsafeHTML(value)) {
     return String(/** @type any */ (value).value ?? '');
   }
-  // live() — on the server, just unwrap and render the inner value.
+  // live() on the server just unwraps and renders the inner value.
   if (isLive(value)) {
     return render(/** @type any */ (value).value, ctx);
   }
@@ -187,7 +187,7 @@ async function renderTemplate(tr, ctx) {
       } else if (state === 'rawtext') {
         // Inside <script> / <style>: emit the value as-is (no HTML escaping).
         // Author is responsible for not closing the tag with user-controlled
-        // data — the usual caveat for CSS/JS interpolation.
+        // data: the usual caveat for CSS/JS interpolation.
         out += String(val ?? '');
         rawTail = '';
       } else if (state === 'text') {
@@ -243,7 +243,7 @@ async function injectDSD(html, ctx) {
     const [match, tag, attrs, selfClose] = m;
     const Cls = lookup(tag);
     if (!Cls) continue;
-    // Track which custom elements actually appeared — used by SSR to emit
+    // Track which custom elements actually appeared: used by SSR to emit
     // `<link rel="modulepreload">` hints for their module URLs.
     if (ctx && ctx.usedComponents) ctx.usedComponents.add(tag);
     const opening = selfClose ? `<${tag}${attrs}>` : match;
@@ -353,7 +353,7 @@ function camelCase(s) {
  * that yields HTML chunks as strings.
  *
  * Works identically to {@link renderToString} but streams partial HTML as
- * it is rendered — avoiding buffering the entire page in memory. For
+ * it is rendered: avoiding buffering the entire page in memory. For
  * Suspense boundaries, the fallback is yielded immediately and resolved
  * content is streamed afterwards at the end of the response.
  *
@@ -371,7 +371,7 @@ export function renderToStream(value, opts = { ssr: true }) {
     async start(controller) {
       try {
         if (opts && opts.ssr === false) {
-          // No DSD injection — just stream the raw rendered chunks.
+          // No DSD injection: just stream the raw rendered chunks.
           await streamRender(value, ctx, controller);
         } else {
           // Render to string first to run DSD injection (which operates on
@@ -549,7 +549,7 @@ async function streamTemplate(tr, ctx, controller) {
       }
     }
 
-    // Flush the buffer before processing the value hole — but only when
+    // Flush the buffer before processing the value hole: but only when
     // we're in text state (in attribute states we may need the buffer for
     // backtracking).
     if (i < values.length) {

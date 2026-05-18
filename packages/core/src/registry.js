@@ -24,7 +24,7 @@
  * user's app modules each import `@webjskit/core`. When the cli is
  * installed globally (or hoisted at a different level than the user's
  * app), Node resolves the bare specifier from each importer's location
- * and may end up loading TWO instances of `@webjskit/core` — one for
+ * and may end up loading TWO instances of `@webjskit/core`: one for
  * the server, one for the user's app. Each instance would otherwise
  * have its own private `registry` Map, so:
  *
@@ -112,7 +112,7 @@ if (!isBrowser) {
       },
       /** No-op: server never upgrades real elements. */
       upgrade() {},
-      /** Resolves immediately — SSR never waits for upgrade. */
+      /** Resolves immediately: SSR never waits for upgrade. */
       whenDefined(tag) {
         const e = registry.get(tag);
         return Promise.resolve(e?.cls);
@@ -122,11 +122,11 @@ if (!isBrowser) {
 }
 
 /* ------------------------------------------------------------------
- * Public API — unchanged signature surface.
+ * Public API: unchanged signature surface.
  * ------------------------------------------------------------------ */
 
 /**
- * @deprecated Low-level internal — prefer `customElements.define(tag, cls)`.
+ * @deprecated Low-level internal: prefer `customElements.define(tag, cls)`.
  * Kept as a minimal wrapper for back-compat with any framework code that
  * calls it directly.
  *

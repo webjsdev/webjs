@@ -22,7 +22,7 @@ export default {
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
   // component sources directly. Mirrors `webjs dev` (which registers an esbuild
-  // ESM loader hook for the same purpose) — esbuild is already a hard dep of
+  // ESM loader hook for the same purpose): esbuild is already a hard dep of
   // @webjskit/server, so this isn't adding a new toolchain.
   plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
   browsers: [

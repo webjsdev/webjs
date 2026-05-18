@@ -4,7 +4,7 @@ import { html } from '@webjskit/core';
  * Root 404 boundary. Renders when a page or server action throws
  * notFound() AND when no route matches the requested URL.
  *
- * Keep this file's import graph minimal — same reason as error.ts:
+ * Keep this file's import graph minimal: same reason as error.ts:
  * if this file fails to load, the framework falls through to its
  * generic 404 page. Only @webjskit/core, nothing else.
  *

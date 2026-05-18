@@ -1,10 +1,10 @@
 /**
- * Integration tests for `scaffoldApp` — invokes the full-stack, api, and
+ * Integration tests for `scaffoldApp`: invokes the full-stack, api, and
  * saas scaffolds programmatically in a temp dir and asserts the expected
  * files / directory structure are produced. Runs entirely offline.
  *
  * This is a coverage anchor for `packages/cli/lib/create.js` and
- * `packages/cli/lib/saas-template.js` — both files are otherwise only
+ * `packages/cli/lib/saas-template.js`: both files are otherwise only
  * exercised by manual `webjs create` runs.
  */
 
@@ -169,7 +169,7 @@ test('scaffoldApp: exits / throws when the target dir already exists', async () 
   let exitCode = null;
   process.exit = (code) => {
     exitCode = code;
-    // Throw to short-circuit — scaffoldApp would otherwise continue
+    // Throw to short-circuit: scaffoldApp would otherwise continue
     // executing after the existsSync branch.
     throw new Error('exit-stub');
   };

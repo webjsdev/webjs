@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# guard-main-merge.sh — Claude Code PreToolUse hook
+# guard-main-merge.sh - Claude Code PreToolUse hook
 #
 # Rules:
 #   - git merge → ask (merging to parent branch needs approval)
@@ -11,7 +11,7 @@
 COMMAND=$(jq -r '.tool_input.command // empty' < /dev/stdin)
 [ -z "$COMMAND" ] && exit 0
 
-# Bypass mode — full autonomy
+# Bypass mode - full autonomy
 SETTINGS="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS" ]; then
   BYPASS=$(jq -r '.skipDangerousModePermissionPrompt // false' "$SETTINGS" 2>/dev/null)

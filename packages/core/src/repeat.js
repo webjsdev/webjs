@@ -1,5 +1,5 @@
 /**
- * `repeat()` — keyed list directive.
+ * `repeat()`: keyed list directive.
  *
  * Usage in a template:
  * ```js
@@ -9,7 +9,7 @@
  *
  * Without `repeat()`, an array re-render rebuilds every child (losing focus,
  * selection, and scroll). With `repeat()`, the client renderer maintains a
- * `Map<key, TemplateInstance>` — matched items update in place, new items
+ * `Map<key, TemplateInstance>`: matched items update in place, new items
  * mount fresh, removed items unmount, and the surviving DOM nodes are moved
  * (not recreated) when the order changes.
  *

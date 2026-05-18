@@ -187,7 +187,7 @@ GoodProp.register('good-prop');
 });
 
 test('reactive-props-use-declare: ignores non-reactive plain fields', async () => {
-  // Fields whose names are NOT in `static properties` are free-form —
+  // Fields whose names are NOT in `static properties` are free-form -
   // no reactive accessor exists, so a class-field initializer is fine.
   const appDir = await makeTempApp();
   try {
@@ -198,8 +198,8 @@ test('reactive-props-use-declare: ignores non-reactive plain fields', async () =
 class Mixed extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
-  _conn: WebSocket | null = null;     // not reactive — fine
-  _retries = 0;                       // not reactive — fine
+  _conn: WebSocket | null = null;     // not reactive: fine
+  _retries = 0;                       // not reactive: fine
 
   constructor() { super(); this.count = 0; }
 }
@@ -619,7 +619,7 @@ test('one-function-per-action: only applies inside modules/*/actions/ or queries
   try {
     await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
     await mkdir(join(appDir, 'lib'), { recursive: true });
-    // lib/session.ts has 5 exports — was previously flagged. Must NOT be flagged now.
+    // lib/session.ts has 5 exports: was previously flagged. Must NOT be flagged now.
     await writeFile(
       join(appDir, 'lib', 'session.ts'),
       `'use server';
@@ -630,7 +630,7 @@ export function rotateSession() {}
 export function verifySession() {}
 `,
     );
-    // modules/auth/actions/login.server.ts with 2 exports — MUST be flagged.
+    // modules/auth/actions/login.server.ts with 2 exports: MUST be flagged.
     await writeFile(
       join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
       `export async function login() {}\nexport async function loginAlt() {}\n`,
@@ -687,7 +687,7 @@ test('no-json-data-files: does not flag package.json / tsconfig.json / other con
     await writeFile(join(appDir, 'package.json'), '{"name":"x"}');
     await writeFile(join(appDir, 'tsconfig.json'), '{}');
     await writeFile(join(appDir, 'manifest.json'), '{}');
-    // A random JSON file with a normal name elsewhere — also fine.
+    // A random JSON file with a normal name elsewhere: also fine.
     await mkdir(join(appDir, 'app'), { recursive: true });
     await writeFile(join(appDir, 'app', 'metadata.json'), '{}');
 
@@ -821,7 +821,7 @@ test('shell-in-non-root-layout: ignores shell tokens inside line/block comments'
     await writeFile(
       join(appDir, 'app', 'foo', 'layout.ts'),
       `import { html } from '@webjskit/core';
-// Note: do NOT write <!doctype> here — only the root layout owns the shell.
+// Note: do NOT write <!doctype> here: only the root layout owns the shell.
 /* Reminder: the framework auto-emits <html>/<head>/<body>. */
 export default function FooLayout({ children }) {
   return html\`<main>\${children}</main>\`;
@@ -842,7 +842,7 @@ test('shell-in-non-root-layout: ignores non-layout files in app/', async () => {
   try {
     await mkdir(join(appDir, 'app'), { recursive: true });
     // route.ts / middleware.ts / error.ts etc. can mention these tokens
-    // (e.g. error pages constructing fallback HTML) — only layout.* and
+    // (e.g. error pages constructing fallback HTML): only layout.* and
     // page.* are policed by this rule.
     await writeFile(
       join(appDir, 'app', 'route.ts'),

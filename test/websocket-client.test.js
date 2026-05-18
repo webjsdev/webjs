@@ -1,5 +1,5 @@
 /**
- * Unit tests for connectWS — client-side WebSocket helper with
+ * Unit tests for connectWS: client-side WebSocket helper with
  * reconnection + JSON codec + queued sends.
  *
  * Uses a fake WebSocket class to drive open/message/close/error events
@@ -314,7 +314,7 @@ test('socket getter exposes the current underlying WebSocket', () => {
 
 test('readyState getter returns CLOSED (3) when socket is null', () => {
   // Force a situation where ws is null by overriding WebSocket to throw
-  // during construction inside the reconnect callback — unrealistic but
+  // during construction inside the reconnect callback: unrealistic but
   // lets us exercise the null-coalescing branch.
   const conn = connectWS('/x');
   assert.equal(conn.readyState, FakeWS.CONNECTING);

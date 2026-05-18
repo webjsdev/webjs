@@ -1,5 +1,5 @@
 /**
- * Toggle — pressable on/off button. Pure class helper; use with a native
+ * Toggle: pressable on/off button. Pure class helper; use with a native
  * `<button>` and toggle the `data-state="on|off"` and `aria-pressed`
  * attributes yourself, OR use the stateful `<ui-toggle>` element.
  *
@@ -13,7 +13,7 @@
  *     <svg>…</svg>
  *   </button>
  *
- * Usage (custom element — handles state for you):
+ * Usage (custom element: handles state for you):
  *   <ui-toggle aria-label="Toggle bold">
  *     <svg>…</svg>
  *   </ui-toggle>
@@ -23,7 +23,7 @@
  */
 import { cn, Base, defineElement } from '../lib/utils.ts';
 
-// cursor-pointer + select-none on BASE for both call sites — the
+// cursor-pointer + select-none on BASE for both call sites: the
 // class-helper applied to a native <button> (where shadcn's upstream
 // also omits it; see the same convention the button fix applies) and
 // the <ui-toggle> custom element (a generic element with no implicit
@@ -53,7 +53,7 @@ export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize }
 }
 
 // --------------------------------------------------------------------------
-// <ui-toggle> — manages pressed state + aria-pressed + data-state on a host
+// <ui-toggle> manages pressed state + aria-pressed + data-state on a host
 // button. Convenience when you want state without writing the toggling JS.
 // --------------------------------------------------------------------------
 

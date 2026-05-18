@@ -7,7 +7,7 @@ import type { CommentFormatted } from '../types.ts';
 type State = { comments: CommentFormatted[]; busy: boolean; error: string | null };
 
 /**
- * `<comments-thread>` — live thread. Editorial card list, mono meta,
+ * `<comments-thread>`: live thread. Editorial card list, mono meta,
  * warm accent CTA, empty-state hint.
  */
 export class CommentsThread extends WebComponent {
@@ -79,7 +79,7 @@ export class CommentsThread extends WebComponent {
     const { comments, busy, error } = this.state;
     return html`
       ${comments.length === 0
-        ? html`<div class="p-6 text-center text-fg-subtle font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet — be the first.</div>`
+        ? html`<div class="p-6 text-center text-fg-subtle font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`
         : html`<ul class="list-none p-0 m-0 mb-5 grid gap-4">${repeat(comments, (c) => c.id, (c) => html`
             <li class="p-4 px-5 bg-bg-elev border border-border rounded">
               <div class="flex gap-2 items-baseline font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle mb-1.5">

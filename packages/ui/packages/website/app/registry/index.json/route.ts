@@ -1,6 +1,6 @@
 import { loadRegistryIndex } from '../../_lib/registry.server.ts';
 
-/** GET /registry/index.json — flat list of registry items (metadata only, used by `webjsui list`). */
+/** GET /registry/index.json: flat list of registry items (metadata only, used by `webjsui list`). */
 export async function GET() {
   const items = await loadRegistryIndex();
   return new Response(JSON.stringify(items, null, 2), {

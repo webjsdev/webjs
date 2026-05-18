@@ -1,5 +1,5 @@
 /**
- * Popover — floating panel anchored to a trigger button, built on the
+ * Popover, floating panel anchored to a trigger button, built on the
  * native HTML Popover API (`popover` attribute + `popovertarget`).
  *
  * Tier-1 component (no custom element). The browser handles:
@@ -20,7 +20,7 @@
  *   PopoverTitle       → popoverTitleClass()
  *   PopoverDescription → popoverDescriptionClass()
  *
- * Usage (single invoker, implicit anchor — zero inline style):
+ * Usage (single invoker, implicit anchor, zero inline style):
  *   <button popovertarget="filter" class=${buttonClass({ variant: 'outline' })}>Filter</button>
  *   <div id="filter" popover
  *        class=${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}>
@@ -54,7 +54,7 @@
 // --------------------------------------------------------------------------
 
 /**
- * Popover content options — mirror shadcn's `<PopoverContent>` props.
+ * Popover content options, mirror shadcn's `<PopoverContent>` props.
  * `side` and `align` map to CSS Anchor Positioning's `position-area`;
  * `sideOffset` maps to a directional margin so the popover sits a few
  * pixels off the anchor's edge.
@@ -169,7 +169,7 @@ export function popoverContentClass(opts: PopoverContentOptions = {}): string {
   const align = opts.align ?? 'center';
   const sideOffset = opts.sideOffset ?? 4;
   const alignOffset = opts.alignOffset ?? 0;
-  // align='center' has no align axis to offset along — skip the translate.
+  // align='center' has no align axis to offset along, skip the translate.
   let alignClass = '';
   if (align !== 'center' && alignOffset !== 0) {
     const axis = side === 'top' || side === 'bottom' ? 'horizontal' : 'vertical';

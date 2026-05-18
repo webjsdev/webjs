@@ -1,4 +1,4 @@
-// Use Web Crypto (globalThis.crypto) for random + hash — works on Node >=20,
+// Use Web Crypto (globalThis.crypto) for random + hash: works on Node >=20,
 // Deno, Bun, Cloudflare Workers. Avoids the node:crypto import and keeps
 // CSRF portable across runtimes.
 const webCrypto = /** @type {Crypto} */ (globalThis.crypto);

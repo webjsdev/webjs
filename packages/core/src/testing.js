@@ -29,7 +29,7 @@
  *
  * **When to use (AI hint):** Use `fixture()` in unit tests to quickly
  * mount a component and assert against its rendered shadow DOM.
- * This is the primary test helper — start every component test with it.
+ * This is the primary test helper: start every component test with it.
  *
  * @param {import('./html.js').TemplateResult | string} template
  *   Either a `html\`…\`` result or a raw HTML string.
@@ -132,7 +132,7 @@ function getContainer() {
     return _container;
   }
 
-  // Node.js environment — use linkedom
+  // Node.js environment: use linkedom
   try {
     const { parseHTML } = /** @type {any} */ (
       // Dynamic import syntax can't be used in a sync function,

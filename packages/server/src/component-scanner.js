@@ -3,7 +3,7 @@
  * browser-visible URL for every webjs component module.
  *
  * Called once at server boot. Results are used to prime the core
- * registry (`primeModuleUrl`) BEFORE any SSR render — so when a page
+ * registry (`primeModuleUrl`) BEFORE any SSR render: so when a page
  * renders a component tag, `lookupModuleUrl(tag)` already has the URL
  * ready for `<link rel="modulepreload">` hints.
  *
@@ -13,7 +13,7 @@
  *     customElements.define('my-counter', Counter);
  *
  * The scanner looks for `customElements.define('<tag>', <ClassName>)`
- * calls — static text patterns that are cheap to regex-match without
+ * calls: static text patterns that are cheap to regex-match without
  * a full TS parse. A full parse would be ~50× slower for no payoff;
  * we only need `{ tag, className, moduleUrl }` tuples.
  */
@@ -125,7 +125,7 @@ export async function findOrphanComponents(appDir) {
   for await (const file of walk(appDir, filter)) {
     let src;
     try { src = await readFile(file, 'utf8'); } catch { continue; }
-    // Find every class that extends WebComponent (exact name — we trust
+    // Find every class that extends WebComponent (exact name: we trust
     // the framework convention).
     const classRe = /\b(?:export\s+)?(?:default\s+)?class\s+([A-Z][A-Za-z0-9_$]*)\s+extends\s+WebComponent\b/g;
     // A class counts as "registered" if either Class.register('tag') or

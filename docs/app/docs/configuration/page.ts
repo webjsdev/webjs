@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Configuration — webjs' };
+export const metadata = { title: 'Configuration | webjs' };
 
 export default function Configuration() {
   return html`
@@ -11,18 +11,18 @@ export default function Configuration() {
     <h3>webjs dev</h3>
     <pre>webjs dev [--port 3000]</pre>
     <ul>
-      <li><code>--port</code> — dev server port (default: <code>3000</code>, or <code>PORT</code> env var)</li>
+      <li><code>--port</code>: dev server port (default: <code>3000</code>, or <code>PORT</code> env var)</li>
       <li>File watching via chokidar (automatic)</li>
       <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
       <li>TypeScript files transformed on the fly</li>
-      <li>No cache-busting needed — module loads are busted per request</li>
+      <li>No cache-busting needed, since module loads are busted per request</li>
     </ul>
 
     <h3>webjs start</h3>
     <pre>webjs start [--port 3000]</pre>
     <ul>
-      <li><code>--port</code> — production server port (also honors the <code>PORT</code> env var; default 3000)</li>
-      <li>Speaks plain HTTP/1.1; TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
+      <li><code>--port</code>: production server port (also honors the <code>PORT</code> env var, default 3000)</li>
+      <li>Speaks plain HTTP/1.1. TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
       <li>gzip/brotli compression enabled by default</li>
       <li>Static file ETag + Cache-Control headers</li>
       <li>Graceful shutdown on SIGTERM/SIGINT</li>
@@ -54,13 +54,13 @@ webjs db studio       # prisma studio</pre>
 }</pre>
     <p>Key settings:</p>
     <ul>
-      <li><code>noEmit</code> — type-check only, no compiled output (preserves no-build)</li>
-      <li><code>allowImportingTsExtensions</code> — needed for explicit <code>.ts</code> in imports</li>
-      <li><code>checkJs</code> — type-check <code>.js</code> files too (for mixed codebases)</li>
+      <li><code>noEmit</code>: type-check only, no compiled output (preserves no-build)</li>
+      <li><code>allowImportingTsExtensions</code>: needed for explicit <code>.ts</code> in imports</li>
+      <li><code>checkJs</code>: type-check <code>.js</code> files too (for mixed codebases)</li>
     </ul>
 
     <h2>Environment Variables</h2>
-    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). There's no built-in <code>.env</code> loader — use <code>dotenv</code> or pass vars via the shell:</p>
+    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). There's no built-in <code>.env</code> loader, so use <code>dotenv</code> or pass vars via the shell:</p>
     <pre>DATABASE_URL=postgres://... webjs start</pre>
     <blockquote><strong>Warning:</strong> never reference <code>process.env</code> in component code that runs on the client. It's undefined in the browser and would leak server secrets if it worked.</blockquote>
 
@@ -89,10 +89,10 @@ const resp = await app.handle(new Request('http://x/api/hello'));
     <h2>What Can't Be Configured</h2>
     <p>Some things are intentionally fixed:</p>
     <ul>
-      <li><strong>Routing conventions</strong> — <code>page.ts</code>, <code>layout.ts</code>, <code>route.ts</code>, <code>middleware.ts</code>, <code>error.ts</code>, <code>not-found.ts</code> are the file names. No aliases.</li>
-      <li><strong>Light DOM by default</strong> — components render into light DOM so global CSS and Tailwind utilities apply directly. Opt into shadow DOM per component with <code>static shadow = true</code>. No global toggle.</li>
-      <li><strong>CSRF on server actions</strong> — always on for <code>/__webjs/action/*</code> RPC. Can't disable.</li>
-      <li><strong>Import map</strong> — auto-generated. Maps <code>@webjskit/core</code> sub-paths to framework-served URLs and any bare npm imports your client code uses to vendor bundles.</li>
+      <li><strong>Routing conventions</strong>: <code>page.ts</code>, <code>layout.ts</code>, <code>route.ts</code>, <code>middleware.ts</code>, <code>error.ts</code>, <code>not-found.ts</code> are the file names. No aliases.</li>
+      <li><strong>Light DOM by default</strong>: components render into light DOM so global CSS and Tailwind utilities apply directly. Opt into shadow DOM per component with <code>static shadow = true</code>. No global toggle.</li>
+      <li><strong>CSRF on server actions</strong>: always on for <code>/__webjs/action/*</code> RPC. Can't disable.</li>
+      <li><strong>Import map</strong>: auto-generated. Maps <code>@webjskit/core</code> sub-paths to framework-served URLs and any bare npm imports your client code uses to vendor bundles.</li>
     </ul>
   `;
 }

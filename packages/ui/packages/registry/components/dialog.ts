@@ -1,5 +1,5 @@
 /**
- * Dialog — modal dialog built on the native <dialog> element.
+ * Dialog, modal dialog built on the native <dialog> element.
  *
  * The custom element is a thin decorator. All the heavy lifting comes
  * from HTMLDialogElement.showModal():
@@ -18,7 +18,7 @@
  *
  * The previous version's focus trap, Tab cycling, Escape listener,
  * `<ui-dialog-overlay>` element, and document-level keydown handler are
- * all gone — the platform owns them now.
+ * all gone, the platform owns them now.
  *
  * shadcn parity:
  *   <Dialog>            → <ui-dialog open>
@@ -50,10 +50,10 @@
  *   </ui-dialog>
  *
  * Attributes on <ui-dialog>:
- *   `open` — boolean (reflected). Presence shows the dialog.
+ *   `open`, boolean (reflected). Presence shows the dialog.
  *
  * Events on <ui-dialog>:
- *   `ui-open-change` — { detail: { open: boolean } }, fires after the
+ *   `ui-open-change`, { detail: { open: boolean } }, fires after the
  *     element transitions between open and closed.
  *
  * Programmatic API: .show()  .hide()  .toggle()

@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Authentication — webjs' };
+export const metadata = { title: 'Authentication | webjs' };
 
 export default function Auth() {
   return html`
@@ -8,7 +8,7 @@ export default function Auth() {
     <p>webjs provides NextAuth-style authentication with OAuth providers, credentials login, and JWT sessions. No external auth library needed.</p>
 
     <h2>Setup</h2>
-    <pre>// lib/auth.ts — create once
+    <pre>// lib/auth.ts: create once
 import { createAuth, Credentials, Google, GitHub } from '@webjskit/server';
 import { prisma } from './prisma.ts';
 
@@ -89,14 +89,14 @@ export async function logout() {
     <table>
       <thead><tr><th>Provider</th><th>Env vars</th><th>Flow</th></tr></thead>
       <tbody>
-        <tr><td><code>Credentials()</code></td><td>None</td><td>Custom authorize function — you handle password verification</td></tr>
+        <tr><td><code>Credentials()</code></td><td>None</td><td>Custom authorize function, you handle password verification</td></tr>
         <tr><td><code>Google()</code></td><td><code>AUTH_GOOGLE_ID</code>, <code>AUTH_GOOGLE_SECRET</code></td><td>OAuth 2.0 redirect flow</td></tr>
         <tr><td><code>GitHub()</code></td><td><code>AUTH_GITHUB_ID</code>, <code>AUTH_GITHUB_SECRET</code></td><td>OAuth 2.0 redirect flow</td></tr>
       </tbody>
     </table>
 
     <h2>Session strategies</h2>
-    <p><strong>JWT (default):</strong> Session data signed in a cookie. Stateless — scales horizontally without Redis. Cannot be revoked before expiry.</p>
+    <p><strong>JWT (default):</strong> Session data signed in a cookie. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
     <p><strong>Database:</strong> Session ID in cookie, data in cache store. Can revoke sessions instantly. Requires Redis or similar for horizontal scaling.</p>
     <pre>createAuth({
   session: { strategy: 'database' },  // default: 'jwt'

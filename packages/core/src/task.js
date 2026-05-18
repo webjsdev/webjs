@@ -1,12 +1,12 @@
 /**
- * Task — a ReactiveController for managing async data fetching inside
+ * Task: a ReactiveController for managing async data fetching inside
  * web components.
  *
  * ## When to use
  *
  * Use Task when a component needs to fetch data and render
  * loading / error / success states. Task handles `AbortController`
- * automatically — navigating away or re-running cancels the previous
+ * automatically: navigating away or re-running cancels the previous
  * in-flight request, preventing race conditions and wasted work.
  *
  * Good fits:
@@ -18,7 +18,7 @@
  * ## When NOT to use
  *
  * - For **page-level** data loading, use async page functions or server
- *   actions instead — they run on the server, stream via Suspense, and
+ *   actions instead: they run on the server, stream via Suspense, and
  *   produce real HTML for crawlers.
  * - For one-shot fire-and-forget mutations (form submit, delete), a plain
  *   `async` method on the component is usually simpler.
@@ -126,7 +126,7 @@ export const TaskStatus = /** @type {const} */ ({
  * - **AbortController** is managed automatically. Each call to `run()`
  *   aborts the previous in-flight request. The `{ signal }` object
  *   passed as the last argument to your task function is wired to the
- *   internal AbortController — pass it to `fetch()`, `ReadableStream`,
+ *   internal AbortController: pass it to `fetch()`, `ReadableStream`,
  *   or any other signal-aware API.
  *
  * - **`args`** is a function that returns an array. It is re-evaluated
@@ -136,7 +136,7 @@ export const TaskStatus = /** @type {const} */ ({
  *   reactive data loading work.
  *
  * - When the host disconnects (e.g. the component is removed from the
- *   DOM), any in-flight task is aborted automatically — no cleanup
+ *   DOM), any in-flight task is aborted automatically: no cleanup
  *   needed.
  *
  * @template T
@@ -150,11 +150,11 @@ export class Task {
    *   args?: () => unknown[],
    *   autoRun?: boolean
    * }} options
-   *   - `task` — The async function to execute. Receives the spread args
+   *   - `task`: The async function to execute. Receives the spread args
    *     from `args()` followed by an options object with `{ signal }`.
-   *   - `args` — A function returning an array of arguments. Re-evaluated
+   *   - `args`: A function returning an array of arguments. Re-evaluated
    *     on every host update cycle. Defaults to `() => []`.
-   *   - `autoRun` — When true (default), the task re-runs automatically
+   *   - `autoRun`: When true (default), the task re-runs automatically
    *     whenever `args()` returns values that differ from the previous
    *     run. Set to false for manual-only triggering via `run()`.
    */
@@ -168,7 +168,7 @@ export class Task {
     /** @type {boolean} */
     this._autoRun = autoRun;
 
-    /** @type {number} — current TaskStatus */
+    /** @type {number}: current TaskStatus */
     this._status = TaskStatus.INITIAL;
     /** @type {T | undefined} */
     this._value = undefined;
@@ -224,7 +224,7 @@ export class Task {
    * `args()` function is called to produce the current arguments.
    *
    * @returns {Promise<void>} Resolves when the task finishes (or is
-   *   superseded). Does not reject — errors are captured in `this.error`.
+   *   superseded). Does not reject: errors are captured in `this.error`.
    */
   async run() {
     // Abort previous.
@@ -269,7 +269,7 @@ export class Task {
    *
    * The AbortController's signal is set to aborted, which cancels any
    * `fetch()` or other signal-aware work inside the task function. The
-   * task's status is **not** changed — it remains at whatever state it
+   * task's status is **not** changed: it remains at whatever state it
    * was before the abort. A subsequent `run()` will transition to
    * PENDING.
    */
@@ -330,7 +330,7 @@ export class Task {
     const nextArgs = this._argsFn();
 
     if (!this._argsEqual(this._prevArgs, nextArgs)) {
-      // Don't await — the run will trigger another host update when it
+      // Don't await: the run will trigger another host update when it
       // transitions status.
       this.run();
     }
@@ -343,7 +343,7 @@ export class Task {
   afterRender() {}
 
   /**
-   * Called when the host connects to the DOM. Currently a no-op —
+   * Called when the host connects to the DOM. Currently a no-op -
    * initial run (if autoRun) happens on the first `beforeRender()`.
    */
   onMount() {}

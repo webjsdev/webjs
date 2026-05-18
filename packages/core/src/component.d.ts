@@ -2,7 +2,7 @@
  * TypeScript overlay for packages/core/src/component.js.
  *
  * The runtime is JSDoc-authored JavaScript; this file exists so editors
- * (tsserver — used by VS Code, Neovim, Zed, WebStorm) resolve imports
+ * (tsserver: used by VS Code, Neovim, Zed, WebStorm) resolve imports
  * with full type information. Without this overlay, `declare foo: Foo`
  * would type the field but the surrounding class (`this.setState`,
  * `this.state`, `this.requestUpdate`, lifecycle hooks) would be weakly
@@ -22,7 +22,7 @@ export type PropertyConstructor<T = unknown> =
   | (new (...args: any[]) => T)
   | ((v: any) => T);
 
-/** Runtime-level property declaration — matches `static properties = { … }`. */
+/** Runtime-level property declaration: matches `static properties = { … }`. */
 export interface PropertyDeclaration<T = unknown> {
   /** Constructor used for string → value coercion when the attribute changes. */
   type?: PropertyConstructor<T>;
@@ -62,7 +62,7 @@ export interface ReactiveController {
  *     }
  *     StudentCard.register('student-card');
  *
- * The `declare` field has no runtime cost — it tells TypeScript the
+ * The `declare` field has no runtime cost: it tells TypeScript the
  * field's type without emitting a class-field initializer that would
  * clobber the reactive accessor the framework installs via
  * `Object.defineProperty` in the constructor.

@@ -1,5 +1,5 @@
 /**
- * Branch-coverage tests — push the package over ~95%.
+ * Branch-coverage tests: push the package over ~95%.
  * Covers the harder-to-reach branches in init/add/detect-project/list.
  */
 import { test } from 'node:test';
@@ -22,13 +22,13 @@ function tmp(deps) {
   return d;
 }
 
-test('detectProject — astro', () => {
+test('detectProject: astro', () => {
   const d = tmp({ astro: '4.0.0' });
   try { assert.equal(detectProject(d).type, 'astro'); }
   finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject — vite uses src/', () => {
+test('defaultsForProject: vite uses src/', () => {
   const d = tmp({ vite: '5.0.0' });
   try {
     const def = defaultsForProject(d);
@@ -37,7 +37,7 @@ test('defaultsForProject — vite uses src/', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject — astro uses src/styles/', () => {
+test('defaultsForProject: astro uses src/styles/', () => {
   const d = tmp({ astro: '4.0.0' });
   try {
     const def = defaultsForProject(d);
@@ -46,7 +46,7 @@ test('defaultsForProject — astro uses src/styles/', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject — plain projects use styles/', () => {
+test('defaultsForProject: plain projects use styles/', () => {
   const d = tmp({});
   try {
     const def = defaultsForProject(d);
@@ -54,7 +54,7 @@ test('defaultsForProject — plain projects use styles/', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — webjs via app/layout.ts (no @webjskit dep)', () => {
+test('detectProject: webjs via app/layout.ts (no @webjskit dep)', () => {
   const d = tmp({});
   try {
     mkdirSync(join(d, 'app'), { recursive: true });
@@ -63,7 +63,7 @@ test('detectProject — webjs via app/layout.ts (no @webjskit dep)', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('init — warns gracefully when lib-utils fetch fails', async () => {
+test('init: warns gracefully when lib-utils fetch fails', async () => {
   globalThis.fetch = async (url) => new Response('not found', { status: 404 });
   console.log = () => {};
   const out = [];
@@ -80,7 +80,7 @@ test('init — warns gracefully when lib-utils fetch fails', async () => {
   }
 });
 
-test('add — --no-deps flag skips install command', async () => {
+test('add: --no-deps flag skips install command', async () => {
   globalThis.fetch = async (url) => {
     const name = String(url).split('/').pop().replace('.json', '');
     if (name !== 'button') return new Response('not found', { status: 404 });
@@ -98,7 +98,7 @@ test('add — --no-deps flag skips install command', async () => {
   }));
   console.log = () => {};
   try {
-    // --no-deps means we don't spawn npm install — so even a fake package name is fine
+    // --no-deps means we don't spawn npm install: so even a fake package name is fine
     await add.parseAsync(['button', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
   } finally {
     globalThis.fetch = origFetch;
@@ -107,7 +107,7 @@ test('add — --no-deps flag skips install command', async () => {
   }
 });
 
-test('list — prints empty-state message when filter yields no results', async () => {
+test('list: prints empty-state message when filter yields no results', async () => {
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/index.json')) {
       return new Response(JSON.stringify([{ name: 'button', type: 'registry:ui' }]), { status: 200 });
@@ -125,7 +125,7 @@ test('list — prints empty-state message when filter yields no results', async 
   }
 });
 
-test('logger — all colour helpers return strings', () => {
+test('logger: all colour helpers return strings', () => {
   assert.equal(typeof logger.dim('x'), 'string');
   assert.equal(typeof logger.bold('x'), 'string');
   assert.equal(typeof logger.cyan('x'), 'string');

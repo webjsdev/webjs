@@ -11,7 +11,7 @@ const scryptAsync = promisify(scrypt) as (
 
 /**
  * Hash a password with scrypt. Output format: `scrypt$<saltHex>$<hashHex>`.
- * scrypt's default params (N=16384, r=8, p=1) take ~50ms per hash — cheap
+ * scrypt's default params (N=16384, r=8, p=1) take ~50ms per hash: cheap
  * on one login, prohibitive to brute-force.
  */
 export async function hashPassword(password: string): Promise<string> {

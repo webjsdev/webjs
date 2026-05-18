@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * Registry composer — reads the source files from `packages/ui/packages/registry/`
+ * Registry composer: reads the source files from `packages/ui/packages/registry/`
  * and produces shadcn-compatible registry JSON on demand. Replaces the old
  * `node scripts/build.js → r/*.json` step: no committed build output, no
  * `prestart` hook, source-of-truth is the .ts files + registry.json manifest
@@ -9,7 +9,7 @@
  *
  * The 6 non-neutral base-colour themes (`theme-stone`, `theme-zinc`,
  * `theme-mauve`, `theme-olive`, `theme-mist`, `theme-taupe`) are NOT listed
- * in registry.json — they're synthesized here by merging per-colour overrides
+ * in registry.json: they're synthesized here by merging per-colour overrides
  * from `themes/base-colors.js` into the canonical `themes/index.css`. The
  * resulting JSON has the same `files: [{ target: 'app/globals.css', content }]`
  * shape as `theme-neutral` so the CLI's `webjsui init --base-color <color>`
@@ -127,7 +127,7 @@ function synthesizeColorTheme(color: string): RegistryItem | null {
 export async function loadRegistryItem(name: string): Promise<RegistryItem | null> {
   if (itemCache.has(name)) return itemCache.get(name)!;
 
-  // Manifest items (components, lib-utils, theme-neutral) — inline file content.
+  // Manifest items (components, lib-utils, theme-neutral): inline file content.
   const manifestItem = readManifest().items.find((it) => it.name === name);
   if (manifestItem) {
     const composed = inlineFiles(manifestItem);
@@ -148,7 +148,7 @@ export async function loadRegistryItem(name: string): Promise<RegistryItem | nul
   return null;
 }
 
-/** Load the flat registry index (one entry per item, metadata-only — no inlined content). */
+/** Load the flat registry index (one entry per item, metadata-only: no inlined content). */
 export async function loadRegistryIndex(): Promise<RegistryItem[]> {
   if (indexCache) return indexCache;
   const fromManifest = readManifest().items.map((item) => ({

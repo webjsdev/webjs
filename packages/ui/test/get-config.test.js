@@ -9,14 +9,14 @@ function tmp() {
   return mkdtempSync(join(tmpdir(), 'webjsui-config-'));
 }
 
-test('getConfig — returns null if components.json missing', () => {
+test('getConfig: returns null if components.json missing', () => {
   const d = tmp();
   try {
     assert.equal(getConfig(d), null);
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('writeConfig + getConfig — round-trip', () => {
+test('writeConfig + getConfig: round-trip', () => {
   const d = tmp();
   try {
     const cfg = {
@@ -33,7 +33,7 @@ test('writeConfig + getConfig — round-trip', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('getConfig — rejects invalid config', () => {
+test('getConfig: rejects invalid config', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, CONFIG_FILE), JSON.stringify({ aliases: {} }));

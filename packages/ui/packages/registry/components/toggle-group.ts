@@ -1,5 +1,5 @@
 /**
- * ToggleGroup — group of toggles with single or multiple selection. Stateful
+ * ToggleGroup: group of toggles with single or multiple selection. Stateful
  * because items coordinate active state across the group.
  *
  * shadcn parity:
@@ -22,14 +22,14 @@
  *   </ui-toggle-group>
  *
  * Attributes on `<ui-toggle-group>`:
- *   `type`     — "single" | "multiple"
- *   `value`    — current selected value(s). Single: string. Multiple: comma-separated.
- *   `variant`  — "default" | "outline"
- *   `size`     — "default" | "sm" | "lg"
- *   `spacing`  — 0 (joined) | number (gap multiplier)
+ *   `type`:    "single" | "multiple"
+ *   `value`:   current selected value(s). Single: string. Multiple: comma-separated.
+ *   `variant`: "default" | "outline"
+ *   `size`:    "default" | "sm" | "lg"
+ *   `spacing`: 0 (joined) | number (gap multiplier)
  *
  * Events:
- *   `ui-value-change` — { detail: { value } } when selection changes.
+ *   `ui-value-change`: { detail: { value } } when selection changes.
  *
  * Design tokens used: inherited from toggleClass.
  */

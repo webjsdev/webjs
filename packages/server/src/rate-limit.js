@@ -40,7 +40,7 @@ export function rateLimit(opts = {}) {
   const keyFn = typeof opts.key === 'function' ? opts.key : defaultKey;
   const keyPrefix = typeof opts.key === 'string' ? opts.key : '';
   const message = opts.message ?? 'Too Many Requests';
-  // Use the provided store, or fall back to the global cache store —
+  // Use the provided store, or fall back to the global cache store -
   // whatever was set via `setStore()` at app startup (in-memory by default).
   const store = opts.store || null;
 
@@ -100,6 +100,6 @@ export function parseWindow(w) {
 
 /** Testing hook: reset the default store (for unit tests). */
 export function _resetRateLimits() {
-  // With the cache store, there's nothing to reset here — the store
+  // With the cache store, there's nothing to reset here: the store
   // handles its own state. This function exists for API compatibility.
 }

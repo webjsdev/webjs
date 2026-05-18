@@ -1,18 +1,18 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'TypeScript — webjs' };
+export const metadata = { title: 'TypeScript | webjs' };
 
 export default function TypeScript() {
   return html`
     <h1>TypeScript</h1>
-    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. The dev server transforms TypeScript via esbuild for both server-side imports and browser-bound modules — same transformer for both, so SSR and hydration always produce equivalent JS. No compilation step, no output directory, full TypeScript feature support.</p>
+    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. The dev server transforms TypeScript via esbuild for both server-side imports and browser-bound modules. One transformer handles both, so SSR and hydration always produce equivalent JS. No compilation step, no output directory, full TypeScript feature support.</p>
 
     <h2>No-Build TypeScript</h2>
-    <p>When the dev server starts, it registers an esbuild loader hook with Node (<code>module.register()</code>). From that point on, every <code>.ts</code> import — whether from a server-side route file or a browser fetch of <code>/components/foo.ts</code> — flows through esbuild's <code>transform()</code> API. The transform takes roughly 1ms per file and the result is cached by file mtime, so subsequent loads are instant.</p>
-    <p>Because the same transformer runs on both sides, you can use any TypeScript feature esbuild supports (enums, decorators, parameter properties, namespaces, generics) without worrying about a mismatch between SSR and hydration. On the server side, your pages, layouts, server actions, and middleware run as-is. On the client side, browsers fetch <code>.ts</code> URLs and receive the transformed JS — the URL keeps its <code>.ts</code> extension; only the response body is JS.</p>
-    <p>In production, the same esbuild loader runs in <code>webjs start</code>. Source <code>.ts</code> files are transformed on first request and cached by mtime — there is no separate compile or bundle step. Combined with the importmap + <code>modulepreload</code> hints emitted at SSR time, the per-file ESM model is competitive with bundling and gives you granular cache invalidation on incremental deploys.</p>
+    <p>When the dev server starts, it registers an esbuild loader hook with Node (<code>module.register()</code>). From that point on, every <code>.ts</code> import (whether from a server-side route file or a browser fetch of <code>/components/foo.ts</code>) flows through esbuild's <code>transform()</code> API. The transform takes roughly 1ms per file and the result is cached by file mtime, so subsequent loads are instant.</p>
+    <p>Because the same transformer runs on both sides, you can use any TypeScript feature esbuild supports (enums, decorators, parameter properties, namespaces, generics) without worrying about a mismatch between SSR and hydration. On the server side, your pages, layouts, server actions, and middleware run as-is. On the client side, browsers fetch <code>.ts</code> URLs and receive the transformed JS. The URL keeps its <code>.ts</code> extension. Only the response body is JS.</p>
+    <p>In production, the same esbuild loader runs in <code>webjs start</code>. Source <code>.ts</code> files are transformed on first request and cached by mtime. There is no separate compile or bundle step. Combined with the importmap + <code>modulepreload</code> hints emitted at SSR time, the per-file ESM model is competitive with bundling and gives you granular cache invalidation on incremental deploys.</p>
 
-    <h2>Use .ts or .js — Both Are First-Class</h2>
+    <h2>Use .ts or .js: both are first-class</h2>
     <p>webjs treats <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> identically for routing and module resolution. The router recognises <code>page.ts</code> and <code>page.js</code> the same way. The action scanner recognises <code>create-post.server.ts</code> and <code>create-post.server.js</code>. Pick your preference and be consistent, or mix them freely across your project.</p>
 
     <h2>tsconfig.json Setup</h2>
@@ -43,25 +43,25 @@ export default function TypeScript() {
 }</pre>
     <p>Key settings explained:</p>
     <ul>
-      <li><strong>noEmit: true</strong> — webjs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly.</li>
-      <li><strong>allowImportingTsExtensions: true</strong> — lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the webjs convention (see below).</li>
-      <li><strong>checkJs: true</strong> — type-check your <code>.js</code> files too, using JSDoc annotations. Enables a mixed codebase where both <code>.ts</code> and <code>.js</code> files participate in the same type graph.</li>
-      <li><strong>allowJs: true</strong> — include <code>.js</code> files in the project. Required alongside <code>checkJs</code>.</li>
-      <li><strong>module / moduleResolution: NodeNext</strong> — matches how Node resolves ESM imports, including <code>.ts</code> extensions.</li>
-      <li><strong>isolatedModules: true</strong> — ensures every file can be transpiled independently, matching esbuild's per-file transform model.</li>
+      <li><strong>noEmit: true</strong>: webjs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly.</li>
+      <li><strong>allowImportingTsExtensions: true</strong>: lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the webjs convention (see below).</li>
+      <li><strong>checkJs: true</strong>: type-check your <code>.js</code> files too, using JSDoc annotations. Enables a mixed codebase where both <code>.ts</code> and <code>.js</code> files participate in the same type graph.</li>
+      <li><strong>allowJs: true</strong>: include <code>.js</code> files in the project. Required alongside <code>checkJs</code>.</li>
+      <li><strong>module / moduleResolution: NodeNext</strong>: matches how Node resolves ESM imports, including <code>.ts</code> extensions.</li>
+      <li><strong>isolatedModules: true</strong>: ensures every file can be transpiled independently, matching esbuild's per-file transform model.</li>
     </ul>
 
     <h2>Import Convention: Explicit .ts Extensions</h2>
     <p>In webjs projects, always use the real file extension in your imports:</p>
-    <pre>// Good — explicit .ts extension
+    <pre>// Good: explicit .ts extension
 import { prisma } from '../lib/prisma.ts';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 import type { PostFormatted } from '../types.ts';
 
-// Also fine — .js files
+// Also fine: .js files
 import { slugify } from '../utils/slugify.js';
 
-// Avoid — extensionless imports don't work with Node's ESM or in browsers
+// Avoid: extensionless imports don't work with Node's ESM or in browsers
 import { prisma } from '../lib/prisma';       // ERROR</pre>
     <p>This convention works because:</p>
     <ul>
@@ -87,7 +87,7 @@ export async function createPost(
   if (!me) return { success: false, error: 'Not signed in', status: 401 };
   // ...
 }</pre>
-    <pre>// components/new-post-form.ts — client component
+    <pre>// components/new-post-form.ts: client component
 import { createPost } from '../modules/posts/actions/create-post.server.ts';
 
 // TypeScript knows createPost accepts (input: unknown)
@@ -100,13 +100,13 @@ if (result.success) {
     <p>At runtime, the browser never receives the server code. webjs replaces the import with a thin RPC stub that calls <code>POST /__webjs/action/:hash/createPost</code>. But TypeScript's type checker sees through the <code>.server.ts</code> boundary and validates argument/return types at compile time.</p>
 
     <h2>Rich Types Across the Wire</h2>
-    <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. webjs ships its own pure-ESM serializer (in <code>@webjskit/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip — including binary content (file uploads through actions just work).</p>
+    <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. webjs ships its own pure-ESM serializer (in <code>@webjskit/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip, including binary content (file uploads through actions just work).</p>
     <pre>// Server action
 export async function getEvents(): Promise&lt;Event[]&gt; {
   return prisma.event.findMany(); // createdAt is a Date
 }
 
-// Client — createdAt arrives as a real Date, not a string
+// Client: createdAt arrives as a real Date, not a string
 const events = await getEvents();
 events[0].createdAt instanceof Date; // true
 events[0].createdAt.toLocaleDateString(); // works</pre>
@@ -123,7 +123,7 @@ export const prisma = new PrismaClient();
  * @returns {Promise&lt;{ success: boolean, data?: Post, error?: string }&gt;}
  */
 export async function createPost(input) {
-  // TypeScript checks types via JSDoc — same strictness
+  // TypeScript checks types via JSDoc, same strictness
 }</pre>
     <p>You can also define complex types with <code>@typedef</code>:</p>
     <pre>/**
@@ -144,13 +144,13 @@ export function formatDate(post) {
     <p>JSDoc-typed <code>.js</code> files and <code>.ts</code> files can import each other freely. The type checker treats them as part of the same project.</p>
 
     <h2>TypeScript Feature Support</h2>
-    <p>Because webjs uses esbuild on both the server side (loader hook) and the browser side (per-request transform), you can use any TypeScript feature esbuild supports — including features that Node's built-in type stripper rejects:</p>
+    <p>Because webjs uses esbuild on both the server side (loader hook) and the browser side (per-request transform), you can use any TypeScript feature esbuild supports, including features that Node's built-in type stripper rejects:</p>
     <ul>
-      <li><strong>Enums</strong> — <code>enum Direction { Up, Down }</code> compiles to a runtime object. Both string and numeric enums are supported.</li>
-      <li><strong>Namespaces</strong> with runtime value exports — <code>namespace Util { export const VERSION = '1.0'; }</code> compiles to an IIFE.</li>
-      <li><strong>Parameter properties</strong> — <code>constructor(public name: string)</code> desugars to <code>this.name = name</code> in the constructor body.</li>
-      <li><strong>Decorators</strong> — both legacy <code>experimentalDecorators</code> and Stage-3 standard decorators work.</li>
-      <li><strong>Generics</strong>, type aliases, interfaces, type assertions, satisfies, const assertions — all supported.</li>
+      <li><strong>Enums</strong>: <code>enum Direction { Up, Down }</code> compiles to a runtime object. Both string and numeric enums are supported.</li>
+      <li><strong>Namespaces</strong> with runtime value exports: <code>namespace Util { export const VERSION = '1.0'; }</code> compiles to an IIFE.</li>
+      <li><strong>Parameter properties</strong>: <code>constructor(public name: string)</code> desugars to <code>this.name = name</code> in the constructor body.</li>
+      <li><strong>Decorators</strong>: both legacy <code>experimentalDecorators</code> and Stage-3 standard decorators work.</li>
+      <li><strong>Generics</strong>, type aliases, interfaces, type assertions, satisfies, const assertions: all supported.</li>
     </ul>
     <p>That said, you may still prefer erasable TypeScript (no enums, no namespaces, no parameter properties) for stylistic reasons or if you also want your code to run unchanged with TypeScript's <code>erasableSyntaxOnly</code> mode or Node's built-in stripper. Most modern TypeScript codebases trend that way anyway:</p>
     <pre>// Erasable equivalent of an enum:
@@ -203,6 +203,6 @@ import '../components/footer.js';</pre>
     "typecheck:watch": "tsc --noEmit --watch"
   }
 }</pre>
-    <p>Run <code>npm run typecheck</code> in CI or as a pre-commit hook. The dev server stays fast because it only strips types; full type analysis is a separate, parallelizable step.</p>
+    <p>Run <code>npm run typecheck</code> in CI or as a pre-commit hook. The dev server stays fast because it only strips types. Full type analysis is a separate, parallelizable step.</p>
   `;
 }

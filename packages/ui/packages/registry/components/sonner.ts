@@ -1,5 +1,5 @@
 /**
- * Sonner — toast notification queue. Hand-rolled (no `sonner` npm package).
+ * Sonner: toast notification queue. Hand-rolled (no `sonner` npm package).
  *
  * shadcn parity: `<Toaster />` component + `toast()` function with success,
  * error, info, warning, loading, promise methods.
@@ -81,7 +81,7 @@ toast.promise = <T,>(p: Promise<T>, opts: { loading: string; success: string; er
 };
 
 // --------------------------------------------------------------------------
-// <ui-sonner> — the toaster element. Renders pending toasts as children.
+// <ui-sonner> is the toaster element. Renders pending toasts as children.
 // --------------------------------------------------------------------------
 
 const POSITIONS = {
@@ -128,7 +128,7 @@ export class UiSonner extends Base {
    * viewport). Primary use case: docs demos that mount one viewport
    * per position and want each demo button to fire into its own
    * viewport. App code should normally call the global `toast()` /
-   * `toast.success()` / etc. — they route via the singleton.
+   * `toast.success()` / etc.: they route via the singleton.
    */
   addToast(message: string, opts: ToastOptions = {}, type: ToastType = 'default'): string | number {
     const id = opts.id ?? nextId++;

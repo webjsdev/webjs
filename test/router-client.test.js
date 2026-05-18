@@ -1,5 +1,5 @@
 /**
- * Unit tests for router-client internals — the nested-layout-aware
+ * Unit tests for router-client internals: the nested-layout-aware
  * partial-swap mechanism.
  *
  * Coverage:
@@ -88,7 +88,7 @@ before(async () => {
 });
 
 /* ====================================================================
- * collectChildrenSlots — marker discovery
+ * collectChildrenSlots: marker discovery
  * ==================================================================== */
 
 /** Helper: parse an HTML body string into a real body element via DOMParser. */
@@ -209,7 +209,7 @@ test('keyOf: no key → null (positional match only)', () => {
 });
 
 /* ====================================================================
- * diffElementInPlace — attribute diffing + live-attr preservation
+ * diffElementInPlace: attribute diffing + live-attr preservation
  * ==================================================================== */
 
 test('diffElementInPlace: copies non-live attributes from src to dst', () => {
@@ -227,7 +227,7 @@ test('diffElementInPlace: copies non-live attributes from src to dst', () => {
 });
 
 test('diffElementInPlace: PRESERVES live attribute `value` on input', () => {
-  // User typed something into the input between renders — the server-
+  // User typed something into the input between renders: the server-
   // rendered HTML has the initial value, but the live DOM has the user's
   // input. Diff must leave the live attribute untouched.
   const dst = document.createElement('input');
@@ -278,7 +278,7 @@ test('diffElementInPlace: different tag → replaceWith (no in-place reuse)', ()
 });
 
 /* ====================================================================
- * reconcileChildren — keyed reuse + positional reuse
+ * reconcileChildren: keyed reuse + positional reuse
  * ==================================================================== */
 
 test('reconcileChildren: matches by data-key, reuses the DOM node', () => {
@@ -294,7 +294,7 @@ test('reconcileChildren: matches by data-key, reuses the DOM node', () => {
 
   _reconcile(dst, src);
 
-  // The "a" element is reused — same node reference after reconciliation,
+  // The "a" element is reused: same node reference after reconciliation,
   // but reordered.
   const liveItems = [...dst.querySelectorAll('li')];
   assert.equal(liveItems.length, 2);
@@ -325,7 +325,7 @@ test('reconcileChildren: unmatched live children are removed', () => {
 });
 
 /* ====================================================================
- * addNewHeadElements — add-only head merge (Tailwind survives)
+ * addNewHeadElements: add-only head merge (Tailwind survives)
  * ==================================================================== */
 
 test('addNewHeadElements: updates <title> from new head', () => {
@@ -351,7 +351,7 @@ test('addNewHeadElements: adds NEW link/style elements, preserves existing', () 
   _addNewHead(newHead);
 
   // Runtime-generated CSS must survive (this is why we use add-only on
-  // partial swaps — Tailwind runtime injects its CSS as a <style>, and
+  // partial swaps: Tailwind runtime injects its CSS as a <style>, and
   // a full mergeHead would remove it).
   assert.ok(
     document.head.querySelector('#runtime-css'),
@@ -394,7 +394,7 @@ test('addNewHeadElements: script elements are recreated (not cloned) to execute'
 });
 
 /* ====================================================================
- * mergeHead — full-merge head (used on full body swap)
+ * mergeHead: full-merge head (used on full body swap)
  * ==================================================================== */
 
 test('mergeHead: removes elements not in the new head', () => {
@@ -476,7 +476,7 @@ test('isNonHtmlPath: does NOT skip normal page paths', () => {
 });
 
 /* ====================================================================
- * navigate — Content-Type guard + fallback paths
+ * navigate: Content-Type guard + fallback paths
  * ==================================================================== */
 
 function installNavigationMocks({ contentType, body = '', ok = true, captureHeaders = false }) {
@@ -630,7 +630,7 @@ test('navigate: non-ok HTML response is rendered in place (validation errors, 40
   try {
     document.body.innerHTML = '<p>old</p>';
     await navigate('http://localhost/missing');
-    // No full-page fallback — location.href was NOT reassigned.
+    // No full-page fallback: location.href was NOT reassigned.
     assert.equal(redirect.href, null,
       'HTML 4xx/5xx should render in place, not full-nav-fallback');
     // The new body is in place.
@@ -685,7 +685,7 @@ test('navigate: 204 No Content stays on current page (records history, no DOM sw
     await navigate('http://localhost/save');
     assert.equal(redirected, null, 'no full-page fallback');
     assert.ok(document.getElementById('keep'),
-      'DOM untouched — 204 means stay on current page');
+      'DOM untouched: 204 means stay on current page');
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.location = originalLocation;
@@ -729,7 +729,7 @@ test('navigate: server-side redirect records the final URL in history (PRG patte
 });
 
 /* ====================================================================
- * navigate — partial-swap end-to-end
+ * navigate: partial-swap end-to-end
  * ==================================================================== */
 
 test('navigate: marker-based partial swap preserves outer layout DOM', async () => {
@@ -737,7 +737,7 @@ test('navigate: marker-based partial swap preserves outer layout DOM', async () 
   // content lives inside the docs layout's children-slot. After
   // navigating between two pages that both nest under root + docs,
   // the <header> and <main> wrappers AND the docs sidenav must
-  // remain identically mounted — same DOM nodes, no re-render.
+  // remain identically mounted: same DOM nodes, no re-render.
   document.body.innerHTML =
     '<header id="hdr">root header</header>' +
     '<main>' +
@@ -777,7 +777,7 @@ test('navigate: marker-based partial swap preserves outer layout DOM', async () 
   try {
     await navigate('http://localhost/docs/components/b');
 
-    // Outer header / footer DOM nodes are the SAME objects — not re-rendered.
+    // Outer header / footer DOM nodes are the SAME objects: not re-rendered.
     assert.equal(document.getElementById('hdr'), headerBefore,
       'outer header DOM identity preserved across nav');
     assert.equal(document.getElementById('sidenav'), sidenavBefore,
@@ -816,7 +816,7 @@ test('navigate: deepest shared marker wins (inner swap, not outer)', async () =>
   try {
     await navigate('http://localhost/docs/components/b');
     // The shallower /-marker was ALSO present in both, but the deeper
-    // /docs marker wins — so the sidenav inside the /-slot but outside
+    // /docs marker wins: so the sidenav inside the /-slot but outside
     // the /docs-slot is left untouched.
     assert.equal(document.querySelector('.docs-shell'), sidenav,
       'deeper match preserves outer-slot DOM');
@@ -875,7 +875,7 @@ test('navigate: sends X-Webjs-Have header listing current marker paths', async (
 });
 
 /* ====================================================================
- * navigate — Suspense resolver forwarding (partial swap)
+ * navigate: Suspense resolver forwarding (partial swap)
  * ==================================================================== */
 
 test('navigate: marker-based swap forwards <template data-webjs-resolve> nodes', async () => {
@@ -900,7 +900,7 @@ test('navigate: marker-based swap forwards <template data-webjs-resolve> nodes',
 });
 
 /* ====================================================================
- * navigate — parseHTML returning null, hash scroll
+ * navigate: parseHTML returning null, hash scroll
  * ==================================================================== */
 
 test('navigate: unparseable HTML body falls back to full navigation', async () => {
@@ -952,7 +952,7 @@ test('navigate: hash portion triggers scroll (target found or top)', async () =>
 });
 
 /* ====================================================================
- * activeFrameId — <webjs-frame> escape hatch detection
+ * activeFrameId: <webjs-frame> escape hatch detection
  * ==================================================================== */
 
 test('activeFrameId: returns id of nearest enclosing webjs-frame', () => {
@@ -1027,7 +1027,7 @@ test('disableClientRouter: enableClientRouter is idempotent', () => {
 });
 
 /* ====================================================================
- * onPopState — back/forward triggers router nav
+ * onPopState: back/forward triggers router nav
  * ==================================================================== */
 
 test('onPopState: triggers a router navigation to location.href', async () => {
@@ -1062,7 +1062,7 @@ test('onPopState: triggers a router navigation to location.href', async () => {
 });
 
 /* ====================================================================
- * revalidate — snapshot-cache invalidation
+ * revalidate: snapshot-cache invalidation
  * ==================================================================== */
 
 test('revalidate(url): removes one URL from the snapshot cache', () => {
@@ -1087,7 +1087,7 @@ test('revalidate(): clears the entire snapshot cache when called with no args', 
 });
 
 /* ====================================================================
- * blurOutgoingFocus — clear stuck focus on the previously-activated
+ * blurOutgoingFocus: clear stuck focus on the previously-activated
  * element so it doesn't paint a :focus-visible ring when the window
  * regains focus.
  * ==================================================================== */
@@ -1128,12 +1128,12 @@ test('blurOutgoingFocus: no-op when there is no active element', () => {
 });
 
 test('blurOutgoingFocus: no-op when active element has no blur() method', () => {
-  // Pathological case — exotic node types without blur. Should not throw.
+  // Pathological case: exotic node types without blur. Should not throw.
   withActiveElement({ /* no blur method */ }, () => _blurOutgoingFocus());
 });
 
 /* ====================================================================
- * Form submission — getSubmitMethod / getSubmitAction
+ * Form submission: getSubmitMethod / getSubmitAction
  * ==================================================================== */
 
 /** Build a form element in the test document for inspection. */
@@ -1187,14 +1187,14 @@ test('getSubmitAction: empty submitter formaction is honored (means submit-to-se
 });
 
 /* ====================================================================
- * Form submission — onSubmit filter rules
+ * Form submission: onSubmit filter rules
  * ==================================================================== */
 
 /**
  * Construct a fake SubmitEvent for the given form. We can't use a real
  * SubmitEvent in linkedom (it's undefined there), but onSubmit only
  * reads `defaultPrevented`, `target`, `submitter`, and `preventDefault`
- * — easy to fake.
+ * - easy to fake.
  */
 function fakeSubmitEvent(form, submitter) {
   let prevented = false;
@@ -1249,7 +1249,7 @@ test('onSubmit: ignores already-prevented events (server-action RPC stub got fir
   e.defaultPrevented = true; // simulate a user @submit handler already running
   _onSubmit(e);
   assert.equal(e._wasPrevented(), false,
-    "router does not double-prevent — user handler owns the event");
+    "router does not double-prevent: user handler owns the event");
 });
 
 test('onSubmit: ignores submitter with data-no-router (per-button escape)', () => {
@@ -1261,7 +1261,7 @@ test('onSubmit: ignores submitter with data-no-router (per-button escape)', () =
 });
 
 /* ====================================================================
- * restoreOptimistic — nav-token race guard
+ * restoreOptimistic: nav-token race guard
  * ==================================================================== */
 
 test('restoreOptimistic: stale token is a no-op (newer nav already settled)', () => {
@@ -1274,7 +1274,7 @@ test('restoreOptimistic: stale token is a no-op (newer nav already settled)', ()
   const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/');
   const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children');
 
-  // Construct stale state — token from a navigation that already passed.
+  // Construct stale state: token from a navigation that already passed.
   const staleToken = _navToken();
   _bumpNavToken();          // simulate a newer navigation taking over
   _bumpNavToken();          // ...and another, just to be safe
@@ -1285,10 +1285,10 @@ test('restoreOptimistic: stale token is a no-op (newer nav already settled)', ()
 
   _restoreOptimistic({ slot: { start, end }, oldChildren: [oldChild], token: staleToken });
 
-  // Loading element must STILL be there — restore should have been
+  // Loading element must STILL be there: restore should have been
   // skipped because token is stale.
   assert.ok(document.getElementById('loading'),
-    'newer nav owns the page — stale restore must not revert it');
+    'newer nav owns the page: stale restore must not revert it');
   assert.equal(document.getElementById('old-content'), null,
     'stale oldChildren must not be inserted');
 });
@@ -1314,7 +1314,7 @@ test('restoreOptimistic: current token applies the restore', () => {
 });
 
 /* ====================================================================
- * revalidate — falsy-arg semantics (Phase 3)
+ * revalidate: falsy-arg semantics (Phase 3)
  * ==================================================================== */
 
 test("revalidate(''): empty-string url clears the entire cache", () => {
@@ -1322,7 +1322,7 @@ test("revalidate(''): empty-string url clears the entire cache", () => {
   _snapshotCache.set('/b', 'snap-b');
   revalidate('');
   assert.equal(_snapshotCache.size, 0,
-    "empty string is treated as 'no specific URL' — clear everything");
+    "empty string is treated as 'no specific URL': clear everything");
 });
 
 test('revalidate(null) / revalidate(undefined): both clear entire cache', () => {
@@ -1335,7 +1335,7 @@ test('revalidate(null) / revalidate(undefined): both clear entire cache', () => 
 });
 
 /* ====================================================================
- * addNewHeadElements — importmap mismatch warning (Phase 3)
+ * addNewHeadElements: importmap mismatch warning (Phase 3)
  * ==================================================================== */
 
 /** Capture console.warn calls into an array. */
@@ -1380,7 +1380,7 @@ test('addNewHeadElements: silent when current page has no importmap', () => {
 
   const warnings = captureWarn(() => _addNewHead(newHead));
   assert.equal(warnings.length, 0,
-    "no current importmap to conflict with — silent (the new map still won't be injected, but that's separate)");
+    "no current importmap to conflict with: silent (the new map still won't be injected, but that's separate)");
 });
 
 /* ====================================================================
@@ -1391,7 +1391,7 @@ test('addNewHeadElements: silent when current page has no importmap', () => {
  * ==================================================================== */
 
 test('enableClientRouter: sets history.scrollRestoration = "manual"', () => {
-  // Start from a known state. enableClientRouter is idempotent — it
+  // Start from a known state. enableClientRouter is idempotent: it
   // early-returns if `enabled` is already true (which it is, since the
   // module auto-enables on import). Cycle off-then-on to exercise it.
   const origScrollRestoration = globalThis.history?.scrollRestoration;
@@ -1446,7 +1446,7 @@ test('currentPageUrl: tracker exists and can be read/written via test helpers', 
 test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the destination URL', async () => {
   // The bug: on popstate the browser updates location.href to the
   // destination BEFORE firing the event. snapshotCurrent(location.href)
-  // therefore overwrites the cached snapshot we wanted to read — with
+  // therefore overwrites the cached snapshot we wanted to read: with
   // the CURRENT (about-to-be-left) DOM under the destination URL key.
   // The fix uses `currentPageUrl` (the page actually being left), not
   // `location.href`, so the destination's cached snapshot survives.
@@ -1454,7 +1454,7 @@ test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the d
   const origFetch = globalThis.fetch;
   const prevPageUrl = _currentPageUrl();
 
-  // Seed the destination's cached snapshot — what we want preserved.
+  // Seed the destination's cached snapshot: what we want preserved.
   const goodSnapshot = {
     html: '<!doctype html><html><head><title>Original A</title></head>' +
           '<body><!--wj:children:/-->original-a-content<!--/wj:children--></body></html>',
@@ -1494,7 +1494,7 @@ test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the d
       typeof after === 'object' ? after.html : after,
       goodSnapshot.html,
       'destination URL\'s cached snapshot survived the popstate handler ' +
-      '— this was the bug: previously the snapshot got overwritten with ' +
+      '- this was the bug: previously the snapshot got overwritten with ' +
       'the page being LEFT, keyed under the destination URL'
     );
   } finally {
@@ -1547,7 +1547,7 @@ test('popstate: page being LEFT is snapshotted under its own URL (so forward-nav
     const html = typeof bSnap === 'object' ? bSnap.html : bSnap;
     assert.match(html, /b-content/,
       "/b's snapshot contains the b-content DOM the user was looking " +
-      'at when they hit back — required so a future forward-nav can ' +
+      'at when they hit back: required so a future forward-nav can ' +
       'restore /b instantly');
   } finally {
     _snapshotCache.delete('/a');

@@ -1,5 +1,5 @@
 /**
- * Dialog — modal dialog with focus trap, Escape-to-close, and overlay click.
+ * Dialog: modal dialog with focus trap, Escape-to-close, and overlay click.
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
  *
@@ -33,15 +33,15 @@
  *   </ui-dialog>
  *
  * Attributes on <ui-dialog>:
- *   `open` — boolean (reflected). Presence ⇒ dialog is shown.
+ *   `open`: boolean (reflected). Presence ⇒ dialog is shown.
  *
  * Events fired on <ui-dialog>:
- *   `ui-open-change` — `{ detail: { open: boolean } }` — fires after the
+ *   `ui-open-change`: `{ detail: { open: boolean } }`: fires after the
  *     element transitions between open / closed states.
  *
  * Keyboard:
- *   Escape           — close
- *   Tab / Shift-Tab  — cycle focusable elements within the dialog content
+ *   Escape           close
+ *   Tab / Shift-Tab  cycle focusable elements within the dialog content
  *
  * Programmatic API on <ui-dialog>:
  *   .show()   .hide()   .toggle()
@@ -55,31 +55,31 @@ import { cn, Base, defineElement } from '../../lib/utils.ts';
 // Class helpers for static subparts. Compose with plain elements.
 // --------------------------------------------------------------------------
 
-/** Dialog header — flex column for title + description, stacks on mobile. */
+/** Dialog header: flex column for title + description, stacks on mobile. */
 export const dialogHeaderClass = (): string =>
   'flex flex-col gap-2 text-center sm:text-left';
 
-/** Dialog title — large semibold heading. */
+/** Dialog title: large semibold heading. */
 export const dialogTitleClass = (): string =>
   'text-lg leading-none font-semibold';
 
-/** Dialog description — subdued caption below the title. */
+/** Dialog description: subdued caption below the title. */
 export const dialogDescriptionClass = (): string =>
   'text-sm text-muted-foreground';
 
-/** Dialog footer — right-aligned actions on desktop, reverse-stacked on mobile. */
+/** Dialog footer: right-aligned actions on desktop, reverse-stacked on mobile. */
 export const dialogFooterClass = (): string =>
   'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
 
-/** Dialog content panel — centered, fixed-position box with shadow + border. */
+/** Dialog content panel: centered, fixed-position box with shadow + border. */
 export const dialogContentClass = (): string =>
   'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none sm:max-w-lg';
 
-/** Dialog backdrop — fixed full-viewport translucent overlay. */
+/** Dialog backdrop: fixed full-viewport translucent overlay. */
 export const dialogOverlayClass = (): string => 'fixed inset-0 z-50 bg-black/50';
 
 // --------------------------------------------------------------------------
-// Visibility CSS — installed once. Hides content + overlay when the host
+// Visibility CSS: installed once. Hides content + overlay when the host
 // <ui-dialog> doesn't have the `open` attribute. This works at SSR time too:
 // because SSR includes no `open` attribute by default, content is invisible
 // until JS hydrates and the user opens the dialog.
@@ -102,7 +102,7 @@ function installStyles(): void {
 }
 
 // --------------------------------------------------------------------------
-// Body scroll lock — refcounted so multiple open dialogs nest correctly.
+// Body scroll lock: refcounted so multiple open dialogs nest correctly.
 // --------------------------------------------------------------------------
 
 let scrollLockCount = 0;
@@ -122,7 +122,7 @@ function unlockScroll(): void {
 }
 
 // --------------------------------------------------------------------------
-// Focus management — find focusables, trap Tab, restore focus on close.
+// Focus management: find focusables, trap Tab, restore focus on close.
 // --------------------------------------------------------------------------
 
 const FOCUSABLE_SELECTOR = [
@@ -142,7 +142,7 @@ function getFocusables(root: HTMLElement): HTMLElement[] {
 }
 
 // --------------------------------------------------------------------------
-// <ui-dialog> — owns open state, focus trap, escape, scroll lock.
+// <ui-dialog> owns open state, focus trap, escape, scroll lock.
 // --------------------------------------------------------------------------
 
 export class UiDialog extends Base {
@@ -267,8 +267,8 @@ export class UiDialog extends Base {
 defineElement('ui-dialog', UiDialog);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-trigger> — clicks on this (or any element inside) open the
-// enclosing <ui-dialog>. Decorator only — does not render anything.
+// <ui-dialog-trigger> clicks on this (or any element inside) open the
+// enclosing <ui-dialog>. Decorator only: does not render anything.
 // --------------------------------------------------------------------------
 
 export class UiDialogTrigger extends Base {
@@ -287,7 +287,7 @@ export class UiDialogTrigger extends Base {
 defineElement('ui-dialog-trigger', UiDialogTrigger);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-content> — the centered panel. Applies the visual classes from
+// <ui-dialog-content> is the centered panel. Applies the visual classes from
 // dialogContentClass() to its host, merging with any user-provided class.
 // --------------------------------------------------------------------------
 
@@ -302,7 +302,7 @@ export class UiDialogContent extends Base {
 defineElement('ui-dialog-content', UiDialogContent);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-overlay> — the translucent backdrop. Clicks here close the
+// <ui-dialog-overlay> is the translucent backdrop. Clicks here close the
 // enclosing dialog (matches shadcn's modal-close-on-overlay behavior).
 // --------------------------------------------------------------------------
 
@@ -325,7 +325,7 @@ export class UiDialogOverlay extends Base {
 defineElement('ui-dialog-overlay', UiDialogOverlay);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-close> — clicks on this (or any element inside) close the
+// <ui-dialog-close> clicks on this (or any element inside) close the
 // enclosing dialog.
 // --------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ out/
 .cache/
 .webjs/
 
-# generated Tailwind CSS — built from public/input.css via `npm run dev` / `npm run start`
+# generated Tailwind CSS - built from public/input.css via `npm run dev` / `npm run start`
 **/public/tailwind.css
 
 # env
@@ -32,8 +32,13 @@ Thumbs.db
 .vscode/
 .idea/
 
-# AI assistants — local session state, scheduled-task locks, etc.
-.claude/
+# AI assistants - local session state, scheduled-task locks, etc.
+# Keep repo-shared config (settings.json + hooks scripts) tracked so
+# every contributor / agent gets the same PreToolUse rules.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**
 
 # test artifacts
 coverage/

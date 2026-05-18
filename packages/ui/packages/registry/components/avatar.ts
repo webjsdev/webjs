@@ -1,5 +1,5 @@
 /**
- * Avatar — circular user image with fallback. Class helpers; pair with native
+ * Avatar: circular user image with fallback. Class helpers; pair with native
  * `<img>` for the image and any element for fallback. Image-error fallback
  * needs a tiny runtime helper (see UiAvatar below).
  *

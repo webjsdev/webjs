@@ -16,7 +16,7 @@ const UI_REGISTRY_ROOT = resolve(
 /**
  * Read a registry component and rewrite its `'../lib/utils.ts'` import for
  * the scaffolded app's `components/ui/<name>.ts` layout (two-up to lib/).
- * Mirrors the helper in `create.js` — kept private here to avoid coupling.
+ * Mirrors the helper in `create.js`, kept private here to avoid coupling.
  */
 async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
@@ -42,11 +42,11 @@ async function copyUiComponents(appDir, names) {
  * @param {string} appDir
  */
 export async function writeSaasFiles(appDir) {
-  // SaaS pages use auth forms — copy the extra ui-* components on top of
+  // SaaS pages use auth forms, so copy the extra ui-* components on top of
   // the standard set the full-stack scaffold already wrote. Pre-importing
   // them in login/signup/dashboard pages below means the dev server will
   // SSR these elements with full styling on first paint.
-  // `form` and `field` are deferred to v2 (see packages/ui/AGENTS.md) —
+  // `form` and `field` are deferred to v2 (see packages/ui/AGENTS.md) -
   // the saas auth pages use raw <form> + label/input class helpers instead.
   await copyUiComponents(appDir, ['dialog', 'switch', 'checkbox']);
 
@@ -173,11 +173,11 @@ export async function writeSaasFiles(appDir) {
     "",
   ].join('\n'));
 
-  // test/unit/auth.test.ts — minimal stub so the scaffold passes
+  // test/unit/auth.test.ts: minimal stub so the scaffold passes
   // `webjs check` (tests-exist) and `webjs test` runs cleanly out of the
   // box. The signup/current-user functions import from lib/prisma.ts and
   // lib/auth.ts, both of which need `prisma generate` to have run before
-  // they can be imported — so we deliberately test only the runtime-
+  // they can be imported, so we deliberately test only the runtime-
   // dependency-free types.ts here. Replace with real tests once Prisma
   // is set up (run `npm install && npx prisma migrate dev --name init`).
   await writeFile(join(appDir, 'test', 'unit', 'auth.test.ts'), [
@@ -247,7 +247,7 @@ export async function writeSaasFiles(appDir) {
     "      <div class=${cardClass()}>",
     "        <div class=${cardHeaderClass()}>",
     "          <h3 class=${cardTitleClass()}>Sign in</h3>",
-    "          <p class=${cardDescriptionClass()}>Welcome back — log in to continue.</p>",
+    "          <p class=${cardDescriptionClass()}>Welcome back: log in to continue.</p>",
     "        </div>",
     "        <div class=${cardContentClass()}>",
     "          <form method=\"POST\" action=\"/api/auth/callback/credentials\" class=\"flex flex-col gap-4\">",

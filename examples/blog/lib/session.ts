@@ -9,7 +9,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
  * Create a new session for `userId` and return the raw token (128 bits hex).
- * The token is the row primary key; never hashed — simpler for a demo,
+ * The token is the row primary key; never hashed: simpler for a demo,
  * acceptable for a server-only DB.
  */
 export async function createSession(

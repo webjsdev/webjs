@@ -1,6 +1,6 @@
-# AGENTS.md — @webjskit/server
+# AGENTS.md for @webjskit/server
 
-The webjs **server runtime** — dev + prod request handling, SSR,
+The webjs **server runtime**: dev + prod request handling, SSR,
 file-based router, server actions (RPC scanner + endpoint), auth,
 session, cache store, rate limiting, WebSocket upgrade, CSRF,
 compression, build helper, convention validator.
@@ -16,9 +16,9 @@ This file only covers what's specific to `@webjskit/server`.
 
 Two entry shapes:
 
-- `startServer({ appDir, port, dev })` — owns the HTTP server, used
+- `startServer({ appDir, port, dev })`: owns the HTTP server, used
   by the CLI's `webjs dev` / `webjs start`.
-- `createRequestHandler({ appDir })` — returns `{ handle(req): Response }`
+- `createRequestHandler({ appDir })`: returns `{ handle(req): Response }`
   for embedding under Express / Fastify / Bun / Deno / edge.
 
 Both go through the same pipeline: `dev.js` (file serving + TS
@@ -41,7 +41,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `cache-fn.js` | `cache(key, fn, { ttl })` query-caching helper + `invalidate()` |
 | `rate-limit.js` | `rateLimit({ window, max })` middleware factory |
 | `csrf.js` | Double-submit CSRF protection (server-action endpoints) |
-| `websocket.js` | WS upgrade handling — invokes `WS` export from `route.ts` |
+| `websocket.js` | WS upgrade handling: invokes `WS` export from `route.ts` |
 | `broadcast.js` | `broadcast(topic, msg)` for fan-out messaging |
 | `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`) |
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
@@ -67,7 +67,7 @@ can load it without booting the full server.
    re-verifies every JS/TS request against the server-file predicate
    (filename suffix `.server.{js,ts}` OR `'use server'` directive in
    the first 5 lines) before serving bytes. A server file ALWAYS
-   responds with a generated RPC stub, never its source — regardless
+   responds with a generated RPC stub, never its source, regardless
    of route-index state, FS race conditions, or developer error.
    Regression tests: `test/server-file-guardrail.test.js`.
 2. **File router has no manifest.** `buildRouteTable()` walks `app/`

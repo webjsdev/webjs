@@ -11,7 +11,7 @@ const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taup
 
 export const init = new Command()
   .name('init')
-  .description('Initialize @webjskit/ui in a project — writes components.json, theme CSS, lib/utils')
+  .description('Initialize @webjskit/ui in a project: writes components.json, theme CSS, lib/utils')
   .option('-c, --cwd <cwd>', 'the working directory', process.cwd())
   .option('-y, --yes', 'skip confirmation prompts', false)
   .option('--base-color <color>', `base color (${BASE_COLORS.join('|')})`)
@@ -100,7 +100,7 @@ async function writeTheme(cwd, baseColor, cssPath, registryUrl) {
     const themeBlock = item.files[0]?.content || '';
     // Idempotent: only append if our marker isn't already present.
     if (existing.includes('/* @webjskit/ui theme */')) {
-      logger.info(`Theme already present in ${cssPath} — skipping.`);
+      logger.info(`Theme already present in ${cssPath}: skipping.`);
       return;
     }
     writeFileSync(target, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + themeBlock, 'utf8');

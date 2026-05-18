@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Architecture — webjs' };
+export const metadata = { title: 'Architecture | webjs' };
 
 export default function Architecture() {
   return html`
@@ -10,47 +10,47 @@ export default function Architecture() {
     <h2>Package Overview</h2>
     <pre>webjs/
 ├── packages/
-│   ├── core/     # webjs       — browser + server runtime
-│   ├── server/   # @webjskit/server — dev/prod server, router, SSR, actions
-│   └── cli/      # @webjskit/cli   — webjs dev/start/build/db commands
+│   ├── core/     # webjs       : browser + server runtime
+│   ├── server/   # @webjskit/server : dev/prod server, router, SSR, actions
+│   └── cli/      # @webjskit/cli   : webjs dev/start/build/db commands
 ├── examples/
 │   └── blog/     # reference app exercising every feature
 └── docs/         # this documentation site (built on webjs)</pre>
 
     <h3>webjs (core)</h3>
-    <p>Isomorphic — safe to import on both server and client. Contains:</p>
+    <p>Isomorphic: safe to import on both server and client. Contains:</p>
     <ul>
-      <li><code>html</code> / <code>css</code> — tagged template literals for templates and styles</li>
-      <li><code>WebComponent</code> — base class for custom elements</li>
-      <li><code>render</code> — client-side fine-grained DOM renderer</li>
-      <li><code>renderToString</code> — server-side async HTML renderer with DSD injection</li>
-      <li><code>repeat()</code> — keyed list directive</li>
-      <li><code>Suspense()</code> — streaming SSR boundary</li>
-      <li><code>expose()</code> — tag an action for REST exposure</li>
-      <li><code>notFound()</code> / <code>redirect()</code> — navigation sentinels</li>
-      <li><code>connectWS()</code> — auto-reconnecting WebSocket client</li>
-      <li><code>richFetch()</code> — rich-type-aware fetch wrapper</li>
-      <li><code>stringify()</code> / <code>parse()</code> — webjs's built-in serializer (Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, cycles)</li>
+      <li><code>html</code> / <code>css</code>: tagged template literals for templates and styles</li>
+      <li><code>WebComponent</code>: base class for custom elements</li>
+      <li><code>render</code>: client-side fine-grained DOM renderer</li>
+      <li><code>renderToString</code>: server-side async HTML renderer with DSD injection</li>
+      <li><code>repeat()</code> is the keyed list directive</li>
+      <li><code>Suspense()</code> is the streaming SSR boundary</li>
+      <li><code>expose()</code> tags an action for REST exposure</li>
+      <li><code>notFound()</code> / <code>redirect()</code> are navigation sentinels</li>
+      <li><code>connectWS()</code> is the auto-reconnecting WebSocket client</li>
+      <li><code>richFetch()</code> is the rich-type-aware fetch wrapper</li>
+      <li><code>stringify()</code> / <code>parse()</code> are webjs's built-in serializer (Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, cycles)</li>
     </ul>
 
     <h3>@webjskit/server</h3>
     <p>Server-only. Contains:</p>
     <ul>
-      <li><code>startServer()</code> — creates an HTTP(S) server with all features wired</li>
-      <li><code>createRequestHandler()</code> — returns a <code>(Request) → Response</code> handler for embedding</li>
+      <li><code>startServer()</code> creates an HTTP(S) server with all features wired</li>
+      <li><code>createRequestHandler()</code> returns a <code>(Request) → Response</code> handler for embedding</li>
       <li>File-based router, SSR pipeline, server actions, WebSocket handler</li>
-      <li><code>cookies()</code> / <code>headers()</code> — request context via AsyncLocalStorage</li>
-      <li><code>json()</code> / <code>readBody()</code> — content-negotiated JSON helpers</li>
-      <li><code>rateLimit()</code> — in-memory fixed-window rate limiter</li>
+      <li><code>cookies()</code> / <code>headers()</code> provide request context via AsyncLocalStorage</li>
+      <li><code>json()</code> / <code>readBody()</code> are content-negotiated JSON helpers</li>
+      <li><code>rateLimit()</code> is the in-memory fixed-window rate limiter</li>
       <li>CSRF, compression, graceful shutdown, health probes, logger</li>
     </ul>
 
     <h3>@webjskit/cli</h3>
     <p>The <code>webjs</code> command-line tool:</p>
     <ul>
-      <li><code>webjs dev</code> — dev server with file watching + live reload via SSE</li>
-      <li><code>webjs start</code> — production server, speaks plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2); no build step — serves source directly</li>
-      <li><code>webjs db generate/migrate/studio</code> — Prisma CLI wrappers</li>
+      <li><code>webjs dev</code>: dev server with file watching + live reload via SSE</li>
+      <li><code>webjs start</code>: production server, speaks plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2). No build step: serves source directly.</li>
+      <li><code>webjs db generate/migrate/studio</code>: Prisma CLI wrappers</li>
     </ul>
 
     <h2>Modules Architecture (Recommended)</h2>
@@ -84,7 +84,7 @@ export default function Architecture() {
     <ul>
       <li><strong>Routes stay thin.</strong> If a route.ts has more than ~20 lines of business logic, extract it into a module action.</li>
       <li><strong>One module per feature.</strong> auth, posts, comments, etc. each get their own folder.</li>
-      <li><strong>Actions return <code>ActionResult&lt;T&gt;</code></strong> — a <code>{ success, data } | { success: false, error, status }</code> envelope that routes translate to HTTP responses mechanically.</li>
+      <li><strong>Actions return <code>ActionResult&lt;T&gt;</code></strong>: a <code>{ success, data } | { success: false, error, status }</code> envelope that routes translate to HTTP responses mechanically.</li>
       <li><strong>Server-only imports</strong> (<code>@prisma/client</code>, <code>node:*</code>) stay in <code>.server.ts</code> files. Components import them and get auto-generated RPC stubs.</li>
     </ul>
 
@@ -103,12 +103,12 @@ export default function Architecture() {
 
     <h2>Progressive Enhancement</h2>
     <p>
-      Step 6 above produces real HTML. The SSR pipeline runs every web component's <code>render()</code> on the server, so the component's initial markup is in the response before any script loads. The browser paints content, processes <code>&lt;a&gt;</code> links, and handles <code>&lt;form&gt;</code> submissions before any JavaScript runs. The client router, custom-element upgrades, and Suspense streaming are <em>layered</em> on top of that HTML — they enhance an already-working page, they do not constitute it.
+      Step 6 above produces real HTML. The SSR pipeline runs every web component's <code>render()</code> on the server, so the component's initial markup is in the response before any script loads. The browser paints content, processes <code>&lt;a&gt;</code> links, and handles <code>&lt;form&gt;</code> submissions before any JavaScript runs. The client router, custom-element upgrades, and Suspense streaming are <em>layered</em> on top of that HTML. They enhance an already-working page, they do not constitute it.
     </p>
     <ul>
       <li><strong>Read-paths:</strong> the SSR'd HTML is the user's first interaction. With JS disabled, content reads, <code>&lt;a&gt;</code> links navigate, and display-only custom elements render correctly.</li>
-      <li><strong>Write-paths:</strong> server actions are reachable as plain HTML form POSTs. A <code>&lt;form action=${"/actions/foo"}&gt;</code> works without JavaScript; the framework upgrades it to a partial-swap submission once the client router is active.</li>
-      <li><strong>Interactivity:</strong> JavaScript is only required for behaviors that <em>respond</em> to user input — <code>@click</code>, <code>setState()</code>, drag handlers, focus management. The component's <em>initial</em> render is HTML either way; a counter shows "0" without JS, only the +/- click handling needs scripts.</li>
+      <li><strong>Write-paths:</strong> server actions are reachable as plain HTML form POSTs. A <code>&lt;form action=${"/actions/foo"}&gt;</code> works without JavaScript, and the framework upgrades it to a partial-swap submission once the client router is active.</li>
+      <li><strong>Interactivity:</strong> JavaScript is only required for behaviors that <em>respond</em> to user input: <code>@click</code>, <code>setState()</code>, drag handlers, focus management. The component's <em>initial</em> render is HTML either way. A counter shows "0" without JS, and only the +/- click handling needs scripts.</li>
     </ul>
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full design rationale and patterns.</p>
 
@@ -125,6 +125,6 @@ const app = await createRequestHandler({
 const resp = await app.handle(new Request('http://x/api/hello'));
 console.log(await resp.json());</pre>
 
-    <p>This returns standard <code>Request → Response</code> — usable in Express, Fastify, Bun, Deno, Cloudflare Workers (with the file-system caveat documented in the deployment guide).</p>
+    <p>This returns standard <code>Request → Response</code>, usable in Express, Fastify, Bun, Deno, Cloudflare Workers (with the file-system caveat documented in the deployment guide).</p>
   `;
 }

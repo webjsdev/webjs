@@ -75,7 +75,7 @@ export function attachWebSocket(server, getRouteTable, opts) {
 }
 
 /**
- * Write an HTTP error on the raw TCP socket and destroy it — used to refuse
+ * Write an HTTP error on the raw TCP socket and destroy it: used to refuse
  * an upgrade cleanly.
  * @param {import('node:net').Socket} socket
  * @param {number} status

@@ -30,7 +30,7 @@ function tmpRegistry() {
   return d;
 }
 
-test('build — emits r/<name>.json per item with inlined content', async () => {
+test('build: emits r/<name>.json per item with inlined content', async () => {
   const d = tmpRegistry();
   try {
     await build.parseAsync(['registry.json', '--cwd', d, '--output', './r'], { from: 'user' });
@@ -42,7 +42,7 @@ test('build — emits r/<name>.json per item with inlined content', async () => 
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('build — emits index.json with flat list', async () => {
+test('build: emits index.json with flat list', async () => {
   const d = tmpRegistry();
   try {
     await build.parseAsync(['registry.json', '--cwd', d], { from: 'user' });
@@ -52,7 +52,7 @@ test('build — emits index.json with flat list', async () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('build — emits registry.json (full manifest copy)', async () => {
+test('build: emits registry.json (full manifest copy)', async () => {
   const d = tmpRegistry();
   try {
     await build.parseAsync(['registry.json', '--cwd', d], { from: 'user' });
@@ -62,7 +62,7 @@ test('build — emits registry.json (full manifest copy)', async () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('build — preserves registryDependencies in output', async () => {
+test('build: preserves registryDependencies in output', async () => {
   const d = tmpRegistry();
   try {
     await build.parseAsync(['registry.json', '--cwd', d], { from: 'user' });
@@ -71,7 +71,7 @@ test('build — preserves registryDependencies in output', async () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('build — fails on missing manifest', async (t) => {
+test('build: fails on missing manifest', async (t) => {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-build-missing-'));
   const origExit = process.exit;
   const origError = console.error;

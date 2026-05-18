@@ -1,5 +1,5 @@
 /**
- * Breadcrumb — semantic nav with breadcrumb list. Pure class helpers; use
+ * Breadcrumb: semantic nav with breadcrumb list. Pure class helpers; use
  * native `<nav>`, `<ol>`, `<li>`, `<a>`, `<span>`.
  *
  * shadcn parity: Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink,

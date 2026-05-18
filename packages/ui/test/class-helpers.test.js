@@ -1,11 +1,11 @@
 /**
- * Unit tests for Tier-1 class-helper functions — pure functions that return
+ * Unit tests for Tier-1 class-helper functions: pure functions that return
  * Tailwind class strings. No DOM, no browser, no custom-element machinery.
  *
  * These used to live in `test/browser/ui-visual.test.js` and
  * `test/browser/ui-composite.test.js`, where they mounted nonexistent custom
  * elements (`<ui-button>`, `<ui-card>`, …) and failed. After the Tier-1/Tier-2
- * refactor, Tier-1 components are functions — the right test shape is to
+ * refactor, Tier-1 components are functions: the right test shape is to
  * call them and assert on the returned string. That's all this file does.
  *
  * Tier-2 custom-element tests still live under `test/browser/` because they
@@ -45,7 +45,7 @@ function assertHelper(mod, name) {
 
 // ---------- button ----------
 
-test('buttonClass — default variant + size', { skip }, async () => {
+test('buttonClass: default variant + size', { skip }, async () => {
   const { buttonClass } = await import(join(COMPONENTS_DIR, 'button.ts'));
   const s = buttonClass();
   assert.match(s, /bg-primary/);
@@ -54,7 +54,7 @@ test('buttonClass — default variant + size', { skip }, async () => {
   assert.match(s, /h-9/); // default size
 });
 
-test('buttonClass — variant strings', { skip }, async () => {
+test('buttonClass: variant strings', { skip }, async () => {
   const { buttonClass } = await import(join(COMPONENTS_DIR, 'button.ts'));
   assert.match(buttonClass({ variant: 'destructive' }), /bg-destructive/);
   assert.match(buttonClass({ variant: 'secondary' }), /bg-secondary/);
@@ -65,7 +65,7 @@ test('buttonClass — variant strings', { skip }, async () => {
   assert.match(buttonClass({ variant: 'link' }), /underline-offset-4/);
 });
 
-test('buttonClass — size strings', { skip }, async () => {
+test('buttonClass: size strings', { skip }, async () => {
   const { buttonClass } = await import(join(COMPONENTS_DIR, 'button.ts'));
   assert.match(buttonClass({ size: 'xs' }), /h-6/);
   assert.match(buttonClass({ size: 'sm' }), /h-8/);
@@ -78,7 +78,7 @@ test('buttonClass — size strings', { skip }, async () => {
 
 // ---------- badge ----------
 
-test('badgeClass — variants', { skip }, async () => {
+test('badgeClass: variants', { skip }, async () => {
   const { badgeClass } = await import(join(COMPONENTS_DIR, 'badge.ts'));
   assert.match(badgeClass(), /bg-primary/);
   assert.match(badgeClass({ variant: 'secondary' }), /bg-secondary/);
@@ -88,7 +88,7 @@ test('badgeClass — variants', { skip }, async () => {
 
 // ---------- alert ----------
 
-test('alert — class helpers expose role + variant', { skip }, async () => {
+test('alert: class helpers expose role + variant', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'alert.ts'));
   assert.match(mod.alertClass(), /relative/);
   assert.match(mod.alertClass({ variant: 'destructive' }), /text-destructive/);
@@ -98,7 +98,7 @@ test('alert — class helpers expose role + variant', { skip }, async () => {
 
 // ---------- card ----------
 
-test('card — exposes 7 subpart helpers', { skip }, async () => {
+test('card: exposes 7 subpart helpers', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'card.ts'));
   for (const name of [
     'cardClass',
@@ -116,7 +116,7 @@ test('card — exposes 7 subpart helpers', { skip }, async () => {
 
 // ---------- avatar ----------
 
-test('avatar — exposes 6 subpart helpers', { skip }, async () => {
+test('avatar: exposes 6 subpart helpers', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'avatar.ts'));
   assert.equal(typeof mod.avatarClass, 'function');
   for (const name of [
@@ -132,7 +132,7 @@ test('avatar — exposes 6 subpart helpers', { skip }, async () => {
 
 // ---------- table ----------
 
-test('table — 9 subpart helpers', { skip }, async () => {
+test('table: 9 subpart helpers', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'table.ts'));
   for (const name of [
     'tableContainerClass',
@@ -151,7 +151,7 @@ test('table — 9 subpart helpers', { skip }, async () => {
 
 // ---------- input / textarea / label ----------
 
-test('input / textarea / label — helper strings', { skip }, async () => {
+test('input / textarea / label: helper strings', { skip }, async () => {
   const input = await import(join(COMPONENTS_DIR, 'input.ts'));
   const textarea = await import(join(COMPONENTS_DIR, 'textarea.ts'));
   const label = await import(join(COMPONENTS_DIR, 'label.ts'));
@@ -162,7 +162,7 @@ test('input / textarea / label — helper strings', { skip }, async () => {
 
 // ---------- visual primitives ----------
 
-test('separator / skeleton / aspect-ratio / kbd — helpers exist', { skip }, async () => {
+test('separator / skeleton / aspect-ratio / kbd: helpers exist', { skip }, async () => {
   const sep = await import(join(COMPONENTS_DIR, 'separator.ts'));
   const skel = await import(join(COMPONENTS_DIR, 'skeleton.ts'));
   const ar = await import(join(COMPONENTS_DIR, 'aspect-ratio.ts'));
@@ -180,7 +180,7 @@ test('separator / skeleton / aspect-ratio / kbd — helpers exist', { skip }, as
 
 // ---------- form primitives that are class helpers (no <ui-*>) ----------
 
-test('checkbox / switch / radio-group / toggle — class helpers (not custom elements)', { skip }, async () => {
+test('checkbox / switch / radio-group / toggle: class helpers (not custom elements)', { skip }, async () => {
   const cb = await import(join(COMPONENTS_DIR, 'checkbox.ts'));
   const sw = await import(join(COMPONENTS_DIR, 'switch.ts'));
   const rg = await import(join(COMPONENTS_DIR, 'radio-group.ts'));
@@ -194,7 +194,7 @@ test('checkbox / switch / radio-group / toggle — class helpers (not custom ele
   assert.equal(typeof tg.toggleClass, 'function');
 });
 
-test('toggle — variant + size accepted', { skip }, async () => {
+test('toggle: variant + size accepted', { skip }, async () => {
   const { toggleClass } = await import(join(COMPONENTS_DIR, 'toggle.ts'));
   assert.ok(toggleClass().length > 10);
   assert.match(toggleClass({ variant: 'outline' }), /border/);
@@ -202,7 +202,7 @@ test('toggle — variant + size accepted', { skip }, async () => {
 
 // ---------- breadcrumb / pagination ----------
 
-test('breadcrumb — 6 subpart helpers', { skip }, async () => {
+test('breadcrumb: 6 subpart helpers', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'breadcrumb.ts'));
   for (const name of [
     'breadcrumbListClass',
@@ -216,7 +216,7 @@ test('breadcrumb — 6 subpart helpers', { skip }, async () => {
   }
 });
 
-test('pagination — helpers including variant-driven link', { skip }, async () => {
+test('pagination: helpers including variant-driven link', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'pagination.ts'));
   assert.equal(typeof mod.paginationLinkClass, 'function');
   const active = mod.paginationLinkClass({ isActive: true });
@@ -226,7 +226,7 @@ test('pagination — helpers including variant-driven link', { skip }, async () 
 
 // ---------- native-select ----------
 
-test('native-select — wrapper + select + option helpers', { skip }, async () => {
+test('native-select: wrapper + select + option helpers', { skip }, async () => {
   const mod = await import(join(COMPONENTS_DIR, 'native-select.ts'));
   for (const name of [
     'nativeSelectWrapperClass',

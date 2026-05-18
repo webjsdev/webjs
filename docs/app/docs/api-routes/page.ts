@@ -1,22 +1,22 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'API Routes — webjs' };
+export const metadata = { title: 'API Routes | webjs' };
 
 export default function ApiRoutes() {
   return html`
     <h1>API Routes</h1>
     <p>API routes are <code>route.ts</code> files that export named async functions for each HTTP method you want to handle. They follow the same file-based routing as pages but produce JSON (or any <code>Response</code>) instead of HTML.</p>
 
-    <blockquote>A <code>route.ts</code> can live <strong>anywhere under <code>app/</code></strong> -- not just inside an <code>api/</code> subdirectory. <code>app/webhook/route.ts</code> maps to <code>/webhook</code>, <code>app/stripe/checkout/route.ts</code> maps to <code>/stripe/checkout</code>, and so on.</blockquote>
+    <blockquote>A <code>route.ts</code> can live <strong>anywhere under <code>app/</code></strong>, not just inside an <code>api/</code> subdirectory. <code>app/webhook/route.ts</code> maps to <code>/webhook</code>, <code>app/stripe/checkout/route.ts</code> maps to <code>/stripe/checkout</code>, and so on.</blockquote>
 
     <h2>Supported Methods</h2>
     <p>Export one or more named async functions from a <code>route.ts</code> file:</p>
     <ul>
-      <li><strong>GET</strong> -- read a resource</li>
-      <li><strong>POST</strong> -- create a resource</li>
-      <li><strong>PUT</strong> -- replace a resource</li>
-      <li><strong>PATCH</strong> -- partially update a resource</li>
-      <li><strong>DELETE</strong> -- remove a resource</li>
+      <li><strong>GET</strong>: read a resource</li>
+      <li><strong>POST</strong>: create a resource</li>
+      <li><strong>PUT</strong>: replace a resource</li>
+      <li><strong>PATCH</strong>: partially update a resource</li>
+      <li><strong>DELETE</strong>: remove a resource</li>
     </ul>
     <p>If a request arrives with a method that has no matching export, webjs returns <code>405 Method Not Allowed</code> with an <code>Allow</code> header listing the available methods.</p>
 
@@ -27,8 +27,8 @@ export default function ApiRoutes() {
   { params }: { params: Record&lt;string, string&gt; }
 ): Promise&lt;Response | object&gt;</pre>
     <ul>
-      <li><strong>req</strong> -- a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body.</li>
-      <li><strong>params</strong> -- an object containing dynamic route segment values (from <code>[slug]</code> folder names).</li>
+      <li><strong>req</strong>: a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body.</li>
+      <li><strong>params</strong>: an object containing dynamic route segment values (from <code>[slug]</code> folder names).</li>
     </ul>
     <p>Return a <code>Response</code> for full control over status, headers, and body. Or return a plain object (or array, number, null) and webjs wraps it with <code>Response.json()</code> automatically.</p>
 
@@ -68,7 +68,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   await db.post.delete({ where: { slug: params.slug } });
   return Response.json({ deleted: true });
 }</pre>
-    <p>Catch-all segments (<code>[...rest]</code>) work too -- <code>params.rest</code> is the full remaining path as a string:</p>
+    <p>Catch-all segments (<code>[...rest]</code>) work too, with <code>params.rest</code> as the full remaining path as a string:</p>
     <pre>// app/api/files/[...path]/route.ts
 type Ctx = { params: { path: string } };
 
@@ -94,11 +94,11 @@ export async function POST(req: Request) {
 }</pre>
     <p>When you need control over status code, headers, or streaming, return a <code>Response</code> directly.</p>
 
-    <h2>json() Helper -- Content Negotiation</h2>
+    <h2>json() Helper: Content Negotiation</h2>
     <p>The <code>json()</code> helper from <code>@webjskit/server</code> adds smart content negotiation. It inspects the incoming request's <code>Accept</code> header and responds accordingly:</p>
     <ul>
       <li>If the client sent <code>Accept: application/vnd.webjs+json</code> (e.g. via <code>richFetch()</code>), the response is encoded with the <strong>webjs serializer</strong> so that <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, <code>FormData</code>, and reference cycles all survive the round trip.</li>
-      <li>Otherwise, the response is plain <code>application/json</code> -- standard for curl, mobile apps, and third-party consumers.</li>
+      <li>Otherwise, the response is plain <code>application/json</code>, the standard for curl, mobile apps, and third-party consumers.</li>
     </ul>
     <pre>// app/api/posts/route.ts
 import { json } from '@webjskit/server';
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 }</pre>
     <p>The helper reads the in-flight Request from an <code>AsyncLocalStorage</code> context set up by the request pipeline, so you do not need to pass the request explicitly.</p>
 
-    <h2>readBody() -- Parsing Rich Request Bodies</h2>
+    <h2>readBody(): Parsing Rich Request Bodies</h2>
     <p>The <code>readBody()</code> helper from <code>@webjskit/server</code> is the inverse of <code>json()</code>. It parses the request body with the webjs rich serializer when the client sent the <code>application/vnd.webjs+json</code> content type, and as plain JSON otherwise:</p>
     <pre>import { json, readBody } from '@webjskit/server';
 
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
   return json(post, { status: 201 });
 }</pre>
 
-    <h2>richFetch() -- Typed Client Calls</h2>
+    <h2>richFetch(): Typed Client Calls</h2>
     <p>On the client side, <code>richFetch()</code> from <code>webjs</code> is a drop-in replacement for <code>fetch()</code> that enables the rich-type round trip:</p>
     <pre>import { richFetch } from '@webjskit/core';
 
@@ -212,18 +212,18 @@ export default rateLimit({
 });</pre>
     <p>When the limit is exceeded, the response is <code>429 Too Many Requests</code> with headers:</p>
     <ul>
-      <li><code>Retry-After</code> -- seconds until the window resets</li>
-      <li><code>X-RateLimit-Limit</code> -- the configured max</li>
-      <li><code>X-RateLimit-Remaining</code> -- requests left in the current window</li>
-      <li><code>X-RateLimit-Reset</code> -- Unix timestamp when the window resets</li>
+      <li><code>Retry-After</code>: seconds until the window resets</li>
+      <li><code>X-RateLimit-Limit</code>: the configured max</li>
+      <li><code>X-RateLimit-Remaining</code>: requests left in the current window</li>
+      <li><code>X-RateLimit-Reset</code>: Unix timestamp when the window resets</li>
     </ul>
     <p>These rate-limit headers are also added to successful responses so clients can monitor their usage. The default key function extracts the client IP from <code>X-Forwarded-For</code>, <code>CF-Connecting-IP</code>, or <code>X-Real-IP</code> headers (in that order). For multi-instance deployments, use an external rate limiter (Redis, nginx, Cloudflare).</p>
 
     <h2>CORS on expose()d Endpoints</h2>
     <p>There are two patterns for CORS in webjs:</p>
     <ol>
-      <li><strong>expose() with cors option</strong> -- per-function CORS for server actions that double as REST endpoints. Preflight <code>OPTIONS</code> handling is automatic.</li>
-      <li><strong>route.ts with middleware</strong> -- manual CORS via a shared middleware that applies to all routes in a segment.</li>
+      <li><strong>expose() with cors option</strong>: per-function CORS for server actions that double as REST endpoints. Preflight <code>OPTIONS</code> handling is automatic.</li>
+      <li><strong>route.ts with middleware</strong>: manual CORS via a shared middleware that applies to all routes in a segment.</li>
     </ol>
     <p>Example CORS middleware for route.ts files:</p>
     <pre>// app/api/public/middleware.ts
@@ -255,7 +255,7 @@ export default async function cors(
     <pre>// app/api/posts/route.ts
 import { json, readBody } from '@webjskit/server';
 
-// GET /api/posts -- list all posts, with pagination
+// GET /api/posts: list all posts, with pagination
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const page = Number(url.searchParams.get('page') || '1');
@@ -278,7 +278,7 @@ export async function GET(req: Request) {
   });
 }
 
-// POST /api/posts -- create a new post
+// POST /api/posts: create a new post
 export async function POST(req: Request) {
   const data = await readBody(req);
 
@@ -300,7 +300,7 @@ export async function POST(req: Request) {
   return json(post, { status: 201 });
 }
 
-// DELETE /api/posts -- delete posts by IDs
+// DELETE /api/posts: delete posts by IDs
 export async function DELETE(req: Request) {
   const { ids } = await req.json();
 

@@ -119,7 +119,7 @@ test('tab-toggle pattern: click handler flips a sibling class without crashing',
   const buttons = Array.from(el.querySelectorAll('button'));
   assert.equal(buttons[0].getAttribute('class'), 'active');
   assert.equal(buttons[1].getAttribute('class'), '');
-  // Click "B" — should not throw, should update classes.
+  // Click "B": should not throw, should update classes.
   assert.doesNotThrow(() => buttons[1].click());
   const after = Array.from(el.querySelectorAll('button'));
   assert.equal(after[0].getAttribute('class'), '');
@@ -328,7 +328,7 @@ test('render: live() short-circuits when DOM value already matches (prop)', asyn
   assert.equal(input.value, 'a');
 });
 
-test('render: live() on attr — no-op when attribute already matches', async () => {
+test('render: live() on attr: no-op when attribute already matches', async () => {
   const { live } = await import('../packages/core/src/directives.js');
   const el = document.createElement('div');
   render(html`<input class=${live('x')}>`, el);
@@ -338,7 +338,7 @@ test('render: live() on attr — no-op when attribute already matches', async ()
   assert.equal(input.getAttribute('class'), 'x');
 });
 
-test('render: live() on boolean attr — no-op when state already matches', async () => {
+test('render: live() on boolean attr: no-op when state already matches', async () => {
   const { live } = await import('../packages/core/src/directives.js');
   const el = document.createElement('div');
   render(html`<input ?disabled=${live(true)}>`, el);

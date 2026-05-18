@@ -3,7 +3,7 @@ import '@webjskit/core/client-router';
 import '../components/theme-toggle.ts';
 
 /**
- * Root layout — Tailwind CSS browser runtime + @theme design tokens,
+ * Root layout: Tailwind CSS browser runtime + @theme design tokens,
  * matching the blog example's architecture. Light DOM everywhere.
  *
  * Docs / Blog URLs are read from env so the same code works across
@@ -20,8 +20,8 @@ const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 // Site-wide Open Graph + Twitter card metadata. `generateMetadata`
 // receives the request context so we can derive an absolute og:image
 // URL (OG scrapers require absolute http(s) URLs).
-const TITLE = 'webjs — AI-first, web-components-first, no-build web framework';
-const DESCRIPTION = 'Web components, server actions, streaming SSR — on web standards. Designed for AI agents to read, write, and ship.';
+const TITLE = 'webjs: AI-first, web-components-first, no-build web framework';
+const DESCRIPTION = 'Web components, server actions, streaming SSR: on web standards. Designed for AI agents to read, write, and ship.';
 
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
@@ -37,7 +37,7 @@ export function generateMetadata(ctx: { url: string }) {
       image,
       'image:width': '1200',
       'image:height': '630',
-      'image:alt': 'webjs — AI-first, web-components-first, no-build web framework',
+      'image:alt': 'webjs: AI-first, web-components-first, no-build web framework',
       'site_name': 'webjs',
     },
     twitter: {
@@ -96,7 +96,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --font-serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
         --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
-        /* spacing + radii + shadows — consumed by the home page's <style> block */
+        /* spacing + radii + shadows: consumed by the home page's <style> block */
         --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
         --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 72px;
         --rad-sm: 4px; --rad: 8px; --rad-lg: 12px; --rad-xl: 16px;
@@ -155,7 +155,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
       }
 
-      /* Explicit light toggle on a dark OS — same UA-chrome problem in
+      /* Explicit light toggle on a dark OS: same UA-chrome problem in
          the other direction. */
       :root[data-theme='light'] {
         color-scheme: light;

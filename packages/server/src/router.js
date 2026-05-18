@@ -232,7 +232,7 @@ function segmentsToPattern(segments, prefix = '') {
   // e.g., /docs/[[...slug]] matches both /docs and /docs/a/b/c
   const suffix = isOptionalCatchAll ? '(?:/(.*))?/?' : '/?';
   const regexBody = isOptionalCatchAll
-    ? body.replace(/\/\(\.\*\)$/, '')  // remove the trailing (.*) — we add it as optional
+    ? body.replace(/\/\(\.\*\)$/, '')  // remove the trailing (.*): we add it as optional
     : body;
   const pattern = new RegExp(`^${escapeRe(prefix)}${regexBody}${isOptionalCatchAll ? suffix : '/?$'}`);
   if (!isOptionalCatchAll) {

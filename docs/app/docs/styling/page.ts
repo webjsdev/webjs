@@ -1,16 +1,16 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Styling — webjs' };
+export const metadata = { title: 'Styling | webjs' };
 
 export default function Styling() {
   return html`
     <h1>Styling</h1>
-    <p>webjs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong> — the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed isolation.</p>
+    <p>webjs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed isolation.</p>
 
     <h2>The default: light DOM + Tailwind</h2>
-    <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly — no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>
+    <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>
 
-    <pre>// app/layout.ts — excerpt
+    <pre>// app/layout.ts excerpt
 import { html } from '@webjskit/core';
 
 export default function RootLayout({ children }: { children: unknown }) {
@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <pre>import { WebComponent, html } from '@webjskit/core';
 
 export class Counter extends WebComponent {
-  // static shadow = false is the default — no need to declare it.
+  // static shadow = false is the default, no need to declare it.
   static properties = { count: { type: Number } };
   declare count: number;
 
@@ -75,7 +75,7 @@ Counter.register('my-counter');</pre>
     <h2>Class-prefix rule for light-DOM custom CSS</h2>
     <p>Tailwind utilities are unique by construction, so most light-DOM components need zero custom CSS. But when you <em>do</em> reach for a <code>&lt;style&gt;</code> block or an imported stylesheet, <strong>every class selector MUST be prefixed with the component's tag name</strong>. Otherwise two components that both define <code>.card</code> or <code>.header</code> will style each other.</p>
 
-    <pre>// Pattern A — BEM-ish class names prefixed with tag
+    <pre>// Pattern A: BEM-ish class names prefixed with tag
 class MyCard extends WebComponent {
   render() {
     return html\`
@@ -90,7 +90,7 @@ class MyCard extends WebComponent {
   }
 }
 
-// Pattern B — descendant selector rooted at the tag
+// Pattern B: descendant selector rooted at the tag
 class MyCard extends WebComponent {
   render() {
     return html\`
@@ -126,18 +126,18 @@ export class Card extends WebComponent {
 }
 Card.register('my-card');</pre>
 
-    <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM — styles paint before JS loads, no hydration runtime, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker; client-side rendering replaces the marker without flash.</p>
+    <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM. Styles paint before JS loads, no hydration runtime, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker, and client-side rendering replaces the marker without flash.</p>
 
     <h2>Design tokens via CSS custom properties</h2>
     <p>CSS custom properties <strong>inherit through shadow DOM boundaries</strong>. Define them once on <code>:root</code> (as the blog example does in its layout) and both light-DOM and shadow-DOM components can consume them via Tailwind classes (<code>text-fg</code>, <code>bg-bg-elev</code>) or bare CSS (<code>var(--fg)</code>).</p>
 
-    <h2>DRY'ing up repeated Tailwind classes — JS helpers</h2>
-    <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>app/_utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML — no client-side runtime, no diff from inline classes.</p>
+    <h2>DRY'ing up repeated Tailwind classes via JS helpers</h2>
+    <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>app/_utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
 
     <pre>// app/_utils/ui.ts
 import { html } from '@webjskit/core';
 
-/** \`label\` kicker — small caps, accent colour, above headings. */
+/** \`label\` kicker: small caps, accent colour, above headings. */
 export function rubric(label: string) {
   return html\`
     &lt;span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent mb-4"&gt;● \${label}&lt;/span&gt;
@@ -163,14 +163,14 @@ export default function Post({ params }) {
   \`;
 }</pre>
 
-    <p><strong>When to extract.</strong> Inline classes when they appear once. Extract when they repeat 2+ times identically, or vary only by 1–2 props (e.g. a margin size). Don't force-fit — radically different call sites should stay inline.</p>
+    <p><strong>When to extract.</strong> Inline classes when they appear once. Extract when they repeat 2+ times identically, or vary only by 1–2 props (e.g. a margin size). Don't force-fit. Radically different call sites should stay inline.</p>
 
     <p><strong>Why not <code>@apply</code>?</strong> <code>@apply</code> hides which utilities a class uses and creates a second source of truth. JS helpers keep the class bundle visible at the definition site and compose naturally with conditional classes and active states.</p>
 
     <h2>Global styles and pseudo-elements</h2>
-    <p>Some CSS can't be expressed as utility classes — body defaults, <code>::selection</code>, <code>::-webkit-scrollbar</code>, <code>body::before</code> decorative overlays. Put these in a plain <code>&lt;style&gt;</code> block in the root layout:</p>
+    <p>Some CSS can't be expressed as utility classes: body defaults, <code>::selection</code>, <code>::-webkit-scrollbar</code>, <code>body::before</code> decorative overlays. Put these in a plain <code>&lt;style&gt;</code> block in the root layout:</p>
 
-    <pre>// app/layout.ts — excerpt
+    <pre>// app/layout.ts excerpt
 &lt;style&gt;
   html, body { margin: 0; }
   body {
@@ -188,7 +188,7 @@ export default function Post({ params }) {
       <li>Define dark tokens in <code>:root { ... }</code> as the default.</li>
       <li>Override for light via <code>:root[data-theme='light']</code> and <code>@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) { ... } }</code>.</li>
       <li>Ship a <code>&lt;theme-toggle&gt;</code> component that sets <code>data-theme</code> on <code>&lt;html&gt;</code> + persists to localStorage.</li>
-      <li>Add a synchronous <code>&lt;script&gt;</code> before your <code>&lt;style&gt;</code> block that reads localStorage and sets <code>data-theme</code> before any paint — no FOUC.</li>
+      <li>Add a synchronous <code>&lt;script&gt;</code> before your <code>&lt;style&gt;</code> block that reads localStorage and sets <code>data-theme</code> before any paint. No FOUC.</li>
     </ol>
 
     <h2>Vanilla CSS end-to-end (opt out of Tailwind)</h2>
@@ -204,7 +204,7 @@ export default function Post({ params }) {
       </tbody>
     </table>
 
-    <p>Every page wraps its output in <code>&lt;div class="page-&lt;route&gt;"&gt;</code>. Every layout wraps in <code>&lt;div class="layout-&lt;name&gt;"&gt;</code>. Components scope via their tag name. Styles colocate with the markup as <code>const STYLES = css\`…\`</code> and interpolate via <code>&lt;style&gt;\${STYLES.text}&lt;/style&gt;</code> — <code>@webjskit/ts-plugin</code> (which bundles <code>ts-lit-plugin</code> internally) highlights the CSS and resolves class go-to-definition inside those blocks.</p>
+    <p>Every page wraps its output in <code>&lt;div class="page-&lt;route&gt;"&gt;</code>. Every layout wraps in <code>&lt;div class="layout-&lt;name&gt;"&gt;</code>. Components scope via their tag name. Styles colocate with the markup as <code>const STYLES = css\`…\`</code> and interpolate via <code>&lt;style&gt;\${STYLES.text}&lt;/style&gt;</code>. <code>@webjskit/ts-plugin</code> (which bundles <code>ts-lit-plugin</code> internally) highlights the CSS and resolves class go-to-definition inside those blocks.</p>
 
     <h3>Page scope</h3>
     <pre>// app/dashboard/page.ts
@@ -276,13 +276,13 @@ export class MyCard extends WebComponent {
 MyCard.register('my-card');</pre>
 
     <h3>Primitives stay intentionally global</h3>
-    <p>A small curated set of design-system classes (<code>rubric</code>, <code>banner</code>, <code>accent-link</code>, <code>display-h1</code>, <code>code-chip</code>, …) lives once in the root layout and is intentionally global. These are your design system — treated the way Bootstrap treats <code>.btn</code>. Everything else is scoped.</p>
+    <p>A small curated set of design-system classes (<code>rubric</code>, <code>banner</code>, <code>accent-link</code>, <code>display-h1</code>, <code>code-chip</code>, …) lives once in the root layout and is intentionally global. These are your design system, treated the way Bootstrap treats <code>.btn</code>. Everything else is scoped.</p>
 
     <h3>Tradeoffs vs Tailwind</h3>
     <ul>
-      <li><strong>More per-file CSS to write</strong> — no utility ecosystem.</li>
-      <li><strong>Wrapper discipline</strong> — every page and every layout remembers to wrap.</li>
-      <li><strong>Rename cost</strong> — moving <code>app/dashboard/</code> → <code>app/admin/</code> is 2 textual edits in one file: the <code>.page-dashboard</code> selector in the <code>css\`…\`</code> block and the matching <code>class="page-dashboard"</code> on the wrapper div.</li>
+      <li><strong>More per-file CSS to write</strong>: no utility ecosystem.</li>
+      <li><strong>Wrapper discipline</strong>: every page and every layout remembers to wrap.</li>
+      <li><strong>Rename cost</strong>: moving <code>app/dashboard/</code> → <code>app/admin/</code> is 2 textual edits in one file: the <code>.page-dashboard</code> selector in the <code>css\`…\`</code> block and the matching <code>class="page-dashboard"</code> on the wrapper div.</li>
     </ul>
     <p>You get in return: no browser-runtime script, no <code>@theme</code> block, idiomatic CSS you can debug with plain DevTools, and a cascade that works exactly the way you read it.</p>
 
@@ -291,7 +291,7 @@ MyCard.register('my-card');</pre>
     <h2>How SSR works for each mode</h2>
     <ul>
       <li><strong>Light DOM:</strong> component content is serialised as direct children of the custom element with a leading <code>&lt;!--webjs-hydrate--&gt;</code> marker. Global stylesheets paint immediately. On connect the client renderer replaces the marker with rendered content (identical output for unchanged state, no flash).</li>
-      <li><strong>Shadow DOM:</strong> component content is serialised inside a <code>&lt;template shadowrootmode="open"&gt;</code>. The browser attaches the shadow root automatically — styles paint before any JS loads. On connect the component upgrades and adopts the same stylesheet via <code>adoptedStyleSheets</code>, so SSR and client styles stay in sync.</li>
+      <li><strong>Shadow DOM:</strong> component content is serialised inside a <code>&lt;template shadowrootmode="open"&gt;</code>. The browser attaches the shadow root automatically, so styles paint before any JS loads. On connect the component upgrades and adopts the same stylesheet via <code>adoptedStyleSheets</code>, so SSR and client styles stay in sync.</li>
     </ul>
   `;
 }

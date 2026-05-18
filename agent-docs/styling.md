@@ -1,7 +1,7 @@
-# Styling — Tailwind default + vanilla-CSS opt-out
+# Styling: Tailwind default plus vanilla-CSS opt-out
 
 The framework default is Tailwind. The conventions below describe how to
-opt out and use plain CSS everywhere — fully supported.
+opt out and use plain CSS everywhere. Fully supported.
 
 ## Tailwind + JS helpers (default convention)
 
@@ -17,7 +17,7 @@ classes repeats across 2+ places, extract it into a helper in
 ```ts
 import { html } from '@webjskit/core';
 
-/** `● label` kicker — small caps, accent colour, above headings. */
+/** `● label` kicker: small caps, accent colour, above headings. */
 export function rubric(label: string, mb: 'sm' | 'md' = 'md') {
   const mbCls = mb === 'sm' ? 'mb-3' : 'mb-4';
   return html`
@@ -25,7 +25,7 @@ export function rubric(label: string, mb: 'sm' | 'md' = 'md') {
   `;
 }
 
-/** "← label" back link — small caps, muted. */
+/** "← label" back link: small caps, muted. */
 export function backLink(href: string, label: string) {
   return html`
     <a href=${href} class="inline-block mb-12 text-fg-subtle no-underline font-mono text-[11px] leading-none font-medium tracking-[0.15em] uppercase transition-colors duration-fast hover:text-fg">← ${label}</a>
@@ -60,7 +60,7 @@ export default function Post({ params }) {
 `@apply` hides which utilities a class uses from the reader and creates
 a second source of truth. JS helpers keep the class bundle visible at
 the definition site and compose naturally with other props (conditional
-classes, active states, etc.). They run at SSR time — output HTML is
+classes, active states, etc.). They run at SSR time. Output HTML is
 identical to inline classes, no client-side runtime.
 
 ## Vanilla CSS for the whole app (opt-out of Tailwind)
@@ -70,7 +70,7 @@ scoping convention so generic class names (`.btn`, `.input`, `.header`)
 don't collide across pages, layouts, and components in the global
 light-DOM namespace.
 
-### Convention — three scopes, one rule each
+### Convention: three scopes, one rule each
 
 | Scope | Wrapper selector | Where it lives |
 |---|---|---|
@@ -94,7 +94,7 @@ Styles colocate with the markup as `const STYLES = css\`…\`` and
 interpolate via `<style>${STYLES.text}</style>`. `ts-lit-plugin` /
 `@webjskit/ts-plugin` highlights the CSS and resolves class go-to-definition.
 
-### Example — page
+### Example: a page
 
 ```ts
 import { html, css } from '@webjskit/core';
@@ -119,7 +119,7 @@ export default function Dashboard() {
 }
 ```
 
-### Example — layout
+### Example: a layout
 
 ```ts
 const STYLES = css`
@@ -143,10 +143,10 @@ export default function RootLayout({ children }) {
 ```
 
 Inside each scope, `.btn` / `.input` / `.header` / `.form` / `.item`
-are free names — CSS descendant combinators stop them at the scope
+are free names because CSS descendant combinators stop them at the scope
 boundary. A small curated set of **primitives** (`rubric`, `banner`,
 `accent-link`, `display-h1`, …) can live global in the root layout as
-your design system; everything else is scoped.
+your design system. Everything else is scoped.
 
 ### Tradeoffs vs Tailwind
 

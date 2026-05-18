@@ -1,5 +1,5 @@
 /**
- * Edge cases for the session() cookie middleware — covers the
+ * Edge cases for the session() cookie middleware: covers the
  * destroyed-session clear-cookie path, custom cookie serializer
  * options (httpOnly=false / secure=false / sameSite override), the
  * dirty-session signed cookie path, and getSession() being called
@@ -23,7 +23,7 @@ function reqWith(cookie) {
 
 test('session(): destroyed session emits a clear-cookie (Max-Age=0)', async () => {
   // Mock a storage whose save() returns '' (the "destroyed" sentinel)
-  // unconditionally — simpler than threading destroy() through a real
+  // unconditionally: simpler than threading destroy() through a real
   // request/AsyncLocalStorage flow.
   const destroyStorage = {
     async read() { return new Session('x'); },

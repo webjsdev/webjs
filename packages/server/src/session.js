@@ -137,7 +137,7 @@ export class Session {
 
 /**
  * Cookie-based session storage. All data lives in the cookie itself.
- * Stateless — no server storage needed.
+ * Stateless: no server storage needed.
  *
  * @returns {SessionStorage}
  */
@@ -296,12 +296,12 @@ export function session(opts = {}) {
     const cookieValue = await storage.save(s);
 
     if (cookieValue === '') {
-      // Destroyed — clear the cookie
+      // Destroyed: clear the cookie
       try {
         resp.headers.append('set-cookie', `${cookieName}=; Max-Age=0; Path=${cookieOpts.path}`);
       } catch {}
     } else if (cookieValue !== null) {
-      // Changed — sign and set
+      // Changed: sign and set
       try {
         resp.headers.append('set-cookie', serializeCookie(cookieName, sign(cookieValue, secret), cookieOpts));
       } catch {}

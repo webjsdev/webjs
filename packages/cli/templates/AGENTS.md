@@ -1,18 +1,18 @@
-# AGENTS.md — {{APP_NAME}}
+# AGENTS.md for {{APP_NAME}}
 
 Read this before editing any file. This is a webjs app: AI-first, web-
 components-first, no build step. The framework's own full API reference
 lives at https://github.com/vivek7405/webjs/blob/main/AGENTS.md and the
 full hosted documentation (every API, recipe, and example) lives at
-**https://docs.webjs.com** — treat this file as the app-scoped
+**https://docs.webjs.com**. Treat this file as the app-scoped
 companion and reach for docs.webjs.com whenever you need more detail.
 
-## If you just scaffolded this app (AI agents — read first)
+## If you just scaffolded this app (AI agents, read first)
 
 This project was created with `webjs create`. The files you see right
-now — `app/page.ts` ("Hello from {{APP_NAME}}"), the example `User`
+now (`app/page.ts` printing "Hello from {{APP_NAME}}", the example `User`
 model in `prisma/schema.prisma`, the `theme-toggle` component, the
-example users module (api/saas templates) — are **starting-point
+example users module in api/saas templates) are **starting-point
 references, not the final product**. Your job is to replace them with
 the app the user actually asked for.
 
@@ -21,28 +21,28 @@ the app the user actually asked for.
 1. **Use Prisma + SQLite for persistence.** It's already wired up
    (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`,
    `predev` hook running `prisma generate`). For any data the app
-   stores — todos, posts, messages, products, comments, anything —
+   stores (todos, posts, messages, products, comments, anything),
    define a Prisma model and persist there.
    - **NEVER** store app data in JSON files (`data/todos.json`,
      `db.json`, …). The convention check `no-json-data-files` flags
      this and the user's prompt explicitly forbids it.
    - **NEVER** use in-memory arrays or `Map`s as a substitute for the
-     database — they vanish on every dev-server reload and aren't
+     database. They vanish on every dev-server reload and aren't
      shared across processes.
-   - **NEVER** use `localStorage` to persist app data — it's per-browser
+   - **NEVER** use `localStorage` to persist app data. It's per-browser
      and doesn't reach the server.
 2. **One of three scaffolds only.** The CLI exposes exactly three:
    `full-stack` (default), `--template api`, `--template saas`. Don't
    reach for a `--template blog` / `--template todo` / `--template
-   ecommerce` — they don't exist and the CLI will reject them.
+   ecommerce`. They don't exist and the CLI will reject them.
 3. **First step after scaffolding:** edit `prisma/schema.prisma` to the
    app's real domain models (delete the example `User` model unless the
    app actually needs users), run `webjs db migrate <name>`, then build
    pages / actions / queries against those models.
 
 **Picking the right scaffold from the user's prompt** (you do this BEFORE
-running `webjs create`; if you're reading this you've already scaffolded —
-verify the choice was correct, otherwise re-scaffold in a fresh dir):
+running `webjs create`; if you're reading this you've already scaffolded.
+Verify the choice was correct, otherwise re-scaffold in a fresh dir):
 
 | User asks for… | Scaffold |
 |---|---|
@@ -56,7 +56,7 @@ is explicit about auth / accounts / SaaS.
 
 ## Framework source is in `node_modules/`
 
-No build step, no bundler, no minification — what you read is what
+No build step, no bundler, no minification. What you read is what
 runs. When in doubt, grep the framework:
 
 ```
@@ -82,12 +82,12 @@ node_modules/@webjskit/
 ```
 
 Reaching straight for the source is the fastest way to resolve "why
-doesn't X work?" — no documentation guesswork, no stale blog posts.
+doesn't X work?" with no documentation guesswork and no stale blog posts.
 
-## Editor TS plugin — `@webjskit/ts-plugin`
+## Editor TS plugin: `@webjskit/ts-plugin`
 
 This scaffold's `tsconfig.json` lists a single tsserver plugin. It is
-editor-only — not required for the framework to run.
+editor-only, not required for the framework to run.
 
 ```jsonc
 // tsconfig.json (already wired by the scaffold)
@@ -97,7 +97,7 @@ editor-only — not required for the framework to run.
 ```
 
 `@webjskit/ts-plugin` bundles `ts-lit-plugin` internally (it's a runtime
-dependency of the plugin) and loads it programmatically — so users
+dependency of the plugin) and loads it programmatically, so users
 list one entry, not two. You get the full stack of template-literal
 intelligence (type-checking, diagnostics, go-to-def inside
 `` html`…` `` and `` css`…` `` templates) **plus** webjs-aware behaviour
@@ -112,14 +112,14 @@ layered on top:
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
 
-## UI components — Webjs UI (preinstalled)
+## UI components: Webjs UI (preinstalled)
 
 This scaffold ships with the standard Webjs UI component kit
 **already installed at `components/ui/`**. The kit is **AI-first** and
-splits into two tiers. Internalise the split — picking the wrong tier
+splits into two tiers. Internalise the split. Picking the wrong tier
 produces broken markup.
 
-### Tier 1 — class-helper functions (the majority)
+### Tier 1: class-helper functions (the majority)
 
 Pure functions that return Tailwind class strings. You apply them to
 **raw native HTML elements** that you write yourself. Examples:
@@ -156,13 +156,13 @@ return html`
 Helpers with variants take an options object:
 `buttonClass({ variant: 'outline', size: 'sm' })`.
 
-### Tier 2 — stateful custom elements
+### Tier 2: stateful custom elements
 
 For things the browser doesn't provide natively (focus traps, portaled
 overlays, keyboard-navigated lists): `dialog`, `alert-dialog`, `popover`,
 `tooltip`, `hover-card`, `tabs`, `accordion`, `collapsible`,
 `dropdown-menu`, `progress`, `sonner`, `toggle-group`. These ARE custom
-elements — import them once (typically in `app/layout.ts`) and use
+elements. Import them once (typically in `app/layout.ts`) and use
 `<ui-X>` tags:
 
 ```ts
@@ -200,17 +200,17 @@ Each `webjs ui add` call fetches the component source from
 `webjs ui list` to browse the catalogue or visit
 [https://ui.webjs.dev](https://ui.webjs.dev).
 
-### AI agents — picking the right tier
+### AI agents, picking the right tier
 
 For forms, dashboards, settings pages, marketing layouts: **call the
 Tier-1 class helpers on raw native elements**. You get accessibility,
-visual consistency, and form submission semantics for free —
-`<input class=${inputClass()}>` is a real `<input>`, with native
+visual consistency, and form submission semantics for free.
+`<input class=${inputClass()}>` is a real `<input>` with native
 autofill, browser validation, and `<form>` submission unchanged.
 
 Because Tier-1 helpers wrap *real* HTML elements, a `buttonClass()`
 button inside a `<form action="/posts" method="post">` participates
-in the client router's partial-swap submission automatically — no JS
+in the client router's partial-swap submission automatically. No JS
 handler, no `fetch`. See *Client navigation patterns* below for the
 full form-submission + 4xx-HTML-render-in-place pattern.
 
@@ -228,7 +228,7 @@ behavior the browser can't deliver natively.
 ## File conventions
 
 ```
-app/                     thin route adapters — import from modules/
+app/                     thin route adapters (import from modules/)
   page.ts                → /
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
@@ -244,7 +244,7 @@ app/                     thin route adapters — import from modules/
   sitemap.ts             metadata route → /sitemap.xml
   robots.ts              metadata route → /robots.txt
   opengraph-image.ts     metadata route → /opengraph-image
-components/              web components — extend WebComponent, call .register()
+components/              web components (extend WebComponent, call .register())
 modules/<feature>/
   actions/*.server.ts    server actions (one function per file)
   queries/*.server.ts    data reads (one function per file)
@@ -255,7 +255,7 @@ lib/
   prisma.ts              PrismaClient singleton (import from here, never `new PrismaClient()`)
   ...                    other cross-cutting infra (session, auth config, etc.)
 prisma/
-  schema.prisma          Prisma schema — SQLite by default, switch provider for Postgres/MySQL
+  schema.prisma          Prisma schema, SQLite by default, switch provider for Postgres/MySQL
   dev.db                 SQLite file (gitignored); run `npm run db:migrate` to create
   migrations/            generated migration SQL
 public/                  static assets, served at /public/*
@@ -277,13 +277,13 @@ npm run dev                   # webjs dev + prisma generate via predev
 
 Scripts:
 
-- `npm run db:migrate` — `prisma migrate dev` (dev-time schema changes + migration + generate)
-- `npm run db:generate` — `prisma generate` (regenerate client only)
-- `npm run db:studio` — `prisma studio` (GUI)
+- `npm run db:migrate`: `prisma migrate dev` (dev-time schema changes + migration + generate)
+- `npm run db:generate`: `prisma generate` (regenerate client only)
+- `npm run db:studio`: `prisma studio` (GUI)
 - `predev` hook auto-runs `prisma generate` before `npm run dev`
 - `prestart` hook runs `prisma migrate deploy` before `npm start` (idempotent in prod)
 
-Always import the client from `lib/prisma.ts` (never `new PrismaClient()` directly —
+Always import the client from `lib/prisma.ts` (never `new PrismaClient()` directly -
 the singleton avoids opening a new connection on every dev-server reload):
 
 ```ts
@@ -321,7 +321,7 @@ export class Counter extends WebComponent {
 
   constructor() {
     super();
-    this.count = 0;                  // SSR-meaningful default — see below
+    this.count = 0;                  // SSR-meaningful default, see below
   }
 
   render() {
@@ -336,10 +336,10 @@ Counter.register('my-counter');
 ```
 
 **Progressive-enhancement rule for components.** Every webjs component
-is SSR'd — the server constructs the component, applies attributes,
+is SSR'd. The server constructs the component, applies attributes,
 and runs `render()`. With JS disabled, the component's initial HTML
-still paints (an unstyled counter still shows the number; only the
-click handler is inert). Two consequences for how you write code:
+still paints (an unstyled counter still shows the number, and only
+the click handler is inert). Two consequences for how you write code:
 
 1. **Defaults for the first paint go in `constructor()`** (after
    `super()`), never as class-field initializers (which break
@@ -350,7 +350,7 @@ click handler is inert). Two consequences for how you write code:
    `localStorage`, viewport size, online status, or anything that
    genuinely can't be known on the server. Read the value, then
    `setState({...})` to refine the render. The SSR'd first paint
-   shows the constructor default; the browser refines after
+   shows the constructor default. The browser refines after
    hydration.
 3. **Server-known data goes through the page function**, not into
    `connectedCallback`. Fetch in the page (which runs on the server),
@@ -378,7 +378,7 @@ export async function createPost(input: { title: string; body: string }) {
 }
 ```
 
-Import it from a client component — the framework rewrites it into a
+Import it from a client component. The framework rewrites it into a
 type-safe RPC stub automatically.
 
 ## Client navigation patterns (auto-magic)
@@ -394,9 +394,9 @@ What this changes for how you write apps:
 ### 1. Put shared chrome in `layout.ts`, not in every page
 
 When you navigate from `/posts` to `/posts/123`, the framework swaps
-only the deepest layout's `${'${children}'}` slot — outer layouts stay
+only the deepest layout's `${'${children}'}` slot. Outer layouts stay
 mounted. The sidenav's scroll position, an open `<details>`, a focused
-input, an inflight `<video>` — all preserved across the navigation
+input, and an inflight `<video>` are all preserved across the navigation
 without you writing any code.
 
 The rule: anything that should persist across navigations within a
@@ -430,7 +430,7 @@ export async function POST(req: Request) {
   });
   if (!result.success) {
     // Re-render the form page with the user's input + inline errors.
-    // The client router applies this HTML in place; no full reload.
+    // The client router applies this HTML in place, no full reload.
     return new Response(renderNewPostForm(result.errors, form), {
       status: 422,
       headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -451,12 +451,12 @@ export async function POST(req: Request) {
 ```
 
 With JS active: router intercepts the submit, sends the POST, applies
-the response in place — 2xx + redirect for success, 4xx HTML for
-errors. With JS disabled: browser performs the same POST as a normal
+the response in place (2xx + redirect for success, 4xx HTML for
+errors). With JS disabled: browser performs the same POST as a normal
 form submission and renders the response page. Same code, both paths.
 
 (For RPC-style server actions that return typed values to client
-components — see *Server action pattern* above. The HTML-form pattern
+components. See *Server action pattern* above. The HTML-form pattern
 here is for the "submit → server processes → render new page" flow.)
 
 ### 4. `<webjs-frame id="...">` for non-layout swap regions
@@ -477,7 +477,7 @@ return html`
 ```
 
 The router's `closest('webjs-frame')` detection takes precedence over
-layout markers. Only the frame's content swaps. Use this sparingly —
+layout markers. Only the frame's content swaps. Use this sparingly -
 folder-based layouts handle 99% of cases.
 
 ### 5. `loading.ts` for per-segment skeletons
@@ -485,7 +485,7 @@ folder-based layouts handle 99% of cases.
 Drop a `loading.ts` in any route segment. The framework auto-wraps the
 sibling `page.ts` in a Suspense boundary with `loading.ts`'s default
 export as the fallback. On navigation, the client router clones the
-deepest matching loading template into the swap slot immediately —
+deepest matching loading template into the swap slot immediately -
 the user sees a skeleton during the fetch, then the real content.
 
 ### 6. `error.ts` for per-segment error boundaries
@@ -497,14 +497,14 @@ default export, scoped to that boundary (outer layouts stay alive).
 ### What you do NOT need to write
 
 - Manual fetch / DOM-swap code for SPA-style navigation
-- An "active link" highlight handler — use `aria-current="page"`
-  derived from the request URL on the server
-- Loading spinners on `<a>` clicks — `loading.ts` handles it
-- Cancellation when the user clicks faster than the network — the
+- An "active link" highlight handler. Use `aria-current="page"`
+  derived from the request URL on the server.
+- Loading spinners on `<a>` clicks. `loading.ts` handles it.
+- Cancellation when the user clicks faster than the network. The
   router's nav-token + AbortController combo guarantees stale
-  responses never overwrite a newer settled page
-- Scroll-position save/restore for back/forward — the snapshot cache
-  handles window scroll; inner scrollables persist via DOM identity
+  responses never overwrite a newer settled page.
+- Scroll-position save/restore for back/forward. The snapshot cache
+  handles window scroll. Inner scrollables persist via DOM identity.
 
 Full reference: see the [Client Router docs](https://docs.webjs.dev/docs/client-router) and the framework AGENTS.md "Client navigation" section.
 
@@ -520,7 +520,7 @@ the typed `other: { '<meta-name>': value }` escape hatch.
 ```ts
 export const metadata = {
   title: 'My page',
-  // OR: title: { template: '%s — {{APP_NAME}}', default: '{{APP_NAME}}' }
+  // OR: title: { template: '%s | {{APP_NAME}}', default: '{{APP_NAME}}' }
   description: 'A page in {{APP_NAME}}',
   metadataBase: 'https://example.com',           // base for relative URLs below
   openGraph: { type: 'website', image: '/og.png' },
@@ -568,7 +568,7 @@ the framework respects it and splices its required tags into the
 user's `<head>`.
 
 ```ts
-// app/layout.ts — root, optionally owning the shell
+// app/layout.ts (root, optionally owning the shell)
 export default function RootLayout({ children }) {
   return html`
     <!doctype html>
@@ -593,22 +593,31 @@ composition, so a nested shell ends up dropped by the HTML parser.
 ## Invariants (do not violate)
 
 1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
-2. Never import `@prisma/client` or `node:*` from client-reachable files —
+2. Never import `@prisma/client` or `node:*` from client-reachable files -
    only from `.server.ts` modules or `lib/*.ts`.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
-4. Use `setState()` — never mutate `this.state` directly.
+4. Use `setState()`. Never mutate `this.state` directly.
 5. Pages / layouts / metadata routes default-export a server-only function.
 6. One exported function per action / query file. Name the file after it.
 7. **Components must render meaningful HTML on first paint** (SSR
-   uses constructor defaults + attributes — `connectedCallback` is
+   uses constructor defaults + attributes, while `connectedCallback` is
    browser-only). Never fetch initial data in `connectedCallback` /
-   `firstUpdated`; fetch in the page function (server) and pass it as
+   `firstUpdated`. Fetch in the page function (server) and pass it as
    a prop. See *Component pattern* above.
+8. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used
+   as a pause-punctuation substitute.** Prose, comments, code, JSON
+   descriptions, commit messages. Rewrite the sentence so no
+   pause-punctuation crutch is needed. Banned as pause punctuation:
+   the em-dash (`-`), a plain hyphen used in place of one (` - `), and
+   a semicolon used in place of one (` ; `). Use a period, comma,
+   colon, parentheses, or a restructured phrasing. Plain hyphens stay
+   fine in compound words (`AI-first`), CLI flags (`--http2`),
+   filenames, and ranges. Semicolons stay fine inside code.
 
 ## Workflow expectations for AI agents
 
-1. Branch before editing — never push to `main` directly.
+1. Branch before editing. Never push to `main` directly.
 2. Every code change comes with: unit test(s), AGENTS.md / docs updates if
    the feature surface changed, `webjs check` passing.
 3. Commit and push after each logical unit. No AI attribution trailers.
