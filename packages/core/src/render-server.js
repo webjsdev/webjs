@@ -229,12 +229,17 @@ async function renderTemplate(tr, ctx) {
 async function injectDSD(html, ctx) {
   const tags = allTags();
   if (!tags.length) return html;
+  // Sort longest tag name first so the regex alternation tries the most
+  // specific match before its prefixes. Combined with the (?=[\s>/])
+  // lookahead this prevents `my-card` from spuriously matching the prefix
+  // of `<my-card-2>` (or `slot-ssr-1` matching `<slot-ssr-14>`, etc).
   // Attribute section is "anything that isn't `>`, with quoted values as a
   // single unit" so slashes in URL-valued attrs (e.g. then="/dashboard") don't
   // prevent the match. Non-greedy so self-closing `/>` still captures into the
   // third group.
+  const sortedTags = [...tags].sort((a, b) => b.length - a.length);
   const pattern = new RegExp(
-    `<(${tags.map(escapeRegex).join('|')})((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
+    `<(${sortedTags.map(escapeRegex).join('|')})(?=[\\s>/])((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
     'g'
   );
   /** @type {{start:number, end:number, text:string}[]} */
@@ -254,28 +259,83 @@ async function injectDSD(html, ctx) {
       applyAttrsToInstance(instance, attrMap, Cls);
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
-      // Render the template to HTML, then recursively inject DSD for
-      // any nested custom elements (e.g. <theme-toggle> inside <blog-shell>).
+      // Render the template to HTML. injectDSD recurses on the result so
+      // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
+      // get their own DSD pass.
       const rawInner = await render(tpl, ctx);
-      const inner = await injectDSD(rawInner, ctx);
 
       if (isShadow) {
-        // Shadow DOM: wrap in Declarative Shadow DOM template
-        /** @type {any} */
+        // Shadow DOM: native <slot> stays as-is in the DSD template. The
+        // browser handles projection from the host's light-DOM children
+        // into the shadow tree natively. No framework substitution here.
+        const innerProcessed = await injectDSD(rawInner, ctx);
         const rawStyles = /** @type any */ (Cls).styles;
         const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
         const styleStr = stylesToString(styleList);
         edits.push({
           start: m.index,
           end: m.index + match.length,
-          text: `${opening}<template shadowrootmode="open">${styleStr}${inner}</template>`,
+          text: `${opening}<template shadowrootmode="open">${styleStr}${innerProcessed}</template>`,
         });
       } else {
-        // Light DOM: render content directly as children, add hydration marker
+        // Light DOM. When the component has a non-empty rendered template,
+        // run the slot pipeline so behaviour matches shadow DOM: authored
+        // children are visible only where projected through <slot>; any
+        // child without a matching slot is dropped.
+        //
+        // When rendered template is empty (Base-extending decorator
+        // components that have no render() method, or render() that
+        // returns an empty template), the host acts as a transparent
+        // wrapper: authored children stay in place adjacent to the
+        // (empty) hydration marker. This preserves the kit's
+        // decorator-pattern components (those extending Base from the
+        // ui package's lib/utils.ts) without forcing a render() rewrite.
+        const renderedIsEmpty = rawInner.trim() === '';
+        if (renderedIsEmpty) {
+          edits.push({
+            start: m.index,
+            end: m.index + match.length,
+            text: `${opening}<!--webjs-hydrate-->`,
+          });
+          continue;
+        }
+        //
+        // 1. Find the matching closing tag in the source HTML (depth-
+        //    tracked for nested same-tag elements).
+        // 2. Extract authored inner HTML, partition by slot="" attr.
+        // 3. Substitute each <slot> in the rendered output with a
+        //    framework-marked <slot data-webjs-light data-projection
+        //    ="actual|fallback"> element carrying projection or
+        //    fallback content per first-wins rule.
+        // 4. Recursively run injectDSD on the substituted output so
+        //    nested custom elements (inside projected children) get
+        //    their own DSD pass.
+        let authoredInner = '';
+        let closeEnd = m.index + match.length;
+        if (!selfClose) {
+          const innerStart = m.index + match.length;
+          const closeIdx = findClosingTagInString(html, innerStart, tag);
+          if (closeIdx !== -1) {
+            authoredInner = html.slice(innerStart, closeIdx);
+            const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
+            const tail = html.slice(closeIdx);
+            const closeMatch = closeRe.exec(tail);
+            const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
+            closeEnd = closeIdx + closeLen;
+          } else {
+            // Unclosed in source. Take rest of html as authored content
+            // and synthesize a closing tag on output.
+            authoredInner = html.slice(innerStart);
+            closeEnd = html.length;
+          }
+        }
+        const partitioned = partitionAuthoredBySlot(authoredInner);
+        const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
+        const innerProcessed = await injectDSD(innerWithSlots, ctx);
         edits.push({
           start: m.index,
-          end: m.index + match.length,
-          text: `${opening}<!--webjs-hydrate-->${inner}`,
+          end: closeEnd,
+          text: `${opening}<!--webjs-hydrate-->${innerProcessed}</${tag}>`,
         });
       }
     } catch (e) {
@@ -283,13 +343,252 @@ async function injectDSD(html, ctx) {
     }
   }
   if (!edits.length) return html;
-  // Apply edits from last to first to keep indices stable.
+
+  // Drop edits whose range lives inside an earlier edit's range. This
+  // happens when an outer custom element with <slot> in its render takes
+  // an edit that spans its opening + closing tags (covering inner custom
+  // elements among authored children); the inner matches were enumerated
+  // independently against the original html, but those inner elements
+  // are processed by the recursive injectDSD call on innerWithSlots.
+  // Keeping both edits would double-process them and corrupt the output.
+  edits.sort((a, b) => a.start - b.start);
+  /** @type {{start:number, end:number, text:string}[]} */
+  const filtered = [];
+  let consumedTo = -1;
+  for (const e of edits) {
+    if (e.start >= consumedTo) {
+      filtered.push(e);
+      consumedTo = e.end;
+    }
+  }
+  // Apply edits from last to first so indices stay stable.
   let out = html;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const { start, end, text } = edits[i];
+  for (let i = filtered.length - 1; i >= 0; i--) {
+    const { start, end, text } = filtered[i];
     out = out.slice(0, start) + text + out.slice(end);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Slot SSR helpers
+// ---------------------------------------------------------------------------
+
+const VOID_ELEMENTS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+/** @param {string} tag @returns {boolean} */
+function isVoidElement(tag) {
+  return VOID_ELEMENTS.has(tag.toLowerCase());
+}
+
+/**
+ * Find the position of the matching closing tag for `tagName` starting
+ * from `fromIndex` in `html`. Handles nested same-tag elements via depth
+ * tracking. Returns the index of the `<` of `</tagName>`, or -1 if
+ * unclosed.
+ *
+ * @param {string} html
+ * @param {number} fromIndex
+ * @param {string} tagName
+ * @returns {number}
+ */
+function findClosingTagInString(html, fromIndex, tagName) {
+  const esc = escapeRegex(tagName);
+  // Match same-name opening tags. Followed by a name-boundary character
+  // so we don't accept <table> as opening <tab>.
+  const openRe = new RegExp(`<${esc}(?:[\\s>/])`, 'gi');
+  const closeRe = new RegExp(`</${esc}\\s*>`, 'gi');
+  openRe.lastIndex = fromIndex;
+  closeRe.lastIndex = fromIndex;
+  let depth = 1;
+  while (depth > 0) {
+    const o = openRe.exec(html);
+    const c = closeRe.exec(html);
+    if (!c) return -1;
+    if (o && o.index < c.index) {
+      depth++;
+      closeRe.lastIndex = o.index + 1;
+    } else {
+      depth--;
+      if (depth === 0) return c.index;
+      openRe.lastIndex = c.index + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Extract the `slot` attribute value from an attribute string. Returns
+ * null when the attribute is absent.
+ *
+ * @param {string} attrsRaw
+ * @returns {string | null}
+ */
+function extractSlotAttr(attrsRaw) {
+  const m = /\bslot\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
+  if (!m) return null;
+  const value = m[1] ?? m[2] ?? m[3] ?? '';
+  // Per shadow DOM spec, slot="" (empty) and missing slot attribute
+  // both route to the default slot.
+  return value === '' ? null : value;
+}
+
+/**
+ * Partition authored inner HTML by each top-level child's `slot=""`
+ * attribute. Text nodes, comment nodes, and elements without `slot=""`
+ * all route to the default-slot key (null).
+ *
+ * Returns a Map keyed by slot name (null for default) whose values are
+ * the concatenated HTML strings for that slot in source order.
+ *
+ * @param {string} html
+ * @returns {Map<string|null, string>}
+ */
+function partitionAuthoredBySlot(html) {
+  /** @type {Map<string|null, string>} */
+  const groups = new Map();
+  let defaultBuf = '';
+  let cursor = 0;
+  while (cursor < html.length) {
+    const lt = html.indexOf('<', cursor);
+    if (lt === -1) {
+      defaultBuf += html.slice(cursor);
+      break;
+    }
+    if (lt > cursor) defaultBuf += html.slice(cursor, lt);
+    const rest = html.slice(lt);
+    if (rest.startsWith('<!--')) {
+      const end = html.indexOf('-->', lt + 4);
+      if (end === -1) {
+        defaultBuf += rest;
+        cursor = html.length;
+        break;
+      }
+      defaultBuf += html.slice(lt, end + 3);
+      cursor = end + 3;
+      continue;
+    }
+    if (rest.startsWith('<!') || rest.startsWith('</')) {
+      const end = html.indexOf('>', lt);
+      if (end === -1) {
+        defaultBuf += rest;
+        cursor = html.length;
+        break;
+      }
+      defaultBuf += html.slice(lt, end + 1);
+      cursor = end + 1;
+      continue;
+    }
+    const tagMatch = /^<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/.exec(rest);
+    if (!tagMatch) {
+      defaultBuf += '<';
+      cursor = lt + 1;
+      continue;
+    }
+    const [tagFull, tagName, attrsRaw, selfCloseSlash] = tagMatch;
+    const lower = tagName.toLowerCase();
+    const isSelfClose = !!selfCloseSlash || isVoidElement(lower);
+    const slotAttr = extractSlotAttr(attrsRaw);
+    let elemEnd;
+    if (isSelfClose) {
+      elemEnd = lt + tagFull.length;
+    } else {
+      const innerStart = lt + tagFull.length;
+      const closeIdx = findClosingTagInString(html, innerStart, lower);
+      if (closeIdx === -1) {
+        // Unclosed element. Take to end of html.
+        const elementHTML = html.slice(lt);
+        if (slotAttr !== null) appendStringToMap(groups, slotAttr, elementHTML);
+        else defaultBuf += elementHTML;
+        cursor = html.length;
+        continue;
+      }
+      const closeRe = new RegExp(`</${escapeRegex(lower)}\\s*>`, 'i');
+      const tail = html.slice(closeIdx);
+      const closeMatch = closeRe.exec(tail);
+      const closeLen = closeMatch ? closeMatch[0].length : `</${lower}>`.length;
+      elemEnd = closeIdx + closeLen;
+    }
+    const elementHTML = html.slice(lt, elemEnd);
+    if (slotAttr !== null) appendStringToMap(groups, slotAttr, elementHTML);
+    else defaultBuf += elementHTML;
+    cursor = elemEnd;
+  }
+  if (defaultBuf.length > 0) groups.set(null, defaultBuf);
+  return groups;
+}
+
+/** Append a string to a Map<K, string>, concatenating if the key exists. */
+function appendStringToMap(map, key, value) {
+  const existing = map.get(key);
+  if (existing !== undefined) map.set(key, existing + value);
+  else map.set(key, value);
+}
+
+/**
+ * Substitute every `<slot>` tag in `rendered` with a framework-marked
+ * `<slot data-webjs-light data-projection="actual|fallback">` element
+ * carrying either the projected children for that slot (from
+ * `partitioned`) or the slot's authored fallback content. Multiple
+ * slots with the same name follow the first-wins rule per spec; later
+ * same-named slots fall back regardless of available projection.
+ *
+ * @param {string} rendered
+ * @param {Map<string|null, string>} partitioned
+ * @returns {string}
+ */
+function substituteSlotsInRender(rendered, partitioned) {
+  /** @type {Set<string|null>} */
+  const consumedNames = new Set();
+  let result = '';
+  let cursor = 0;
+  const slotRe = /<slot((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/gi;
+  let m;
+  while ((m = slotRe.exec(rendered)) !== null) {
+    result += rendered.slice(cursor, m.index);
+    const [fullOpen, attrsRaw, selfCloseSlash] = m;
+    const isSelfClose = !!selfCloseSlash;
+    const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
+    const name = nameMatch ? (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]) : null;
+    // Strip the `name` attribute from the carried-through attribute
+    // string so we can re-add it (with escaping) on the framework slot.
+    const otherAttrs = attrsRaw.replace(/\bname\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '').trim();
+    let fallback = '';
+    let totalEnd;
+    if (isSelfClose) {
+      totalEnd = m.index + fullOpen.length;
+    } else {
+      const innerStart = m.index + fullOpen.length;
+      const closeIdx = findClosingTagInString(rendered, innerStart, 'slot');
+      if (closeIdx === -1) {
+        fallback = rendered.slice(innerStart);
+        totalEnd = rendered.length;
+      } else {
+        fallback = rendered.slice(innerStart, closeIdx);
+        const closeRe = /<\/slot\s*>/i;
+        const tail = rendered.slice(closeIdx);
+        const closeMatch = closeRe.exec(tail);
+        const closeLen = closeMatch ? closeMatch[0].length : '</slot>'.length;
+        totalEnd = closeIdx + closeLen;
+      }
+    }
+    const projected = partitioned.get(name);
+    const nameAttr = name !== null ? ` name="${escapeAttr(name)}"` : '';
+    const extraAttrs = otherAttrs ? ` ${otherAttrs}` : '';
+    if (projected !== undefined && !consumedNames.has(name)) {
+      consumedNames.add(name);
+      result += `<slot data-webjs-light data-projection="actual"${nameAttr}${extraAttrs}>${projected}</slot>`;
+    } else {
+      result += `<slot data-webjs-light data-projection="fallback"${nameAttr}${extraAttrs}>${fallback}</slot>`;
+    }
+    cursor = totalEnd;
+    slotRe.lastIndex = totalEnd;
+  }
+  result += rendered.slice(cursor);
+  return result;
 }
 
 /** @param {string} s */

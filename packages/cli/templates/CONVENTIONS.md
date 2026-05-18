@@ -448,7 +448,7 @@ registered webjs elements).
 
 **Rules:**
 - One component per file
-- **Light DOM by default.** Opt in to shadow DOM with `static shadow = true` when you need scoped styles, `<slot>` projection, or third-party-embed isolation.
+- **Light DOM by default.** Opt in to shadow DOM with `static shadow = true` when you need scoped styles (via `static styles = css\`...\``) or third-party-embed isolation. `<slot>` projection works identically in both modes (named slots, fallback content, `assignedNodes` / `slotchange`, first-wins resolution), so slot usage alone is never a reason to opt into shadow DOM.
 - Prefer Tailwind utility classes for styling. They're unique by construction (`p-4`, `font-semibold`) so they can't collide across components.
 - **If a light-DOM component authors its own custom CSS (a `<style>` block in `render()` or an imported stylesheet), every class selector MUST be prefixed with the component's tag name.** Either pattern works. Pick one and stay consistent:
   - `.my-widget__body`, `.my-widget__title` (BEM-ish)
@@ -469,7 +469,7 @@ registered webjs elements).
 |---|---|---|
 | Global / Tailwind CSS, simple composition | **Light DOM** (default) | Write `class="..."` in your template. Plain children, global styles apply. |
 | Scoped styles via `static styles = css\`\`` | Shadow DOM | Set `static shadow = true`. `adoptedStyleSheets` scopes bare selectors. |
-| `<slot>` content projection | Shadow DOM | Slots only work inside shadow roots. |
+| `<slot>` content projection | **Either** | Same `<slot>` / `<slot name="x">` / fallback / `assignedNodes` / `slotchange` API in both modes. Light DOM uses framework projection; shadow DOM uses native browser projection. |
 | Third-party embed isolation | Shadow DOM | CSS can't leak in or out. |
 
 **Light DOM** = the component renders as plain HTML. Global CSS and
