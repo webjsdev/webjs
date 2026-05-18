@@ -460,7 +460,7 @@ Light DOM is default because global CSS and Tailwind classes apply directly.
 |---|---|
 | Global / Tailwind CSS, simple composition | **Light DOM** (default) |
 | `static styles = css\`\`` scoped styles | Shadow DOM (`static shadow = true`) |
-| `<slot>` content projection | Shadow DOM (slots require shadow root) |
+| `<slot>` content projection | **Either.** Same `<slot>` / `<slot name="x">` / fallback / `assignedNodes` / `slotchange` API in both modes. Light DOM uses framework projection; shadow DOM uses native. |
 | Third-party isolation | Shadow DOM |
 
 **Light-DOM CSS-prefix rule (invariant):** if a light-DOM component

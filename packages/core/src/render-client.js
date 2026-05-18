@@ -2,6 +2,16 @@ import { isTemplate, MARKER } from './html.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
 import { isUnsafeHTML, isLive } from './directives.js';
+import {
+  LIGHT_SLOT_ATTR,
+  PROJECTION_ATTR,
+  PROJECTION_FALLBACK,
+  SLOT_FALLBACK_FRAG,
+  SLOT_STATE,
+  scheduleProjection,
+  moveSlotChildrenToPending,
+  ensureSlotState,
+} from './slot.js';
 
 /**
  * Client-side renderer with **fine-grained** updates.
@@ -35,7 +45,7 @@ const INSTANCE = Symbol.for('webjs.instance');
 
 /**
  * @typedef {{
- *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'noop',
+ *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'slot' | 'noop',
  *   path: number[],
  *   name?: string,
  *   statics?: string[],
@@ -57,6 +67,8 @@ const INSTANCE = Symbol.for('webjs.instance');
  *   | { kind: 'event', el: Element, name: string, handler: ((e: Event) => void) | null, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
+ *   | { kind: 'slot', slotEl: HTMLSlotElement, applied: boolean }
+ *   | { kind: 'noop' }
  * } BoundPart
  */
 
@@ -315,12 +327,60 @@ function compile(tr) {
   const templateEl = document.createElement('template');
   templateEl.innerHTML = html;
 
+  // Mark every <slot> in the template for framework projection and
+  // register a SLOT part for each so projectChildren can find them on
+  // clones. This runs BEFORE assignPaths so the sentinel attributes the
+  // discovery step adds are picked up in the same path-recording walk.
+  discoverSlots(templateEl.content, parts);
+
   // Walk the parsed fragment and record DOM paths for each part.
   assignPaths(templateEl.content, parts);
 
   cached = { templateEl, parts };
   templateCache.set(strings, cached);
   return cached;
+}
+
+/**
+ * Walk the compiled template content for <slot> elements (the static ones
+ * written into the template, not dynamically-inserted ones). For each:
+ *   1. Add the `data-webjs-light` attribute so slot.js's polyfilled APIs
+ *      recognise it as a framework-managed light-DOM slot.
+ *   2. Add a sentinel attribute (`data-MARKER<idx>`) so the subsequent
+ *      assignPaths walk records the slot's path into the new SLOT part.
+ *   3. Move the slot's authored children into a `fallbackTemplate`
+ *      DocumentFragment stored on the PartDescriptor. The slot in the
+ *      cached template becomes empty, so every clone starts empty too.
+ *      bindPart clones a fresh fallback fragment per instance from this
+ *      template, giving each instance an independent fallback supply
+ *      that slot.js swaps in via the SLOT_FALLBACK_FRAG symbol.
+ *
+ *   Fallback content with template holes (`<slot>fallback ${x}</slot>`)
+ *   is captured as a static-HTML snapshot of the template state at
+ *   compile time. Dynamic holes inside fallback content are not
+ *   re-bound per instance in v1; authors should put dynamic content
+ *   outside the slot.
+ *
+ * @param {DocumentFragment} root
+ * @param {PartDescriptor[]} parts
+ */
+function discoverSlots(root, parts) {
+  const slots = root.querySelectorAll('slot');
+  for (const slot of slots) {
+    slot.setAttribute(LIGHT_SLOT_ATTR, '');
+    const partIdx = parts.length;
+    slot.setAttribute(`data-${MARKER}${partIdx}`, '');
+    parts.push({ kind: 'slot', path: [] });
+  }
+  // NOTE: fallback content stays IN the slot's children in the cached
+  // template. Each clone gets its own copy. For shadow-DOM components,
+  // native browser projection uses those children as fallback content
+  // when no light child matches. For light-DOM components, the slot's
+  // apply step (run after the cloned template is in the live tree)
+  // moves the cloned fallback into a per-instance holding fragment
+  // owned by slot.js, so the slot is empty and ready to receive
+  // projected children. Doing the strip at apply time, not at compile
+  // time, lets a single cached template serve both DOM modes.
 }
 
 /**
@@ -394,6 +454,15 @@ function createInstance(tr, container) {
   }
 
   /** @type any */ (container).replaceChildren(startNode, ...frag.childNodes, endNode);
+
+  // Slot parts have no value-hole to drive applyPart from the loop above.
+  // Apply them once now that the fragment is inserted into the live
+  // container, so each slot can locate its host by walking parents and
+  // schedule the first projection through slot.js.
+  for (const part of bound) {
+    if (part.kind === 'slot') applyPart(part, undefined, undefined, []);
+  }
+
   return { strings: tr.strings, bound, lastValues, startNode, endNode };
 }
 
@@ -427,6 +496,15 @@ function bindPart(p, root) {
   if (p.kind === 'attr-mixed') return { kind: 'attr-mixed', el, name: p.name || '', statics: p.statics || [], group: p.group || [] };
   if (p.kind === 'prop') return { kind: 'prop', el, name: p.name || '' };
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
+  if (p.kind === 'slot') {
+    const slotEl = /** @type {HTMLSlotElement} */ (el);
+    // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
+    // time so we know whether the slot is light or shadow at the point
+    // where the decision matters. At bind time the cloned slot still
+    // holds its fallback content from the template clone; we just
+    // record the slot ref.
+    return { kind: 'slot', slotEl, applied: false };
+  }
   throw new Error(`unknown part kind ${/** @type any */(p).kind}`);
 }
 
@@ -448,9 +526,15 @@ function updateInstance(inst, values) {
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
 function clearInstance(inst, container) {
-  // Dispose event listeners on event parts.
+  // Dispose event listeners on event parts and rescue any projected
+  // children sitting inside slot parts so they survive teardown of a
+  // collapsing conditional fragment.
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'slot') {
+      const host = findSlotHost(p.slotEl);
+      if (host) moveSlotChildrenToPending(host, p.slotEl);
+    }
   }
   /** @type any */ (container).replaceChildren();
 }
@@ -505,10 +589,87 @@ function applyPart(part, value, _prev, allValues) {
       part.el.setAttribute(part.name, val);
       break;
     }
+    case 'slot': {
+      // Slot parts have no template-hole value to apply. The "apply" is
+      // a one-shot trigger that runs after the template fragment has
+      // been inserted into the host's render root. At this point the
+      // slot's parent chain reveals whether it lives inside a shadow
+      // root (browser native projection) or in light DOM (framework
+      // projection). For shadow-DOM slots we leave the cloned fallback
+      // in place. For light-DOM slots we move the fallback into a
+      // per-slot holding fragment owned by slot.js (via the
+      // SLOT_FALLBACK_FRAG symbol) so the slot can receive projected
+      // children, and we kick off projection.
+      //
+      // For NESTED templates (a slot inside `${cond ? html`<slot/>` : ''}`),
+      // the slot's parent chain at first apply may still lead through
+      // an unattached fragment. findSlotHost returns null then; we
+      // retry on the next microtask, by which point the outer's
+      // replaceChildren has placed the entire tree into the host.
+      if (part.applied) break;
+      const slotEl = part.slotEl;
+      const finalize = () => {
+        part.applied = true;
+        const host = findSlotHost(slotEl);
+        if (!host) return; // truly orphan slot
+        // Shadow DOM: native projection. Leave fallback in place.
+        if (isInShadowRootEl(slotEl)) return;
+        // Light DOM: harvest the cloned fallback into a holding
+        // fragment, then trigger projection.
+        const frag = document.createDocumentFragment();
+        while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
+        /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
+        scheduleProjection(host);
+      };
+      const directHost = findSlotHost(slotEl);
+      if (directHost) {
+        finalize();
+      } else {
+        queueMicrotask(finalize);
+      }
+      break;
+    }
     case 'noop':
       // intentionally empty: used for holes inside HTML comments
       break;
   }
+}
+
+/**
+ * Walk a slot element's parent chain looking for a WebComponent host
+ * (an element that has slot state initialised). Used by the slot-part's
+ * apply and teardown steps to coordinate with slot.js.
+ *
+ * @param {HTMLSlotElement} slotEl
+ * @returns {Element | null}
+ */
+function findSlotHost(slotEl) {
+  let p = slotEl.parentElement;
+  while (p) {
+    if (/** @type any */ (p)[SLOT_STATE]) return p;
+    p = p.parentElement;
+  }
+  return null;
+}
+
+/**
+ * True when an element is inside a shadow root (so native browser slot
+ * projection applies). Mirrors slot.js's helper; duplicated here to
+ * avoid the round trip through the slot.js public surface for this
+ * hot path.
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isInShadowRootEl(el) {
+  let n = /** @type {Node} */ (el);
+  for (let depth = 0; depth < 128; depth++) {
+    const parent = n.parentNode;
+    if (!parent) return false;
+    if (parent === n) return false;
+    if (/** @type any */ (parent).host) return true;
+    n = parent;
+  }
+  return false;
 }
 
 /**
@@ -589,6 +750,14 @@ function applyChild(part, value) {
     }
     const nodes = [startNode, ...frag.childNodes, endNode];
     marker.parentNode?.insertBefore(nodesToFrag(nodes), marker);
+    // Slot parts in this nested template need their one-shot apply just
+    // like createInstance does for top-level templates. The slot is now
+    // in the live tree (insertBefore above) so its parent walk can
+    // reach the host. Without this loop, conditional / nested templates
+    // with <slot> inside never trigger projection.
+    for (const p of bound) {
+      if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
+    }
     part.child = { strings: tr.strings, bound, lastValues, startNode, endNode };
     return;
   }

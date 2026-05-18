@@ -292,9 +292,10 @@ class MyCard extends WebComponent {
     <p>Set <code>static shadow = true</code> when you want one of these:</p>
     <ul>
       <li>Scoped styles via <code>static styles = css\`...\`</code> (adopted via <code>adoptedStyleSheets</code>) without prefix discipline.</li>
-      <li><code>&lt;slot&gt;</code> content projection with the full slot semantics (<code>::slotted</code>, named slots).</li>
+      <li><code>::slotted()</code> CSS selectors from inside the shadow tree, since the native browser projection is what makes them work.</li>
       <li>Third-party embed isolation: your component looks right in any host page, regardless of their CSS.</li>
     </ul>
+    <p><strong>Slots themselves are NOT a reason to opt into shadow DOM.</strong> <code>&lt;slot&gt;</code>, <code>&lt;slot name="x"&gt;</code>, fallback content, <code>assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, <code>slotchange</code>, named-slot routing, and first-wins resolution all work identically in light DOM (the framework's default). See the <strong>Slots</strong> section below for the full surface.</p>
 
     <pre>class Card extends WebComponent {
   static shadow = true;                 // opt in
@@ -310,7 +311,7 @@ class MyCard extends WebComponent {
     \`;
   }
 }
-Card.register('my-card');
+Card.register('my-card');</pre>
 
     <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
 
@@ -324,7 +325,7 @@ Card.register('my-card');
       <tbody>
         <tr><td>Global / Tailwind utility classes, simple composition</td><td><strong>Light DOM</strong> (default)</td><td>Utilities apply directly. No host plumbing.</td></tr>
         <tr><td><code>static styles = css\`\`</code> scoped styles</td><td>Shadow DOM</td><td><code>adoptedStyleSheets</code> needs a shadow root.</td></tr>
-        <tr><td><code>&lt;slot&gt;</code> content projection</td><td>Shadow DOM</td><td>Slots only exist inside shadow roots.</td></tr>
+        <tr><td><code>&lt;slot&gt;</code> content projection</td><td><strong>Either</strong></td><td>Full shadow-DOM spec parity in light DOM. Same <code>&lt;slot&gt;</code> / <code>&lt;slot name="x"&gt;</code> / fallback / <code>assignedNodes</code> / <code>slotchange</code> in both modes.</td></tr>
         <tr><td>Third-party embed needing isolation</td><td>Shadow DOM</td><td>CSS can't leak in or out.</td></tr>
       </tbody>
     </table>
@@ -395,7 +396,7 @@ class Cart extends WebComponent {
     <p>This is the design rule that makes <a href="/docs/progressive-enhancement">progressive enhancement</a> work in webjs: the component's HTML lands in the response, with the right content, before any script runs.</p>
 
     <h2>Slots: Content Projection</h2>
-    <p>Slots are how a parent passes content into a shadow DOM component. If you are coming from React, think of the default slot as <code>children</code>.</p>
+    <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>webjs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>
 
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
@@ -781,8 +782,8 @@ ChatBox.register('chat-box');</pre>
       <li><strong>State</strong>: use <code>this.setState({...})</code> for shallow merge + batched re-render.</li>
       <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
-      <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots. Shadow DOM only.</li>
-      <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles, slot projection, or third-party embed isolation.</li>
+      <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>
+      <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles (<code>static styles = css\`...\`</code>) or third-party embed isolation.</li>
       <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
       <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
       <li><strong>SSR</strong>: components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>

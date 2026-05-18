@@ -1,6 +1,14 @@
 import { render as clientRender } from './render-client.js';
 import { isCSS, adoptStyles } from './css.js';
 import { register, tagOf } from './registry.js';
+import {
+  captureAuthoredChildren,
+  adoptSSRAssignments,
+  attachSlotObservers,
+  detachSlotObservers,
+  ensureSlotState,
+  hasSlotState,
+} from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
 
@@ -381,6 +389,35 @@ export class WebComponent extends Base {
           `For light DOM, use global CSS or <style> in render().`
         );
       }
+      // Light-DOM slot lifecycle phase one. Three sub-paths:
+      //
+      // a. Reconnection. Slot state already exists from a prior mount.
+      //    The host still carries the rendered template DOM (plus
+      //    projected children) from before the disconnect. Skip
+      //    capture (would wrongly hoover up rendered nodes) and skip
+      //    SSR adoption. clientRender will see the existing INSTANCE
+      //    and updateInstance instead of recreating; the DOM stays.
+      //
+      // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
+      //    present). Children are already projected into
+      //    <slot data-webjs-light data-projection="actual"> elements
+      //    by injectDSD. Adopt those assignments BEFORE _performRender
+      //    so we retain references to the SSR'd nodes; the renderer's
+      //    createInstance().replaceChildren() will detach them, but
+      //    projection re-attaches by moving the same Node refs into
+      //    the freshly-cloned slot. DOM identity preserved through the
+      //    hydration round-trip.
+      //
+      // c. First mount, no SSR. Move authored children into the
+      //    assignment table before _performRender wipes the host.
+      if (hasSlotState(this)) {
+        // (a) Reconnection. State already populated; nothing to do here.
+      } else if (this.__isHydrating()) {
+        ensureSlotState(this);
+        adoptSSRAssignments(this);
+      } else {
+        captureAuthoredChildren(this);
+      }
     }
 
     // Notify all controllers that the host is connected.
@@ -393,6 +430,38 @@ export class WebComponent extends Base {
     // light DOM, existing shadow root for shadow DOM) and hydrates
     // instead of replacing: binding events without touching the DOM.
     this._performRender();
+
+    // Light-DOM slot lifecycle phase two. With the rendered template
+    // (and therefore the live <slot> elements) now in the DOM, attach
+    // mutation observers so future authored-child mutations and
+    // slot-name changes drive incremental projection. Adoption of
+    // SSR-placed assignments has already happened in phase one (before
+    // _performRender) so the renderer's replaceChildren cannot destroy
+    // those nodes; projection moves them into the freshly-cloned slots.
+    if (this._renderRoot === this) {
+      attachSlotObservers(this);
+    }
+  }
+
+  /**
+   * True when this host's first child is the framework's hydration
+   * marker, meaning the SSR pipeline already rendered the template's
+   * shape (including <slot data-webjs-light> elements with their
+   * projected children inside) and the client should bind events
+   * without re-creating DOM. Sets __hydratedAtActivate as a side
+   * effect so the post-render path picks up the SSR assignment table.
+   *
+   * @returns {boolean}
+   * @private
+   */
+  __isHydrating() {
+    const first = this.firstChild;
+    const isHydrate =
+      first != null &&
+      first.nodeType === 8 &&
+      /** @type {Comment} */ (first).data === 'webjs-hydrate';
+    if (isHydrate) this.__hydratedAtActivate = true;
+    return isHydrate;
   }
 
 
@@ -411,6 +480,10 @@ export class WebComponent extends Base {
       this.__hydrationObserver.disconnect();
       this.__hydrationObserver = null;
     }
+    // Pause slot observers. The per-host state (assignment table,
+    // pending fragments, last snapshots) is preserved so a subsequent
+    // reconnection picks up where it left off.
+    if (this._renderRoot === this) detachSlotObservers(this);
     for (const c of this.__controllers) {
       if (c.onUnmount) c.onUnmount();
     }

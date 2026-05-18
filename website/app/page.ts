@@ -21,7 +21,8 @@ const STORY_URL = 'https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full
 const FEATURES = [
   { icon: '🤖', title: 'AI-First Development', desc: 'Designed from the ground up for AI agents. AGENTS.md contract, cross-agent guardrails (.cursorrules, .windsurfrules, copilot-instructions.md), auto-generated tests and docs, opinionated conventions: LLMs produce production-quality code without guesswork.' },
   { icon: '⚡', title: 'No Build Step', desc: 'Source files are served to the browser as native ES modules. Edit a .ts file, refresh, see it. No webpack, no Vite, no compile step. Auto-vendor bundling for npm packages via import maps.' },
-  { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class: html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles, <slot> projection, or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
+  { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class: html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
+  { icon: '🪟', title: '<slot> in Light DOM, Full Shadow-DOM Parity', desc: 'The complete <slot> surface in light DOM: named slots, fallback content, assignedNodes() / assignedElements() / assignedSlot, slotchange events, first-wins resolution, and {flatten: true} forwarding. The same render() template works whether static shadow is true or false, no rewrite when you switch modes. SSR projects authored children directly into the rendered HTML so progressive enhancement works with JS disabled.' },
   { icon: '🪜', title: 'Progressive Enhancement by Default', desc: 'Pages and every web component are SSR’d to real HTML: each component’s render() runs on the server, so its initial markup is in the response before any script loads. With JS disabled: content reads, <a> links navigate, <form> server actions submit, and display-only custom elements look right. JavaScript is opt-in per interactive behavior, not per component: a counter renders as "0" without JS: only the +/- click handling needs scripts. The HTML is the floor; @click and setState interactivity are layered on top.' },
   { icon: '💡', title: 'Editor Intelligence', desc: '@webjskit/ts-plugin gives VS Code and Neovim type-checked html`` templates, custom-element go-to-definition, attribute auto-complete from static properties, and silenced "Unknown tag" diagnostics for Class.register("tag") elements.' },
   { icon: '🎨', title: 'Tailwind CSS by Default', desc: 'The scaffold ships with the Tailwind browser runtime and @theme design tokens: color palette, font families, fluid type scale, and motion durations wired into Tailwind classes. Dedup repeated class bundles with small JS helpers in app/_utils/ui.ts that run at SSR time. Custom CSS still supported: no hard Tailwind dependency.' },
@@ -137,9 +138,10 @@ export default function LandingPage() {
         margin: 0 auto;
         padding: 0 var(--sp-5) var(--sp-8);
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: var(--sp-4);
       }
+      @media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
       .feature {
         padding: var(--sp-5);
         background: var(--bg-elev);

@@ -18,6 +18,7 @@ export default {
     'test/browser/light-dom-hydration.test.js',
     'test/browser/ui-stateful.test.js',
     'test/browser/ui-overlay.test.js',
+    'test/browser/slot.test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
