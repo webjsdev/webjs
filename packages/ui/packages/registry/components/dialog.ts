@@ -84,33 +84,35 @@ export const dialogContentClass = (): string =>
   'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none sm:max-w-lg';
 
 // --------------------------------------------------------------------------
-// Visibility CSS. The pre-hydration SSR pass renders <ui-dialog-content>
-// with the host having no [open] attribute, so it must stay hidden until
-// JS upgrades. Once upgraded the native <dialog> takes over: it is
-// `display: none` while closed and `display: block` when showModal()
-// puts it in the top layer.
+// Pre-hydration paint fallback. Before the script upgrades the custom
+// elements, <ui-dialog-content> sits in normal flow and would flash
+// visible. The selector-based rules hide it until JS marks the host as
+// `[open]`. Custom-element display defaults (`display: inline`) also
+// need explicit values, which Tailwind cannot supply on tags the user
+// authors. Once upgraded, the native <dialog> wrapper takes over:
+// closed `<dialog>` is UA `display: none`, opened via showModal() is
+// `display: block` in the top layer. Everything specific to the native
+// <dialog> wrapper (background, border, padding reset; ::backdrop) is
+// applied via Tailwind classes on the dynamically-created element, see
+// NATIVE_DIALOG_CLASS below.
 // --------------------------------------------------------------------------
 
 const STYLES = `
 ui-dialog:not([open]) ui-dialog-content { display: none !important; }
 ui-dialog[open] { display: contents; }
 ui-dialog-content { display: grid; }
-ui-dialog dialog[data-slot="dialog-native"] {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  width: 0;
-  height: 0;
-  max-width: none;
-  max-height: none;
-  overflow: visible;
-  color: inherit;
-}
-ui-dialog dialog[data-slot="dialog-native"]::backdrop {
-  background: rgba(0, 0, 0, 0.5);
-}
 `;
+
+// Tailwind class string applied to the programmatic <dialog> element
+// in _wrap(). Replaces the prior ui-dialog dialog[...] CSS rule one
+// utility at a time:
+//   - border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none
+//     overflow-visible text-inherit  clears the UA defaults so the
+//     <dialog> itself becomes an invisible top-layer host; the visible
+//     box is rendered by <ui-dialog-content> with dialogContentClass.
+//   - backdrop:bg-black/50  styles the `::backdrop` pseudo-element via
+//     the Tailwind 4 `backdrop:` variant.
+const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;
@@ -224,6 +226,7 @@ export class UiDialog extends Base {
     } else {
       const dlg = document.createElement('dialog');
       dlg.setAttribute('data-slot', 'dialog-native');
+      dlg.className = NATIVE_DIALOG_CLASS;
       content.replaceWith(dlg);
       dlg.appendChild(content);
       this._native = dlg;
