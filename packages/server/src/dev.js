@@ -3,22 +3,30 @@ import { stat, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
-import { createRequire, register } from 'node:module';
+import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Route every server-side `.ts` import through esbuild: same transformer
-// as the dev server uses for browser-bound modules. Keeps SSR and hydration
-// output identical and supports the full TS feature set (enums, decorators,
-// parameter properties) that Node's built-in stripper rejects.
+// Server-side `.ts` imports are handled natively by Node 24+'s default
+// type-stripping (`process.features.typescript === 'strip'`). No loader
+// hook required. The browser-bound TypeScript request handler uses
+// `module.stripTypeScriptTypes` for the same transform, so SSR and
+// hydration produce identical JS.
 //
-// Registered before any user-app import. Idempotent across restarts.
-let _esbuildLoaderRegistered = false;
-function registerEsbuildLoader() {
-  if (_esbuildLoaderRegistered) return;
-  _esbuildLoaderRegistered = true;
-  register('./esbuild-loader.js', import.meta.url);
-}
-registerEsbuildLoader();
+// Suppress the one-shot ExperimentalWarning that Node prints the
+// first time `stripTypeScriptTypes` is called. The API is committed
+// per Node 24's release notes; the warning is a holdover. We keep
+// every other warning intact.
+const _origEmitWarning = process.emitWarning.bind(process);
+process.emitWarning = function (warning, type, code, ctor) {
+  const msg = warning && warning.message ? warning.message : String(warning);
+  if (
+    (type === 'ExperimentalWarning' || (warning && warning.name === 'ExperimentalWarning')) &&
+    msg.includes('stripTypeScriptTypes')
+  ) {
+    return;
+  }
+  return _origEmitWarning(warning, type, code, ctor);
+};
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
 import { ssrPage, ssrNotFound } from './ssr.js';
@@ -68,10 +76,23 @@ const MIME = {
 };
 
 /**
- * Cache of esbuild-transformed `.ts` / `.mts` source.
- * Keyed by absolute file path; entries expire when mtime changes.
+ * Cache of stripped `.ts` / `.mts` source.
+ * Keyed by absolute file path. Entries expire when mtime changes.
  * Capped at 500 entries to prevent unbounded memory growth in
  * long-running production servers.
+ *
+ * Primary stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
+ * Position-preserving whitespace replacement. No sourcemap is
+ * emitted because every (line, column) maps to itself in the source.
+ *
+ * Fallback stripper: `esbuild.transform`. Triggered only when the
+ * primary path throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (the file
+ * uses `enum`, `namespace`, parameter properties, or legacy
+ * decorators). Emits an inline sourcemap so DevTools can still
+ * resolve source positions for the regenerated JS. Mostly fires for
+ * third-party `.ts` files; user code is enforced erasable by
+ * `webjs check`.
+ *
  * @type {Map<string, { mtimeMs: number, code: string, map: string | null }>}
  */
 const TS_CACHE_MAX = 500;
@@ -765,15 +786,49 @@ async function exists(p) {
 }
 
 /**
- * Serve a `.ts` / `.mts` source file as JavaScript. Types are stripped via
- * esbuild's transform() (microseconds per file). Result is cached by mtime
- * so subsequent requests are instant; a file edit invalidates naturally.
+ * Strip TypeScript types from `source`, using Node's built-in
+ * `module.stripTypeScriptTypes` first (whitespace replacement,
+ * position-preserving, no sourcemap needed) and falling back to
+ * esbuild for files using non-erasable syntax (`enum`, `namespace`,
+ * parameter properties, legacy decorators).
+ *
+ * The framework's own code and the user's app code are kept on
+ * erasable TS by the `erasable-typescript-only` convention check.
+ * The fallback exists for third-party `.ts` files that the runtime
+ * occasionally needs to serve.
+ *
+ * @param {string} source
+ * @param {string} abs
+ * @returns {Promise<string>}
+ */
+async function stripTs(source, abs) {
+  try {
+    return stripTypeScriptTypes(source);
+  } catch (err) {
+    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
+      const { transform: esbuild } = await loadEsbuild();
+      const r = await esbuild(source, {
+        loader: 'ts',
+        format: 'esm',
+        target: 'es2022',
+        sourcemap: 'inline',
+        sourcefile: abs,
+      });
+      return r.code;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
+ * Result is cached by mtime so subsequent requests are instant; a
+ * file edit invalidates naturally.
  *
  * @param {string} abs
  * @param {boolean} dev
  */
 async function tsResponse(abs, dev) {
-  const { transform: esbuild } = await loadEsbuild();
   const st = await stat(abs);
   const cached = TS_CACHE.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
@@ -785,20 +840,14 @@ async function tsResponse(abs, dev) {
     });
   }
   const source = await readFile(abs, 'utf8');
-  const result = await esbuild(source, {
-    loader: abs.endsWith('.mts') ? 'ts' : 'ts',
-    format: 'esm',
-    target: 'es2022',
-    sourcemap: 'inline',
-    sourcefile: abs,
-  });
+  const code = await stripTs(source, abs);
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
     const oldest = TS_CACHE.keys().next().value;
     TS_CACHE.delete(oldest);
   }
-  TS_CACHE.set(abs, { mtimeMs: st.mtimeMs, code: result.code, map: null });
-  return new Response(result.code, {
+  TS_CACHE.set(abs, { mtimeMs: st.mtimeMs, code, map: null });
+  return new Response(code, {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
       'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
