@@ -471,6 +471,55 @@ describe('SSR edge cases', () => {
     assert.match(out, /<p>x<\/p><\/slot><hr\/?>/);
   });
 
+  test('Suspense fallback inside authored children projects into default slot', async () => {
+    const { Suspense } = await import('../packages/core/index.js');
+    class C extends WebComponent {
+      render() { return html`<article><slot></slot></article>`; }
+    }
+    C.register('slot-edge-suspense-1');
+    const asyncContent = new Promise((r) => setTimeout(() => r(html`<p>resolved</p>`), 5));
+    // Without a suspense ctx, the fallback is the rendered output.
+    const out = await renderToString(html`<slot-edge-suspense-1>${Suspense({ fallback: html`<i>wait</i>`, children: asyncContent })}</slot-edge-suspense-1>`);
+    // The fallback markup lands inside the slot via the partitioning step.
+    assert.match(out, /data-projection="actual"><i>wait<\/i><\/slot>/);
+  });
+
+  test('Suspense streaming places <webjs-boundary> inside the slot', async () => {
+    const { Suspense } = await import('../packages/core/index.js');
+    class C extends WebComponent {
+      render() { return html`<article><slot></slot></article>`; }
+    }
+    C.register('slot-edge-suspense-2');
+    const asyncContent = new Promise((r) => setTimeout(() => r(html`<p>resolved</p>`), 5));
+    const ctx = { pending: [], nextId: 0, usedComponents: new Set() };
+    const out = await renderToString(
+      html`<slot-edge-suspense-2>${Suspense({ fallback: html`<i>wait</i>`, children: asyncContent })}</slot-edge-suspense-2>`,
+      { suspenseCtx: ctx },
+    );
+    // <webjs-boundary id="s0"> wraps the fallback. The boundary lives
+    // INSIDE the projected slot, so when the resolved template streams
+    // in later (via the data-webjs-resolve script's replaceWith), the
+    // swap updates the slot's children in place. DOM identity for the
+    // wrapping <article> and surrounding slot stays stable.
+    assert.match(out, /data-projection="actual"><webjs-boundary id="s0"><i>wait<\/i><\/webjs-boundary><\/slot>/);
+    assert.equal(ctx.pending.length, 1, 'one pending suspense promise');
+  });
+
+  test('Suspense inside the component render output runs alongside slot projection', async () => {
+    const { Suspense } = await import('../packages/core/index.js');
+    class C extends WebComponent {
+      render() {
+        const async = new Promise((r) => setTimeout(() => r(html`<p>done</p>`), 5));
+        return html`<div><slot name="title"></slot><main><slot></slot>${Suspense({ fallback: html`<span>loading</span>`, children: async })}</main></div>`;
+      }
+    }
+    C.register('slot-edge-suspense-3');
+    const out = await renderToString(html`<slot-edge-suspense-3><h2 slot="title">T</h2><p>body</p></slot-edge-suspense-3>`);
+    assert.match(out, /name="title"><h2 slot="title">T<\/h2>/);
+    assert.match(out, /<main><slot[^>]*><p>body<\/p>/);
+    assert.match(out, /<span>loading<\/span>/);
+  });
+
   test('slot inside list-style render (manual loop, not repeat)', async () => {
     class C extends WebComponent {
       render() {
