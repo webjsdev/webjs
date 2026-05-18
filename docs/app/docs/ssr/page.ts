@@ -25,7 +25,7 @@ export default async function Home() {
   \`;
 }</pre>
 
-    <p>The dev server's esbuild loader hook transforms TypeScript on import, so the file above runs directly on the server with no manual compilation step.</p>
+    <p>Node 24+ strips TypeScript types natively when it imports a <code>.ts</code> file, so the file above runs directly on the server with no manual compilation step.</p>
 
     <h2>The SSR Pipeline</h2>
     <p>When the server receives a GET request for a page URL, the pipeline runs in this order:</p>
