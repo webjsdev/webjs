@@ -5,7 +5,7 @@ export const metadata = { title: 'Deployment | webjs' };
 export default function Deployment() {
   return html`
     <h1>Deployment</h1>
-    <p>webjs runs as a standard Node.js server. There is no static export, no serverless adapter, no edge runtime. Deploy it anywhere you can run Node 20.6+: a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal.</p>
+    <p>webjs runs as a standard Node.js server. There is no static export, no serverless adapter, no edge runtime. Deploy it anywhere you can run Node 24+ (the minimum is set by Node's built-in TypeScript type-stripping): a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal.</p>
 
     <h2>Dev vs Prod</h2>
     <p>webjs has two modes, controlled by the CLI command:</p>
@@ -271,10 +271,10 @@ pm2 start "webjs start" --name my-app</pre>
 
     <h2>Deployment Checklist</h2>
     <ul>
-      <li>Node 20.6+ installed (required for the esbuild loader hook).</li>
+      <li>Node 24+ installed (required for the built-in TypeScript type-stripping that the framework uses for both server-side imports and browser-bound <code>.ts</code> files).</li>
       <li><code>npm ci --omit=dev</code> to install only runtime dependencies.</li>
       <li>Run <code>npx prisma generate</code> if you use Prisma.</li>
-      <li>No build step. Source <code>.js</code> / <code>.ts</code> files are deployed as-is and transformed on first request.</li>
+      <li>No build step. Source <code>.js</code> / <code>.ts</code> files are deployed as-is. TypeScript types are stripped on first request via Node's built-in stripper (whitespace replacement, byte-exact positions, no sourcemap overhead) and cached by mtime.</li>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>

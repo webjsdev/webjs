@@ -50,8 +50,8 @@ export default function Routing() {
 
     <p>
       Files can use <code>.ts</code>, <code>.js</code>, <code>.mts</code>, or
-      <code>.mjs</code> extensions. TypeScript files run via the dev server's
-      esbuild loader hook, no build step required.
+      <code>.mjs</code> extensions. TypeScript files run via Node 24+'s
+      built-in type-stripping, no build step required.
     </p>
 
     <!-- ===== PAGES ===== -->
