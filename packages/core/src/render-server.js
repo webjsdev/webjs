@@ -278,59 +278,51 @@ async function injectDSD(html, ctx) {
           text: `${opening}<template shadowrootmode="open">${styleStr}${innerProcessed}</template>`,
         });
       } else {
-        // Light DOM. Two sub-paths.
-        const hasSlots = /<slot[\s>/]/i.test(rawInner);
-        if (!hasSlots) {
-          // Old path. No slot in the rendered template, so the SSR output
-          // keeps the historical shape: edit at the opening tag only,
-          // leave authored children adjacent to the rendered template,
-          // closing tag untouched. Nested custom elements in the source
-          // html are matched independently in the outer loop.
-          const innerProcessed = await injectDSD(rawInner, ctx);
-          edits.push({
-            start: m.index,
-            end: m.index + match.length,
-            text: `${opening}<!--webjs-hydrate-->${innerProcessed}`,
-          });
-        } else {
-          // Slot path. Extract the authored inner HTML from the source
-          // (between this element's opening and closing tags), partition
-          // it by slot="" attribute, substitute each <slot> tag in the
-          // rendered template with projected (or fallback) content, and
-          // emit one edit that spans the entire opening-to-closing range.
-          // The recursive injectDSD call walks the substituted output so
-          // nested custom elements inside projected children get their
-          // own DSD pass. Inner matches already enumerated for this
-          // element's authored span are dropped by the non-overlap
-          // filter below.
-          let authoredInner = '';
-          let closeEnd = m.index + match.length;
-          if (!selfClose) {
-            const innerStart = m.index + match.length;
-            const closeIdx = findClosingTagInString(html, innerStart, tag);
-            if (closeIdx !== -1) {
-              authoredInner = html.slice(innerStart, closeIdx);
-              const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
-              const tail = html.slice(closeIdx);
-              const closeMatch = closeRe.exec(tail);
-              const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
-              closeEnd = closeIdx + closeLen;
-            } else {
-              // Unclosed in source. Consume the rest as authored content
-              // and synthesize the closing tag on output.
-              authoredInner = html.slice(innerStart);
-              closeEnd = html.length;
-            }
+        // Light DOM. Always run the slot pipeline so behaviour matches
+        // shadow DOM regardless of whether the rendered template
+        // contains explicit <slot> elements. Authored children with no
+        // matching <slot> are dropped from output, matching shadow-DOM
+        // projection rules exactly: light children of a host are
+        // visible only if (and where) the component's render projects
+        // them through a slot.
+        //
+        // 1. Find the matching closing tag in the source HTML (depth-
+        //    tracked for nested same-tag elements).
+        // 2. Extract authored inner HTML, partition by slot="" attr.
+        // 3. Substitute each <slot> in the rendered output with a
+        //    framework-marked <slot data-webjs-light data-projection
+        //    ="actual|fallback"> element carrying projection or
+        //    fallback content per first-wins rule.
+        // 4. Recursively run injectDSD on the substituted output so
+        //    nested custom elements (inside projected children) get
+        //    their own DSD pass.
+        let authoredInner = '';
+        let closeEnd = m.index + match.length;
+        if (!selfClose) {
+          const innerStart = m.index + match.length;
+          const closeIdx = findClosingTagInString(html, innerStart, tag);
+          if (closeIdx !== -1) {
+            authoredInner = html.slice(innerStart, closeIdx);
+            const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
+            const tail = html.slice(closeIdx);
+            const closeMatch = closeRe.exec(tail);
+            const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
+            closeEnd = closeIdx + closeLen;
+          } else {
+            // Unclosed in source. Take rest of html as authored content
+            // and synthesize a closing tag on output.
+            authoredInner = html.slice(innerStart);
+            closeEnd = html.length;
           }
-          const partitioned = partitionAuthoredBySlot(authoredInner);
-          const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
-          const innerProcessed = await injectDSD(innerWithSlots, ctx);
-          edits.push({
-            start: m.index,
-            end: closeEnd,
-            text: `${opening}<!--webjs-hydrate-->${innerProcessed}</${tag}>`,
-          });
         }
+        const partitioned = partitionAuthoredBySlot(authoredInner);
+        const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
+        const innerProcessed = await injectDSD(innerWithSlots, ctx);
+        edits.push({
+          start: m.index,
+          end: closeEnd,
+          text: `${opening}<!--webjs-hydrate-->${innerProcessed}</${tag}>`,
+        });
       }
     } catch (e) {
       console.error(`[webjs] SSR failed for <${tag}>:`, e);
@@ -424,7 +416,10 @@ function findClosingTagInString(html, fromIndex, tagName) {
 function extractSlotAttr(attrsRaw) {
   const m = /\bslot\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
   if (!m) return null;
-  return m[1] ?? m[2] ?? m[3] ?? null;
+  const value = m[1] ?? m[2] ?? m[3] ?? '';
+  // Per shadow DOM spec, slot="" (empty) and missing slot attribute
+  // both route to the default slot.
+  return value === '' ? null : value;
 }
 
 /**

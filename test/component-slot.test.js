@@ -175,14 +175,17 @@ describe('SSR projection', () => {
     assert.ok(secondMatch && secondMatch.length === 1);
   });
 
-  test('component with no slot in render preserves old SSR shape', async () => {
+  test('component with no slot in render drops unprojected children (shadow-DOM parity)', async () => {
     class C extends WebComponent {
       render() { return html`<div class="rendered"></div>`; }
     }
     C.register('slot-ssr-14');
     const out = await renderToString(html`<slot-ssr-14><p>leftover</p></slot-ssr-14>`);
-    assert.match(out, /<!--webjs-hydrate--><div class="rendered"><\/div><p>leftover<\/p><\/slot-ssr-14>/);
-    assert.doesNotMatch(out, /data-webjs-light/);
+    // No <slot> in render means there's no projection target. Per shadow
+    // DOM rules, light children of the host are not visible without a
+    // matching slot. The framework now drops them from SSR output.
+    assert.match(out, /<!--webjs-hydrate--><div class="rendered"><\/div><\/slot-ssr-14>/);
+    assert.doesNotMatch(out, /<p>leftover<\/p>/);
   });
 
   test('attributes on slot beyond name pass through', async () => {
@@ -204,12 +207,284 @@ describe('SSR projection', () => {
       }
     }
     C.register('slot-ssr-16');
-    // Self-closing in source. The HTML parser still requires an explicit
-    // closing tag for non-void elements, but for SSR we exercise the
-    // "no authored content" path with an empty body.
     const out = await renderToString(html`<slot-ssr-16></slot-ssr-16>`);
     assert.match(out, /data-projection="fallback">FA<\/slot>/);
     assert.match(out, /data-projection="fallback"[^>]*name="x">FB<\/slot>/);
+  });
+});
+
+// =============================================================================
+// Block 1b. SSR edge-case coverage
+// =============================================================================
+
+describe('SSR edge cases', () => {
+  test('slot inside conditional ternary (true branch)', async () => {
+    class C extends WebComponent {
+      static properties = { expanded: { type: Boolean } };
+      constructor() { super(); this.expanded =true; }
+      render() {
+        return html`<div>${this.expanded ? html`<section><slot></slot></section>` : html`<p>hidden</p>`}</div>`;
+      }
+    }
+    C.register('slot-edge-cond-true');
+    const out = await renderToString(html`<slot-edge-cond-true expanded><b>visible</b></slot-edge-cond-true>`);
+    assert.match(out, /data-projection="actual"><b>visible<\/b><\/slot>/);
+  });
+
+  test('slot inside conditional ternary (false branch absent)', async () => {
+    class C extends WebComponent {
+      static properties = { expanded: { type: Boolean } };
+      constructor() { super(); this.expanded =false; }
+      render() {
+        return html`<div>${this.expanded ? html`<section><slot></slot></section>` : html`<p>hidden</p>`}</div>`;
+      }
+    }
+    C.register('slot-edge-cond-false');
+    const out = await renderToString(html`<slot-edge-cond-false><b>dropped</b></slot-edge-cond-false>`);
+    // No slot was rendered, so the authored child is dropped (per spec).
+    assert.match(out, /<p>hidden<\/p>/);
+    assert.doesNotMatch(out, /<b>dropped<\/b>/);
+  });
+
+  test('nested same-tag custom elements with slot in each (depth tracking)', async () => {
+    class Box extends WebComponent {
+      render() { return html`<div class="box"><slot></slot></div>`; }
+    }
+    Box.register('slot-edge-box');
+    const out = await renderToString(html`<slot-edge-box><slot-edge-box><p>inner</p></slot-edge-box></slot-edge-box>`);
+    // Outer Box should project the inner Box (and its <p>) into its default slot.
+    // Inner Box should project the <p> into its default slot.
+    assert.match(out, /<div class="box"><slot[^>]*data-projection="actual"><slot-edge-box><!--webjs-hydrate--><div class="box"><slot[^>]*data-projection="actual"><p>inner<\/p>/);
+  });
+
+  test('case-sensitive slot name matching', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot name="Header"></slot><slot name="header"></slot></div>`; }
+    }
+    C.register('slot-edge-case');
+    const out = await renderToString(html`<slot-edge-case><h1 slot="Header">CapH</h1><h2 slot="header">lowh</h2></slot-edge-case>`);
+    // Names are case-sensitive: capital-H and lowercase-h are distinct.
+    assert.match(out, /name="Header"><h1 slot="Header">CapH<\/h1>/);
+    assert.match(out, /name="header"><h2 slot="header">lowh<\/h2>/);
+  });
+
+  test('empty slot=" " attribute routes child to default slot', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot><slot name="x">F</slot></div>`; }
+    }
+    C.register('slot-edge-empty');
+    // Per spec, slot="" (empty string) is the default-slot indicator.
+    const out = await renderToString(html`<slot-edge-empty><p slot="">empty</p></slot-edge-empty>`);
+    assert.match(out, /<slot data-webjs-light data-projection="actual"><p slot="">empty<\/p>/);
+    assert.match(out, /name="x">F<\/slot>/);
+  });
+
+  test('mixed text + element + comment in a single slot', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-mixed');
+    const out = await renderToString(html`<slot-edge-mixed>before<!-- mid --><b>middle</b>after</slot-edge-mixed>`);
+    assert.match(out, /data-projection="actual">before<!-- mid --><b>middle<\/b>after<\/slot>/);
+  });
+
+  test('self-closing void element inside slot content (br, img)', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-void');
+    const out = await renderToString(html`<slot-edge-void><p>line1<br>line2</p><img src="/x.png" alt="x"></slot-edge-void>`);
+    assert.match(out, /<p>line1<br>line2<\/p>/);
+    assert.match(out, /<img src="\/x\.png" alt="x">/);
+  });
+
+  test('html entities in projected content preserved', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-entities');
+    const out = await renderToString(html`<slot-edge-entities><p>${'<script>'}</p></slot-edge-entities>`);
+    // <script> in interpolated text is escaped by html``'s own pipeline.
+    assert.match(out, /<p>&lt;script&gt;<\/p>/);
+  });
+
+  test('html entities in slot fallback content preserved', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot>&copy; ${'2026'}</slot></div>`; }
+    }
+    C.register('slot-edge-entities-fallback');
+    const out = await renderToString(html`<slot-edge-entities-fallback></slot-edge-entities-fallback>`);
+    assert.match(out, /data-projection="fallback">&copy; 2026<\/slot>/);
+  });
+
+  test('deeply nested authored children all reach default slot', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-deep');
+    const out = await renderToString(html`<slot-edge-deep><div><section><article><p>deep</p></article></section></div></slot-edge-deep>`);
+    assert.match(out, /<div><section><article><p>deep<\/p><\/article><\/section><\/div>/);
+  });
+
+  test('multiple slots with same name interleaved with default slots', async () => {
+    class C extends WebComponent {
+      render() {
+        return html`<div><slot name="a">FA</slot><slot>FD</slot><slot name="a">FA2</slot></div>`;
+      }
+    }
+    C.register('slot-edge-interleave');
+    const out = await renderToString(html`<slot-edge-interleave><b slot="a">x</b><p>y</p></slot-edge-interleave>`);
+    assert.match(out, /data-projection="actual"[^>]*name="a"><b slot="a">x<\/b><\/slot>/);
+    assert.match(out, /data-projection="actual"><p>y<\/p><\/slot>/);
+    // Second "a" slot shows fallback per first-wins.
+    assert.match(out, /data-projection="fallback"[^>]*name="a">FA2<\/slot>/);
+  });
+
+  test('slot with no fallback content shows empty when no projection', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot name="x"></slot></div>`; }
+    }
+    C.register('slot-edge-nofallback');
+    const out = await renderToString(html`<slot-edge-nofallback></slot-edge-nofallback>`);
+    assert.match(out, /data-projection="fallback"[^>]*name="x"><\/slot>/);
+  });
+
+  test('special characters in slot name (hyphens, underscores)', async () => {
+    class C extends WebComponent {
+      render() {
+        return html`<div><slot name="my-named_slot"></slot></div>`;
+      }
+    }
+    C.register('slot-edge-special-name');
+    const out = await renderToString(html`<slot-edge-special-name><p slot="my-named_slot">value</p></slot-edge-special-name>`);
+    assert.match(out, /name="my-named_slot"><p slot="my-named_slot">value<\/p>/);
+  });
+
+  test('shadow DOM component nested inside light DOM component (projection passes through)', async () => {
+    class Light extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    Light.register('slot-edge-light-outer');
+    class Shadow extends WebComponent {
+      static shadow = true;
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    Shadow.register('slot-edge-shadow-inner');
+    const out = await renderToString(html`<slot-edge-light-outer><slot-edge-shadow-inner><p>both</p></slot-edge-shadow-inner></slot-edge-light-outer>`);
+    // Light outer projects the shadow inner; shadow inner uses native slot.
+    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
+    assert.match(out, /<p>both<\/p><\/slot-edge-shadow-inner>/);
+  });
+
+  test('light DOM component nested inside shadow DOM component', async () => {
+    class Shadow extends WebComponent {
+      static shadow = true;
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    Shadow.register('slot-edge-shadow-outer');
+    class Light extends WebComponent {
+      render() { return html`<section><slot></slot></section>`; }
+    }
+    Light.register('slot-edge-light-inner');
+    const out = await renderToString(html`<slot-edge-shadow-outer><slot-edge-light-inner><b>inner content</b></slot-edge-light-inner></slot-edge-shadow-outer>`);
+    // Light inner uses framework slot; sits in the outer's light children
+    // for browser's native projection.
+    assert.match(out, /<slot-edge-light-inner><!--webjs-hydrate--><section><slot[^>]*data-projection="actual"><b>inner content<\/b>/);
+  });
+
+  test('multiple authored children to same named slot concatenate in order', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot name="items"></slot></div>`; }
+    }
+    C.register('slot-edge-multi-same');
+    const out = await renderToString(html`<slot-edge-multi-same><li slot="items">A</li><li slot="items">B</li><li slot="items">C</li></slot-edge-multi-same>`);
+    assert.match(out, /<li slot="items">A<\/li><li slot="items">B<\/li><li slot="items">C<\/li>/);
+  });
+
+  test('slot in deeply nested render structure', async () => {
+    class C extends WebComponent {
+      render() {
+        return html`<div><header><nav><div><slot name="nav"></slot></div></nav></header><main><slot></slot></main></div>`;
+      }
+    }
+    C.register('slot-edge-deep-render');
+    const out = await renderToString(html`<slot-edge-deep-render><a slot="nav" href="/">Home</a><p>main content</p></slot-edge-deep-render>`);
+    assert.match(out, /<nav><div><slot[^>]*name="nav"><a slot="nav" href="\/">Home<\/a><\/slot>/);
+    assert.match(out, /<main><slot[^>]*><p>main content<\/p><\/slot>/);
+  });
+
+  test('authored child is a custom element with its own slot', async () => {
+    class Outer extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    Outer.register('slot-edge-outer-with-inner');
+    class Inner extends WebComponent {
+      render() { return html`<span><slot></slot></span>`; }
+    }
+    Inner.register('slot-edge-inner-with-slot');
+    const out = await renderToString(html`<slot-edge-outer-with-inner><slot-edge-inner-with-slot><b>deep</b></slot-edge-inner-with-slot></slot-edge-outer-with-inner>`);
+    // Outer projects the inner; inner projects its child <b>.
+    assert.match(out, /<slot-edge-inner-with-slot><!--webjs-hydrate--><span><slot[^>]*data-projection="actual"><b>deep<\/b>/);
+  });
+
+  test('attribute values with special characters survive partition', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-attr-special');
+    const out = await renderToString(html`<slot-edge-attr-special><a href="/path?q=a&b=c" title="say 'hi'">link</a></slot-edge-attr-special>`);
+    // The framework preserves authored static HTML byte-for-byte through
+    // slot partitioning; it does not re-escape characters in static
+    // attribute values. Authors are responsible for valid HTML in their
+    // own template literals (or use interpolation for untrusted data,
+    // which is escape-on-the-fly).
+    assert.match(out, /<a href="\/path\?q=a&b=c" title="say 'hi'">link<\/a>/);
+  });
+
+  test('boolean and event attributes on children survive partition', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register('slot-edge-bool-attr');
+    // disabled is a boolean attribute; the SSR pipeline must preserve it.
+    const out = await renderToString(html`<slot-edge-bool-attr><button disabled>off</button><input required></slot-edge-bool-attr>`);
+    assert.match(out, /<button disabled>off<\/button>/);
+    assert.match(out, /<input required>/);
+  });
+
+  test('component with only one named slot, no default, drops slot-less children', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot name="only"></slot></div>`; }
+    }
+    C.register('slot-edge-named-only');
+    const out = await renderToString(html`<slot-edge-named-only><p>nowhere</p><b slot="only">ok</b></slot-edge-named-only>`);
+    assert.match(out, /<b slot="only">ok<\/b>/);
+    assert.doesNotMatch(out, /<p>nowhere<\/p>/);
+  });
+
+  test('component renders a slot followed by a sibling element', async () => {
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot><hr/></div>`; }
+    }
+    C.register('slot-edge-with-sibling');
+    const out = await renderToString(html`<slot-edge-with-sibling><p>x</p></slot-edge-with-sibling>`);
+    assert.match(out, /<p>x<\/p><\/slot><hr\/?>/);
+  });
+
+  test('slot inside list-style render (manual loop, not repeat)', async () => {
+    class C extends WebComponent {
+      render() {
+        const items = ['a', 'b'];
+        return html`<ul>${items.map((x) => html`<li>${x}<slot></slot></li>`)}</ul>`;
+      }
+    }
+    C.register('slot-edge-list');
+    const out = await renderToString(html`<slot-edge-list><span>shared</span></slot-edge-list>`);
+    // Multiple <slot> elements in render output. First wins per spec; the
+    // single authored <span> projects into the first slot; the second
+    // shows its fallback (empty in this case).
+    assert.match(out, /data-projection="actual"><span>shared<\/span>/);
+    assert.match(out, /data-projection="fallback"/);
   });
 });
 
