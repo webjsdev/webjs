@@ -87,6 +87,11 @@ export const RULES = [
     description:
       'Only the root layout (app/layout.{js,ts}) may write a <!doctype>/<html>/<head>/<body> shell to override default <html lang>, <body class>, etc. Non-root layouts (app/<segment>/layout.{js,ts}) and pages (app/**/page.{js,ts}) must not: the framework auto-emits the wrapper around the whole composition, so a nested shell ends up nested inside <body> where browsers drop it. Triggers on any of <!doctype>, <html, <head, <body in a non-root layout or page.',
   },
+  {
+    name: 'erasable-typescript-only',
+    description:
+      'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax fall back to esbuild + inline sourcemap, which is supported as a safety net for third-party deps but should not be the path your own code takes. The rule checks the project\'s tsconfig.json and warns when `erasableSyntaxOnly` is missing or set to false. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -749,6 +754,51 @@ export async function checkConventions(appDir, opts) {
             `Non-root layout/page contains ${m[0]}: only the root layout (app/layout.{js,ts}) may write the shell. The framework auto-emits <!doctype>/<html>/<head>/<body> around the whole composition; a nested shell ends up duplicated and dropped by the HTML parser.`,
           fix:
             'Remove the <!doctype>/<html>/<head>/<body> wrapper from this file. Use the `metadata` export for <title>/<meta>/og/twitter, return inline <link>/<style>/<script> for head-bound resources (they auto-hoist), and put any `<html lang>` / `<body class>` overrides in app/layout.{js,ts} instead.',
+        });
+      }
+    }
+  }
+
+  // --- Rule: erasable-typescript-only ---
+  // The dev server's primary type-stripper is Node's built-in
+  // module.stripTypeScriptTypes, which rejects non-erasable TS (enum,
+  // namespace with values, constructor parameter properties, legacy
+  // decorators, `import = require`). The fallback path is esbuild +
+  // inline sourcemap, which is a real ~3x wire-byte hit on every .ts
+  // request that takes it. Enforce TS-side rejection of those patterns
+  // via `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json so
+  // violations surface as red squiggles in the editor before they ever
+  // hit the dev server.
+  if (isRuleEnabled('erasable-typescript-only', overrides)) {
+    let tsconfigContent = null;
+    try {
+      tsconfigContent = await readFile(join(appDir, 'tsconfig.json'), 'utf8');
+    } catch {
+      // No tsconfig.json (pure JS app). Skip the rule.
+    }
+    if (tsconfigContent != null) {
+      let parsed = null;
+      try {
+        const stripped = tsconfigContent
+          .replace(/\/\/.*$/gm, '')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/,(\s*[}\]])/g, '$1');
+        parsed = JSON.parse(stripped);
+      } catch {
+        parsed = null;
+      }
+      const compilerOptions = parsed && typeof parsed === 'object' ? parsed.compilerOptions : null;
+      const flag = compilerOptions && typeof compilerOptions === 'object' ? compilerOptions.erasableSyntaxOnly : undefined;
+      if (flag !== true) {
+        violations.push({
+          rule: 'erasable-typescript-only',
+          file: 'tsconfig.json',
+          message:
+            flag === false
+              ? '`compilerOptions.erasableSyntaxOnly` is `false`. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators) falls back to esbuild + inline sourcemap on every request, costing ~3x wire bytes and losing byte-exact stack-trace positions.'
+              : '`compilerOptions.erasableSyntaxOnly` is not set. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Setting this flag makes the TypeScript compiler flag non-erasable syntax as a red squiggle in the editor instead of letting it silently slip through to a slower runtime fallback.',
+          fix:
+            'Set `"erasableSyntaxOnly": true` under `compilerOptions` in tsconfig.json. Replace any existing `enum` declarations with `const X = { ... } as const` plus a `type X = typeof X[keyof typeof X]` union. Replace constructor parameter properties with explicit field declarations + assignments.',
         });
       }
     }

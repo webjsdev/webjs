@@ -3,7 +3,11 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "strict": true,
     "noEmit": true,
     "checkJs": true,
@@ -12,9 +16,12 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
+    "erasableSyntaxOnly": true,
     "jsx": "preserve",
     "plugins": [
-      { "name": "@webjskit/ts-plugin" }
+      {
+        "name": "@webjskit/ts-plugin"
+      }
     ]
   },
   "include": [
@@ -25,5 +32,9 @@
     "middleware.js",
     "middleware.ts"
   ],
-  "exclude": ["node_modules", ".webjs", "prisma/migrations"]
+  "exclude": [
+    "node_modules",
+    ".webjs",
+    "prisma/migrations"
+  ]
 }
