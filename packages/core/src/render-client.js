@@ -603,10 +603,25 @@ function applyPart(part, value, _prev, allValues) {
       // been inserted into the host's render root (so the slot can find
       // its host by walking parents). Subsequent re-renders are
       // observer-driven from slot.js, not value-driven.
+      //
+      // For NESTED templates (a slot inside `${cond ? html`<slot/>` : ''}`),
+      // the slot's parent chain at apply time leads up through an
+      // unattached fragment that has not yet been inserted into the
+      // host's render root by the outer createInstance. findSlotHost
+      // returns null in that case. We retry on the next microtask, by
+      // which point the outer's replaceChildren has placed the entire
+      // tree (including this nested slot) into the host.
       if (part.applied) break;
       part.applied = true;
-      const host = findSlotHost(part.slotEl);
-      if (host) scheduleProjection(host);
+      const directHost = findSlotHost(part.slotEl);
+      if (directHost) {
+        scheduleProjection(directHost);
+      } else {
+        queueMicrotask(() => {
+          const h = findSlotHost(part.slotEl);
+          if (h) scheduleProjection(h);
+        });
+      }
       break;
     }
     case 'noop':
@@ -710,6 +725,14 @@ function applyChild(part, value) {
     }
     const nodes = [startNode, ...frag.childNodes, endNode];
     marker.parentNode?.insertBefore(nodesToFrag(nodes), marker);
+    // Slot parts in this nested template need their one-shot apply just
+    // like createInstance does for top-level templates. The slot is now
+    // in the live tree (insertBefore above) so its parent walk can
+    // reach the host. Without this loop, conditional / nested templates
+    // with <slot> inside never trigger projection.
+    for (const p of bound) {
+      if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
+    }
     part.child = { strings: tr.strings, bound, lastValues, startNode, endNode };
     return;
   }
