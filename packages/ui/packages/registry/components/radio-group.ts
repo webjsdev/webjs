@@ -1,5 +1,5 @@
 /**
- * RadioGroup — group of native radio inputs. Pure composition:
+ * RadioGroup: group of native radio inputs. Pure composition:
  * just use native `<input type="radio" name="...">` with a shared `name`.
  * The browser handles keyboard nav (Arrow keys), single-selection, and form
  * submission. No JS needed.
@@ -24,7 +24,7 @@
 import { cn } from '../lib/utils.ts';
 
 // Two SVGs, one per theme. The dot needs to contrast with the radio's
-// inner surface — and that surface flips between themes:
+// inner surface: and that surface flips between themes:
 //
 //   light: input bg is `bg-transparent` (so the page bg shows through;
 //          page bg is near-white) → dot must be DARK to be visible.
@@ -35,7 +35,7 @@ import { cn } from '../lib/utils.ts';
 // Hardcoding a single dark-coloured dot (the original implementation)
 // painted invisibly on the near-black dark-mode surface, making the
 // :checked state indistinguishable from unchecked. Same pattern the
-// checkbox fix uses (CHECKMARK_LIGHT / CHECKMARK_DARK) — `currentColor`
+// checkbox fix uses (CHECKMARK_LIGHT / CHECKMARK_DARK): `currentColor`
 // in a data:url SVG used as background-image does not inherit from the
 // host element, so we ship two SVGs and toggle them via a theme
 // selector.
@@ -47,7 +47,7 @@ const DOT_DARK =
 const RADIO_CLASS =
   'aspect-square size-4 shrink-0 appearance-none rounded-full border border-input bg-transparent shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40';
 
-// Three sibling rule blocks for theme selection — mirrors the
+// Three sibling rule blocks for theme selection: mirrors the
 // checkbox.ts pattern in this same registry:
 //   - prefers-color-scheme: dark (OS preference, gated by
 //     :not([data-theme='light']):not(.light) so an explicit-light
@@ -92,10 +92,10 @@ export type RadioGroupOrientation = 'vertical' | 'horizontal';
 /**
  * Container for a group of native <input type="radio"> elements.
  *
- * Vertical (default) — stacked column, gap-3. Matches Radix
+ * Vertical (default): stacked column, gap-3. Matches Radix
  * RadioGroup.Root's default + the most common shadcn snippet.
  *
- * Horizontal — flex row that wraps. Picks `flex flex-wrap gap-x-6
+ * Horizontal: flex row that wraps. Picks `flex flex-wrap gap-x-6
  * gap-y-3` so multi-line wraps still have vertical breathing room.
  */
 export function radioGroupClass(opts: { orientation?: RadioGroupOrientation } = {}): string {

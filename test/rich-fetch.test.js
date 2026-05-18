@@ -1,5 +1,5 @@
 /**
- * Unit tests for richFetch — the fetch wrapper that round-trips rich JS
+ * Unit tests for richFetch: the fetch wrapper that round-trips rich JS
  * types (Date, Map, Set, BigInt, TypedArray, Blob/File/FormData, cycles)
  * via the webjs serializer.
  *
@@ -183,7 +183,7 @@ test('returns null for an empty JSON response', async () => {
   assert.equal(out, null);
 });
 
-test('handles missing content-type — returns raw text', async () => {
+test('handles missing content-type: returns raw text', async () => {
   mockFetch(() => new Response('mystery'));
   const out = await richFetch('/x');
   assert.equal(out, 'mystery');

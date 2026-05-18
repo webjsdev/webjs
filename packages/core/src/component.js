@@ -84,24 +84,24 @@ function defaultHasChanged(a, b) {
  * while staying JSDoc-only and no-build.
  *
  * Subclasses declare:
- *  - `static properties` — attribute/property declarations with type info,
+ *  - `static properties`: attribute/property declarations with type info,
  *    reflection, custom converters, and internal-state mode
- *  - `static styles` — CSSResult or array thereof (only meaningful with
+ *  - `static styles`: CSSResult or array thereof (only meaningful with
  *    `static shadow = true`; light-DOM components inherit global CSS)
- *  - `static shadow` — set `true` to opt in to shadow DOM (default: `false`
+ *  - `static shadow`: set `true` to opt in to shadow DOM (default: `false`
  *    → light DOM, so Tailwind / global CSS apply directly)
- *  - `render()` — returns a TemplateResult
+ *  - `render()`: returns a TemplateResult
  *
- * The tag name is not a static field — pass it to `.register('tag-name')`
+ * The tag name is not a static field: pass it to `.register('tag-name')`
  * at the bottom of the file. Tag must contain a hyphen (HTML spec).
  *
  * Lifecycle (called in order during each update cycle):
  *  1. controllers' `beforeRender()`
  *  2. `render()` + DOM commit (with error boundary)
  *  3. controllers' `afterRender()`
- *  4. `firstUpdated()` — once, after the very first render
+ *  4. `firstUpdated()`: once, after the very first render
  *
- * "Less is more" — only hooks with no native workaround are included.
+ * "Less is more": only hooks with no native workaround are included.
  * Use `render()` for derived state. Use `firstUpdated()` for one-time
  * DOM setup. Use `this.shadowRoot.querySelector()` for element refs.
  *
@@ -129,7 +129,7 @@ export class WebComponent extends Base {
    * **AI hint:** Set `static hydrate = 'visible'` to defer client-side
    * hydration until the element scrolls into (or near) the viewport. The
    * server-rendered Declarative Shadow DOM content stays visible the whole
-   * time — users see the SSR HTML immediately while JavaScript activation
+   * time: users see the SSR HTML immediately while JavaScript activation
    * is deferred. This is useful for below-the-fold components that don't
    * need interactivity right away.
    *
@@ -151,7 +151,7 @@ export class WebComponent extends Base {
    * and optionally reflect back to attributes.
    *
    * Properties with `state: true` are excluded from `observedAttributes`
-   * and never reflect — they behave like private reactive state.
+   * and never reflect: they behave like private reactive state.
    *
    * @type {Record<string, PropertyDeclaration>}
    */
@@ -171,7 +171,7 @@ export class WebComponent extends Base {
    *
    * Delegates to `customElements.define` (or the server-side shim) via the
    * internal registry. The module URL for `<link rel="modulepreload">`
-   * hints is derived server-side by scanning the app tree — no need to
+   * hints is derived server-side by scanning the app tree: no need to
    * pass `import.meta.url`.
    *
    * @param {string} tag  Must contain a hyphen (HTML spec).
@@ -182,7 +182,7 @@ export class WebComponent extends Base {
 
   /**
    * Returns the list of attribute names the browser should observe.
-   * Properties with `state: true` are excluded — they are internal-only
+   * Properties with `state: true` are excluded: they are internal-only
    * and do not correspond to any HTML attribute.
    *
    * @returns {string[]}
@@ -310,7 +310,7 @@ export class WebComponent extends Base {
 
     // Selective hydration: defer activation until the element scrolls into
     // (or near) the viewport. The DSD content from SSR stays visible the
-    // whole time — the user sees the server-rendered HTML.
+    // whole time: the user sees the server-rendered HTML.
     if (
       Ctor.hydrate === 'visible' &&
       typeof IntersectionObserver !== 'undefined' &&
@@ -391,7 +391,7 @@ export class WebComponent extends Base {
     // For both shadow and light DOM: proceed with _performRender().
     // The client renderer detects SSR content (<!--webjs-hydrate--> for
     // light DOM, existing shadow root for shadow DOM) and hydrates
-    // instead of replacing — binding events without touching the DOM.
+    // instead of replacing: binding events without touching the DOM.
     this._performRender();
   }
 
@@ -478,7 +478,7 @@ export class WebComponent extends Base {
    *   1. Controllers' beforeRender()
    *   2. render() + DOM commit (with error boundary)
    *   3. Controllers' afterRender()
-   *   4. firstUpdated() — once, on the first render only
+   *   4. firstUpdated() runs once, on the first render only
    */
   _performRender() {
     if (!this._renderRoot) return;
@@ -515,14 +515,14 @@ export class WebComponent extends Base {
   }
 
   // ---------------------------------------------------------------------------
-  // Lifecycle hooks — override in subclasses
+  // Lifecycle hooks: override in subclasses
   // ---------------------------------------------------------------------------
 
   /**
    * Called exactly once, after the component's very first render completes
    * and the DOM is live.
    *
-   * **When to use:** one-time post-render setup that requires DOM access —
+   * **When to use:** one-time post-render setup that requires DOM access -
    * auto-focusing an input, measuring layout, initializing a third-party
    * library on a DOM node. `connectedCallback` fires before the first
    * render, so querying shadow children there yields nothing.
@@ -577,7 +577,7 @@ export class WebComponent extends Base {
    * Unregister a previously added {@link ReactiveController}.
    *
    * **When to use:** call this when a controller's lifetime is shorter
-   * than the component's — e.g. a controller that tracks a specific
+   * than the component's: e.g. a controller that tracks a specific
    * resource and should be swapped out when the resource changes.
    *
    * The controller's `onUnmount()` is NOT called by `removeController`;

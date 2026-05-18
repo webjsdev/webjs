@@ -1,6 +1,6 @@
 /**
- * Textarea — styled native `<textarea>` via a class-helper function. Real
- * native multi-line input — form submission, autosize via `field-sizing`,
+ * Textarea: styled native `<textarea>` via a class-helper function. Real
+ * native multi-line input: form submission, autosize via `field-sizing`,
  * native validation all work.
  *
  * Usage:

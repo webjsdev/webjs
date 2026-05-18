@@ -6,7 +6,7 @@
  * `<ui-X>` tags for Tier-1 components), and the API template deliberately
  * ships none of that.
  *
- * The "no stale Tier-1 tags" assertion catches a real regression class —
+ * The "no stale Tier-1 tags" assertion catches a real regression class -
  * before the Tier-1/Tier-2 split, scaffolded pages used `<ui-button>`,
  * `<ui-card>`, etc. as custom elements. After the split, those Tier-1
  * components are class helpers (`buttonClass()`, `cardClass()`); a tag
@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 
 import { scaffoldApp } from '../packages/cli/lib/create.js';
 
-// Tier 1 — class helpers. Pages MUST call e.g. `buttonClass()` and apply
+// Tier 1: class helpers. Pages MUST call e.g. `buttonClass()` and apply
 // to a native <button>, never use `<ui-button>` (which doesn't exist).
 const TIER1_TAGS = [
   'ui-button', 'ui-card', 'ui-card-header', 'ui-card-title', 'ui-card-description',
@@ -55,7 +55,7 @@ function assertTier1HygieneOnFile(content, filePath) {
     assert.doesNotMatch(
       content,
       new RegExp(`<${tag}\\b`),
-      `${filePath}: stale Tier-1 tag <${tag}> — Tier-1 components are class helpers, not custom elements`,
+      `${filePath}: stale Tier-1 tag <${tag}>: Tier-1 components are class helpers, not custom elements`,
     );
   }
 }
@@ -130,7 +130,7 @@ test('saas scaffold uses Tier-1 helpers on native elements', async () => {
       assert.ok(await exists(join(appDir, 'components', 'ui', `${name}.ts`)));
     }
 
-    // Saas extras — only Tier-2 (dialog) + form-control class helpers
+    // Saas extras: only Tier-2 (dialog) + form-control class helpers
     // (switch, checkbox). form + field are v2-deferred (see ui AGENTS.md).
     for (const name of ['dialog', 'switch', 'checkbox']) {
       assert.ok(
@@ -146,21 +146,21 @@ test('saas scaffold uses Tier-1 helpers on native elements', async () => {
     }
     assertTier1HygieneOnFile(login, 'app/login/page.ts');
 
-    // Signup page — same shape
+    // Signup page: same shape
     const signup = await readFile(join(appDir, 'app', 'signup', 'page.ts'), 'utf8');
     for (const fn of [...TIER1_HELPERS_CARD, ...TIER1_HELPERS_BUTTON, ...TIER1_HELPERS_INPUT, ...TIER1_HELPERS_LABEL]) {
       assert.match(signup, new RegExp(`\\b${fn}\\b`), `signup.ts should call ${fn}()`);
     }
     assertTier1HygieneOnFile(signup, 'app/signup/page.ts');
 
-    // Dashboard — uses card + button + badge (no inputs)
+    // Dashboard: uses card + button + badge (no inputs)
     const dash = await readFile(join(appDir, 'app', 'dashboard', 'page.ts'), 'utf8');
     for (const fn of [...TIER1_HELPERS_CARD, ...TIER1_HELPERS_BUTTON, 'badgeClass']) {
       assert.match(dash, new RegExp(`\\b${fn}\\b`), `dashboard.ts should call ${fn}()`);
     }
     assertTier1HygieneOnFile(dash, 'app/dashboard/page.ts');
 
-    // Settings — uses card subparts only
+    // Settings: uses card subparts only
     const settings = await readFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), 'utf8');
     for (const fn of TIER1_HELPERS_CARD) {
       assert.match(settings, new RegExp(`\\b${fn}\\b`), `settings.ts should call ${fn}()`);
@@ -177,7 +177,7 @@ test('api scaffold deliberately ships no ui-* components', async () => {
     await scaffoldApp('demo', cwd, { template: 'api' });
     const appDir = join(cwd, 'demo');
 
-    // API has no UI — none of these should exist
+    // API has no UI: none of these should exist
     assert.equal(existsSync(join(appDir, 'components', 'ui')), false);
     assert.equal(existsSync(join(appDir, 'components.json')), false);
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false);
@@ -228,7 +228,7 @@ test('lib/utils.ts ships the cn() helper + Base + defineElement', async () => {
     assert.match(utils, /export function cn/);
     assert.match(utils, /ClassValue/);
     // Tier-2 custom elements (when added via `webjs ui add dialog`) import
-    // Base + defineElement from here — verify both exports are present.
+    // Base + defineElement from here: verify both exports are present.
     // Base is exported as a const (class expression assigned to a const)
     // so it works in non-browser test environments where HTMLElement is
     // undefined; accept either `class Base` or `const Base`.

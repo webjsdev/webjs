@@ -26,7 +26,7 @@ export default class FakeRedis {
     return e.value;
   }
 
-  // ioredis signature: set(key, value, 'PX', ms) — 4 positional args.
+  // ioredis signature: set(key, value, 'PX', ms): 4 positional args.
   async set(key, value, ...rest) {
     let expiresAt = null;
     // rest = [mode, ms] or [{ PX: ms }]

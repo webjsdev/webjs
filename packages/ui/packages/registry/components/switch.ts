@@ -1,5 +1,5 @@
 /**
- * Switch — toggle styled as a sliding pill. A hidden native `<input
+ * Switch: toggle styled as a sliding pill. A hidden native `<input
  * type="checkbox" role="switch">` handles form submission and keyboard.
  * A sibling `<span>` provides the visual track + thumb.
  *
@@ -22,7 +22,7 @@
  */
 import { cn } from '../lib/utils.ts';
 
-/** Hidden native checkbox — handles form value + keyboard activation. */
+/** Hidden native checkbox: handles form value + keyboard activation. */
 export const switchInputClass = (): string => 'peer sr-only';
 
 const TRACK_BASE =

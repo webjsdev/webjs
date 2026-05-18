@@ -1,5 +1,5 @@
 /**
- * AspectRatio — preserve a width:height ratio for its child. Uses the modern
+ * AspectRatio: preserve a width:height ratio for its child. Uses the modern
  * CSS `aspect-ratio` property (Baseline 2022). No custom element needed.
  *
  * shadcn parity: matches shadcn AspectRatio (Radix primitive).

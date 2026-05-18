@@ -1,8 +1,8 @@
-# Single image for the whole monorepo — website, docs, blog. Each
+# Single image for the whole monorepo - website, docs, blog. Each
 # Railway service runs the same image with a different start command.
 # Locally: `docker compose up --build` runs all three via compose.yaml.
 #
-# No build step for JS — webjs serves .ts directly, Node 22+ strips types.
+# No build step for JS - webjs serves .ts directly, Node 22+ strips types.
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The blog
 # runs `prisma generate` at build and `prisma migrate deploy` at start.
 FROM node:22-alpine
@@ -29,7 +29,7 @@ COPY docs/package.json                               ./docs/
 
 # Copy the CLI's bin/ before install so npm can symlink it into
 # /app/node_modules/.bin/webjs. Without this, the bin target doesn't
-# exist at install time and npm silently skips the symlink — then
+# exist at install time and npm silently skips the symlink - then
 # `npm start` inside any workspace fails with `sh: webjs: not found`.
 COPY packages/cli/bin                     ./packages/cli/bin
 
@@ -54,6 +54,6 @@ RUN npx tailwindcss -i website/public/input.css       -o website/public/tailwind
  && npx tailwindcss -i docs/public/input.css          -o docs/public/tailwind.css          --minify \
  && npx tailwindcss -i examples/blog/public/input.css -o examples/blog/public/tailwind.css --minify
 
-# Defaults — Railway / compose override per service.
+# Defaults - Railway / compose override per service.
 ENV NODE_ENV=production
 CMD ["node", "--help"]

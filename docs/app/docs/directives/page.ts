@@ -1,17 +1,17 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Directives — webjs' };
+export const metadata = { title: 'Directives | webjs' };
 
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>webjs follows a <strong>"less is more"</strong> philosophy. Only three directives are built in — each solves a problem that has <em>no native alternative</em>. Everything else uses native JavaScript and HTML patterns.</p>
+    <p>webjs follows a <strong>"less is more"</strong> philosophy. Only three directives are built in, and each solves a problem that has <em>no native alternative</em>. Everything else uses native JavaScript and HTML patterns.</p>
 
     <pre>import { repeat } from '@webjskit/core';            // keyed lists
 import { unsafeHTML, live } from '@webjskit/core/directives'; // raw HTML, input sync</pre>
 
     <h2>repeat(items, keyFn, templateFn)</h2>
-    <p><strong>Essential.</strong> Keyed list reconciliation. Without it, re-rendering an array destroys and recreates all DOM nodes — losing focus, scroll position, and component state.</p>
+    <p><strong>Essential.</strong> Keyed list reconciliation. Without it, re-rendering an array destroys and recreates all DOM nodes, losing focus, scroll position, and component state.</p>
     <pre>import { html, repeat } from '@webjskit/core';
 
 html\`&lt;ul&gt;
@@ -22,7 +22,7 @@ html\`&lt;ul&gt;
   )}
 &lt;/ul&gt;\`;</pre>
     <p><strong>When to use:</strong> Any list where items can be added, removed, or reordered and you need to preserve DOM identity (e.g., animated lists, forms with inputs, draggable items).</p>
-    <p><strong>When NOT to use:</strong> Static lists or lists that always re-render fully — use plain <code>\${items.map(...)}</code> instead.</p>
+    <p><strong>When NOT to use:</strong> Static lists or lists that always re-render fully. Use plain <code>\${items.map(...)}</code> instead.</p>
 
     <h2>unsafeHTML(htmlString)</h2>
     <p><strong>Essential.</strong> Renders a raw HTML string without escaping. The only way to inject pre-built HTML (CMS content, markdown output) into a template.</p>
@@ -85,18 +85,18 @@ render() { return this.#task.render({ pending: () =&gt; html\`Loading...\`, comp
 
     <h3>Preserve DOM (tabs/views)</h3>
     <pre>// Instead of cache(template):
-// Use CSS to hide inactive views — DOM stays in memory:
+// Use CSS to hide inactive views, with the DOM staying in memory:
 html\`
   &lt;div style=\${\`display:\${tab === 'a' ? 'block' : 'none'}\`}&gt;Tab A content&lt;/div&gt;
   &lt;div style=\${\`display:\${tab === 'b' ? 'block' : 'none'}\`}&gt;Tab B content&lt;/div&gt;
 \`;</pre>
 
     <h2>Why "less is more"</h2>
-    <p>webjs is an AI-first framework. AI agents don't need syntax sugar — they generate verbose code as easily as terse code. Fewer directives means:</p>
+    <p>webjs is an AI-first framework. AI agents don't need syntax sugar, since they generate verbose code as easily as terse code. Fewer directives means:</p>
     <ul>
       <li><strong>Fewer concepts</strong> for agents to choose between (less chance of wrong choice)</li>
       <li><strong>Smaller API surface</strong> to maintain and test</li>
-      <li><strong>More portable knowledge</strong> — native patterns work in any framework</li>
+      <li><strong>More portable knowledge</strong>: native patterns work in any framework</li>
       <li><strong>Fewer edge cases</strong> in the renderer</li>
     </ul>
   `;

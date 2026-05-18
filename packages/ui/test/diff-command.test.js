@@ -44,7 +44,7 @@ function captureLog(fn) {
   return fn().finally(() => { console.log = origLog; }).then(() => out.join('\n'));
 }
 
-test('diff — reports no changes when local matches registry', async () => {
+test('diff: reports no changes when local matches registry', async () => {
   stubFetch();
   const d = setupProject();
   try {
@@ -59,7 +59,7 @@ test('diff — reports no changes when local matches registry', async () => {
   }
 });
 
-test('diff — flags differing local copy', async () => {
+test('diff: flags differing local copy', async () => {
   stubFetch();
   const d = setupProject();
   try {
@@ -75,7 +75,7 @@ test('diff — flags differing local copy', async () => {
   }
 });
 
-test('diff — diffs all components when no name given', async () => {
+test('diff: diffs all components when no name given', async () => {
   stubFetch();
   const d = setupProject();
   try {
@@ -90,7 +90,7 @@ test('diff — diffs all components when no name given', async () => {
   }
 });
 
-test('diff — exits with error when components.json missing', async () => {
+test('diff: exits with error when components.json missing', async () => {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-diff-noconf-'));
   const origExit = process.exit;
   const origError = console.error;

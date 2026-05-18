@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Docs — Webjs UI' };
+export const metadata = { title: 'Docs, Webjs UI' };
 
 export default function Docs() {
   return html`
@@ -13,7 +13,7 @@ export default function Docs() {
         <code>&lt;details&gt;</code>, and the <code>popover</code> attribute), plus a small set of
         stateful custom elements (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>,
         <code>&lt;ui-dropdown-menu&gt;</code>) that own the behavior native HTML still lacks. You install the CLI once and add components
-        to your project as you need them — the source is copied into your repo, so you own it and
+        to your project as you need them, the source is copied into your repo, so you own it and
         can edit it freely. Variant names and data-attribute conventions mirror shadcn so existing
         shadcn knowledge maps directly.
       </p>
@@ -27,13 +27,13 @@ export default function Docs() {
 webjs ui add button card dialog</code></pre>
 
       <h2>For everyone else (Next, Astro, Vite, SvelteKit, Lit, vanilla, …)</h2>
-      <p>Two npm installs — the CLI and the runtime base class — then run the CLI:</p>
+      <p>Two npm installs, the CLI and the runtime base class, then run the CLI:</p>
       <pre><code class="block bg-muted p-4 rounded">npm install -D @webjskit/ui
 npm install @webjskit/core
 npx webjsui init
 npx webjsui add button card dialog</code></pre>
       <p>
-        The <code>webjsui</code> binary is standalone — it does NOT require <code>@webjskit/cli</code>.
+        The <code>webjsui</code> binary is standalone, it does NOT require <code>@webjskit/cli</code>.
         It auto-detects your project type (Next / Astro / Vite / Lit / plain) and picks sensible defaults.
       </p>
 
@@ -45,7 +45,7 @@ npx webjsui add button card dialog</code></pre>
       </p>
       <p>
         <code>add &lt;name&gt;</code> copies the component source to <code>components/ui/&lt;name&gt;.ts</code>.
-        Components are dependency-free — positioning, focus trap, toast queue are all hand-rolled.
+        Components are dependency-free, positioning, focus trap, toast queue are all hand-rolled.
       </p>
       <h2>Usage</h2>
       <pre><code class="block bg-muted p-4 rounded">&lt;ui-card&gt;

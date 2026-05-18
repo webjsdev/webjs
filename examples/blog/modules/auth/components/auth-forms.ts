@@ -10,14 +10,14 @@ import {
 import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.ts';
 
 /**
- * `<auth-forms>` — tabbed sign-in / sign-up.
+ * `<auth-forms>`: tabbed sign-in / sign-up.
  *
  * Uses the Webjs UI two-tier composition:
  *  - Tier-1 helpers (cardClass, inputClass, labelClass, buttonClass,
  *    alertClass) spread onto native <div>, <input>, <label>, <button>.
  *  - The Sign in / Create account switcher is hand-rolled (two pill
  *    buttons toggling a `mode` property). `<ui-tabs>` would also work
- *    but is designed for separate panels — both modes here share a
+ *    but is designed for separate panels: both modes here share a
  *    single form with only the field set differing, so a custom switcher
  *    is the better fit.
  */

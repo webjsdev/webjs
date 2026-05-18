@@ -1,5 +1,5 @@
 /**
- * `Suspense({ fallback, children })` — deferred boundary for streaming SSR.
+ * `Suspense({ fallback, children })`: deferred boundary for streaming SSR.
  *
  * ```js
  * import { html, Suspense } from '@webjskit/core';
@@ -21,7 +21,7 @@
  * response stream open. When the children promise resolves, the resolved
  * HTML streams as a `<template data-webjs-resolve="ID">…</template>` plus
  * a tiny inline script that swaps the fallback for the real content. No
- * hydration runtime required — just a `replaceWith` call.
+ * hydration runtime required: just a `replaceWith` call.
  *
  * Nested Suspense works: a resolved template can itself contain Suspense,
  * whose fallback is emitted inside the template until its own promise lands.

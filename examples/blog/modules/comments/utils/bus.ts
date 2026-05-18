@@ -2,7 +2,7 @@
  * Simple in-process publish/subscribe for live comments.
  *
  * Single-instance only. For multi-instance deployments, replace with
- * Redis pub/sub or a message broker — the framework doesn't abstract
+ * Redis pub/sub or a message broker: the framework doesn't abstract
  * this; the user decides their infrastructure.
  */
 import type { CommentFormatted } from '../types.ts';

@@ -3,12 +3,12 @@
  * reverse-proxy headers (`X-Forwarded-Proto`, `X-Forwarded-Host`).
  *
  * Why: webjs apps are almost always deployed behind a reverse proxy
- * (Railway, Fly, Render, Vercel, Cloudflare, nginx, Caddy, Traefik —
+ * (Railway, Fly, Render, Vercel, Cloudflare, nginx, Caddy, Traefik -
  * see the no-build architecture docs). The proxy terminates TLS and
  * speaks plain HTTP/1.1 to the container, so `req.url` inside the
  * container reflects the internal "http" view. Without honoring the
  * forwarded headers, `ctx.url.origin` returns `http://container-host`
- * even though the browser is on `https://your-domain.com` — which
+ * even though the browser is on `https://your-domain.com`: which
  * breaks OG / og:image tags, OAuth callback URLs, and any user code
  * that builds absolute URLs.
  *
@@ -24,7 +24,7 @@
  * - `X-Forwarded-Host` / `X-Forwarded-Proto` can be a comma-separated
  *   chain if multiple proxies are in front (e.g. CDN -> load balancer
  *   -> container). The first entry is the value closest to the
- *   original client — that's what we want.
+ *   original client: that's what we want.
  * - Node sometimes returns headers as an array (when the same header
  *   appears multiple times); handle both string and array shapes.
  *

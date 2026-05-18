@@ -4,7 +4,7 @@ import { parseCookies } from './csrf.js';
 /**
  * Per-request context backed by AsyncLocalStorage. Lets server-side code
  * (pages, layouts, server actions, exposed actions) read the current
- * Request's headers and cookies without explicit threading — the same
+ * Request's headers and cookies without explicit threading: the same
  * ergonomics as NextJs's `headers()` / `cookies()` from `next/headers`.
  *
  * Strictly server-side: importing this module on the client is a bug.

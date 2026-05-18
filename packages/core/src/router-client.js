@@ -4,13 +4,13 @@
 import './webjs-frame.js';
 
 /**
- * Client router for webjs — nested-layout-aware partial swap.
+ * Client router for webjs: nested-layout-aware partial swap.
  *
  * Intercepts same-origin link clicks and form submissions, fetches the
  * target page's HTML via `fetch()`, finds the deepest layout boundary
  * shared by both the current and incoming pages, and replaces ONLY the
  * children of that boundary. Outer layout DOM (header, sidenav, footer)
- * stays mounted — no re-render, no flicker, scroll positions preserved.
+ * stays mounted: no re-render, no flicker, scroll positions preserved.
  *
  * To enable, import this module from a layout or boot script:
  *
@@ -18,7 +18,7 @@ import './webjs-frame.js';
  *
  * Or call `enableClientRouter()` for programmatic control.
  *
- * Mechanism — auto-derived from folder structure:
+ * Mechanism: auto-derived from folder structure:
  *   1. SSR injects `<!--wj:children:<segment-path>-->...<!--/wj:children-->`
  *      comment markers around each layout's `${children}` interpolation
  *      (one pair per layout in the chain).
@@ -37,7 +37,7 @@ import './webjs-frame.js';
  *     already has. Server walks the target's layout chain, skips
  *     layouts at-or-above the deepest match, returns only the
  *     divergent fragment (wrapped in the deepest shared marker). Real
- *     wire-byte savings — the layout chain is never re-serialized for
+ *     wire-byte savings: the layout chain is never re-serialized for
  *     same-shell navigations.
  *   - URL-keyed snapshot cache (Turbo SnapshotCache pattern). Back/
  *     forward via popstate restores from cache instantly, then
@@ -49,7 +49,7 @@ import './webjs-frame.js';
  *     content.
  *
  * Escape hatch:
- *   `<webjs-frame id="...">` — declarative partial-swap region NOT
+ *   `<webjs-frame id="...">`: declarative partial-swap region NOT
  *   tied to a folder layout. If a link's enclosing `closest('webjs-frame')`
  *   matches a frame in the incoming HTML, the frame swap takes
  *   precedence over the layout-marker mechanism. Use for ad-hoc
@@ -78,7 +78,7 @@ let enabled = false;
 
 /**
  * AbortController for the currently in-flight fetch. A new navigation /
- * submission `abort()`s this and replaces it — Turbo Drive's
+ * submission `abort()`s this and replaces it: Turbo Drive's
  * `navigator.stop()` pattern. Aborting in-flight requests on rapid
  * link clicks avoids late responses clobbering newer settled state.
  *
@@ -90,7 +90,7 @@ let activeAbortController = null;
  * Monotonic counter incremented at the start of every navigation. Each
  * async path captures the value at its entry point and compares before
  * applying side effects (swap, restore-optimistic). A mismatch means a
- * newer nav superseded this one — bail out silently. Belt-and-suspenders
+ * newer nav superseded this one: bail out silently. Belt-and-suspenders
  * on top of AbortController: covers paths where a response has already
  * resolved past the await but a newer nav started before applySwap ran.
  */
@@ -120,7 +120,7 @@ function ensureUpgradeObserver() {
 }
 
 /**
- * The URL the user is currently viewing — tracked separately from
+ * The URL the user is currently viewing: tracked separately from
  * `location.href` because on `popstate` the browser updates
  * `location.href` to the destination URL BEFORE firing the event,
  * which means snapshotting "the current page" naively keys against
@@ -138,7 +138,7 @@ let currentPageUrl = null;
  * Previous value of `history.scrollRestoration` (so we can restore it
  * when the router is disabled). The browser's default behavior of
  * auto-restoring scroll on popstate races with the SPA's own scroll
- * restoration — disabled here so webjs is the sole authority on scroll
+ * restoration: disabled here so webjs is the sole authority on scroll
  * during navigation. Same pattern as Turbo Drive's
  * `assumeControlOfScrollRestoration()` (turbo/src/core/drive/history.js).
  *
@@ -242,8 +242,8 @@ function onClick(e) {
   if (NON_HTML_EXTENSIONS.test(url.pathname)) return;
 
   e.preventDefault();
-  // Identify the active <webjs-frame> via closest() — null if the click
-  // wasn't inside any frame. The frame escape-hatch takes precedence
+  // Identify the active <webjs-frame> via closest(), returning null if the
+  // click wasn't inside any frame. The frame escape-hatch takes precedence
   // over the auto-derived layout markers when both are present.
   const frameId = activeFrameId(anchor);
   performNavigation(href, false, frameId);
@@ -251,14 +251,14 @@ function onClick(e) {
 
 /** @param {PopStateEvent} _e */
 function onPopState(_e) {
-  // popstate has no DOM anchor, so no frame context — restore via cache or
+  // popstate has no DOM anchor, so no frame context: restore via cache or
   // refetch the whole document.
   performNavigation(location.href, true, null);
 }
 
 /**
  * Intercept form submissions. Capture phase so we run before user
- * `@submit` handlers in component templates — they can call
+ * `@submit` handlers in component templates: they can call
  * `e.preventDefault()` or `e.stopImmediatePropagation()` first if they
  * want to handle the submission themselves (server-action RPC stubs do
  * this).
@@ -270,7 +270,7 @@ function onPopState(_e) {
  *   - Cross-origin or non-HTML-extension action → let the browser handle.
  *
  * Submitter attributes (`formmethod`, `formaction`, `formenctype`) take
- * precedence over the form's own — HTML5 form-submission algorithm.
+ * precedence over the form's own: HTML5 form-submission algorithm.
  *
  * @param {SubmitEvent} e
  */
@@ -279,7 +279,7 @@ function onSubmit(e) {
   if (e.defaultPrevented) return;
 
   const form = /** @type {HTMLFormElement | null} */ (e.target);
-  // Duck-type check rather than `instanceof HTMLFormElement` — linkedom
+  // Duck-type check rather than `instanceof HTMLFormElement`: linkedom
   // and other non-browser DOMs don't always mark form elements as
   // instances of the window's HTMLFormElement class.
   if (!form || form.nodeType !== 1 || form.tagName !== 'FORM') return;
@@ -364,7 +364,7 @@ function buildSubmitFormData(form, submitter) {
 
 /**
  * Find the nearest <a> in the event's composed path. composedPath() crosses
- * shadow DOM boundaries — essential because nav links typically live inside
+ * shadow DOM boundaries: essential because nav links typically live inside
  * the layout shell's shadow root.
  *
  * @param {MouseEvent} e
@@ -416,7 +416,7 @@ function activeFrameId(el) {
  *     <page content>
  *   <!--/wj:children-->
  *
- * The walk uses a stack to track nested marker pairs — a path can
+ * The walk uses a stack to track nested marker pairs: a path can
  * appear multiple times in a document only if a layout transitively
  * includes itself (pathological; we take the outermost).
  *
@@ -429,7 +429,7 @@ export function collectChildrenSlots(root) {
   /** @type {{ path: string, start: Comment }[]} */
   const stack = [];
 
-  // Plain recursive comment walk — TreeWalker/NodeFilter aren't available
+  // Plain recursive comment walk: TreeWalker/NodeFilter aren't available
   // in every DOM polyfill (notably linkedom in tests). Iterative depth-
   // first traversal keeps us portable across linkedom + native + jsdom.
   /** @param {Node} node */
@@ -495,7 +495,7 @@ const snapshotCache = new Map();
  * instantly, scroll position restores to whatever the user left it at.
  *
  * Turbo Drive captures `window.pageXOffset/pageYOffset` on every scroll
- * event into history state. Webjs captures lazily at snapshot time —
+ * event into history state. Webjs captures lazily at snapshot time -
  * one read per nav rather than one per scroll event. Sufficient because
  * we only need the position at the moment of leaving.
  *
@@ -553,7 +553,7 @@ function cacheKey(url) {
  * @param {string | null} frameId  Active <webjs-frame> id, or null.
  */
 async function performNavigation(href, isPopState, frameId) {
-  // Cancel any in-flight fetch — Turbo Drive's navigator.stop().
+  // Cancel any in-flight fetch: Turbo Drive's navigator.stop().
   if (activeAbortController) activeAbortController.abort();
   activeAbortController = new AbortController();
   const signal = activeAbortController.signal;
@@ -564,13 +564,13 @@ async function performNavigation(href, isPopState, frameId) {
   // so back/forward navigation can restore it. We key under
   // `currentPageUrl` rather than `location.href` because on popstate
   // the browser has already updated `location.href` to the destination
-  // URL — using it as the key would clobber the cached snapshot we're
+  // URL: using it as the key would clobber the cached snapshot we're
   // about to read in the popstate-restore branch below.
   if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
   // Show a subtle loading indicator, but only if the nav takes long
   // enough to be worth showing one. Setting an attribute on <html>
-  // invalidates global style computation — which forces CSS like
+  // invalidates global style computation: which forces CSS like
   // `color-mix(in oklch, …)` to re-resolve. For values that use
   // wide-gamut color spaces the re-resolution can switch between
   // equivalent representations (oklch ↔ oklab) and fire any
@@ -610,7 +610,7 @@ async function performNavigation(href, isPopState, frameId) {
         }
       }
       // Cache-miss popstate. Browser-native scroll restoration is
-      // disabled (we set scrollRestoration='manual') — so without
+      // disabled (we set scrollRestoration='manual'): so without
       // explicit handling, scroll would just stay where the user was
       // on the page they popped FROM. Scroll to top as the reasonable
       // default; fetchAndApply skips its own scroll handling when
@@ -639,7 +639,7 @@ async function performNavigation(href, isPopState, frameId) {
  * send the body as-is.
  *
  * Mutating methods (anything except GET/HEAD) clear the whole snapshot
- * cache after a successful response — Turbo's `clearSnapshotCache()` on
+ * cache after a successful response: Turbo's `clearSnapshotCache()` on
  * `!isSafe` (`navigator.js:71-88`). Other URLs in the cache may have
  * been server-side-mutated by this submission; refusing to clear would
  * serve stale content on subsequent back/forward.
@@ -659,7 +659,7 @@ async function performSubmission(href, method, body, frameId) {
   let url = new URL(href, location.href);
   if (isSafe) {
     // Promote body to query string per the HTML5 form-submission
-    // algorithm. The form's own `action` query is replaced — same as
+    // algorithm. The form's own `action` query is replaced: same as
     // a native GET-form submission.
     url.search = '';
     for (const [k, v] of body) {
@@ -669,7 +669,7 @@ async function performSubmission(href, method, body, frameId) {
 
   // Snapshot the page being submitted from (form submissions are
   // always foreground / never popstate, so `currentPageUrl` already
-  // matches `location.href` — but use the tracker for consistency
+  // matches `location.href`: but use the tracker for consistency
   // with performNavigation).
   if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
@@ -691,7 +691,7 @@ async function performSubmission(href, method, body, frameId) {
       signal,
       myToken,
     );
-    // Mutating submissions invalidate cached versions of other URLs —
+    // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is
     // snapshotted on the next nav, not pre-emptively wiped.
     if (!isSafe && myToken === currentNavigationToken) {
@@ -727,7 +727,7 @@ function buildHaveHeader() {
  * @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null} optimisticState
  * @param {string} [method]  HTTP verb (uppercase). Default 'GET'.
  * @param {BodyInit | null} [body]  Request body for non-GET methods.
- * @param {AbortSignal | null} [signal]  Abort signal — newer nav cancels this fetch.
+ * @param {AbortSignal | null} [signal]  Abort signal - newer nav cancels this fetch.
  * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
  */
 async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
@@ -750,7 +750,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     const resp = await fetch(href, init);
     const ctype = resp.headers.get('content-type') || '';
     const isHTML = /^text\/html\b/i.test(ctype);
-    // Server-side redirect (PRG, auth-gate, etc.) — fetch followed it
+    // Server-side redirect (PRG, auth-gate, etc.): fetch followed it
     // automatically. Record the FINAL URL in history, not the
     // originally-requested one, so back/forward + bookmarking work.
     if (resp.redirected && resp.url) finalUrl = resp.url;
@@ -758,7 +758,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // Empty-body status codes (204 No Content, 205 Reset Content):
     // server-rendered "stay on current page" pattern. Don't try to
     // swap an empty document over the live one. We DO still record
-    // history for the originating URL — same as a normal navigation
+    // history for the originating URL: same as a normal navigation
     // that decided to short-circuit.
     if (resp.status === 204 || resp.status === 205) {
       if (myToken === currentNavigationToken && recordHistory) {
@@ -767,7 +767,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       return;
     }
 
-    // Non-HTML response (JSON error, file download, opaque) — let the
+    // Non-HTML response (JSON error, file download, opaque): let the
     // browser handle it. Same for non-OK responses that aren't HTML
     // (a 500 returning `{"error": "..."}` shouldn't be rendered as a
     // page).
@@ -776,17 +776,17 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       return;
     }
 
-    // HTML body of ANY status — 2xx, 4xx validation errors, 5xx error
-    // pages — is parsed and applied in place. Matches Turbo Drive's
+    // HTML body of ANY status: 2xx, 4xx validation errors, 5xx error
+    // pages: is parsed and applied in place. Matches Turbo Drive's
     // `formSubmissionFailedWithResponse` behavior
     // (turbo/src/core/drive/navigator.js:92-107). Critical for the
     // standard server-rendered validation pattern: 422 + re-rendered
     // form with errors keeps the user's typed input and shows context.
     html = await resp.text();
   } catch (err) {
-    // Aborted by a newer navigation — let it run, don't fall back.
+    // Aborted by a newer navigation: let it run, don't fall back.
     if (err && /** @type any */ (err).name === 'AbortError') return;
-    // Stale (a newer nav started before we got the network error) —
+    // Stale (a newer nav started before we got the network error) -
     // the newer nav owns the page now; don't clobber it.
     if (myToken !== currentNavigationToken) return;
     restoreOptimistic(optimisticState);
@@ -794,7 +794,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     return;
   }
 
-  // A newer navigation started while we awaited the response body —
+  // A newer navigation started while we awaited the response body -
   // bail before we overwrite its work.
   if (myToken !== currentNavigationToken) return;
 
@@ -808,9 +808,9 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // Scroll only for foreground (history-recording) navigations. When
   // `recordHistory` is false we're either:
   //   (a) the background revalidation after a cached popstate restore
-  //       — performNavigation already set scroll from the cached
+  //       - performNavigation already set scroll from the cached
   //       position; we must NOT clobber it here.
-  //   (b) a cache-miss popstate — modern browsers fire scroll-
+  //   (b) a cache-miss popstate: modern browsers fire scroll-
   //       restoration themselves before dispatching popstate, so
   //       leaving scroll alone preserves the browser-native UX.
   if (recordHistory) {
@@ -836,7 +836,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  *
  * @param {Document} doc
  * @param {string | null} frameId
- * @param {boolean} revalidating  Restore from cache — already-matched markers may stomp inflight state; signal helps loading templates skip.
+ * @param {boolean} revalidating  Restore from cache - already-matched markers may stomp inflight state; signal helps loading templates skip.
  */
 function applySwap(doc, frameId, revalidating) {
   // 1. webjs-frame escape hatch.
@@ -863,7 +863,7 @@ function applySwap(doc, frameId, revalidating) {
   const sharedPath = longestSharedPath(here, there);
 
   if (sharedPath) {
-    // ADD-ONLY head merge for the same reason — outer layout stays
+    // ADD-ONLY head merge for the same reason: outer layout stays
     // mounted, its head-bound runtime state must not be invalidated.
     addNewHeadElements(doc.head);
     swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
@@ -872,7 +872,7 @@ function applySwap(doc, frameId, revalidating) {
     return;
   }
 
-  // 3. Full body swap fallback. Use full head merge — different root
+  // 3. Full body swap fallback. Use full head merge: different root
   // layout, so stale head elements should be removed.
   mergeHead(doc.head);
   const newChildren = [...doc.body.childNodes];
@@ -898,7 +898,7 @@ function applySwap(doc, frameId, revalidating) {
  * focus on whatever has focus at that moment. A click leaves focus on
  * the clicked element, so without this blur the user sees a stuck focus
  * ring on the sidenav link every time they switch workspaces and come
- * back — even though they navigated minutes ago.
+ * back: even though they navigated minutes ago.
  *
  * We do NOT programmatically move focus to the new page's h1/h2.
  * That'd just relocate the same problem (focus ring on the heading
@@ -909,7 +909,7 @@ function applySwap(doc, frameId, revalidating) {
  * No-op when focus is on `<body>` (browser default after `removeChild`
  * of a focused node) or when the active element survived the swap and
  * was inside the new content (means the swap was internal to a region
- * the user was already interacting with — don't fight them).
+ * the user was already interacting with: don't fight them).
  */
 function blurOutgoingFocus() {
   const a = document.activeElement;
@@ -933,7 +933,7 @@ function swapMarkerRange(target, source, _doc) {
   if (!target || !source) return;
 
   // Build a parent-with-matching-children pair for the keyed differ.
-  // The differ wants two parents — synthesize a transient parent for
+  // The differ wants two parents: synthesize a transient parent for
   // the slice of `source` so we can diff in-place against `target.start`
   // / `target.end` siblings on the live document.
   const liveParent = target.start.parentNode;
@@ -977,7 +977,7 @@ function swapMarkerRange(target, source, _doc) {
  *   - Live attributes (value, checked, open, scroll-position) are
  *     preserved on matched elements regardless of server HTML.
  *
- * This is intentionally simple — when no keys are present, the diff
+ * This is intentionally simple: when no keys are present, the diff
  * matches by position only and falls back to replaceChildren-like
  * semantics for the unkeyed range. Apps that want stronger
  * preservation add `data-key` to elements they care about.
@@ -1058,7 +1058,7 @@ function diffElementInPlace(dst, src) {
     if (!srcAttrs.has(attr.name)) dst.removeAttribute(attr.name);
   }
   // For form-control-like elements, preserve live IDL state.
-  // (`value`, `checked`, `open`, etc. — see LIVE_ATTRS below for full list.)
+  // (`value`, `checked`, `open`, etc.: see LIVE_ATTRS below for full list.)
   // The attribute version is skipped above; we deliberately do nothing
   // here so the user's typing / checking is never blown away.
 
@@ -1217,7 +1217,7 @@ function applyOptimisticLoading() {
 /** @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null} state */
 function restoreOptimistic(state) {
   if (!state) return;
-  // A newer nav superseded the one that captured this state — don't
+  // A newer nav superseded the one that captured this state: don't
   // revert; that newer nav owns the page now.
   if (state.token !== currentNavigationToken) return;
   const { slot, oldChildren } = state;
@@ -1250,7 +1250,7 @@ function diffChildren(dst, src) {
 /**
  * Add-only head merge for partial (marker + frame) swaps. Updates the
  * title and adds new elements (modulepreloads, scripts) without
- * removing existing ones — runtime-generated content like Tailwind's
+ * removing existing ones: runtime-generated content like Tailwind's
  * injected CSS must survive across navigations that keep the outer
  * layout mounted.
  *
@@ -1265,7 +1265,7 @@ function addNewHeadElements(newHead) {
 
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') {
-      // Skip — partial swaps keep the outer layout mounted, so the
+      // Skip: partial swaps keep the outer layout mounted, so the
       // existing importmap stays authoritative. Warn if the incoming
       // map differs: importmaps are immutable once a script has run
       // (modern browsers ignore subsequent <script type=importmap>),

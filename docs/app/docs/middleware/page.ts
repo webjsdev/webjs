@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Middleware — webjs' };
+export const metadata = { title: 'Middleware | webjs' };
 
 export default function Middleware() {
   return html`
@@ -10,7 +10,7 @@ export default function Middleware() {
     <h2>Root Middleware</h2>
     <p>Place a <code>middleware.ts</code> (or <code>middleware.js</code>) at the root of your project (next to <code>app/</code>, not inside it). This middleware runs on <strong>every request</strong> before webjs routes it to a page, API route, or server action.</p>
     <pre>my-app/
-  middleware.ts          # root middleware — runs on every request
+  middleware.ts          # root middleware: runs on every request
   app/
     page.ts
     api/
@@ -34,7 +34,7 @@ export default async function middleware(
     <pre>my-app/
   middleware.ts               # root: every request
   app/
-    page.ts                   # / — root + no segment middleware
+    page.ts                   # /: root + no segment middleware
     dashboard/
       middleware.ts            # only /dashboard/* requests
       page.ts                 # / dashboard
@@ -55,9 +55,9 @@ export default async function middleware(
   next: () =&gt; Promise&lt;Response&gt;,
 ): Promise&lt;Response&gt;</pre>
     <ul>
-      <li><strong>req</strong> — a standard <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Request</a> object. Read headers, cookies, URL, method, body.</li>
-      <li><strong>next()</strong> — calls the next middleware in the chain, or the final handler (page render, API route, action). Returns a <code>Promise&lt;Response&gt;</code>.</li>
-      <li><strong>Return value</strong> — you must return a <code>Response</code>. Either pass through the one from <code>next()</code> (optionally modified), or return your own to short-circuit the chain.</li>
+      <li><strong>req</strong>: a standard <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Request</a> object. Read headers, cookies, URL, method, body.</li>
+      <li><strong>next()</strong>: calls the next middleware in the chain, or the final handler (page render, API route, action). Returns a <code>Promise&lt;Response&gt;</code>.</li>
+      <li><strong>Return value</strong>: you must return a <code>Response</code>. Either pass through the one from <code>next()</code> (optionally modified), or return your own to short-circuit the chain.</li>
     </ul>
     <p>The file must <code>export default</code> a function. Named exports are ignored.</p>
 
@@ -82,7 +82,7 @@ export default async function middleware(
 
     <h2>Short-Circuiting</h2>
     <p>Return a <code>Response</code> without calling <code>next()</code> to stop the chain early. The request never reaches downstream middleware or the route handler.</p>
-    <pre>// app/api/middleware.ts — require API key for all /api/* routes
+    <pre>// app/api/middleware.ts: require API key for all /api/* routes
 export default async function apiAuth(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
@@ -134,7 +134,7 @@ export default async function logger(
 }</pre>
 
     <h2>Use Case: CORS Headers</h2>
-    <pre>// app/api/middleware.ts — add CORS to all /api/* routes
+    <pre>// app/api/middleware.ts: add CORS to all /api/* routes
 export default async function cors(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
@@ -176,10 +176,10 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
 })</pre>
     <p>The rate limiter is in-memory and uses a fixed-window algorithm. Response headers are set automatically:</p>
     <ul>
-      <li><code>x-ratelimit-limit</code> — the max for this window</li>
-      <li><code>x-ratelimit-remaining</code> — requests left in the current window</li>
-      <li><code>x-ratelimit-reset</code> — unix timestamp when the window resets</li>
-      <li><code>retry-after</code> — seconds until the window resets (on 429 responses only)</li>
+      <li><code>x-ratelimit-limit</code>: the max for this window</li>
+      <li><code>x-ratelimit-remaining</code>: requests left in the current window</li>
+      <li><code>x-ratelimit-reset</code>: unix timestamp when the window resets</li>
+      <li><code>retry-after</code>: seconds until the window resets (on 429 responses only)</li>
     </ul>
     <p>For multi-instance deployments, rate-limit at the edge (nginx, Cloudflare, AWS WAF) or use the <code>key</code> function to integrate with a shared store like Redis.</p>
 
@@ -208,7 +208,7 @@ const userAgent = headers().get('user-agent');</pre>
     <ul>
       <li><strong>Keep middleware fast.</strong> It runs on every request in its scope. Defer heavy work to the route handler when possible.</li>
       <li><strong>Avoid mutating the request.</strong> The Web <code>Request</code> API is largely immutable. If you need to pass data downstream (e.g., a resolved user object), store it in a module-scoped <code>AsyncLocalStorage</code> or use a header.</li>
-      <li><strong>One default export.</strong> Each <code>middleware.ts</code> must export a single default function. Multiple middleware in one file are not supported; if you need composition, chain them manually inside your export.</li>
+      <li><strong>One default export.</strong> Each <code>middleware.ts</code> must export a single default function. Multiple middleware in one file are not supported. If you need composition, chain them manually inside your export.</li>
       <li><strong>Use <code>rateLimit()</code> from <code>@webjskit/server</code></strong> rather than writing your own. It handles cleanup, header injection, and IP extraction from proxy headers.</li>
     </ul>
   `;

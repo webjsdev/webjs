@@ -1,5 +1,5 @@
 /**
- * WebSocket broadcast — send data to all connected clients on a route.
+ * WebSocket broadcast: send data to all connected clients on a route.
  *
  * ```js
  * // app/api/chat/route.ts
@@ -13,7 +13,7 @@
  * ```
  *
  * Single-instance by default. For multi-instance scaling, the user
- * wires Redis themselves — explicit, not magic.
+ * wires Redis themselves: explicit, not magic.
  *
  * @module broadcast
  */

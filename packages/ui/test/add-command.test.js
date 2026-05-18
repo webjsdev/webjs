@@ -51,7 +51,7 @@ function tmp() {
   return d;
 }
 
-test('add — writes a single component to components/ui/', async () => {
+test('add: writes a single component to components/ui/', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -65,7 +65,7 @@ test('add — writes a single component to components/ui/', async () => {
   }
 });
 
-test('add — resolves transitive registry dependencies', async () => {
+test('add: resolves transitive registry dependencies', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -79,7 +79,7 @@ test('add — resolves transitive registry dependencies', async () => {
   }
 });
 
-test('add — multiple components at once', async () => {
+test('add: multiple components at once', async () => {
   stubFetch();
   const d = tmp();
   try {
@@ -92,12 +92,12 @@ test('add — multiple components at once', async () => {
   }
 });
 
-test('add — respects registry:lib `target` field for utils.ts placement', async () => {
+test('add: respects registry:lib `target` field for utils.ts placement', async () => {
   stubFetch();
   const d = tmp();
   try {
     await add.parseAsync(['card', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
-    // lib-utils has `target: 'lib/utils.ts'` — it should land there, not in components/ui/
+    // lib-utils has `target: 'lib/utils.ts'`: it should land there, not in components/ui/
     assert.ok(existsSync(join(d, 'lib', 'utils.ts')));
     assert.ok(!existsSync(join(d, 'components', 'ui', 'utils.ts')));
   } finally {
@@ -106,7 +106,7 @@ test('add — respects registry:lib `target` field for utils.ts placement', asyn
   }
 });
 
-test('add — fails fast if components.json is missing', async () => {
+test('add: fails fast if components.json is missing', async () => {
   stubFetch();
   const d = mkdtempSync(join(tmpdir(), 'webjsui-add-noconf-'));
   const origExit = process.exit;
@@ -129,7 +129,7 @@ test('add — fails fast if components.json is missing', async () => {
   }
 });
 
-test('add — fails fast if no components specified', async () => {
+test('add: fails fast if no components specified', async () => {
   stubFetch();
   const d = tmp();
   const origExit = process.exit;
@@ -152,7 +152,7 @@ test('add — fails fast if no components specified', async () => {
   }
 });
 
-test('add — --overwrite replaces existing files without prompt', async () => {
+test('add: --overwrite replaces existing files without prompt', async () => {
   stubFetch();
   const d = tmp();
   const { mkdirSync } = await import('node:fs');

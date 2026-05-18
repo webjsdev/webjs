@@ -6,18 +6,18 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
 
-// Exactly three scaffolds exist — keep this list as the single source of
+// Exactly three scaffolds exist. Keep this list as the single source of
 // truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
 // .windsurfrules / .github/copilot-instructions.md mirror it.
 const TEMPLATES = ['full-stack', 'api', 'saas'];
 
-const USAGE = `webjs — commands:
+const USAGE = `webjs commands:
   webjs dev   [--port 3000]                       Start dev server with live reload
-  webjs start [--port 3000]                       Start production server (serves source directly; no build step)
+  webjs start [--port 3000]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
   webjs create <name> [--template full-stack|api|saas]  Scaffold a new webjs app
-                                                  (only 3 templates exist; default: full-stack with Prisma+SQLite)
+                                                  (only 3 templates exist. default: full-stack with Prisma+SQLite)
   webjs db generate                               Run \`prisma generate\`
   webjs db migrate [name]                         Run \`prisma migrate dev\`
   webjs db studio                                 Run \`prisma studio\`
@@ -95,8 +95,8 @@ async function main() {
     }
     case 'ui': {
       // Delegate to @webjskit/ui. Bundled as a hard dependency of
-      // @webjskit/cli — `npm install -g @webjskit/cli` pulls it in
-      // automatically, so `webjs ui add button` works out of the box
+      // @webjskit/cli, so `npm install -g @webjskit/cli` pulls it in
+      // automatically, and `webjs ui add button` works out of the box
       // without an extra install in user projects.
       const { createRequire } = await import('node:module');
       const req = createRequire(import.meta.url);
@@ -174,7 +174,7 @@ async function main() {
           const code = await new Promise(r => child.on('exit', r));
           if (code !== 0) process.exit(code ?? 1);
         } else if (!serverOnly) {
-          // No WTR config — check for test/browser directory
+          // No WTR config, check for test/browser directory
           const browserDir = join(cwd, 'test', 'browser');
           if (existsSync(browserDir)) {
             console.log(`\nwebjs test: running browser tests (WTR + Playwright)…\n`);
@@ -195,7 +195,7 @@ async function main() {
       const violations = await checkConventions(process.cwd());
 
       if (rest.includes('--rules')) {
-        console.log('webjs check — available rules:\n');
+        console.log('webjs check, available rules:\n');
         for (const r of RULES) {
           console.log(`  ${r.name.padEnd(30)} ${r.description}`);
         }
@@ -230,19 +230,19 @@ async function main() {
         console.error(`Error: unknown template '${template}'.
 
 Only three scaffolds exist:
-  full-stack   (default) — pages + components + API + Prisma/SQLite.
+  full-stack   (default): pages + components + API + Prisma/SQLite.
                 Pick this for any app the user describes in product terms
                 (todo app, blog, dashboard, marketplace, social feed, …).
-  api          — backend-only: route handlers + modules, no pages/SSR.
+  api          backend-only: route handlers + modules, no pages/SSR.
                 Pick this only if the user explicitly asks for an HTTP/JSON
                 API with no UI.
-  saas         — auth + login/signup + protected dashboard + Prisma User
+  saas         auth + login/signup + protected dashboard + Prisma User
                 model. Pick this only if the user explicitly asks for auth
                 or a SaaS-shaped product.
 
-The scaffold is a starting point — replace the example layout/page/
+The scaffold is a starting point. Replace the example layout/page/
 components/schema with the actual app the user requested. Use Prisma +
-SQLite for persistence (already wired up); never store app data in JSON
+SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
 Full docs: https://docs.webjs.com`);

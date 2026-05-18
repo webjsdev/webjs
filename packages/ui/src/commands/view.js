@@ -9,7 +9,7 @@ export const view = new Command()
   .option('--registry <url>', 'registry base URL', DEFAULT_REGISTRY_URL)
   .action(async (name, opts) => {
     const item = await fetchRegistryItem(name, opts.registry);
-    logger.info(logger.dim(`# ${item.name} — ${item.type}`));
+    logger.info(logger.dim(`# ${item.name}: ${item.type}`));
     if (item.description) logger.info(logger.dim(`# ${item.description}`));
     for (const f of item.files || []) {
       logger.info('');

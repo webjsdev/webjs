@@ -25,5 +25,5 @@ export { json, readBody } from './src/json.js';
 export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
-// Auth — NextAuth-style
+// Auth (NextAuth-style)
 export { createAuth, Credentials, Google, GitHub } from './src/auth.js';

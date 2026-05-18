@@ -1,12 +1,12 @@
 # TypeScript without a build step + full-stack type safety
 
 Files ending in `.ts` / `.mts` are supported everywhere `.js` / `.mjs`
-are — same routing conventions, same server-action behaviour. No `tsc`
-run is part of the user-visible workflow; no separate build step:
+are: same routing conventions, same server-action behaviour. No `tsc`
+run is part of the user-visible workflow, no separate build step:
 
 - **Editor** (VS Code) runs the TypeScript language server continuously. Red-squiggle on wrong types.
 - **CI** (optional) runs `tsc --noEmit` against `tsconfig.json`. Type-check only.
-- **Dev + prod server** (runtime, both directions): the server registers an esbuild ESM loader hook at startup (`module.register()`) so every `.ts` import — server-side (SSR pages, layouts, actions, routes) or browser-fetched (`/components/foo.ts`) — flows through the same `esbuild.transform()` call (~0.5–1ms per file, cached by mtime). SSR + hydration produce equivalent JS. The same loader runs in `webjs dev` and `webjs start`; there is no separate compile step in between.
+- **Dev + prod server** (runtime, both directions): the server registers an esbuild ESM loader hook at startup (`module.register()`) so every `.ts` import, whether server-side (SSR pages, layouts, actions, routes) or browser-fetched (`/components/foo.ts`), flows through the same `esbuild.transform()` call (~0.5–1ms per file, cached by mtime). SSR + hydration produce equivalent JS. The same loader runs in `webjs dev` and `webjs start`. There is no separate compile step in between.
 
 ## TypeScript feature support
 
@@ -20,8 +20,8 @@ caveat.
 
 Use explicit `.ts` extensions in imports. The esbuild loader hook
 expects file URLs ending in `.ts` / `.mts`. For mixed codebases, `.js`
-imports that point at a `.ts` sibling also resolve in the dev server
-— but prefer explicit `.ts`.
+imports that point at a `.ts` sibling also resolve in the dev server.
+Still prefer explicit `.ts`.
 
 ```ts
 // modules/posts/queries/list-posts.server.ts
@@ -50,10 +50,10 @@ import { formatPost } from '../utils/slugify.ts';         // TS file
 
 ## Full-stack type safety
 
-### Server actions — type-safe automatically
+### Server actions: type-safe automatically
 
-Calling a server action from a client component resolves — at type-check
-time — to the action's real source file. The dev server's runtime stub
+Calling a server action from a client component resolves at type-check
+time to the action's real source file. The dev server's runtime stub
 replacement is invisible to the type checker.
 
 ```ts
@@ -74,16 +74,16 @@ ESM serializer: `Date` → `Date`, `Map` → `Map`, `BigInt` → `BigInt`.
 Supported: `Date`, `Map`, `Set`, `BigInt`, `Error`, `undefined`,
 `NaN`/`Infinity`/`-0`, `TypedArray`, `ArrayBuffer`, `DataView`, `Blob`,
 `File`, `FormData`, `Symbol.for(...)`, reference cycles. Class
-instances come through as plain objects — prototypes lost, methods
-don't survive (matches React Server Actions).
+instances come through as plain objects, with prototypes lost and methods
+gone (matches React Server Actions).
 
-### API routes — opt in via content negotiation
+### API routes: opt in via content negotiation
 
 `route.ts` handlers use standard JSON by default so external consumers
 keep working. Opt into rich types for your own UI code:
 
 ```ts
-// app/api/posts/route.ts — server
+// app/api/posts/route.ts: server
 import { json } from '@webjskit/server';
 import { listPosts } from '../../../modules/posts/queries/list-posts.server.ts';
 
@@ -93,14 +93,14 @@ export async function GET() {
 ```
 
 ```ts
-// caller — client
+// caller: client
 import { richFetch } from '@webjskit/core';
 const posts = await richFetch<Post[]>('/api/posts');
 // posts[0].createdAt is a Date here.
 ```
 
 The `json()` helper reads the in-flight Request via AsyncLocalStorage:
-- `Accept: application/vnd.webjs+json` → encoded with the webjs serializer; `Content-Type: application/vnd.webjs+json`; `Vary: Accept`.
+- `Accept: application/vnd.webjs+json` → encoded with the webjs serializer, served with `Content-Type: application/vnd.webjs+json` and `Vary: Accept`.
 - Otherwise → plain JSON.
 
 Request bodies parse with `readBody(req)` from `@webjskit/server`.
@@ -111,13 +111,13 @@ JS + JSDoc gets the same call-site type safety. The TypeScript language
 server reads `@typedef` / `@param` / `@returns` identically to `.ts`
 syntax. Add `"checkJs": true` to enforce types in editor + CI.
 
-## Editor plugin — `@webjskit/ts-plugin`
+## Editor plugin: `@webjskit/ts-plugin`
 
-**Editor-only — not required for the framework to run.** The runtime
+**Editor-only. Not required for the framework to run.** The runtime
 has no dependency on it.
 
 A single plugin. As of `@webjskit/ts-plugin@0.4.0`, `ts-lit-plugin`
-is bundled internally — list one entry:
+is bundled internally, so list one entry:
 
 ```jsonc
 "plugins": [
@@ -132,4 +132,4 @@ Gives you:
 - Attribute auto-complete from `static properties = { … }` keys.
 - Attribute-value type-check: `<my-counter count=${expr}>` assignability-checks `typeof expr` against `declare count: T`.
 
-Both behaviours are gated on import-graph reachability — a tag is recognized only if the file registering it is reachable from the file you're editing.
+Both behaviours are gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing.

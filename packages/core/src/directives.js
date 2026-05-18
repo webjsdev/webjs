@@ -3,11 +3,11 @@
  *
  * webjs follows a "less is more" philosophy: only directives that solve
  * problems with NO native alternative are included. AI agents don't need
- * syntax sugar — they can write ternaries, string concatenation, and
+ * syntax sugar: they can write ternaries, string concatenation, and
  * lifecycle hooks just fine.
  *
  * **What's here:**
- * - `unsafeHTML(str)` — render trusted raw HTML (no alternative in templates)
+ * - `unsafeHTML(str)`: render trusted raw HTML (no alternative in templates)
  *
  * **What's NOT here (and why):**
  * - classMap → use `class=${'btn ' + (active ? 'active' : '')}`
@@ -21,7 +21,7 @@
  * - live → set `.value` via property binding `.value=${val}` and handle
  *   input events with `@input=${e => this.setState({val: e.target.value})}`
  *
- * `repeat()` is in its own file (`./repeat.js`) — it's essential for keyed
+ * `repeat()` is in its own file (`./repeat.js`): it's essential for keyed
  * list reconciliation and has no native alternative.
  *
  * @module directives
@@ -35,9 +35,9 @@
  * Render a raw HTML string without escaping. The string is injected
  * directly into the DOM as parsed HTML nodes.
  *
- * **When to use (AI hint):** Use ONLY for trusted HTML — CMS content,
+ * **When to use (AI hint):** Use ONLY for trusted HTML: CMS content,
  * markdown-to-HTML output, or sanitized rich text. NEVER use for
- * user-supplied input — this is an XSS vector.
+ * user-supplied input: this is an XSS vector.
  *
  * ```js
  * import { html } from '@webjskit/core';
@@ -46,7 +46,7 @@
  * // Good: trusted markdown output
  * html`<article>${unsafeHTML(markdownToHtml(post.body))}</article>`;
  *
- * // DANGEROUS: user input — use ${text} instead (auto-escaped)
+ * // DANGEROUS: user input: use ${text} instead (auto-escaped)
  * // html`<p>${unsafeHTML(userInput)}</p>`;  // ← XSS!
  * ```
  *
@@ -79,7 +79,7 @@ export function isUnsafeHTML(x) {
  * **When to use (AI hint):** Use `live()` on `.value` or `.checked`
  * bindings for `<input>`, `<textarea>`, `<select>` elements where the
  * user types/selects between renders. Without `live()`, the renderer
- * skips the update because its cached value matches — even though the
+ * skips the update because its cached value matches: even though the
  * DOM value has changed.
  *
  * ```js
@@ -90,7 +90,7 @@ export function isUnsafeHTML(x) {
  *             @input=${e => this.setState({ query: e.target.value })}>`;
  * ```
  *
- * On the server, `live()` is a no-op — it unwraps to the inner value.
+ * On the server, `live()` is a no-op: it unwraps to the inner value.
  *
  * @param {unknown} value  The value to set on the element.
  * @returns {{ _$webjs: 'live', value: unknown }}

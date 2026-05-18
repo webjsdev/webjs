@@ -1,4 +1,4 @@
-# AGENTS.md — @webjskit/ui-website
+# AGENTS.md: @webjskit/ui-website
 
 The HTTP host for `@webjskit/ui`'s registry + the per-component docs site.
 
@@ -7,20 +7,20 @@ This file covers ONLY what's specific to this package.
 
 ---
 
-## ⚠️ Directory layout — does NOT match a normal scaffolded webjs app
+## ⚠️ Directory layout: does NOT match a normal scaffolded webjs app
 
 **Read this before adding ANY file.** This package has a unique layout
 because it's both the *publisher* of the `@webjskit/ui` component kit
 (it serves `/registry/<name>.json` to the CLI) and a *consumer* of the
 same kit (its docs pages import the components to render live previews).
-The footgun this creates has already broken a live deploy once — don't
+The footgun this creates has already broken a live deploy once, so don't
 re-introduce it.
 
 | Directory | Tracked in git? | Add hand-written files here? |
 |---|---|---|
-| `components/` | **NO — gitignored**, regenerated at `predev`/`prestart` by `scripts/copy-registry.js` from `../registry/`. | ❌ **NEVER.** Anything you put here is wiped every dev cycle AND never reaches the deploy. |
-| `lib/` | **NO — gitignored**, same as above. | ❌ **NEVER.** |
-| `app/_components/` | ✅ **YES — tracked.** Underscore prefix = webjs private folder (not routable). | ✅ **Yes — this is the home for hand-written website-chrome components** (`theme-toggle`, etc.). |
+| `components/` | **NO: gitignored**, regenerated at `predev`/`prestart` by `scripts/copy-registry.js` from `../registry/`. | ❌ **NEVER.** Anything you put here is wiped every dev cycle AND never reaches the deploy. |
+| `lib/` | **NO: gitignored**, same as above. | ❌ **NEVER.** |
+| `app/_components/` | ✅ **YES: tracked.** Underscore prefix = webjs private folder (not routable). | ✅ **Yes, this is the home for hand-written website-chrome components** (`theme-toggle`, etc.). |
 | `app/` (other), `public/`, `scripts/` | ✅ Tracked, normal webjs source | ✅ Yes |
 
 ### How to register a new website-chrome component
@@ -48,7 +48,7 @@ in the layout / pages.
 `'../lib/utils.ts'` import to `'../../lib/utils.ts'` (one extra `..`
 for the website's deeper path). The docs preview pages then import
 locally. Committing the mirror would create two sources of truth that
-drift — hence the wholesale `.gitignore` on `/components/` and `/lib/`.
+drift, hence the wholesale `.gitignore` on `/components/` and `/lib/`.
 
 If a hand-written component slips into `components/`, it gets
 gitignored too. The file works locally (it's in your working tree)
@@ -67,18 +67,18 @@ The rule above (`app/_components/`) prevents this entirely.
 | Any other webjs app | tracked source, shadcn-style "you own it" |
 
 When working in any of the other surfaces, the trap above does NOT
-apply — `components/ui/` is just normal project source.
+apply, and `components/ui/` is just normal project source.
 
 ---
 
 ## Routes (HTTP surface)
 
-- `GET /registry`             — full manifest, content inlined
-- `GET /registry/index.json`  — flat metadata-only list
-- `GET /registry/<name>.json` — single item, content inlined
-- `GET /docs`                 — docs root
-- `GET /docs/components/<name>` — per-component docs page
-- `GET /`                     — homepage / component index
+- `GET /registry`              full manifest, content inlined
+- `GET /registry/index.json`   flat metadata-only list
+- `GET /registry/<name>.json`  single item, content inlined
+- `GET /docs`                  docs root
+- `GET /docs/components/<name>` per-component docs page
+- `GET /`                      homepage / component index
 
 The `app/registry/**` route handlers call `app/_lib/registry.server.ts`,
 which composes JSON on demand from `../registry/` (no build step).

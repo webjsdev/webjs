@@ -6,7 +6,7 @@ import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire, register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Route every server-side `.ts` import through esbuild — same transformer
+// Route every server-side `.ts` import through esbuild: same transformer
 // as the dev server uses for browser-bound modules. Keeps SSR and hydration
 // output identical and supports the full TS feature set (enums, decorators,
 // parameter properties) that Node's built-in stripper rejects.
@@ -80,7 +80,7 @@ const TS_CACHE = new Map();
 /**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
- * standard `Response` — suitable for Node http, Deno, Bun, Cloudflare Workers,
+ * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
  * or embedding inside an Express/Fastify app.
  *
  * @param {{
@@ -111,7 +111,7 @@ export async function createRequestHandler(opts) {
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
   // module. Without registration, <my-tag> elements silently stay as
-  // HTMLUnknownElement in the browser — a common early-stage footgun.
+  // HTMLUnknownElement in the browser: a common early-stage footgun.
   if (dev) {
     const orphans = await findOrphanComponents(appDir);
     for (const { className, file } of orphans) {
@@ -192,7 +192,7 @@ export async function createRequestHandler(opts) {
     handle,
     rebuild,
     routeFor,
-    /** current route table getter — used by the WebSocket subsystem */
+    /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
     appDir,
     dev,
@@ -248,7 +248,7 @@ export async function startServer(opts) {
   }
 
   // SSE keepalive: send a comment frame every 25s to defeat proxy idle timeouts.
-  // Cheap (no event listeners on the client side) and safe — comments are ignored.
+  // Cheap (no event listeners on the client side) and safe: comments are ignored.
   const keepalive = setInterval(() => {
     for (const res of sseClients) {
       try { res.write(`: ka\n\n`); } catch {}
@@ -260,7 +260,7 @@ export async function startServer(opts) {
     try {
       const url = urlFromRequest(req);
 
-      // SSE — handled specially; doesn't fit the req→Response model.
+      // SSE: handled specially; doesn't fit the req→Response model.
       if (url.pathname === '/__webjs/events') {
         if (!dev) { res.writeHead(404); res.end(); return; }
         res.writeHead(200, {
@@ -317,7 +317,7 @@ export async function startServer(opts) {
   process.once('SIGINT', () => shutdown('SIGINT'));
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 
-  // Catch-all process handlers — log, but don't tear the process down on a
+  // Catch-all process handlers: log, but don't tear the process down on a
   // single mishandled promise. Uncaught exceptions are different: state may be
   // corrupted, so log + start an orderly shutdown rather than continuing.
   installProcessHandlers(logger, () => shutdown('uncaughtException'));
@@ -364,7 +364,7 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: !dev });
   }
 
-  // Vendor bundles: /__webjs/vendor/<pkg>.js — generic auto-bundler
+  // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
   // (Vite-style optimizeDeps) for any bare npm import that webjs can't
   // serve directly as ESM.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
@@ -425,14 +425,14 @@ async function handleCore(req, ctx) {
     if (abs.startsWith(appDir) && (await exists(abs))) {
       // Server-file guardrail: a file is server-only if its name matches
       // `.server.{js,ts,mjs,mts}` OR the source starts with `'use server'`.
-      // Such files MUST NEVER be served as source to the browser — they
+      // Such files MUST NEVER be served as source to the browser: they
       // contain secrets, DB queries, and privileged logic. Always return a
       // generated RPC stub instead.
       //
       // We re-verify via `isServerFile(abs)` on every request (not just the
       // action-index snapshot taken at boot). This catches files created
       // after boot, files that flipped their `'use server'` status, or any
-      // race between scan completion and request — the guardrail is an
+      // race between scan completion and request: the guardrail is an
       // independent check, not a cache lookup.
       if (await isServerFile(abs)) {
         // Lazily ensure the index knows about this file so serveActionStub
@@ -500,7 +500,7 @@ async function handleCore(req, ctx) {
     }
   }
 
-  // Fallback — content-negotiated 404
+  // Fallback: content-negotiated 404
   if (wantsJson(req, path)) {
     return Response.json({ error: 'Not found', path }, { status: 404 });
   }
@@ -534,7 +534,7 @@ async function runWithSegmentMiddleware(req, files, terminal, dev) {
       const mod = await import(url + bust);
       if (typeof mod.default === 'function') handlers.push(mod.default);
     } catch {
-      // Bad middleware file — skip; top-level error handler will catch real problems.
+      // Bad middleware file: skip; top-level error handler will catch real problems.
     }
   }
   let i = 0;
@@ -576,7 +576,7 @@ async function loadMiddleware(appDir, dev, logger) {
 /**
  * Create a plain HTTP/1.1 server. webjs deploys are expected to sit
  * behind a reverse proxy (PaaS edge, nginx, Caddy, etc.) that handles
- * TLS termination and speaks HTTP/2 to clients — Node's http2 module
+ * TLS termination and speaks HTTP/2 to clients: Node's http2 module
  * doesn't need to be involved on the framework side.
  *
  * @param {(req: any, res: any) => void} handler
@@ -641,7 +641,7 @@ function toWebRequest(req, url) {
   /** @type {Record<string,string>} */
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
-    // Drop HTTP/2 pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`) —
+    // Drop HTTP/2 pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`) -
     // they're parsed separately into req.method / req.url and are rejected
     // by the standard Headers class if we pass them through verbatim.
     if (k.startsWith(':')) continue;
@@ -792,7 +792,7 @@ async function tsResponse(abs, dev) {
     sourcemap: 'inline',
     sourcefile: abs,
   });
-  // Evict oldest entry if cache is full (simple FIFO — Map preserves insertion order).
+  // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
     const oldest = TS_CACHE.keys().next().value;
     TS_CACHE.delete(oldest);

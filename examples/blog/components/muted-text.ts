@@ -1,8 +1,8 @@
 /**
- * `<muted-text>` — small all-caps mono rubric for timestamps and meta.
+ * `<muted-text>`: small all-caps mono rubric for timestamps and meta.
  * Use for everything that isn't prose: dates, authors, labels, statuses.
  *
- * Pure HTMLElement — no render step. Children are preserved as-is;
+ * Pure HTMLElement: no render step. Children are preserved as-is;
  * Tailwind utility classes are applied directly to the host.
  */
 if (typeof window !== 'undefined' && typeof HTMLElement !== 'undefined') {

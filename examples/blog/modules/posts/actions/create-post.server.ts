@@ -9,7 +9,7 @@ import type { PostFormatted } from '../types.ts';
 
 /**
  * Create a post authored by the currently-logged-in user. Reads the user
- * from the request context (AsyncLocalStorage) — no userId parameter.
+ * from the request context (AsyncLocalStorage): no userId parameter.
  */
 export async function createPost(
   input: unknown,

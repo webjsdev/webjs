@@ -1,6 +1,6 @@
-# GitHub Copilot Instructions — webjs app
+# GitHub Copilot Instructions: webjs app
 
-You are working on a webjs app — an AI-first, no-build, web-components-first
+You are working on a webjs app, an AI-first, no-build, web-components-first
 framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
 project-specific conventions. When AGENTS.md doesn't cover what you need,
 the full hosted docs are at **https://docs.webjs.com**.
@@ -43,7 +43,7 @@ If running without interactive approval (sandbox, auto-approve, etc.):
 ## Mandatory workflow
 
 Every code change must include:
-1. Commit and push — COMMIT AND PUSH after each logical unit of work.
+1. Commit and push. COMMIT AND PUSH after each logical unit of work.
    Always `git push` after committing. Don't accumulate changes. Automatic.
 2. Server tests in test/unit/*.test.ts (node:test for actions, queries, utilities)
 3. Browser tests in test/browser/*.test.js (WTR + Playwright, real Chromium)
@@ -66,7 +66,7 @@ Every code change must include:
 - Tagged template: html`<div>${value}</div>` with css`...` for styles
 - Components: extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), call `Class.register('tag-name')` at the bottom of the file. The tag name is the argument to `.register()`, not a static field.
 - Server actions: *.server.ts files with one exported async function each
-- Directives: webjs ships only `unsafeHTML`, `live`, and `repeat`. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported — use plain template-literal expressions and lifecycle hooks instead.
+- Directives: webjs ships only `unsafeHTML`, `live`, and `repeat`. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported - use plain template-literal expressions and lifecycle hooks instead.
 - Context: import { createContext, ContextProvider, ContextConsumer } from '@webjskit/core/context'
 - Task: import { Task, TaskStatus } from '@webjskit/core/task'
 - Routing: file-based under app/ (page.ts, layout.ts, route.ts, middleware.ts)

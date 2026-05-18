@@ -1,11 +1,11 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Testing — webjs' };
+export const metadata = { title: 'Testing | webjs' };
 
 export default function Testing() {
   return html`
     <h1>Testing</h1>
-    <p>webjs uses Node's built-in <code>node:test</code> runner — no external test framework needed. The framework itself ships with 70+ tests covering the server renderer, router, actions, CSRF, client diffing, and more.</p>
+    <p>webjs uses Node's built-in <code>node:test</code> runner, so no external test framework is needed. The framework itself ships with 70+ tests covering the server renderer, router, actions, CSRF, client diffing, and more.</p>
 
     <h2>Running Tests</h2>
     <pre># from the webjs monorepo root
@@ -14,7 +14,7 @@ npm test
 node --test test/*.test.js</pre>
 
     <h2>Server-Side Tests</h2>
-    <p>Test your server actions, queries, and utilities directly — they're just async functions:</p>
+    <p>Test your server actions, queries, and utilities directly. They're just async functions:</p>
     <pre>import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
@@ -53,8 +53,8 @@ test('matches dynamic routes', async () =&gt; {
 });</pre>
 
     <h2>Browser Tests (WTR + Playwright)</h2>
-    <p>Client-side tests run in <strong>real Chromium</strong> via Web Test Runner + Playwright. No fake DOM — full Shadow DOM, events, adoptedStyleSheets, everything works.</p>
-    <pre>// test/browser/renderer.test.js — runs in real Chromium
+    <p>Client-side tests run in <strong>real Chromium</strong> via Web Test Runner + Playwright. No fake DOM, just full Shadow DOM, events, adoptedStyleSheets, everything works.</p>
+    <pre>// test/browser/renderer.test.js: runs in real Chromium
 import { html } from '../../packages/core/src/html.js';
 import { render } from '../../packages/core/src/render-client.js';
 
@@ -116,9 +116,9 @@ webjs test --browser</pre>
 
     <p>It discovers test files automatically:</p>
     <ul>
-      <li><code>test/unit/*.test.{ts,js}</code> — unit tests</li>
-      <li><code>test/browser/*.test.{ts,js}</code> — E2E tests (with <code>--browser</code> flag)</li>
-      <li><code>test/*.test.{ts,js}</code> — root-level tests (flat layout)</li>
+      <li><code>test/unit/*.test.{ts,js}</code>: unit tests</li>
+      <li><code>test/browser/*.test.{ts,js}</code>: E2E tests (with <code>--browser</code> flag)</li>
+      <li><code>test/*.test.{ts,js}</code>: root-level tests (flat layout)</li>
     </ul>
 
     <h2>Browser Tests (WTR + Playwright)</h2>
@@ -168,6 +168,6 @@ web-test-runner.config.js   # WTR config</pre>
       <li><strong>New page or route</strong> → E2E test required</li>
       <li><strong>Bug fix</strong> → regression test required</li>
     </ul>
-    <p>The user should never have to ask for tests — they are part of every deliverable.</p>
+    <p>The user should never have to ask for tests. They are part of every deliverable.</p>
   `;
 }

@@ -4,7 +4,7 @@ import { splitByTier } from '../_lib/tier.ts';
 
 // Subtle, hover-revealed scrollbar for the sidenav.
 //
-// Default behavior: scrollbar track + thumb are transparent — the column
+// Default behavior: scrollbar track + thumb are transparent: the column
 // looks bar-less while idle. On hover (mouse over the aside) the thumb
 // fades in. Mirrors macOS overlay-scrollbar feel cross-browser:
 //   - Firefox: scrollbar-color, scrollbar-width
@@ -60,14 +60,14 @@ export default async function DocsLayout({ children }: { children: unknown }) {
   // Why not `hover:bg-accent`: in ui-website's @theme block, `bg-accent`
   // is deliberately remapped to `--accent-shadcn` so the component
   // PREVIEWS render shadcn's neutral hover state. That same remap makes
-  // chrome `bg-accent` resolve to oklch(0.97 0 0) — near-white on a
+  // chrome `bg-accent` resolve to oklch(0.97 0 0): near-white on a
   // near-white page bg, basically invisible on hover.
   //
   // Why `bg-bg-subtle` instead of a translucent `bg-fg/10`: a defined
   // theme token reads as a solid, padded surface against the page bg in
   // both light + dark, and the rounded-md corners stay crisp. The 10%
   // foreground tint we used before was so subtle in light mode that the
-  // padded+rounded shape didn't register visually — the hover looked
+  // padded+rounded shape didn't register visually: the hover looked
   // like a thin color smudge sized to the text, not a button.
   const linkClass =
     'block py-2 px-3 -mx-2 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors';
@@ -86,11 +86,11 @@ export default async function DocsLayout({ children }: { children: unknown }) {
         of 2rem makes the aside fit the visible viewport from the
         start. Once the user scrolls past the header, sticky top-4
         keeps the aside pinned 16px below viewport top with plenty
-        of headroom — slightly less vertical real estate in the
+        of headroom, slightly less vertical real estate in the
         sticky state, but acceptable trade-off for never needing a
         page scroll to reach the last item.
 
-        (Do not use U+0060 GRAVE ACCENT in this comment — it's inside
+        (Do not use U+0060 GRAVE ACCENT in this comment, since it's inside
         the docs layout's html tagged template. See
         [[feedback-html-template-no-backticks]].)
       -->

@@ -2,13 +2,13 @@ import { html } from '@webjskit/core';
 import '@webjskit/core/client-router';
 
 /**
- * Root layout for the docs site — Tailwind CSS browser runtime +
+ * Root layout for the docs site: Tailwind CSS browser runtime +
  * @theme design tokens. Light DOM everywhere. Shell chrome (sidebar +
  * content) lives in app/docs/layout.ts so the sidebar only renders on
  * documentation pages.
  */
 
-const TITLE = 'webjs — Documentation';
+const TITLE = 'webjs: Documentation';
 const DESCRIPTION = 'Getting started, routing, components, server actions, deployment, and more.';
 
 export function generateMetadata(ctx: { url: string }) {
@@ -84,7 +84,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --font-serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
         --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
-        /* spacing + radii + shadows — referenced by individual doc pages */
+        /* spacing + radii + shadows: referenced by individual doc pages */
         --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
         --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 72px;
         --rad-sm: 4px; --rad: 8px; --rad-lg: 12px; --rad-xl: 16px;
@@ -139,7 +139,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-tint:   oklch(0.78 0.14 55 / 0.12);
       }
 
-      /* Explicit light toggle on a dark OS — same UA-chrome problem in
+      /* Explicit light toggle on a dark OS: same UA-chrome problem in
          the other direction. */
       :root[data-theme='light'] {
         color-scheme: light;

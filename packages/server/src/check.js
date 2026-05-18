@@ -45,12 +45,12 @@ export const RULES = [
   {
     name: 'actions-in-modules',
     description:
-      'Server action files (*.server.{js,ts} or \'use server\') should live under modules/*/actions/ or modules/*/queries/, not loose in the app root. Files under lib/ are exempt — lib/ is the documented home for cross-cutting server infrastructure (prisma client, session helpers, auth config). Skipped when no modules/ directory exists.',
+      'Server action files (*.server.{js,ts} or \'use server\') should live under modules/*/actions/ or modules/*/queries/, not loose in the app root. Files under lib/ are exempt: lib/ is the documented home for cross-cutting server infrastructure (prisma client, session helpers, auth config). Skipped when no modules/ directory exists.',
   },
   {
     name: 'one-function-per-action',
     description:
-      'Each .server.{js,ts} file under modules/*/actions/ or modules/*/queries/ should export exactly one async function (one-function-per-file convention). Files outside those two directories — lib/ infrastructure modules, route handlers — are exempt; this rule is specifically about the action/query file pattern.',
+      'Each .server.{js,ts} file under modules/*/actions/ or modules/*/queries/ should export exactly one async function (one-function-per-file convention). Files outside those two directories: lib/ infrastructure modules, route handlers: are exempt; this rule is specifically about the action/query file pattern.',
   },
   {
     name: 'components-have-register',
@@ -80,12 +80,12 @@ export const RULES = [
   {
     name: 'no-json-data-files',
     description:
-      'Apps must use Prisma + SQLite (already wired up in every scaffold) for persisted data, not JSON files. Flags JSON files that look like a fake database — top-level data/ JSON files (data/todos.json, data/posts.json…), or DB-shaped names (db.json, database.json, store.json, *-db.json) anywhere outside node_modules/, prisma/, .next/, dist/, build/, public/. Read-only seed data and config JSON (package.json, tsconfig.json, etc.) are exempt.',
+      'Apps must use Prisma + SQLite (already wired up in every scaffold) for persisted data, not JSON files. Flags JSON files that look like a fake database: top-level data/ JSON files (data/todos.json, data/posts.json…), or DB-shaped names (db.json, database.json, store.json, *-db.json) anywhere outside node_modules/, prisma/, .next/, dist/, build/, public/. Read-only seed data and config JSON (package.json, tsconfig.json, etc.) are exempt.',
   },
   {
     name: 'shell-in-non-root-layout',
     description:
-      'Only the root layout (app/layout.{js,ts}) may write a <!doctype>/<html>/<head>/<body> shell to override default <html lang>, <body class>, etc. Non-root layouts (app/<segment>/layout.{js,ts}) and pages (app/**/page.{js,ts}) must not — the framework auto-emits the wrapper around the whole composition, so a nested shell ends up nested inside <body> where browsers drop it. Triggers on any of <!doctype>, <html, <head, <body in a non-root layout or page.',
+      'Only the root layout (app/layout.{js,ts}) may write a <!doctype>/<html>/<head>/<body> shell to override default <html lang>, <body class>, etc. Non-root layouts (app/<segment>/layout.{js,ts}) and pages (app/**/page.{js,ts}) must not: the framework auto-emits the wrapper around the whole composition, so a nested shell ends up nested inside <body> where browsers drop it. Triggers on any of <!doctype>, <html, <head, <body in a non-root layout or page.',
   },
 ];
 
@@ -138,7 +138,7 @@ async function loadOverrides(appDir) {
       overrides = /** @type {Record<string, boolean>} */ (cfg);
     }
   } catch {
-    // No conventions file — try package.json
+    // No conventions file: try package.json
     try {
       const pkgPath = join(appDir, 'package.json');
       const pkgText = await readFile(pkgPath, 'utf8');
@@ -147,7 +147,7 @@ async function loadOverrides(appDir) {
         overrides = pkg.conventions;
       }
     } catch {
-      // No package.json or no conventions key — everything enabled
+      // No package.json or no conventions key: everything enabled
     }
   }
 
@@ -188,7 +188,7 @@ function guessModuleName(relPath) {
 
 /**
  * Count the number of named exported async functions in source text using
- * regex heuristics (no AST — intentionally fast and loose).
+ * regex heuristics (no AST: intentionally fast and loose).
  *
  * Looks for patterns like:
  *   export async function name(...)
@@ -286,7 +286,7 @@ function matchClosingBrace(s, start) {
 
 /**
  * Find every `<key>:` entry inside the first `static properties = { … }`
- * literal in `classBody`. Returns the bare property names — the keys
+ * literal in `classBody`. Returns the bare property names: the keys
  * we'll then look up as class fields.
  *
  * @param {string} classBody
@@ -493,7 +493,7 @@ export async function checkConventions(appDir, opts) {
       if (/^modules\/[^/]+\/(components|utils)\//.test(normRel)) continue;
       // OK: cross-cutting server infrastructure under lib/. The documented
       // pattern puts the Prisma singleton, session helpers, auth config,
-      // password hashing, etc. in lib/ — those files are intentionally
+      // password hashing, etc. in lib/: those files are intentionally
       // multi-export 'use server' modules, not one-function actions.
       if (/^lib\//.test(normRel)) continue;
       // Anything else (loose at the root, under app/, etc.) is flagged.
@@ -509,7 +509,7 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: one-function-per-action ---
-  // Apply ONLY to files inside modules/<feature>/{actions,queries}/ — that
+  // Apply ONLY to files inside modules/<feature>/{actions,queries}/: that
   // is where the one-function-per-file convention lives. lib/ infra modules
   // and any other 'use server' file outside the action/query dirs are
   // intentional multi-export utility modules and are exempt.
@@ -537,8 +537,8 @@ export async function checkConventions(appDir, opts) {
       // Check if it defines a class extending WebComponent
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
       // Accept either registration pattern:
-      //   Counter.register('tag')                    — webjs idiom
-      //   customElements.define('tag', Counter)      — native
+      //   Counter.register('tag')                    (webjs idiom)
+      //   customElements.define('tag', Counter)      (native)
       if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"]/.test(content)) continue;
       if (/\bcustomElements\.define\s*\(/.test(content)) continue;
       violations.push({
@@ -573,7 +573,7 @@ export async function checkConventions(appDir, opts) {
   if (isRuleEnabled('no-server-imports-in-components', overrides)) {
     for (const { abs, rel, content } of files) {
       if (!isComponentFile(rel)) continue;
-      // Skip server action files — they are allowed to import anything
+      // Skip server action files: they are allowed to import anything
       if (isServerActionFile(abs, content)) continue;
 
       const importPatterns = [
@@ -636,7 +636,7 @@ export async function checkConventions(appDir, opts) {
   // the real database. Every scaffold ships Prisma + SQLite ready to go, so
   // there is never a good reason to invent `data/todos.json`, `db.json`,
   // etc. The rule is intentionally narrow: we only flag JSON files that
-  // *look like* a database — by location (top-level `data/` directory) or by
+  // *look like* a database: by location (top-level `data/` directory) or by
   // name (db/database/store/*-db). Config and read-only seed JSON elsewhere
   // is left alone.
   if (isRuleEnabled('no-json-data-files', overrides)) {
@@ -711,7 +711,7 @@ export async function checkConventions(appDir, opts) {
       violations.push({
         rule: 'no-json-data-files',
         file: s.rel,
-        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up — see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
+        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
         fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.ts'\`. Delete ${s.rel} once the data has moved.`,
       });
     }
@@ -732,7 +732,7 @@ export async function checkConventions(appDir, opts) {
       if (ROOT_LAYOUT.test(rel)) continue;
       if (!LAYOUT_OR_PAGE.test(rel)) continue;
       // Strip line comments + /* … */ block comments + ` ` string-template
-      // tag content is fine — we're looking at the literal HTML in the
+      // tag content is fine: we're looking at the literal HTML in the
       // returned `html` template, which won't be inside a code comment.
       // A naive substring scan is good enough; false positives only when
       // someone genuinely embeds `<html>` inside a string literal that
@@ -746,7 +746,7 @@ export async function checkConventions(appDir, opts) {
           rule: 'shell-in-non-root-layout',
           file: rel,
           message:
-            `Non-root layout/page contains ${m[0]} — only the root layout (app/layout.{js,ts}) may write the shell. The framework auto-emits <!doctype>/<html>/<head>/<body> around the whole composition; a nested shell ends up duplicated and dropped by the HTML parser.`,
+            `Non-root layout/page contains ${m[0]}: only the root layout (app/layout.{js,ts}) may write the shell. The framework auto-emits <!doctype>/<html>/<head>/<body> around the whole composition; a nested shell ends up duplicated and dropped by the HTML parser.`,
           fix:
             'Remove the <!doctype>/<html>/<head>/<body> wrapper from this file. Use the `metadata` export for <title>/<meta>/og/twitter, return inline <link>/<style>/<script> for head-bound resources (they auto-hoist), and put any `<html lang>` / `<body class>` overrides in app/layout.{js,ts} instead.',
         });

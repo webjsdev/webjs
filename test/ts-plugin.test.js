@@ -1,10 +1,10 @@
 /**
- * Unit tests for @webjskit/ts-plugin — verifies the language-service decorator
+ * Unit tests for @webjskit/ts-plugin: verifies the language-service decorator
  * returns a correct `getDefinitionAndBoundSpan` result for a cursor
  * positioned on a custom-element tag inside an html`` template.
  *
  * Builds a tiny in-memory TypeScript language service host, plants two
- * fixture files, and drives the plugin directly — no tsserver, no
+ * fixture files, and drives the plugin directly: no tsserver, no
  * editor.
  *
  * The plugin recognises the web-standard convention:
@@ -71,7 +71,7 @@ function offsetOf(file, needle) {
   return i;
 }
 
-test('loadLitEnhanced: ts-lit-plugin is bundled — single-plugin tsconfig works', () => {
+test('loadLitEnhanced: ts-lit-plugin is bundled: single-plugin tsconfig works', () => {
   // Sanity check: @webjskit/ts-plugin pulls ts-lit-plugin in transitively
   // and loads it inside create(info). This test verifies the package is
   // resolvable from the plugin's perspective so we never accidentally
@@ -85,7 +85,7 @@ test('loadLitEnhanced: ts-lit-plugin is bundled — single-plugin tsconfig works
 test('loadLitEnhanced: falls back gracefully when create(info) is given a minimal info', () => {
   // Our existing tests pass a deliberately partial `info` object (no
   // serverHost data, minimal logger). ts-lit-plugin may not handle that
-  // and throw — the plugin must NOT crash; it should just degrade to the
+  // and throw: the plugin must NOT crash; it should just degrade to the
   // bare languageService. If this test passes, the fallback works for
   // the rest of the suite.
   const svc = makeService({
@@ -424,7 +424,7 @@ test('suppresses lit-plugin "unknown tag" diagnostic for an imported webjs compo
 });
 
 test('keeps lit-plugin "unknown tag" diagnostic when the component is NOT imported', () => {
-  // Same component, but page.ts forgets the side-effect import — runtime
+  // Same component, but page.ts forgets the side-effect import: runtime
   // would fail too, so the diagnostic must remain.
   const simulator = (fileName, src) => {
     if (fileName !== '/page.ts') return [];
@@ -447,7 +447,7 @@ test('keeps lit-plugin "unknown tag" diagnostic when the component is NOT import
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      // No `import './auth.ts'` — auth-forms unreachable from page.ts.
+      // No `import './auth.ts'`: auth-forms unreachable from page.ts.
       `import { html } from '@webjskit/core';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms></auth-forms>\`;\n` +
@@ -598,7 +598,7 @@ test('flags string-or-number against a string-literal-union type', () => {
 });
 
 test('does not type-check static (non-interpolated) attribute values', () => {
-  // <auth-forms mode=123> is plain template text — at runtime it's just
+  // <auth-forms mode=123> is plain template text: at runtime it's just
   // the string "123", not a number. We deliberately don't flag it.
   const svc = makeService({
     '/auth.ts':
@@ -621,7 +621,7 @@ test('does not type-check static (non-interpolated) attribute values', () => {
 });
 
 test('skips check when component is reachable but the prop has no `declare` annotation', () => {
-  // If the user hasn't typed the prop, we can't check — fall back to
+  // If the user hasn't typed the prop, we can't check: fall back to
   // silence rather than noise.
   const svc = makeService({
     '/auth.ts':
@@ -646,7 +646,7 @@ test('skips check when component is reachable but the prop has no `declare` anno
 test('does not check tags that are not reachable through imports', () => {
   // The component class exists in the program but page.ts forgets to
   // import it. Reachability gating means we don't synthesise a value
-  // diagnostic — the missing import is already surfaced via the kept
+  // diagnostic: the missing import is already surfaced via the kept
   // "unknown tag" warning from ts-lit-plugin.
   const svc = makeService({
     '/auth.ts':

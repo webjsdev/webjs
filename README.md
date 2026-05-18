@@ -11,35 +11,35 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ## Why webjs
 
-- **AI-first.** Predictable file conventions, one function per file, explicit `.server.ts` boundary, `AGENTS.md` contract — designed so LLMs modify code without loading the entire codebase into context.
-- **No build step you run.** `.ts` files served directly. The dev server transforms TypeScript via esbuild for both server-side imports (SSR) and browser-bound modules (hydration) — same transformer for both, ~1ms/file, cached by mtime. Full TS feature support (enums, decorators, parameter properties — anything esbuild handles). Edit, refresh, done.
-- **Web components, light DOM by default.** Pages and components render as light DOM so global CSS and Tailwind utilities apply directly — no `::part`, no `:host`, no CSS-var plumbing. Shadow DOM is opt-in (`static shadow = true`) when you need scoped styles or real `<slot>` projection. Both modes SSR fully, no hydration runtime.
-- **Progressive enhancement, built in.** Pages *and* components are SSR'd to real HTML — every web component's `render()` runs on the server, so its initial markup is in the response before any script loads. Content reads, links navigate, forms submit (server actions are plain HTML POSTs), and display-only custom elements look right, all without JavaScript. JS is opt-in *per interactive behavior*, not per component: a counter renders as "0" without JS — only the +/- click handling needs scripts. The HTML is the floor; the client router and `@click` / `setState` interactivity are layered on top.
-- **Tailwind CSS by default.** The scaffold ships with the Tailwind browser runtime + `@theme` design tokens. Prefer hand-written CSS? Opt out entirely — the framework works just as well with vanilla CSS when you follow the wrapper-scoping convention (`.page-<route>`, `.layout-<name>`, component-tag scoped). Full recipe in the [Styling docs](./docs/app/docs/styling/page.ts).
-- **Full-stack type safety.** Import a `.server.ts` function from a component — TypeScript sees the real signature. webjs's built-in ESM serializer on the wire preserves `Date`, `Map`, `Set`, `BigInt`, `TypedArray`, `Blob`, `File`, `FormData`, and reference cycles.
+- **AI-first.** Predictable file conventions, one function per file, an explicit `.server.ts` boundary, and an `AGENTS.md` contract. The whole design lets LLMs modify code without loading the entire codebase into context.
+- **No build step you run.** `.ts` files served directly. The dev server transforms TypeScript via esbuild for both server-side imports (SSR) and browser-bound modules (hydration). One transformer handles both at roughly 1ms per file, cached by mtime. Full TS feature support: enums, decorators, parameter properties, anything esbuild handles. Edit, refresh, done.
+- **Web components, light DOM by default.** Pages and components render as light DOM so global CSS and Tailwind utilities apply directly: no `::part`, no `:host`, no CSS-var plumbing. Shadow DOM is opt-in (`static shadow = true`) when you need scoped styles or real `<slot>` projection. Both modes SSR fully, no hydration runtime.
+- **Progressive enhancement, built in.** Pages *and* components are SSR'd to real HTML. Every web component's `render()` runs on the server, so its initial markup is in the response before any script loads. Content reads, links navigate, forms submit (server actions are plain HTML POSTs), and display-only custom elements look right, all without JavaScript. JS is opt-in *per interactive behavior*, not per component: a counter renders as "0" without JS, and only the +/- click handling needs scripts. The HTML is the floor, and the client router and `@click` / `setState` interactivity are layered on top.
+- **Tailwind CSS by default.** The scaffold ships with the Tailwind browser runtime + `@theme` design tokens. Prefer hand-written CSS? Opt out entirely, and the framework works just as well with vanilla CSS when you follow the wrapper-scoping convention (`.page-<route>`, `.layout-<name>`, component-tag scoped). Full recipe in the [Styling docs](./docs/app/docs/styling/page.ts).
+- **Full-stack type safety.** Import a `.server.ts` function from a component, and TypeScript sees the real signature. webjs's built-in ESM serializer on the wire preserves `Date`, `Map`, `Set`, `BigInt`, `TypedArray`, `Blob`, `File`, `FormData`, and reference cycles.
 - **Server-file source is unreachable from the browser.** Framework invariant: any file ending `.server.{js,ts}` or starting with `'use server'` is always served as an RPC stub, never its real source. Enforced in the HTTP layer with regression tests.
 - **NextJs-style routing.** `page.ts`, `layout.ts`, `route.ts`, `error.ts`, `middleware.ts`, `[params]`, `(groups)`, `_private`. Layouts persist across navigations.
 - **Client router.** Turbo-Drive-style link interception. Shadow-DOM-aware via `composedPath()`. Layouts stay mounted, only page content swaps. No white flash.
 - **WebSockets built in.** Export `WS` from `route.ts` → WebSocket endpoint. `connectWS()` on the client auto-reconnects.
-- **Backend-only mode.** Skip pages entirely — use webjs as a lightweight API framework with file routing, middleware, rate limiting, and TypeScript.
-- **Built-in essentials.** Auth, sessions, caching, WebSocket broadcast, rate limiting — all built in, sharing one pluggable cache store. In-memory by default; call `setStore(redisStore({ url: process.env.REDIS_URL }))` once at startup to put all four on Redis for horizontal scaling.
-- **Lazy loading.** `static lazy = true` defers module download until the component scrolls into the viewport. SSR content stays visible — only the JS is lazy.
+- **Backend-only mode.** Skip pages entirely and use webjs as a lightweight API framework with file routing, middleware, rate limiting, and TypeScript.
+- **Built-in essentials.** Auth, sessions, caching, WebSocket broadcast, and rate limiting are all built in, sharing one pluggable cache store. In-memory by default. Call `setStore(redisStore({ url: process.env.REDIS_URL }))` once at startup to put all four on Redis for horizontal scaling.
+- **Lazy loading.** `static lazy = true` defers module download until the component scrolls into the viewport. SSR content stays visible. Only the JS is lazy.
 - **Error boundaries & loading states.** `error.ts` catches render failures at any route level. `loading.ts` auto-wraps pages in Suspense boundaries.
-- **Metadata routes.** `sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts` — dynamic SEO/PWA metadata from functions, not static files.
+- **Metadata routes.** `sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts`: dynamic SEO/PWA metadata from functions, not static files.
 - **`expose()` for REST.** Tag a server action with `expose('POST /api/posts', fn)` to make it reachable over HTTP and via RPC. Optional input validation.
 - **Production ready.** CSRF, gzip/brotli, HTTP/2, 103 Early Hints, CSP nonces, modulepreload, rate limiting, health probes, graceful shutdown, streaming Suspense.
-- **AI-first component library — Webjs UI.** 32 primitives at [ui.webjs.dev](https://ui.webjs.dev), written for AI agents. Two-tier composition: pure class-helper functions (`buttonClass`, `cardClass`, `inputClass`) for visual primitives, plus a small set of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where state matters. `webjs ui add button card dialog` copies source into your project — you own it, edit it. Auto-installed with `@webjskit/cli`. Non-webjs users: `npx webjsui add button card dialog`.
+- **AI-first component library: Webjs UI.** 32 primitives at [ui.webjs.dev](https://ui.webjs.dev), written for AI agents. Two-tier composition: pure class-helper functions (`buttonClass`, `cardClass`, `inputClass`) for visual primitives, plus a small set of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where state matters. `webjs ui add button card dialog` copies source into your project, and you own it and edit it. Auto-installed with `@webjskit/cli`. Non-webjs users: `npx webjsui add button card dialog`.
 
 ## Quickstart
 
-> **AI agents — read this before scaffolding.** Only three templates exist
-> (`full-stack` default, `--template api`, `--template saas`); the CLI
-> rejects anything else. Always start from one of them — never hand-roll
-> the directory structure. Default to **full-stack with Prisma + SQLite**;
-> never store app data in JSON files / in-memory arrays / localStorage as
-> a substitute for the database. The scaffold is **reference only** —
-> replace the example layout / page / components / `User` model with the
-> app the user actually asked for. Picker:
+> **AI agents, read this before scaffolding.** Only three templates exist
+> (`full-stack` default, `--template api`, `--template saas`), and the CLI
+> rejects anything else. Always start from one of them. Never hand-roll
+> the directory structure. Default to **full-stack with Prisma + SQLite**.
+> Never store app data in JSON files, in-memory arrays, or localStorage
+> as a substitute for the database. The scaffold is **reference only**.
+> Replace the example layout, page, components, and `User` model with
+> the app the user actually asked for. Picker:
 >
 > - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce…) → **default** (`webjs create <name>`)
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
@@ -82,9 +82,9 @@ cd website        && npm run dev     # just the website
 
 ```
 packages/
-  core/       # webjs — html, css, WebComponent, renderers, client router
-  server/     # @webjskit/server — dev/prod server, router, SSR, actions, WS
-  cli/        # @webjskit/cli — webjs dev/start/build/db
+  core/       # webjs: html, css, WebComponent, renderers, client router
+  server/     # @webjskit/server: dev/prod server, router, SSR, actions, WS
+  cli/        # @webjskit/cli: webjs dev/start/build/db
 examples/
   blog/       # full-featured reference app (auth, posts, comments, chat)
 docs/         # documentation site (built on webjs itself)
@@ -95,7 +95,7 @@ CLAUDE.md     # Claude Code quick-reference
 ## Example
 
 ```ts
-// app/page.ts — server-rendered, async data fetching
+// app/page.ts: server-rendered, async data fetching
 import { html, repeat } from '@webjskit/core';
 import '../components/counter.ts';
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
@@ -115,11 +115,11 @@ export default async function Home() {
 ```
 
 ```ts
-// components/counter.ts — interactive web component, light DOM + Tailwind
+// components/counter.ts: interactive web component, light DOM + Tailwind
 import { WebComponent, html } from '@webjskit/core';
 
 export class Counter extends WebComponent {
-  // Light DOM is the default; Tailwind utility classes apply directly.
+  // Light DOM is the default, so Tailwind utility classes apply directly.
   static properties = { count: { type: Number } };
   declare count: number;
 
@@ -146,7 +146,7 @@ in to shadow DOM with `static shadow = true` and author styles via
 `static styles = css\`…\``.
 
 ```ts
-// modules/posts/queries/list-posts.server.ts — one function per file
+// modules/posts/queries/list-posts.server.ts: one function per file
 'use server';
 import { prisma } from '../../../lib/prisma.ts';
 
@@ -157,8 +157,8 @@ export async function listPosts() {
 
 ## Production
 
-No build step. The same source files that ran in `webjs dev` run in
-production — served as native ES modules via importmap, with
+No build step. The same source files that ran in `webjs dev` also run in
+production, served as native ES modules via importmap, with
 `<link rel="modulepreload">` hints emitted at SSR time so the browser
 fetches the page's modules in parallel over a single HTTP/2 connection.
 Same model as Rails 7+ with `importmap-rails`.
@@ -169,12 +169,12 @@ webjs start --port 8080                            # JSON logs, gzip/brotli, ETa
 
 `webjs start` speaks plain HTTP/1.1. The expected production topology
 is a reverse proxy in front that terminates TLS and speaks HTTP/2 to
-the browser. **PaaS edges already do this for free** — Railway, Fly,
-Render, Vercel, Cloudflare Pages, Netlify, Heroku all serve HTTP/2 to
-clients while proxying HTTP/1.1 to your container. For bare-VM /
+the browser. **PaaS edges already do this for free.** Railway, Fly,
+Render, Vercel, Cloudflare Pages, Netlify, and Heroku all serve HTTP/2
+to clients while proxying HTTP/1.1 to your container. For bare-VM or
 self-hosted deploys, put nginx, Caddy, or Traefik in front. HTTP/2 at
 the edge matters because webjs's per-file ESM model benefits from
-HTTP/2 multiplex; HTTP/1.1-only deployments still work, just slower
+HTTP/2 multiplex. HTTP/1.1-only deployments still work, just slower
 on cold cache.
 
 Health: `GET /__webjs/health`. Graceful shutdown on `SIGTERM`.
@@ -211,7 +211,7 @@ Pre-1.0. 632 unit tests (96.6% line coverage, 87.5% branch, 93.6% function),
 - **Core:** SSR with DSD (opt-in) + light-DOM hydration (default), fine-grained client renderer, `repeat()`, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net
 - **Data:** server actions with webjs's built-in serializer (Date/Map/Set/BigInt/TypedArray/Blob/File/FormData/cycles survive the wire), `expose()` for REST, `json()` + `richFetch()` for content-negotiated APIs, `cache()` for server-side query caching with TTL + `invalidate()`
 - **Server:** file router, per-segment middleware, `rateLimit()`, WebSockets + `broadcast()`, CSRF, compression, HTTP/2, 103 Early Hints, health probes, graceful shutdown, `Session` class with `SessionStorage` (cookie or store-backed), NextAuth-style `createAuth()` (Credentials, Google, GitHub)
-- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, plus `@webjskit/ts-plugin` for tsserver — a single editor-only plugin that bundles `ts-lit-plugin` internally and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. The scaffold lists exactly one plugin in `tsconfig.json`. Not required for the framework to run.
+- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, plus `@webjskit/ts-plugin` for tsserver. The plugin is a single editor-only piece that bundles `ts-lit-plugin` internally and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. The scaffold lists exactly one plugin in `tsconfig.json`. Not required for the framework to run.
 
 ## License
 

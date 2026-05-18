@@ -3,7 +3,7 @@ import { stringify as wjStringify, parse as wjParse } from './serialize.js';
 const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 
 /**
- * `richFetch(url, init?)` — drop-in `fetch` for calling your own API routes
+ * `richFetch(url, init?)`: drop-in `fetch` for calling your own API routes
  * when you want rich types to round-trip (`Date`, `Map`, `Set`, `BigInt`,
  * `TypedArray`, `Blob`, `File`, `FormData`, cycles).
  *

@@ -123,7 +123,7 @@ export async function isServerFile(file) {
 
 /**
  * @param {ActionIndex} idx
- * @param {string} urlPath — a browser-visible URL path like `/actions/foo.server.js`
+ * @param {string} urlPath - a browser-visible URL path like `/actions/foo.server.js`
  */
 export function resolveServerModule(idx, urlPath) {
   const abs = join(idx.appDir, urlPath.split('/').join(sep));
@@ -324,7 +324,7 @@ export async function invokeExposedAction(idx, route, params, req) {
       arg = route.validate(arg);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // Many schema libs (zod, valibot) throw structured errors — pass their
+      // Many schema libs (zod, valibot) throw structured errors: pass their
       // `issues` array through when present for easier client-side handling.
       const issues = e && typeof e === 'object' && 'issues' in e
         ? /** @type any */ (e).issues

@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Server Actions — webjs' };
+export const metadata = { title: 'Server Actions | webjs' };
 
 export default function ServerActions() {
   return html`
@@ -82,7 +82,7 @@ export const deletePost = (...args) => __rpc('deletePost', args);</pre>
     <p>The hash (<code>a1b2c3d4e5</code>) is a SHA-256 digest of the file's absolute path, computed at startup. The stub's function signatures match the original exports, so TypeScript sees the real types through the import.</p>
 
     <h2>Full-Stack Type Safety</h2>
-    <p>Because the browser's import statement points at the real <code>.server.ts</code> file, TypeScript's language server resolves types from the original source. Your editor shows the correct parameter types, return types, and JSDoc comments. The rewrite happens only at runtime in the browser -- the type checker never sees the stub.</p>
+    <p>Because the browser's import statement points at the real <code>.server.ts</code> file, TypeScript's language server resolves types from the original source. Your editor shows the correct parameter types, return types, and JSDoc comments. The rewrite happens only at runtime in the browser, so the type checker never sees the stub.</p>
 
     <pre>// components/post-form.ts
 import { WebComponent, html, css } from '@webjskit/core';
@@ -117,19 +117,19 @@ PostForm.register('post-form');</pre>
     <h2>The Wire Format</h2>
     <p>Server actions use <strong>webjs's built-in serializer</strong> (a pure-ESM, dependency-free implementation in <code>@webjskit/core</code>) for the RPC wire, not plain <code>JSON.stringify</code>. The content type is <code>application/vnd.webjs+json</code>. Rich JavaScript types survive the round trip:</p>
     <ul>
-      <li><code>Date</code> objects -- arrive as real <code>Date</code> instances, not ISO strings</li>
-      <li><code>Map</code> and <code>Set</code> -- preserved as their native types</li>
-      <li><code>BigInt</code> -- preserved (plain JSON throws on BigInt)</li>
-      <li><code>undefined</code> -- distinguished from <code>null</code></li>
-      <li><code>NaN</code>, <code>Infinity</code>, <code>-0</code> -- preserved (plain JSON drops these)</li>
-      <li><code>Error</code> -- name + message + stack preserved</li>
-      <li><code>TypedArray</code> (Int8...Float64), <code>ArrayBuffer</code>, <code>DataView</code> -- inlined as base64</li>
-      <li><code>Blob</code>, <code>File</code>, <code>FormData</code> -- including binary content (file uploads through actions just work)</li>
-      <li><code>Symbol.for(...)</code> registered symbols -- preserved (local symbols throw a clear error)</li>
-      <li>Reference cycles + shared references -- preserved by id</li>
+      <li><code>Date</code> objects: arrive as real <code>Date</code> instances, not ISO strings</li>
+      <li><code>Map</code> and <code>Set</code>: preserved as their native types</li>
+      <li><code>BigInt</code>: preserved (plain JSON throws on BigInt)</li>
+      <li><code>undefined</code>: distinguished from <code>null</code></li>
+      <li><code>NaN</code>, <code>Infinity</code>, <code>-0</code>: preserved (plain JSON drops these)</li>
+      <li><code>Error</code>: name + message + stack preserved</li>
+      <li><code>TypedArray</code> (Int8...Float64), <code>ArrayBuffer</code>, <code>DataView</code>: inlined as base64</li>
+      <li><code>Blob</code>, <code>File</code>, <code>FormData</code>: including binary content (file uploads through actions just work)</li>
+      <li><code>Symbol.for(...)</code> registered symbols: preserved (local symbols throw a clear error)</li>
+      <li>Reference cycles + shared references: preserved by id</li>
       <li>Nested combinations of all the above</li>
     </ul>
-    <p>The stub serialises function arguments with <code>await stringify(args)</code> and deserialises the response with <code>parse(text)</code>. The server does the inverse. This is invisible to the developer -- you work with native types on both sides. The serializer is async because Blob/File/FormData require an <code>await arrayBuffer()</code>; for payloads without binary the async cost is just one Promise tick.</p>
+    <p>The stub serialises function arguments with <code>await stringify(args)</code> and deserialises the response with <code>parse(text)</code>. The server does the inverse. This is invisible to the developer, so you work with native types on both sides. The serializer is async because Blob/File/FormData require an <code>await arrayBuffer()</code>. For payloads without binary the async cost is just one Promise tick.</p>
 
     <h2>CSRF Protection</h2>
     <p>Every server action RPC call is protected against Cross-Site Request Forgery using a <strong>double-submit cookie</strong> pattern:</p>
@@ -140,7 +140,7 @@ PostForm.register('post-form');</pre>
     </ol>
     <p>This works because a cross-origin attacker cannot read the victim's cookies (SameSite + same-origin policy), so they cannot set the header to the matching value. No server-side session store is needed.</p>
 
-    <h2>expose() -- REST Endpoints from Server Actions</h2>
+    <h2>expose(): REST Endpoints from Server Actions</h2>
     <p>The <code>expose()</code> function makes a server action available as a first-class REST endpoint in addition to its internal RPC URL. The same function implementation backs both call paths.</p>
 
     <pre>// actions/posts.server.ts
@@ -164,13 +164,13 @@ export const createPost = expose('POST /api/posts', async ({ title, body }: { ti
 
     <p>Now <code>createPost</code> is reachable two ways:</p>
     <ul>
-      <li><strong>From a client component:</strong> <code>import { createPost } from '../actions/posts.server.ts'</code> -- auto-rewritten to RPC stub, CSRF-protected, encoded with the webjs rich serializer.</li>
-      <li><strong>From curl or another service:</strong> <code>POST /api/posts</code> with a JSON body -- the function receives a single merged object of URL params + query string + JSON body.</li>
+      <li><strong>From a client component:</strong> <code>import { createPost } from '../actions/posts.server.ts'</code> is auto-rewritten to an RPC stub, CSRF-protected, encoded with the webjs rich serializer.</li>
+      <li><strong>From curl or another service:</strong> <code>POST /api/posts</code> with a JSON body. The function receives a single merged object of URL params + query string + JSON body.</li>
     </ul>
 
     <p>The pattern string follows the format <code>"METHOD /path"</code>. Path params use <code>:name</code> syntax (or <code>[name]</code> bracket syntax for familiarity):</p>
     <pre>expose('GET /api/posts/:slug', fn)       // :slug style
-expose('DELETE /api/posts/[slug]', fn)   // [slug] style -- equivalent</pre>
+expose('DELETE /api/posts/[slug]', fn)   // [slug] style: equivalent</pre>
 
     <h3>expose() Validate Hook</h3>
     <p>The optional <code>validate</code> function runs before the action when invoked over HTTP. It receives the merged input object and should return the validated/transformed input. Throw to reject with a 400 response.</p>
@@ -366,6 +366,6 @@ export async function POST(req: Request) {
   &lt;textarea name="body" required&gt;&lt;/textarea&gt;
   &lt;button&gt;Publish&lt;/button&gt;
 &lt;/form&gt;</pre>
-    <p>The router intercepts the submit, sends the POST, applies the response — 2xx with redirect for success, 4xx HTML for validation errors. Works without JavaScript (just slower; full page reload), and ramps up to partial-swap when the client router is active. Both ends of the progressive-enhancement spectrum from one piece of code. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</p>
+    <p>The router intercepts the submit, sends the POST, applies the response (2xx with redirect for success, 4xx HTML for validation errors). Works without JavaScript (just slower, with a full page reload), and ramps up to partial-swap when the client router is active. Both ends of the progressive-enhancement spectrum from one piece of code. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</p>
   `;
 }

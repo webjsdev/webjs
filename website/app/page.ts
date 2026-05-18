@@ -1,15 +1,15 @@
 import { html } from '@webjskit/core';
 
 export const metadata = {
-  title: 'webjs — AI-first, web-components-first, no-build web framework',
-  description: 'AI-first, web-components-first framework. File-based routing, server actions, streaming SSR — built on web standards. Designed for AI agents to read, write, and ship.',
+  title: 'webjs: AI-first, web-components-first, no-build web framework',
+  description: 'AI-first, web-components-first framework. File-based routing, server actions, streaming SSR: built on web standards. Designed for AI agents to read, write, and ship.',
 };
 
 // URLs for the sibling apps. Read at SSR time so they reflect whatever
-// environment the website is running in — `webjs dev` uses the default
+// environment the website is running in: `webjs dev` uses the default
 // ports; deployments override DOCS_URL / BLOG_URL with real URLs.
 // Guarded against `process` being undefined because this file also
-// loads on the client during hydration — an unguarded access crashes
+// loads on the client during hydration: an unguarded access crashes
 // the module and prevents custom elements (e.g. <theme-toggle>) from
 // upgrading.
 const env = (globalThis as any).process?.env ?? {};
@@ -19,19 +19,19 @@ const UI_URL   = env.UI_URL   || 'https://ui.webjs.dev';
 const STORY_URL = 'https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full-stack-framework-for-the-ai-era-i-call-it-webjs';
 
 const FEATURES = [
-  { icon: '🤖', title: 'AI-First Development', desc: 'Designed from the ground up for AI agents. AGENTS.md contract, cross-agent guardrails (.cursorrules, .windsurfrules, copilot-instructions.md), auto-generated tests and docs, opinionated conventions — LLMs produce production-quality code without guesswork.' },
+  { icon: '🤖', title: 'AI-First Development', desc: 'Designed from the ground up for AI agents. AGENTS.md contract, cross-agent guardrails (.cursorrules, .windsurfrules, copilot-instructions.md), auto-generated tests and docs, opinionated conventions: LLMs produce production-quality code without guesswork.' },
   { icon: '⚡', title: 'No Build Step', desc: 'Source files are served to the browser as native ES modules. Edit a .ts file, refresh, see it. No webpack, no Vite, no compile step. Auto-vendor bundling for npm packages via import maps.' },
-  { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class — html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles, <slot> projection, or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
-  { icon: '🪜', title: 'Progressive Enhancement by Default', desc: 'Pages and every web component are SSR’d to real HTML — each component’s render() runs on the server, so its initial markup is in the response before any script loads. With JS disabled: content reads, <a> links navigate, <form> server actions submit, and display-only custom elements look right. JavaScript is opt-in per interactive behavior, not per component: a counter renders as "0" without JS — only the +/- click handling needs scripts. The HTML is the floor; @click and setState interactivity are layered on top.' },
+  { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class: html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles, <slot> projection, or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
+  { icon: '🪜', title: 'Progressive Enhancement by Default', desc: 'Pages and every web component are SSR’d to real HTML: each component’s render() runs on the server, so its initial markup is in the response before any script loads. With JS disabled: content reads, <a> links navigate, <form> server actions submit, and display-only custom elements look right. JavaScript is opt-in per interactive behavior, not per component: a counter renders as "0" without JS: only the +/- click handling needs scripts. The HTML is the floor; @click and setState interactivity are layered on top.' },
   { icon: '💡', title: 'Editor Intelligence', desc: '@webjskit/ts-plugin gives VS Code and Neovim type-checked html`` templates, custom-element go-to-definition, attribute auto-complete from static properties, and silenced "Unknown tag" diagnostics for Class.register("tag") elements.' },
-  { icon: '🎨', title: 'Tailwind CSS by Default', desc: 'The scaffold ships with the Tailwind browser runtime and @theme design tokens — color palette, font families, fluid type scale, and motion durations wired into Tailwind classes. Dedup repeated class bundles with small JS helpers in app/_utils/ui.ts that run at SSR time. Custom CSS still supported — no hard Tailwind dependency.' },
-  { icon: '🧩', title: 'AI-First Component Library', desc: 'Webjs UI ships 32 primitives written for AI agents, not for human dev ergonomics. Two-tier composition: pure class-helper functions (buttonClass, cardClass, inputClass) compose with raw native elements, plus a small set of stateful custom elements (ui-dialog, ui-tabs, ui-popover, ui-dropdown-menu) only where the browser needs state. Source-copied into your project — you own it. Zero third-party runtime deps. Visit ui.webjs.dev.' },
-  { icon: '📁', title: 'File-Based Routing', desc: 'Pages, layouts, route handlers, error boundaries, and loading states from the file system — page.ts, layout.ts, route.ts, error.ts, loading.ts (auto-Suspense), not-found.ts (nested), middleware.ts, [param], [...slug], [[...optional]], (groups), and metadata routes (sitemap.ts, robots.ts). Familiar if you have used the NextJs App Router.' },
-  { icon: '🔄', title: 'Server Actions, rich types on the wire', desc: 'Import a .server.ts function from a client component — it auto-rewrites into a type-safe RPC stub. Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, and reference cycles all round-trip as their real types via webjs\'s built-in ESM serializer.' },
+  { icon: '🎨', title: 'Tailwind CSS by Default', desc: 'The scaffold ships with the Tailwind browser runtime and @theme design tokens: color palette, font families, fluid type scale, and motion durations wired into Tailwind classes. Dedup repeated class bundles with small JS helpers in app/_utils/ui.ts that run at SSR time. Custom CSS still supported: no hard Tailwind dependency.' },
+  { icon: '🧩', title: 'AI-First Component Library', desc: 'Webjs UI ships 32 primitives written for AI agents, not for human dev ergonomics. Two-tier composition: pure class-helper functions (buttonClass, cardClass, inputClass) compose with raw native elements, plus a small set of stateful custom elements (ui-dialog, ui-tabs, ui-popover, ui-dropdown-menu) only where the browser needs state. Source-copied into your project: you own it. Zero third-party runtime deps. Visit ui.webjs.dev.' },
+  { icon: '📁', title: 'File-Based Routing', desc: 'Pages, layouts, route handlers, error boundaries, and loading states from the file system: page.ts, layout.ts, route.ts, error.ts, loading.ts (auto-Suspense), not-found.ts (nested), middleware.ts, [param], [...slug], [[...optional]], (groups), and metadata routes (sitemap.ts, robots.ts). Familiar if you have used the NextJs App Router.' },
+  { icon: '🔄', title: 'Server Actions, rich types on the wire', desc: 'Import a .server.ts function from a client component: it auto-rewrites into a type-safe RPC stub. Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, and reference cycles all round-trip as their real types via webjs\'s built-in ESM serializer.' },
   { icon: '🌊', title: 'Streaming SSR + Suspense', desc: 'Fallback content flushes immediately. Deferred data streams in as it resolves. TTFB measured in milliseconds, not seconds.' },
   { icon: '🔌', title: 'WebSocket Built In', desc: 'Export a WS function from any route.ts and it becomes a WebSocket endpoint. connectWS() on the client auto-reconnects with exponential backoff.' },
-  { icon: '🛡️', title: 'Built-in Essentials', desc: 'Auth (OAuth + credentials + JWT), sessions (cookie or Redis-backed), cache() for queries, HTTP Cache-Control for pages, WebSocket broadcast, rate limiting — the building blocks every app needs, without third-party dependencies.' },
-  { icon: '📝', title: 'TypeScript or JSDoc', desc: 'Full-stack type safety with .ts files or JSDoc annotations. The dev server transforms TypeScript on the fly via esbuild — same transformer for SSR and hydration, full TS feature support, no build step you run.' },
+  { icon: '🛡️', title: 'Built-in Essentials', desc: 'Auth (OAuth + credentials + JWT), sessions (cookie or Redis-backed), cache() for queries, HTTP Cache-Control for pages, WebSocket broadcast, rate limiting: the building blocks every app needs, without third-party dependencies.' },
+  { icon: '📝', title: 'TypeScript or JSDoc', desc: 'Full-stack type safety with .ts files or JSDoc annotations. The dev server transforms TypeScript on the fly via esbuild: same transformer for SSR and hydration, full TS feature support, no build step you run.' },
   { icon: '🧪', title: 'Testing Built In', desc: 'webjs test runs server + browser tests (WTR + Playwright). webjs check validates conventions. webjs create scaffolds test directories and example tests. AI agents auto-generate tests with every feature.' },
   { icon: '🔀', title: 'Git Workflow Guardrails', desc: 'Branch checking before edits, merge approval with delete/keep prompt, no AI attribution in commits, auto-rebase before work. Enforced via hooks for Claude Code, config files for Cursor/Windsurf/Copilot.' },
   { icon: '📐', title: 'Opinionated Conventions', desc: 'Modules architecture, one-function-per-file actions, CONVENTIONS.md with overridable rules, webjs check validator. AI agents produce consistent code across teams.' },
@@ -231,7 +231,7 @@ export default function LandingPage() {
     <section class="hero">
       <div class="rubric">
         <span class="name">webjs</span>
-        <span class="sep">—</span>
+        <span class="sep">·</span>
         <span>ai-first</span>
         <span class="sep">·</span>
         <span>web-components-first</span>
@@ -298,7 +298,7 @@ actions/posts.server.ts → server action</pre>
           <p>
             Skip pages entirely. Use webjs as a lightweight API framework
             with file-based routing, middleware, rate limiting, WebSockets,
-            and TypeScript — zero frontend required.
+            and TypeScript. Zero frontend required.
           </p>
           <pre>app/api/users/route.ts     → CRUD
 app/api/auth/middleware.ts → rate limit
@@ -339,7 +339,7 @@ middleware.ts              → global auth</pre>
           <p>
             In bypass-permissions mode, agents auto-decide: create feature branches,
             rebase before starting, generate meaningful commits, fix failing tests,
-            delete feature branches after merge. Same quality bar — no blocking on questions.
+            delete feature branches after merge. Same quality bar, with no blocking on questions.
           </p>
         </div>
         <div class="mode-card">
@@ -348,7 +348,7 @@ middleware.ts              → global auth</pre>
           <p>
             <code>webjs test</code> runs server + browser tests (WTR + Playwright). <code>webjs check</code>
             validates conventions (actions in modules, components registered, tests exist).
-            AI agents run both automatically — the user never has to ask for tests or docs.
+            AI agents run both automatically, so the user never has to ask for tests or docs.
           </p>
         </div>
       </div>

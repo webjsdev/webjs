@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Server-Side Rendering — webjs' };
+export const metadata = { title: 'Server-Side Rendering | webjs' };
 
 export default function SSR() {
   return html`
@@ -30,15 +30,15 @@ export default async function Home() {
     <h2>The SSR Pipeline</h2>
     <p>When the server receives a GET request for a page URL, the pipeline runs in this order:</p>
     <ol>
-      <li><strong>Route match</strong> -- the router scans the <code>app/</code> directory tree (at startup) and matches the URL pathname against the file-based route table. Dynamic segments (<code>[slug]</code>), catch-all segments (<code>[...rest]</code>), and route groups (<code>(marketing)</code>) all use the file-based conventions documented under <a href="/docs/routing">Routing</a>.</li>
-      <li><strong>103 Early Hints</strong> -- before SSR begins, the server calls <code>res.writeEarlyHints()</code> with <code>&lt;link rel="modulepreload"&gt;</code> headers for every module URL that the page will need (the page file itself, its layout chain, and any web component modules discovered on a previous render). This lets the browser start fetching scripts while the server is still computing HTML.</li>
-      <li><strong>Segment middleware</strong> -- if any <code>middleware.ts</code> files exist on the path from root to the matched route, they execute outermost-first as a chain: <code>(req, next) =&gt; Response</code>.</li>
-      <li><strong>Load page module</strong> -- the server dynamically imports the matched <code>page.ts</code> file. In dev mode, a cache-busting query string is appended to the import URL so edits take effect immediately without restarting.</li>
-      <li><strong>Load layout chain</strong> -- layout files are loaded outermost-first (<code>app/layout.ts</code>, then <code>app/blog/layout.ts</code>, etc.). Each layout wraps the previous result via its <code>children</code> prop.</li>
-      <li><strong>Collect metadata</strong> -- each layout and the page can export a <code>metadata</code> object or a <code>generateMetadata(ctx)</code> async function. Metadata is merged page-wins so the innermost file's title takes precedence.</li>
-      <li><strong>renderToString</strong> -- the fully-nested template tree is rendered to an HTML string. Promises in template holes are awaited. Arrays and <code>repeat()</code> iterables are expanded.</li>
-      <li><strong>injectDSD</strong> -- the rendered HTML is scanned for registered custom element tags. For each one found, the server instantiates the component class, applies attributes, calls its <code>render()</code> method (which may be async), and wraps the output in a <code>&lt;template shadowrootmode="open"&gt;</code> element immediately after the opening tag. Scoped <code>css\`\`</code> styles are included inside the template.</li>
-      <li><strong>Stream response</strong> -- the fully rendered document (or its initial chunk plus Suspense boundaries) is sent as a streaming <code>text/html</code> response.</li>
+      <li><strong>Route match</strong>: the router scans the <code>app/</code> directory tree (at startup) and matches the URL pathname against the file-based route table. Dynamic segments (<code>[slug]</code>), catch-all segments (<code>[...rest]</code>), and route groups (<code>(marketing)</code>) all use the file-based conventions documented under <a href="/docs/routing">Routing</a>.</li>
+      <li><strong>103 Early Hints</strong>: before SSR begins, the server calls <code>res.writeEarlyHints()</code> with <code>&lt;link rel="modulepreload"&gt;</code> headers for every module URL that the page will need (the page file itself, its layout chain, and any web component modules discovered on a previous render). This lets the browser start fetching scripts while the server is still computing HTML.</li>
+      <li><strong>Segment middleware</strong>: if any <code>middleware.ts</code> files exist on the path from root to the matched route, they execute outermost-first as a chain: <code>(req, next) =&gt; Response</code>.</li>
+      <li><strong>Load page module</strong>: the server dynamically imports the matched <code>page.ts</code> file. In dev mode, a cache-busting query string is appended to the import URL so edits take effect immediately without restarting.</li>
+      <li><strong>Load layout chain</strong>: layout files are loaded outermost-first (<code>app/layout.ts</code>, then <code>app/blog/layout.ts</code>, etc.). Each layout wraps the previous result via its <code>children</code> prop.</li>
+      <li><strong>Collect metadata</strong>: each layout and the page can export a <code>metadata</code> object or a <code>generateMetadata(ctx)</code> async function. Metadata is merged page-wins so the innermost file's title takes precedence.</li>
+      <li><strong>renderToString</strong>: the fully-nested template tree is rendered to an HTML string. Promises in template holes are awaited. Arrays and <code>repeat()</code> iterables are expanded.</li>
+      <li><strong>injectDSD</strong>: the rendered HTML is scanned for registered custom element tags. For each one found, the server instantiates the component class, applies attributes, calls its <code>render()</code> method (which may be async), and wraps the output in a <code>&lt;template shadowrootmode="open"&gt;</code> element immediately after the opening tag. Scoped <code>css\`\`</code> styles are included inside the template.</li>
+      <li><strong>Stream response</strong>: the fully rendered document (or its initial chunk plus Suspense boundaries) is sent as a streaming <code>text/html</code> response.</li>
     </ol>
 
     <h2>Declarative Shadow DOM (DSD)</h2>
@@ -55,9 +55,9 @@ export default async function Home() {
 
     <p>The browser's HTML parser recognises <code>&lt;template shadowrootmode="open"&gt;</code> and immediately attaches a shadow root with that content. This happens during parsing, before any JavaScript runs. The result is:</p>
     <ul>
-      <li><strong>First paint before JS loads</strong> -- the component's styled markup is visible as soon as the HTML arrives. There is no flash of unstyled content and no layout shift.</li>
-      <li><strong>No hydration mismatch</strong> -- the shadow root already exists when the custom element's constructor runs. webjs's <code>connectedCallback</code> checks for an existing <code>shadowRoot</code> and re-renders into it rather than creating a new one.</li>
-      <li><strong>Scoped styles for free</strong> -- the <code>&lt;style&gt;</code> inside the shadow root is scoped by the browser's native shadow DOM encapsulation. No CSS-in-JS runtime is needed.</li>
+      <li><strong>First paint before JS loads</strong>: the component's styled markup is visible as soon as the HTML arrives. There is no flash of unstyled content and no layout shift.</li>
+      <li><strong>No hydration mismatch</strong>: the shadow root already exists when the custom element's constructor runs. webjs's <code>connectedCallback</code> checks for an existing <code>shadowRoot</code> and re-renders into it rather than creating a new one.</li>
+      <li><strong>Scoped styles for free</strong>: the <code>&lt;style&gt;</code> inside the shadow root is scoped by the browser's native shadow DOM encapsulation. No CSS-in-JS runtime is needed.</li>
     </ul>
 
     <h3>Components Without Shadow DOM</h3>
@@ -108,9 +108,9 @@ async function loadExpensiveItems() {
     <ol>
       <li>The server renders the page. When it encounters a Suspense boundary, it emits the fallback HTML wrapped in a <code>&lt;webjs-boundary id="s1"&gt;</code> element and records the children Promise.</li>
       <li>The initial HTML chunk (everything up to and including all fallbacks) is flushed to the browser immediately. The response stream stays open.</li>
-      <li>A tiny inline script is included in the <code>&lt;head&gt;</code> that defines <code>window.__webjsResolve(id)</code> -- a function that swaps a boundary's fallback for real content.</li>
+      <li>A tiny inline script is included in the <code>&lt;head&gt;</code> that defines <code>window.__webjsResolve(id)</code>, a function that swaps a boundary's fallback for real content.</li>
       <li>As each Suspense promise resolves, the server renders the resolved content and streams it as a <code>&lt;template data-webjs-resolve="s1"&gt;...&lt;/template&gt;</code> followed by an inline script calling <code>__webjsResolve("s1")</code>.</li>
-      <li>The browser receives each chunk, the script runs, and the fallback is replaced with the real content. No framework JS is needed -- it is a plain DOM <code>replaceWith()</code>.</li>
+      <li>The browser receives each chunk, the script runs, and the fallback is replaced with the real content. No framework JS is needed: it is a plain DOM <code>replaceWith()</code>.</li>
     </ol>
     <p>Nested Suspense is supported: resolved content can itself contain Suspense boundaries, which are emitted and resolved in subsequent streaming chunks.</p>
 
@@ -128,7 +128,7 @@ async function loadExpensiveItems() {
 
     <pre>// Static metadata
 export const metadata = {
-  title: 'Blog Post Title — My App',
+  title: 'Blog Post Title | My App',
   description: 'A summary for search engines and social cards.',
   viewport: 'width=device-width, initial-scale=1',
   themeColor: '#1a1a1a',
@@ -148,7 +148,7 @@ export const metadata = {
     <pre>export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await db.post.findUnique({ where: { slug: params.slug } });
   return {
-    title: post ? post.title + ' — My App' : 'Not Found',
+    title: post ? post.title + ' | My App' : 'Not Found',
     description: post?.summary,
     openGraph: post ? { title: post.title, image: post.coverImage } : undefined,
   };
@@ -156,12 +156,12 @@ export const metadata = {
 
     <p>Metadata is merged outermost-layout-first, page-last. The page's values win when keys conflict. The resulting <code>&lt;head&gt;</code> includes:</p>
     <ul>
-      <li><code>&lt;title&gt;</code> -- from <code>metadata.title</code></li>
-      <li><code>&lt;meta name="description"&gt;</code> -- from <code>metadata.description</code></li>
-      <li><code>&lt;meta name="viewport"&gt;</code> -- defaults to <code>width=device-width,initial-scale=1</code> if not set</li>
-      <li><code>&lt;meta name="theme-color"&gt;</code> -- from <code>metadata.themeColor</code></li>
-      <li><code>&lt;meta property="og:*"&gt;</code> -- one tag per key in <code>metadata.openGraph</code></li>
-      <li><code>&lt;link rel="preload"&gt;</code> -- from <code>metadata.preload</code> array (fonts, images, etc.)</li>
+      <li><code>&lt;title&gt;</code>: from <code>metadata.title</code></li>
+      <li><code>&lt;meta name="description"&gt;</code>: from <code>metadata.description</code></li>
+      <li><code>&lt;meta name="viewport"&gt;</code>: defaults to <code>width=device-width,initial-scale=1</code> if not set</li>
+      <li><code>&lt;meta name="theme-color"&gt;</code>: from <code>metadata.themeColor</code></li>
+      <li><code>&lt;meta property="og:*"&gt;</code>: one tag per key in <code>metadata.openGraph</code></li>
+      <li><code>&lt;link rel="preload"&gt;</code>: from <code>metadata.preload</code> array (fonts, images, etc.)</li>
     </ul>
 
     <h2>Module Preload Hints</h2>
@@ -194,10 +194,10 @@ export const metadata = {
     <p>If a page or layout throws during rendering, the SSR pipeline catches the error and walks up the layout chain looking for the nearest <code>error.ts</code> file. Error boundaries are nested: <code>app/blog/error.ts</code> catches errors in blog pages, while <code>app/error.ts</code> is the outermost fallback.</p>
     <p>Special throw helpers are also caught:</p>
     <ul>
-      <li><code>throw notFound()</code> -- renders the <code>not-found.ts</code> page with a 404 status.</li>
-      <li><code>throw redirect('/login')</code> -- sends a 307 redirect (or the status you specify).</li>
+      <li><code>throw notFound()</code>: renders the <code>not-found.ts</code> page with a 404 status.</li>
+      <li><code>throw redirect('/login')</code>: sends a 307 redirect (or the status you specify).</li>
     </ul>
-    <p>In development, unhandled errors show the full stack trace in the browser. In production, only a generic "Something went wrong" message is shown -- no stack traces are leaked to the client.</p>
+    <p>In development, unhandled errors show the full stack trace in the browser. In production, only a generic "Something went wrong" message is shown, with no stack traces leaked to the client.</p>
 
     <h2>CSRF Cookie</h2>
     <p>Every SSR response that lacks a CSRF cookie automatically sets one: <code>webjs_csrf</code> with <code>SameSite=Lax</code>. This cookie powers the double-submit CSRF protection for server actions. It is set during SSR so that the first client-side action call already has a token to send.</p>
@@ -219,7 +219,7 @@ import { html, Suspense } from '@webjskit/core';
 import '../components/hero-banner.ts';
 
 export const metadata = {
-  title: 'Home — My App',
+  title: 'Home | My App',
   description: 'Welcome to my webjs application.',
   openGraph: { title: 'My App', image: '/public/og.png' },
 };
@@ -245,6 +245,6 @@ async function recentPosts() {
   \`;
 }</pre>
 
-    <p>When a browser requests <code>/</code>, it receives the full HTML with the hero banner painted via DSD, the "Loading recent posts..." fallback visible immediately, and (milliseconds later) the real post list streamed in -- all before the page's JavaScript has finished loading.</p>
+    <p>When a browser requests <code>/</code>, it receives the full HTML with the hero banner painted via DSD, the "Loading recent posts..." fallback visible immediately, and (milliseconds later) the real post list streamed in, all before the page's JavaScript has finished loading.</p>
   `;
 }

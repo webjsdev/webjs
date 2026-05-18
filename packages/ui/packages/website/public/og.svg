@@ -45,14 +45,14 @@
     <text x="64" y="478">Zero third-party deps. Copy-paste source. Works anywhere.</text>
   </g>
 
-  <!-- Rubric (small, mono, uppercase, tracked-out) — bottom-left -->
+  <!-- Rubric (small, mono, uppercase, tracked-out) - bottom-left -->
   <g font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
      font-weight="600" letter-spacing="2">
     <text x="64" y="568" fill="#f6a06b">●</text>
     <text x="86" y="568" fill="#c5b8ad">COMPOSITION-FIRST  ·  NATIVE SEMANTICS  ·  ZERO DEPS</text>
   </g>
 
-  <!-- Domain badge — bottom-right -->
+  <!-- Domain badge - bottom-right -->
   <text x="1136" y="568" text-anchor="end"
         font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
         font-weight="600" letter-spacing="2" fill="#8a7d72">UI.WEBJS.DEV</text>

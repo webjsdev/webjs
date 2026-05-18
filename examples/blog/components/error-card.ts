@@ -1,7 +1,7 @@
 import { WebComponent, html } from '@webjskit/core';
 
 /**
- * `<error-card message="…">` — inline error surface, uses the accent tint
+ * `<error-card message="…">`: inline error surface, uses the accent tint
  * for a muted alarm.
  */
 export class ErrorCard extends WebComponent {

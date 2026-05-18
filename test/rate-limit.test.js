@@ -88,7 +88,7 @@ test('immutable response headers do not throw (catch branch)', async () => {
 });
 
 test('static string key acts as a bucket prefix (namespaces IP buckets)', async () => {
-  // opts.key as a string prefixes the default IP-derived key — it doesn't
+  // opts.key as a string prefixes the default IP-derived key: it doesn't
   // collapse all callers into one bucket.
   const mwA = rateLimit({ window: '1s', max: 1, key: 'group-a:' });
   const mwB = rateLimit({ window: '1s', max: 1, key: 'group-b:' });

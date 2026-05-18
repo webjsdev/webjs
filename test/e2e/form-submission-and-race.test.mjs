@@ -1,24 +1,24 @@
 /**
  * End-to-end coverage for the second wave of partial-swap features:
  *
- *   Phase 1 — form submission interception:
+ *   Phase 1: form submission interception:
  *     - GET form: body promoted to query string, partial swap applies
  *       response.
  *     - POST form: FormData body sent, partial swap applies response,
  *       snapshot cache cleared.
  *     - data-no-router form: NOT intercepted (browser full nav).
  *
- *   Phase 2 — concurrent-nav safety:
+ *   Phase 2: concurrent-nav safety:
  *     - Rapid double-click: first fetch is aborted, only the second
  *       response is applied to the DOM.
  *
- *   Phase 3 — scroll restoration:
+ *   Phase 3: scroll restoration:
  *     - Window scroll position is restored on back-button after a
  *       same-layout partial swap.
  *
  * These run against the ui-website dev server at :5001 and use
  * Playwright's `page.route()` to mock server responses for the form
- * endpoints — the docs site has no real form-handling routes, so we
+ * endpoints: the docs site has no real form-handling routes, so we
  * synthesize them via route interception. The form itself is injected
  * into the page DOM via `evaluate()`; we're testing the client router's
  * interception logic, not server-side form handling.
@@ -51,7 +51,7 @@ async function ensureServer() {
  * the new content.
  */
 function mockResponseBody(headingText) {
-  // We don't need a full ui-website layout — the router falls back to
+  // We don't need a full ui-website layout: the router falls back to
   // full body swap when markers don't match. For these tests we only
   // care that the response was fetched + applied.
   return `<!doctype html><html><head><title>Mocked</title></head>` +
@@ -106,7 +106,7 @@ test('form GET: body is promoted to query string and response is applied', async
       'form input promoted to URL query');
     assert.equal(u.searchParams.get('page'), '2');
 
-    // 2. Response was applied — the mock heading is now in the DOM.
+    // 2. Response was applied: the mock heading is now in the DOM.
     const probe = await page.locator('#probe').textContent();
     assert.equal(probe, 'arrived-from-get');
 
@@ -300,7 +300,7 @@ test('form POST returning 422: validation errors render in place, no full-page r
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
   try {
-    // Track full-page navigations (would be a regression — 422 should
+    // Track full-page navigations (would be a regression: 422 should
     // be partial-swap, not full-nav).
     let pageNavigationCount = 0;
     page.on('framenavigated', (f) => {
@@ -344,7 +344,7 @@ test('form POST returning 422: validation errors render in place, no full-page r
     await page.waitForFunction(() => !!document.getElementById('err-email'),
       { timeout: 4000 });
 
-    // The 422 response's HTML was applied — errors are visible.
+    // The 422 response's HTML was applied: errors are visible.
     assert.ok(await page.locator('#err-email').isVisible(),
       'validation error for email is rendered');
     assert.ok(await page.locator('#err-password').isVisible(),
@@ -365,7 +365,7 @@ test('form POST returning 422: validation errors render in place, no full-page r
     // its console listeners) survived the swap.
     const pageStillResponsive = await page.evaluate(() => 'yes');
     assert.equal(pageStillResponsive, 'yes',
-      'page context survived — no full reload');
+      'page context survived: no full reload');
   } finally {
     await browser.close();
   }
@@ -408,7 +408,7 @@ test('scroll restoration: back-button restores window scroll position', async ()
     await page.waitForTimeout(80);
 
     const afterBackScroll = await page.evaluate(() => window.scrollY);
-    // Allow a small tolerance — browser may round, sub-pixel layout etc.
+    // Allow a small tolerance: browser may round, sub-pixel layout etc.
     assert.ok(Math.abs(afterBackScroll - beforeScroll) < 20,
       `scroll restored: was ${beforeScroll}, after back ${afterBackScroll}`);
   } finally {

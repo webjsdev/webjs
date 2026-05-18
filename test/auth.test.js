@@ -110,7 +110,7 @@ test('auth() returns null for a tampered cookie (bad signature)', async () => {
   assert.equal(await auth(req), null);
 });
 
-test('auth() returns null for a malformed (non-base64) cookie — does not throw', async () => {
+test('auth() returns null for a malformed (non-base64) cookie: does not throw', async () => {
   const { auth } = createAuth({
     secret: SECRET,
     providers: [Credentials({ authorize: async () => null })],
@@ -136,7 +136,7 @@ test('auth() returns null for an expired JWT', async () => {
   const raw = cookie.match(/webjs\.auth=([^;]+)/)[1];
   const [h, p, s] = raw.split('.');
   // Decode payload, overwrite exp, re-encode (signature will no longer
-  // match, which is fine — verify() returns false and we get null; this
+  // match, which is fine: verify() returns false and we get null; this
   // also exercises the expiration branch when the signature DOES match
   // via the natural exp-expired case above would require a signing key
   // hack. Verifying null on bad signature is sufficient for the branch.)

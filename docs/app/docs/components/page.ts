@@ -1,14 +1,14 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Components — webjs' };
+export const metadata = { title: 'Components | webjs' };
 
 export default function Components() {
   return html`
     <h1>Components</h1>
-    <p>webjs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle — there is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
+    <p>webjs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle. There is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
 
     <h2>The WebComponent Base Class</h2>
-    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code> — not a static field.</p>
+    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
     <pre>import { WebComponent, html, css } from '@webjskit/core';
 
@@ -61,7 +61,7 @@ UserCard.register('user-card');</pre>
     <p>If you forget the hyphen, the browser throws at registration time with a clear error message.</p>
 
     <h2>Properties</h2>
-    <p>The <code>static properties</code> object declares which HTML attributes the component observes, along with their type for coercion. The browser's <code>observedAttributes</code> list is auto-derived from the property names — you never write it by hand.</p>
+    <p>The <code>static properties</code> object declares which HTML attributes the component observes, along with their type for coercion. The browser's <code>observedAttributes</code> list is auto-derived from the property names, so you never write it by hand.</p>
 
     <pre>class UserCard extends WebComponent {
 
@@ -72,8 +72,8 @@ UserCard.register('user-card');</pre>
     config:   { type: Object },
     tags:     { type: Array },
   };
-  // Compile-time types only — never use class-field initializers for
-  // reactive props; they would clobber the framework's accessor under
+  // Compile-time types only. Never use class-field initializers for
+  // reactive props. They would clobber the framework's accessor under
   // modern class-field semantics. Set defaults in the constructor.
   declare name: string;
   declare age: number;
@@ -104,10 +104,10 @@ UserCard.register('user-card');</pre>
     <p>When an attribute changes on the DOM element, webjs coerces the string value to the declared type:</p>
 
     <ul>
-      <li><strong>String</strong> — passed through as-is.</li>
-      <li><strong>Number</strong> — converted via <code>Number(value)</code>. Null attributes become <code>null</code>.</li>
-      <li><strong>Boolean</strong> — the attribute is <code>true</code> if present and not <code>"false"</code>. Removing the attribute sets <code>false</code>.</li>
-      <li><strong>Object / Array</strong> — parsed via <code>JSON.parse()</code>. If parsing fails, the raw string is used.</li>
+      <li><strong>String</strong>: passed through as-is.</li>
+      <li><strong>Number</strong>: converted via <code>Number(value)</code>. Null attributes become <code>null</code>.</li>
+      <li><strong>Boolean</strong>: the attribute is <code>true</code> if present and not <code>"false"</code>. Removing the attribute sets <code>false</code>.</li>
+      <li><strong>Object / Array</strong>: parsed via <code>JSON.parse()</code>. If parsing fails, the raw string is used.</li>
     </ul>
 
     <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>.</p>
@@ -162,8 +162,8 @@ TodoList.register('todo-list');</pre>
 
     <h3>How setState Works</h3>
     <ul>
-      <li><strong>Shallow merge</strong> — <code>this.setState({ filter: 'active' })</code> merges <code>{ filter: 'active' }</code> into <code>this.state</code> without touching other keys. This is the same semantics as React's <code>setState</code>.</li>
-      <li><strong>Batched re-render</strong> — calling <code>setState</code> (or <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
+      <li><strong>Shallow merge</strong>: <code>this.setState({ filter: 'active' })</code> merges <code>{ filter: 'active' }</code> into <code>this.state</code> without touching other keys. This is the same semantics as React's <code>setState</code>.</li>
+      <li><strong>Batched re-render</strong>: calling <code>setState</code> (or <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
     </ul>
 
     <pre>// These two calls result in a single re-render, not two:
@@ -204,8 +204,8 @@ StyledCard.register('styled-card');</pre>
 
     <h3>How Styles Are Applied</h3>
     <ul>
-      <li><strong>adoptedStyleSheets</strong> — when the browser supports it (all modern browsers), styles are applied via <code>adoptedStyleSheets</code> on the shadow root. This is the most efficient path: the browser parses the CSS once and shares the <code>CSSStyleSheet</code> object across all instances of the same component.</li>
-      <li><strong>Fallback</strong> — on older browsers, a <code>&lt;style&gt;</code> element is injected into the shadow root instead.</li>
+      <li><strong>adoptedStyleSheets</strong>: when the browser supports it (all modern browsers), styles are applied via <code>adoptedStyleSheets</code> on the shadow root. This is the most efficient path: the browser parses the CSS once and shares the <code>CSSStyleSheet</code> object across all instances of the same component.</li>
+      <li><strong>Fallback</strong>: on older browsers, a <code>&lt;style&gt;</code> element is injected into the shadow root instead.</li>
     </ul>
 
     <h3>Design Tokens via CSS Custom Properties</h3>
@@ -220,7 +220,7 @@ StyledCard.register('styled-card');</pre>
   --sp-4: 16px;
 }
 
-/* Inside a component's static styles — these "just work" */
+/* Inside a component's static styles, these "just work" */
 static styles = css\`
   :host {
     background: var(--bg-elev);
@@ -234,10 +234,10 @@ static styles = css\`
     <blockquote>This is fundamentally different from React CSS-in-JS solutions that require runtime injection or build tooling. webjs uses the platform: shadow DOM gives you scoping, CSS custom properties give you theming, and there is nothing to configure.</blockquote>
 
     <h2>Light DOM (default)</h2>
-    <p>Light DOM is the default because global CSS and Tailwind utility classes apply directly — no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. The browser renders a plain custom element with normal children. This is the mode the blog example uses everywhere except when shadow DOM buys something specific.</p>
+    <p>Light DOM is the default because global CSS and Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. The browser renders a plain custom element with normal children. This is the mode the blog example uses everywhere except when shadow DOM buys something specific.</p>
 
     <pre>class AppCard extends WebComponent {
-  // static shadow = false is the default — no need to declare it.
+  // static shadow = false is the default, no need to declare it.
   static properties = {
     heading: { type: String },
   };
@@ -262,7 +262,7 @@ AppCard.register('app-card');</pre>
     <h3>Class-prefix rule for custom CSS</h3>
     <p>Tailwind utilities are unique by construction, so most light-DOM components need zero custom CSS. If you <em>do</em> author a <code>&lt;style&gt;</code> block or import a stylesheet, <strong>every class selector MUST be prefixed with the component's tag name</strong>. Otherwise two components with a <code>.card</code> or <code>.header</code> class will style each other.</p>
 
-    <pre>// Pattern A — BEM-ish class names prefixed with tag
+    <pre>// Pattern A: BEM-ish class names prefixed with tag
 class MyCard extends WebComponent {
   render() {
     return html\`
@@ -275,7 +275,7 @@ class MyCard extends WebComponent {
   }
 }
 
-// Pattern B — descendant selector rooted at the tag
+// Pattern B: descendant selector rooted at the tag
 class MyCard extends WebComponent {
   render() {
     return html\`
@@ -293,7 +293,7 @@ class MyCard extends WebComponent {
     <ul>
       <li>Scoped styles via <code>static styles = css\`...\`</code> (adopted via <code>adoptedStyleSheets</code>) without prefix discipline.</li>
       <li><code>&lt;slot&gt;</code> content projection with the full slot semantics (<code>::slotted</code>, named slots).</li>
-      <li>Third-party embed isolation — your component looks right in any host page, regardless of their CSS.</li>
+      <li>Third-party embed isolation: your component looks right in any host page, regardless of their CSS.</li>
     </ul>
 
     <pre>class Card extends WebComponent {
@@ -312,10 +312,10 @@ class MyCard extends WebComponent {
 }
 Card.register('my-card');
 
-    <p><code>static styles</code> on a light-DOM component is silently ignored — there's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
+    <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
 
     <h3>Mode summary</h3>
-    <p>Both modes are <strong>fully SSR'd</strong>. Shadow DOM renders via Declarative Shadow DOM (<code>&lt;template shadowrootmode="open"&gt;</code>); light DOM renders content directly as HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Both hydrate on the client without flash.</p>
+    <p>Both modes are <strong>fully SSR'd</strong>. Shadow DOM renders via Declarative Shadow DOM (<code>&lt;template shadowrootmode="open"&gt;</code>). Light DOM renders content directly as HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Both hydrate on the client without flash.</p>
 
     <table>
       <thead>
@@ -334,19 +334,19 @@ Card.register('my-card');
     <p>Every web component on a page runs through the SSR pipeline. For each rendered tag, the server:</p>
 
     <ol>
-      <li>Calls <code>new Cls()</code> — the constructor runs.</li>
+      <li>Calls <code>new Cls()</code>: the constructor runs.</li>
       <li>Applies the element's attributes to the instance (via <code>static properties</code> converters).</li>
       <li>Calls <code>instance.render()</code> and awaits the resulting template.</li>
       <li>Inlines the rendered HTML as the element's children (light DOM) or wraps it in <code>&lt;template shadowrootmode="open"&gt;</code> (shadow DOM).</li>
     </ol>
 
-    <p><strong>The server does NOT call <code>connectedCallback</code>, <code>firstUpdated</code>, or any other lifecycle hook.</strong> Those run only after the script loads in the browser. This is intentional — the server runs many components for many concurrent requests, and lifecycle hooks frequently touch <code>window</code>, <code>document</code>, <code>localStorage</code>, observers, and timers that don't exist server-side.</p>
+    <p><strong>The server does NOT call <code>connectedCallback</code>, <code>firstUpdated</code>, or any other lifecycle hook.</strong> Those run only after the script loads in the browser. This is intentional. The server runs many components for many concurrent requests, and lifecycle hooks frequently touch <code>window</code>, <code>document</code>, <code>localStorage</code>, observers, and timers that don't exist server-side.</p>
 
     <h3>Rule: SSR-meaningful state goes in the constructor</h3>
 
     <p>Whatever state should appear in the first paint MUST be set in the constructor (after <code>super()</code>) or be derivable from <code>static properties</code> + the tag's attributes. The SSR pipeline reads exactly these values.</p>
 
-    <pre>// ❌ first paint is empty — initial state set in browser-only hook
+    <pre>// ❌ first paint is empty (initial state set in browser-only hook)
 class Cart extends WebComponent {
   declare items: Item[];
 
@@ -359,7 +359,7 @@ class Cart extends WebComponent {
   render() { return html\`&lt;ul&gt;\${this.items.map(/* … */)}&lt;/ul&gt;\`; }
 }</pre>
 
-    <pre>// ✅ SSR-safe — sensible default in the constructor;
+    <pre>// ✅ SSR-safe: sensible default in the constructor,
 //    browser hook refines after hydration
 class Cart extends WebComponent {
   declare items: Item[];
@@ -387,7 +387,7 @@ class Cart extends WebComponent {
       <tbody>
         <tr><td>Database, session, cookies, request headers</td><td>Page function (server). Pass to the component as an attribute or property.</td></tr>
         <tr><td>Initial state / defaults known at coding time</td><td>Component's <code>constructor()</code> after <code>super()</code>.</td></tr>
-        <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code> — then <code>setState</code> to refine.</td></tr>
+        <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code>, then <code>setState</code> to refine.</td></tr>
         <tr><td>Flash-sensitive (theme, RTL direction)</td><td>Synchronous inline <code>&lt;script&gt;</code> in the root layout's <code>&lt;head&gt;</code> that writes attributes to <code>document.documentElement</code> before custom elements upgrade.</td></tr>
       </tbody>
     </table>
@@ -412,7 +412,7 @@ class AppShell extends WebComponent {
   }
 }
 
-// Usage — the &lt;p&gt; is projected into &lt;main&gt;
+// Usage: the &lt;p&gt; is projected into &lt;main&gt;
 html\`
   &lt;app-shell&gt;
     &lt;p&gt;This paragraph appears inside the main slot.&lt;/p&gt;
@@ -471,7 +471,7 @@ html\`
     <p>Called when the element is inserted into the document. This is where webjs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
 
     <pre>connectedCallback() {
-  super.connectedCallback();  // REQUIRED — sets up shadow root + first render
+  super.connectedCallback();  // REQUIRED: sets up shadow root + first render
   this._ws = connectWS('/api/chat', {
     onMessage: (msg) =&gt; this.setState({ messages: [...this.state.messages, msg] }),
   });
@@ -491,7 +491,7 @@ html\`
     <p>You do not need to call <code>super.disconnectedCallback()</code> (the base class is a no-op), but it does not hurt to include it for safety.</p>
 
     <h3>attributeChangedCallback(name, oldValue, newValue)</h3>
-    <p>Called when one of the <code>observedAttributes</code> changes. webjs handles this for you — it coerces the attribute value based on the type declared in <code>static properties</code>, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
+    <p>Called when one of the <code>observedAttributes</code> changes. webjs handles this for you. It coerces the attribute value based on the type declared in <code>static properties</code>, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
 
     <pre>attributeChangedCallback(name, oldVal, newVal) {
   super.attributeChangedCallback(name, oldVal, newVal);
@@ -524,8 +524,8 @@ html\`
 
     <h3>How Event Binding Works</h3>
     <ul>
-      <li><strong>Server rendering</strong> — <code>@event</code> bindings are stripped during SSR. The HTML sent to the browser contains no inline handlers. This is safe, clean, and Content-Security-Policy friendly.</li>
-      <li><strong>Client rendering</strong> — on the client, each <code>@event</code> binding creates a <strong>stable dispatcher</strong> function that is registered once with <code>addEventListener</code>. When you re-render with a new handler reference, the dispatcher is updated in place — no listener is removed and re-added. This eliminates event listener churn that plagues naive re-render strategies.</li>
+      <li><strong>Server rendering</strong>: <code>@event</code> bindings are stripped during SSR. The HTML sent to the browser contains no inline handlers. This is safe, clean, and Content-Security-Policy friendly.</li>
+      <li><strong>Client rendering</strong>: on the client, each <code>@event</code> binding creates a <strong>stable dispatcher</strong> function that is registered once with <code>addEventListener</code>. When you re-render with a new handler reference, the dispatcher is updated in place, so no listener is removed and re-added. This eliminates event listener churn that plagues naive re-render strategies.</li>
     </ul>
 
     <pre>// Even though this creates a new arrow function on every render,
@@ -563,7 +563,7 @@ render() {
   &lt;div ?hidden=\${this.state.items.length === 0}&gt;No items&lt;/div&gt;
 \`</pre>
 
-    <p>During SSR, <code>?disabled=\${true}</code> emits <code>disabled=""</code> and <code>?disabled=\${false}</code> emits nothing — matching how the browser interprets boolean attributes.</p>
+    <p>During SSR, <code>?disabled=\${true}</code> emits <code>disabled=""</code> and <code>?disabled=\${false}</code> emits nothing, matching how the browser interprets boolean attributes.</p>
 
     <h2>Class.register('tag')</h2>
     <p>Register the component with <code>Class.register('tag')</code> at the bottom of the file:</p>
@@ -572,8 +572,8 @@ render() {
 
     <p>webjs wraps the native API (and installs a compatible shim on the server) so the same line works in both environments:</p>
     <ul>
-      <li><strong>Browser</strong> — tells the browser to upgrade all <code>&lt;my-counter&gt;</code> elements with the <code>MyCounter</code> class, and mirrors the mapping into webjs's internal registry.</li>
-      <li><strong>Server</strong> — stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
+      <li><strong>Browser</strong>: tells the browser to upgrade all <code>&lt;my-counter&gt;</code> elements with the <code>MyCounter</code> class, and mirrors the mapping into webjs's internal registry.</li>
+      <li><strong>Server</strong>: stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
     </ul>
 
     <p>Module URLs for <code>&lt;link rel="modulepreload"&gt;</code> hints are discovered separately, by a server-side scanner that walks the app tree at boot and derives the file path for each discovered tag. No per-component <code>import.meta.url</code> argument needed.</p>
@@ -600,7 +600,7 @@ render() {
       <li>The server imports the component module, which calls <code>Class.register('tag')</code> and stores the class in the registry.</li>
       <li>During <code>renderToString()</code>, the server scans the output HTML for registered custom element tags.</li>
       <li>For each match, it creates a temporary instance, applies attributes from the HTML, calls <code>render()</code>, and wraps the result in a <code>&lt;template shadowrootmode="open"&gt;</code> block with the component's styles.</li>
-      <li>The browser parses this as a native declarative shadow root — the content is visible <strong>before any JavaScript loads</strong>.</li>
+      <li>The browser parses this as a native declarative shadow root, so the content is visible <strong>before any JavaScript loads</strong>.</li>
       <li>When the component's JS module eventually loads and the custom element upgrades, the existing shadow root is reused. The client renderer performs a fine-grained diff against the already-painted DOM.</li>
     </ul>
 
@@ -617,7 +617,7 @@ render() {
   }
 
   async render() {
-    // This await is resolved during SSR — the full HTML is sent to the client
+    // This await is resolved during SSR, so the full HTML is sent to the client
     const user = await fetch(\`/api/users/\${this.userId}\`).then(r =&gt; r.json());
     return html\`
       &lt;h2&gt;\${user.name}&lt;/h2&gt;
@@ -634,10 +634,10 @@ UserProfile.register('user-profile');</pre>
 
     <h3>What Gets Preserved</h3>
     <ul>
-      <li><strong>Focus</strong> — if an <code>&lt;input&gt;</code> is focused when you call <code>setState()</code>, it stays focused after re-render.</li>
-      <li><strong>Cursor position</strong> — the text cursor inside an input or textarea does not jump.</li>
-      <li><strong>Selection</strong> — text selections survive re-renders.</li>
-      <li><strong>Scroll position</strong> — scroll state of overflow containers is not disturbed.</li>
+      <li><strong>Focus</strong>: if an <code>&lt;input&gt;</code> is focused when you call <code>setState()</code>, it stays focused after re-render.</li>
+      <li><strong>Cursor position</strong>: the text cursor inside an input or textarea does not jump.</li>
+      <li><strong>Selection</strong>: text selections survive re-renders.</li>
+      <li><strong>Scroll position</strong>: scroll state of overflow containers is not disturbed.</li>
     </ul>
 
     <p>This happens because the renderer only updates the specific text node, attribute, or property that changed. Elements that are not affected by the state change are never touched.</p>
@@ -681,7 +681,7 @@ class TaskList extends WebComponent {
       &lt;ul&gt;
         \${repeat(
           this.state.tasks,
-          (task) =&gt; task.id,           // key function — must be stable + unique
+          (task) =&gt; task.id,           // key function: must be stable + unique
           (task) =&gt; html\`
             &lt;li @click=\${() =&gt; this.toggle(task.id)}
                 style=\${task.done ? 'text-decoration: line-through' : ''}&gt;
@@ -698,14 +698,14 @@ TaskList.register('task-list');</pre>
     <h3>How repeat() Works</h3>
     <ul>
       <li>Each item is identified by the key returned from the key function (first argument after items).</li>
-      <li>On re-render, items with matching keys <strong>update in place</strong> — the DOM nodes are reused, not recreated.</li>
+      <li>On re-render, items with matching keys <strong>update in place</strong>: the DOM nodes are reused, not recreated.</li>
       <li>New keys cause fresh nodes to be inserted. Missing keys cause nodes to be removed.</li>
       <li>When the order changes, existing DOM nodes are <strong>moved</strong> (via <code>insertBefore</code>), not destroyed and rebuilt. This preserves element identity, focus, scroll, and any internal state.</li>
     </ul>
 
-    <blockquote>Use a stable ID from your data as the key — like <code>task.id</code> or <code>user.email</code>. Never use the array index as a key; it defeats the purpose of keyed reconciliation, just like in React.</blockquote>
+    <blockquote>Use a stable ID from your data as the key, like <code>task.id</code> or <code>user.email</code>. Never use the array index as a key. It defeats the purpose of keyed reconciliation, just like in React.</blockquote>
 
-    <p>On the server, <code>repeat()</code> is simply iterated in order — keys are only used on the client for efficient DOM updates.</p>
+    <p>On the server, <code>repeat()</code> is simply iterated in order. Keys are only used on the client for efficient DOM updates.</p>
 
     <h2>Putting It All Together</h2>
     <p>Here is a complete example showing properties, state, events, lifecycle, slots, and scoped styles in a single component:</p>
@@ -778,22 +778,22 @@ ChatBox.register('chat-box');</pre>
       <li><strong>Extend</strong> <code>WebComponent</code> and set <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
       <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
-      <li><strong>State</strong> — use <code>this.setState({...})</code> for shallow merge + batched re-render.</li>
-      <li><strong>Events</strong> — <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
-      <li><strong>Bindings</strong> — <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
-      <li><strong>Slots</strong> — <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots. Shadow DOM only.</li>
+      <li><strong>State</strong>: use <code>this.setState({...})</code> for shallow merge + batched re-render.</li>
+      <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
+      <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
+      <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots. Shadow DOM only.</li>
       <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles, slot projection, or third-party embed isolation.</li>
-      <li><strong>Lifecycle</strong> — <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
-      <li><strong>Lists</strong> — <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
-      <li><strong>SSR</strong> — components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>
+      <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
+      <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
+      <li><strong>SSR</strong>: components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>
     </ul>
 
     <h2>Next Steps</h2>
     <ul>
-      <li><a href="/docs/styling">Styling</a> — design tokens, scoped CSS, and theming in depth</li>
-      <li><a href="/docs/ssr">Server-Side Rendering</a> — Declarative Shadow DOM, streaming, and hydration</li>
-      <li><a href="/docs/server-actions">Server Actions</a> — call server functions from components</li>
-      <li><a href="/docs/suspense">Streaming &amp; Suspense</a> — deferred data with fallback UI</li>
+      <li><a href="/docs/styling">Styling</a>: design tokens, scoped CSS, and theming in depth</li>
+      <li><a href="/docs/ssr">Server-Side Rendering</a>: Declarative Shadow DOM, streaming, and hydration</li>
+      <li><a href="/docs/server-actions">Server Actions</a>: call server functions from components</li>
+      <li><a href="/docs/suspense">Streaming &amp; Suspense</a>: deferred data with fallback UI</li>
     </ul>
   `;
 }

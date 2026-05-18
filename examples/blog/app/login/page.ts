@@ -6,7 +6,7 @@ import { rubric } from '../_utils/ui.ts';
 type Ctx = { searchParams?: Record<string, string> };
 
 export function generateMetadata({ searchParams }: Ctx) {
-  return { title: searchParams?.tab === 'signup' ? 'Create account — webjs blog' : 'Sign in — webjs blog' };
+  return { title: searchParams?.tab === 'signup' ? 'Create account: webjs blog' : 'Sign in: webjs blog' };
 }
 
 export default async function LoginPage({ searchParams }: Ctx) {

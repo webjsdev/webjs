@@ -157,7 +157,7 @@ export async function bundlePackage(pkgName, appDir, dev) {
     vendorCache.set(pkgName, code);
     return code;
   } catch (e) {
-    // Build failed (native module, server-only dep, etc.) — skip silently
+    // Build failed (native module, server-only dep, etc.): skip silently
     return null;
   }
 }

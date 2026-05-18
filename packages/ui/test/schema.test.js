@@ -6,7 +6,7 @@ import {
   rawConfigSchema,
 } from '../src/registry/schema.js';
 
-test('registryItemSchema — accepts a minimal ui item', () => {
+test('registryItemSchema: accepts a minimal ui item', () => {
   const item = {
     name: 'button',
     type: 'registry:ui',
@@ -15,11 +15,11 @@ test('registryItemSchema — accepts a minimal ui item', () => {
   assert.doesNotThrow(() => registryItemSchema.parse(item));
 });
 
-test('registryItemSchema — rejects unknown type', () => {
+test('registryItemSchema: rejects unknown type', () => {
   assert.throws(() => registryItemSchema.parse({ name: 'x', type: 'registry:wat', files: [] }));
 });
 
-test('registryItemSchema — registry:file requires target', () => {
+test('registryItemSchema: registry:file requires target', () => {
   assert.throws(() =>
     registryItemSchema.parse({
       name: 'x',
@@ -29,7 +29,7 @@ test('registryItemSchema — registry:file requires target', () => {
   );
 });
 
-test('registrySchema — accepts the full manifest shape', () => {
+test('registrySchema: accepts the full manifest shape', () => {
   const manifest = {
     name: 'test',
     items: [
@@ -40,7 +40,7 @@ test('registrySchema — accepts the full manifest shape', () => {
   assert.doesNotThrow(() => registrySchema.parse(manifest));
 });
 
-test('rawConfigSchema — fills defaults', () => {
+test('rawConfigSchema: fills defaults', () => {
   const parsed = rawConfigSchema.parse({
     style: 'default',
     tailwind: { css: 'app/globals.css', baseColor: 'neutral' },
@@ -50,7 +50,7 @@ test('rawConfigSchema — fills defaults', () => {
   assert.equal(parsed.iconLibrary, 'lucide');
 });
 
-test('rawConfigSchema — rejects missing tailwind', () => {
+test('rawConfigSchema: rejects missing tailwind', () => {
   assert.throws(() =>
     rawConfigSchema.parse({ style: 'default', aliases: { components: 'c', utils: 'u' } }),
   );

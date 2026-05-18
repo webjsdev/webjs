@@ -1,5 +1,5 @@
 /**
- * Badge — small visual label. Pure class helper.
+ * Badge: small visual label. Pure class helper.
  *
  * shadcn parity:
  *   variants: default | secondary | destructive | outline | ghost | link

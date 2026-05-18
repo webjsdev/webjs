@@ -1,5 +1,5 @@
 /**
- * Button — styled `<button>` via a class-helper function. Use with a real
+ * Button: styled `<button>` via a class-helper function. Use with a real
  * native element so form submission, focus, keyboard activation, screen-reader
  * semantics all "just work".
  *
@@ -15,7 +15,7 @@
  *
  * The shadcn React component supports `asChild` to apply Button styles to a
  * different element. The web equivalent is just calling buttonClass() and
- * spreading the classes onto whatever element you want — no Slot needed.
+ * spreading the classes onto whatever element you want: no Slot needed.
  *
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
@@ -25,7 +25,7 @@ import { cn } from '../lib/utils.ts';
 
 // cursor-pointer is on the BASE so every variant (default, outline,
 // ghost, link, …) gets the right hover affordance. Native <button>
-// defaults to the OS arrow cursor in Chromium and Firefox — fine for
+// defaults to the OS arrow cursor in Chromium and Firefox: fine for
 // native chrome but unusual for app buttons; shadcn's modern Button
 // has long since gravitated toward an explicit cursor-pointer in the
 // real world (see the open issue shadcn-ui/ui#1791). disabled:pointer-

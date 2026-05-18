@@ -24,5 +24,5 @@ export const info = new Command()
       logger.info(`${logger.bold('Tailwind CSS')} ${config.tailwind.css}`);
       logger.info(`${logger.bold('Aliases')}      ${JSON.stringify(config.aliases)}`);
     }
-    logger.info(`${logger.bold('Tailwind')}     ${existsSync(join(cwd, 'tailwind.config.js')) || existsSync(join(cwd, 'tailwind.config.ts')) ? 'config detected' : '(none — Tailwind v4 uses CSS-only config)'}`);
+    logger.info(`${logger.bold('Tailwind')}     ${existsSync(join(cwd, 'tailwind.config.js')) || existsSync(join(cwd, 'tailwind.config.ts')) ? 'config detected' : '(none: Tailwind v4 uses CSS-only config)'}`);
   });

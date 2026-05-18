@@ -29,36 +29,36 @@ beforeEach(() => {
   };
 });
 
-test('fetchRegistryItem — fetches and validates a registry item', async () => {
+test('fetchRegistryItem: fetches and validates a registry item', async () => {
   const it = await fetchRegistryItem('button', 'http://test/registry');
   assert.equal(it.name, 'button');
   assert.equal(calls.length, 1);
   assert.match(calls[0], /^http:\/\/test\/registry\/button\.json$/);
 });
 
-test('fetchRegistryItem — caches subsequent fetches', async () => {
+test('fetchRegistryItem: caches subsequent fetches', async () => {
   await fetchRegistryItem('button2', 'http://test/registry');
   await fetchRegistryItem('button2', 'http://test/registry');
   assert.equal(calls.length, 1); // second call hits cache
 });
 
-test('fetchRegistryItem — throws on HTTP error', async () => {
+test('fetchRegistryItem: throws on HTTP error', async () => {
   await assert.rejects(
     () => fetchRegistryItem('missing', 'http://test/registry'),
     /HTTP 404/,
   );
 });
 
-test('fetchRegistryItem — throws on schema mismatch', async () => {
+test('fetchRegistryItem: throws on schema mismatch', async () => {
   await assert.rejects(() => fetchRegistryItem('bad-shape', 'http://test/registry'));
 });
 
-test('fetchRegistryItem — strips trailing slash in baseUrl', async () => {
+test('fetchRegistryItem: strips trailing slash in baseUrl', async () => {
   await fetchRegistryItem('strip-test', 'http://test/registry/');
   assert.equal(calls.at(-1), 'http://test/registry/strip-test.json');
 });
 
-test('fetchRegistryIndex — fetches the index', async () => {
+test('fetchRegistryIndex: fetches the index', async () => {
   const items = await fetchRegistryIndex('http://test/registry');
   assert.equal(items.length, 2);
   assert.equal(items[0].name, 'button');

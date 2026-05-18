@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Loading States — webjs' };
+export const metadata = { title: 'Loading States | webjs' };
 
 export default function LoadingStates() {
   return html`
@@ -15,8 +15,8 @@ export default function LoadingStates() {
 
     <h2>When NOT to use</h2>
     <ul>
-      <li>For fast pages that render in under 100ms — the loading state would flash and disappear, which is worse UX than waiting.</li>
-      <li>For client-side loading within a component — use the <a href="/docs/task">Task controller</a> instead.</li>
+      <li>For fast pages that render in under 100ms. The loading state would flash and disappear, which is worse UX than waiting.</li>
+      <li>For client-side loading within a component. Use the <a href="/docs/task">Task controller</a> instead.</li>
     </ul>
 
     <h2>Basic usage</h2>
@@ -35,7 +35,7 @@ export default function Loading() {
   ${'`'};
 }</pre>
 
-    <pre>// app/blog/page.ts — this is async and may be slow
+    <pre>// app/blog/page.ts: this is async and may be slow
 import { html } from '@webjskit/core';
 
 export default async function BlogPage() {
@@ -47,7 +47,7 @@ export default async function BlogPage() {
     <ol>
       <li>The server renders the loading fallback and flushes it to the browser immediately.</li>
       <li>The page function runs in the background.</li>
-      <li>When the page resolves, the server streams a <code>&lt;template&gt;</code> chunk that replaces the fallback with the real content — no client JavaScript needed for the swap.</li>
+      <li>When the page resolves, the server streams a <code>&lt;template&gt;</code> chunk that replaces the fallback with the real content, with no client JavaScript needed for the swap.</li>
     </ol>
 
     <h2>Nesting</h2>
@@ -60,8 +60,8 @@ export default async function BlogPage() {
     [slug]/page.ts      ← wrapped by blog/loading.ts</pre>
 
     <h2>Loading states on client navigation</h2>
-    <p>The same <code>loading.ts</code> also feeds client-side navigation. The SSR pipeline emits each segment's loading content as a hidden <code>&lt;template id="wj-loading:&lt;segment-path&gt;"&gt;</code> at body end. When a user clicks a link, the router clones the deepest matching template into the swap slot <strong>immediately</strong> — before the fetch even completes — so the user sees the skeleton instantly instead of stale content from the previous page.</p>
-    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router falls back to a full page navigation. The same files serve both server-side SSR Suspense and client-side nav optimistic UI — write one <code>loading.ts</code>, get both behaviors.</p>
+    <p>The same <code>loading.ts</code> also feeds client-side navigation. The SSR pipeline emits each segment's loading content as a hidden <code>&lt;template id="wj-loading:&lt;segment-path&gt;"&gt;</code> at body end. When a user clicks a link, the router clones the deepest matching template into the swap slot <strong>immediately</strong>, before the fetch even completes, so the user sees the skeleton instantly instead of stale content from the previous page.</p>
+    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router falls back to a full page navigation. The same files serve both server-side SSR Suspense and client-side nav optimistic UI. Write one <code>loading.ts</code>, get both behaviors.</p>
 
     <h2>Manual Suspense</h2>
     <p>For more control, use <code>Suspense()</code> directly in your page template instead of a <code>loading.ts</code> file:</p>
@@ -76,13 +76,13 @@ export default function Page() {
   ${'`'};
 }</pre>
 
-    <p>Each <code>Suspense</code> boundary resolves independently — the feed can appear before the stats if it's faster.</p>
+    <p>Each <code>Suspense</code> boundary resolves independently, so the feed can appear before the stats if it's faster.</p>
 
     <h2>Next steps</h2>
     <ul>
-      <li><a href="/docs/suspense">Streaming & Suspense</a> — the underlying streaming mechanism</li>
-      <li><a href="/docs/error-handling">Error Handling</a> — <code>error.ts</code> boundaries</li>
-      <li><a href="/docs/task">Task (Async Data)</a> — client-side loading states within components</li>
+      <li><a href="/docs/suspense">Streaming & Suspense</a>: the underlying streaming mechanism</li>
+      <li><a href="/docs/error-handling">Error Handling</a>: <code>error.ts</code> boundaries</li>
+      <li><a href="/docs/task">Task (Async Data)</a>: client-side loading states within components</li>
     </ul>
   `;
 }

@@ -530,7 +530,7 @@ const EXAMPLES: Record<string, string> = {
   `,
 };
 
-// Aliases — registry uses hyphens; some keys use underscores to avoid TS
+// Aliases, registry uses hyphens; some keys use underscores to avoid TS
 // reserved-word collisions in the JSON file.
 const HYPHENATED_ALIASES: Record<string, string> = {
   'alert-dialog': 'alert_dialog',
@@ -543,7 +543,7 @@ export function getExample(name: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Per-variant + per-size example snippets — one per key, used by the
+// Per-variant + per-size example snippets, one per key, used by the
 // component docs page to render a stack of <ComponentPreview>-style cards
 // under "Variants" and "Sizes" headings, mirroring shadcn's docs.
 //
@@ -559,7 +559,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   // Each button's text IS the variant key so the combined preview pane
   // reads "Default | Destructive | Outline | Secondary | Ghost | Link"
   // without any extra annotation. Same principle for badge, toggle,
-  // alert below — when a section shows multiple values side-by-side
+  // alert below, when a section shows multiple values side-by-side
   // and the values' visual difference is what's being demonstrated,
   // the text content should name the value rather than be generic.
   button: {
@@ -595,7 +595,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   // <ui-toggle> for interactivity AND to show the variant-specific
   // styling (default = transparent until pressed; outline = always
   // shows border + shadow). Previously these were static <button>s
-  // both stuck in data-state=on, which painted bg-accent on both —
+  // both stuck in data-state=on, which painted bg-accent on both , 
   // visually identical. Now they start unpressed so the structural
   // differences (border on outline, none on default) are visible,
   // and clicking each toggles the pressed state.
@@ -656,9 +656,9 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
     `,
   },
   // Each variant card renders a real interactive <ui-dropdown-menu>
-  // with a trigger button — clicking opens the actual menu (matches
+  // with a trigger button, clicking opens the actual menu (matches
   // the hero preview's pattern). Previously these were STATIC popover
-  // cards with bare <ui-dropdown-menu-item> orphans floating inside —
+  // cards with bare <ui-dropdown-menu-item> orphans floating inside , 
   // the click handler couldn't close any enclosing menu (there was
   // none), the popover positioning code didn't run, and roving focus
   // had nothing to rove on. Now each card is an authentic mini-menu
@@ -707,7 +707,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   },
   // separator's variants ARE orientations. The separatorClass()
   // utility outputs `data-[orientation=…]:h-px` / `w-px` selectors,
-  // so the element MUST carry a matching data-orientation attribute —
+  // so the element MUST carry a matching data-orientation attribute , 
   // without it the bg-color paints but width/height stay 0 and the
   // separator vanishes. Add data-orientation explicitly to each demo.
   // (shadcn's React Separator sets this attribute via the orientation
@@ -732,7 +732,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
 
 const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   // Button text = size key (xs / sm / default / lg). Icon-sized buttons
-  // are intentionally NOT in this map — they're demoed in
+  // are intentionally NOT in this map, they're demoed in
   // ICON_SIZE_EXAMPLES below so the Sizes section stays consistent
   // (text buttons whose height varies) and the Icon section stays
   // consistent (cog icons whose box varies, no label text).
@@ -766,7 +766,7 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </label>
     `,
   },
-  // Same <ui-toggle> rationale as variants — interactive + the size
+  // Same <ui-toggle> rationale as variants, interactive + the size
   // attribute propagates via the class helper called from
   // _applyClass(). Outline variant chosen so the size diff (border
   // box height) reads at a glance.
@@ -803,7 +803,7 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
           <div class="${cardTitleClass()}">Notifications</div>
           <div class="${cardDescriptionClass()}">You have 3 unread.</div>
         </div>
-        <div class="${cardContentClass()}">Default size — gap-6 / py-6 / px-6.</div>
+        <div class="${cardContentClass()}">Default size, gap-6 / py-6 / px-6.</div>
       </div>
     `,
     sm: `
@@ -812,7 +812,7 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
           <div class="${cardTitleClass()}">Notifications</div>
           <div class="${cardDescriptionClass()}">You have 3 unread.</div>
         </div>
-        <div class="${cardContentClass()}">Small size — gap-3 / py-3 / px-4.</div>
+        <div class="${cardContentClass()}">Small size, gap-3 / py-3 / px-4.</div>
       </div>
     `,
   },
@@ -884,7 +884,7 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   },
 };
 
-// Position demos for sonner — each card mounts its own <ui-sonner> at
+// Position demos for sonner, each card mounts its own <ui-sonner> at
 // the target position and the Show button calls .addToast() on THAT
 // specific viewport (via the public per-instance method, bypassing the
 // singleton toaster.add routing). This works around the multi-viewport
@@ -908,12 +908,12 @@ SIZE_EXAMPLES.sonner = (() => {
   };
 })();
 
-// Variant examples for sonner are TYPE demos — each card fires the
+// Variant examples for sonner are TYPE demos, each card fires the
 // matching imperative API so the user sees the icon + colour treatment
 // for that toast type.
 //
 // IMPORTANT: <ui-sonner>'s connectedCallback overwrites the singleton
-// `toaster.add` reference (see sonner.ts:120) — the LAST viewport to
+// `toaster.add` reference (see sonner.ts:120), the LAST viewport to
 // connect wins for every subsequent toast() call, including ones from
 // buttons in OTHER cards (and the hero). Earlier each card used
 // position="top-center", which meant: user clicks "Show toast" on the
@@ -921,12 +921,12 @@ SIZE_EXAMPLES.sonner = (() => {
 // FIRST), but the toast appears at top-center because one of the
 // variant-card viewports mounted later. Fixing the visible symptom
 // by pinning every viewport on this page to bottom-right so it
-// doesn't matter which one wins — toasts always appear in the same
+// doesn't matter which one wins, toasts always appear in the same
 // place users expect from the default. (Proper multi-viewport
 // routing is a separate concern in sonner.ts, deferred.)
 VARIANT_EXAMPLES.sonner = (() => {
   // Loading toasts default to duration: 0 (sticky) per sonner
-  // convention — they're meant to be replaced by a follow-up
+  // convention, they're meant to be replaced by a follow-up
   // toast.success / toast.error via toast.promise. A bare
   // toast.loading() in a docs preview would never disappear. So
   // the loading card demos the realistic flow: toast.promise with
@@ -969,7 +969,7 @@ export function getSizeExamples(name: string): Record<string, string> | null {
   return SIZE_EXAMPLES[name] || null;
 }
 
-// Icon-sized previews — separate map because they're visually distinct
+// Icon-sized previews, separate map because they're visually distinct
 // from text-button sizes (cog icons of varying box sizes, no label
 // text) and deserve their own section heading. Currently only button
 // has icon-sized variants but the pattern scales to any future

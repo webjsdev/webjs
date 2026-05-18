@@ -8,7 +8,7 @@
  *   if (user.banned) redirect('/goodbye');
  *
  * Both throw a sentinel that the SSR pipeline catches. Never catch them
- * yourself — let them propagate.
+ * yourself: let them propagate.
  */
 
 const NOT_FOUND = Symbol.for('webjs.notFound');

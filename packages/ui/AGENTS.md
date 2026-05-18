@@ -1,6 +1,6 @@
-# AGENTS.md — @webjskit/ui
+# AGENTS.md : @webjskit/ui
 
-The webjs **AI-first component library + CLI** — `webjsui init` / `add` /
+The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
 `list` / `view` / `diff` / `info` / `build`. Ships 32 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
@@ -10,13 +10,13 @@ Framework-wide rules live in the root [`../../AGENTS.md`](../../AGENTS.md) and
 apply here. Read that first. This file only covers what's specific to
 `@webjskit/ui`.
 
-## Architecture — composition-first, two tiers
+## Architecture : composition-first, two tiers
 
 `@webjskit/ui` ships **class-helper functions** (returning Tailwind class
-strings) and **a small set of stateful custom elements** — never bundled
+strings) and **a small set of stateful custom elements**, never bundled
 wrappers around native form controls.
 
-### Tier 1 — class helpers (the majority)
+### Tier 1 : class helpers (the majority)
 
 Pure functions returning Tailwind class strings. Compose with whatever
 native element you want.
@@ -42,7 +42,7 @@ html`
 
 Helpers that take options accept an object: `buttonClass({ variant: 'outline', size: 'sm' })`.
 
-### Tier 2 — stateful custom elements
+### Tier 2 : stateful custom elements
 
 For things the browser doesn't provide natively: dialogs, popovers, tabs,
 accordions, dropdowns. Plain `HTMLElement` subclasses (not `WebComponent`)
@@ -76,13 +76,13 @@ packages/ui/
   src/
     index.js                      CLI entry (Commander program + dispatch)
     commands/
-      init.js                     init — writes components.json, theme CSS, lib/utils.ts
-      add.js                      add — resolve registry items + write into project + install deps
-      list.js                     list — show all registry items
-      view.js                     view — print a component's source
-      diff.js                     diff — compare local vs registry
-      info.js                     info — project diagnostics
-      build.js                    build — compile a custom registry (for registry authors)
+      init.js                     init, writes components.json, theme CSS, lib/utils.ts
+      add.js                      add, resolve registry items + write into project + install deps
+      list.js                     list, show all registry items
+      view.js                     view, print a component's source
+      diff.js                     diff, compare local vs registry
+      info.js                     info, project diagnostics
+      build.js                    build, compile a custom registry (for registry authors)
     registry/
       schema.js                   zod schemas (wire-compatible with shadcn's)
       fetcher.js                  HTTP GET + cache for registry items
@@ -110,25 +110,25 @@ packages/ui/
       layout.ts, page.ts          docs site shell + home
       _components/                hand-written website-chrome custom elements (theme-toggle, …)
       _lib/registry.server.ts     composes registry JSON on demand from ../../registry/
-      registry/route.ts                  GET /registry — full manifest (composed on demand)
-      registry/index.json/route.ts       GET /registry/index.json — flat list
-      registry/[name]/route.ts           GET /registry/<name>.json — single item (CLI fetches here)
+      registry/route.ts                  GET /registry, full manifest (composed on demand)
+      registry/index.json/route.ts       GET /registry/index.json, flat list
+      registry/[name]/route.ts           GET /registry/<name>.json, single item (CLI fetches here)
       docs/page.ts                docs root
       docs/components/[name]/page.ts  per-component docs page
-    components/                   GITIGNORED — auto-populated at prestart by scripts/copy-registry.js
-    lib/                          GITIGNORED — same as above (for utils.ts)
+    components/                   GITIGNORED, auto-populated at prestart by scripts/copy-registry.js
+    lib/                          GITIGNORED, same as above (for utils.ts)
 ```
 
-### ⚠️ ui-website footgun — do NOT write hand-written files into `packages/website/components/`
+### ⚠️ ui-website footgun : do NOT write hand-written files into `packages/website/components/`
 
 `packages/website/` is the publisher AND a consumer of the kit, so its
-`components/` and `lib/` directories are wholesale gitignored —
+`components/` and `lib/` directories are wholesale gitignored , 
 `scripts/copy-registry.js` regenerates them at prestart by mirroring
 `../registry/` with each component's `'../lib/utils.ts'` import rewritten
 to the website's depth. **Anything hand-written you put in
 `packages/website/components/*` or `packages/website/lib/*` is invisible
 to git, never reaches the deploy, and breaks SSR with a prod 500
-(this has happened — see git log for the favicon / theme-toggle incidents).**
+(this has happened, see git log for the favicon / theme-toggle incidents).**
 
 Hand-written components for the website go in
 **`packages/website/app/_components/`** instead. The underscore prefix
@@ -137,7 +137,7 @@ the `components/` mirror's gitignore can stay simple.
 
 This trap exists ONLY in `packages/website/`. Scaffolded user apps,
 `examples/blog`, and every other webjs app keep `components/ui/` as
-normal tracked source — the standard shadcn "you own it" pattern.
+normal tracked source, the standard shadcn "you own it" pattern.
 See [`packages/website/AGENTS.md`](packages/website/AGENTS.md) for the
 full per-directory breakdown.
 
@@ -145,33 +145,33 @@ full per-directory breakdown.
 
 | Tier | Component | Surface |
 |---|---|---|
-| 1a | `button` | `buttonClass({ variant, size })` — 6 variants × 8 sizes |
-| 1a | `badge` | `badgeClass({ variant })` — 6 variants |
+| 1a | `button` | `buttonClass({ variant, size })`, 6 variants × 8 sizes |
+| 1a | `badge` | `badgeClass({ variant })`, 6 variants |
 | 1a | `alert` | `alertClass({ variant })`, `alertTitleClass`, `alertDescriptionClass` |
 | 1a | `card` | `cardClass`, `cardHeaderClass`, `cardTitleClass`, `cardDescriptionClass`, `cardActionClass`, `cardContentClass`, `cardFooterClass` |
 | 1a | `input` / `textarea` / `label` | `inputClass`, `textareaClass`, `labelClass` |
-| 1a | `checkbox` | `checkboxClass` — native `<input type="checkbox">` with SVG check on `:checked` |
-| 1a | `radio-group` | `radioGroupClass`, `radioClass` — native `<input type="radio">` |
-| 1a | `switch` | `switchInputClass`, `switchTrackClass({ size })` — hidden native checkbox + visible track |
+| 1a | `checkbox` | `checkboxClass`, native `<input type="checkbox">` with SVG check on `:checked` |
+| 1a | `radio-group` | `radioGroupClass`, `radioClass`, native `<input type="radio">` |
+| 1a | `switch` | `switchInputClass`, `switchTrackClass({ size })`, hidden native checkbox + visible track |
 | 1a | `native-select` | `nativeSelectWrapperClass`, `nativeSelectClass`, `nativeSelectIconClass`, `nativeSelectOptionClass`, `nativeSelectOptGroupClass` |
 | 1a | `avatar` | `avatarClass`, `avatarImageClass`, `avatarFallbackClass`, `avatarBadgeClass`, `avatarGroupClass`, `avatarGroupCountClass` |
 | 1a | `separator` | `separatorClass({ orientation })` |
 | 1a | `skeleton` | `skeletonClass` |
-| 1a | `aspect-ratio` | `aspectRatioClass` — use Tailwind `aspect-[16/9]` directly |
+| 1a | `aspect-ratio` | `aspectRatioClass`, use Tailwind `aspect-[16/9]` directly |
 | 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
 | 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
-| 1a | `toggle` | `toggleClass({ variant, size })` — pair with native `<button>` |
+| 1a | `toggle` | `toggleClass({ variant, size })`, pair with native `<button>` |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
 | 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |
 | 1b | `accordion` | `accordionClass`, `accordionItemClass`, `accordionTriggerClass`, `accordionContentClass`. Compose with `<details name="...">` + `<summary>`; `name` provides exclusive-open behavior natively. |
 | 1b | `collapsible` | `collapsibleClass`, `collapsibleTriggerClass`, `collapsibleContentClass`. Compose with `<details>` + `<summary>`. |
-| 2  | `progress` | `<ui-progress value="...">` — handles indicator transform |
+| 2  | `progress` | `<ui-progress value="...">`, handles indicator transform |
 | 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>` |
-| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()` — top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. |
+| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()`, top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. |
 | 2  | `alert-dialog` | Like dialog, role=alertdialog. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
-| 2  | `tooltip` | `<ui-tooltip delay-duration>` — hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. |
-| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>` — hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. |
+| 2  | `tooltip` | `<ui-tooltip delay-duration>`, hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. |
+| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>`, hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. |
 | 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. |
 | 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Escape close. |
 | 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. |
@@ -180,7 +180,7 @@ full per-directory breakdown.
 
 | Command | What it does |
 |---|---|
-| `webjsui init` | Initialize a project — writes `components.json`, copies `lib/utils.ts`, appends theme CSS |
+| `webjsui init` | Initialize a project, writes `components.json`, copies `lib/utils.ts`, appends theme CSS |
 | `webjsui add <names...>` | Resolve transitive deps, copy component sources, install npm deps |
 | `webjsui list [filter]` | List components in the registry |
 | `webjsui view <name>` | Print a component's source to stdout |
@@ -210,7 +210,7 @@ full per-directory breakdown.
    our registry (modulo TS vs TSX extensions).
 
 4. **Light DOM + Tailwind everywhere.** Custom elements extend `HTMLElement`
-   (NOT `WebComponent`) — they decorate the host element rather than
+   (NOT `WebComponent`), they decorate the host element rather than
    render replacement children. Light DOM means Tailwind utility classes
    apply directly.
 
@@ -224,7 +224,7 @@ full per-directory breakdown.
    - `asChild` → drop the wrapper, apply the class helper directly
 
 6. **Native form controls participate in `<form>` submission natively.**
-   `<input type="checkbox" class=${checkboxClass()}>` is a real input —
+   `<input type="checkbox" class=${checkboxClass()}>` is a real input , 
    no `ElementInternals`, no `setFormValue` proxying. Submission,
    autofill, browser autocomplete, native validation all work.
 
@@ -242,14 +242,14 @@ names mechanically:
 ## Class-helper conventions (Tier 1)
 
 - Helpers with no parameters: `cardClass()`, `inputClass()`, etc.
-- Helpers with variants: `buttonClass({ variant, size })` — object arg, all keys optional.
+- Helpers with variants: `buttonClass({ variant, size })`, object arg, all keys optional.
 - All `.ts` files in `components/` export named functions. No default exports.
 - Use `cn()` from `'../lib/utils.ts'` to merge a helper's output with
   user-supplied classes when needed: `<button class=${cn(buttonClass(), 'rounded-full')}>`.
 
 ## Layout + typography helpers (the design system)
 
-These live in `lib/utils.ts` and are foundational — encode the spacing
+These live in `lib/utils.ts` and are foundational, encode the spacing
 and typography rhythm.
 
 | Helper | Returns | Use for |
@@ -264,7 +264,7 @@ and typography rhythm.
 | `helpClass()` | `text-xs text-muted-foreground` | Tertiary muted text |
 | `errorClass()` | `text-sm font-medium text-destructive` | Validation error text |
 
-Change one helper to retune the entire app — every form field that uses
+Change one helper to retune the entire app, every form field that uses
 `fieldClass()` updates atomically.
 
 ## Tests
@@ -289,16 +289,16 @@ truth is `packages/registry/components/*.ts` + `registry.json` +
 `themes/base-colors.js`. Cached in memory after first request.
 
 Theme synthesis: only `theme-neutral` is declared in `registry.json`
-(canonical CSS lives at `themes/index.css`). The other 6 base colours —
+(canonical CSS lives at `themes/index.css`). The other 6 base colours , 
 `theme-stone`, `theme-zinc`, `theme-mauve`, `theme-olive`, `theme-mist`,
-`theme-taupe` — are synthesized on demand by merging per-colour
+`theme-taupe`, are synthesized on demand by merging per-colour
 overrides from `themes/base-colors.js` into the neutral CSS. All 7
 themes return the same `files: [{ target: 'app/globals.css', content }]`
 shape so `webjsui init --base-color <name>` works uniformly.
 
 ## Deferred to v2 (not in the registry)
 
-These shadcn components are NOT shipped in v1 — their old-pattern source
+These shadcn components are NOT shipped in v1, their old-pattern source
 files have been **removed entirely** from `packages/registry/components/`.
 When v2 starts, write fresh files following the Tier-1 / Tier-2 conventions
 above:

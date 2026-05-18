@@ -28,7 +28,7 @@ export const diff = new Command()
         if (!existsSync(target)) continue;
         const local = readFileSync(target, 'utf8');
         if (local !== (file.content || '')) {
-          logger.info(`${logger.bold(item.name)} — ${basename(file.path)} differs from registry`);
+          logger.info(`${logger.bold(item.name)}: ${basename(file.path)} differs from registry`);
           changed++;
         }
       }

@@ -17,7 +17,7 @@ export const list = new Command()
       return;
     }
     for (const i of filtered) {
-      const desc = i.description ? logger.dim(' — ' + i.description) : '';
+      const desc = i.description ? logger.dim(': ' + i.description) : '';
       logger.info(`  ${logger.cyan(i.name)}${desc}`);
     }
     logger.info('');

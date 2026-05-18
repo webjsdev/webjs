@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'WebSockets — webjs' };
+export const metadata = { title: 'WebSockets | webjs' };
 
 export default function WebSockets() {
   return html`
@@ -34,9 +34,9 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
 
     <p>The three arguments give you everything you need:</p>
     <ul>
-      <li><strong><code>ws</code></strong> -- the <a href="https://github.com/websockets/ws">ws</a> library's <code>WebSocket</code> instance. Use <code>ws.on('message', ...)</code>, <code>ws.send()</code>, <code>ws.close()</code>, and all other ws APIs.</li>
-      <li><strong><code>req</code></strong> -- a standard <code>Request</code> constructed from the HTTP upgrade request. It carries the original headers, cookies, URL, and query parameters. Use it for authentication: read the session cookie, verify a JWT from the <code>Authorization</code> header, or check query params.</li>
-      <li><strong><code>{ params }</code></strong> -- dynamic route segment values, just like in API route handlers. For <code>app/api/rooms/[roomId]/route.ts</code>, <code>params.roomId</code> is the room ID from the URL.</li>
+      <li><strong><code>ws</code></strong>: the <a href="https://github.com/websockets/ws">ws</a> library's <code>WebSocket</code> instance. Use <code>ws.on('message', ...)</code>, <code>ws.send()</code>, <code>ws.close()</code>, and all other ws APIs.</li>
+      <li><strong><code>req</code></strong>: a standard <code>Request</code> constructed from the HTTP upgrade request. It carries the original headers, cookies, URL, and query parameters. Use it for authentication: read the session cookie, verify a JWT from the <code>Authorization</code> header, or check query params.</li>
+      <li><strong><code>{ params }</code></strong>: dynamic route segment values, just like in API route handlers. For <code>app/api/rooms/[roomId]/route.ts</code>, <code>params.roomId</code> is the room ID from the URL.</li>
     </ul>
 
     <h3>Under the Hood</h3>
@@ -128,8 +128,8 @@ conn.close();</pre>
     <h3>URL Resolution</h3>
     <p>Relative paths like <code>'/api/chat'</code> are automatically promoted to the correct WebSocket URL based on the current page's protocol:</p>
     <ul>
-      <li><code>http://</code> page -- <code>ws://localhost:3000/api/chat</code></li>
-      <li><code>https://</code> page -- <code>wss://example.com/api/chat</code></li>
+      <li><code>http://</code> page: <code>ws://localhost:3000/api/chat</code></li>
+      <li><code>https://</code> page: <code>wss://example.com/api/chat</code></li>
     </ul>
     <p>Absolute <code>ws://</code> or <code>wss://</code> URLs pass through unchanged.</p>
 
@@ -158,19 +158,19 @@ conn.close();</pre>
     </ul>
 
     <h3>Send Queuing While Disconnected</h3>
-    <p>If you call <code>conn.send()</code> before the socket is open or while it is reconnecting, the message is queued in memory. When the connection (re)opens, all queued messages are flushed in order. This means you do not need to check connection state before sending -- messages are never silently dropped.</p>
+    <p>If you call <code>conn.send()</code> before the socket is open or while it is reconnecting, the message is queued in memory. When the connection (re)opens, all queued messages are flushed in order. This means you do not need to check connection state before sending. Messages are never silently dropped.</p>
 
-    <pre>// Safe to call immediately -- message is queued if not yet connected
+    <pre>// Safe to call immediately: message is queued if not yet connected
 const conn = connectWS('/api/events');
 conn.send({ type: 'subscribe', channel: 'updates' });</pre>
 
     <h3>Connection State</h3>
     <p>The returned connection object exposes:</p>
     <ul>
-      <li><code>conn.send(data)</code> -- send a message (queued if not open)</li>
-      <li><code>conn.close(code?, reason?)</code> -- permanently close and disable reconnect</li>
-      <li><code>conn.socket</code> -- the underlying <code>WebSocket</code> instance (may be <code>null</code> while reconnecting)</li>
-      <li><code>conn.readyState</code> -- current state: 0 (CONNECTING), 1 (OPEN), 2 (CLOSING), 3 (CLOSED)</li>
+      <li><code>conn.send(data)</code>: send a message (queued if not open)</li>
+      <li><code>conn.close(code?, reason?)</code>: permanently close and disable reconnect</li>
+      <li><code>conn.socket</code>: the underlying <code>WebSocket</code> instance (may be <code>null</code> while reconnecting)</li>
+      <li><code>conn.readyState</code>: current state: 0 (CONNECTING), 1 (OPEN), 2 (CLOSING), 3 (CLOSED)</li>
     </ul>
 
     <h2>The globalThis Pattern for Shared State</h2>
@@ -510,10 +510,10 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: { roomId: 
     <h2>Summary</h2>
     <ul>
       <li>Export <code>WS</code> from any <code>route.ts</code> to create a WebSocket endpoint</li>
-      <li>The handler receives <code>(ws, req, { params })</code> -- the ws socket, the upgrade Request (for auth/cookies), and dynamic route params</li>
+      <li>The handler receives <code>(ws, req, { params })</code>: the ws socket, the upgrade Request (for auth/cookies), and dynamic route params</li>
       <li>Uses the <code>ws</code> library under the hood with HTTP/1.1 Upgrade</li>
       <li>Client: <code>connectWS(url, handlers)</code> with auto-reconnect (exponential backoff, capped at 30s)</li>
-      <li>Outgoing objects are JSON-stringified; incoming text is JSON-parsed when possible</li>
+      <li>Outgoing objects are JSON-stringified, while incoming text is JSON-parsed when possible</li>
       <li>Messages sent while disconnected are queued and flushed on reconnect</li>
       <li>Use the <code>globalThis</code> pattern for shared state that survives dev-mode module reloads</li>
       <li>WebSocket and HTTP handlers coexist in the same <code>route.ts</code> file</li>

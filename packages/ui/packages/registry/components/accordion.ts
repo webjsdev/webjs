@@ -1,8 +1,8 @@
 /**
- * Accordion — vertical collapsible list built on native <details>/<summary>.
+ * Accordion, vertical collapsible list built on native <details>/<summary>.
  *
- * Tier-1 component (no custom element). Exclusive open behavior — what
- * Radix calls `type="single"` — is provided natively by giving each
+ * Tier-1 component (no custom element). Exclusive open behavior, what
+ * Radix calls `type="single"`, is provided natively by giving each
  * <details> the same `name=""` attribute. Independent open behavior
  * (`type="multiple"`) is the default when `name` is omitted.
  *
@@ -40,7 +40,7 @@
  *         <span>Is it styled?</span>
  *         <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
  *       </summary>
- *       <div class=${accordionContentClass()}>Yes — shadcn design tokens.</div>
+ *       <div class=${accordionContentClass()}>Yes, shadcn design tokens.</div>
  *     </details>
  *   </div>
  *
@@ -71,7 +71,7 @@ export const accordionItemClass = (): string => 'group border-b last:border-b-0'
  *
  * `disabled: true` returns the visual disabled state (greyed out,
  * not-allowed cursor, no pointer events). For true keyboard prevention
- * — the native disabled-disclosure-widget gap — add the standard
+ *, the native disabled-disclosure-widget gap, add the standard
  * `inert` attribute to the <details> element. shadcn's React `disabled`
  * prop combines both; native HTML has no `disabled` on <details>.
  */

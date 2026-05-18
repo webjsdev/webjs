@@ -1,5 +1,5 @@
 /**
- * Checkbox — styled native `<input type="checkbox">`. Uses `appearance: none`
+ * Checkbox: styled native `<input type="checkbox">`. Uses `appearance: none`
  * + an SVG background for the checkmark when `:checked`, so it's a real form
  * control (participates in `<form>` submission natively, no ElementInternals).
  *
@@ -22,8 +22,8 @@ import { cn } from '../lib/utils.ts';
 // (`oklch(0.205 0 0)`) and the checkmark needs to be light (white); in dark
 // mode the box is light (`oklch(0.922 0 0)`) and the checkmark needs to be
 // dark (black). `currentColor` inside a data:url SVG does NOT inherit from
-// the host element when used as a background-image — that's a long-
-// standing browser limitation — and pseudo-elements (::before/::after) on
+// the host element when used as a background-image: that's a long-
+// standing browser limitation: and pseudo-elements (::before/::after) on
 // `<input>` aren't reliable cross-browser, so the simplest correct fix is
 // to ship two SVGs and toggle them via a theme selector.
 const CHECKMARK_LIGHT =
@@ -37,7 +37,7 @@ const CHECKBOX_CLASS =
 // Inject style once for the checkmark background-image when :checked.
 //
 // Theme selectors are kept in sync with what shadcn's components.json
-// scaffolds for theme switching — explicit `[data-theme='dark']` /
+// scaffolds for theme switching: explicit `[data-theme='dark']` /
 // `.dark` on `<html>` (set by toggle scripts), AND `prefers-color-
 // scheme: dark` gated by `:not([data-theme='light']):not(.light)` so
 // an explicit-light toggle still wins over the OS preference. Matches

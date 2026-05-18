@@ -79,7 +79,7 @@ test('hoistHeadTags: lifts multiple consecutive leading script/style tags', () =
 test('hoistHeadTags: does NOT lift script/style that appear after normal content', () => {
   const bodyHtml = '<main>page</main><script>alert(1)</script>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
-  // The script isn't leading — stays in the body.
+  // The script isn't leading: stays in the body.
   assert.equal(head, '<head></head>');
   assert.equal(body, bodyHtml);
 });
@@ -135,7 +135,7 @@ test('hoistHeadTags: does NOT lift <link> after normal content', () => {
 });
 
 test('hoistHeadTags: lifts head-bound tags at the top of body (no wrapper now)', () => {
-  // The SSR pipeline no longer wraps layout output in a wrapping div —
+  // The SSR pipeline no longer wraps layout output in a wrapping div -
   // partial-nav uses inline comment markers instead. Head-bound tags
   // emitted at the top of a layout template lift directly into <head>.
   const bodyHtml =
@@ -255,7 +255,7 @@ test('buildDocumentParts: passes through user shell with no <head> at all', () =
 });
 
 test('buildDocumentParts: user shell is detected directly (no wrapper to peek past)', () => {
-  // The renderChain output goes directly into the shell extractor — partial
+  // The renderChain output goes directly into the shell extractor: partial
   // -nav uses inline comment markers, not a wrapping div. extractUserShell
   // sees the user's <!doctype><html> shell at the top of body.
   const userShellBody =
@@ -419,18 +419,18 @@ async function makeLayeredRoute(...metadataSources) {
 test('title template: page string title is wrapped by root template', async () => {
   const { route, appDir } = await makeLayeredRoute(
     // Root (outer): template + default
-    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    `export const metadata = { title: { template: '%s: webjs', default: 'webjs' } };`,
     // Page (inner): plain string title
     `export const metadata = { title: 'Hello' };`,
   );
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
   const html = await resp.text();
-  assert.match(html, /<title>Hello — webjs<\/title>/);
+  assert.match(html, /<title>Hello: webjs<\/title>/);
 });
 
 test('title template: page omits title; root default is used', async () => {
   const { route, appDir } = await makeLayeredRoute(
-    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    `export const metadata = { title: { template: '%s: webjs', default: 'webjs' } };`,
   );
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
   const html = await resp.text();
@@ -439,24 +439,24 @@ test('title template: page omits title; root default is used', async () => {
 
 test('title template: page absolute title escapes the template', async () => {
   const { route, appDir } = await makeLayeredRoute(
-    `export const metadata = { title: { template: '%s — webjs', default: 'webjs' } };`,
+    `export const metadata = { title: { template: '%s: webjs', default: 'webjs' } };`,
     `export const metadata = { title: { absolute: 'A standalone title' } };`,
   );
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
   const html = await resp.text();
   assert.match(html, /<title>A standalone title<\/title>/);
-  assert.doesNotMatch(html, /— webjs/);
+  assert.doesNotMatch(html, /: webjs/);
 });
 
 test('title template: deeper layout can override the inherited template', async () => {
   const { route, appDir } = await makeLayeredRoute(
-    `export const metadata = { title: { template: '%s — Site', default: 'Site' } };`,
-    `export const metadata = { title: { template: '%s — Blog' } };`, // intermediate layout overrides
+    `export const metadata = { title: { template: '%s: Site', default: 'Site' } };`,
+    `export const metadata = { title: { template: '%s: Blog' } };`, // intermediate layout overrides
     `export const metadata = { title: 'Post' };`,                    // page supplies plain string
   );
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
   const html = await resp.text();
-  assert.match(html, /<title>Post — Blog<\/title>/);
+  assert.match(html, /<title>Post: Blog<\/title>/);
 });
 
 /* ------------ Metadata parity: icons + manifest ------------ */
@@ -763,7 +763,7 @@ test('ssrPage: emits wj:children comment marker around the page slot for each la
 
 test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', async () => {
   // The client tells the server "I already have layouts at / and /docs"
-  // via the X-Webjs-Have header. Server must short-circuit at /docs —
+  // via the X-Webjs-Have header. Server must short-circuit at /docs -
   // emit only the page content wrapped in the /docs marker pair, never
   // re-render the docs layout's outer markup (header/sidenav/etc.).
   const { route, appDir, tmpDir } = await makeRoute({
@@ -784,7 +784,7 @@ test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', as
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();
 
-  // The outer layout's distinctive markup must NOT appear — it was skipped.
+  // The outer layout's distinctive markup must NOT appear: it was skipped.
   assert.ok(!body.includes('HEAVY-OUTER-LAYOUT'),
     `outer layout should be skipped, but body contains it. got: ${body.slice(0, 500)}`);
   // The page content is still present, wrapped in the matched marker.
@@ -826,7 +826,7 @@ test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () 
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();
 
-  // Both outer layouts must be skipped — body has neither's distinctive markup.
+  // Both outer layouts must be skipped: body has neither's distinctive markup.
   assert.ok(!body.includes('ROOT'), `root layout skipped; got: ${body.slice(0, 600)}`);
   assert.ok(!body.includes('DOCS'), `docs layout skipped; got: ${body.slice(0, 600)}`);
   // Marker for /docs is present (deepest match).
@@ -962,7 +962,7 @@ test('ssrNotFound: no notFound file → plain 404 fallback', async () => {
   const resp = await ssrNotFound(null, { dev: false, appDir: tmpDir });
   assert.equal(resp.status, 404);
   const body = await resp.text();
-  assert.ok(body.includes('404 — Not found'));
+  assert.ok(body.includes('404: Not found'));
 });
 
 test('ssrNotFound: renders the user-supplied not-found.js module', async () => {
@@ -985,7 +985,7 @@ test('ssrNotFound: not-found.js that throws falls back to an inline error body',
   const resp = await ssrNotFound(notFoundFile, { dev: false, appDir: sub });
   assert.equal(resp.status, 404);
   const body = await resp.text();
-  assert.ok(body.includes('404 — Not found'));
+  assert.ok(body.includes('404: Not found'));
   assert.ok(body.includes('boom'));
 });
 
@@ -1080,7 +1080,7 @@ test('ssrPage: page throws + NO error.js boundary → default 500', async () => 
     const body = await resp.text();
     assert.ok(body.includes('Something went wrong'));
     // The thrown error.message is NOT leaked in prod when no boundary
-    // handles it — only the framework's terse default body shows.
+    // handles it: only the framework's terse default body shows.
     assert.ok(!body.includes('no-boundary'));
   } finally { console.error = prev; }
 });
@@ -1088,7 +1088,7 @@ test('ssrPage: page throws + NO error.js boundary → default 500', async () => 
 test('ssrPage: error.js fails to LOAD (syntax error) → falls through to default 500', async () => {
   // Distinct from "error.js renders then throws" (already covered
   // above). This exercises the loadModule() throw path inside the
-  // for-loop at ssr.js:98 — when the boundary file itself can't be
+  // for-loop at ssr.js:98: when the boundary file itself can't be
   // imported (bad syntax, missing dep, broken template literal,
   // etc.), the inner catch should swallow the load failure and
   // continue to the next boundary, eventually reaching the default
@@ -1103,7 +1103,7 @@ test('ssrPage: error.js fails to LOAD (syntax error) → falls through to defaul
   writeFileSync(pageFile,
     `export default function Page() { throw new Error('SENTINEL_PAGE_ERR_zq7'); }\n`);
 
-  // Intentionally malformed module — JS parse failure on import.
+  // Intentionally malformed module: JS parse failure on import.
   const errorFile = join(appDir, 'error.js');
   writeFileSync(errorFile, `export default function Err({ error } { return; }\n`);
 

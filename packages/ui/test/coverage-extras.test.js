@@ -14,14 +14,14 @@ const origLog = console.log;
 
 function tmp() { return mkdtempSync(join(tmpdir(), 'webjsui-cov-extra-')); }
 
-test('detectProject — handles missing package.json gracefully', () => {
+test('detectProject: handles missing package.json gracefully', () => {
   const d = tmp();
   try {
     assert.deepEqual(detectProject(d), { type: 'plain', meta: {} });
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — vite via devDependencies (not just deps)', () => {
+test('detectProject: vite via devDependencies (not just deps)', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({
@@ -31,7 +31,7 @@ test('detectProject — vite via devDependencies (not just deps)', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — vite via @vitejs/plugin-vue in devDeps', () => {
+test('detectProject: vite via @vitejs/plugin-vue in devDeps', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({
@@ -41,7 +41,7 @@ test('detectProject — vite via @vitejs/plugin-vue in devDeps', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — falls back to plain when no recognized dep', () => {
+test('detectProject: falls back to plain when no recognized dep', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({
@@ -51,7 +51,7 @@ test('detectProject — falls back to plain when no recognized dep', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject — webjs via app/layout.js (not just .ts)', () => {
+test('detectProject: webjs via app/layout.js (not just .ts)', () => {
   const d = tmp();
   try {
     mkdirSync(join(d, 'app'), { recursive: true });

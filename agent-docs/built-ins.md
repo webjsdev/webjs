@@ -6,7 +6,7 @@ Opinionated defaults: **set `REDIS_URL` and everything scales.**
 
 ## Caching (HTTP standards, Remix-style)
 
-webjs uses standard HTTP caching — `Cache-Control` on responses. Let
+webjs uses standard HTTP caching via `Cache-Control` on responses. Let
 browsers, CDNs, and reverse proxies handle caching. No framework cache
 layer to debug.
 
@@ -34,19 +34,19 @@ cache store directly:
 ```js
 import { getStore, setStore, redisStore } from '@webjskit/server';
 
-// Default — memory store
+// Default: memory store
 const store = getStore();
 
-// At app startup — Redis for horizontal scaling
+// At app startup, switch to Redis for horizontal scaling
 setStore(redisStore({ url: process.env.REDIS_URL }));
 ```
 
 ## Sessions
 
 ```js
-// middleware.js — enable on all routes
+// middleware.js: enable on all routes
 import { session } from '@webjskit/server';
-export default session();   // auto: REDIS_URL → server-side; else → cookie
+export default session();   // auto: REDIS_URL → server-side, else → cookie
 
 // in a page or action
 import { getSession } from '@webjskit/server';

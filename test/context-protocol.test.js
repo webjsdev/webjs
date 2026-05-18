@@ -9,7 +9,7 @@ import {
 } from '../packages/core/src/context.js';
 
 // ---------------------------------------------------------------------------
-// Helpers — mock host that simulates a WebComponent with EventTarget
+// Helpers: mock host that simulates a WebComponent with EventTarget
 // ---------------------------------------------------------------------------
 
 function createMockHost() {
@@ -77,7 +77,7 @@ test('ContextProvider: responds to context-request with value', () => {
   const ctx = createContext('color');
   const provider = new ContextProvider(host, { context: ctx, initialValue: 'red' });
 
-  // Simulate onMount — starts listening.
+  // Simulate onMount: starts listening.
   provider.onMount();
 
   let received;
@@ -136,7 +136,7 @@ test('ContextProvider: setValue with same value is a no-op', () => {
   const event = new ContextRequestEvent(ctx, (v) => { values.push(v); }, true);
   host.dispatchEvent(event);
 
-  provider.setValue('x'); // same value — should not notify
+  provider.setValue('x'); // same value: should not notify
   assert.deepEqual(values, ['x']);
 
   provider.onUnmount();

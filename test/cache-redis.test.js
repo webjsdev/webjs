@@ -1,6 +1,6 @@
 /**
  * Redis-backed cache store tests. Uses a fake `ioredis` via an ESM
- * loader hook — no live Redis instance required.
+ * loader hook: no live Redis instance required.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -74,7 +74,7 @@ test('redisStore: increment returns sequential values', async () => {
 test('redisStore: increment sets TTL on first occurrence only', async () => {
   const s = redisStore({ url: 'redis://test' });
   await s.increment('t1', 50);     // creates + sets TTL
-  await s.increment('t1', 50);     // subsequent — existing entry, no TTL re-set
+  await s.increment('t1', 50);     // subsequent: existing entry, no TTL re-set
   await new Promise((r) => setTimeout(r, 80));
   // After TTL, key should be cleared.
   assert.equal(await s.get('t1'), null);

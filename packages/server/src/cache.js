@@ -1,5 +1,5 @@
 /**
- * Pluggable cache store — the foundation for rate limiting, sessions,
+ * Pluggable cache store: the foundation for rate limiting, sessions,
  * and any feature that needs shared state across requests.
  *
  * Default: in-memory LRU (single-process, great for dev).
@@ -85,12 +85,12 @@ export function memoryStore(opts = {}) {
 }
 
 /**
- * Redis-backed cache store. Scales horizontally — all instances share
+ * Redis-backed cache store. Scales horizontally: all instances share
  * the same cache. Requires `REDIS_URL` in the environment or explicit URL.
  *
  * Uses the `ioredis` package if available, falls back to built-in
  * `redis` package (Node 20+ ships with `node:` prefix modules but
- * not a Redis client — the user must install one).
+ * not a Redis client: the user must install one).
  *
  * @param {{ url?: string }} [opts]
  * @returns {CacheStore}
@@ -132,7 +132,7 @@ export function redisStore(opts = {}) {
     async set(key, value, ttlMs) {
       const c = await getClient();
       if (ttlMs) {
-        // ioredis: set(key, value, 'PX', ms) — redis: set(key, value, { PX: ms })
+        // ioredis: set(key, value, 'PX', ms): redis: set(key, value, { PX: ms })
         if (typeof c.set === 'function' && c.set.length >= 4) {
           await c.set(key, value, 'PX', ttlMs);
         } else {
@@ -163,7 +163,7 @@ let _defaultStore = null;
 
 /**
  * Get the default cache store. Memory store unless explicitly set via
- * `setStore()`. No auto-detection — the user decides.
+ * `setStore()`. No auto-detection: the user decides.
  *
  * @returns {CacheStore}
  */

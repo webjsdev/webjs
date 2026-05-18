@@ -1,11 +1,11 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'Task Controller — webjs' };
+export const metadata = { title: 'Task Controller | webjs' };
 
 export default function TaskPage() {
   return html`
     <h1>Task Controller</h1>
-    <p>The Task controller manages async operations inside components — data fetching, computations, or any promise-based work. It tracks loading, success, and error states automatically, cancels in-flight requests when args change, and provides a convenient <code>render()</code> helper for mapping states to templates.</p>
+    <p>The Task controller manages async operations inside components such as data fetching, computations, or any promise-based work. It tracks loading, success, and error states automatically, cancels in-flight requests when args change, and provides a convenient <code>render()</code> helper for mapping states to templates.</p>
 
     <pre>import { Task, TaskStatus } from '@webjskit/core/task';</pre>
 
@@ -108,7 +108,7 @@ UserProfile.register('user-profile');</pre>
   args: () =&gt; [this.state.query],
 });</pre>
 
-    <p>This prevents race conditions where an older, slower request resolves after a newer one — a common bug in naive async patterns.</p>
+    <p>This prevents race conditions where an older, slower request resolves after a newer one, a common bug in naive async patterns.</p>
 
     <h2>autoRun Behavior</h2>
     <p>By default, the task runs automatically whenever the <code>args</code> function returns new values (compared via shallow equality). This is the <code>autoRun: true</code> behavior.</p>
@@ -133,7 +133,7 @@ handleSubmit(e) {
   this.#submit.run();  // manually trigger the task
 }</pre>
 
-    <p>Use <code>autoRun: false</code> for tasks that should only fire on explicit user action — form submissions, delete confirmations, or manual refresh buttons.</p>
+    <p>Use <code>autoRun: false</code> for tasks that should only fire on explicit user action: form submissions, delete confirmations, or manual refresh buttons.</p>
 
     <h2>Reactive Args</h2>
     <p>The <code>args</code> function is called on every host update. When the returned array differs from the previous one (shallow comparison per element), the task re-runs. This creates a reactive chain: property change triggers host update, host update evaluates <code>args</code>, changed args trigger the task.</p>
@@ -176,12 +176,12 @@ SearchResults.register('search-results');</pre>
         <tr><th>Scenario</th><th>Use</th></tr>
       </thead>
       <tbody>
-        <tr><td>Page-level data loading (blog posts, product details)</td><td><strong>Async page function</strong> — runs on the server, included in the initial HTML.</td></tr>
-        <tr><td>Search-as-you-type, autocomplete</td><td><strong>Task</strong> — client-side, reactive to user input, cancels stale requests.</td></tr>
-        <tr><td>Lazy-loaded component data (expand a section, scroll into view)</td><td><strong>Task</strong> — client-side, runs on demand or on connect.</td></tr>
-        <tr><td>Form submission</td><td><strong>Task with autoRun: false</strong> — fires on explicit user action.</td></tr>
-        <tr><td>Data shown on first paint (SEO-relevant)</td><td><strong>Async page function</strong> — server-rendered HTML for crawlers.</td></tr>
-        <tr><td>Data that changes based on client-side state (filters, tabs)</td><td><strong>Task</strong> — re-runs reactively when args change.</td></tr>
+        <tr><td>Page-level data loading (blog posts, product details)</td><td><strong>Async page function</strong>: runs on the server, included in the initial HTML.</td></tr>
+        <tr><td>Search-as-you-type, autocomplete</td><td><strong>Task</strong>: client-side, reactive to user input, cancels stale requests.</td></tr>
+        <tr><td>Lazy-loaded component data (expand a section, scroll into view)</td><td><strong>Task</strong>: client-side, runs on demand or on connect.</td></tr>
+        <tr><td>Form submission</td><td><strong>Task with autoRun: false</strong>: fires on explicit user action.</td></tr>
+        <tr><td>Data shown on first paint (SEO-relevant)</td><td><strong>Async page function</strong>: server-rendered HTML for crawlers.</td></tr>
+        <tr><td>Data that changes based on client-side state (filters, tabs)</td><td><strong>Task</strong>: re-runs reactively when args change.</td></tr>
       </tbody>
     </table>
 
@@ -252,9 +252,9 @@ LiveSearch.register('live-search');</pre>
 
     <h2>Next Steps</h2>
     <ul>
-      <li><a href="/docs/controllers">Reactive Controllers</a> — the general pattern Task is built on</li>
-      <li><a href="/docs/context">Context Protocol</a> — share data across components without prop drilling</li>
-      <li><a href="/docs/server-actions">Server Actions</a> — server-side data fetching and mutations</li>
+      <li><a href="/docs/controllers">Reactive Controllers</a>: the general pattern Task is built on</li>
+      <li><a href="/docs/context">Context Protocol</a>: share data across components without prop drilling</li>
+      <li><a href="/docs/server-actions">Server Actions</a>: server-side data fetching and mutations</li>
     </ul>
   `;
 }

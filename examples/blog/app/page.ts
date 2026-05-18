@@ -77,7 +77,7 @@ export default async function HomePage() {
     <section class="mt-18 pt-6 border-t border-border">
       ${rubric('real-time · websocket')}
       ${sectionH2('Live chat')}
-      <p class="text-fg-muted m-0 mb-4 text-sm">Open this page in two windows — messages broadcast across every connected client.</p>
+      <p class="text-fg-muted m-0 mb-4 text-sm">Open this page in two windows. Messages broadcast across every connected client.</p>
       <chat-box></chat-box>
     </section>
   `;

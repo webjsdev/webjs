@@ -2,7 +2,7 @@
   "name": "@webjskit/cli",
   "version": "0.5.2",
   "type": "module",
-  "description": "webjs CLI — dev, start, create, db",
+  "description": "webjs CLI - dev, start, create, db",
   "bin": {
     "webjs": "bin/webjs.js"
   },

@@ -1,5 +1,5 @@
 /**
- * Button — styled `<button>` via a class-helper function. Use with a real
+ * Button: styled `<button>` via a class-helper function. Use with a real
  * native element so form submission, focus, keyboard activation, screen-reader
  * semantics all "just work".
  *
@@ -15,7 +15,7 @@
  *
  * The shadcn React component supports `asChild` to apply Button styles to a
  * different element. The web equivalent is just calling buttonClass() and
- * spreading the classes onto whatever element you want — no Slot needed.
+ * spreading the classes onto whatever element you want: no Slot needed.
  *
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,

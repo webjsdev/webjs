@@ -4,7 +4,7 @@
  * in `themes/index.css`. Lightness stays identical so contrast ratios are
  * preserved; only hue / chroma shift.
  *
- * Pure ESM data module — imported at request time by the website's registry
+ * Pure ESM data module: imported at request time by the website's registry
  * composer (`app/_lib/registry.server.ts`) to synthesize `theme-<color>` items
  * on demand. No build step, no committed output. Numbers match the values
  * shadcn emits in `apps/v4/public/r/themes/*.json`.
@@ -162,10 +162,10 @@ export const BASE_OVERRIDES = {
  * Strategy: locate the `:root { ... }` and `.dark { ... }` blocks, then
  * substitute each overridden `--<key>: <value>` line in place. Keys not
  * present in `overrides` keep their neutral defaults. The output preserves
- * the original file's formatting + comments verbatim — only the values
+ * the original file's formatting + comments verbatim: only the values
  * change.
  *
- * @param {string} neutralCss — verbatim contents of `themes/index.css`
+ * @param {string} neutralCss - verbatim contents of `themes/index.css`
  * @param {{ light: Record<string,string>, dark: Record<string,string> }} overrides
  */
 export function mergeThemeCss(neutralCss, overrides) {

@@ -1,6 +1,6 @@
 /**
  * Unit tests for WebComponent lifecycle paths that aren't exercised by
- * the SSR-only tests — property accessor initialisation, attribute
+ * the SSR-only tests: property accessor initialisation, attribute
  * coercion, reflection, connectedCallback upgrading, controller
  * dispatch, setState batching, firstUpdated, renderError.
  *
@@ -187,7 +187,7 @@ test('custom hasChanged short-circuits updates when false', async () => {
   document.body.appendChild(el);
   await Promise.resolve(); await Promise.resolve();
   renders = 0;
-  el.size = 10;                          // first change — renders
+  el.size = 10;                          // first change: renders
   await Promise.resolve(); await Promise.resolve();
   el.size = 10.5;                        // diff 0.5 → hasChanged false → skip
   await Promise.resolve(); await Promise.resolve();
@@ -272,7 +272,7 @@ test('removeController detaches a controller', async () => {
   el.removeController(ctrl);
   el.setState({ foo: 1 });
   await Promise.resolve();
-  assert.equal(updates, 1, 'beforeRender only fired once — once removed, no more');
+  assert.equal(updates, 1, 'beforeRender only fired once: once removed, no more');
 });
 
 /* -------------------- setState batching -------------------- */
@@ -342,7 +342,7 @@ test('renderError catches exceptions thrown from render() and uses its fallback'
   assert.ok(el, 'component survived a throwing render');
 });
 
-/* -------------------- lazy controllers set — ensure graceful behavior -------------------- */
+/* -------------------- lazy controllers set: ensure graceful behavior -------------------- */
 
 test('WebComponent without static properties still constructs cleanly', () => {
   class C extends WebComponent {

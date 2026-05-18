@@ -40,7 +40,7 @@ test('buildModuleGraph: builds graph from source files', async () => {
   assert.ok(counterDeps, 'counter.ts should have deps');
   assert.ok(counterDeps.has(join(dir, 'components', 'shared.ts')));
 
-  // Bare specifiers (e.g. '@webjskit/core') should NOT be in the graph — only
+  // Bare specifiers (e.g. '@webjskit/core') should NOT be in the graph: only
   // relative imports resolve to absolute paths.
   if (pageDeps) {
     for (const dep of pageDeps) {

@@ -1,33 +1,33 @@
 import { html } from '@webjskit/core';
 
-export const metadata = { title: 'AI-First Development — webjs' };
+export const metadata = { title: 'AI-First Development | webjs' };
 
 export default function AIFirst() {
   return html`
     <h1>AI-First Development</h1>
-    <p>webjs is designed from the ground up to be <strong>the framework AI agents can read, write, and ship</strong>. Every architectural decision — from the file layout to the naming conventions to the one-function-per-file rule — was made with one question in mind: <em>can an LLM understand this without loading the entire codebase into context?</em></p>
+    <p>webjs is designed from the ground up to be <strong>the framework AI agents can read, write, and ship</strong>. Every architectural decision (from the file layout to the naming conventions to the one-function-per-file rule) was made with one question in mind: <em>can an LLM understand this without loading the entire codebase into context?</em></p>
 
     <h2>Why AI-First Matters</h2>
     <p>Modern AI coding assistants (Claude Code, GitHub Copilot, Cursor, Windsurf, etc.) are increasingly writing production code. But most frameworks were designed for humans who hold the whole project in their head. They rely on:</p>
     <ul>
-      <li><strong>Implicit conventions</strong> — "you just know" where to put things.</li>
-      <li><strong>Barrel files</strong> — re-exports that hide the real location of code.</li>
-      <li><strong>Magic config</strong> — next.config.js, vite.config.ts, webpack aliases.</li>
-      <li><strong>Build-time transforms</strong> — what the source says isn't what runs.</li>
-      <li><strong>Scattered state</strong> — a single feature touches 5 files across 3 directories with no discoverable link.</li>
+      <li><strong>Implicit conventions</strong>: "you just know" where to put things.</li>
+      <li><strong>Barrel files</strong>: re-exports that hide the real location of code.</li>
+      <li><strong>Magic config</strong>: next.config.js, vite.config.ts, webpack aliases.</li>
+      <li><strong>Build-time transforms</strong>: what the source says isn't what runs.</li>
+      <li><strong>Scattered state</strong>: a single feature touches 5 files across 3 directories with no discoverable link.</li>
     </ul>
     <p>These work fine for experienced developers who've memorised the conventions. They're hostile to AI agents that need to discover structure from the files themselves.</p>
 
     <h2>How webjs Solves This</h2>
 
-    <h3>1. AGENTS.md — The Machine-Readable Contract</h3>
+    <h3>1. AGENTS.md: The Machine-Readable Contract</h3>
     <p>Every webjs app has an <code>AGENTS.md</code> at the root. This is a structured document that AI agents read before touching any code. It contains:</p>
     <ul>
-      <li><strong>File conventions table</strong> — which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
-      <li><strong>Public API surface</strong> — every exported function from <code>webjs</code> and <code>@webjskit/server</code> with a one-line description.</li>
-      <li><strong>Invariants</strong> — rules that must never be broken ("never import @prisma/client from a component", "event holes must be unquoted").</li>
-      <li><strong>Recipes</strong> — step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
-      <li><strong>What's deliberately deferred</strong> — so agents don't try to implement features that aren't supported yet.</li>
+      <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
+      <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjskit/server</code> with a one-line description.</li>
+      <li><strong>Invariants</strong>: rules that must never be broken ("never import @prisma/client from a component", "event holes must be unquoted").</li>
+      <li><strong>Recipes</strong>: step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
+      <li><strong>What's deliberately deferred</strong>, so agents don't try to implement features that aren't supported yet.</li>
     </ul>
     <p>An AI agent reads AGENTS.md once and knows: the shape of the app, what's safe to change, what's not, and how to add any feature. No guessing.</p>
 
@@ -46,7 +46,7 @@ modules/
     components/        → feature-owned UI
     utils/             → pure helpers
     types.ts           → shared type definitions</pre>
-    <p>Every file has one job. An AI agent looking for "the function that creates a post" searches <code>modules/posts/actions/</code> — not a 500-line utils.ts or a re-exported barrel index. One grep, one result.</p>
+    <p>Every file has one job. An AI agent looking for "the function that creates a post" searches <code>modules/posts/actions/</code>, not a 500-line utils.ts or a re-exported barrel index. One grep, one result.</p>
 
     <h3>3. One Function Per File</h3>
     <p>Server actions and queries follow a strict <strong>one exported function per file</strong> convention:</p>
@@ -57,12 +57,12 @@ modules/posts/queries/get-post.server.ts      → exports getPost()</pre>
     <p>This is the single most AI-friendly decision in the architecture. When an LLM needs to modify <code>createPost</code>, it reads exactly one file. It doesn't need to understand the rest of the module. Context window usage is minimal. The blast radius of a change is visible from the filename.</p>
 
     <h3>4. No Build Step = What You See Is What Runs</h3>
-    <p>Frameworks with build pipelines transform source code before it executes. The JSX you write becomes <code>React.createElement</code> calls. Your imports become webpack chunks. Your CSS modules get hashed classnames. An AI agent reading the source sees one thing; the runtime does another.</p>
-    <p>webjs has <strong>no build step you run</strong>. The <code>.ts</code> file you see is the file that runs — the dev server transforms TypeScript via esbuild on import (server-side) and on request (browser-side), with the same transformer for both. There's no intermediate representation, no generated code, no output directory. An AI agent can reason about what the code does by reading the file — because the file IS what runs.</p>
+    <p>Frameworks with build pipelines transform source code before it executes. The JSX you write becomes <code>React.createElement</code> calls. Your imports become webpack chunks. Your CSS modules get hashed classnames. An AI agent reading the source sees one thing, while the runtime does another.</p>
+    <p>webjs has <strong>no build step you run</strong>. The <code>.ts</code> file you see is the file that runs. The dev server transforms TypeScript via esbuild on import (server-side) and on request (browser-side), with the same transformer for both. There's no intermediate representation, no generated code, no output directory. An AI agent can reason about what the code does by reading the file, because the file IS what runs.</p>
 
     <h3>5. Explicit Server Boundary</h3>
-    <p>The <code>.server.ts</code> extension is a visible, greppable marker that says "this code runs only on the server." An AI agent never accidentally puts a database call in a component — the naming convention prevents it. And the framework enforces it: <code>.server.ts</code> files are rewritten to RPC stubs for the browser.</p>
-    <p>Compare with NextJs where <code>'use client'</code> / <code>'use server'</code> directives are easy to forget and their scope rules are subtle. The <code>.server.ts</code> convention is filename-level — you can't accidentally import server code without the filename literally telling you.</p>
+    <p>The <code>.server.ts</code> extension is a visible, greppable marker that says "this code runs only on the server." An AI agent never accidentally puts a database call in a component, because the naming convention prevents it. And the framework enforces it: <code>.server.ts</code> files are rewritten to RPC stubs for the browser.</p>
+    <p>Compare with NextJs where <code>'use client'</code> / <code>'use server'</code> directives are easy to forget and their scope rules are subtle. The <code>.server.ts</code> convention is filename-level. You can't accidentally import server code without the filename literally telling you.</p>
 
     <h3>6. Typed RPC Without Schema</h3>
     <p>When an AI agent writes a server action:</p>
@@ -78,31 +78,31 @@ export async function createPost(
     </ol>
     <p>Zero indirection. Zero codegen. Zero schema drift.</p>
 
-    <h3>7. JSDoc or TypeScript — Agent's Choice</h3>
-    <p>Some AI agents work better with TypeScript; others prefer JSDoc. webjs supports both equally. The type-checking story is identical either way — the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
+    <h3>7. JSDoc or TypeScript: Agent's Choice</h3>
+    <p>Some AI agents work better with TypeScript, others prefer JSDoc. webjs supports both equally. The type-checking story is identical either way, since the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
 
     <h3>8. Cross-Agent Config Files</h3>
     <p><code>webjs create</code> scaffolds guardrail config files for every major AI coding agent:</p>
     <ul>
-      <li><code>CLAUDE.md</code> + <code>.claude/settings.json</code> + hooks — Claude Code</li>
-      <li><code>.cursorrules</code> — Cursor</li>
-      <li><code>.windsurfrules</code> — Windsurf</li>
-      <li><code>.github/copilot-instructions.md</code> — GitHub Copilot</li>
-      <li><code>AGENTS.md</code> + <code>CONVENTIONS.md</code> — all agents</li>
+      <li><code>CLAUDE.md</code> + <code>.claude/settings.json</code> + hooks for Claude Code</li>
+      <li><code>.cursorrules</code> for Cursor</li>
+      <li><code>.windsurfrules</code> for Windsurf</li>
+      <li><code>.github/copilot-instructions.md</code> for GitHub Copilot</li>
+      <li><code>AGENTS.md</code> + <code>CONVENTIONS.md</code> for all agents</li>
     </ul>
     <p>Every agent gets the same rules: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
 
     <h3>9. Autonomous Mode</h3>
-    <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar — no blocking on questions.</p>
+    <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
 
     <h3>10. Automatic Tests and Docs</h3>
     <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>.</p>
 
     <h3>11. Scaffold + Persistence Defaults</h3>
-    <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database — not a JSON-file simulation. webjs enforces this with three guardrails:</p>
+    <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. webjs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
-      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up — and won't accidentally fall back to JSON files for persistence.</li>
+      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
       <li><strong><code>no-json-data-files</code> convention check.</strong> <code>webjs check</code> flags JSON files used as a fake database (<code>data/todos.json</code>, <code>db.json</code>, etc.) so an agent that takes the shortcut gets caught before shipping.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
@@ -113,18 +113,18 @@ HTTP/JSON API only, no UI                                --template api
 Auth / login / signup / SaaS                            --template saas</pre>
     <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>prisma/schema.prisma</code>, and the example components with the app the user actually requested. The infrastructure (Prisma wiring, test config, agent rules, route conventions) stays.</p>
 
-    <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases) — the full hosted documentation is at <a href="https://docs.webjs.com">docs.webjs.com</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>
+    <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases), the full hosted documentation is at <a href="https://docs.webjs.com">docs.webjs.com</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>
 
     <h2>What an AI Agent Can Do with webjs</h2>
     <p>Given a webjs app + AGENTS.md, an AI coding assistant can:</p>
     <ul>
-      <li><strong>Add a new page</strong> — create <code>app/about/page.ts</code>, export a function returning <code>html\`...\`</code>. Done. No router config.</li>
-      <li><strong>Add a new API endpoint</strong> — create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
-      <li><strong>Add a server action</strong> — create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
-      <li><strong>Add a component</strong> — create a file, extend <code>WebComponent</code>, set <code>static properties</code>, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
-      <li><strong>Add authentication</strong> — follow the recipe in AGENTS.md. Create lib/session.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
-      <li><strong>Add a database model</strong> — edit <code>prisma/schema.prisma</code>, run <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
-      <li><strong>Debug an issue</strong> — read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
+      <li><strong>Add a new page</strong>: create <code>app/about/page.ts</code>, export a function returning <code>html\`...\`</code>. Done. No router config.</li>
+      <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
+      <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
+      <li><strong>Add a component</strong>: create a file, extend <code>WebComponent</code>, set <code>static properties</code>, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
+      <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
+      <li><strong>Add a database model</strong>: edit <code>prisma/schema.prisma</code>, run <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
+      <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>
 
     <h2>Design Principles for AI-Friendly Code</h2>
@@ -158,10 +158,10 @@ Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</pre>
     <p>Here's what a webjs app's <code>AGENTS.md</code> contains (the blog example ships a complete one):</p>
     <pre>## What webjs is
 ## App layout (file conventions table)
-## Public API — webjs
-## Public API — @webjskit/server
+## Public API: webjs
+## Public API: @webjskit/server
 ## Modules architecture
-## File conventions — detail (pages, layouts, routes, actions, components)
+## File conventions in detail (pages, layouts, routes, actions, components)
 ## Invariants (rules agents must follow)
 ## Recipes (step-by-step: add a page, add an action, add a component...)
 ## Security checklist for expose()

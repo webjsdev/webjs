@@ -1,5 +1,5 @@
 /**
- * @webjskit/ts-plugin — a TypeScript language-service plugin that resolves
+ * @webjskit/ts-plugin: a TypeScript language-service plugin that resolves
  *
  *   1. Custom-element tag names inside `html\`\`` tagged templates → the
  *      corresponding WebComponent class declaration.
@@ -38,7 +38,7 @@ function init(modules) {
    * list `ts-lit-plugin` separately in tsconfig).
    *
    * Failure modes:
-   *  - ts-lit-plugin missing from node_modules (very unlikely — we
+   *  - ts-lit-plugin missing from node_modules (very unlikely: we
    *    declare it as a runtime dep)
    *  - factory shape changed in an incompatible way upstream
    *  - factory throws
@@ -58,7 +58,7 @@ function init(modules) {
       const litCreate = litMod && typeof litMod.create === 'function' ? litMod.create : null;
       if (!litCreate) {
         info.project.projectService.logger?.info?.(
-          '@webjskit/ts-plugin: ts-lit-plugin has unexpected factory shape — falling back to bare LS',
+          '@webjskit/ts-plugin: ts-lit-plugin has unexpected factory shape: falling back to bare LS',
         );
         return info.languageService;
       }
@@ -66,7 +66,7 @@ function init(modules) {
       return enhanced || info.languageService;
     } catch (e) {
       info.project.projectService.logger?.info?.(
-        `@webjskit/ts-plugin: ts-lit-plugin failed to load — falling back to bare LS: ${String(e)}`,
+        `@webjskit/ts-plugin: ts-lit-plugin failed to load: falling back to bare LS: ${String(e)}`,
       );
       return info.languageService;
     }
@@ -81,7 +81,7 @@ function init(modules) {
     }
 
     proxy.getDefinitionAndBoundSpan = (fileName, position) => {
-      // Always try upstream first — ts-lit-plugin / stock tsserver may
+      // Always try upstream first: ts-lit-plugin / stock tsserver may
       // already have an answer for Lit-style components, JSDoc-tagged
       // elements, or HTMLElementTagNameMap-augmented tags.
       const upstream = inner.getDefinitionAndBoundSpan(fileName, position);
@@ -105,7 +105,7 @@ function init(modules) {
     // ts-lit-plugin doesn't know about webjs components (no `@customElement`
     // decorator, no HTMLElementTagNameMap augmentation), so it flags every
     // `<my-component>` inside an html`` template as "Unknown tag". Filter
-    // those out — but ONLY for tags that this file can actually reach
+    // those out: but ONLY for tags that this file can actually reach
     // through its import graph. A tag registered somewhere in the program
     // but not imported here is still genuinely unknown at runtime, so the
     // diagnostic must stay.
@@ -769,7 +769,7 @@ function init(modules) {
   /**
    * Extract CSS class definitions from every `css\`…\`` tagged template in
    * the file. Each occurrence of `.class-name` in the template text is
-   * recorded as a potential definition — if the user go-to-definitions on
+   * recorded as a potential definition: if the user go-to-definitions on
    * a class name and the plugin finds one or more matches across the
    * program, they are offered as the destination(s).
    *
@@ -789,7 +789,7 @@ function init(modules) {
         const t = node.template;
         const start = t.getStart(sf);
         const end = t.getEnd();
-        // Scan the raw literal text (including interpolation markers —
+        // Scan the raw literal text (including interpolation markers -
         // they're unlikely to collide with a class-name pattern).
         const body = src.slice(start, end);
         const re = /\.([A-Za-z_][\w-]*)/g;
@@ -876,7 +876,7 @@ function init(modules) {
    * for any mismatch.
    *
    * Static (non-interpolated) attribute values like `mode="login"` are
-   * not checked — they're plain template text and at runtime always
+   * not checked: they're plain template text and at runtime always
    * coerce to strings. Only interpolations carry a real value type
    * worth checking.
    *
@@ -919,7 +919,7 @@ function init(modules) {
       // hole belongs to.
       // Stitch the cooked text together with placeholders to track tags.
       // Simpler: just inspect the trailing text of each segment that
-      // precedes a span — does it look like `<webjs-tag … attr=`?
+      // precedes a span: does it look like `<webjs-tag … attr=`?
       for (let i = 0; i < tpl.templateSpans.length; i++) {
         // Text immediately preceding the i-th interpolation.
         const preceding = i === 0 ? tpl.head.text : tpl.templateSpans[i - 1].literal.text;
@@ -999,7 +999,7 @@ function init(modules) {
    * Resolve the declared type of `attr` on the given component class.
    * Looks for a class member with that name and a TypeNode annotation
    * (typically a `declare attr: T` field). Returns undefined if no
-   * annotation is present — the user hasn't told us the type, so we
+   * annotation is present: the user hasn't told us the type, so we
    * can't check it.
    *
    * @param {import('typescript').Program} program

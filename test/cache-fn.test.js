@@ -17,7 +17,7 @@ test('cache returns cached result on second call', async () => {
   assert.equal(calls, 1);
 });
 
-test('cache respects TTL — recomputes after expiry', async () => {
+test('cache respects TTL: recomputes after expiry', async () => {
   let calls = 0;
   const fn = cache(async () => ++calls, { key: 'test-ttl', ttl: 0.001 }); // ~1ms
   await fn();
