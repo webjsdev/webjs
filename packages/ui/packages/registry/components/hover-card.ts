@@ -1,5 +1,8 @@
 /**
- * HoverCard — popover-like panel triggered by hover with configurable delays.
+ * HoverCard — popover-like panel triggered by hover with configurable
+ * open/close delays. The content uses the native Popover API in
+ * `popover="manual"` mode for top-layer rendering. The hover-with-linger
+ * state machine remains JS.
  *
  * shadcn parity: HoverCard, HoverCardTrigger, HoverCardContent.
  *   open-delay, close-delay (ms).
@@ -11,7 +14,7 @@
  *     </ui-hover-card-trigger>
  *     <ui-hover-card-content>
  *       <div class="flex gap-3">
- *         <img class="size-10 rounded-full" src="…" alt="">
+ *         <img class="size-10 rounded-full" src="..." alt="">
  *         <div>
  *           <h4 class="font-semibold">@vivek</h4>
  *           <p class="text-sm text-muted-foreground">Building webjs.</p>
@@ -29,8 +32,10 @@ export const hoverCardContentClass = (): string =>
   'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
 
 const STYLES = `
-ui-hover-card:not([open]) ui-hover-card-content { display: none !important; }
-ui-hover-card-content { display: block; position: fixed; }
+ui-hover-card-content[popover] {
+  position: fixed;
+  margin: 0;
+}
 `;
 
 function installStyles(): void {
@@ -76,12 +81,19 @@ export class UiHoverCard extends Base {
       side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
       align: (content.getAttribute('align') ?? 'center') as PopoverAlign,
       sideOffset: Number(content.getAttribute('side-offset') ?? 4),
+      alignOffset: Number(content.getAttribute('align-offset') ?? 0),
     });
   }
   private _reflect(): void {
-    this.setAttribute('data-state', this.hasAttribute('open') ? 'open' : 'closed');
-    const c = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
-    c?.setAttribute('data-state', this.hasAttribute('open') ? 'open' : 'closed');
+    const open = this.hasAttribute('open');
+    this.setAttribute('data-state', open ? 'open' : 'closed');
+    const content = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
+    if (!content) return;
+    content.setAttribute('data-state', open ? 'open' : 'closed');
+    if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
+      if (open) (content as HTMLElement & { showPopover: () => void }).showPopover();
+      else (content as HTMLElement & { hidePopover: () => void }).hidePopover();
+    }
   }
 }
 defineElement('ui-hover-card', UiHoverCard);
@@ -109,6 +121,10 @@ export class UiHoverCardContent extends Base {
   connectedCallback(): void {
     this.setAttribute('data-slot', 'hover-card-content');
     this.setAttribute('role', 'dialog');
+    // Opt into the native top-layer via the Popover API in manual mode.
+    // Manual (rather than auto) avoids the native light-dismiss closing
+    // the card when the cursor is briefly off the trigger.
+    if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(hoverCardContentClass(), userClass);
     // Keep open while pointer is over the content itself.

@@ -163,17 +163,17 @@ full per-directory breakdown.
 | 1a | `toggle` | `toggleClass({ variant, size })` — pair with native `<button>` |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
+| 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |
+| 1b | `accordion` | `accordionClass`, `accordionItemClass`, `accordionTriggerClass`, `accordionContentClass`. Compose with `<details name="...">` + `<summary>`; `name` provides exclusive-open behavior natively. |
+| 1b | `collapsible` | `collapsibleClass`, `collapsibleTriggerClass`, `collapsibleContentClass`. Compose with `<details>` + `<summary>`. |
 | 2  | `progress` | `<ui-progress value="...">` — handles indicator transform |
 | 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>` |
-| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>` / overlay. Class helpers for `dialogHeader/Title/Description/Footer`. Focus trap, Escape, body-scroll lock. |
-| 2  | `alert-dialog` | Like dialog, role=alertdialog, no Escape/overlay-close. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
-| 2  | `popover` | `<ui-popover>` + Trigger + Content with `side`/`align`/`side-offset`. Hand-rolled positioning, auto-flip. |
-| 2  | `tooltip` | `<ui-tooltip delay-duration>` — hover/focus + delay. |
-| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>` — hover with linger-keep-open. |
+| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()` — top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. |
+| 2  | `alert-dialog` | Like dialog, role=alertdialog. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
+| 2  | `tooltip` | `<ui-tooltip delay-duration>` — hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. |
+| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>` — hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. |
 | 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. |
-| 2  | `accordion` | `<ui-accordion type collapsible value>` + Item / Trigger / Content. |
-| 2  | `collapsible` | `<ui-collapsible open>` + Trigger / Content. |
-| 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. ArrowUp/Down nav, Escape close. |
+| 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Escape close. |
 | 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. |
 
 ## Public commands (binary: `webjsui`)

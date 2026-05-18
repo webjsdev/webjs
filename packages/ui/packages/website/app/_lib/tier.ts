@@ -14,9 +14,15 @@
 import type { RegistryItem } from './registry.server.ts';
 
 /**
- * The 12 Tier-2 components — stateful custom elements (`<ui-X>` tags)
+ * The 9 Tier-2 components — stateful custom elements (`<ui-X>` tags)
  * that manage focus, keyboard nav, open/close state, etc. Everything
  * else with `type === 'registry:ui'` is Tier 1.
+ *
+ * popover, accordion, and collapsible moved to Tier 1 once their
+ * source files were rewritten to be pure class helpers on native HTML
+ * primitives (the Popover API and <details>/<summary>). They still
+ * appear in the registry but are now native-HTML compositions rather
+ * than custom elements.
  *
  * When adding a new component to the registry, add its name here if its
  * source defines `class X extends WebComponent` + `.register('ui-...')`.
@@ -24,12 +30,9 @@ import type { RegistryItem } from './registry.server.ts';
 export const TIER_2_NAMES: ReadonlySet<string> = new Set([
   'dialog',
   'alert-dialog',
-  'popover',
   'tooltip',
   'hover-card',
   'tabs',
-  'accordion',
-  'collapsible',
   'dropdown-menu',
   'sonner',
   'progress',

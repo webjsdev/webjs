@@ -6,9 +6,11 @@
  * component shows a representative use case.
  *
  * Architecture note: examples for **Tier-1 class-helper components** (button,
- * card, badge, alert, etc.) use native HTML elements with the helper output
- * inlined as `class="..."`. Examples for **Tier-2 stateful custom elements**
- * (dialog, popover, tabs, etc.) use the `<ui-*>` tags directly.
+ * card, badge, alert, popover, accordion, collapsible, etc.) use native HTML
+ * elements (including <dialog>, <details>/<summary>, and the popover
+ * attribute) with the helper output inlined as `class="..."`. Examples for
+ * **Tier-2 stateful custom elements** (dialog, alert-dialog, tabs, tooltip,
+ * hover-card, dropdown-menu, sonner) use the `<ui-*>` tags directly.
  *
  * The helper-class strings below are kept in sync with the registry helpers
  * by importing them at module load and producing each example string fresh.
@@ -89,10 +91,22 @@ import {
   dialogFooterClass,
 } from '../../../../components/ui/dialog.ts';
 import {
+  popoverContentClass,
   popoverHeaderClass,
   popoverTitleClass,
   popoverDescriptionClass,
 } from '../../../../components/ui/popover.ts';
+import {
+  accordionClass,
+  accordionItemClass,
+  accordionTriggerClass,
+  accordionContentClass,
+} from '../../../../components/ui/accordion.ts';
+import {
+  collapsibleClass,
+  collapsibleTriggerClass,
+  collapsibleContentClass,
+} from '../../../../components/ui/collapsible.ts';
 import {
   alertDialogContentClass,
   alertDialogHeaderClass,
@@ -381,21 +395,17 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   popover: `
-    <ui-popover>
-      <ui-popover-trigger>
-        <button class="${buttonClass({ variant: 'outline' })}">Open popover</button>
-      </ui-popover-trigger>
-      <ui-popover-content side="bottom" align="start">
-        <div class="${popoverHeaderClass()}">
-          <h3 class="${popoverTitleClass()}">Filter</h3>
-          <p class="${popoverDescriptionClass()}">Tag and status.</p>
-        </div>
-        <div class="${stackClass({ gap: 'sm' })} mt-3">
-          <label class="${labelClass()}">Status</label>
-          <select class="${nativeSelectClass()}"><option>Open</option><option>Closed</option></select>
-        </div>
-      </ui-popover-content>
-    </ui-popover>
+    <button popovertarget="ex-popover" class="${buttonClass({ variant: 'outline' })}">Open popover</button>
+    <div popover id="ex-popover" class="${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}">
+      <div class="${popoverHeaderClass()}">
+        <h3 class="${popoverTitleClass()}">Filter</h3>
+        <p class="${popoverDescriptionClass()}">Tag and status.</p>
+      </div>
+      <div class="${stackClass({ gap: 'sm' })} mt-3">
+        <label class="${labelClass()}">Status</label>
+        <select class="${nativeSelectClass()}"><option>Open</option><option>Closed</option></select>
+      </div>
+    </div>
   `,
 
   tooltip: `
@@ -444,27 +454,46 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   accordion: `
-    <ui-accordion type="single" collapsible class="w-full max-w-md">
-      <ui-accordion-item value="item-1">
-        <ui-accordion-trigger>Is it accessible?</ui-accordion-trigger>
-        <ui-accordion-content>Yes — uses the WAI-ARIA accordion pattern.</ui-accordion-content>
-      </ui-accordion-item>
-      <ui-accordion-item value="item-2">
-        <ui-accordion-trigger>Is it styled?</ui-accordion-trigger>
-        <ui-accordion-content>Yes — matches shadcn's design tokens.</ui-accordion-content>
-      </ui-accordion-item>
-    </ui-accordion>
+    <div class="${accordionClass()} max-w-md">
+      <details name="ex-accordion" class="${accordionItemClass()}">
+        <summary class="${accordionTriggerClass()}">
+          <span>Is it accessible?</span>
+          <svg class="size-4 shrink-0 transition-transform group-open:rotate-180"
+               xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="${accordionContentClass()}">Yes. Native disclosure widget pattern.</div>
+      </details>
+      <details name="ex-accordion" class="${accordionItemClass()}">
+        <summary class="${accordionTriggerClass()}">
+          <span>Is it styled?</span>
+          <svg class="size-4 shrink-0 transition-transform group-open:rotate-180"
+               xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </summary>
+        <div class="${accordionContentClass()}">Yes. Matches shadcn design tokens.</div>
+      </details>
+    </div>
   `,
 
   collapsible: `
-    <ui-collapsible class="w-full max-w-md">
-      <ui-collapsible-trigger>
-        <button class="${buttonClass({ variant: 'outline' })}">Show / Hide details</button>
-      </ui-collapsible-trigger>
-      <ui-collapsible-content class="mt-3 rounded-md border p-4 text-sm">
-        Hidden content revealed on trigger click. Real content, real DOM — no animation in v1.
-      </ui-collapsible-content>
-    </ui-collapsible>
+    <details class="${collapsibleClass()} max-w-md">
+      <summary class="${collapsibleTriggerClass()} ${buttonClass({ variant: 'outline' })}">
+        Show / Hide details
+        <svg class="size-4 transition-transform group-open:rotate-180"
+             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </summary>
+      <div class="${collapsibleContentClass()} mt-3 rounded-md border p-4">
+        Hidden content revealed when the disclosure widget opens. Real content, real DOM.
+      </div>
+    </details>
   `,
 
   'dropdown-menu': `

@@ -1,68 +1,196 @@
 /**
- * Popover — floating panel anchored to a trigger. Hand-rolled positioning
- * (no @floating-ui/dom). Auto-flips if there's not enough room.
+ * Popover — floating panel anchored to a trigger button, built on the
+ * native HTML Popover API (`popover` attribute + `popovertarget`).
+ *
+ * Tier-1 component (no custom element). The browser handles:
+ *   - Open/close state via the `popover` attribute + showPopover()/hidePopover()
+ *   - Top-layer rendering (no z-index wars)
+ *   - Light-dismiss on outside click (with popover="auto")
+ *   - Escape-to-close
+ *   - Focus restoration to the invoking <button popovertarget="...">
+ *   - **Implicit anchor**: a popover invoked via `popovertarget` is
+ *     automatically anchored to its invoker (CSS Anchor Positioning's
+ *     default `position-anchor: auto` for popovers). No `anchor-name`
+ *     or `position-anchor` inline style is required for the common case.
  *
  * shadcn parity:
- *   Popover, PopoverTrigger, PopoverContent, PopoverAnchor,
- *   PopoverHeader, PopoverTitle, PopoverDescription.
- *   Attributes on content: align (start | center | end), side, side-offset.
+ *   <PopoverContent side="..." align="..." sideOffset={...}>
+ *     → popoverContentClass({ side, align, sideOffset })
+ *   PopoverHeader      → popoverHeaderClass()
+ *   PopoverTitle       → popoverTitleClass()
+ *   PopoverDescription → popoverDescriptionClass()
  *
- * Usage:
- *   <ui-popover>
- *     <ui-popover-trigger>
- *       <button class=${buttonClass({ variant: 'outline' })}>Filter</button>
- *     </ui-popover-trigger>
- *     <ui-popover-content side="bottom" align="start" side-offset="4">
- *       <div class=${popoverHeaderClass()}>
- *         <h3 class=${popoverTitleClass()}>Filter posts</h3>
- *         <p class=${popoverDescriptionClass()}>By tag and status.</p>
- *       </div>
- *       …
- *     </ui-popover-content>
- *   </ui-popover>
+ * Usage (single invoker, implicit anchor — zero inline style):
+ *   <button popovertarget="filter" class=${buttonClass({ variant: 'outline' })}>Filter</button>
+ *   <div id="filter" popover
+ *        class=${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}>
+ *     <div class=${popoverHeaderClass()}>
+ *       <h3 class=${popoverTitleClass()}>Filter posts</h3>
+ *       <p class=${popoverDescriptionClass()}>By tag and status.</p>
+ *     </div>
+ *   </div>
  *
- * Events on `<ui-popover>`:
- *   `ui-open-change` — { detail: { open: boolean } }.
+ * When you DO need explicit anchor binding (multiple invokers for the
+ * same popover, or anchoring to a different element than the invoker),
+ * add the `anchor-name` / `position-anchor` pair via inline style:
  *
- * Keyboard: Escape closes; outside-click closes; Tab cycles content focus.
+ *   <span style="anchor-name: --picker">@vivek</span>
+ *   <button popovertarget="profile">Show</button>
+ *   <div id="profile" popover style="position-anchor: --picker"
+ *        class=${popoverContentClass({ side: 'bottom' })}>…</div>
  *
- * Design tokens used: --popover, --popover-foreground, --border,
- * --muted-foreground.
+ * CSS Anchor Positioning ships in Chrome 125+, Safari 26+, Firefox 134+.
+ *
+ * For consumers that need imperative positioning right now, the
+ * `positionFloating` helper is still exported and is what the tier-2
+ * tooltip / hover-card / dropdown-menu components use internally.
+ *
+ * Migrated from the prior <ui-popover> / <ui-popover-trigger> /
+ * <ui-popover-content> custom elements.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers
 // --------------------------------------------------------------------------
 
-export const popoverContentClass = (): string =>
-  'z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
+/**
+ * Popover content options — mirror shadcn's `<PopoverContent>` props.
+ * `side` and `align` map to CSS Anchor Positioning's `position-area`;
+ * `sideOffset` maps to a directional margin so the popover sits a few
+ * pixels off the anchor's edge.
+ *
+ * `sideOffset` is restricted to a discrete set so Tailwind 4's static
+ * scanner sees each emitted class literal. For arbitrary values,
+ * override the margin via inline style on the popover element.
+ */
+export type PopoverSideOffset = 0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24;
+export type PopoverAlignOffset = 0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24;
+
+export interface PopoverContentOptions {
+  /** Which side of the trigger the popover appears on. Default 'bottom'. */
+  side?: PopoverSide;
+  /** Alignment along the chosen side. Default 'center'. */
+  align?: PopoverAlign;
+  /** Pixels between the trigger and the popover. Default 4 (shadcn default). */
+  sideOffset?: PopoverSideOffset;
+  /**
+   * Pixels offset along the align axis. Positive values push away from
+   * the aligned edge toward the opposite edge. No-op for align='center'.
+   * Default 0 (matches shadcn).
+   */
+  alignOffset?: PopoverAlignOffset;
+}
+
+// position-area combinations baked as literal class strings so Tailwind 4's
+// scanner generates CSS for every (side, align) pair the helper can return.
+// Underscores become spaces in arbitrary CSS values.
+const POSITION_AREA_CLASS: Record<string, string> = {
+  'top-start': '[position-area:top_span-right]',
+  'top-center': '[position-area:top]',
+  'top-end': '[position-area:top_span-left]',
+  'bottom-start': '[position-area:bottom_span-right]',
+  'bottom-center': '[position-area:bottom]',
+  'bottom-end': '[position-area:bottom_span-left]',
+  'left-start': '[position-area:left_span-bottom]',
+  'left-center': '[position-area:left]',
+  'left-end': '[position-area:left_span-top]',
+  'right-start': '[position-area:right_span-bottom]',
+  'right-center': '[position-area:right]',
+  'right-end': '[position-area:right_span-top]',
+};
+
+// Align-axis translate classes. For align='start', positive offset moves
+// the popover AWAY from the start edge (toward the end edge); align='end'
+// reverses. align='center' is a no-op. The axis is perpendicular to the
+// side: top/bottom sides translate X; left/right sides translate Y.
+// All 36 (4 axis-direction combos × 9 offset values) appear literally so
+// Tailwind 4 generates each class.
+const ALIGN_OFFSET_CLASS: Record<string, Record<PopoverAlignOffset, string>> = {
+  'horizontal-start': {
+    0: 'translate-x-[0px]',  2: 'translate-x-[2px]',  4: 'translate-x-[4px]',
+    6: 'translate-x-[6px]',  8: 'translate-x-[8px]',  12: 'translate-x-[12px]',
+    16: 'translate-x-[16px]', 20: 'translate-x-[20px]', 24: 'translate-x-[24px]',
+  },
+  'horizontal-end': {
+    0: 'translate-x-[0px]',  2: 'translate-x-[-2px]',  4: 'translate-x-[-4px]',
+    6: 'translate-x-[-6px]',  8: 'translate-x-[-8px]',  12: 'translate-x-[-12px]',
+    16: 'translate-x-[-16px]', 20: 'translate-x-[-20px]', 24: 'translate-x-[-24px]',
+  },
+  'vertical-start': {
+    0: 'translate-y-[0px]',  2: 'translate-y-[2px]',  4: 'translate-y-[4px]',
+    6: 'translate-y-[6px]',  8: 'translate-y-[8px]',  12: 'translate-y-[12px]',
+    16: 'translate-y-[16px]', 20: 'translate-y-[20px]', 24: 'translate-y-[24px]',
+  },
+  'vertical-end': {
+    0: 'translate-y-[0px]',  2: 'translate-y-[-2px]',  4: 'translate-y-[-4px]',
+    6: 'translate-y-[-6px]',  8: 'translate-y-[-8px]',  12: 'translate-y-[-12px]',
+    16: 'translate-y-[-16px]', 20: 'translate-y-[-20px]', 24: 'translate-y-[-24px]',
+  },
+};
+
+// Per-side offset margin classes. Side 'bottom' wants margin-top, etc.
+// Each value of PopoverSideOffset appears literally for Tailwind's scanner.
+const MARGIN_OFFSET_CLASS: Record<PopoverSide, Record<PopoverSideOffset, string>> = {
+  top: {
+    0: '[margin-bottom:0px]',  2: '[margin-bottom:2px]',  4: '[margin-bottom:4px]',
+    6: '[margin-bottom:6px]',  8: '[margin-bottom:8px]',  12: '[margin-bottom:12px]',
+    16: '[margin-bottom:16px]', 20: '[margin-bottom:20px]', 24: '[margin-bottom:24px]',
+  },
+  bottom: {
+    0: '[margin-top:0px]',  2: '[margin-top:2px]',  4: '[margin-top:4px]',
+    6: '[margin-top:6px]',  8: '[margin-top:8px]',  12: '[margin-top:12px]',
+    16: '[margin-top:16px]', 20: '[margin-top:20px]', 24: '[margin-top:24px]',
+  },
+  left: {
+    0: '[margin-right:0px]',  2: '[margin-right:2px]',  4: '[margin-right:4px]',
+    6: '[margin-right:6px]',  8: '[margin-right:8px]',  12: '[margin-right:12px]',
+    16: '[margin-right:16px]', 20: '[margin-right:20px]', 24: '[margin-right:24px]',
+  },
+  right: {
+    0: '[margin-left:0px]',  2: '[margin-left:2px]',  4: '[margin-left:4px]',
+    6: '[margin-left:6px]',  8: '[margin-left:8px]',  12: '[margin-left:12px]',
+    16: '[margin-left:16px]', 20: '[margin-left:20px]', 24: '[margin-left:24px]',
+  },
+};
+
+/**
+ * Popover content class. `side` and `align` cover the shadcn
+ * `<PopoverContent>` placement props; `sideOffset` sets the gap to
+ * the anchor. The visual layer (border, bg, padding, shadow) is
+ * fixed to match shadcn's default; width is opinionated at `w-72`
+ * (override at the call site).
+ *
+ * `m-0` clears the UA `margin: auto` so anchor positioning isn't
+ * fighting auto-centering, then a single directional margin sets the
+ * sideOffset gap.
+ */
+export function popoverContentClass(opts: PopoverContentOptions = {}): string {
+  const side = opts.side ?? 'bottom';
+  const align = opts.align ?? 'center';
+  const sideOffset = opts.sideOffset ?? 4;
+  const alignOffset = opts.alignOffset ?? 0;
+  // align='center' has no align axis to offset along — skip the translate.
+  let alignClass = '';
+  if (align !== 'center' && alignOffset !== 0) {
+    const axis = side === 'top' || side === 'bottom' ? 'horizontal' : 'vertical';
+    alignClass = ALIGN_OFFSET_CLASS[`${axis}-${align}`][alignOffset];
+  }
+  return [
+    'w-72 m-0 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden',
+    POSITION_AREA_CLASS[`${side}-${align}`],
+    MARGIN_OFFSET_CLASS[side][sideOffset],
+    alignClass,
+  ].filter(Boolean).join(' ');
+}
 
 export const popoverHeaderClass = (): string => 'flex flex-col gap-1 text-sm';
 export const popoverTitleClass = (): string => 'font-medium';
 export const popoverDescriptionClass = (): string => 'text-muted-foreground';
 
 // --------------------------------------------------------------------------
-// Visibility CSS
-// --------------------------------------------------------------------------
-
-const STYLES = `
-ui-popover:not([open]) ui-popover-content { display: none !important; }
-ui-popover-content { display: block; position: fixed; }
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-popover-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-popover-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
-
-// --------------------------------------------------------------------------
-// Positioning helper. Computes top/left for a content element relative to a
-// trigger, given side + align + offset. Auto-flips when off-screen.
+// Imperative positioning helper. Still exported for the tier-2 tooltip /
+// hover-card / dropdown-menu components, which need exact placement before
+// CSS anchor positioning is universally available.
 // --------------------------------------------------------------------------
 
 export type PopoverSide = 'top' | 'bottom' | 'left' | 'right';
@@ -71,11 +199,17 @@ export type PopoverAlign = 'start' | 'center' | 'end';
 export function positionFloating(
   trigger: HTMLElement,
   content: HTMLElement,
-  opts: { side?: PopoverSide; align?: PopoverAlign; sideOffset?: number } = {},
+  opts: {
+    side?: PopoverSide;
+    align?: PopoverAlign;
+    sideOffset?: number;
+    alignOffset?: number;
+  } = {},
 ): void {
   const side = opts.side ?? 'bottom';
   const align = opts.align ?? 'center';
   const sideOffset = opts.sideOffset ?? 4;
+  const alignOffset = opts.alignOffset ?? 0;
   const tr = trigger.getBoundingClientRect();
   const cr = content.getBoundingClientRect();
   const vw = window.innerWidth;
@@ -111,7 +245,18 @@ export function positionFloating(
     else left = tr.left + (tr.width - cr.width) / 2;
   }
 
-  // Clamp into viewport
+  // alignOffset shifts the popover along the align axis. For align='start',
+  // positive shifts AWAY from the start edge; align='end' reverses; center
+  // is a no-op. Axis is perpendicular to the chosen side.
+  if (align !== 'center' && alignOffset !== 0) {
+    const dir = align === 'start' ? 1 : -1;
+    if (actualSide === 'top' || actualSide === 'bottom') {
+      left += dir * alignOffset;
+    } else {
+      top += dir * alignOffset;
+    }
+  }
+
   left = Math.max(8, Math.min(left, vw - cr.width - 8));
   top = Math.max(8, Math.min(top, vh - cr.height - 8));
 
@@ -120,118 +265,3 @@ export function positionFloating(
   content.setAttribute('data-side', actualSide);
   content.setAttribute('data-align', align);
 }
-
-// --------------------------------------------------------------------------
-// <ui-popover>
-// --------------------------------------------------------------------------
-
-export class UiPopover extends Base {
-  static get observedAttributes(): string[] {
-    return ['open'];
-  }
-
-  private _docClickHandler = (e: MouseEvent): void => this._onDocClick(e);
-  private _keyHandler = (e: KeyboardEvent): void => this._onKeyDown(e);
-  private _resizeHandler = (): void => this._reposition();
-
-  connectedCallback(): void {
-    installStyles();
-    this.setAttribute('data-slot', 'popover');
-    this._reflect();
-  }
-  disconnectedCallback(): void {
-    if (this.isOpen) this._teardown();
-  }
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
-    if (name === 'open' && oldVal !== newVal) {
-      this._reflect();
-      if (newVal !== null) this._setup();
-      else this._teardown();
-      this.dispatchEvent(
-        new CustomEvent('ui-open-change', { detail: { open: this.isOpen }, bubbles: true }),
-      );
-    }
-  }
-
-  get isOpen(): boolean {
-    return this.hasAttribute('open');
-  }
-  show(): void {
-    this.setAttribute('open', '');
-  }
-  hide(): void {
-    this.removeAttribute('open');
-  }
-  toggle(): void {
-    if (this.isOpen) this.hide();
-    else this.show();
-  }
-
-  _reposition(): void {
-    const trigger = this.querySelector<HTMLElement>(':scope > ui-popover-trigger');
-    const content = this.querySelector<HTMLElement>(':scope > ui-popover-content');
-    if (!trigger || !content) return;
-    positionFloating(trigger, content, {
-      side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
-      align: (content.getAttribute('align') ?? 'center') as PopoverAlign,
-      sideOffset: Number(content.getAttribute('side-offset') ?? 4),
-    });
-  }
-
-  private _reflect(): void {
-    this.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
-    const content = this.querySelector<HTMLElement>(':scope > ui-popover-content');
-    if (content) content.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
-  }
-
-  private _setup(): void {
-    queueMicrotask(() => {
-      this._reposition();
-      document.addEventListener('click', this._docClickHandler);
-      document.addEventListener('keydown', this._keyHandler);
-      window.addEventListener('resize', this._resizeHandler);
-      window.addEventListener('scroll', this._resizeHandler, true);
-    });
-  }
-  private _teardown(): void {
-    document.removeEventListener('click', this._docClickHandler);
-    document.removeEventListener('keydown', this._keyHandler);
-    window.removeEventListener('resize', this._resizeHandler);
-    window.removeEventListener('scroll', this._resizeHandler, true);
-  }
-
-  private _onDocClick(e: MouseEvent): void {
-    if (!this.isOpen) return;
-    if (e.composedPath().some((n) => n === this)) return;
-    this.hide();
-  }
-  private _onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape' && this.isOpen) this.hide();
-  }
-}
-defineElement('ui-popover', UiPopover);
-
-export class UiPopoverTrigger extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'popover-trigger');
-    this.addEventListener('click', this._onClick);
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-  }
-  private _onClick = (): void => {
-    (this.closest('ui-popover') as UiPopover | null)?.toggle();
-  };
-}
-defineElement('ui-popover-trigger', UiPopoverTrigger);
-
-export class UiPopoverContent extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'popover-content');
-    this.setAttribute('role', 'dialog');
-    this.setAttribute('tabindex', '-1');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(popoverContentClass(), userClass);
-  }
-}
-defineElement('ui-popover-content', UiPopoverContent);

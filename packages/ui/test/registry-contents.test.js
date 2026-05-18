@@ -41,10 +41,13 @@ const V1_COMPONENTS = [
 ];
 
 // Components that are Tier 2 — must register a custom element.
+// popover, accordion, collapsible moved to Tier 1 once their sources
+// became pure class helpers on native HTML (Popover API,
+// <details>/<summary>). They no longer extend Base or call defineElement.
 const TIER_2 = new Set([
   'progress', 'toggle', 'toggle-group',
-  'dialog', 'alert-dialog', 'popover', 'tooltip', 'hover-card',
-  'tabs', 'accordion', 'collapsible',
+  'dialog', 'alert-dialog', 'tooltip', 'hover-card',
+  'tabs',
   'dropdown-menu', 'sonner',
 ]);
 
@@ -135,13 +138,13 @@ test('card — exposes all 7 subpart class helpers (no custom elements)', { skip
   }
 });
 
-test('dialog — has focus-trap, escape, role wiring', { skip }, () => {
+test('dialog — delegates to native <dialog> for modal behavior', { skip }, () => {
   const src = readSource('dialog');
   assert.match(src, /'role',\s*'dialog'|"role",\s*"dialog"|role="dialog"/);
   assert.match(src, /aria-modal/);
-  assert.match(src, /Escape/);
-  assert.match(src, /Tab/);
-  assert.match(src, /focusable/i);
+  // Native dialog is what owns Escape, Tab cycling, and focus restoration.
+  assert.match(src, /showModal/);
+  assert.match(src, /HTMLDialogElement/);
   assert.match(src, /defineElement\(['"]ui-dialog['"]/);
 });
 
@@ -149,14 +152,98 @@ test('alert-dialog — uses alertdialog role, no overlay-click-to-close', { skip
   const src = readSource('alert-dialog');
   assert.match(src, /alertdialog/);
   assert.match(src, /No click-to-close/);
+  // Native Escape close is cancelled via the dialog's `cancel` event.
+  assert.match(src, /cancel/);
+  assert.match(src, /showModal/);
 });
 
-test('popover — positioning helper + side/align/side-offset attrs', { skip }, () => {
+test('popover — tier-1 class helpers + positionFloating utility export', { skip }, () => {
   const src = readSource('popover');
-  assert.match(src, /positionFloating/);
-  assert.match(src, /side/);
-  assert.match(src, /align/);
-  assert.match(src, /side-offset/);
+  // No custom element: pure class helpers + a positioning utility for
+  // sibling tier-2 components.
+  assert.doesNotMatch(src, /defineElement\(/);
+  assert.match(src, /export\s+function\s+positionFloating/);
+  // Parameterized helper with shadcn parity for side / align / sideOffset / alignOffset.
+  assert.match(src, /export\s+function\s+popoverContentClass\s*\(/);
+  assert.match(src, /PopoverContentOptions/);
+  assert.match(src, /side\??:\s*PopoverSide/);
+  assert.match(src, /align\??:\s*PopoverAlign/);
+  assert.match(src, /sideOffset/);
+  assert.match(src, /alignOffset/);
+  // position-area pre-baked classes (Tailwind 4 scanner needs literals).
+  assert.match(src, /\[position-area:bottom_span-right\]/);
+  assert.match(src, /\[position-area:top_span-left\]/);
+  // alignOffset translate classes baked as literals.
+  assert.match(src, /translate-x-\[4px\]/);
+  assert.match(src, /translate-x-\[-4px\]/);
+  assert.match(src, /translate-y-\[4px\]/);
+  assert.match(src, /translate-y-\[-4px\]/);
+  // popover invoker pattern referenced in the JSDoc.
+  assert.match(src, /popovertarget|popover\s+attribute|Popover API/i);
+});
+
+test('positionFloating — accepts alignOffset for tier-2 placement', { skip }, () => {
+  const src = readSource('popover');
+  // The utility consumed by tooltip / hover-card / dropdown-menu must
+  // accept alignOffset alongside sideOffset.
+  assert.match(src, /alignOffset\??:\s*number/);
+});
+
+test('accordion / collapsible — disabled option on trigger class helper', { skip }, () => {
+  for (const name of ['accordion', 'collapsible']) {
+    const src = readSource(name);
+    assert.match(src, /disabled\??:\s*boolean/, `${name}: trigger class missing { disabled } option`);
+    assert.match(src, /pointer-events-none/, `${name}: disabled state should include pointer-events-none`);
+    assert.match(src, /inert/, `${name}: docs should mention the native inert attribute for full disable`);
+  }
+});
+
+test('tier-2 components — read align-offset attribute', { skip }, () => {
+  for (const name of ['tooltip', 'hover-card', 'dropdown-menu']) {
+    const src = readSource(name);
+    assert.match(src, /align-offset/, `${name}: should read align-offset attribute`);
+    assert.match(src, /alignOffset/, `${name}: should pass alignOffset to positionFloating`);
+  }
+});
+
+test('tooltip — skip-delay-duration attribute', { skip }, () => {
+  const src = readSource('tooltip');
+  assert.match(src, /skip-delay-duration/);
+  assert.match(src, /lastTooltipHideAt|lastHideAt|skipDelay/i);
+});
+
+test('dropdown-menu — typeahead via text-value', { skip }, () => {
+  const src = readSource('dropdown-menu');
+  assert.match(src, /typeahead/i);
+  assert.match(src, /text-value/);
+});
+
+test('accordion — tier-1 class helpers on native <details>/<summary>', { skip }, () => {
+  const src = readSource('accordion');
+  assert.doesNotMatch(src, /defineElement\(/);
+  assert.match(src, /<details/);
+  assert.match(src, /<summary/);
+  // `name="..."` is the exclusive-accordion primitive.
+  assert.match(src, /name=/);
+  // `type="single"` and `type="multiple"` still documented (parity with shadcn).
+  assert.match(src, /'single'|"single"|type="single"/);
+  assert.match(src, /'multiple'|"multiple"|type="multiple"/);
+  assert.match(src, /collapsible/);
+});
+
+test('collapsible — tier-1 class helpers on native <details>/<summary>', { skip }, () => {
+  const src = readSource('collapsible');
+  assert.doesNotMatch(src, /defineElement\(/);
+  assert.match(src, /<details/);
+  assert.match(src, /<summary/);
+});
+
+test('dropdown-menu / tooltip / hover-card — top-layer via popover attribute', { skip }, () => {
+  for (const name of ['dropdown-menu', 'tooltip', 'hover-card']) {
+    const src = readSource(name);
+    assert.match(src, /popover/i, `${name}: should reference the Popover API`);
+    assert.match(src, /showPopover|hidePopover/, `${name}: should call showPopover/hidePopover`);
+  }
 });
 
 test('tabs — exposes Arrow-key navigation + roles', { skip }, () => {
