@@ -7,6 +7,7 @@ import {
   attachSlotObservers,
   detachSlotObservers,
   ensureSlotState,
+  hasSlotState,
 } from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
@@ -388,19 +389,32 @@ export class WebComponent extends Base {
           `For light DOM, use global CSS or <style> in render().`
         );
       }
-      // Light-DOM slot lifecycle phase one. Capture authored children
-      // into the slot-state's assignment table BEFORE _performRender
-      // runs, since the renderer's first clientRender call will
-      // replaceChildren() on the host and would otherwise destroy them.
+      // Light-DOM slot lifecycle phase one. Three sub-paths:
       //
-      // Detect SSR hydration via the framework's <!--webjs-hydrate-->
-      // marker: in that case the SSR pipeline already placed projected
-      // children inside <slot data-webjs-light data-projection="actual">
-      // elements, so we ensure slot state exists (so findSlotHost
-      // succeeds) and defer to adoptSSRAssignments after the renderer
-      // has hydrated the template. Otherwise capture in place.
-      if (this.__isHydrating()) {
+      // a. Reconnection. Slot state already exists from a prior mount.
+      //    The host still carries the rendered template DOM (plus
+      //    projected children) from before the disconnect. Skip
+      //    capture (would wrongly hoover up rendered nodes) and skip
+      //    SSR adoption. clientRender will see the existing INSTANCE
+      //    and updateInstance instead of recreating; the DOM stays.
+      //
+      // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
+      //    present). Children are already projected into
+      //    <slot data-webjs-light data-projection="actual"> elements
+      //    by injectDSD. Adopt those assignments BEFORE _performRender
+      //    so we retain references to the SSR'd nodes; the renderer's
+      //    createInstance().replaceChildren() will detach them, but
+      //    projection re-attaches by moving the same Node refs into
+      //    the freshly-cloned slot. DOM identity preserved through the
+      //    hydration round-trip.
+      //
+      // c. First mount, no SSR. Move authored children into the
+      //    assignment table before _performRender wipes the host.
+      if (hasSlotState(this)) {
+        // (a) Reconnection. State already populated; nothing to do here.
+      } else if (this.__isHydrating()) {
         ensureSlotState(this);
+        adoptSSRAssignments(this);
       } else {
         captureAuthoredChildren(this);
       }
@@ -418,16 +432,13 @@ export class WebComponent extends Base {
     this._performRender();
 
     // Light-DOM slot lifecycle phase two. With the rendered template
-    // (and therefore the live <slot> elements) now in the DOM, hook up
-    // the mutation observers so future authored-child mutations and
-    // slot-name changes drive incremental projection. For hydrated
-    // hosts, also adopt the SSR-placed slot assignments so the first
-    // projection pass is a no-op.
+    // (and therefore the live <slot> elements) now in the DOM, attach
+    // mutation observers so future authored-child mutations and
+    // slot-name changes drive incremental projection. Adoption of
+    // SSR-placed assignments has already happened in phase one (before
+    // _performRender) so the renderer's replaceChildren cannot destroy
+    // those nodes; projection moves them into the freshly-cloned slots.
     if (this._renderRoot === this) {
-      if (this.__hydratedAtActivate) {
-        adoptSSRAssignments(this);
-        this.__hydratedAtActivate = false;
-      }
       attachSlotObservers(this);
     }
   }

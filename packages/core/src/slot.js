@@ -411,21 +411,35 @@ export function attachSlotObservers(host) {
         }
       } else if (r.type === 'attributes' && r.attributeName === 'slot') {
         const target = /** @type {Element} */ (r.target);
-        if (target.parentElement === host || hostOwnsAssignedNode(host, target)) {
-          if (removeFromAssignments(state, target)) {
-            appendToMap(state.assignedByName, slotNameOf(target), target);
-            dirty = true;
-          }
+        // A child's slot=" " attribute changed. If it's an authored
+        // child currently in the assignment table (either still a
+        // direct child of host or already projected into a slot deeper
+        // down), re-partition by the new name.
+        if (removeFromAssignments(state, target)) {
+          appendToMap(state.assignedByName, slotNameOf(target), target);
+          dirty = true;
+        } else if (target.parentElement === host) {
+          // Edge case where state.removeFromAssignments missed it: still
+          // direct on host and not yet captured.
+          appendToMap(state.assignedByName, slotNameOf(target), target);
+          dirty = true;
         }
       }
     }
     if (dirty) scheduleProjection(host);
   });
+  // subtree: true so children moved into <slot> deeper in the tree are
+  // still observed when their slot=" " attribute changes (which would
+  // otherwise be invisible under subtree: false). The attribute filter
+  // keeps the observed surface small. childList stays scoped to host's
+  // direct children: appending a node to host is the user-level entry
+  // point for authoring; projection's slot.appendChild is on a node
+  // deeper in the tree and the filter does not fire on those.
   state.childObserver.observe(host, {
     childList: true,
     attributes: true,
     attributeFilter: ['slot'],
-    subtree: false,
+    subtree: true,
   });
 }
 
@@ -686,11 +700,12 @@ function applyFallback(state, slot) {
     return false;
   }
 
-  const prev = state.lastSnapshot.get(slot) || [];
-  if (prev.length > 0) {
-    const lastName = slot.getAttribute('name') || null;
-    appendArrayToMap(state.pendingByName, lastName, prev);
-  }
+  // Slot transitioning from actual to fallback. This happens when the
+  // host's assignment for this slot's name is empty (e.g., user removed
+  // all matching children). Drop the lastSnapshot record; do NOT push
+  // children to the pending map (that path is for slot destruction
+  // during a conditional collapse, handled separately by
+  // moveSlotChildrenToPending).
   state.lastSnapshot.delete(slot);
   while (slot.firstChild) slot.removeChild(slot.firstChild);
   restoreFallbackInto(slot);
