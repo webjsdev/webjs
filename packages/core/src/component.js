@@ -1,6 +1,13 @@
 import { render as clientRender } from './render-client.js';
 import { isCSS, adoptStyles } from './css.js';
 import { register, tagOf } from './registry.js';
+import {
+  captureAuthoredChildren,
+  adoptSSRAssignments,
+  attachSlotObservers,
+  detachSlotObservers,
+  ensureSlotState,
+} from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
 
@@ -381,6 +388,22 @@ export class WebComponent extends Base {
           `For light DOM, use global CSS or <style> in render().`
         );
       }
+      // Light-DOM slot lifecycle phase one. Capture authored children
+      // into the slot-state's assignment table BEFORE _performRender
+      // runs, since the renderer's first clientRender call will
+      // replaceChildren() on the host and would otherwise destroy them.
+      //
+      // Detect SSR hydration via the framework's <!--webjs-hydrate-->
+      // marker: in that case the SSR pipeline already placed projected
+      // children inside <slot data-webjs-light data-projection="actual">
+      // elements, so we ensure slot state exists (so findSlotHost
+      // succeeds) and defer to adoptSSRAssignments after the renderer
+      // has hydrated the template. Otherwise capture in place.
+      if (this.__isHydrating()) {
+        ensureSlotState(this);
+      } else {
+        captureAuthoredChildren(this);
+      }
     }
 
     // Notify all controllers that the host is connected.
@@ -393,6 +416,41 @@ export class WebComponent extends Base {
     // light DOM, existing shadow root for shadow DOM) and hydrates
     // instead of replacing: binding events without touching the DOM.
     this._performRender();
+
+    // Light-DOM slot lifecycle phase two. With the rendered template
+    // (and therefore the live <slot> elements) now in the DOM, hook up
+    // the mutation observers so future authored-child mutations and
+    // slot-name changes drive incremental projection. For hydrated
+    // hosts, also adopt the SSR-placed slot assignments so the first
+    // projection pass is a no-op.
+    if (this._renderRoot === this) {
+      if (this.__hydratedAtActivate) {
+        adoptSSRAssignments(this);
+        this.__hydratedAtActivate = false;
+      }
+      attachSlotObservers(this);
+    }
+  }
+
+  /**
+   * True when this host's first child is the framework's hydration
+   * marker, meaning the SSR pipeline already rendered the template's
+   * shape (including <slot data-webjs-light> elements with their
+   * projected children inside) and the client should bind events
+   * without re-creating DOM. Sets __hydratedAtActivate as a side
+   * effect so the post-render path picks up the SSR assignment table.
+   *
+   * @returns {boolean}
+   * @private
+   */
+  __isHydrating() {
+    const first = this.firstChild;
+    const isHydrate =
+      first != null &&
+      first.nodeType === 8 &&
+      /** @type {Comment} */ (first).data === 'webjs-hydrate';
+    if (isHydrate) this.__hydratedAtActivate = true;
+    return isHydrate;
   }
 
 
@@ -411,6 +469,10 @@ export class WebComponent extends Base {
       this.__hydrationObserver.disconnect();
       this.__hydrationObserver = null;
     }
+    // Pause slot observers. The per-host state (assignment table,
+    // pending fragments, last snapshots) is preserved so a subsequent
+    // reconnection picks up where it left off.
+    if (this._renderRoot === this) detachSlotObservers(this);
     for (const c of this.__controllers) {
       if (c.onUnmount) c.onUnmount();
     }

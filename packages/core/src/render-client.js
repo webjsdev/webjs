@@ -50,6 +50,7 @@ const INSTANCE = Symbol.for('webjs.instance');
  *   name?: string,
  *   statics?: string[],
  *   group?: number[],
+ *   fallbackTemplate?: DocumentFragment,
  * }} PartDescriptor
  *
  * @typedef {{
@@ -348,12 +349,18 @@ function compile(tr) {
  *      recognise it as a framework-managed light-DOM slot.
  *   2. Add a sentinel attribute (`data-MARKER<idx>`) so the subsequent
  *      assignPaths walk records the slot's path into the new SLOT part.
- *   3. Push a SLOT part descriptor onto the parts list.
+ *   3. Move the slot's authored children into a `fallbackTemplate`
+ *      DocumentFragment stored on the PartDescriptor. The slot in the
+ *      cached template becomes empty, so every clone starts empty too.
+ *      bindPart clones a fresh fallback fragment per instance from this
+ *      template, giving each instance an independent fallback supply
+ *      that slot.js swaps in via the SLOT_FALLBACK_FRAG symbol.
  *
- * The slot's authored inner content stays in place in the template; it
- * becomes the fallback content cloned along with the rest of the template
- * on every instantiation. The slot-part's bind step at createInstance
- * moves those cloned nodes into a holding fragment owned by the part.
+ *   Fallback content with template holes (`<slot>fallback ${x}</slot>`)
+ *   is captured as a static-HTML snapshot of the template state at
+ *   compile time. Dynamic holes inside fallback content are not
+ *   re-bound per instance in v1; authors should put dynamic content
+ *   outside the slot.
  *
  * @param {DocumentFragment} root
  * @param {PartDescriptor[]} parts
@@ -364,7 +371,9 @@ function discoverSlots(root, parts) {
     slot.setAttribute(LIGHT_SLOT_ATTR, '');
     const partIdx = parts.length;
     slot.setAttribute(`data-${MARKER}${partIdx}`, '');
-    parts.push({ kind: 'slot', path: [] });
+    const fallbackTemplate = document.createDocumentFragment();
+    while (slot.firstChild) fallbackTemplate.appendChild(slot.firstChild);
+    parts.push({ kind: 'slot', path: [], fallbackTemplate });
   }
 }
 
@@ -483,12 +492,24 @@ function bindPart(p, root) {
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
-    // Move the slot's fallback content (cloned from the template) into a
-    // holding fragment that slot.js can swap back in when the slot
-    // transitions to data-projection="fallback". slot.js looks this up
-    // via the SLOT_FALLBACK_FRAG symbol on the slot element.
+    // Build a per-instance holding fragment by cloning the PartDescriptor's
+    // fallback template (captured once at compile time). slot.js swaps
+    // this fragment in via SLOT_FALLBACK_FRAG when projection state
+    // transitions to "fallback". The cloned slot in `root` starts empty
+    // (discoverSlots() moved the original children to the template), so
+    // there is nothing to extract from the slot itself.
+    //
+    // Hydration case: if the slot already carries data-projection="actual"
+    // from the SSR pipeline, its children are the SSR-projected nodes and
+    // must be left in place. The component lifecycle (component.js) calls
+    // adoptSSRAssignments() to record those children in the host state
+    // so the first projection pass is a no-op.
     const frag = document.createDocumentFragment();
-    while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
+    if (p.fallbackTemplate) {
+      for (const node of p.fallbackTemplate.childNodes) {
+        frag.appendChild(node.cloneNode(true));
+      }
+    }
     /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
     return { kind: 'slot', slotEl, applied: false };
   }
