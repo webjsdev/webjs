@@ -177,9 +177,18 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 - **Built-in essentials.** Auth, sessions, caching, cache store, rate
   limiting, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
-- **JSDoc or TypeScript.** Plain `.js` with JSDoc is default. `.ts`/`.mts`
-  flows through an esbuild loader hook registered at startup, so SSR and
-  hydration always produce equivalent JS.
+- **JSDoc or TypeScript (erasable only).** Plain `.js` with JSDoc is
+  default. `.ts` / `.mts` is stripped via Node 24+'s built-in
+  `module.stripTypeScriptTypes` (whitespace replacement, byte-exact
+  position preservation, no sourcemap overhead). Requires
+  `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json, which
+  rejects `enum`, `namespace` with values, constructor parameter
+  properties, legacy decorators with `emitDecoratorMetadata`, and
+  `import = require` at edit time. If you turn the flag off and use
+  non-erasable syntax, the dev server falls back to esbuild and ships
+  inline sourcemaps for those files (slower, ~3x wire bytes). The
+  `erasable-typescript-only` convention check enforces the flag.
+- **Node 24+ required** for the default strip-types behavior.
 - **SSR + CSR by default.** Pages are server-rendered (real HTML).
   Interactive web components render as light DOM by default. Shadow
   DOM is opt-in via `static shadow = true` with Declarative Shadow
@@ -679,7 +688,27 @@ See `agent-docs/advanced.md` Client router section for the full mechanism.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.
 9. **No backtick characters inside `html\`...\`` template bodies**, even inside CSS / HTML comments. A nested backtick closes the literal at JS-parse time and 500s in prod.
-10. **No em-dashes (U+2014) anywhere in the repo, no hyphen or semicolon used as a pause-punctuation substitute, and no colon attached to a code-shaped left-hand side.** Prose, comments, code, JSON descriptions, commit messages: rewrite the sentence so no pause-punctuation crutch is needed.
+10. **TypeScript must be erasable.** Use `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json. No `enum`, no `namespace` with values, no constructor parameter properties, no legacy decorators with `emitDecoratorMetadata`, no `import = require`. Use the erasable equivalents:
+
+    ```ts
+    // Allowed erasable forms
+    type Color = 'red' | 'green' | 'blue';
+    const Color = { Red: 'red', Green: 'green', Blue: 'blue' } as const;
+    type ColorKey = keyof typeof Color;
+
+    class Foo {
+      x: number;
+      constructor(x: number) { this.x = x; }
+    }
+
+    interface User { name: string; }
+    type Status = 'ok' | 'error';
+    import type { Thing } from './thing.ts';
+    ```
+
+    The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position preservation, no sourcemap shipped to the browser). If you disable `erasableSyntaxOnly` and use non-erasable syntax, the dev server falls back to esbuild on those specific files and emits an inline sourcemap, costing ~3x wire bytes per request and losing strict stack-trace position accuracy. The `erasable-typescript-only` convention check enforces the flag.
+
+11. **No em-dashes (U+2014) anywhere in the repo, no hyphen or semicolon used as a pause-punctuation substitute, and no colon attached to a code-shaped left-hand side.** Prose, comments, code, JSON descriptions, commit messages: rewrite the sentence so no pause-punctuation crutch is needed.
 
     Banned glyphs as pause punctuation:
     - The em-dash (U+2014).
@@ -770,7 +799,7 @@ off a rule, set it to `false` in `package.json` `webjs.conventions` or in
 `one-function-per-action`, `components-have-register`,
 `no-server-imports-in-components`, `tests-exist`, `tag-name-has-hyphen`,
 `reactive-props-use-declare`, `no-json-data-files`,
-`shell-in-non-root-layout`.
+`shell-in-non-root-layout`, `erasable-typescript-only`.
 
 ---
 

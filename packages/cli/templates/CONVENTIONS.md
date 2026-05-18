@@ -772,6 +772,22 @@ export async function createPost(input: {
 
 <!-- OVERRIDE -->
 - TypeScript with explicit `.ts` extensions in imports
+- **Erasable TypeScript only.** The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact line + column preservation, no sourcemap shipped). Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so the compiler rejects: `enum`, `namespace` with values, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`, and `import = require`. Write the erasable equivalents:
+  ```ts
+  // Not allowed
+  enum Color { Red, Green, Blue }
+  class Foo { constructor(public x: number) {} }
+
+  // Erasable equivalents
+  const Color = { Red: 'Red', Green: 'Green', Blue: 'Blue' } as const;
+  type Color = typeof Color[keyof typeof Color];
+
+  class Foo {
+    x: number;
+    constructor(x: number) { this.x = x; }
+  }
+  ```
+  If you turn `erasableSyntaxOnly` off and use non-erasable syntax, the dev server falls back to esbuild and ships inline sourcemaps for those files (~3x wire bytes per request and stack traces lose strict accuracy). The `erasable-typescript-only` convention check warns when the flag is off.
 - No semicolons (or with semicolons, pick one and stay consistent)
 - `const` by default, `let` when needed, never `var`
 - Prefer `async/await` over `.then()` chains
