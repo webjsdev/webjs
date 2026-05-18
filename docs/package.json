@@ -15,5 +15,8 @@
     "@webjskit/cli": "^0.5.2",
     "@webjskit/core": "^0.4.1",
     "@webjskit/server": "^0.5.2"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   }
 }
