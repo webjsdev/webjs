@@ -28,9 +28,10 @@ the same output in all three.
 |---|---|
 | `html.js` | `` html`` `` tagged-template → `TemplateResult`, plus `MARKER` and `isTemplate` |
 | `css.js` | `` css`` `` → `CSSResult`, `adoptStyles`, `stylesToString` |
-| `component.js` | `WebComponent` base class: lifecycle, properties, reactive accessors, light-vs-shadow DOM, scheduling |
-| `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming) |
-| `render-client.js` | Client-side patcher + hydration; the only file that touches `document` |
+| `component.js` | `WebComponent` base class: lifecycle, properties, reactive accessors, light-vs-shadow DOM, scheduling, slot host wiring |
+| `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming), SSR slot substitution in `injectDSD` |
+| `render-client.js` | Client-side patcher + hydration; the only file that touches `document`. Also discovers and binds light-DOM slot parts |
+| `slot.js` | Light-DOM `<slot>` runtime: `HTMLSlotElement` polyfills (`assignedNodes`, `assignedElements`, `slotchange`), projection scheduling, MutationObserver, first-wins resolution, fallback swap, pending-fragment recovery |
 | `directives.js` | `unsafeHTML`, `live` (and `isUnsafeHTML` / `isLive`) |
 | `repeat.js` | `repeat(items, keyFn, templateFn)` for keyed list reconciliation |
 | `suspense.js` | `Suspense()` boundary primitive |
@@ -71,6 +72,15 @@ export.
    defaults**, never class-field initializers (those clobber the
    framework's accessor under modern class-field semantics).
    See `component.js` and the `reactive-props-use-declare` rule.
+6. **`<slot>` works identically in light and shadow DOM.** Light-DOM
+   slots get the same `assignedNodes` / `assignedElements` /
+   `assignedSlot` / `slotchange` surface, named slots, fallback content,
+   and first-wins resolution as shadow-DOM slots. The light-DOM runtime
+   in `slot.js` gates every polyfill on a `data-webjs-light` attribute,
+   so real shadow-DOM slots elsewhere on the page are never touched.
+   SSR (`injectDSD`) projects light-DOM children into the rendered
+   template before the response goes out, so progressive enhancement
+   and JS-disabled clients both see the projected content.
 
 ## Tests
 
