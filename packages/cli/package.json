@@ -32,5 +32,8 @@
     "cli",
     "dev",
     "scaffold"
-  ]
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
 }

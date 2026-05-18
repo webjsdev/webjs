@@ -32,5 +32,8 @@
     "language-service",
     "tsserver-plugin",
     "web-components"
-  ]
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
 }
