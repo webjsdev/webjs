@@ -44,8 +44,5 @@
     "tailwind",
     "components",
     "webjs"
-  ],
-  "engines": {
-    "node": ">=24.0.0"
-  }
+  ]
 }
