@@ -1,7 +1,24 @@
 /**
- * Dialog — modal dialog with focus trap, Escape-to-close, and overlay click.
+ * Dialog — modal dialog built on the native <dialog> element.
  *
- * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+ * The custom element is a thin decorator. All the heavy lifting comes
+ * from HTMLDialogElement.showModal():
+ *   - Top-layer rendering (no z-index wars)
+ *   - ::backdrop pseudo-element for the overlay
+ *   - Native focus management: initial focus on first tabbable, Tab
+ *     trapped inside the dialog, focus restored on close
+ *   - Escape-to-close via the cancel event
+ *   - Background made inert (clicks pass through to nothing)
+ *
+ * On connection the component reparents <ui-dialog-content> inside a
+ * programmatically-created <dialog> so we can call showModal() on it.
+ * The <dialog> is transparent and zero-sized; the visible panel is
+ * <ui-dialog-content> with its `position: fixed; top: 50%; left: 50%`
+ * classes, which is what gets the shadow and rounded border.
+ *
+ * The previous version's focus trap, Tab cycling, Escape listener,
+ * `<ui-dialog-overlay>` element, and document-level keydown handler are
+ * all gone — the platform owns them now.
  *
  * shadcn parity:
  *   <Dialog>            → <ui-dialog open>
@@ -33,64 +50,66 @@
  *   </ui-dialog>
  *
  * Attributes on <ui-dialog>:
- *   `open` — boolean (reflected). Presence ⇒ dialog is shown.
+ *   `open` — boolean (reflected). Presence shows the dialog.
  *
- * Events fired on <ui-dialog>:
- *   `ui-open-change` — `{ detail: { open: boolean } }` — fires after the
- *     element transitions between open / closed states.
+ * Events on <ui-dialog>:
+ *   `ui-open-change` — { detail: { open: boolean } }, fires after the
+ *     element transitions between open and closed.
  *
- * Keyboard:
- *   Escape           — close
- *   Tab / Shift-Tab  — cycle focusable elements within the dialog content
+ * Programmatic API: .show()  .hide()  .toggle()
  *
- * Programmatic API on <ui-dialog>:
- *   .show()   .hide()   .toggle()
- *
- * Design tokens used: --background, --border, --muted-foreground, --foreground.
+ * Design tokens used: --background, --border, --muted-foreground.
  */
 
 import { cn, Base, defineElement } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------
-// Class helpers for static subparts. Compose with plain elements.
+// Class helpers for subparts. Unchanged from the prior version.
 // --------------------------------------------------------------------------
 
-/** Dialog header — flex column for title + description, stacks on mobile. */
 export const dialogHeaderClass = (): string =>
   'flex flex-col gap-2 text-center sm:text-left';
 
-/** Dialog title — large semibold heading. */
 export const dialogTitleClass = (): string =>
   'text-lg leading-none font-semibold';
 
-/** Dialog description — subdued caption below the title. */
 export const dialogDescriptionClass = (): string =>
   'text-sm text-muted-foreground';
 
-/** Dialog footer — right-aligned actions on desktop, reverse-stacked on mobile. */
 export const dialogFooterClass = (): string =>
   'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
 
-/** Dialog content panel — centered, fixed-position box with shadow + border. */
 export const dialogContentClass = (): string =>
   'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none sm:max-w-lg';
 
-/** Dialog backdrop — fixed full-viewport translucent overlay. */
-export const dialogOverlayClass = (): string => 'fixed inset-0 z-50 bg-black/50';
-
 // --------------------------------------------------------------------------
-// Visibility CSS — installed once. Hides content + overlay when the host
-// <ui-dialog> doesn't have the `open` attribute. This works at SSR time too:
-// because SSR includes no `open` attribute by default, content is invisible
-// until JS hydrates and the user opens the dialog.
+// Visibility CSS. The pre-hydration SSR pass renders <ui-dialog-content>
+// with the host having no [open] attribute, so it must stay hidden until
+// JS upgrades. Once upgraded the native <dialog> takes over: it is
+// `display: none` while closed and `display: block` when showModal()
+// puts it in the top layer.
 // --------------------------------------------------------------------------
 
 const STYLES = `
-ui-dialog:not([open]) ui-dialog-content,
-ui-dialog:not([open]) ui-dialog-overlay { display: none !important; }
+ui-dialog:not([open]) ui-dialog-content { display: none !important; }
 ui-dialog[open] { display: contents; }
 ui-dialog-content { display: grid; }
+ui-dialog dialog[data-slot="dialog-native"] {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 0;
+  height: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  color: inherit;
+}
+ui-dialog dialog[data-slot="dialog-native"]::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
 `;
 
 function installStyles(): void {
@@ -103,7 +122,9 @@ function installStyles(): void {
 }
 
 // --------------------------------------------------------------------------
-// Body scroll lock — refcounted so multiple open dialogs nest correctly.
+// Body scroll lock. Refcounted so nested dialogs unlock in order. Native
+// <dialog> does not lock body scroll, only inert-ifies the background;
+// preserved behavior parity with the previous version.
 // --------------------------------------------------------------------------
 
 let scrollLockCount = 0;
@@ -112,14 +133,6 @@ let savedPaddingRight = '';
 
 function lockScroll(): void {
   if (scrollLockCount === 0) {
-    // Measure the vertical scrollbar's width BEFORE hiding it. When the body
-    // switches to `overflow: hidden` the OS-painted scrollbar disappears and
-    // the viewport gains back its width — without compensation, every
-    // element constrained to `100vw` (or the body itself, which fills the
-    // viewport) reflows ~15px to the right and the page visibly jumps.
-    // Reserving the same width as inline padding-right keeps the content
-    // pinned in place. Restored on unlock so apps that author their own
-    // body padding aren't permanently shifted.
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     savedOverflow = document.body.style.overflow;
     savedPaddingRight = document.body.style.paddingRight;
@@ -138,27 +151,7 @@ function unlockScroll(): void {
 }
 
 // --------------------------------------------------------------------------
-// Focus management — find focusables, trap Tab, restore focus on close.
-// --------------------------------------------------------------------------
-
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'textarea:not([disabled])',
-  'select:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-  '[contenteditable="true"]',
-].join(',');
-
-function getFocusables(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => !el.hasAttribute('aria-hidden') && el.offsetParent !== null,
-  );
-}
-
-// --------------------------------------------------------------------------
-// <ui-dialog> — owns open state, focus trap, escape, scroll lock.
+// <ui-dialog>
 // --------------------------------------------------------------------------
 
 export class UiDialog extends Base {
@@ -166,24 +159,27 @@ export class UiDialog extends Base {
     return ['open'];
   }
 
-  private _previouslyFocused: HTMLElement | null = null;
-  private _keyHandler = (e: KeyboardEvent): void => this._onKeyDown(e);
+  private _native: HTMLDialogElement | null = null;
+  private _onNativeClose = (): void => {
+    if (this.isOpen) this.removeAttribute('open');
+  };
+  private _onNativeClick = (e: MouseEvent): void => {
+    if (e.target === this._native) this.hide();
+  };
 
   connectedCallback(): void {
     installStyles();
     this.setAttribute('data-slot', 'dialog');
-    // Auto-ensure an overlay element exists inside the dialog so styles work
-    // even if the author forgot to write <ui-dialog-overlay>.
-    if (!this.querySelector(':scope > ui-dialog-overlay')) {
-      const overlay = document.createElement('ui-dialog-overlay');
-      this.insertBefore(overlay, this.firstChild);
-    }
+    this._wrap();
     this._reflect();
+    if (this.isOpen) this._setup();
   }
 
   disconnectedCallback(): void {
-    if (this.isOpen) {
-      this._teardown();
+    if (this.isOpen) this._teardown();
+    if (this._native) {
+      this._native.removeEventListener('close', this._onNativeClose);
+      this._native.removeEventListener('click', this._onNativeClick as EventListener);
     }
   }
 
@@ -219,9 +215,28 @@ export class UiDialog extends Base {
     this.isOpen = !this.isOpen;
   }
 
+  private _wrap(): void {
+    const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
+    if (!content) return;
+    // Already wrapped (HMR re-attach or repeated connectedCallback).
+    if (content.parentElement?.tagName === 'DIALOG') {
+      this._native = content.parentElement as HTMLDialogElement;
+    } else {
+      const dlg = document.createElement('dialog');
+      dlg.setAttribute('data-slot', 'dialog-native');
+      content.replaceWith(dlg);
+      dlg.appendChild(content);
+      this._native = dlg;
+    }
+    // The legacy <ui-dialog-overlay> is no longer needed; ::backdrop covers it.
+    this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
+    this._native.addEventListener('close', this._onNativeClose);
+    this._native.addEventListener('click', this._onNativeClick as EventListener);
+  }
+
   private _reflect(): void {
     this.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
-    const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
+    const content = this.querySelector<HTMLElement>('ui-dialog-content');
     if (content) {
       content.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
       content.setAttribute('role', 'dialog');
@@ -230,61 +245,20 @@ export class UiDialog extends Base {
   }
 
   private _setup(): void {
-    this._previouslyFocused = document.activeElement as HTMLElement | null;
+    if (!this._native) return;
     lockScroll();
-    document.addEventListener('keydown', this._keyHandler);
-    // Focus first focusable inside the content after a microtask so DOM is settled.
-    queueMicrotask(() => {
-      const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
-      if (!content) return;
-      const focusables = getFocusables(content);
-      (focusables[0] ?? content).focus({ preventScroll: true });
-    });
+    if (!this._native.open) this._native.showModal();
   }
 
   private _teardown(): void {
     unlockScroll();
-    document.removeEventListener('keydown', this._keyHandler);
-    if (this._previouslyFocused) {
-      this._previouslyFocused.focus({ preventScroll: true });
-      this._previouslyFocused = null;
-    }
-  }
-
-  private _onKeyDown(e: KeyboardEvent): void {
-    if (!this.isOpen) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      this.hide();
-      return;
-    }
-    if (e.key === 'Tab') {
-      const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
-      if (!content) return;
-      const focusables = getFocusables(content);
-      if (focusables.length === 0) {
-        e.preventDefault();
-        content.focus();
-        return;
-      }
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
+    if (this._native?.open) this._native.close();
   }
 }
 defineElement('ui-dialog', UiDialog);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-trigger> — clicks on this (or any element inside) open the
-// enclosing <ui-dialog>. Decorator only — does not render anything.
+// <ui-dialog-trigger>
 // --------------------------------------------------------------------------
 
 export class UiDialogTrigger extends Base {
@@ -296,27 +270,18 @@ export class UiDialogTrigger extends Base {
     this.removeEventListener('click', this._onClick);
   }
   private _onClick = (): void => {
-    const dialog = this.closest('ui-dialog') as UiDialog | null;
-    dialog?.show();
+    (this.closest('ui-dialog') as UiDialog | null)?.show();
   };
 }
 defineElement('ui-dialog-trigger', UiDialogTrigger);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-content> — the centered panel. Applies the visual classes from
-// dialogContentClass() to its host, merging with any user-provided class.
+// <ui-dialog-content>
 // --------------------------------------------------------------------------
 
-// Class helper for the auto-injected close button. shadcn ships an X
-// pinned to the top-right of every DialogContent; we mirror that so the
-// `<ui-dialog-content show-close-button>` toggle has a default visual
-// to inject. Class includes focus/hover states + the data-state-keyed
-// fade matched to shadcn's DialogClose.
 export const dialogCloseButtonClass = (): string =>
   "absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
-// Inline X (lucide-style) auto-appended into <ui-dialog-content> when
-// show-close-button is enabled (the default — matches shadcn).
 const DIALOG_CLOSE_X_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
 
@@ -326,17 +291,6 @@ export class UiDialogContent extends Base {
     this.setAttribute('tabindex', '-1');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dialogContentClass(), userClass);
-    // shadcn auto-injects an X in the top-right corner of every
-    // DialogContent, opt-out via `showCloseButton={false}`. Mirror the
-    // same default. The injected element is a real <ui-dialog-close>
-    // (defined below) so clicking it goes through the existing
-    // close-on-click path and ARIA wiring stays consistent.
-    //
-    // Skip if the user explicitly disabled it OR if they've already
-    // authored their own <ui-dialog-close> as a direct child (legacy
-    // hand-authored close-X pattern). A <ui-dialog-close> nested
-    // deeper (e.g. inside the footer as a Cancel button) does NOT
-    // suppress the X — it's a different role.
     const showCloseButton = this.getAttribute('show-close-button') !== 'false';
     if (showCloseButton && !this.querySelector(':scope > ui-dialog-close')) {
       const closeEl = document.createElement('ui-dialog-close');
@@ -350,31 +304,7 @@ export class UiDialogContent extends Base {
 defineElement('ui-dialog-content', UiDialogContent);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-overlay> — the translucent backdrop. Clicks here close the
-// enclosing dialog (matches shadcn's modal-close-on-overlay behavior).
-// --------------------------------------------------------------------------
-
-export class UiDialogOverlay extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'dialog-overlay');
-    this.setAttribute('aria-hidden', 'true');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(dialogOverlayClass(), userClass);
-    this.addEventListener('click', this._onClick);
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-  }
-  private _onClick = (): void => {
-    const dialog = this.closest('ui-dialog') as UiDialog | null;
-    dialog?.hide();
-  };
-}
-defineElement('ui-dialog-overlay', UiDialogOverlay);
-
-// --------------------------------------------------------------------------
-// <ui-dialog-close> — clicks on this (or any element inside) close the
-// enclosing dialog.
+// <ui-dialog-close>
 // --------------------------------------------------------------------------
 
 export class UiDialogClose extends Base {
@@ -386,18 +316,13 @@ export class UiDialogClose extends Base {
     this.removeEventListener('click', this._onClick);
   }
   private _onClick = (): void => {
-    const dialog = this.closest('ui-dialog') as UiDialog | null;
-    dialog?.hide();
+    (this.closest('ui-dialog') as UiDialog | null)?.hide();
   };
 }
 defineElement('ui-dialog-close', UiDialogClose);
 
 // --------------------------------------------------------------------------
-// <ui-dialog-footer> — applies dialogFooterClass + optionally auto-injects
-// a "Close" button via show-close-button="true". Shadcn ships
-// showCloseButton on DialogFooter across all 15 styles (default false)
-// so users can opt into a stock Close action without authoring the
-// markup themselves. Mirrors the auto-X injection on <ui-dialog-content>.
+// <ui-dialog-footer>
 // --------------------------------------------------------------------------
 
 export class UiDialogFooter extends Base {
@@ -405,10 +330,6 @@ export class UiDialogFooter extends Base {
     this.setAttribute('data-slot', 'dialog-footer');
     const userClass = this.getAttribute('class') ?? '';
     this.className = cn(dialogFooterClass(), userClass);
-    // Auto-inject a "Close" button when show-close-button="true" (or just
-    // the bare boolean attribute). Skip if the user already authored
-    // their own <ui-dialog-close> as a direct child — back-compat with
-    // hand-authored footers.
     const showClose = this.hasAttribute('show-close-button')
       && this.getAttribute('show-close-button') !== 'false';
     if (showClose && !this.querySelector(':scope > ui-dialog-close')) {

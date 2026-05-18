@@ -7,16 +7,22 @@ Two-tier composition designed for AI agents who reason about real HTML +
 function calls, not for a layered React abstraction over every primitive:
 
 - **Tier 1 — class-helper functions** (`buttonClass`, `cardClass`,
-  `inputClass`, `labelClass`, `alertClass`, …). Pure functions that return
-  Tailwind class strings. You spread them onto raw native elements —
-  `<button class=${buttonClass({ variant: 'outline' })}>` — so a real
-  `<button>` participates in form submission, autocomplete, screen readers,
-  and devtools as itself.
-- **Tier 2 — stateful custom elements** (`<ui-dialog>`, `<ui-popover>`,
-  `<ui-tabs>`, `<ui-tooltip>`, `<ui-dropdown-menu>`, `<ui-accordion>`, …).
-  Reserved for behavior the browser doesn't give you natively: focus
-  traps, portaled overlays, keyboard-navigated lists, body-scroll lock.
-  Decorate the host, no shadow DOM.
+  `inputClass`, `labelClass`, `alertClass`, `popoverContentClass`,
+  `accordionItemClass`, `collapsibleTriggerClass`, …). Pure functions that
+  return Tailwind class strings. You spread them onto raw native elements
+  — including `<button class=${buttonClass({ variant: 'outline' })}>`,
+  `<details name="faq" class=${accordionItemClass()}>`, and
+  `<div popover class=${popoverContentClass()}>` — so real native elements
+  participate in form submission, autocomplete, screen readers, the
+  Popover API ancestry, and devtools as themselves.
+- **Tier 2 — stateful custom elements** (`<ui-dialog>`, `<ui-alert-dialog>`,
+  `<ui-tabs>`, `<ui-tooltip>`, `<ui-hover-card>`, `<ui-dropdown-menu>`,
+  `<ui-sonner>`, …). Reserved for the behavior the browser still doesn't
+  give you for free: hover-with-delay tooltips, roving-focus keyboard nav
+  for menus and tabs, toast queue with stack and dismiss. Dialog and
+  alert-dialog use a thin custom element on top of the native
+  `<dialog>.showModal()` — focus trap, Escape, and backdrop overlay all
+  come from the platform. Decorate the host, no shadow DOM.
 
 Works with any project that uses Tailwind CSS v4 and supports custom elements:
 webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML — as long as Tailwind

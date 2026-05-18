@@ -1,187 +1,88 @@
 /**
- * Accordion — vertical collapsible item list. Single or multiple open at a time.
+ * Accordion — vertical collapsible list built on native <details>/<summary>.
  *
- * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/accordion/
+ * Tier-1 component (no custom element). Exclusive open behavior — what
+ * Radix calls `type="single"` — is provided natively by giving each
+ * <details> the same `name=""` attribute. Independent open behavior
+ * (`type="multiple"`) is the default when `name` is omitted.
+ *
+ * Both modes give the user `collapsible` behavior for free: clicking the
+ * currently-open <summary> always closes it.
  *
  * shadcn parity:
- *   Accordion (type: single | multiple, collapsible: boolean, value: string|string[])
- *   AccordionItem (value), AccordionTrigger, AccordionContent.
+ *   <Accordion type="single" collapsible>
+ *     → <div class=${accordionClass()}>
+ *         <details name="faq" class=${accordionItemClass()}>…</details>
+ *         <details name="faq" class=${accordionItemClass()}>…</details>
+ *       </div>
  *
- * Usage:
- *   <ui-accordion type="single" collapsible>
- *     <ui-accordion-item value="item-1">
- *       <ui-accordion-trigger>Is it accessible?</ui-accordion-trigger>
- *       <ui-accordion-content>Yes — uses APG accordion pattern.</ui-accordion-content>
- *     </ui-accordion-item>
- *     <ui-accordion-item value="item-2">
- *       <ui-accordion-trigger>Is it animated?</ui-accordion-trigger>
- *       <ui-accordion-content>Yes (height transition).</ui-accordion-content>
- *     </ui-accordion-item>
- *   </ui-accordion>
+ *   <Accordion type="multiple">
+ *     → omit the `name="…"` attribute. Each <details> toggles
+ *       independently.
  *
- * Design tokens used: --muted-foreground, --border, --ring.
+ *   <AccordionTrigger> → <summary class=${accordionTriggerClass()}>
+ *   <AccordionContent> → <div class=${accordionContentClass()}>
+ *
+ * Usage (single-open, exclusive):
+ *   <div class=${accordionClass()}>
+ *     <details name="faq" class=${accordionItemClass()}>
+ *       <summary class=${accordionTriggerClass()}>
+ *         <span>Is it accessible?</span>
+ *         <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
+ *       </summary>
+ *       <div class=${accordionContentClass()}>
+ *         Yes. Native &lt;details&gt; implements the WAI-ARIA disclosure
+ *         widget pattern.
+ *       </div>
+ *     </details>
+ *     <details name="faq" class=${accordionItemClass()} open>
+ *       <summary class=${accordionTriggerClass()}>
+ *         <span>Is it styled?</span>
+ *         <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
+ *       </summary>
+ *       <div class=${accordionContentClass()}>Yes — shadcn design tokens.</div>
+ *     </details>
+ *   </div>
+ *
+ * Initial state: add `open` on the <details> that should render expanded
+ * on first paint. Programmatic toggling: `el.open = true | false`.
+ *
+ * `<details name="X">` is the platform's exclusive-accordion primitive:
+ * Chrome 120+, Safari 17.2+, Firefox 130+.
+ *
+ * Migrated from the prior <ui-accordion> / <ui-accordion-item> /
+ * <ui-accordion-trigger> / <ui-accordion-content> custom elements.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
 
-export const accordionItemClass = (): string => 'border-b last:border-b-0';
+/** Root wrapper. Holds the column-of-items rhythm; no display: rules. */
+export const accordionClass = (): string => 'w-full';
 
-export const accordionTriggerClass = (): string =>
-  'flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180';
+/**
+ * Item: each <details>. The `group` utility lets the trigger's chevron
+ * rotate on open via `group-open:rotate-180`. `last:border-b-0` cleans
+ * the trailing edge.
+ */
+export const accordionItemClass = (): string => 'group border-b last:border-b-0';
 
-export const accordionContentClass = (): string => 'overflow-hidden text-sm';
+/**
+ * Trigger: applied to <summary>. Hides the native disclosure triangle so
+ * authors can compose their own chevron icon (typical pattern: trailing
+ * lucide chevron with `group-open:rotate-180`).
+ *
+ * `disabled: true` returns the visual disabled state (greyed out,
+ * not-allowed cursor, no pointer events). For true keyboard prevention
+ * — the native disabled-disclosure-widget gap — add the standard
+ * `inert` attribute to the <details> element. shadcn's React `disabled`
+ * prop combines both; native HTML has no `disabled` on <details>.
+ */
+export const accordionTriggerClass = (opts: { disabled?: boolean } = {}): string => {
+  const base = 'flex w-full cursor-pointer list-none items-center justify-between gap-4 py-4 text-left text-sm font-medium outline-none transition-all hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 marker:hidden [&::-webkit-details-marker]:hidden';
+  if (opts.disabled) return `${base} pointer-events-none cursor-not-allowed opacity-50`;
+  return base;
+};
 
-const STYLES = `
-ui-accordion-item[data-state="closed"] > ui-accordion-content { display: none !important; }
-ui-accordion-content > * { padding-top: 0; padding-bottom: 1rem; }
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-accordion-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-accordion-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
-
-export class UiAccordion extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'type', 'collapsible', 'orientation'];
-  }
-  connectedCallback(): void {
-    installStyles();
-    this.setAttribute('data-slot', 'accordion');
-    if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
-    // Radix Accordion.Root supports orientation="horizontal" too. Reflect
-    // to data-orientation so Tailwind `data-[orientation=…]:` selectors
-    // and a11y screen readers both see the value. Default "vertical"
-    // matches Radix.
-    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'vertical');
-    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'vertical');
-    this.addEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
-    queueMicrotask(() => this._sync());
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('ui-accordion-trigger-click', this._onTriggerClick as EventListener);
-  }
-  attributeChangedCallback(name: string): void {
-    // Keep data-orientation in lockstep with the orientation attribute
-    // so toggling the attr at runtime updates the Tailwind selectors.
-    if (name === 'orientation') {
-      this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'vertical');
-    }
-    this._sync();
-  }
-
-  private get _type(): 'single' | 'multiple' {
-    return (this.getAttribute('type') as 'single' | 'multiple') ?? 'single';
-  }
-  private get _values(): Set<string> {
-    const raw = this.getAttribute('value') ?? '';
-    return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
-  }
-  private _setValues(values: Set<string>): void {
-    const next = Array.from(values).join(',');
-    this.setAttribute('value', next);
-  }
-  private _sync(): void {
-    const values = this._values;
-    const items = this.querySelectorAll<HTMLElement>('ui-accordion-item');
-    items.forEach((item) => {
-      const v = item.getAttribute('value');
-      const open = !!v && values.has(v);
-      item.setAttribute('data-state', open ? 'open' : 'closed');
-      const trigger = item.querySelector<HTMLElement>('ui-accordion-trigger');
-      trigger?.setAttribute('data-state', open ? 'open' : 'closed');
-      trigger?.setAttribute('aria-expanded', String(open));
-      const content = item.querySelector<HTMLElement>('ui-accordion-content');
-      content?.setAttribute('data-state', open ? 'open' : 'closed');
-    });
-  }
-  private _onTriggerClick = (e: CustomEvent): void => {
-    const v = e.detail?.value as string | undefined;
-    if (!v) return;
-    const values = this._values;
-    const collapsible = this.hasAttribute('collapsible');
-    if (this._type === 'single') {
-      if (values.has(v)) {
-        if (collapsible) values.clear();
-        else return;
-      } else {
-        values.clear();
-        values.add(v);
-      }
-    } else {
-      if (values.has(v)) values.delete(v);
-      else values.add(v);
-    }
-    this._setValues(values);
-  };
-}
-defineElement('ui-accordion', UiAccordion);
-
-export class UiAccordionItem extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'accordion-item');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(accordionItemClass(), userClass);
-  }
-}
-defineElement('ui-accordion-item', UiAccordionItem);
-
-export class UiAccordionTrigger extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'accordion-trigger');
-    this.setAttribute('role', 'button');
-    this.setAttribute('tabindex', '0');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(accordionTriggerClass(), userClass);
-    // Default chevron icon if no SVG child is provided
-    if (!this.querySelector('svg')) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'none');
-      svg.setAttribute('stroke', 'currentColor');
-      svg.setAttribute('stroke-width', '2');
-      svg.setAttribute('stroke-linecap', 'round');
-      svg.setAttribute('stroke-linejoin', 'round');
-      svg.setAttribute(
-        'class',
-        'pointer-events-none size-4 shrink-0 translate-y-0.5 text-muted-foreground transition-transform duration-200',
-      );
-      svg.innerHTML = '<path d="m6 9 6 6 6-6"/>';
-      this.appendChild(svg);
-    }
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', this._onKeyDown);
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('keydown', this._onKeyDown);
-  }
-  private _onClick = (): void => {
-    const item = this.closest('ui-accordion-item');
-    const value = item?.getAttribute('value');
-    if (!value) return;
-    this.dispatchEvent(
-      new CustomEvent('ui-accordion-trigger-click', { detail: { value }, bubbles: true }),
-    );
-  };
-  private _onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      this._onClick();
-    }
-  };
-}
-defineElement('ui-accordion-trigger', UiAccordionTrigger);
-
-export class UiAccordionContent extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'accordion-content');
-    this.setAttribute('role', 'region');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(accordionContentClass(), userClass);
-  }
-}
-defineElement('ui-accordion-content', UiAccordionContent);
+/**
+ * Content: <details> hides this entirely when not [open], so all we add
+ * is the typography rhythm matching shadcn (bottom padding, small text).
+ */
+export const accordionContentClass = (): string => 'pb-4 text-sm';

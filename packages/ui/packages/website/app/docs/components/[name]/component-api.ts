@@ -229,19 +229,18 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   accordion: {
     subcomponents: [
-      { name: '<ui-accordion>', description: 'Root — accepts type="single | multiple" and a controlled value.' },
-      { name: '<ui-accordion-item>', description: 'One row. value attribute links it to the active set.' },
-      { name: '<ui-accordion-trigger>', description: 'Clickable header inside an item.' },
-      { name: '<ui-accordion-content>', description: 'Collapsible body inside an item.' },
+      { name: '<details name="...">', description: 'One row. Items sharing the same name attribute form an exclusive group (Radix type="single"); omit name for independent items (type="multiple").' },
+      { name: '<summary>', description: 'Clickable header inside a <details>. Apply accordionTriggerClass() and hide the native ::marker.' },
+      { name: 'accordionClass()', description: 'Wrapper around the column of <details> rows.' },
+      { name: 'accordionItemClass()', description: 'Applied to each <details>. Adds `group` so the trigger chevron can rotate on `group-open:`.' },
+      { name: 'accordionTriggerClass()', description: 'Applied to each <summary>. Hides the native disclosure marker.' },
+      { name: 'accordionContentClass()', description: 'Applied to the content wrapper inside <details>.' },
     ],
     props: [
-      { name: 'type', type: '"single" | "multiple"', default: '"single"' },
-      { name: 'collapsible', type: 'boolean (attribute)', default: 'false', description: 'On type="single" — allow closing the open item.' },
-      { name: 'orientation', type: '"vertical" | "horizontal"', default: '"vertical"', description: 'Reflected to data-orientation on the host so Tailwind data-[orientation=…]:… selectors fire.' },
-      { name: 'value', type: 'string | string[]', description: 'Controlled active item(s).' },
-    ],
-    events: [
-      { name: 'ui-value-change', detail: '{ value: string | string[] }', description: 'Fired when the active set changes.' },
+      { name: 'open', type: 'boolean (HTML attribute on <details>)', default: 'absent', description: 'Set on a <details> to render it expanded on first paint.' },
+      { name: 'name', type: 'string (HTML attribute on <details>)', default: 'absent', description: 'Items sharing a name form an exclusive group (only one open at a time).' },
+      { name: 'disabled', type: 'boolean (argument to accordionTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention — native <details> has no `disabled` attribute.' },
+      { name: 'orientation="horizontal"', type: '— not supported', description: 'Native <details>/<summary> is always vertical (summary above, content below). For a horizontal disclosure, use <ui-tabs> instead.' },
     ],
   },
 
@@ -256,7 +255,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     subcomponents: [
       { name: '<ui-alert-dialog>', description: 'Root — owns the open state.' },
       { name: '<ui-alert-dialog-trigger>', description: 'Opens the dialog on click.' },
-      { name: '<ui-alert-dialog-content>', description: 'Modal panel — role="alertdialog", focus trap, no escape/overlay-close.' },
+      { name: '<ui-alert-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal() with role="alertdialog"; native Escape close is cancelled via the dialog cancel event, and backdrop click is intentionally not wired (user MUST choose Cancel or Action).' },
       { name: '<ui-alert-dialog-action>', description: 'Primary action button — applies buttonClass automatically. Accepts `variant` (default "default") and `size` (default "default"). Closes the dialog on click.' },
       { name: '<ui-alert-dialog-cancel>', description: 'Cancel button — applies buttonClass automatically. Accepts `variant` (default "outline") and `size` (default "default"). Closes the dialog on click.' },
       { name: 'alertDialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / OverlayClass()', description: 'Class helpers for the static prose layout.' },
@@ -273,7 +272,7 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     subcomponents: [
       { name: '<ui-dialog>', description: 'Root — owns the open state.' },
       { name: '<ui-dialog-trigger>', description: 'Opens the dialog on click.' },
-      { name: '<ui-dialog-content>', description: 'Modal panel — focus trap, Escape to close, body-scroll lock. Auto-injects an X close button in the top-right corner unless show-close-button="false".' },
+      { name: '<ui-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal(): top-layer rendering, focus trap, Escape to close, and ::backdrop overlay are all provided by the browser. We add body-scroll lock + auto-injected X close button in the top-right corner unless show-close-button="false".' },
       { name: '<ui-dialog-footer show-close-button>', description: 'Footer row. Optionally auto-appends a "Close" outline button when show-close-button is set.' },
       { name: '<ui-dialog-close>', description: 'Close button — wrap any element to close on click.' },
       { name: 'dialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / ContentClass() / OverlayClass() / CloseButtonClass()', description: 'Class helpers for prose layout + close-button positioning.' },
@@ -315,21 +314,28 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: 'inset', type: 'boolean (attribute)', default: 'false', description: 'On <ui-dropdown-menu-item>, <ui-dropdown-menu-label>, and <ui-dropdown-menu-sub-trigger> — left-pad for icon alignment so the row aligns with sibling items that have leading icons.' },
       { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom" (content) / "right" (sub-content)' },
       { name: 'align', type: '"start" | "center" | "end"', default: '"start"' },
+      { name: 'side-offset', type: 'number (px)', default: '4 (content) / -4 (sub-content)', description: 'Attribute on <ui-dropdown-menu-content> and <ui-dropdown-menu-sub-content>.' },
+      { name: 'align-offset', type: 'number (px)', default: '0', description: 'Attribute on <ui-dropdown-menu-content> and <ui-dropdown-menu-sub-content>. Pixels offset along the align axis.' },
+      { name: 'text-value', type: 'string (attribute)', description: 'On <ui-dropdown-menu-item>. Override the string matched during typeahead. Defaults to the item textContent. Matches shadcn/Radix textValue.' },
     ],
   },
 
   popover: {
     subcomponents: [
-      { name: '<ui-popover>', description: 'Root — owns the open state.' },
-      { name: '<ui-popover-trigger>', description: 'Toggles the popover on click.' },
-      { name: '<ui-popover-content>', description: 'Floating panel — side / align / side-offset attributes.' },
+      { name: '<button popovertarget="id">', description: 'Invoker. The browser toggles the matching popover on click and restores focus on close.' },
+      { name: '<div popover id="id">', description: 'Floating panel. Native UA hides it until the invoker fires.' },
+      { name: 'popoverContentClass({ side, align, sideOffset })', description: 'Applied to the popover element. Same shape as shadcn `<PopoverContent>` placement props — side / align / sideOffset are encoded into CSS Anchor Positioning utilities.' },
       { name: 'popoverHeaderClass() / TitleClass() / DescriptionClass()', description: 'Class helpers for prose inside the content.' },
+      { name: 'positionFloating(trigger, content, opts)', description: 'Imperative positioning utility for callers that cannot yet rely on CSS anchor positioning. Also used internally by tooltip / hover-card / dropdown-menu.' },
     ],
     props: [
-      { name: 'open', type: 'boolean (attribute)', default: 'false' },
-      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom"' },
-      { name: 'align', type: '"start" | "center" | "end"', default: '"center"' },
-      { name: 'side-offset', type: 'number', default: '4' },
+      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom"', description: 'Argument to popoverContentClass. Encoded via CSS `position-area`.' },
+      { name: 'align', type: '"start" | "center" | "end"', default: '"center"', description: 'Argument to popoverContentClass. Encoded via CSS `position-area`.' },
+      { name: 'sideOffset', type: '0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24', default: '4', description: 'Argument to popoverContentClass. Pixels between the trigger and the popover. For other values, override margin-{top|bottom|left|right} via inline style.' },
+      { name: 'alignOffset', type: '0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24', default: '0', description: 'Argument to popoverContentClass. Pixels offset along the align axis (no-op for align="center"). Emitted as a Tailwind translate utility.' },
+      { name: 'popover', type: '"auto" | "manual" (HTML attribute)', default: '"auto"', description: 'Auto gets light dismiss + Escape close for free. Manual is JS-driven.' },
+      { name: 'popovertarget', type: 'string (HTML attribute on the invoker)', description: 'id of the popover element to toggle. Also wires the invoker as the implicit anchor — no anchor-name / position-anchor needed for the common case.' },
+      { name: 'anchor-name / position-anchor', type: 'CSS properties (inline style — optional)', description: 'Only needed when you have multiple invokers for the same popover or want to anchor to a different element than the invoker.' },
     ],
   },
 
@@ -340,9 +346,12 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
       { name: '<ui-tooltip-content>', description: 'Floating label — side / align / side-offset.' },
     ],
     props: [
-      { name: 'delay-duration', type: 'number (ms)', default: '700' },
-      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"top"' },
-      { name: 'align', type: '"start" | "center" | "end"', default: '"center"' },
+      { name: 'delay-duration', type: 'number (ms)', default: '700', description: 'Hover dwell before the tooltip opens.' },
+      { name: 'skip-delay-duration', type: 'number (ms)', default: '300', description: 'Window after one tooltip closes during which the next tooltip skips its delay-duration. Matches shadcn TooltipProvider.skipDelayDuration.' },
+      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"top"', description: 'Attribute on <ui-tooltip-content>.' },
+      { name: 'align', type: '"start" | "center" | "end"', default: '"center"', description: 'Attribute on <ui-tooltip-content>.' },
+      { name: 'side-offset', type: 'number (px)', default: '4', description: 'Attribute on <ui-tooltip-content>.' },
+      { name: 'align-offset', type: 'number (px)', default: '0', description: 'Attribute on <ui-tooltip-content>. Pixels offset along the align axis (no-op for align="center").' },
     ],
   },
 
@@ -355,16 +364,25 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     props: [
       { name: 'open-delay', type: 'number (ms)', default: '700' },
       { name: 'close-delay', type: 'number (ms)', default: '300' },
+      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom"', description: 'Attribute on <ui-hover-card-content>.' },
+      { name: 'align', type: '"start" | "center" | "end"', default: '"center"', description: 'Attribute on <ui-hover-card-content>.' },
+      { name: 'side-offset', type: 'number (px)', default: '4', description: 'Attribute on <ui-hover-card-content>.' },
+      { name: 'align-offset', type: 'number (px)', default: '0', description: 'Attribute on <ui-hover-card-content>. Pixels offset along the align axis.' },
     ],
   },
 
   collapsible: {
     subcomponents: [
-      { name: '<ui-collapsible>', description: 'Root — owns the open state.' },
-      { name: '<ui-collapsible-trigger>', description: 'Toggles open/closed on click.' },
-      { name: '<ui-collapsible-content>', description: 'Hidden when closed, shown when open.' },
+      { name: '<details>', description: 'Root — owns the open state natively. Click or Enter on the <summary> toggles.' },
+      { name: '<summary>', description: 'Clickable header. Apply collapsibleTriggerClass() so the native disclosure triangle is hidden and the typography matches.' },
+      { name: 'collapsibleClass()', description: 'Applied to the <details>. Marks the disclosure as a `group` so descendants react to `group-open:`.' },
+      { name: 'collapsibleTriggerClass()', description: 'Applied to <summary>. Hides the native ::marker.' },
+      { name: 'collapsibleContentClass()', description: 'Typography for the content wrapper inside the <details>.' },
     ],
-    props: [{ name: 'open', type: 'boolean (attribute)', default: 'false' }],
+    props: [
+      { name: 'open', type: 'boolean (HTML attribute on <details>)', default: 'absent', description: 'Initial state. After mount, toggle via `el.open = true | false` or by clicking the summary.' },
+      { name: 'disabled', type: 'boolean (argument to collapsibleTriggerClass)', default: 'false', description: 'Visual disabled state on the <summary>. Combine with the standard `inert` attribute on the <details> for full keyboard prevention — native <details> has no `disabled` attribute.' },
+    ],
   },
 
   progress: {
