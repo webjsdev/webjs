@@ -48,8 +48,13 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // Class helpers
 // --------------------------------------------------------------------------
 
+// `fixed m-0` opts out of the UA `[popover]` defaults (the auto-centering
+// `margin: auto`) so JS-computed top/left coordinates from
+// `positionFloating` land correctly. `border` already applies, so no
+// `border-0` is needed (the UA `border: 1px solid` is overridden by the
+// shadcn `border` utility lower in the cascade).
 export const dropdownMenuContentClass = (): string =>
-  'z-50 max-h-[--available-height] min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md';
+  'fixed z-50 max-h-[--available-height] min-w-[8rem] m-0 overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md';
 
 // Each item class adds `:hover` variants of every `:focus` rule so the
 // accent highlight paints under the cursor regardless of focus state.
@@ -118,22 +123,25 @@ export const dropdownMenuSubTriggerClass = (): string =>
   "flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm select-none outline-hidden focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>svg:last-child]:ml-auto";
 
 // Sub-content uses shadow-lg (vs the root content's shadow-md) so submenus
-// visually stack above their parent, matches shadcn.
+// visually stack above their parent, matches shadcn. `fixed m-0` opts
+// out of the UA `[popover]` auto-centering for the same reason as the
+// root content class above.
 export const dropdownMenuSubContentClass = (): string =>
-  'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
+  'fixed z-50 min-w-[8rem] m-0 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
 
-// Content panels opt into the native Popover API in manual mode so they
-// render in the top layer (no z-index wars) while keyboard navigation,
-// outside-click dismissal, and submenu logic stay JS-driven. Visibility
-// is governed by `[popover]:not(:popover-open) { display: none }` (UA
-// default), backed by our explicit show/hide-popover calls. The legacy
-// `:not([open])` selectors are kept as a paint fallback for the moment
-// before the JS runs.
+// Pre-hydration paint fallback. Before the script upgrades the custom
+// elements, the menu content sits in normal flow and would flash visible.
+// Two CSS rules hide it until JS marks the host as `[open]`. Once the
+// elements upgrade, UA `[popover]:not(:popover-open) { display: none }`
+// takes over and these rules become dormant. Tailwind cannot express
+// "hide child when parent lacks attribute X" without authoring a class
+// on the parent at SSR time, so this stays as a one-time selector-based
+// injection.
 const STYLES = `
-ui-dropdown-menu:not([open]) ui-dropdown-menu-content { display: none !important; }
-ui-dropdown-menu-content[popover] { display: block; position: fixed; margin: 0; padding: 0.25rem; border: 0; background: revert; color: revert; overflow: revert; }
-ui-dropdown-menu-sub:not([open]) ui-dropdown-menu-sub-content { display: none !important; }
-ui-dropdown-menu-sub-content[popover] { display: block; position: fixed; margin: 0; padding: 0.25rem; border: 0; background: revert; color: revert; overflow: revert; }
+ui-dropdown-menu:not([open]) ui-dropdown-menu-content,
+ui-dropdown-menu-sub:not([open]) ui-dropdown-menu-sub-content {
+  display: none !important;
+}
 `;
 
 function installStyles(): void {

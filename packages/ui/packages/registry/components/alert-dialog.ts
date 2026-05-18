@@ -54,25 +54,24 @@ export const alertDialogTitleClass = (): string => 'text-lg font-semibold';
 
 export const alertDialogDescriptionClass = (): string => 'text-sm text-muted-foreground';
 
+// Pre-hydration paint fallback. Hides the content panel until JS marks
+// the host as `[open]` (Tailwind cannot author classes on the user's
+// <ui-alert-dialog> at SSR time, so this stays as a selector-based
+// injection). Everything specific to the native <dialog> wrapper goes
+// through Tailwind classes on the element, see NATIVE_DIALOG_CLASS below.
 const STYLES = `
 ui-alert-dialog:not([open]) ui-alert-dialog-content { display: none !important; }
 ui-alert-dialog-content { display: grid; }
-ui-alert-dialog dialog[data-slot="alert-dialog-native"] {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  width: 0;
-  height: 0;
-  max-width: none;
-  max-height: none;
-  overflow: visible;
-  color: inherit;
-}
-ui-alert-dialog dialog[data-slot="alert-dialog-native"]::backdrop {
-  background: rgba(0, 0, 0, 0.5);
-}
 `;
+
+// Tailwind class string applied to the programmatic <dialog> wrapper.
+// `border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none
+// overflow-visible text-inherit` clears the UA defaults so the <dialog>
+// is an invisible top-layer host; the visible panel is rendered by
+// <ui-alert-dialog-content> with alertDialogContentClass.
+// `backdrop:bg-black/50` paints the overlay via the Tailwind 4
+// `backdrop:` variant.
+const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;
@@ -174,6 +173,7 @@ export class UiAlertDialog extends Base {
     } else {
       const dlg = document.createElement('dialog');
       dlg.setAttribute('data-slot', 'alert-dialog-native');
+      dlg.className = NATIVE_DIALOG_CLASS;
       content.replaceWith(dlg);
       dlg.appendChild(content);
       this._native = dlg;
