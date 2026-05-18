@@ -311,7 +311,7 @@ class MyCard extends WebComponent {
     \`;
   }
 }
-Card.register('my-card');
+Card.register('my-card');</pre>
 
     <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
 
