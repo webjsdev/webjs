@@ -687,8 +687,10 @@ export default function Home() {
       <p class="text-fg-muted text-sm m-0 mb-4">
         Components render into light DOM by default. Tailwind utility classes
         apply directly. Set <code class="font-mono text-[0.9em]">static shadow = true</code>
-        on a component when you need scoped styles, &lt;slot&gt; projection,
-        or third-party-embed isolation.
+        on a component when you need scoped styles or third-party-embed
+        isolation. &lt;slot&gt; projection works identically in both modes,
+        including named slots, fallback content, and the full
+        assignedNodes / slotchange API.
       </p>
     </section>
   \`;
