@@ -1,7 +1,7 @@
 'use server';
 
 import { cache } from '@webjskit/server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 import { formatPost } from '../utils/slugify.ts';
 import type { PostFormatted } from '../types.ts';
 

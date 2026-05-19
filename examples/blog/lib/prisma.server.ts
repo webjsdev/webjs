@@ -1,5 +1,3 @@
-'use server';
-
 import { PrismaClient } from '@prisma/client';
 
 // In dev the module may re-import per request; stash on globalThis so the

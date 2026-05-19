@@ -54,7 +54,7 @@ async function scaffold(files) {
 test('action scanner discovers expose()d routes and invokes them over HTTP', async () => {
   // Use a relative import so the scaffolded module can find webjs via the workspace.
   const dir = await scaffold({
-    'actions/math.server.js': `
+    'actions/math.server.js': `'use server';
       import { expose } from '@webjskit/core';
       export const add = expose('POST /api/add', async ({ a, b }) => a + b);
       export const get = expose('GET /api/value/:id', async ({ id }) => ({ id: Number(id) }));
@@ -99,7 +99,7 @@ test('action scanner discovers expose()d routes and invokes them over HTTP', asy
 
 test('validate hook rejects bad input with 400 before handler runs', async () => {
   const dir = await scaffold({
-    'actions/guarded.server.js': `
+    'actions/guarded.server.js': `'use server';
       import { expose } from '@webjskit/core';
       let called = 0;
       export const make = expose(

@@ -97,7 +97,7 @@ s.regenerateId(true);  // new ID, old store entry deleted</pre>
     <h2>Example: Login Flow</h2>
     <pre>// app/api/login/route.ts
 import { getSession } from '@webjskit/server';
-import { prisma } from '../../lib/prisma.ts';
+import { prisma } from '../../lib/prisma.server.ts';
 import { verifyPassword } from '../../lib/auth.server.ts';
 
 export async function POST(req: Request) {

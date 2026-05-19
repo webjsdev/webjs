@@ -17,7 +17,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 - **Progressive enhancement, built in.** Pages *and* components are SSR'd to real HTML. Every web component's `render()` runs on the server, so its initial markup is in the response before any script loads. Content reads, links navigate, forms submit (server actions are plain HTML POSTs), and display-only custom elements look right, all without JavaScript. JS is opt-in *per interactive behavior*, not per component: a counter renders as "0" without JS, and only the +/- click handling needs scripts. The HTML is the floor, and the client router and `@click` / `setState` interactivity are layered on top.
 - **Tailwind CSS by default.** The scaffold ships with the Tailwind browser runtime + `@theme` design tokens. Prefer hand-written CSS? Opt out entirely, and the framework works just as well with vanilla CSS when you follow the wrapper-scoping convention (`.page-<route>`, `.layout-<name>`, component-tag scoped). Full recipe in the [Styling docs](./docs/app/docs/styling/page.ts).
 - **Full-stack type safety.** Import a `.server.ts` function from a component, and TypeScript sees the real signature. webjs's built-in ESM serializer on the wire preserves `Date`, `Map`, `Set`, `BigInt`, `TypedArray`, `Blob`, `File`, `FormData`, and reference cycles.
-- **Server-file source is unreachable from the browser.** Framework invariant: any file ending `.server.{js,ts}` or starting with `'use server'` is always served as an RPC stub, never its real source. Enforced in the HTTP layer with regression tests.
+- **Server-file source is unreachable from the browser.** Framework invariant: any file ending `.server.{js,ts}` is source-protected. With `'use server'` it serves an RPC stub (server action); without, a throw-at-load stub (server-only utility). Either way the real source never reaches the browser. Enforced in the HTTP layer with regression tests.
 - **NextJs-style routing.** `page.ts`, `layout.ts`, `route.ts`, `error.ts`, `middleware.ts`, `[params]`, `(groups)`, `_private`. Layouts persist across navigations.
 - **Client router.** Turbo-Drive-style link interception. Shadow-DOM-aware via `composedPath()`. Layouts stay mounted, only page content swaps. No white flash.
 - **WebSockets built in.** Export `WS` from `route.ts` → WebSocket endpoint. `connectWS()` on the client auto-reconnects.
@@ -148,7 +148,7 @@ in to shadow DOM with `static shadow = true` and author styles via
 ```ts
 // modules/posts/queries/list-posts.server.ts: one function per file
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function listPosts() {
   return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });

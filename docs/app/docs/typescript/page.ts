@@ -56,7 +56,7 @@ export default function TypeScript() {
     <h2>Import Convention: Explicit .ts Extensions</h2>
     <p>In webjs projects, always use the real file extension in your imports:</p>
     <pre>// Good: explicit .ts extension
-import { prisma } from '../lib/prisma.ts';
+import { prisma } from '../lib/prisma.server.ts';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 import type { PostFormatted } from '../types.ts';
 

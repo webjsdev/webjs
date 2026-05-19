@@ -65,7 +65,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
 
     // Prisma + lib singleton wired up
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
-    assert.ok(existsSync(join(appDir, 'lib', 'prisma.ts')), 'lib/prisma.ts written');
+    assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');
 
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
@@ -147,9 +147,9 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
 
     // SaaS-specific lib files
-    assert.ok(existsSync(join(appDir, 'lib', 'prisma.ts')), 'lib/prisma.ts present');
-    assert.ok(existsSync(join(appDir, 'lib', 'password.ts')), 'lib/password.ts present');
-    assert.ok(existsSync(join(appDir, 'lib', 'auth.ts')), 'lib/auth.ts present');
+    assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts present');
+    assert.ok(existsSync(join(appDir, 'lib', 'password.server.ts')), 'lib/password.server.ts present');
+    assert.ok(existsSync(join(appDir, 'lib', 'auth.server.ts')), 'lib/auth.server.ts present');
 
     // Prisma User model
     const schema = readFileSync(join(appDir, 'prisma', 'schema.prisma'), 'utf8');

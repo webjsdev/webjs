@@ -188,7 +188,7 @@ cd my-app && npm install && npm run dev</pre>
       <li><code>app/</code> with root layout + page</li>
       <li><code>modules/</code> skeleton for feature-scoped code</li>
       <li><code>components/</code> with a theme toggle component</li>
-      <li><code>prisma/schema.prisma</code>: SQLite by default, example <code>User</code> model. <code>lib/prisma.ts</code> ships a singleton client.</li>
+      <li><code>prisma/schema.prisma</code>: SQLite by default, example <code>User</code> model. <code>lib/prisma.server.ts</code> ships a singleton client.</li>
       <li><code>test/unit/</code> and <code>test/browser/</code> with example tests</li>
       <li><code>CONVENTIONS.md</code>: editable project conventions</li>
       <li><code>AGENTS.md</code>: full framework API reference</li>

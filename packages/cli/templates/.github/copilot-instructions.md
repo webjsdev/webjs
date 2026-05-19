@@ -8,7 +8,7 @@ the full hosted docs are at **https://docs.webjs.com**.
 ## Persistence + scaffold rules (non-negotiable)
 
 - **Use Prisma + SQLite for data, never JSON files.** It's already wired up
-  (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`). For ANY
+  (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`). For ANY
   data the app stores (todos, posts, messages, products, comments…),
   define a Prisma model. NEVER create `data/*.json`, `db.json`, or any
   JSON file as a fake database. NEVER use module-scope arrays / Maps as
@@ -79,7 +79,7 @@ Every code change must include:
 ## What NOT to do
 
 - Don't introduce build tools or bundlers in the critical path
-- Server-only code (@prisma/client, node:*, anything needing Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap in a .server.{js,ts} file; the framework rewrites that import to an RPC stub for the browser. lib/ holds both server-only infra (lib/prisma.ts) and browser-safe utilities (lib/utils.ts with cn); apply the same rule per file.
+- Server-only code (@prisma/client, node:*, anything needing Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap in a .server.{js,ts} file; the framework rewrites that import to an RPC stub for the browser. lib/ holds both server-only infra (lib/prisma.server.ts) and browser-safe utilities (lib/utils/cn.ts with cn); apply the same rule per file.
 - Don't use inline style="..." on components (use static styles = css`...`)
 - Don't mutate this.state directly (use this.setState())
 - Don't skip tests or documentation updates
