@@ -65,6 +65,11 @@ export const RULES = [
       'Component files must not directly import from @prisma/client, node:*, or lib/ paths.',
   },
   {
+    name: 'no-server-env-in-components',
+    description:
+      'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
+  },
+  {
     name: 'tests-exist',
     description:
       'Each modules/<feature>/ directory should have corresponding test files under test/unit/ or test/e2e/.',
@@ -596,6 +601,35 @@ export async function checkConventions(appDir, opts) {
             fix: 'Move the import into a .server.{js,ts} file and call it via a server action',
           });
         }
+      }
+    }
+  }
+
+  // --- Rule: no-server-env-in-components ---
+  // Catches `process.env.X` reads in component files where X is not a
+  // WEBJS_PUBLIC_* var and not NODE_ENV. The SSR shim only exposes those
+  // two categories to the browser; any other read either leaks a secret
+  // into the SSR'd HTML or reads as undefined after hydration.
+  if (isRuleEnabled('no-server-env-in-components', overrides)) {
+    for (const { abs, rel, content } of files) {
+      if (!isComponentFile(rel)) continue;
+      if (isServerActionFile(abs, content)) continue;
+
+      const re = /\bprocess\.env\.([A-Z][A-Z0-9_]*)\b/g;
+      const seen = new Set();
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        const name = m[1];
+        if (name.startsWith('WEBJS_PUBLIC_')) continue;
+        if (name === 'NODE_ENV') continue;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        violations.push({
+          rule: 'no-server-env-in-components',
+          file: rel,
+          message: `Component reads process.env.${name}; server-only env vars must not be read in components (would leak into SSR'd HTML and read as undefined after hydration)`,
+          fix: `Either rename to WEBJS_PUBLIC_${name} if the value is intended for the browser, or read process.env.${name} in a page function / server action / middleware and pass a derived value to the component as an attribute.`,
+        });
       }
     }
   }
