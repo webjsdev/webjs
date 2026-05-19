@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { add } from '../src/commands/add.js';
+import { add, rewriteUtilsImport } from '../src/commands/add.js';
 
 const origFetch = globalThis.fetch;
 
@@ -163,6 +163,115 @@ test('add: --overwrite replaces existing files without prompt', async () => {
     assert.equal(readFileSync(join(d, 'components', 'ui', 'button.ts'), 'utf8'), 'export const Button = "btn";');
   } finally {
     globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+/* -------------------- rewriteUtilsImport (unit tests) -------------------- */
+
+test('rewriteUtilsImport: maps to lib/utils/cn alias for a Tier-1 file', () => {
+  const cwd = '/app';
+  const config = {
+    resolvedPaths: {
+      utils: '/app/lib/utils/cn.ts',
+    },
+  };
+  const target = '/app/components/ui/button.ts';
+  const content =
+    `import { cn } from '../lib/utils.ts';\nexport const buttonClass = () => cn('p-2');`;
+  const out = rewriteUtilsImport(content, target, config);
+  assert.match(out, /from '\.\.\/\.\.\/lib\/utils\/cn\.ts'/);
+  assert.doesNotMatch(out, /from '\.\.\/lib\/utils\.ts'/);
+});
+
+test('rewriteUtilsImport: handles the legacy lib/utils alias (cn at lib/utils.ts)', () => {
+  const config = { resolvedPaths: { utils: '/app/lib/utils.ts' } };
+  const out = rewriteUtilsImport(
+    `import { cn } from '../lib/utils.ts';`,
+    '/app/components/ui/button.ts',
+    config,
+  );
+  assert.match(out, /from '\.\.\/\.\.\/lib\/utils\.ts'/);
+});
+
+test('rewriteUtilsImport: handles src/lib (vite default)', () => {
+  const config = { resolvedPaths: { utils: '/app/src/lib/utils.ts' } };
+  const out = rewriteUtilsImport(
+    `import { cn } from '../lib/utils.ts';`,
+    '/app/src/components/ui/button.ts',
+    config,
+  );
+  assert.match(out, /from '\.\.\/\.\.\/lib\/utils\.ts'/);
+});
+
+test('rewriteUtilsImport: handles double-quoted form', () => {
+  const config = { resolvedPaths: { utils: '/app/lib/utils/cn.ts' } };
+  const out = rewriteUtilsImport(
+    `import { cn } from "../lib/utils.ts";`,
+    '/app/components/ui/button.ts',
+    config,
+  );
+  assert.match(out, /from "\.\.\/\.\.\/lib\/utils\/cn\.ts"/);
+});
+
+test('rewriteUtilsImport: no-op when content has no utils import', () => {
+  const config = { resolvedPaths: { utils: '/app/lib/utils/cn.ts' } };
+  const out = rewriteUtilsImport(
+    `export const x = 1;`,
+    '/app/components/ui/x.ts',
+    config,
+  );
+  assert.equal(out, 'export const x = 1;');
+});
+
+test('rewriteUtilsImport: gracefully no-ops if config lacks resolvedPaths.utils', () => {
+  const out = rewriteUtilsImport(
+    `import { cn } from '../lib/utils.ts';`,
+    '/app/components/ui/button.ts',
+    {},
+  );
+  // Returns content unchanged so we never crash; the file may still be
+  // broken, but that's a configuration error in components.json.
+  assert.match(out, /from '\.\.\/lib\/utils\.ts'/);
+});
+
+/* -------------------- integration: add rewrites the import -------------------- */
+
+test('add: rewrites a registry component\'s ../lib/utils.ts import to the user\'s aliases.utils path', async () => {
+  // Local stub of fetch that returns a button.ts whose body imports
+  // the registry-relative '../lib/utils.ts'. After `add`, the written
+  // file should reference the user's lib/utils/cn.ts instead.
+  const origFetchLocal = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name === 'button') {
+      return new Response(JSON.stringify({
+        name: 'button', type: 'registry:ui',
+        files: [{
+          path: 'components/button.ts',
+          type: 'registry:ui',
+          content: `import { cn } from '../lib/utils.ts';\nexport const buttonClass = () => cn('p-2');\n`,
+        }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  const d = mkdtempSync(join(tmpdir(), 'webjsui-add-rewrite-'));
+  writeFileSync(join(d, 'components.json'), JSON.stringify({
+    $schema: 'https://ui.webjs.dev/schema.json',
+    style: 'default',
+    tailwind: { css: 'app/globals.css', baseColor: 'neutral', cssVariables: true },
+    aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+  }));
+  try {
+    // Unique --registry URL so the in-memory fetcher cache (keyed by URL)
+    // doesn't return content from an earlier test that reused 'button'.
+    await add.parseAsync(['button', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/rewrite'], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'button.ts'), 'utf8');
+    assert.match(body, /from '\.\.\/\.\.\/lib\/utils\/cn\.ts'/);
+    assert.doesNotMatch(body, /from '\.\.\/lib\/utils\.ts'/);
+  } finally {
+    globalThis.fetch = origFetchLocal;
     rmSync(d, { recursive: true });
   }
 });
