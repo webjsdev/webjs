@@ -622,8 +622,18 @@ composition, so a nested shell ends up dropped by the HTML parser.
 ## Invariants (do not violate)
 
 1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
-2. Never import `@prisma/client` or `node:*` from client-reachable files -
-   only from `.server.ts` modules or `lib/*.ts`.
+2. **Server-only code goes in `.server.{js,ts}` files, `route.ts`
+   handlers, or `middleware.ts`. Never in pages, layouts, or
+   components.** Direct imports of `@prisma/client`, `node:*`, or any
+   server-only dependency from a page, layout, loading.ts, error.ts,
+   not-found.ts, or component will crash the browser at module load.
+   Wrap the access in a `.server.{js,ts}` file; the framework
+   rewrites that import into an RPC stub for the browser. `lib/`
+   holds both server-only infra (`lib/prisma.ts`, `lib/session.ts`)
+   and browser-safe utilities (`lib/utils.ts` with `cn`, design-
+   system helpers). Server-only `lib/*` files must only be imported
+   from `.server.ts`/`route.ts`/`middleware.ts`; browser-safe `lib/*`
+   files (like `lib/utils.ts`) can be imported anywhere.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
 4. Use `setState()`. Never mutate `this.state` directly.
