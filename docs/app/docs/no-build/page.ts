@@ -98,6 +98,18 @@ Content-Type: text/html
     <p>webjs makes the deliberate trade of running esbuild internally on the user's behalf. The bundler is a private implementation detail. You never invoke it, never see its config, never run it as a deploy-time step. Each vendor bundle is produced lazily on first request and cached for the process lifetime, then served with <code>immutable</code> cache headers so the browser never re-downloads it. <code>import dayjs from 'dayjs'</code> works the moment you <code>npm install dayjs</code>, with no other action required.</p>
     <p>The framework itself stays no-build in the sense that matters most. Source equals runtime for <code>@webjskit/*</code> packages and for your own app code, no compile step before deploy, no output directory, no bundle hashes to invalidate. We use a known-good bundler at one well-defined boundary (third-party npm) so the no-build promise extends to the parts of the ecosystem that aren't ready to be served as-is.</p>
 
+    <h2>Browser-side env vars without a build step</h2>
+    <p>Next.js exposes <code>NEXT_PUBLIC_*</code> to the browser via build-time static substitution. webjs has no build step, so it can't substitute literals into source. Instead, the SSR pipeline emits an inline <code>&lt;script&gt;</code> in the document head, before the importmap and any module code:</p>
+    <pre>&lt;script&gt;
+  window.process = window.process || {};
+  window.process.env = Object.assign(window.process.env || {}, {
+    "WEBJS_PUBLIC_API_URL": "https://api.example.com",
+    "NODE_ENV": "production"
+  });
+&lt;/script&gt;</pre>
+    <p>After that runs, <code>process.env.WEBJS_PUBLIC_X</code> is a real property read on a real object in the browser. No transform, no substitution, no build step. Same source equals runtime invariant as everything else on this page.</p>
+    <p>Only env vars with the <code>WEBJS_PUBLIC_</code> prefix cross the wire. Everything else stays on the server. <code>NODE_ENV</code> is also defined so vendor bundles that probe it (lit, react, etc.) run cleanly in the browser. Full user-facing docs in <a href="/docs/configuration">Configuration</a>.</p>
+
     <h2>Granular cache invalidation</h2>
     <p>The killer feature of the no-build model is what happens between two deploys. With a bundler, edit one component and the entire bundle's content hash changes, so every user re-downloads everything. With per-file ESM:</p>
     <ul>
