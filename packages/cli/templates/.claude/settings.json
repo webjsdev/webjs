@@ -2,11 +2,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/guard-main-merge.sh"
+            "command": ".claude/hooks/block-prose-punctuation.sh"
           }
         ]
       },
@@ -16,6 +16,17 @@
           {
             "type": "command",
             "command": ".claude/hooks/guard-branch-context.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/nudge-uncommitted.sh"
           }
         ]
       }
