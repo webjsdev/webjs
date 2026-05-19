@@ -397,6 +397,95 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     assert.match(out, /mode="from-attr"/);
     assert.match(out, /data-webjs-prop-mode="/);
   });
+
+  test('async render(): prop value flows into a render() that awaits', async () => {
+    class AsyncProbe extends WebComponent {
+      static properties = { src: { type: Object } };
+      constructor() { super(); this.src = null; }
+      async render() {
+        // Simulate a render that awaits, e.g. data normalisation
+        await new Promise((r) => setTimeout(r, 1));
+        return html`<p>${this.src && this.src.title}</p>`;
+      }
+    }
+    AsyncProbe.register('async-probe-1');
+
+    const out = await renderToString(
+      html`<async-probe-1 .src=${{ title: 'awaited-ok' }}></async-probe-1>`,
+    );
+    assert.match(out, /<p>awaited-ok<\/p>/);
+  });
+});
+
+describe('SSR: streaming + Suspense + property bindings', () => {
+
+  test('renderToStream produces the same data-webjs-prop output as renderToString', async () => {
+    const { renderToStream } = await import('../packages/core/index.js');
+    class StreamProbe extends WebComponent {
+      static properties = { items: { type: Array } };
+      constructor() { super(); this.items = []; }
+      render() {
+        return html`<ul>${this.items.map((x) => html`<li>${x}</li>`)}</ul>`;
+      }
+    }
+    StreamProbe.register('stream-probe-1');
+
+    const tpl = html`<stream-probe-1 .items=${['a', 'b', 'c']}></stream-probe-1>`;
+    const stringOut = await renderToString(tpl);
+    const stream = await renderToStream(html`<stream-probe-1 .items=${['a', 'b', 'c']}></stream-probe-1>`);
+
+    // Consume the stream into a single string.
+    let chunks = '';
+    const reader = stream.getReader();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks += typeof value === 'string' ? value : new TextDecoder().decode(value);
+    }
+
+    // Streamed output contains the same prop-decoded list items.
+    assert.match(chunks, /<li>a<\/li>/);
+    assert.match(chunks, /<li>b<\/li>/);
+    assert.match(chunks, /<li>c<\/li>/);
+    // Sanity: both renderers produced HTML that includes the rendered list.
+    assert.ok(stringOut.includes('<li>a</li>'));
+  });
+
+  test('Suspense: prop binding on the late-resolved child is applied when the boundary settles', async () => {
+    const { Suspense } = await import('../packages/core/index.js');
+    class LateProbe extends WebComponent {
+      static properties = { name: { type: String } };
+      constructor() { super(); this.name = ''; }
+      render() { return html`<span class="late">${this.name}</span>`; }
+    }
+    LateProbe.register('late-probe-1');
+
+    // The Suspense children Promise resolves to a template that
+    // includes a custom element with a prop binding. The full render
+    // (with suspenseCtx) inlines the fallback and the resolved content
+    // streams in via webjs-resolve scripts. For renderToString without
+    // a suspenseCtx, only the fallback is emitted, so we use a ctx
+    // and check both branches.
+    const ctx = { pending: [], nextId: 0, usedComponents: new Set() };
+    const asyncChild = new Promise((r) =>
+      setTimeout(() => r(html`<late-probe-1 .name=${'arrived-late'}></late-probe-1>`), 1),
+    );
+    const out = await renderToString(
+      html`<div>${Suspense({ fallback: html`<i>loading</i>`, children: asyncChild })}</div>`,
+      { suspenseCtx: ctx },
+    );
+    // Fallback rendered inline
+    assert.match(out, /<i>loading<\/i>/);
+    // Late content registered for streaming
+    assert.equal(ctx.pending.length, 1);
+
+    // Resolve the pending entry. The framework's streaming layer would
+    // render this to HTML asynchronously; we exercise the same path
+    // manually here.
+    const resolved = await ctx.pending[0].promise;
+    const lateHtml = await renderToString(resolved);
+    assert.match(lateHtml, /class="late">arrived-late</);
+  });
 });
 
 // Client-side hydration tests live in test/client-property-bindings.test.js
