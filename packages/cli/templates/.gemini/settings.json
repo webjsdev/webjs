@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".gemini/hooks/nudge-uncommitted.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
