@@ -14,7 +14,7 @@ export default function ServerActions() {
     <p>Any file ending in <code>.server.ts</code> (or <code>.server.js</code>, <code>.server.mts</code>, <code>.server.mjs</code>) is automatically treated as a server module. Every exported function becomes a server action.</p>
 
     <pre>// actions/posts.server.ts
-import { prisma } from '../lib/prisma.ts';
+import { prisma } from '../lib/prisma.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   const post = await prisma.post.create({ data: input });
@@ -33,7 +33,7 @@ export async function deletePost(id: number) {
 'use server';
 
 import { getRequest } from '@webjskit/server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function currentUser() {
   const req = getRequest();
@@ -146,7 +146,7 @@ PostForm.register('post-form');</pre>
     <pre>// actions/posts.server.ts
 'use server';
 import { expose } from '@webjskit/core';
-import { prisma } from '../lib/prisma.ts';
+import { prisma } from '../lib/prisma.server.ts';
 
 export const listPosts = expose('GET /api/posts', async () =&gt; {
   return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });

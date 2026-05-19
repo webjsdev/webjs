@@ -138,7 +138,7 @@ docs". That is the agent's default behavior in a webjs project.
 <!-- OVERRIDE -->
 
 Every webjs app uses **Prisma + SQLite** for persistence by default. The
-scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` (singleton), the
+scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` (singleton), the
 `predev` / `prestart` hooks that run `prisma generate` / `prisma migrate
 deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
 
@@ -157,7 +157,7 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    preferences (theme, sidebar collapsed, etc.).
 5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
    -- --name <description>`. Access via `import { prisma } from
-   '../../../lib/prisma.ts'` **only inside `.server.{js,ts}` files,
+   '../../../lib/prisma.server.ts'` **only inside `.server.{js,ts}` files,
    `route.ts` handlers, or `middleware.ts`**. Never new `PrismaClient()`.
    Components, pages, and layouts call into the wrapped server query
    instead; the framework rewrites that import to an RPC stub on the
@@ -192,7 +192,7 @@ When the user asks the agent to build their actual app:
    doesn't use it.
 5. **Keep:** the Prisma setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
-   `lib/prisma.ts`, the directory conventions, the design tokens in
+   `lib/prisma.server.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
 
 The scaffold exists so the agent doesn't reinvent the directory layout,
@@ -245,9 +245,9 @@ modules/
 
 **Rules:**
 - One exported function per server action/query file
-- Server actions must use `'use server'` pragma or `.server.ts` extension
+- Server actions need BOTH the `.server.{js,ts}` extension AND a `'use server'` directive at the top. Extension alone marks a server-only utility (source-protected, not RPC-callable). Directive alone is a lint violation (`use-server-needs-extension`).
 - Components must call `Class.register('tag')`
-- **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` holds both server-only infra (`lib/prisma.ts`) and browser-safe utilities (`lib/utils.ts` with `cn`); the convention is "if a `lib/` file needs Node APIs, only import it from server-only files."
+- **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` holds both server-only infra (`lib/prisma.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with `cn`); the convention is "if a `lib/` file needs Node APIs, only import it from server-only files."
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules
 
 ---
@@ -745,7 +745,7 @@ Where the data lives, where to read it:
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 import type { ActionResult } from '../types.ts';
 
 export async function createPost(input: {

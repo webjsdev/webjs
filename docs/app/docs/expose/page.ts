@@ -23,7 +23,7 @@ export default function Expose() {
     <h2>Basic usage</h2>
     <pre>// modules/posts/actions/create-post.server.ts
 import { expose } from '@webjskit/core';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export const createPost = expose('POST /api/posts', async ({ title, body }) => {
   return prisma.post.create({ data: { title, body } });

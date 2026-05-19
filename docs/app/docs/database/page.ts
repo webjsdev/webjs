@@ -41,7 +41,7 @@ webjs db generate</pre>
     <p>This writes the typed client to <code>node_modules/.prisma/client</code>. Run it once after schema changes. It's not in the request hot path.</p>
 
     <h2>Using Prisma in Server Actions</h2>
-    <pre>// lib/prisma.ts
+    <pre>// lib/prisma.server.ts
 import { PrismaClient } from '@prisma/client';
 
 declare global {
@@ -54,7 +54,7 @@ export const prisma: PrismaClient =
 
     <pre>// modules/posts/queries/list-posts.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function listPosts() {
   return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
@@ -69,7 +69,7 @@ export default async function Home() {
   return html\`&lt;ul&gt;\${posts.map(p =&gt; html\`&lt;li&gt;\${p.title}&lt;/li&gt;\`)}&lt;/ul&gt;\`;
 }</pre>
 
-    <p><strong>Why the <code>.server.ts</code> indirection?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser as ES modules so transitively imported components can register. A top-level <code>import { prisma } from '../lib/prisma.ts'</code> would pull <code>@prisma/client</code> into the browser graph, which needs Node APIs and would crash. Wrapping the access in a <code>.server.{js,ts}</code> file lets the framework rewrite the import into an RPC stub for the browser; prisma source never reaches the client. The rule across the framework: server-only code (<code>@prisma/client</code>, <code>node:*</code>, anything needing Node APIs) goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
+    <p><strong>Why the <code>.server.ts</code> indirection?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser as ES modules so transitively imported components can register. A top-level <code>import { prisma } from '../lib/prisma.server.ts'</code> would pull <code>@prisma/client</code> into the browser graph, which needs Node APIs and would crash. Wrapping the access in a <code>.server.{js,ts}</code> file lets the framework rewrite the import into an RPC stub for the browser; prisma source never reaches the client. The rule across the framework: server-only code (<code>@prisma/client</code>, <code>node:*</code>, anything needing Node APIs) goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
 
     <h2>Type Safety</h2>
     <p>Prisma generates TypeScript types for every model. In a <code>.ts</code> server action, the return type flows through the RPC boundary to the client component, so <code>Post.createdAt</code> is a <code>Date</code> on the server, and thanks to webjs's built-in rich-type serializer, it's a <code>Date</code> on the client too.</p>

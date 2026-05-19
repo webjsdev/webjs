@@ -35,7 +35,7 @@ export default function MetadataRoutes() {
 
     <h2>sitemap.ts</h2>
     <pre>// app/sitemap.ts
-import { prisma } from '../lib/prisma.ts';
+import { prisma } from '../lib/prisma.server.ts';
 
 export default async function sitemap() {
   const posts = await prisma.post.findMany({ select: { slug: true, updatedAt: true } });
