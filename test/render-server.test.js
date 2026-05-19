@@ -26,12 +26,14 @@ test('drops event handlers on server', async () => {
   assert.equal(await renderToString(html`<button @click=${() => {}}>go</button>`), '<button >go</button>');
 });
 
-test('property bindings serialize into data-webjs-prop-* attributes on server', async () => {
-  // Previously these holes were dropped (lossy). Now they survive SSR
-  // via a side-channel attribute that the SSR walker reads for custom
-  // elements and the client renderer applies + strips on hydration.
-  const out = await renderToString(html`<input .value=${'typed'} />`);
-  assert.match(out, /data-webjs-prop-value="[^"]*typed[^"]*"/);
+test('property bindings on NATIVE elements drop on server (no consumer for them)', async () => {
+  // Native elements (`<input>`) have no SSR walker to construct an
+  // instance from. Emitting `data-webjs-prop-*` would be dead weight
+  // because nothing consumes it on the server or in the browser
+  // (the property is set by the client renderer when the same
+  // template runs in the browser, not from this attribute). So the
+  // hole still drops at SSR.
+  assert.equal(await renderToString(html`<input .value=${'typed'} />`), '<input  />');
 });
 
 test('boolean attribute renders only when truthy', async () => {
