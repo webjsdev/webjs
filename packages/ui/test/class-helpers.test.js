@@ -200,6 +200,16 @@ test('toggle: variant + size accepted', { skip }, async () => {
   assert.match(toggleClass({ variant: 'outline' }), /border/);
 });
 
+test('progress: progressClass over native <progress>', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'progress.ts'));
+  assertHelper(mod, 'progressClass');
+  // Both vendor pseudo-elements styled for the bar fill.
+  assert.match(mod.progressClass(), /\[&::-webkit-progress-value\]:bg-primary/);
+  assert.match(mod.progressClass(), /\[&::-moz-progress-bar\]:bg-primary/);
+  // Module exports the class helper only, no custom-element side effects.
+  assert.equal(mod.UiProgress, undefined, 'UiProgress class no longer exported');
+});
+
 // ---------- breadcrumb / pagination ----------
 
 test('breadcrumb: 6 subpart helpers', { skip }, async () => {

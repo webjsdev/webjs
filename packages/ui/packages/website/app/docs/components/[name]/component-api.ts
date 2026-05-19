@@ -386,10 +386,10 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   progress: {
-    subcomponents: [{ name: '<ui-progress>', description: 'Determinate progress bar. value + max attributes drive the indicator transform.' }],
+    subcomponents: [{ name: 'progressClass()', description: 'Apply to the native <progress value max> element. Browser draws the bar via the ::-webkit-progress-value and ::-moz-progress-bar pseudo-elements.' }],
     props: [
-      { name: 'value', type: 'number (0-100)', default: '0', description: 'Omit for indeterminate.' },
-      { name: 'max', type: 'number', default: '100' },
+      { name: 'value', type: 'number (0-max)', default: 'absent', description: 'Native <progress> attribute. Omit for indeterminate state, which animates the track with pulse.' },
+      { name: 'max', type: 'number', default: '1', description: 'Native <progress> attribute.' },
     ],
   },
 
