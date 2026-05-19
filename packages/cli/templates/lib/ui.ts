@@ -11,8 +11,9 @@
  *   • Varies by 1–2 props → extract with a small parameter.
  *   • Radically different per call site → keep inline.
  *
- * This file lives under `_utils/`: any folder whose name starts with `_`
- * is ignored by the router, so it can never accidentally become a route.
+ * This file lives under `lib/`: webjs's convention for app-wide shared
+ * code (browser-safe by default). Server-only infrastructure under
+ * `lib/server/` is never imported from pages, layouts, or components.
  */
 import { html } from '@webjskit/core';
 

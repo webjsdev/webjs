@@ -453,7 +453,7 @@ export type ActionResult<T> =
   if (!isApi) {
     // Full-stack and SaaS templates: layout + page + theme toggle + Tailwind
 
-    // Copy the Tailwind browser runtime + _utils/ui.ts helpers from the
+    // Copy the Tailwind browser runtime + lib/ui.ts helpers from the
     // scaffold templates directory so the app boots with the exact blog
     // example architecture: light DOM + Tailwind + JS helpers.
     const publicDir = join(appDir, 'public');
@@ -463,11 +463,11 @@ export type ActionResult<T> =
       await cp(tailwindSrc, join(publicDir, 'tailwind-browser.js'));
     }
 
-    const utilsDir = join(appDir, 'app', '_utils');
-    await mkdir(utilsDir, { recursive: true });
-    const uiSrc = join(TEMPLATES, 'app', '_utils', 'ui.ts');
+    const libDir = join(appDir, 'lib');
+    await mkdir(libDir, { recursive: true });
+    const uiSrc = join(TEMPLATES, 'lib', 'ui.ts');
     if (existsSync(uiSrc)) {
-      await cp(uiSrc, join(utilsDir, 'ui.ts'));
+      await cp(uiSrc, join(libDir, 'ui.ts'));
     }
 
     // Pre-initialise @webjskit/ui so the scaffold boots ready for
@@ -653,7 +653,7 @@ ${SHADCN_THEME}
 `);
 
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
-import { rubric, displayH1, accentLink } from './_utils/ui.ts';
+import { rubric, displayH1, accentLink } from '../lib/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
 import {
@@ -840,11 +840,11 @@ ThemeToggle.register('theme-toggle');
   } else {
     console.log(`  ${name}/
     app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
-    app/_utils/ui.ts             ← JS helpers for repeated class bundles
     app/globals.css              ← @webjskit/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
+    lib/ui.ts                    ← Tailwind class-bundle helpers (app-wide)
     lib/utils.ts                 ← cn() helper for ui-* components
     public/tailwind-browser.js   ← Tailwind runtime
     modules/
