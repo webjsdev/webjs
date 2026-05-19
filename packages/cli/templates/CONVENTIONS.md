@@ -11,26 +11,33 @@ Edit the content below the marker to change the convention for your project.
 
 ## How `CONVENTIONS.md` relates to `webjs check`
 
-These are **two separate mechanisms** that share a topic but don't read
-each other:
+This markdown file holds **architectural conventions** (modules layout,
+styling, testing, git workflow) that the linter can't enforce
+programmatically. The `<!-- OVERRIDE -->` markers let you customize
+those for this project, and AI agents read them when writing code.
 
-| | This file (`CONVENTIONS.md`) | `webjs check` |
-|---|---|---|
-| **Kind** | Markdown documentation. | Programmatic linter (code in `node_modules/@webjskit/server/src/check.js`). |
-| **Audience** | Humans + AI agents who read the project. | Run from the CLI / CI. |
-| **Effect of editing this markdown** | Changes the rules AI agents follow when they write code. | **Zero.** The linter does not parse this file. |
-| **How to customize the LINTER** | n/a (it's hardcoded in `@webjskit/server`) | Disable rules via `package.json` or `webjs.conventions.js` (see below). |
+The **lint rules** are a separate, narrower thing: the boolean checks
+that `webjs check` runs (one function per action, components register
+themselves, tag names have hyphens, etc.). They are NOT documented in
+this file. Their **single source of truth** is the
+`"webjs": { "conventions": { … } }` key in `package.json`.
 
-So when you edit a `<!-- OVERRIDE -->` section here, you're telling AI
-agents to follow a different convention. `webjs check` will still
-enforce its hardcoded rules. If you want the linter to stop flagging
-something it currently flags, you have to **disable that rule** as a
-separate step.
+If that key is absent, **every default rule is enabled** and AI agents
+must follow all of them.
 
-### Disabling a `webjs check` rule
+### Discovering the active rules
 
-`webjs check --rules` prints the full list. To disable one, add to
-`package.json`:
+```sh
+webjs check --rules
+```
+
+prints every available rule with its description and shows which ones
+are currently disabled by this project's overrides. That command is the
+**authoritative** list. Do not maintain a copy elsewhere; it will drift.
+
+### Disabling a rule
+
+Add the rule name to `package.json` with a value of `false`:
 
 ```jsonc
 {
@@ -43,39 +50,18 @@ separate step.
 }
 ```
 
-Or create `webjs.conventions.js`:
+Only `false` is meaningful. There's no way to tweak rule *behaviour*
+via config. A rule is either on or off.
 
-```js
-export default {
-  'tests-exist': false,
-};
-```
+### Rule for AI agents
 
-Only `false` is meaningful. There's no way to tweak rule *behaviour* via
-config today, only to switch a whole rule on or off.
-
-### What `webjs check` enforces today
-
-Run `webjs check --rules` for the current set with descriptions. As of
-`@webjskit/server@0.4.1`:
-
-- `actions-in-modules`: `.server.{js,ts}` / `'use server'` files belong
-  in `modules/<feature>/actions/` or `queries/`. `lib/` is exempt
-  (cross-cutting server infra).
-- `one-function-per-action`: files inside `modules/*/actions/` or
-  `modules/*/queries/` should export exactly one async function.
-- `components-have-register`: `WebComponent` subclasses must call
-  `Class.register('tag')` or `customElements.define`.
-- `no-server-imports-in-components`: components must not import
-  `@prisma/client`, `node:*`, or `lib/*`.
-- `reactive-props-use-declare`: props listed in `static properties` must
-  use the `declare propName: Type` + constructor-default pattern (class
-  field initializers clobber the framework's reactive accessor).
-- `tag-name-has-hyphen`: custom element tags must contain a hyphen.
-- `tests-exist`: each `modules/<feature>/` should have a test file.
-- `no-json-data-files`: JSON files that look like a database (under
-  `data/`, or named `db.json` / `database.json` / `*-db.json`) are
-  forbidden. Use Prisma + SQLite instead.
+1. Run `webjs check --rules` to learn the active rule set for this
+   project.
+2. Treat every rule not explicitly disabled as binding when writing
+   code.
+3. To change which rules are active, edit the `webjs.conventions`
+   block in `package.json`. Never inline a rule list into prose, since
+   it will drift.
 
 ---
 
@@ -836,11 +822,12 @@ This project enforces a git workflow via agent-specific config files
 ## Overriding conventions
 
 See the **"How `CONVENTIONS.md` relates to `webjs check`"** section at
-the top of this file. Short version: disable specific linter rules via
-`package.json` (`webjs.conventions.<rule>: false`) or `webjs.conventions.js`.
+the top of this file. Short version: set a rule to `false` in
+`package.json` under `"webjs": { "conventions": { … } }`. With no
+override, every default rule is on.
 
 Run `webjs check` to validate. Run `webjs check --rules` to list every
-rule with its description.
+rule with its description and current enabled state.
 
 ---
 
