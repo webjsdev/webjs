@@ -162,29 +162,30 @@ npx webjsui add button card dialog</code></pre>
           <p class="text-sm text-fg-muted mb-4">
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">buttonClass</code>,
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">cardClass</code>,
-            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">inputClass</code>…
-            Apply to any native element. Same variants and sizes as shadcn.
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">dialogClass</code>…
+            Apply to any native element. Stateful pieces (dialog, tooltip, etc.)
+            ship a small <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">attach*()</code> wiring helper for hover / open behavior.
+            Same variants and sizes as shadcn.
           </p>
           <div class="text-xs text-fg-subtle">
-            23 components · button, card, badge, alert, input, textarea, label,
+            ${tier1.length} components · button, card, badge, alert, input, textarea, label,
             checkbox, switch, radio, native‑select, avatar, separator, skeleton,
             aspect‑ratio, kbd, table, toggle, breadcrumb, pagination, popover,
-            accordion, collapsible
+            accordion, collapsible, dialog, alert‑dialog, tooltip, hover‑card, progress
           </div>
         </div>
         <div class="rounded-lg border border-border bg-bg-elev p-6">
           <div class="text-xs font-mono uppercase tracking-widest text-brand mb-2">Tier 2</div>
           <h3 class="text-lg font-semibold mb-2">Stateful custom elements</h3>
           <p class="text-sm text-fg-muted mb-4">
-            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dialog&gt;</code>,
             <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-tabs&gt;</code>,
-            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dropdown-menu&gt;</code>…
-            Manage what the platform doesn't: keyboard nav for menus + tabs,
-            hover‑with‑delay for tooltips, toast queue.
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-dropdown-menu&gt;</code>,
+            <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-sonner&gt;</code>…
+            Components with repeated inner structure (tabs items, menu items,
+            toast queue) that benefit from custom-element call-site DRY.
           </p>
           <div class="text-xs text-fg-subtle">
-            9 components · dialog, alert‑dialog, tooltip, hover‑card,
-            tabs, dropdown‑menu, sonner, progress, toggle‑group
+            ${tier2.length} components · tabs, toggle‑group, dropdown‑menu, sonner
           </div>
         </div>
       </div>
@@ -197,8 +198,9 @@ npx webjsui add button card dialog</code></pre>
         <span class="text-sm text-fg-muted">${ui.length} primitives</span>
       </div>
       <p class="text-sm text-fg-muted mb-8">
-        Grouped by composition tier. Pick Tier 1 by default. Reach for Tier 2
-        only when the browser doesn't ship the behavior natively.
+        Grouped by composition tier. Tier 1 is the default. Tier 2 (custom
+        elements) is reserved for components with repeated inner structure
+        where the custom-element call-site DRY is worth keeping.
       </p>
 
       <!-- Tier 1 -->
@@ -237,7 +239,9 @@ npx webjsui add button card dialog</code></pre>
         <span class="text-xs text-fg-muted">${tier2.length} components</span>
       </div>
       <p class="text-sm text-fg-muted mb-4">
-        <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-X&gt;</code> tags that manage open/close, keyboard nav, focus trap, escape, click‑outside. Import once in your layout.
+        <code class="text-xs bg-bg-subtle px-1 py-0.5 rounded">&lt;ui-X&gt;</code> tags
+        with repeated inner structure (tabs items, dropdown items, toggle items) or a
+        singleton mount point (sonner). Import once in your layout.
       </p>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         ${tier2.map(

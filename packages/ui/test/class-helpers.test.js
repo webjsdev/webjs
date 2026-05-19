@@ -200,6 +200,54 @@ test('toggle: variant + size accepted', { skip }, async () => {
   assert.match(toggleClass({ variant: 'outline' }), /border/);
 });
 
+test('toggle: attachToggle helper exported', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'toggle.ts'));
+  assert.equal(typeof mod.attachToggle, 'function');
+});
+
+test('progress: progressClass over native <progress>', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'progress.ts'));
+  assertHelper(mod, 'progressClass');
+  // Both vendor pseudo-elements styled for the bar fill.
+  assert.match(mod.progressClass(), /\[&::-webkit-progress-value\]:bg-primary/);
+  assert.match(mod.progressClass(), /\[&::-moz-progress-bar\]:bg-primary/);
+  // Module exports class helper only, no custom-element side effects.
+  assert.equal(mod.UiProgress, undefined, 'UiProgress class no longer exported');
+});
+
+test('dialog: class helpers + openDialog/closeDialog', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'dialog.ts'));
+  assertHelper(mod, 'dialogClass');
+  assertHelper(mod, 'dialogHeaderClass');
+  assertHelper(mod, 'dialogTitleClass');
+  assertHelper(mod, 'dialogDescriptionClass');
+  assertHelper(mod, 'dialogFooterClass');
+  assert.equal(typeof mod.openDialog, 'function');
+  assert.equal(typeof mod.closeDialog, 'function');
+});
+
+test('alert-dialog: class helpers + wireAlertDialog', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'alert-dialog.ts'));
+  assertHelper(mod, 'alertDialogContentClass');
+  assertHelper(mod, 'alertDialogHeaderClass');
+  assertHelper(mod, 'alertDialogFooterClass');
+  assertHelper(mod, 'alertDialogTitleClass');
+  assertHelper(mod, 'alertDialogDescriptionClass');
+  assert.equal(typeof mod.wireAlertDialog, 'function');
+});
+
+test('tooltip: tooltipContentClass + attachTooltip', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'tooltip.ts'));
+  assertHelper(mod, 'tooltipContentClass');
+  assert.equal(typeof mod.attachTooltip, 'function');
+});
+
+test('hover-card: hoverCardContentClass + attachHoverCard', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'hover-card.ts'));
+  assertHelper(mod, 'hoverCardContentClass');
+  assert.equal(typeof mod.attachHoverCard, 'function');
+});
+
 // ---------- breadcrumb / pagination ----------
 
 test('breadcrumb: 6 subpart helpers', { skip }, async () => {

@@ -1,20 +1,18 @@
 /**
- * Browser tests for overlay Tier-2 @webjskit/ui custom elements: dialog,
- * popover, tooltip, dropdown-menu. Runs in real Chromium via WTR + Playwright.
+ * Browser tests for overlay Tier-2 @webjskit/ui custom elements that
+ * remain: dropdown-menu. Runs in real Chromium via WTR + Playwright.
  *
- * API conventions across all four (mirror what they actually implement, not
- * what shadcn's React API looks like):
- *   - `el.isOpen`: boolean getter (popover, dialog, tooltip). For dropdown-
- *     menu and collapsible the state lives on the `open` HTML attribute, so
- *     `el.hasAttribute('open')` is the canonical read.
+ * What moved to Tier 1 (and is now covered by
+ * packages/ui/test/class-helpers.test.js, not here):
+ *   popover, dialog, alert-dialog, tooltip, hover-card, progress, toggle.
+ *
+ * API conventions for the remaining Tier-2 component:
+ *   - State lives on the `open` HTML attribute, so `el.hasAttribute('open')`
+ *     is the canonical read.
  *   - `el.show()` / `el.hide()` / `el.toggle()`: programmatic control.
- *   - Event `ui-open-change` with `detail: { open }`: fires from dialog,
- *     popover, and collapsible. Tooltip and dropdown-menu do NOT emit this
- *     today, so tests for those use post-action state assertions instead.
  *   - Content is rendered INLINE as `:scope > ui-X-content` (not portaled to
- *     document.body). Visibility is controlled by CSS:
- *     `ui-X:not([open]) ui-X-content { display: none !important; }`. So
- *     queries always go through the host element / root, not document.body.
+ *     document.body). Visibility is controlled by the native Popover API
+ *     plus the registered display rule for the pre-hydration window.
  */
 import { html } from '../../packages/core/src/html.js';
 import { render } from '../../packages/core/src/render-client.js';
@@ -36,101 +34,6 @@ async function mount(tpl) {
   await tick();
   return root;
 }
-
-suite('ui-popover', () => {
-  suiteSetup(async () => {
-    await import(`${COMPONENTS_DIR}/popover.ts`);
-  });
-
-  test('trigger click opens popover content', async () => {
-    const root = await mount(html`
-      <ui-popover>
-        <ui-popover-trigger><button>Open</button></ui-popover-trigger>
-        <ui-popover-content>Body</ui-popover-content>
-      </ui-popover>
-    `);
-    root.querySelector('ui-popover-trigger').click();
-    await tick();
-    const pop = root.querySelector('ui-popover');
-    assert.equal(pop.isOpen, true);
-    assert.equal(pop.getAttribute('data-state'), 'open');
-    pop.hide();
-    root.remove();
-  });
-
-  test('clicking outside closes the popover', async () => {
-    const root = await mount(html`
-      <ui-popover>
-        <ui-popover-trigger><button>Open</button></ui-popover-trigger>
-        <ui-popover-content>Body</ui-popover-content>
-      </ui-popover>
-    `);
-    const pop = root.querySelector('ui-popover');
-    pop.show();
-    await tick();
-    const outside = document.createElement('button');
-    outside.textContent = 'outside';
-    document.body.appendChild(outside);
-    // Popover's outside-click handler listens on document `click`, not pointerdown.
-    outside.click();
-    await tick();
-    assert.equal(pop.isOpen, false);
-    outside.remove();
-    root.remove();
-  });
-
-  test('escape key closes the popover', async () => {
-    const root = await mount(html`
-      <ui-popover>
-        <ui-popover-trigger><button>Open</button></ui-popover-trigger>
-        <ui-popover-content>Body</ui-popover-content>
-      </ui-popover>
-    `);
-    const pop = root.querySelector('ui-popover');
-    pop.show();
-    await tick();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    await tick();
-    assert.equal(pop.isOpen, false);
-    root.remove();
-  });
-
-  test('ui-open-change event fires on toggle', async () => {
-    const root = await mount(html`
-      <ui-popover>
-        <ui-popover-trigger><button>Open</button></ui-popover-trigger>
-        <ui-popover-content>Body</ui-popover-content>
-      </ui-popover>
-    `);
-    const pop = root.querySelector('ui-popover');
-    let detail = null;
-    pop.addEventListener('ui-open-change', (e) => { detail = e.detail; });
-    pop.show();
-    await tick();
-    assert.equal(detail?.open, true);
-    pop.hide();
-    root.remove();
-  });
-
-  test('trigger toggles open state', async () => {
-    const root = await mount(html`
-      <ui-popover>
-        <ui-popover-trigger><button>Open</button></ui-popover-trigger>
-        <ui-popover-content>Body</ui-popover-content>
-      </ui-popover>
-    `);
-    const trigger = root.querySelector('ui-popover-trigger');
-    const pop = root.querySelector('ui-popover');
-    trigger.click();
-    await tick();
-    assert.equal(pop.isOpen, true);
-    trigger.click();
-    await tick();
-    assert.equal(pop.isOpen, false);
-    root.remove();
-  });
-});
-
 
 suite('ui-dropdown-menu', () => {
   suiteSetup(async () => {

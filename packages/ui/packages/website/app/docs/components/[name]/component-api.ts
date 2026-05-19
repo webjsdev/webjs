@@ -66,13 +66,14 @@ export interface ComponentApi {
   variantsPreviewMode?: 'combined' | 'cards';
   sizesPreviewMode?: 'combined' | 'cards';
   /**
-   * Compound subcomponents (Tier-2 tag names or Tier-1 class-helper
-   * names). Listed in the API Reference table under "Parts".
+   * Compound subcomponents (native HTML element + class-helper names for
+   * Tier 1, `<ui-X>` tag names for Tier 2). Listed in the API Reference
+   * table under "Parts".
    */
   subcomponents?: Array<{ name: string; description: string }>;
   /** Configurable attributes / props on the main element. */
   props?: Array<{ name: string; type: string; default?: string; description?: string }>;
-  /** DOM events fired by the component (Tier-2 only). */
+  /** DOM events fired by the component (Tier 2 + Tier-1 attach helpers). */
   events?: Array<{ name: string; detail?: string; description?: string }>;
 }
 
@@ -147,17 +148,15 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     variants: ['default', 'outline'],
     sizes: ['default', 'sm', 'lg'],
     subcomponents: [
-      { name: 'toggleClass({ variant, size })', description: 'Apply to a native <button> for the controlled pattern.' },
-      { name: '<ui-toggle>', description: 'Stateful custom element, manages aria-pressed + data-state for you.' },
+      { name: 'toggleClass({ variant, size })', description: 'Apply to a native <button type="button" aria-pressed=…> with initial data-state.' },
+      { name: 'attachToggle(button, { onChange })', description: 'Optional helper that wires click to flip aria-pressed + data-state on the button. Returns a teardown function.' },
     ],
     props: [
       { name: 'variant', type: '"default" | "outline"', default: '"default"' },
       { name: 'size', type: '"default" | "sm" | "lg"', default: '"default"' },
-      { name: 'pressed', type: 'boolean (attribute)', default: 'false', description: 'On <ui-toggle>, initial pressed state.' },
+      { name: 'aria-pressed', type: '"true" | "false"', default: '"false"', description: 'SSR-emit on the native button to set initial pressed state.' },
+      { name: 'data-state', type: '"on" | "off"', default: '"off"', description: 'Used by toggleClass to style the pressed appearance.' },
       { name: 'disabled', type: 'boolean (attribute)', default: 'false' },
-    ],
-    events: [
-      { name: 'ui-pressed-change', detail: '{ pressed: boolean }', description: 'Fired when the pressed state changes.' },
     ],
   },
 
@@ -225,7 +224,10 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     ],
   },
 
-  // ----- Tier 2, stateful custom elements that don't take variant/size but have a rich prop surface -----
+  // ----- Stateful components: Tier-1 attach-helper components (accordion,
+  // alert-dialog, dialog, tooltip, hover-card, popover, ...) and Tier-2
+  // custom elements (tabs, toggle-group, dropdown-menu, sonner). All have
+  // a rich prop surface, no top-level variant/size. -----
 
   accordion: {
     subcomponents: [
@@ -245,42 +247,30 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   'alert-dialog': {
-    // size lives on <ui-alert-dialog-content>. The component reflects
-    // a `size` attribute into `data-size`, so users can write
-    // <ui-alert-dialog-content size="sm">. The preview cards under
-    // "Sizes" render the content panel statically (without the modal
-    // overlay) so both sizes are visible side-by-side without the user
-    // having to open two dialogs.
-    sizes: ['default', 'sm'],
     subcomponents: [
-      { name: '<ui-alert-dialog>', description: 'Root, owns the open state.' },
-      { name: '<ui-alert-dialog-trigger>', description: 'Opens the dialog on click.' },
-      { name: '<ui-alert-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal() with role="alertdialog"; native Escape close is cancelled via the dialog cancel event, and backdrop click is intentionally not wired (user MUST choose Cancel or Action).' },
-      { name: '<ui-alert-dialog-action>', description: 'Primary action button, applies buttonClass automatically. Accepts `variant` (default "default") and `size` (default "default"). Closes the dialog on click.' },
-      { name: '<ui-alert-dialog-cancel>', description: 'Cancel button, applies buttonClass automatically. Accepts `variant` (default "outline") and `size` (default "default"). Closes the dialog on click.' },
-      { name: 'alertDialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / OverlayClass()', description: 'Class helpers for the static prose layout.' },
+      { name: '<dialog role="alertdialog">', description: 'Native dialog element with role="alertdialog". showModal() handles top-layer, focus trap, ::backdrop, focus restoration. No backdrop-click-to-close.' },
+      { name: 'alertDialogContentClass()', description: 'Applied to the <dialog> element. Provides modal panel styling + ::backdrop.' },
+      { name: 'alertDialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass()', description: 'Class helpers for the static prose layout.' },
+      { name: 'wireAlertDialog(dialog)', description: 'Wires the native `cancel` event with preventDefault() to block Escape close. Idempotent (uses data-alert-dialog-wired flag).' },
+      { name: 'openDialog(trigger) / closeDialog(triggerOrDialog)', description: 'Shared with dialog. Opens the nearest sibling <dialog> via showModal() (with body-scroll lock).' },
     ],
     props: [
-      { name: 'open', type: 'boolean (attribute)', default: 'false' },
-      { name: 'size', type: '"default" | "sm"', default: '"default"', description: 'On <ui-alert-dialog-content>. Reflected to data-size.' },
-      { name: 'variant', type: 'ButtonVariant', default: '"default" (Action), "outline" (Cancel)', description: 'On Action / Cancel. Forwarded to buttonClass on the host.' },
-      { name: 'size (button)', type: 'ButtonSize', default: '"default"', description: 'On Action / Cancel. Forwarded to buttonClass.' },
+      { name: 'open', type: 'boolean (HTML attribute on <dialog>)', default: 'absent', description: 'Initial state. SSR with `open` to render expanded; openDialog() flips it via showModal().' },
+      { name: 'role="alertdialog"', type: 'HTML attribute', description: 'Distinguishes from a regular dialog. wireAlertDialog handles the Escape-block behavior on top.' },
     ],
   },
 
   dialog: {
     subcomponents: [
-      { name: '<ui-dialog>', description: 'Root, owns the open state.' },
-      { name: '<ui-dialog-trigger>', description: 'Opens the dialog on click.' },
-      { name: '<ui-dialog-content>', description: 'Modal panel. Backed by native <dialog>.showModal(): top-layer rendering, focus trap, Escape to close, and ::backdrop overlay are all provided by the browser. We add body-scroll lock + auto-injected X close button in the top-right corner unless show-close-button="false".' },
-      { name: '<ui-dialog-footer show-close-button>', description: 'Footer row. Optionally auto-appends a "Close" outline button when show-close-button is set.' },
-      { name: '<ui-dialog-close>', description: 'Close button, wrap any element to close on click.' },
-      { name: 'dialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass() / ContentClass() / OverlayClass() / CloseButtonClass()', description: 'Class helpers for prose layout + close-button positioning.' },
+      { name: '<dialog>', description: 'Native dialog element. showModal() owns top-layer rendering, focus trap, Tab cycling, Escape close, ::backdrop overlay, and focus restoration.' },
+      { name: '<form method="dialog">', description: 'Footer form. Submitting it closes the parent <dialog> natively, no JavaScript needed for the Cancel button.' },
+      { name: 'dialogClass()', description: 'Applied to the <dialog> element. Provides modal panel styling + ::backdrop.' },
+      { name: 'dialogHeaderClass() / TitleClass() / DescriptionClass() / FooterClass()', description: 'Class helpers for prose layout.' },
+      { name: 'openDialog(trigger)', description: 'Walks to the nearest sibling <dialog> from the trigger element and calls showModal() with body-scroll lock. Pass `event.currentTarget` from a click handler.' },
+      { name: 'closeDialog(triggerOrDialog)', description: 'Closes the dialog programmatically. Most apps use <form method="dialog"> instead.' },
     ],
     props: [
-      { name: 'open', type: 'boolean (attribute)', default: 'false' },
-      { name: 'show-close-button (on content)', type: '"true" | "false" (attribute)', default: '"true"', description: 'On <ui-dialog-content>. Set to "false" to opt out of the auto-injected X close button in the top-right corner (matches shadcn DialogContent showCloseButton prop).' },
-      { name: 'show-close-button (on footer)', type: 'boolean (attribute)', default: 'absent', description: 'On <ui-dialog-footer>. When present, auto-appends an outline-styled "Close" button to the footer (matches shadcn DialogFooter showCloseButton).' },
+      { name: 'open', type: 'boolean (HTML attribute on <dialog>)', default: 'absent', description: 'Initial state. SSR with `open` to render expanded; openDialog() flips it via showModal().' },
     ],
   },
 
@@ -341,33 +331,35 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
 
   tooltip: {
     subcomponents: [
-      { name: '<ui-tooltip>', description: 'Root, delay-duration attribute controls hover delay.' },
-      { name: '<ui-tooltip-trigger>', description: 'Wraps the focusable target.' },
-      { name: '<ui-tooltip-content>', description: 'Floating label, side / align / side-offset.' },
+      { name: '<button> (trigger)', description: 'Any focusable element. attachTooltip wires mouseenter / mouseleave / focusin / focusout.' },
+      { name: '<div popover="manual" role="tooltip">', description: 'Native popover element for top-layer rendering. UA `[popover]:not(:popover-open) { display: none }` hides it when closed.' },
+      { name: 'tooltipContentClass()', description: 'Applied to the popover element. Strips UA popover defaults (m-0, border-0) and layers shadcn tooltip styling on top.' },
+      { name: 'attachTooltip(trigger, content, opts)', description: 'Wires hover-and-delay state machine. Returns a teardown function.' },
     ],
     props: [
-      { name: 'delay-duration', type: 'number (ms)', default: '700', description: 'Hover dwell before the tooltip opens.' },
-      { name: 'skip-delay-duration', type: 'number (ms)', default: '300', description: 'Window after one tooltip closes during which the next tooltip skips its delay-duration. Matches shadcn TooltipProvider.skipDelayDuration.' },
-      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"top"', description: 'Attribute on <ui-tooltip-content>.' },
-      { name: 'align', type: '"start" | "center" | "end"', default: '"center"', description: 'Attribute on <ui-tooltip-content>.' },
-      { name: 'side-offset', type: 'number (px)', default: '4', description: 'Attribute on <ui-tooltip-content>.' },
-      { name: 'align-offset', type: 'number (px)', default: '0', description: 'Attribute on <ui-tooltip-content>. Pixels offset along the align axis (no-op for align="center").' },
+      { name: 'delay', type: 'number (ms, AttachTooltipOptions)', default: '700', description: 'Hover dwell before the tooltip opens.' },
+      { name: 'skipDelay', type: 'number (ms, AttachTooltipOptions)', default: '300', description: 'Window after one tooltip closes during which the next tooltip skips its delay. Module-level state shared across every attached tooltip. Matches shadcn TooltipProvider.skipDelayDuration.' },
+      { name: 'side', type: '"top" | "right" | "bottom" | "left" (AttachTooltipOptions)', default: '"top"', description: 'Placement along the trigger.' },
+      { name: 'align', type: '"start" | "center" | "end" (AttachTooltipOptions)', default: '"center"', description: 'Alignment along the side axis.' },
+      { name: 'sideOffset', type: 'number (px, AttachTooltipOptions)', default: '4', description: 'Pixels from the trigger along the side axis.' },
+      { name: 'alignOffset', type: 'number (px, AttachTooltipOptions)', default: '0', description: 'Pixels along the align axis (no-op for align="center").' },
     ],
   },
 
   'hover-card': {
     subcomponents: [
-      { name: '<ui-hover-card>', description: 'Root, open-delay / close-delay attributes.' },
-      { name: '<ui-hover-card-trigger>', description: 'Hoverable anchor.' },
-      { name: '<ui-hover-card-content>', description: 'Floating card.' },
+      { name: '<a> / <button> (trigger)', description: 'Any focusable element. attachHoverCard wires mouseenter / mouseleave / focusin / focusout on both the trigger and the content.' },
+      { name: '<div popover="manual" role="dialog">', description: 'Native popover element with role="dialog" (richer content vs tooltip\'s role="tooltip").' },
+      { name: 'hoverCardContentClass()', description: 'Applied to the popover element. Wider panel + shadow than tooltipContentClass.' },
+      { name: 'attachHoverCard(trigger, content, opts)', description: 'Wires hover-with-linger state machine. The content stays open while the cursor is over it. Returns a teardown function.' },
     ],
     props: [
-      { name: 'open-delay', type: 'number (ms)', default: '700' },
-      { name: 'close-delay', type: 'number (ms)', default: '300' },
-      { name: 'side', type: '"top" | "right" | "bottom" | "left"', default: '"bottom"', description: 'Attribute on <ui-hover-card-content>.' },
-      { name: 'align', type: '"start" | "center" | "end"', default: '"center"', description: 'Attribute on <ui-hover-card-content>.' },
-      { name: 'side-offset', type: 'number (px)', default: '4', description: 'Attribute on <ui-hover-card-content>.' },
-      { name: 'align-offset', type: 'number (px)', default: '0', description: 'Attribute on <ui-hover-card-content>. Pixels offset along the align axis.' },
+      { name: 'openDelay', type: 'number (ms, AttachHoverCardOptions)', default: '700', description: 'Hover dwell before opening.' },
+      { name: 'closeDelay', type: 'number (ms, AttachHoverCardOptions)', default: '300', description: 'Hover-out grace before closing. Cursor moving from trigger to content cancels the close.' },
+      { name: 'side', type: '"top" | "right" | "bottom" | "left" (AttachHoverCardOptions)', default: '"bottom"', description: 'Placement along the trigger.' },
+      { name: 'align', type: '"start" | "center" | "end" (AttachHoverCardOptions)', default: '"center"', description: 'Alignment along the side axis.' },
+      { name: 'sideOffset', type: 'number (px, AttachHoverCardOptions)', default: '4', description: 'Pixels from the trigger along the side axis.' },
+      { name: 'alignOffset', type: 'number (px, AttachHoverCardOptions)', default: '0', description: 'Pixels along the align axis.' },
     ],
   },
 
@@ -386,10 +378,10 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
   },
 
   progress: {
-    subcomponents: [{ name: '<ui-progress>', description: 'Determinate progress bar. value + max attributes drive the indicator transform.' }],
+    subcomponents: [{ name: 'progressClass()', description: 'Apply to the native <progress value max> element. Browser draws the bar via the ::-webkit-progress-value and ::-moz-progress-bar pseudo-elements.' }],
     props: [
-      { name: 'value', type: 'number (0-100)', default: '0', description: 'Omit for indeterminate.' },
-      { name: 'max', type: 'number', default: '100' },
+      { name: 'value', type: 'number (0-max)', default: 'absent', description: 'Native <progress> attribute. Omit for indeterminate state, which animates the track with pulse.' },
+      { name: 'max', type: 'number', default: '1', description: 'Native <progress> attribute.' },
     ],
   },
 

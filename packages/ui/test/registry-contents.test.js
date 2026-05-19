@@ -40,13 +40,17 @@ const V1_COMPONENTS = [
   'dropdown-menu', 'sonner',
 ];
 
-// Components that are Tier 2, must register a custom element.
-// popover, accordion, collapsible moved to Tier 1 once their sources
-// became pure class helpers on native HTML (Popover API,
-// <details>/<summary>). They no longer extend Base or call defineElement.
+// Components that are Tier 2, must register a custom element. The list
+// shrank as Tier-1 migrations landed:
+//   popover, accordion, collapsible: native Popover API + <details>/<summary>
+//   dialog, alert-dialog:             native <dialog>.showModal() + helpers
+//   tooltip, hover-card:              native [popover="manual"] + attach helpers
+//   progress:                         native <progress value max>
+//   toggle:                           native <button aria-pressed=…> + attachToggle
+// What remains: components whose composition needs custom-element call-site
+// DRY (tabs, toggle-group, dropdown-menu) or a singleton mount point (sonner).
 const TIER_2 = new Set([
-  'progress', 'toggle', 'toggle-group',
-  'dialog', 'alert-dialog', 'tooltip', 'hover-card',
+  'toggle-group',
   'tabs',
   'dropdown-menu', 'sonner',
 ]);
@@ -138,23 +142,27 @@ test('card : exposes all 7 subpart class helpers (no custom elements)', { skip }
   }
 });
 
-test('dialog : delegates to native <dialog> for modal behavior', { skip }, () => {
+test('dialog : Tier-1 class helpers + openDialog over native <dialog>', { skip }, () => {
   const src = readSource('dialog');
-  assert.match(src, /'role',\s*'dialog'|"role",\s*"dialog"|role="dialog"/);
-  assert.match(src, /aria-modal/);
-  // Native dialog is what owns Escape, Tab cycling, and focus restoration.
+  // Tier-1: pure class helpers, no custom element. Native <dialog> owns
+  // role="dialog", aria-modal, Escape, Tab cycling, focus restoration.
+  assert.doesNotMatch(src, /defineElement\(/);
+  assert.match(src, /export\s+const\s+dialogClass\b/);
+  assert.match(src, /export\s+(?:const|function)\s+openDialog\b/);
+  assert.match(src, /export\s+(?:const|function)\s+closeDialog\b/);
   assert.match(src, /showModal/);
   assert.match(src, /HTMLDialogElement/);
-  assert.match(src, /defineElement\(['"]ui-dialog['"]/);
 });
 
-test('alert-dialog : uses alertdialog role, no overlay-click-to-close', { skip }, () => {
+test('alert-dialog : Tier-1 class helpers + wireAlertDialog blocks Escape', { skip }, () => {
   const src = readSource('alert-dialog');
-  assert.match(src, /alertdialog/);
-  assert.match(src, /No click-to-close/);
-  // Native Escape close is cancelled via the dialog's `cancel` event.
+  // Tier-1: pure class helpers + a wire helper that hooks the dialog's
+  // native `cancel` event to preventDefault, blocking Escape-to-close.
+  assert.doesNotMatch(src, /defineElement\(/);
+  assert.match(src, /export\s+const\s+alertDialogContentClass\b/);
+  assert.match(src, /export\s+(?:const|function)\s+wireAlertDialog\b/);
   assert.match(src, /cancel/);
-  assert.match(src, /showModal/);
+  assert.match(src, /preventDefault/);
 });
 
 test('popover : tier-1 class helpers + positionFloating utility export', { skip }, () => {
@@ -198,17 +206,20 @@ test('accordion / collapsible : disabled option on trigger class helper', { skip
   }
 });
 
-test('tier-2 components : read align-offset attribute', { skip }, () => {
+test('floating helpers : pass alignOffset to positionFloating', { skip }, () => {
+  // tooltip + hover-card are now Tier 1 (attach helpers, no attribute);
+  // they take alignOffset as an option, not an HTML attribute. dropdown-menu
+  // is still Tier 2 and reads `align-offset` off its content element.
   for (const name of ['tooltip', 'hover-card', 'dropdown-menu']) {
     const src = readSource(name);
-    assert.match(src, /align-offset/, `${name}: should read align-offset attribute`);
     assert.match(src, /alignOffset/, `${name}: should pass alignOffset to positionFloating`);
   }
+  assert.match(readSource('dropdown-menu'), /align-offset/, 'dropdown-menu still reads align-offset attribute');
 });
 
-test('tooltip : skip-delay-duration attribute', { skip }, () => {
+test('tooltip : skip-delay shared across all tooltips', { skip }, () => {
   const src = readSource('tooltip');
-  assert.match(src, /skip-delay-duration/);
+  // Tier-1 attach helper: skipDelay option + module-level lastTooltipHideAt.
   assert.match(src, /lastTooltipHideAt|lastHideAt|skipDelay/i);
 });
 

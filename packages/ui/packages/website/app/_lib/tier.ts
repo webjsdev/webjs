@@ -14,29 +14,35 @@
 import type { RegistryItem } from './registry.server.ts';
 
 /**
- * The 9 Tier-2 components, stateful custom elements (`<ui-X>` tags)
- * that manage focus, keyboard nav, open/close state, etc. Everything
- * else with `type === 'registry:ui'` is Tier 1.
+ * Tier-2 components: stateful custom elements (`<ui-X>` tags) that
+ * manage focus, keyboard nav, open/close state, etc. Everything else
+ * with `type === 'registry:ui'` is Tier 1.
  *
- * popover, accordion, and collapsible moved to Tier 1 once their
- * source files were rewritten to be pure class helpers on native HTML
- * primitives (the Popover API and <details>/<summary>). They still
- * appear in the registry but are now native-HTML compositions rather
- * than custom elements.
+ * Migrations to Tier 1 so far:
+ *   popover, accordion, collapsible: pure class helpers on native HTML
+ *     (Popover API, <details>/<summary>).
+ *   dialog, alert-dialog: class helpers on native <dialog> + openDialog /
+ *     closeDialog / wireAlertDialog helpers. showModal() owns top-layer,
+ *     focus trap, Escape, ::backdrop, focus restoration.
+ *   tooltip, hover-card: class helpers on [popover="manual"] + attachTooltip
+ *     / attachHoverCard wiring helpers.
+ *   progress: class helper on native <progress value max>.
+ *   toggle: class helper on native <button aria-pressed> + attachToggle.
+ *
+ * The remaining four Tier-2 components have repeated inner structure
+ * (tabs items, toggle-group items, dropdown-menu items) or a singleton
+ * mount point (sonner), so they keep call-site DRY by staying custom
+ * elements until they can be rewritten on the WebComponent base class
+ * with html`` rendering + light-DOM <slot> projection.
  *
  * When adding a new component to the registry, add its name here if its
- * source defines `class X extends WebComponent` + `.register('ui-...')`.
+ * source defines `class X extends Base | WebComponent` + `defineElement('ui-...')`.
  */
 export const TIER_2_NAMES: ReadonlySet<string> = new Set([
-  'dialog',
-  'alert-dialog',
-  'tooltip',
-  'hover-card',
   'tabs',
+  'toggle-group',
   'dropdown-menu',
   'sonner',
-  'progress',
-  'toggle-group',
 ]);
 
 /** 'tier-1' | 'tier-2' classification for a `registry:ui` item. */

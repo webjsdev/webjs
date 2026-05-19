@@ -31,6 +31,18 @@ const TIER1_TAGS = [
   'ui-badge', 'ui-separator', 'ui-skeleton', 'ui-aspect-ratio', 'ui-kbd',
   'ui-checkbox', 'ui-radio-group', 'ui-switch', 'ui-native-select',
   'ui-avatar', 'ui-table', 'ui-toggle', 'ui-breadcrumb', 'ui-pagination',
+  // Migrated from custom elements to Tier-1 class helpers in this branch.
+  // Each composes native HTML (button + popover, <dialog>, <progress>) plus
+  // optional attach* / open* helpers from the same module.
+  'ui-progress',
+  'ui-dialog', 'ui-dialog-trigger', 'ui-dialog-content', 'ui-dialog-header',
+  'ui-dialog-title', 'ui-dialog-description', 'ui-dialog-footer', 'ui-dialog-close',
+  'ui-alert-dialog', 'ui-alert-dialog-trigger', 'ui-alert-dialog-content',
+  'ui-alert-dialog-header', 'ui-alert-dialog-footer',
+  'ui-alert-dialog-title', 'ui-alert-dialog-description',
+  'ui-alert-dialog-cancel', 'ui-alert-dialog-action',
+  'ui-tooltip', 'ui-tooltip-trigger', 'ui-tooltip-content',
+  'ui-hover-card', 'ui-hover-card-trigger', 'ui-hover-card-content',
 ];
 
 const TIER1_HELPERS_BUTTON = ['buttonClass'];

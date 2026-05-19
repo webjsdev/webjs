@@ -6,11 +6,12 @@
  * component shows a representative use case.
  *
  * Architecture note: examples for **Tier-1 class-helper components** (button,
- * card, badge, alert, popover, accordion, collapsible, etc.) use native HTML
- * elements (including <dialog>, <details>/<summary>, and the popover
- * attribute) with the helper output inlined as `class="..."`. Examples for
- * **Tier-2 stateful custom elements** (dialog, alert-dialog, tabs, tooltip,
- * hover-card, dropdown-menu, sonner) use the `<ui-*>` tags directly.
+ * card, badge, alert, popover, accordion, collapsible, dialog, alert-dialog,
+ * tooltip, hover-card, progress, toggle, ...) use native HTML elements
+ * (including <dialog>, <details>/<summary>, <progress>, and [popover]) with
+ * the helper output inlined as `class="..."`. Examples for **Tier-2 stateful
+ * custom elements** (tabs, toggle-group, dropdown-menu, sonner) use the
+ * `<ui-*>` tags directly.
  *
  * The helper-class strings below are kept in sync with the registry helpers
  * by importing them at module load and producing each example string fresh.
@@ -64,6 +65,7 @@ import {
   tableCellClass,
 } from '../../../../components/ui/table.ts';
 import { toggleClass } from '../../../../components/ui/toggle.ts';
+import { progressClass } from '../../../../components/ui/progress.ts';
 import { tabsListClass } from '../../../../components/ui/tabs.ts';
 import {
   breadcrumbListClass,
@@ -85,11 +87,14 @@ import {
   stackClass,
 } from '../../../../lib/utils.ts';
 import {
+  dialogClass,
   dialogHeaderClass,
   dialogTitleClass,
   dialogDescriptionClass,
   dialogFooterClass,
 } from '../../../../components/ui/dialog.ts';
+import { tooltipContentClass } from '../../../../components/ui/tooltip.ts';
+import { hoverCardContentClass } from '../../../../components/ui/hover-card.ts';
 import {
   popoverContentClass,
   popoverHeaderClass,
@@ -282,7 +287,7 @@ const EXAMPLES: Record<string, string> = {
 
   progress: `
     <div class="w-64">
-      <ui-progress value="42"></ui-progress>
+      <progress value="42" max="100" class="${progressClass()}"></progress>
     </div>
   `,
 
@@ -313,9 +318,9 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   toggle: `
-    <ui-toggle aria-label="Toggle italic">
+    <button type="button" class="${toggleClass()}" aria-pressed="false" data-state="off" aria-label="Toggle italic">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
-    </ui-toggle>
+    </button>
   `,
 
   'toggle-group': `
@@ -351,47 +356,45 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   // ------------------------------------------------------------------------
-  // Tier-2 examples (custom elements)
+  // Stateful component examples: Tier-1 components that ship a small
+  // attach*() / open*() helper for hover / open behavior (dialog,
+  // alert-dialog, tooltip, hover-card, popover), and Tier-2 custom
+  // elements with repeated inner structure (tabs, toggle-group,
+  // dropdown-menu, sonner).
   // ------------------------------------------------------------------------
 
+  // dialog + alert-dialog are Tier-1 over the native <dialog> element.
+  // The preview renders the dialog with `open` so the visual is visible
+  // inline (no ::backdrop, no top-layer). In app code, omit `open` and
+  // use openDialog(triggerElement) on a separate button click.
   dialog: `
-    <ui-dialog>
-      <ui-dialog-trigger>
-        <button class="${buttonClass({ variant: 'outline' })}">Open dialog</button>
-      </ui-dialog-trigger>
-      <ui-dialog-content>
-        <div class="${dialogHeaderClass()}">
-          <h2 class="${dialogTitleClass()}">Edit profile</h2>
-          <p class="${dialogDescriptionClass()}">Make changes to your profile here.</p>
-        </div>
-        <div class="${fieldClass()}">
-          <label class="${labelClass()}" for="dlg-name">Name</label>
-          <input class="${inputClass()}" id="dlg-name" placeholder="Your name">
-        </div>
-        <div class="${dialogFooterClass()}">
-          <ui-dialog-close><button class="${buttonClass({ variant: 'outline' })}">Cancel</button></ui-dialog-close>
-          <button class="${buttonClass()}">Save</button>
-        </div>
-      </ui-dialog-content>
-    </ui-dialog>
+    <dialog open class="${dialogClass()} relative max-w-md mx-auto my-0">
+      <div class="${dialogHeaderClass()}">
+        <h2 class="${dialogTitleClass()}">Edit profile</h2>
+        <p class="${dialogDescriptionClass()}">Make changes to your profile here.</p>
+      </div>
+      <div class="${fieldClass()}">
+        <label class="${labelClass()}" for="dlg-name">Name</label>
+        <input class="${inputClass()}" id="dlg-name" placeholder="Your name">
+      </div>
+      <form method="dialog" class="${dialogFooterClass()}">
+        <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
+        <button class="${buttonClass()}">Save</button>
+      </form>
+    </dialog>
   `,
 
   alert_dialog: `
-    <ui-alert-dialog>
-      <ui-alert-dialog-trigger>
-        <button class="${buttonClass({ variant: 'destructive' })}">Delete account</button>
-      </ui-alert-dialog-trigger>
-      <ui-alert-dialog-content>
-        <div class="${alertDialogHeaderClass()}">
-          <h2 class="${alertDialogTitleClass()}">Are you sure?</h2>
-          <p class="${alertDialogDescriptionClass()}">This action cannot be undone.</p>
-        </div>
-        <div class="${alertDialogFooterClass()}">
-          <ui-alert-dialog-cancel><button class="${buttonClass({ variant: 'outline' })}">Cancel</button></ui-alert-dialog-cancel>
-          <ui-alert-dialog-action><button class="${buttonClass({ variant: 'destructive' })}">Yes, delete</button></ui-alert-dialog-action>
-        </div>
-      </ui-alert-dialog-content>
-    </ui-alert-dialog>
+    <dialog open role="alertdialog" class="${alertDialogContentClass()} relative max-w-md mx-auto my-0">
+      <div class="${alertDialogHeaderClass()}">
+        <h2 class="${alertDialogTitleClass()}">Are you sure?</h2>
+        <p class="${alertDialogDescriptionClass()}">This action cannot be undone.</p>
+      </div>
+      <form method="dialog" class="${alertDialogFooterClass()}">
+        <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
+        <button class="${buttonClass({ variant: 'destructive' })}">Yes, delete</button>
+      </form>
+    </dialog>
   `,
 
   popover: `
@@ -408,21 +411,22 @@ const EXAMPLES: Record<string, string> = {
     </div>
   `,
 
+  // tooltip + hover-card are Tier-1: native [popover="manual"] elements
+  // + attachTooltip / attachHoverCard helpers for hover state. In the docs
+  // preview, the content is rendered inline (no popover attribute, no
+  // attach helper) so the styled panel is visible. In app code, add
+  // popover="manual" and attachTooltip(trigger, content) on .ref.
   tooltip: `
-    <ui-tooltip delay-duration="200">
-      <ui-tooltip-trigger>
-        <button class="${buttonClass({ variant: 'outline', size: 'icon' })}" aria-label="Help">?</button>
-      </ui-tooltip-trigger>
-      <ui-tooltip-content side="top">Helpful tip appears on hover</ui-tooltip-content>
-    </ui-tooltip>
+    <div class="flex items-center gap-4">
+      <button class="${buttonClass({ variant: 'outline', size: 'icon' })}" aria-label="Help">?</button>
+      <div role="tooltip" class="${tooltipContentClass()} static">Helpful tip appears on hover</div>
+    </div>
   `,
 
   'hover-card': `
-    <ui-hover-card open-delay="300" close-delay="200">
-      <ui-hover-card-trigger>
-        <a class="${buttonClass({ variant: 'link' })}" href="#">@vivek</a>
-      </ui-hover-card-trigger>
-      <ui-hover-card-content>
+    <div class="flex items-start gap-4">
+      <a class="${buttonClass({ variant: 'link' })}" href="#">@vivek</a>
+      <div role="dialog" class="${hoverCardContentClass()} static">
         <div class="flex gap-3">
           <span class="${avatarClass()}" data-size="default">
             <span class="${avatarFallbackClass()}">V</span>
@@ -432,8 +436,8 @@ const EXAMPLES: Record<string, string> = {
             <p class="text-sm text-muted-foreground">Building webjs.</p>
           </div>
         </div>
-      </ui-hover-card-content>
-    </ui-hover-card>
+      </div>
+    </div>
   `,
 
   tabs: `
@@ -592,16 +596,15 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
       </div>
     `,
   },
-  // <ui-toggle> for interactivity AND to show the variant-specific
-  // styling (default = transparent until pressed; outline = always
-  // shows border + shadow). Previously these were static <button>s
-  // both stuck in data-state=on, which painted bg-accent on both , 
-  // visually identical. Now they start unpressed so the structural
-  // differences (border on outline, none on default) are visible,
-  // and clicking each toggles the pressed state.
+  // toggle is a native <button aria-pressed> styled by toggleClass({
+  // variant, size }). variant=default starts transparent until pressed;
+  // variant=outline always shows border + shadow. Start unpressed so the
+  // structural difference (border on outline, none on default) is visible.
+  // attachToggle() wires the click handler in real apps; the doc viewer
+  // adds it via the rendered markup script below.
   toggle: {
-    default: `<ui-toggle variant="default" aria-label="Toggle default">Default</ui-toggle>`,
-    outline: `<ui-toggle variant="outline" aria-label="Toggle outline">Outline</ui-toggle>`,
+    default: `<button type="button" class="${toggleClass({ variant: 'default' })}" aria-pressed="false" data-state="off" aria-label="Toggle default">Default</button>`,
+    outline: `<button type="button" class="${toggleClass({ variant: 'outline' })}" aria-pressed="false" data-state="off" aria-label="Toggle outline">Outline</button>`,
   },
   tabs: {
     default: `
@@ -766,14 +769,12 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
       </label>
     `,
   },
-  // Same <ui-toggle> rationale as variants, interactive + the size
-  // attribute propagates via the class helper called from
-  // _applyClass(). Outline variant chosen so the size diff (border
-  // box height) reads at a glance.
+  // Same toggle rationale as variants. Outline variant chosen so the
+  // size diff (border box height) reads at a glance.
   toggle: {
-    sm: `<ui-toggle variant="outline" size="sm" aria-label="Toggle sm">sm</ui-toggle>`,
-    default: `<ui-toggle variant="outline" size="default" aria-label="Toggle default">default</ui-toggle>`,
-    lg: `<ui-toggle variant="outline" size="lg" aria-label="Toggle lg">lg</ui-toggle>`,
+    sm: `<button type="button" class="${toggleClass({ variant: 'outline', size: 'sm' })}" aria-pressed="false" data-state="off" aria-label="Toggle sm">sm</button>`,
+    default: `<button type="button" class="${toggleClass({ variant: 'outline', size: 'default' })}" aria-pressed="false" data-state="off" aria-label="Toggle default">default</button>`,
+    lg: `<button type="button" class="${toggleClass({ variant: 'outline', size: 'lg' })}" aria-pressed="false" data-state="off" aria-label="Toggle lg">lg</button>`,
   },
   'native-select': {
     default: `

@@ -44,28 +44,32 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 
 ### Tier 2 : stateful custom elements
 
-For things the browser doesn't provide natively: dialogs, popovers, tabs,
-accordions, dropdowns. Plain `HTMLElement` subclasses (not `WebComponent`)
-so they DECORATE their host (set classes, listen for events) without
-replacing children. Children flow naturally.
+For components with repeated inner structure (tabs items, toggle-group
+items, dropdown-menu items) or a singleton mount point (sonner). The
+custom element gives the call site DRY-ness that hand-written markup +
+attach helpers can't match. Plain `HTMLElement` subclasses (not
+`WebComponent`) so they DECORATE their host (set classes, listen for
+events) without replacing children. Children flow naturally.
+
+Current Tier-2 set: `tabs`, `toggle-group`, `dropdown-menu`, `sonner`.
 
 ```ts
 html`
-  <ui-dialog>
-    <ui-dialog-trigger>
-      <button class=${buttonClass({ variant: 'outline' })}>Edit</button>
-    </ui-dialog-trigger>
-    <ui-dialog-content>
-      <div class=${dialogHeaderClass()}>
-        <h2 class=${dialogTitleClass()}>Edit profile</h2>
-        <p class=${dialogDescriptionClass()}>Make changes here.</p>
-      </div>
-      <!-- a real form inside; submission works normally -->
-      <form action="/profile" method="post" class=${formClass()}>…</form>
-    </ui-dialog-content>
-  </ui-dialog>
+  <ui-tabs value="account">
+    <ui-tabs-list>
+      <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
+      <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
+    </ui-tabs-list>
+    <ui-tabs-content value="account">…</ui-tabs-content>
+    <ui-tabs-content value="password">…</ui-tabs-content>
+  </ui-tabs>
 `
 ```
+
+For stateful behavior on a single-wrapper component (dialog, tooltip,
+hover-card, alert-dialog), Tier 1 wins: class helper + a small `attach*()`
+or `openDialog()` helper over native `<dialog>` / `[popover]` covers the
+behavior without needing a custom element.
 
 ## Module map
 
@@ -160,18 +164,18 @@ full per-directory breakdown.
 | 1a | `aspect-ratio` | `aspectRatioClass`, use Tailwind `aspect-[16/9]` directly |
 | 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
 | 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
-| 1a | `toggle` | `toggleClass({ variant, size })`, pair with native `<button>` |
+| 1a | `toggle` | `toggleClass({ variant, size })`, pair with native `<button type="button" aria-pressed=…>`. `attachToggle(button)` wires click to flip aria-pressed + data-state. |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
 | 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |
 | 1b | `accordion` | `accordionClass`, `accordionItemClass`, `accordionTriggerClass`, `accordionContentClass`. Compose with `<details name="...">` + `<summary>`; `name` provides exclusive-open behavior natively. |
 | 1b | `collapsible` | `collapsibleClass`, `collapsibleTriggerClass`, `collapsibleContentClass`. Compose with `<details>` + `<summary>`. |
-| 2  | `progress` | `<ui-progress value="...">`, handles indicator transform |
+| 1b | `progress` | `progressClass()`, apply to native `<progress value max>`. Browser draws the bar via `::-webkit-progress-value` and `::-moz-progress-bar`. Omit `value` for the indeterminate / pulse state. |
 | 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>` |
-| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()`, top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. |
-| 2  | `alert-dialog` | Like dialog, role=alertdialog. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
-| 2  | `tooltip` | `<ui-tooltip delay-duration>`, hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. |
-| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>`, hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. |
+| 1b | `dialog` | `dialogClass()` + `dialogHeader/Title/Description/FooterClass()`. Apply to native `<dialog>` + `<form method="dialog">` for native cancel. `openDialog(triggerEl)` / `closeDialog(triggerOrDialog)` helpers. showModal() owns top-layer, focus trap, Escape close, ::backdrop, focus restoration. |
+| 1b | `alert-dialog` | `alertDialogContentClass()` + header/title/description/footer helpers on a `<dialog role="alertdialog">`. `wireAlertDialog(dialogEl)` cancels Escape via the native `cancel` event. Backdrop-click dismissal is intentionally absent. |
+| 1b | `tooltip` | `tooltipContentClass()` on a `<div popover="manual" role="tooltip">`. `attachTooltip(trigger, content, opts)` wires hover/focus + delay + skip-delay-shared-across-tooltips. Top-layer via the native Popover API. |
+| 1b | `hover-card` | `hoverCardContentClass()` on a `<div popover="manual" role="dialog">`. `attachHoverCard(trigger, content, opts)` wires hover with linger-keep-open (cursor on content keeps it open). Top-layer via the native Popover API. |
 | 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. |
 | 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Escape close. |
 | 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. |

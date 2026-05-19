@@ -638,12 +638,11 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   // after the migration).
   // ---------------------------------------------------------------------------
 
-  test('/ui-demo route renders both tiers: class-helper output + ui-dialog', async () => {
-    // After the Tier-1/Tier-2 migration: Tier-1 components (button, card,
-    // input, label, alert, badge) are class-helper functions: no
-    // <ui-button>/<ui-card> custom elements. They render as native
-    // <button>/<div>/<input> with the helper's class string. Tier-2
-    // components (dialog and friends) stay as <ui-X> custom elements.
+  test('/ui-demo route renders Tier-1 class-helper output + native <dialog>', async () => {
+    // After the Tier-1 migration: Tier-1 components (button, card, input,
+    // label, alert, badge, dialog) are class-helper functions. They render
+    // as native <button>/<div>/<input>/<dialog> with the helper's class
+    // string. There are no <ui-X> custom elements for these on /ui-demo.
     const resp = await page.goto(baseUrl + '/ui-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
     assert.equal(resp.status(), 200, '/ui-demo should respond 200');
     await sleep(1500);
@@ -655,17 +654,20 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
         hasHeading: headings.some((t) => t.toLowerCase().includes('webjs ui demo')),
         // Stale Tier-1 tags MUST NOT appear (regression denylist).
         staleTier1: {
-          'ui-button': document.querySelectorAll('ui-button').length,
-          'ui-card':   document.querySelectorAll('ui-card').length,
-          'ui-input':  document.querySelectorAll('ui-input').length,
-          'ui-alert':  document.querySelectorAll('ui-alert').length,
-          'ui-badge':  document.querySelectorAll('ui-badge').length,
+          'ui-button':  document.querySelectorAll('ui-button').length,
+          'ui-card':    document.querySelectorAll('ui-card').length,
+          'ui-input':   document.querySelectorAll('ui-input').length,
+          'ui-alert':   document.querySelectorAll('ui-alert').length,
+          'ui-badge':   document.querySelectorAll('ui-badge').length,
+          // Migrated to Tier 1 in feat/ui-tier1-native, native <dialog> now.
+          'ui-dialog':  document.querySelectorAll('ui-dialog').length,
         },
-        // Tier-2 dialog WAS migrated to stay as a custom element.
-        uiDialogCount: document.querySelectorAll('ui-dialog').length,
+        // Native <dialog> appears on /ui-demo (dialogClass applied).
+        nativeDialogCount: document.querySelectorAll('dialog').length,
         // Tier-1 helper output present (cardClass + buttonClass characteristic strings).
         hasCardClassOutput: html.includes('rounded-xl border bg-card'),
         hasButtonClassOutput: html.includes('bg-primary text-primary-foreground hover:bg-primary'),
+        hasDialogClassOutput: html.includes('backdrop:bg-black/50'),
       };
     });
 
@@ -673,9 +675,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     for (const [tag, count] of Object.entries(result.staleTier1)) {
       assert.equal(count, 0, `Tier-1 ${tag} is a class helper after migration; <${tag}> tag must not appear`);
     }
-    assert.ok(result.uiDialogCount >= 1, `expected at least one <ui-dialog>, got ${result.uiDialogCount}`);
+    assert.ok(result.nativeDialogCount >= 1, `expected at least one native <dialog>, got ${result.nativeDialogCount}`);
     assert.ok(result.hasCardClassOutput, 'cardClass() Tailwind output should be present');
     assert.ok(result.hasButtonClassOutput, 'buttonClass() Tailwind output should be present');
+    assert.ok(result.hasDialogClassOutput, 'dialogClass() Tailwind output should be present');
   });
 
   test('/ui-demo: clicking a button does not crash the page', async () => {

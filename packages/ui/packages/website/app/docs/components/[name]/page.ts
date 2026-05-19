@@ -68,13 +68,14 @@ function previewPane(snippet: string, opts: { minH?: string } = {}) {
   const minH = opts.minH ?? '160px';
   return html`
     <div
-      class="rounded-lg border p-8 flex flex-wrap items-center justify-center gap-4 bg-background text-foreground"
+      class="webjs-preview rounded-lg border p-8 flex flex-wrap items-center justify-center gap-4 bg-background text-foreground"
       style="min-height: ${minH}"
     >
       ${unsafeHTML(snippet)}
     </div>
   `;
 }
+
 
 // Concatenate all defined values from a variant/size example map into one
 // snippet for the combined preview pane. Skips keys missing from the
@@ -143,6 +144,36 @@ export default async function ComponentDoc({ params }: { params: { name: string 
   const iconSizeExamples = getIconSizeExamples(params.name);
 
   return html`
+    <!-- Client-side bootstrap that wires Tier-1 attach helpers on every
+         .webjs-preview pane after the page mounts. Tier-1 components like
+         toggle ship as a "dumb" <button aria-pressed> styled by
+         toggleClass(); the click handler comes from attachToggle(). The
+         docs preview unsafeHTMLs static markup, so we wire here. -->
+    <script>
+      (function(){
+        function wire(){
+          var toggles = document.querySelectorAll(
+            '.webjs-preview button[aria-pressed][data-state]:not([data-toggle-wired])'
+          );
+          toggles.forEach(function(btn){
+            btn.setAttribute('data-toggle-wired', '1');
+            btn.addEventListener('click', function(){
+              if (btn.hasAttribute('disabled')) return;
+              var pressed = btn.getAttribute('aria-pressed') === 'true';
+              btn.setAttribute('aria-pressed', String(!pressed));
+              btn.setAttribute('data-state', pressed ? 'off' : 'on');
+            });
+          });
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', wire);
+        } else {
+          wire();
+        }
+        // Client-side navigation (webjs swaps body) leaves new previews un-wired.
+        new MutationObserver(wire).observe(document.body, { childList: true, subtree: true });
+      })();
+    </script>
     <a href="/" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>

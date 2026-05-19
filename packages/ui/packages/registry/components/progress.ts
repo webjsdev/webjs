@@ -1,99 +1,47 @@
 /**
- * Progress: determinate progress bar.
+ * Progress, Tier-1 class helpers over the native `<progress>` element.
+ * AI agents compose `<progress>` directly. No custom elements, no JS,
+ * no helper function. The native element provides the
+ * `progressbar` role and `aria-valuenow` automatically from its
+ * `value` and `max` attributes.
  *
- * APG pattern: progressbar role + aria-valuenow.
- *
- * shadcn parity:
- *   `value` (number 0-100). Same visual: 2px track, animated fill.
+ * shadcn parity at the class helper level. Same visual as the prior
+ * custom element: 2px track with an animated fill. The fill uses
+ * `::-webkit-progress-value` and `::-moz-progress-bar` for the bar
+ * pseudo-element, plus `::-webkit-progress-bar` for the track.
  *
  * Usage:
- *   <ui-progress value="42"></ui-progress>
- *   <ui-progress value="100"></ui-progress>
  *
- * Attributes:
- *   `value`: number, 0–100. Defaults to 0.
- *   `max`:  number, default 100.
+ *   <progress value="42" max="100" class=${progressClass()}></progress>
  *
- * The progress is implemented as a custom element because the fill width
- * is driven by a `transform: translateX(-${100 - value}%)` on a child div,
- * which is shadcn's exact approach. A pure class helper can't compute that.
+ *   <!-- Indeterminate (no value attribute): -->
+ *   <progress class=${progressClass()}></progress>
  *
  * Design tokens used: --primary.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
 
-const ROOT_CLASS = 'relative h-2 w-full overflow-hidden rounded-full bg-primary/20';
-const INDICATOR_CLASS = 'h-full w-full flex-1 bg-primary transition-all';
-
-const STYLES = `
-ui-progress { display: block; }
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-progress-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-progress-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
-
-export class UiProgress extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'max'];
-  }
-
-  private _indicator: HTMLDivElement | null = null;
-
-  connectedCallback(): void {
-    installStyles();
-    this.setAttribute('data-slot', 'progress');
-    this.setAttribute('role', 'progressbar');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(ROOT_CLASS, userClass);
-    if (!this._indicator) {
-      this._indicator = document.createElement('div');
-      this._indicator.setAttribute('data-slot', 'progress-indicator');
-      this._indicator.className = INDICATOR_CLASS;
-      this.appendChild(this._indicator);
-    }
-    this._reflect();
-  }
-
-  attributeChangedCallback(): void {
-    this._reflect();
-  }
-
-  private _reflect(): void {
-    const rawValue = this.getAttribute('value');
-    const value = Number(rawValue ?? '0');
-    const max = Number(this.getAttribute('max') ?? '100');
-    const clamped = Math.max(0, Math.min(max, isFinite(value) ? value : 0));
-    const pct = max > 0 ? (clamped / max) * 100 : 0;
-    this.setAttribute('aria-valuenow', String(clamped));
-    this.setAttribute('aria-valuemin', '0');
-    this.setAttribute('aria-valuemax', String(max));
-    // Radix/shadcn data-attribute portability: class strings like
-    //   data-[state=loading]:animate-pulse
-    //   data-[state=indeterminate]:bg-muted
-    // can target our progress now. State = indeterminate when `value`
-    // is absent/null (matches Radix), loading while strictly less than
-    // max, complete on reach.
-    const state =
-      rawValue === null || rawValue === '' || !isFinite(value)
-        ? 'indeterminate'
-        : clamped >= max
-          ? 'complete'
-          : 'loading';
-    this.setAttribute('data-state', state);
-    this.setAttribute('data-value', String(clamped));
-    this.setAttribute('data-max', String(max));
-    if (this._indicator) {
-      this._indicator.setAttribute('data-state', state);
-      this._indicator.setAttribute('data-value', String(clamped));
-      this._indicator.setAttribute('data-max', String(max));
-      this._indicator.style.transform = `translateX(-${100 - pct}%)`;
-    }
-  }
-}
-defineElement('ui-progress', UiProgress);
+/**
+ * Class for the native `<progress>` element. The track + fill colours
+ * come from Tailwind utilities. The browser handles the actual bar
+ * rendering through the `::-webkit-progress-value` and
+ * `::-moz-progress-bar` pseudo-elements. We expose them via the
+ * `[&::-webkit-progress-value]:bg-primary` and
+ * `[&::-moz-progress-bar]:bg-primary` Tailwind variants.
+ *
+ * Indeterminate state (no `value` attribute on the element) gets a
+ * pulse animation via `:indeterminate { animate-pulse }`.
+ */
+export const progressClass = (): string =>
+  [
+    // Reset native styling. WebKit / Blink draw a default 3D bar that we
+    // strip via appearance-none + classic clear of border/bg.
+    'block h-2 w-full overflow-hidden rounded-full',
+    'appearance-none border-0 bg-primary/20 [&::-webkit-progress-bar]:bg-primary/20',
+    // Bar fill: blink/webkit + firefox both via Tailwind 4's arbitrary-
+    // pseudo variant. Smooth animation on width change matches shadcn.
+    "[&::-webkit-progress-value]:bg-primary [&::-webkit-progress-value]:transition-all",
+    "[&::-moz-progress-bar]:bg-primary",
+    // Indeterminate state animates the track itself (no value -> no bar
+    // to color, so we pulse the bg).
+    'indeterminate:animate-pulse',
+  ].join(' ');

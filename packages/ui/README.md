@@ -15,14 +15,17 @@ function calls, not for a layered React abstraction over every primitive:
   `<div popover class=${popoverContentClass()}>`, so real native elements
   participate in form submission, autocomplete, screen readers, the
   Popover API ancestry, and devtools as themselves.
-- **Tier 2, stateful custom elements** (`<ui-dialog>`, `<ui-alert-dialog>`,
-  `<ui-tabs>`, `<ui-tooltip>`, `<ui-hover-card>`, `<ui-dropdown-menu>`,
-  `<ui-sonner>`, …). Reserved for the behavior the browser still doesn't
-  give you for free: hover-with-delay tooltips, roving-focus keyboard nav
-  for menus and tabs, toast queue with stack and dismiss. Dialog and
-  alert-dialog use a thin custom element on top of the native
-  `<dialog>.showModal()`, focus trap, Escape, and backdrop overlay all
-  come from the platform. Decorate the host, no shadow DOM.
+- **Tier 2, stateful custom elements** (`<ui-tabs>`, `<ui-toggle-group>`,
+  `<ui-dropdown-menu>`, `<ui-sonner>`). Reserved for components with
+  repeated inner structure (tab items, menu items, toggle items) or a
+  singleton mount point (toast queue) where the custom-element call-site
+  DRY-ness is worth keeping. Decorate the host, no shadow DOM.
+
+Stateful single-wrapper components (`dialog`, `alert-dialog`, `tooltip`,
+`hover-card`) are Tier 1: a class helper + a small `attach*()` /
+`openDialog()` helper applied to a native `<dialog>` or `[popover]`
+element. The browser owns top-layer, focus trap, Escape, ::backdrop,
+focus restoration. We ship the wiring.
 
 Works with any project that uses Tailwind CSS v4 and supports custom elements:
 webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML, as long as Tailwind
