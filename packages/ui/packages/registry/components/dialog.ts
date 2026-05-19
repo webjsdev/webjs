@@ -10,15 +10,13 @@
  *   - Escape-to-close via the cancel event
  *   - Background made inert (clicks pass through to nothing)
  *
- * On connection the component reparents <ui-dialog-content> inside a
- * programmatically-created <dialog> so we can call showModal() on it.
- * The <dialog> is transparent and zero-sized; the visible panel is
- * <ui-dialog-content> with its `position: fixed; top: 50%; left: 50%`
- * classes, which is what gets the shadow and rounded border.
- *
- * The previous version's focus trap, Tab cycling, Escape listener,
- * `<ui-dialog-overlay>` element, and document-level keydown handler are
- * all gone, the platform owns them now.
+ * Component composition uses named slots: the rendered template emits
+ * a programmatic <dialog> with `<slot name="dialog-content">` inside.
+ * The user authors `<ui-dialog-content>` as a normal child; the
+ * component sets `slot="dialog-content"` on it during connection so
+ * the slot machinery routes it inside the <dialog> automatically.
+ * Triggers and other children stay in the default slot, outside the
+ * <dialog>.
  *
  * shadcn parity:
  *   <Dialog>            → <ui-dialog open>
@@ -61,7 +59,8 @@
  * Design tokens used: --background, --border, --muted-foreground.
  */
 
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------
@@ -91,10 +90,7 @@ export const dialogContentClass = (): string =>
 // need explicit values, which Tailwind cannot supply on tags the user
 // authors. Once upgraded, the native <dialog> wrapper takes over:
 // closed `<dialog>` is UA `display: none`, opened via showModal() is
-// `display: block` in the top layer. Everything specific to the native
-// <dialog> wrapper (background, border, padding reset; ::backdrop) is
-// applied via Tailwind classes on the dynamically-created element, see
-// NATIVE_DIALOG_CLASS below.
+// `display: block` in the top layer.
 // --------------------------------------------------------------------------
 
 const STYLES = `
@@ -103,15 +99,11 @@ ui-dialog[open] { display: contents; }
 ui-dialog-content { display: grid; }
 `;
 
-// Tailwind class string applied to the programmatic <dialog> element
-// in _wrap(). Replaces the prior ui-dialog dialog[...] CSS rule one
-// utility at a time:
-//   - border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none
-//     overflow-visible text-inherit  clears the UA defaults so the
-//     <dialog> itself becomes an invisible top-layer host; the visible
-//     box is rendered by <ui-dialog-content> with dialogContentClass.
-//   - backdrop:bg-black/50  styles the `::backdrop` pseudo-element via
-//     the Tailwind 4 `backdrop:` variant.
+// Tailwind class string applied to the rendered <dialog> element.
+// Clears the UA defaults so the <dialog> itself becomes an invisible
+// top-layer host. The visible box is rendered by <ui-dialog-content>
+// with dialogContentClass. backdrop: variant styles the ::backdrop
+// pseudo-element.
 const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
@@ -156,127 +148,130 @@ function unlockScroll(): void {
 // <ui-dialog>
 // --------------------------------------------------------------------------
 
-export class UiDialog extends Base {
-  static get observedAttributes(): string[] {
-    return ['open'];
-  }
+export class UiDialog extends WebComponent {
+  static properties = {
+    open: { type: Boolean, reflect: true },
+  };
+  declare open: boolean;
 
-  private _native: HTMLDialogElement | null = null;
-  private _onNativeClose = (): void => {
-    if (this.isOpen) this.removeAttribute('open');
-  };
-  private _onNativeClick = (e: MouseEvent): void => {
-    if (e.target === this._native) this.hide();
-  };
+  _native: HTMLDialogElement | null = null;
+  _lastOpen: boolean = false;
+
+  constructor() {
+    super();
+    this.open = false;
+  }
 
   connectedCallback(): void {
     installStyles();
+    // Route the authored <ui-dialog-content> child into the named slot
+    // inside the rendered <dialog>. This happens BEFORE the framework's
+    // slot machinery captures children, so projection is automatic.
+    const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
+    if (content && !content.hasAttribute('slot')) {
+      content.setAttribute('slot', 'dialog-content');
+    }
+    // Remove the legacy overlay; native ::backdrop handles it.
+    this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog');
-    this._wrap();
-    this._reflect();
-    if (this.isOpen) this._setup();
+    this._native = this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    if (this._native) {
+      this._native.addEventListener('close', this._onNativeClose);
+      this._native.addEventListener('click', this._onNativeClick as EventListener);
+    }
+    if (this.open) this._setup();
   }
 
   disconnectedCallback(): void {
-    if (this.isOpen) this._teardown();
+    if (this.open) this._teardown();
     if (this._native) {
       this._native.removeEventListener('close', this._onNativeClose);
       this._native.removeEventListener('click', this._onNativeClick as EventListener);
     }
+    super.disconnectedCallback?.();
   }
 
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
-    if (name === 'open' && oldVal !== newVal) {
-      this._reflect();
-      if (newVal !== null) this._setup();
+  show(): void { this.open = true; }
+  hide(): void { this.open = false; }
+  toggle(): void { this.open = !this.open; }
+
+  render() {
+    this.setAttribute('data-state', this.open ? 'open' : 'closed');
+    queueMicrotask(() => this._afterRender());
+    return html`
+      <slot></slot>
+      <dialog data-slot="dialog-native" class=${NATIVE_DIALOG_CLASS}>
+        <slot name="dialog-content"></slot>
+      </dialog>
+    `;
+  }
+
+  _afterRender(): void {
+    const content = this.querySelector<HTMLElement>('ui-dialog-content');
+    if (content) {
+      content.setAttribute('data-state', this.open ? 'open' : 'closed');
+      content.setAttribute('role', 'dialog');
+      content.setAttribute('aria-modal', 'true');
+    }
+    if (this._lastOpen !== this.open) {
+      this._lastOpen = this.open;
+      if (this.open) this._setup();
       else this._teardown();
       this.dispatchEvent(
-        new CustomEvent('ui-open-change', { detail: { open: this.isOpen }, bubbles: true }),
+        new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }),
       );
     }
   }
 
-  get isOpen(): boolean {
-    return this.hasAttribute('open');
-  }
-
-  set isOpen(v: boolean) {
-    if (v) this.setAttribute('open', '');
-    else this.removeAttribute('open');
-  }
-
-  show(): void {
-    this.isOpen = true;
-  }
-
-  hide(): void {
-    this.isOpen = false;
-  }
-
-  toggle(): void {
-    this.isOpen = !this.isOpen;
-  }
-
-  private _wrap(): void {
-    const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
-    if (!content) return;
-    // Already wrapped (HMR re-attach or repeated connectedCallback).
-    if (content.parentElement?.tagName === 'DIALOG') {
-      this._native = content.parentElement as HTMLDialogElement;
-    } else {
-      const dlg = document.createElement('dialog');
-      dlg.setAttribute('data-slot', 'dialog-native');
-      dlg.className = NATIVE_DIALOG_CLASS;
-      content.replaceWith(dlg);
-      dlg.appendChild(content);
-      this._native = dlg;
-    }
-    // The legacy <ui-dialog-overlay> is no longer needed; ::backdrop covers it.
-    this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
-    this._native.addEventListener('close', this._onNativeClose);
-    this._native.addEventListener('click', this._onNativeClick as EventListener);
-  }
-
-  private _reflect(): void {
-    this.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
-    const content = this.querySelector<HTMLElement>('ui-dialog-content');
-    if (content) {
-      content.setAttribute('data-state', this.isOpen ? 'open' : 'closed');
-      content.setAttribute('role', 'dialog');
-      content.setAttribute('aria-modal', 'true');
-    }
-  }
-
-  private _setup(): void {
+  _setup(): void {
     if (!this._native) return;
     lockScroll();
     if (!this._native.open) this._native.showModal();
   }
 
-  private _teardown(): void {
+  _teardown(): void {
     unlockScroll();
     if (this._native?.open) this._native.close();
   }
+
+  _onNativeClose = (): void => {
+    if (this.open) this.open = false;
+  };
+
+  _onNativeClick = (e: MouseEvent): void => {
+    if (e.target === this._native) this.hide();
+  };
 }
-defineElement('ui-dialog', UiDialog);
+UiDialog.register('ui-dialog');
 
 // --------------------------------------------------------------------------
 // <ui-dialog-trigger>
 // --------------------------------------------------------------------------
 
-export class UiDialogTrigger extends Base {
-  connectedCallback(): void {
+export class UiDialogTrigger extends WebComponent {
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-trigger');
     this.addEventListener('click', this._onClick);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    super.disconnectedCallback?.();
   }
-  private _onClick = (): void => {
+
+  render() {
+    return html`<slot></slot>`;
+  }
+
+  _onClick = (): void => {
     (this.closest('ui-dialog') as UiDialog | null)?.show();
   };
 }
-defineElement('ui-dialog-trigger', UiDialogTrigger);
+UiDialogTrigger.register('ui-dialog-trigger');
 
 // --------------------------------------------------------------------------
 // <ui-dialog-content>
@@ -288,12 +283,17 @@ export const dialogCloseButtonClass = (): string =>
 const DIALOG_CLOSE_X_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
 
-export class UiDialogContent extends Base {
+export class UiDialogContent extends WebComponent {
+  _userClass: string = '';
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-content');
     this.setAttribute('tabindex', '-1');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(dialogContentClass(), userClass);
     const showCloseButton = this.getAttribute('show-close-button') !== 'false';
     if (showCloseButton && !this.querySelector(':scope > ui-dialog-close')) {
       const closeEl = document.createElement('ui-dialog-close');
@@ -303,36 +303,53 @@ export class UiDialogContent extends Base {
       this.appendChild(closeEl);
     }
   }
+
+  render() {
+    this.className = cn(dialogContentClass(), this._userClass);
+    return html`<slot></slot>`;
+  }
 }
-defineElement('ui-dialog-content', UiDialogContent);
+UiDialogContent.register('ui-dialog-content');
 
 // --------------------------------------------------------------------------
 // <ui-dialog-close>
 // --------------------------------------------------------------------------
 
-export class UiDialogClose extends Base {
-  connectedCallback(): void {
+export class UiDialogClose extends WebComponent {
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-close');
     this.addEventListener('click', this._onClick);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
+    super.disconnectedCallback?.();
   }
-  private _onClick = (): void => {
+
+  render() {
+    return html`<slot></slot>`;
+  }
+
+  _onClick = (): void => {
     (this.closest('ui-dialog') as UiDialog | null)?.hide();
   };
 }
-defineElement('ui-dialog-close', UiDialogClose);
+UiDialogClose.register('ui-dialog-close');
 
 // --------------------------------------------------------------------------
 // <ui-dialog-footer>
 // --------------------------------------------------------------------------
 
-export class UiDialogFooter extends Base {
+export class UiDialogFooter extends WebComponent {
+  _userClass: string = '';
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-footer');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(dialogFooterClass(), userClass);
     const showClose = this.hasAttribute('show-close-button')
       && this.getAttribute('show-close-button') !== 'false';
     if (showClose && !this.querySelector(':scope > ui-dialog-close')) {
@@ -344,5 +361,10 @@ export class UiDialogFooter extends Base {
       this.appendChild(closeEl);
     }
   }
+
+  render() {
+    this.className = cn(dialogFooterClass(), this._userClass);
+    return html`<slot></slot>`;
+  }
 }
-defineElement('ui-dialog-footer', UiDialogFooter);
+UiDialogFooter.register('ui-dialog-footer');
