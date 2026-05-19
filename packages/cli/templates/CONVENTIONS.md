@@ -497,10 +497,10 @@ and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
 
 **Dedup repeated Tailwind class bundles with JS helpers, not `@apply`.**
 When the same string of classes appears in 2+ places, extract it into a
-small function in `app/_utils/ui.ts`:
+small function in `lib/utils/ui.ts`:
 
 ```ts
-// app/_utils/ui.ts
+// lib/utils/ui.ts
 import { html } from '@webjskit/core';
 
 export function rubric(label: string) {
@@ -514,7 +514,7 @@ Consume:
 
 ```ts
 // app/page.ts
-import { rubric } from './_utils/ui.ts';
+import { rubric } from '../lib/utils/ui.ts';
 
 export default function Home() {
   return html`

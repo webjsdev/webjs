@@ -259,7 +259,10 @@ For UI debugging, use the Playwright MCP server (configured in
 ## App layout (cannot be renamed)
 
 ```
-app/                        thin route adapters (import from modules/)
+app/                        ROUTING ONLY. Thin route adapters (import from modules/).
+                            Do not put helpers, constants, or shared
+                            code here, not even under a private _utils/
+                            folder. App-wide helpers live in lib/.
   layout.js                 root layout, wraps every page
   page.js                   /
   error.js                  nested error boundary
@@ -279,7 +282,9 @@ sitemap.js                  metadata route → /sitemap.xml
 robots.js                   metadata route → /robots.txt
 manifest.js                 metadata route → /manifest.json
 icon.js / opengraph-image.js / twitter-image.js / apple-icon.js
-lib/                        cross-cutting infra (prisma.js, session.js, password.js)
+lib/                        app-wide code (not module-specific)
+  prisma.js, session.js     cross-cutting infra at the root
+  utils/                    browser-safe helpers grouped by concern (cn.ts, ui.ts, format.ts)
 modules/                    feature-scoped (actions + queries + UI)
   <feature>/
     actions/                mutations (one file per action, `'use server'`)
@@ -620,15 +625,15 @@ export async function POST(req: Request) {
 
 ---
 
-## Styling convention: Tailwind + `_utils/ui.ts` helpers (default)
+## Styling convention: Tailwind + `lib/utils/ui.ts` helpers (default)
 
 **Default stack:** Tailwind CSS browser runtime + `@theme` tokens declared
-in the root layout. Repeated class bundles → JS helpers in `app/_utils/ui.ts`
+in the root layout. Repeated class bundles → JS helpers in `lib/utils/ui.ts`
 returning `html\`...\`` fragments. They run at SSR time with no client runtime,
 no diff from inline classes.
 
 ```ts
-// app/_utils/ui.ts
+// lib/utils/ui.ts
 import { html } from '@webjskit/core';
 export function rubric(label: string) {
   return html`<span class="block font-mono text-xs uppercase text-accent">● ${label}</span>`;
