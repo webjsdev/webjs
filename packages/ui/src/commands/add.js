@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
+import { dirname, join, basename, relative as relPath } from 'node:path';
 import prompts from 'prompts';
 import { execSync } from 'node:child_process';
 import { getConfig } from '../utils/get-config.js';
@@ -70,8 +70,37 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
     }
   }
 
-  writeFileSync(target, file.content || '', 'utf8');
+  const content = rewriteUtilsImport(file.content || '', target, config);
+  writeFileSync(target, content, 'utf8');
   logger.success(`Wrote ${relative(cwd, target)}`);
+}
+
+/**
+ * Rewrite the registry-relative `'../lib/utils.ts'` import to the path
+ * that resolves correctly from the file's target location to the user's
+ * cn() helper.
+ *
+ * The registry source assumes its own layout (`<registry>/components/<x>.ts`
+ * imports `'../lib/utils.ts'`). When that file lands in the user's
+ * components/ui/<x>.ts, the literal `'../lib/utils.ts'` resolves to
+ * `components/lib/utils.ts`, which doesn't exist. We compute the actual
+ * relative path from the target directory to `config.resolvedPaths.utils`
+ * (an absolute path the user has already configured via components.json's
+ * aliases.utils) and substitute it in.
+ *
+ * @param {string} content raw file content from the registry
+ * @param {string} target absolute path where the file will be written
+ * @param {{ resolvedPaths: { utils: string } }} config parsed components.json
+ */
+export function rewriteUtilsImport(content, target, config) {
+  if (!content.includes('../lib/utils.ts')) return content;
+  const utilsAbs = config?.resolvedPaths?.utils;
+  if (!utilsAbs) return content;
+  let rel = relPath(dirname(target), utilsAbs).split(/[\\/]/).join('/');
+  if (!rel.startsWith('.')) rel = './' + rel;
+  return content
+    .replaceAll("'../lib/utils.ts'", `'${rel}'`)
+    .replaceAll('"../lib/utils.ts"', `"${rel}"`);
 }
 
 function resolveTarget(cwd, config, item, file) {
