@@ -266,6 +266,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Claude Code config + hooks
     '.claude.json',
     '.claude/settings.json',
+    '.claude/hooks/block-prose-punctuation.sh',
     '.claude/hooks/guard-main-merge.sh',
     '.claude/hooks/guard-branch-context.sh',
     '.claude/hooks/nudge-uncommitted.sh',
@@ -294,7 +295,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['guard-main-merge.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'guard-main-merge.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
