@@ -121,11 +121,12 @@ bypass/autonomous mode).
    different concerns, you already waited too long. Push after each
    commit so the remote stays in sync. Scaffolded apps ship hook
    coverage for Claude Code (`PostToolUse`), Gemini CLI
-   (`AfterTool`), and Cursor 1.7+ (`afterFileEdit`), all firing at
-   threshold 4. Other agents (Windsurf, Copilot, OpenCode,
-   Antigravity) fall back to the text rules in this file and
-   `.cursorrules` / `.windsurfrules` / `copilot-instructions.md`.
-   The framework repo itself uses the Claude Code hook only.
+   (`AfterTool`), Cursor 1.7+ (`afterFileEdit`), and OpenCode
+   (`tool.execute.after` TS plugin), all firing at threshold 4.
+   Other agents (Windsurf, Copilot, Antigravity) fall back to the
+   text rules in this file and `.cursorrules` / `.windsurfrules` /
+   `copilot-instructions.md`. The framework repo itself uses the
+   Claude Code hook only.
 3. **Meaningful commit messages.** Describe what changed and why. Imperative
    mood, under 72 chars on the first line. Body explains the reason,
    not the diff (the diff is right there).

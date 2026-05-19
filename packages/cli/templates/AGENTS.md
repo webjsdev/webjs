@@ -686,9 +686,9 @@ composition, so a nested shell ends up dropped by the HTML parser.
    | Claude Code | `.claude/hooks/nudge-uncommitted.sh` (`PostToolUse`) | `.claude/settings.json` |
    | Gemini CLI | `.gemini/hooks/nudge-uncommitted.sh` (`AfterTool`) | `.gemini/settings.json` |
    | Cursor 1.7+ | `.cursor/hooks/nudge-uncommitted.sh` (`afterFileEdit`) | `.cursor/hooks.json` |
+   | OpenCode | `.opencode/plugins/nudge-uncommitted.ts` (`tool.execute.after`) | `.opencode/plugins/` |
    | Windsurf | text rule only (post-write hooks cannot inject context) | `.windsurfrules` |
    | GitHub Copilot | text rule only (no hooks API) | `.github/copilot-instructions.md` |
-   | OpenCode | text rule only for now (TS plugin support planned) | `AGENTS.md` |
    | Google Antigravity | text rule only (no hooks API) | `AGENTS.md` |
 
    Tool-agnostic fallback: `.hooks/pre-commit` runs `webjs test` + `webjs check`
