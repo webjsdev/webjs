@@ -26,7 +26,13 @@ test('drops event handlers on server', async () => {
   assert.equal(await renderToString(html`<button @click=${() => {}}>go</button>`), '<button >go</button>');
 });
 
-test('drops properties on server', async () => {
+test('property bindings on NATIVE elements drop on server (no consumer for them)', async () => {
+  // Native elements (`<input>`) have no SSR walker to construct an
+  // instance from. Emitting `data-webjs-prop-*` would be dead weight
+  // because nothing consumes it on the server or in the browser
+  // (the property is set by the client renderer when the same
+  // template runs in the browser, not from this attribute). So the
+  // hole still drops at SSR.
   assert.equal(await renderToString(html`<input .value=${'typed'} />`), '<input  />');
 });
 

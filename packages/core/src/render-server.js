@@ -5,6 +5,7 @@ import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
 import { isUnsafeHTML, isLive } from './directives.js';
+import { stringify, parse } from './serialize.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -195,8 +196,50 @@ async function renderTemplate(tr, ctx) {
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
-        if (prefix === '@' || prefix === '.') {
+        if (prefix === '@') {
+          // Event listener. Client-only behaviour, drop at SSR.
           out = out.slice(0, attrStart);
+          state = 'in-tag';
+          attrName = '';
+        } else if (prefix === '.') {
+          // Property binding. Only meaningful on custom elements (which
+          // have a hyphen in the tag name and a WebComponent subclass
+          // that knows how to apply + strip data-webjs-prop-* on
+          // hydration). For native elements (`<input .value=${v}>`)
+          // the attribute would be dead weight (nothing consumes it),
+          // so we drop it the same way the old behaviour did. The
+          // client renderer still applies the property when the
+          // template runs in the browser, which is the only place a
+          // page-level `.prop` on a native element could have set the
+          // property to begin with.
+          out = out.slice(0, attrStart);
+          if (!currentTag.includes('-')) {
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
+          // `undefined` has no meaningful HTML representation. Drop
+          // silently so the consumer falls back to its constructor
+          // default. `null` is preserved because it's a real value
+          // distinct from "not set".
+          if (val === undefined) {
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
+          try {
+            const encoded = await stringify(val);
+            out += `data-webjs-prop-${kebabCase(name)}="${escapeAttr(encoded)}"`;
+          } catch (e) {
+            // Unserializable value (function, class instance with
+            // private state, DOM node, etc.). Drop with a warning so
+            // SSR does not crash. Same constraint as Next.js RSC.
+            console.warn(
+              `[webjs] property binding .${name} has an unserializable `
+              + `value during SSR. Dropping. The browser will see the `
+              + `property as undefined. Detail: ${e && e.message}`
+            );
+          }
           state = 'in-tag';
           attrName = '';
         } else if (prefix === '?') {
@@ -256,7 +299,14 @@ async function injectDSD(html, ctx) {
       const isShadow = /** @type any */ (Cls).shadow === true;
       const instance = new /** @type any */ (Cls)();
       const attrMap = parseAttrs(attrs);
+      // Decode `data-webjs-prop-*` attributes first (rich-typed values
+      // emitted for `.prop=${val}` bindings in the parent template),
+      // then coerce the ordinary string attributes by `static
+      // properties` type. Property bindings take priority on a name
+      // collision because they preserve the original JS reference.
+      const propValues = consumePropAttrs(attrMap);
       applyAttrsToInstance(instance, attrMap, Cls);
+      for (const [k, v] of Object.entries(propValues)) instance[k] = v;
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
       // Render the template to HTML. injectDSD recurses on the result so
@@ -641,6 +691,61 @@ function applyAttrsToInstance(instance, attrs, Cls) {
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/**
+ * Inverse of camelCase. `userName` -> `user-name`, `userID` -> `user-i-d`.
+ * Used to serialize property-binding names into HTML attribute names,
+ * which are case-insensitive in the parser. The original JS property
+ * name is recovered via camelCase() on the consumer side.
+ *
+ * @param {string} s
+ */
+function kebabCase(s) {
+  return s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * Reverse `escapeAttr` on a server-side attribute value. Needed
+ * because `parseAttrs` returns the literal characters between the
+ * quote marks; HTML entities are not decoded by the regex. The
+ * browser handles this automatically, so client-side reads via
+ * `getAttribute()` do not need the same step.
+ *
+ * @param {string} s
+ */
+function unescapeAttr(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Decode `data-webjs-prop-<kebab>` attributes from a parsed attribute
+ * map, returning a map of camelCase property name to decoded value.
+ * Mutates `attrs` by deleting the consumed entries so they do not
+ * appear in the rendered output a second time.
+ *
+ * @param {Record<string,string>} attrs
+ * @returns {Record<string, unknown>}
+ */
+function consumePropAttrs(attrs) {
+  /** @type {Record<string, unknown>} */
+  const props = {};
+  for (const key of Object.keys(attrs)) {
+    if (!key.startsWith('data-webjs-prop-')) continue;
+    const propName = camelCase(key.slice('data-webjs-prop-'.length));
+    try {
+      props[propName] = parse(unescapeAttr(attrs[key]));
+    } catch {
+      // Malformed payload. Skip silently so the rest of the component
+      // can still render. The client-side hydration will also try and
+      // fail, which is fine: undefined-prop semantics.
+    }
+    delete attrs[key];
+  }
+  return props;
 }
 
 // ---------------------------------------------------------------------------
