@@ -5,6 +5,10 @@ import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
 import { isUnsafeHTML, isLive } from './directives.js';
+// Side effect on import: replaces process.env with a Proxy that
+// filters non-public keys when read from inside a component render
+// context. See env-guard.js for the rationale.
+import { withComponentRender } from './env-guard.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -254,11 +258,19 @@ async function injectDSD(html, ctx) {
     const opening = selfClose ? `<${tag}${attrs}>` : match;
     try {
       const isShadow = /** @type any */ (Cls).shadow === true;
-      const instance = new /** @type any */ (Cls)();
-      const attrMap = parseAttrs(attrs);
-      applyAttrsToInstance(instance, attrMap, Cls);
-      let tpl = instance.render ? instance.render() : '';
-      if (tpl && typeof tpl.then === 'function') tpl = await tpl;
+      // Wrap the full component lifecycle (construction + attribute
+      // application + render) in withComponentRender so non-public
+      // process.env reads return undefined for the duration. Catches
+      // both static (`process.env.SECRET`) and dynamic
+      // (`process.env[name]`) access. See env-guard.js.
+      const { instance, tpl } = await withComponentRender(async () => {
+        const inst = new /** @type any */ (Cls)();
+        const attrMap = parseAttrs(attrs);
+        applyAttrsToInstance(inst, attrMap, Cls);
+        let t = inst.render ? inst.render() : '';
+        if (t && typeof t.then === 'function') t = await t;
+        return { instance: inst, tpl: t };
+      });
       // Render the template to HTML. injectDSD recurses on the result so
       // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
       // get their own DSD pass.
