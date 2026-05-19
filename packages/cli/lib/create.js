@@ -287,7 +287,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['guard-main-merge.sh', 'guard-branch-context.sh']) {
+  for (const hook of ['guard-main-merge.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
