@@ -512,7 +512,7 @@ suppression of "Unknown tag" warnings.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
 - Named exports: `metadata` (static object), `generateMetadata(ctx)` (async function, takes precedence).
 - See `agent-docs/metadata.md` for the full metadata field reference.
-- Page modules also load on the client (so transitively imported components register). Keep top-level imports browser-safe. Do NOT import `@prisma/client`, `node:fs` etc. directly. Go through a server action.
+- Page modules also load on the client (so transitively imported components register). Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything that needs Node APIs) goes only in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
 
 ### Layouts (`app/**/layout.{js,ts}`)
 
@@ -694,7 +694,7 @@ See `agent-docs/advanced.md` Client router section for the full mechanism.
 
 ## Invariants (for both humans and agents)
 
-1. **Never import `@prisma/client`, `node:*`, or any server-only dep from a file under `components/` or a page's top-level module graph that isn't a server action.** The browser will try to load it and fail.
+1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client`, `node:*`, or any server-only dep from a file under `components/`, `app/**/page.{js,ts}`, `app/**/layout.{js,ts}`, `app/**/loading.{js,ts}`, `app/**/error.{js,ts}`, or `app/**/not-found.{js,ts}` will crash the browser at module load. Wrap the access in a `.server.{js,ts}` file; the framework rewrites that import into an RPC stub for the browser. Documented convention, not lint-enforced (the runtime browser error is the backstop).
 2. **Every `*.server.{js,ts}` export must be an `async` function returning serializer-safe values.** Args and results round-trip via webjs's wire.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field.
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
