@@ -1,6 +1,6 @@
 import { html } from '@webjskit/core';
 import '../../../../modules/posts/components/new-post.ts';
-import { backLink, rubric, clampH1 } from '../../../_utils/ui.ts';
+import { backLink, rubric, clampH1 } from '../../../../lib/ui.ts';
 
 export const metadata = { title: 'New post: webjs blog' };
 

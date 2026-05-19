@@ -1,7 +1,7 @@
 import { html, redirect } from '@webjskit/core';
 import '../../modules/auth/components/auth-forms.ts';
 import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
-import { rubric } from '../_utils/ui.ts';
+import { rubric } from '../../lib/ui.ts';
 
 type Ctx = { searchParams?: Record<string, string> };
 
