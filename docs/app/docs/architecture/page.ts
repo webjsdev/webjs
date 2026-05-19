@@ -85,7 +85,7 @@ export default function Architecture() {
       <li><strong>Routes stay thin.</strong> If a route.ts has more than ~20 lines of business logic, extract it into a module action.</li>
       <li><strong>One module per feature.</strong> auth, posts, comments, etc. each get their own folder.</li>
       <li><strong>Actions return <code>ActionResult&lt;T&gt;</code></strong>: a <code>{ success, data } | { success: false, error, status }</code> envelope that routes translate to HTTP responses mechanically.</li>
-      <li><strong>Server-only imports</strong> (<code>@prisma/client</code>, <code>node:*</code>) stay in <code>.server.ts</code> files. Components import them and get auto-generated RPC stubs.</li>
+      <li><strong>Server-only imports</strong> (<code>@prisma/client</code>, <code>node:*</code>, anything needing Node APIs) stay in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components, because page modules also load in the browser to register transitively imported components. Pages and components import functions from a <code>.server.{js,ts}</code> file; the framework rewrites that import into an RPC stub for the browser.</li>
     </ul>
 
     <h2>Request Lifecycle</h2>
