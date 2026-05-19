@@ -94,21 +94,41 @@ export const RULES = [
     description:
       'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax fall back to esbuild + inline sourcemap, which is supported as a safety net for third-party deps but should not be the path your own code takes. The rule checks the project\'s tsconfig.json and warns when `erasableSyntaxOnly` is missing or set to false. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply.',
   },
+  {
+    name: 'use-server-needs-extension',
+    description:
+      'Files that declare the `\'use server\'` directive at the top must also have the `.server.{js,ts,mts,mjs}` extension. The two markers are complementary, not interchangeable: `.server.ts` is the path-level boundary that triggers source protection by the file router; `\'use server\'` is the semantic opt-in that registers exports as RPC-callable from client code. A `\'use server\'` directive without the extension is silently ignored: the file is served to the browser as plain source, exports are NOT registered as RPC, and code the developer expects to run on the server actually runs in the browser. Rename the file to add the `.server.` infix.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
 const RULE_NAMES = new Set(RULES.map((r) => r.name));
 
 /**
- * Check whether a file is a server action file based on its name or content.
- * @param {string} filePath - absolute path
- * @param {string} content - file content (already read)
+ * Check whether a file has the `'use server'` directive in its first
+ * five lines. Used by the `use-server-needs-extension` rule, and by
+ * `isServerActionFile` below.
+ * @param {string} content file content (already read)
+ * @returns {boolean}
+ */
+function hasUseServerDirective(content) {
+  const head = content.split('\n').slice(0, 5).join('\n');
+  return /^\s*(['"])use server\1\s*;?\s*$/m.test(head);
+}
+
+/**
+ * Check whether a file is a server action. A server action requires
+ * BOTH the `.server.{js,ts,mts,mjs}` extension AND the `'use server'`
+ * directive in the file head. Either alone is not enough: bare `.server.ts`
+ * is a server-only utility (no RPC), and bare `'use server'` is a lint
+ * violation (use-server-needs-extension).
+ * @param {string} filePath absolute path
+ * @param {string} content file content (already read)
  * @returns {boolean}
  */
 function isServerActionFile(filePath, content) {
-  if (/\.server\.m?[jt]s$/.test(filePath)) return true;
-  const head = content.split('\n').slice(0, 5).join('\n');
-  return /^\s*(['"])use server\1\s*;?\s*$/m.test(head);
+  if (!/\.server\.m?[jt]s$/.test(filePath)) return false;
+  return hasUseServerDirective(content);
 }
 
 /**
@@ -802,6 +822,28 @@ export async function checkConventions(appDir, opts) {
             'Set `"erasableSyntaxOnly": true` under `compilerOptions` in tsconfig.json. Replace any existing `enum` declarations with `const X = { ... } as const` plus a `type X = typeof X[keyof typeof X]` union. Replace constructor parameter properties with explicit field declarations + assignments.',
         });
       }
+    }
+  }
+
+  // --- Rule: use-server-needs-extension ---
+  // Catch files that declare `'use server'` at the top but lack the
+  // `.server.{js,ts}` extension. Under the two-marker convention the
+  // directive alone does nothing (the file is served to the browser as
+  // plain source and exports are not registered as RPC), which is a
+  // silent footgun. The fix is mechanical: rename the file.
+  if (isRuleEnabled('use-server-needs-extension', overrides)) {
+    for (const { rel, content } of files) {
+      if (!hasUseServerDirective(content)) continue;
+      if (/\.server\.m?[jt]s$/.test(rel)) continue; // OK: has both markers
+      const fileBase = basename(rel);
+      const renamedBase = fileBase.replace(/\.(m?[jt]sx?)$/, '.server.$1');
+      violations.push({
+        rule: 'use-server-needs-extension',
+        file: rel,
+        message:
+          "File declares `'use server'` but its name does not match `.server.{js,ts,mts,mjs}`. The directive is silently ignored: the file is served to the browser as plain source and its exports are not RPC-callable. Code the developer expects to run on the server actually runs in the browser.",
+        fix: `Rename to ${renamedBase} (add the .server. infix before the extension)`,
+      });
     }
   }
 

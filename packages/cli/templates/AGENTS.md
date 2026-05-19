@@ -19,7 +19,7 @@ the app the user actually asked for.
 **Non-negotiables for every webjs app:**
 
 1. **Use Prisma + SQLite for persistence.** It's already wired up
-   (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`,
+   (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`,
    `predev` hook running `prisma generate`). For any data the app
    stores (todos, posts, messages, products, comments, anything),
    define a Prisma model and persist there.
@@ -283,11 +283,11 @@ Scripts:
 - `predev` hook auto-runs `prisma generate` before `npm run dev`
 - `prestart` hook runs `prisma migrate deploy` before `npm start` (idempotent in prod)
 
-Always import the client from `lib/prisma.ts` (never `new PrismaClient()` directly -
+Always import the client from `lib/prisma.server.ts` (never `new PrismaClient()` directly -
 the singleton avoids opening a new connection on every dev-server reload):
 
 ```ts
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 const users = await prisma.user.findMany();
 ```
 
@@ -398,7 +398,7 @@ See [Progressive Enhancement](https://docs.webjs.dev/docs/progressive-enhancemen
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   if (!input.title) return { success: false, error: 'title required', status: 400 };
@@ -629,11 +629,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
    not-found.ts, or component will crash the browser at module load.
    Wrap the access in a `.server.{js,ts}` file; the framework
    rewrites that import into an RPC stub for the browser. `lib/`
-   holds both server-only infra (`lib/prisma.ts`, `lib/session.ts`)
-   and browser-safe utilities (`lib/utils.ts` with `cn`, design-
+   holds both server-only infra (`lib/prisma.server.ts`, `lib/session.server.ts`)
+   and browser-safe utilities (`lib/utils/cn.ts` with `cn`, design-
    system helpers). Server-only `lib/*` files must only be imported
    from `.server.ts`/`route.ts`/`middleware.ts`; browser-safe `lib/*`
-   files (like `lib/utils.ts`) can be imported anywhere.
+   files (like `lib/utils/cn.ts`) can be imported anywhere.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
 4. Use `setState()`. Never mutate `this.state` directly.

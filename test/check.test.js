@@ -283,7 +283,7 @@ test('actions-in-modules: flags .server.ts file outside modules/*/actions or que
     await mkdir(join(appDir, 'app', 'api'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'api', 'create.server.ts'),
-      `export async function create() {}`,
+      `'use server';\nexport async function create() {}`,
     );
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'actions-in-modules');
@@ -368,7 +368,7 @@ test('one-function-per-action: flags file exporting > 1 async function', async (
     await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
     await writeFile(
       join(appDir, 'modules', 'users', 'actions', 'multi.server.ts'),
-      `export async function create() {}\nexport async function remove() {}\n`,
+      `'use server';\nexport async function create() {}\nexport async function remove() {}\n`,
     );
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'one-function-per-action');
@@ -400,7 +400,7 @@ test('one-function-per-action: detects `export const foo = async ...` pattern', 
     await mkdir(join(appDir, 'modules', 'u', 'actions'), { recursive: true });
     await writeFile(
       join(appDir, 'modules', 'u', 'actions', 'arrow.server.ts'),
-      `export const a = async () => {};\nexport const b = async () => {};\n`,
+      `'use server';\nexport const a = async () => {};\nexport const b = async () => {};\n`,
     );
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'one-function-per-action');
@@ -675,7 +675,7 @@ test('actions-in-modules: still flags loose .server.ts at the root', async () =>
     await mkdir(join(appDir, 'modules', 'posts'), { recursive: true });
     await writeFile(
       join(appDir, 'create-post.server.ts'),
-      `export async function createPost() {}\n`,
+      `'use server';\nexport async function createPost() {}\n`,
     );
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'actions-in-modules');
@@ -705,7 +705,7 @@ export function verifySession() {}
     // modules/auth/actions/login.server.ts with 2 exports: MUST be flagged.
     await writeFile(
       join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
-      `export async function login() {}\nexport async function loginAlt() {}\n`,
+      `'use server';\nexport async function login() {}\nexport async function loginAlt() {}\n`,
     );
     const violations = await checkConventions(appDir);
     const flagged = violations
@@ -929,6 +929,90 @@ test('shell-in-non-root-layout: ignores non-layout files in app/', async () => {
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'shell-in-non-root-layout');
     assert.equal(v, undefined, 'route handlers must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('use-server-needs-extension: flags use server directive without .server.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'actions', 'login.ts'),
+      `'use server';
+export async function login(email, password) {
+  return { ok: true };
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'use-server-needs-extension');
+    assert.ok(v, 'expected use-server-needs-extension violation');
+    assert.match(v.file, /login\.ts$/);
+    assert.match(v.fix, /login\.server\.ts/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('use-server-needs-extension: file with both markers is fine', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
+      `'use server';
+export async function login(email, password) {
+  return { ok: true };
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'use-server-needs-extension');
+    assert.equal(v, undefined, 'extension + directive should NOT trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('use-server-needs-extension: .server.ts WITHOUT directive does not trigger this rule', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(
+      join(appDir, 'lib', 'prisma.server.ts'),
+      `export const prisma = { findMany: () => [] };
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'use-server-needs-extension');
+    assert.equal(v, undefined, 'extension alone is server-only utility, not flagged here');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('use-server-needs-extension: can be disabled via overrides', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'tmp',
+        webjs: { conventions: { 'use-server-needs-extension': false } },
+      }),
+    );
+    await mkdir(join(appDir, 'modules', 'auth'), { recursive: true });
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'login.ts'),
+      `'use server';
+export async function login() { return 1; }
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'use-server-needs-extension');
+    assert.equal(v, undefined, 'override should disable the rule');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

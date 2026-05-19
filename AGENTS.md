@@ -220,15 +220,18 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 - **Tailwind CSS is the default styling convention.** Custom CSS still
   works, but light-DOM components authoring CSS MUST prefix selectors
   with the component tag.
-- **Server actions with rich types.** Any `*.server.{js,ts}` (or file
-  with `'use server'`) exports functions importable from the client.
-  The import is rewritten into a typed RPC stub. Wire round-trips
-  `Date`, `Map`, `Set`, `BigInt`, `Error`, `TypedArray`, `Blob`,
-  `File`, `FormData`, registered Symbols, and reference cycles.
+- **Server actions with rich types.** A `*.server.{js,ts}` file that
+  also declares `'use server'` at the top exports functions
+  importable from the client. The import is rewritten into a typed
+  RPC stub. Wire round-trips `Date`, `Map`, `Set`, `BigInt`, `Error`,
+  `TypedArray`, `Blob`, `File`, `FormData`, registered Symbols, and
+  reference cycles.
 - **Server-file source is unreachable from the browser (framework
-  invariant).** The HTTP layer re-verifies every JS/TS request against
-  the server-file predicate before serving bytes. A server file always
-  responds with a generated RPC stub, never its source.
+  invariant).** Every `.server.{js,ts}` file is source-protected by
+  the HTTP layer: the dev server re-verifies the path on every
+  request and returns either a generated RPC stub (when the file has
+  `'use server'`) or a throw-at-load stub (server-only utility) but
+  never the real source.
 
 ---
 
@@ -559,9 +562,19 @@ Framework wraps the sibling page in `Suspense({ fallback: <your loading>, childr
 - Return a Response to short-circuit (redirect, 401). Call `next()` then post-process to add headers, log, etc.
 - Per-segment middleware applies to its subtree. Chain runs outermost → innermost.
 
-### Server actions (`**/*.server.{js,ts}` or `'use server'`)
+### Server actions (`**/*.server.{js,ts}` + `'use server'`)
 
-- Export named async functions. Args + return values must round-trip through webjs's serializer.
+Two complementary markers describe server-side files. The combination
+determines behaviour:
+
+| File | `'use server'`? | What it is |
+|---|---|---|
+| `*.server.ts` | yes | **Server action.** Source-protected by the file router AND RPC-callable: imports from client code are rewritten into RPC stubs that POST to `/__webjs/action/<hash>/<fn>`. |
+| `*.server.ts` | no | **Server-only utility.** Source-protected; browser imports get a throw-at-load stub that errors with a clear message. Use for the Prisma singleton, session helpers, password hashing, anything called only from `.server.ts` actions / `route.ts` handlers / `middleware.ts`. |
+| Plain `.ts` | yes | **Lint violation** (`use-server-needs-extension`). The directive alone is silently ignored: the file serves to the browser as plain source and exports are not RPC-callable. Rename the file to add the `.server.` infix. |
+| Plain `.ts` | no | Browser-safe; standard behaviour. |
+
+- Server actions: export named async functions. Args + return values must round-trip through webjs's serializer.
 - **Importing from a client component IS the API.** The dev server rewrites the import into an RPC stub that POSTs to `/__webjs/action/<hash>/<fn>`.
 - **Expose as REST**: `expose('METHOD /path', fn, { validate?: parse })`. The same function powers both callers. `validate` runs only on HTTP path (direct RPC bypasses it).
 
@@ -594,9 +607,11 @@ Framework wraps the sibling page in `Suspense({ fallback: <your loading>, childr
 - **`modules/<feature>/actions/*.server.{js,ts}`** for mutations, one file per function.
 - **`modules/<feature>/queries/*.server.{js,ts}`** for reads, same shape. The split shows what mutates versus what doesn't.
 - **`modules/<feature>/components/*.{js,ts}`** for feature-owned web components. Shared UI lives in top-level `components/`.
-- **`modules/<feature>/utils/*.{js,ts}`** for pure helpers. No `'use server'`, no DB access.
+- **`modules/<feature>/utils/*.{js,ts}`** for pure helpers. No `'use server'`, no DB access. Use `*.server.ts` here for module-scoped server-only utilities (no RPC).
 - **`modules/<feature>/types.{js,ts}`** for JSDoc typedefs and TS types.
-- **`lib/*.{js,ts}`** for cross-cutting infra: `prisma.{js,ts}` singleton, `password.{js,ts}`, external clients.
+- **`lib/`** for cross-cutting app-wide code:
+  - `lib/*.server.{js,ts}` for server-only infrastructure (Prisma singleton, session helpers, password hashing, external server clients). Extension marks source-protected; no `'use server'` keeps them out of the RPC registry.
+  - `lib/utils/*.{js,ts}` for browser-safe helpers grouped by concern (cn, ui helpers, formatters). Files at the root of `lib/` (like `lib/constants.ts`) carry app-wide browser-safe values.
 
 ### Return shape: the `ActionResult<T>` envelope
 
@@ -699,8 +714,8 @@ See `agent-docs/advanced.md` Client router section for the full mechanism.
 
 ## Invariants (for both humans and agents)
 
-1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client`, `node:*`, or any server-only dep from a file under `components/`, `app/**/page.{js,ts}`, `app/**/layout.{js,ts}`, `app/**/loading.{js,ts}`, `app/**/error.{js,ts}`, or `app/**/not-found.{js,ts}` will crash the browser at module load. Wrap the access in a `.server.{js,ts}` file; the framework rewrites that import into an RPC stub for the browser. Documented convention, not lint-enforced (the runtime browser error is the backstop).
-2. **Every `*.server.{js,ts}` export must be an `async` function returning serializer-safe values.** Args and results round-trip via webjs's wire.
+1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** The `.server.{js,ts}` extension is the path-level boundary: the file router refuses to serve the source to the browser. A separate `'use server'` directive at the top of a `.server.ts` file makes its exports RPC-callable from client code; without the directive the file is a server-only utility (browser imports get a throw-at-load stub). Direct imports of `@prisma/client`, `node:*`, or any server-only dep from a file under `components/`, `app/**/page.{js,ts}`, `app/**/layout.{js,ts}`, `app/**/loading.{js,ts}`, `app/**/error.{js,ts}`, or `app/**/not-found.{js,ts}` will crash the browser at module load.
+2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field.
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
 5. **Do not mutate `this.state` directly.** Use `setState`. State reads are fine.
@@ -774,7 +789,7 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
 3. **Default to a real database, Prisma + SQLite. NEVER use JSON files,
    in-memory arrays, or localStorage as a substitute for persistence.**
-   Every scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` singleton,
+   Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` singleton,
    and `npm run db:*` scripts. The convention check `no-json-data-files`
    flags JSON-as-database.
 4. **Treat the scaffold as REFERENCE, not the final product.** Replace
@@ -912,7 +927,7 @@ export default async function User({ params }: { params: { id: string } }) {
 ```ts
 // modules/users/actions/update-profile.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 export async function updateProfile(input: { name: string }) {
   const name = String(input?.name || '').trim();
   if (!name) return { success: false, error: 'name required', status: 400 };

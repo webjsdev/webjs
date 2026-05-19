@@ -48,7 +48,7 @@ export default function BackendOnly() {
     <h2>File-Based API Routing</h2>
     <p>A <code>route.ts</code> file anywhere under <code>app/</code> becomes an API endpoint. Export functions named after HTTP methods:</p>
     <pre>// app/api/users/route.ts
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function GET(req: Request, { params }: { params: Record&lt;string, string&gt; }) {
   const users = await prisma.user.findMany({
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   return Response.json(user, { status: 201 });
 }</pre>
     <pre>// app/api/users/[id]/route.ts
-import { prisma } from '../../../../lib/prisma.ts';
+import { prisma } from '../../../../lib/prisma.server.ts';
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await prisma.user.findUnique({ where: { id: Number(params.id) } });
@@ -130,7 +130,7 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
     <pre>// actions/users.server.ts
 'use server';
 import { expose } from '@webjskit/core';
-import { prisma } from '../lib/prisma.ts';
+import { prisma } from '../lib/prisma.server.ts';
 
 export const listUsers = expose('GET /api/v2/users', async () =&gt; {
   return prisma.user.findMany({
@@ -309,7 +309,7 @@ fastify.listen({ port: 3000 });</pre>
 
     <h3>app/api/posts/route.ts</h3>
     <pre>import { json } from '@webjskit/server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function GET() {
   const posts = await prisma.post.findMany({

@@ -61,7 +61,7 @@ sessions (with Redis): session ID in cookie, data in Redis. Requires
 ## Authentication (NextAuth-style)
 
 ```js
-// lib/auth.ts
+// lib/auth.server.ts
 import { createAuth, Credentials, Google, GitHub } from '@webjskit/server';
 
 export const { auth, signIn, signOut, handlers } = createAuth({

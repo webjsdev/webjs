@@ -563,6 +563,7 @@ test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () 
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
     'actions.server.js':
+      `'use server';\n` +
       `export async function double(n) { return n * 2; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -609,6 +610,7 @@ test('handle: expose()d action is reachable by method+path', async () => {
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
     'api.server.js':
+      `'use server';\n` +
       `import { expose } from ${JSON.stringify(pathToFileURL(
         resolve(__dirname, '../packages/core/index.js'),
       ).toString())};\n` +
@@ -626,6 +628,7 @@ test('handle: OPTIONS preflight on expose()d action with cors returns CORS heade
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
     'api.server.js':
+      `'use server';\n` +
       `import { expose } from ${JSON.stringify(pathToFileURL(
         resolve(__dirname, '../packages/core/index.js'),
       ).toString())};\n` +
@@ -648,6 +651,7 @@ test('handle: OPTIONS at a path with exposed actions but no CORS → plain allow
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
     'api.server.js':
+      `'use server';\n` +
       `import { expose } from ${JSON.stringify(pathToFileURL(
         resolve(__dirname, '../packages/core/index.js'),
       ).toString())};\n` +
@@ -667,6 +671,7 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
     'actions.server.js':
+      `'use server';\n` +
       `export async function noop() { return 1; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });

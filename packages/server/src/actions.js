@@ -28,16 +28,33 @@ async function rpcResponse(payload, init = {}) {
 /**
  * Server-actions subsystem.
  *
- * A "server action" is an async function defined in:
- *   - any file ending in `.server.js`, OR
- *   - any .js file whose first non-empty, non-comment line is `'use server'`.
+ * Two complementary markers describe server-side files:
+ *
+ *   - `.server.{js,ts,mts,mjs}` extension: file is **server-only**. The
+ *     file router refuses to serve its source to the browser. This is
+ *     the path-level boundary.
+ *   - `'use server'` directive at the top: file's exports are
+ *     **RPC-callable** from client code. This is the semantic opt-in.
+ *
+ * The two together (`.server.ts` AND `'use server'`) define a server
+ * action: source-protected AND RPC-exposed. The extension alone marks
+ * a server-only utility (source-protected, NOT RPC-exposed: browser
+ * imports get an error stub that throws at load). The directive alone
+ * (no extension) does nothing: a `webjs check` lint rule
+ * (`use-server-needs-extension`) flags it because the file is served
+ * to the browser as plain source and the directive is silently
+ * ignored.
  *
  * The server:
- *   1. Scans the app tree on boot, building a map of { hash -> absFile }.
- *   2. Serves a generated ES-module stub when the browser imports the file URL.
- *   3. Exposes POST endpoints at /__webjs/action/:hash/:fn that run the real function.
- *   4. If an exported function was wrapped in `expose('METHOD /path', fn)`, also
- *      registers it as a first-class REST endpoint.
+ *   1. Scans the app tree on boot, classifying server files into
+ *      RPC-callable actions vs. server-only utilities.
+ *   2. Serves a generated ES-module stub when the browser imports
+ *      the file URL (an RPC stub for actions, a throw-at-load stub
+ *      for server-only utilities).
+ *   3. Exposes POST endpoints at /__webjs/action/:hash/:fn for
+ *      RPC-callable actions only.
+ *   4. If an exported function was wrapped in `expose('METHOD /path', fn)`,
+ *      also registers it as a first-class REST endpoint.
  *
  * @typedef {{
  *   method: string,
@@ -74,7 +91,18 @@ export async function buildActionIndex(appDir, dev) {
   const httpRoutes = [];
 
   for await (const file of walk(appDir, (p) => /\.m?[jt]s$/.test(p))) {
-    if (!(await isServerFile(file))) continue;
+    // Path-level: only `.server.{ts,js,mts,mjs}` files are server-only.
+    // A bare `'use server'` directive without the extension is a lint
+    // violation (use-server-needs-extension) and the file is treated as
+    // plain browser code: no source protection, no RPC registration.
+    if (!isServerFile(file)) continue;
+    // Semantic-level: only files that ALSO have `'use server'` are
+    // RPC-callable. `.server.ts` without the directive is server-only
+    // (still source-protected by the file router) but its exports are
+    // NOT registered as RPC endpoints. The browser-side import gets a
+    // throw-at-load stub via `serveServerOnlyStub` instead.
+    if (!(await hasUseServerDirective(file))) continue;
+
     const h = hashFile(file);
     hashToFile.set(h, file);
     fileToHash.set(file, h);
@@ -109,9 +137,32 @@ export function hashFile(file) {
   return createHash('sha256').update(file).digest('hex').slice(0, 10);
 }
 
-/** @param {string} file */
-export async function isServerFile(file) {
-  if (/\.server\.m?[jt]s$/.test(file)) return true;
+/**
+ * Predicate: file is server-only (source-protected, never served as
+ * source to the browser). True for `.server.{js,ts,mts,mjs}` files.
+ * Synchronous, name-only check, the path-level boundary.
+ *
+ * The `'use server'` directive without the extension does NOT make a
+ * file server-only: a `webjs check` lint rule
+ * (`use-server-needs-extension`) flags that pattern instead, and the
+ * file is treated as plain browser code.
+ *
+ * @param {string} file
+ * @returns {boolean}
+ */
+export function isServerFile(file) {
+  return /\.server\.m?[jt]s$/.test(file);
+}
+
+/**
+ * Predicate: file has the `'use server'` directive in its first 5 lines.
+ * Semantic-level marker: when paired with `.server.ts`, registers the
+ * file's exports as RPC-callable from client code.
+ *
+ * @param {string} file
+ * @returns {Promise<boolean>}
+ */
+export async function hasUseServerDirective(file) {
   try {
     const text = await readFile(file, 'utf8');
     const head = text.split('\n').slice(0, 5).join('\n');
@@ -122,12 +173,46 @@ export async function isServerFile(file) {
 }
 
 /**
+ * Predicate: file is a server action (server-only + RPC-callable).
+ * True when both markers are present: `.server.{js,ts}` extension AND
+ * `'use server'` directive.
+ *
+ * @param {string} file
+ * @returns {Promise<boolean>}
+ */
+export async function isServerAction(file) {
+  if (!isServerFile(file)) return false;
+  return await hasUseServerDirective(file);
+}
+
+/**
  * @param {ActionIndex} idx
  * @param {string} urlPath - a browser-visible URL path like `/actions/foo.server.js`
  */
 export function resolveServerModule(idx, urlPath) {
   const abs = join(idx.appDir, urlPath.split('/').join(sep));
   return idx.fileToHash.has(abs) ? abs : null;
+}
+
+/**
+ * Generate a throw-at-load stub for a server-only file (a `.server.ts`
+ * file WITHOUT a `'use server'` directive). When a browser-side module
+ * imports this file, the stub throws synchronously at module load time
+ * with a clear error pointing at the file, so the developer immediately
+ * sees that server-only code can't be reached from the browser.
+ *
+ * @param {string} relPath path relative to appDir for the error message
+ * @returns {string} JavaScript module source
+ */
+export function serveServerOnlyStub(relPath) {
+  const msg =
+    `Cannot import "${relPath}" from browser code. ` +
+    `This file is server-only (a .server.{js,ts} file with no 'use server' directive). ` +
+    `Either add 'use server' at the top of the file to expose its exports as RPC, ` +
+    `or wrap the server-only logic in a separate *.server.{js,ts} action and import that instead.`;
+  return `// webjs: server-only module stub for ${relPath} (no 'use server' directive)
+throw new Error(${JSON.stringify(msg)});
+`;
 }
 
 /**

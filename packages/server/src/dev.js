@@ -43,6 +43,7 @@ import { handleApi } from './api.js';
 import {
   buildActionIndex,
   serveActionStub,
+  serveServerOnlyStub,
   invokeAction,
   matchExposedAction,
   matchAllAtPath,
@@ -50,6 +51,7 @@ import {
   buildPreflightResponse,
   withCors,
   isServerFile,
+  hasUseServerDirective,
   hashFile,
 } from './actions.js';
 import { defaultLogger } from './logger.js';
@@ -453,26 +455,34 @@ async function handleCore(req, ctx) {
       }
     }
     if (abs.startsWith(appDir) && (await exists(abs))) {
-      // Server-file guardrail: a file is server-only if its name matches
-      // `.server.{js,ts,mjs,mts}` OR the source starts with `'use server'`.
-      // Such files MUST NEVER be served as source to the browser: they
-      // contain secrets, DB queries, and privileged logic. Always return a
-      // generated RPC stub instead.
+      // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
+      // MUST NEVER be served as source to the browser. The extension is
+      // the path-level boundary; we re-verify it on every request (not
+      // just the action-index snapshot taken at boot) so files created
+      // after boot, FS races, or developer error never punch through.
       //
-      // We re-verify via `isServerFile(abs)` on every request (not just the
-      // action-index snapshot taken at boot). This catches files created
-      // after boot, files that flipped their `'use server'` status, or any
-      // race between scan completion and request: the guardrail is an
-      // independent check, not a cache lookup.
-      if (await isServerFile(abs)) {
-        // Lazily ensure the index knows about this file so serveActionStub
-        // can mint a stable hash and function list.
-        if (!state.actionIndex.fileToHash.has(abs)) {
-          const h = hashFile(abs);
-          state.actionIndex.fileToHash.set(abs, h);
-          state.actionIndex.hashToFile.set(h, abs);
+      // What the browser gets depends on the file's `'use server'` status:
+      //   - With `'use server'` => server action: a generated RPC stub
+      //     whose exports POST to /__webjs/action/:hash/:fn.
+      //   - Without `'use server'` => server-only utility: a stub that
+      //     throws at module load with a clear error. The file's source
+      //     never reaches the browser either way.
+      if (isServerFile(abs)) {
+        if (await hasUseServerDirective(abs)) {
+          // Lazily ensure the index knows about this file so serveActionStub
+          // can mint a stable hash and function list.
+          if (!state.actionIndex.fileToHash.has(abs)) {
+            const h = hashFile(abs);
+            state.actionIndex.fileToHash.set(abs, h);
+            state.actionIndex.hashToFile.set(h, abs);
+          }
+          const stub = await serveActionStub(state.actionIndex, abs);
+          return new Response(stub, {
+            headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-store' },
+          });
         }
-        const stub = await serveActionStub(state.actionIndex, abs);
+        const relPath = relative(appDir, abs);
+        const stub = serveServerOnlyStub(relPath);
         return new Response(stub, {
           headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-store' },
         });

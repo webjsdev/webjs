@@ -1,8 +1,6 @@
-'use server';
-
 import { randomBytes } from 'node:crypto';
 import type { User } from '@prisma/client';
-import { prisma } from './prisma.ts';
+import { prisma } from './prisma.server.ts';
 
 export const SESSION_COOKIE = 'blog_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
