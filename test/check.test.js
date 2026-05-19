@@ -482,6 +482,121 @@ test('no-server-imports-in-components: skips .server.ts files (they may import a
   }
 });
 
+/* -------------------- no-server-env-in-components -------------------- */
+
+test('no-server-env-in-components: flags non-public process.env reads in components', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'header.ts'),
+      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `class Header extends WebComponent {\n` +
+      `  render() { return html\`<div data-key=\${process.env.STRIPE_SECRET}></div>\`; }\n` +
+      `}\nHeader.register('app-header');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'no-server-env-in-components');
+    assert.ok(v, 'should flag process.env.STRIPE_SECRET');
+    assert.ok(v.message.includes('STRIPE_SECRET'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-env-in-components: allows WEBJS_PUBLIC_* reads', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'api-link.ts'),
+      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `class ApiLink extends WebComponent {\n` +
+      `  render() { return html\`<a href=\${process.env.WEBJS_PUBLIC_API_URL}>x</a>\`; }\n` +
+      `}\nApiLink.register('api-link');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-env-in-components'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-env-in-components: allows NODE_ENV reads', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'debug-banner.ts'),
+      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `class Debug extends WebComponent {\n` +
+      `  render() { return process.env.NODE_ENV === 'development' ? html\`<p>dev</p>\` : html\`\`; }\n` +
+      `}\nDebug.register('debug-banner');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-env-in-components'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-env-in-components: skips .server.{js,ts} files (server actions may read any env)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'auth', 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'components', 'helpers.server.ts'),
+      `'use server';\nexport async function token() { return process.env.AUTH_SECRET; }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-env-in-components'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-env-in-components: only flags each env var name once per file', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'multi.ts'),
+      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `class Multi extends WebComponent {\n` +
+      `  render() {\n` +
+      `    const a = process.env.SECRET_KEY;\n` +
+      `    const b = process.env.SECRET_KEY;\n` +
+      `    const c = process.env.OTHER_KEY;\n` +
+      `    return html\`<div>\${a}\${b}\${c}</div>\`;\n` +
+      `  }\n` +
+      `}\nMulti.register('multi-comp');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const flagged = violations.filter((v) => v.rule === 'no-server-env-in-components');
+    assert.equal(flagged.length, 2, 'should flag SECRET_KEY once and OTHER_KEY once');
+    const names = flagged.map((v) => v.message);
+    assert.ok(names.some((m) => m.includes('SECRET_KEY')));
+    assert.ok(names.some((m) => m.includes('OTHER_KEY')));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-env-in-components: does not fire outside components/', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.ts'),
+      `export default function Page() { const db = process.env.DATABASE_URL; return db; }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-env-in-components'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 /* -------------------- tests-exist -------------------- */
 
 test('tests-exist: flags modules/feature with no matching test file', async () => {

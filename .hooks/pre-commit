@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Framework-repo pre-commit hook.
+#
+# Mirrors what scaffolded webjs apps get via webjs create, adapted
+# for the framework's own test runner. Two gates:
+#   1. Block direct commits to main/master. Use a feature branch.
+#   2. Run `npm test` to refuse commits that break the suite.
+#
+# To bypass in emergencies: git commit --no-verify
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo ""
+  echo "ERROR: Cannot commit directly to '$BRANCH'."
+  echo ""
+  echo "Create a feature branch first:"
+  echo "  git checkout -b feature/<name>"
+  echo ""
+  echo "To bypass (emergencies only): git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+echo "Running npm test..."
+if ! npm test --silent; then
+  echo ""
+  echo "ERROR: npm test failed. Fix tests before committing."
+  echo "To bypass (emergencies only): git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+exit 0

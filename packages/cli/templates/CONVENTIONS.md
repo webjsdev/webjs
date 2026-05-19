@@ -210,6 +210,9 @@ variables control infrastructure (no config files needed):
 | `AUTH_GOOGLE_ID` | Google OAuth client ID (optional) |
 | `AUTH_GITHUB_ID` | GitHub OAuth client ID (optional) |
 | `PORT` | Server port (default: 3000) |
+| `WEBJS_PUBLIC_*` | Any env var starting with this prefix is exposed to the browser as `process.env.WEBJS_PUBLIC_X`. Components can read it directly. No build step, no transform. Use for API base URLs, Stripe publishable keys, analytics IDs, anything that is intended to be visible client-side. |
+
+**Server-only by default.** Any env var without the `WEBJS_PUBLIC_` prefix never reaches the browser. Reading `process.env.DATABASE_URL` from a component returns `undefined`, the same as a typo. The prefix is fail-closed: secrets cannot accidentally leak.
 
 **Development:** zero env vars needed. Everything works with memory/cookie/disk.
 **Production:** set `AUTH_SECRET` + `SESSION_SECRET`. For horizontal scaling, also set `REDIS_URL` and add one line at app startup:
