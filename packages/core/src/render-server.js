@@ -218,6 +218,15 @@ async function renderTemplate(tr, ctx) {
             attrName = '';
             continue;
           }
+          // `undefined` has no meaningful HTML representation. Drop
+          // silently so the consumer falls back to its constructor
+          // default. `null` is preserved because it's a real value
+          // distinct from "not set".
+          if (val === undefined) {
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
           try {
             const encoded = await stringify(val);
             out += `data-webjs-prop-${kebabCase(name)}="${escapeAttr(encoded)}"`;

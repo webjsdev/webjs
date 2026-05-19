@@ -158,6 +158,245 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     assert.equal(out.includes('@click'), false);
     assert.equal(out.includes('data-webjs-prop-click'), false);
   });
+
+  test('nested components: parent .prop propagates to a child .prop in render()', async () => {
+    class Inner1 extends WebComponent {
+      static properties = { item: { type: Object } };
+      constructor() { super(); this.item = null; }
+      render() {
+        return html`<span class="inner">${this.item ? this.item.name : 'none'}</span>`;
+      }
+    }
+    Inner1.register('nested-inner-1');
+
+    class Outer1 extends WebComponent {
+      static properties = { user: { type: Object } };
+      constructor() { super(); this.user = null; }
+      render() {
+        return html`<nested-inner-1 .item=${this.user}></nested-inner-1>`;
+      }
+    }
+    Outer1.register('nested-outer-1');
+
+    const me = { id: 1, name: 'Vivek' };
+    const out = await renderToString(html`<nested-outer-1 .user=${me}></nested-outer-1>`);
+    assert.match(out, /class="inner">Vivek</, 'inner component must have received the prop forwarded by the outer render()');
+  });
+
+  test('null value: encoded and decoded faithfully', async () => {
+    class NullProbe extends WebComponent {
+      static properties = { item: { type: Object } };
+      constructor() { super(); this.item = { sentinel: 'constructor-default' }; }
+      render() {
+        return html`<p>${this.item === null ? 'is-null' : 'not-null'}</p>`;
+      }
+    }
+    NullProbe.register('null-probe-1');
+
+    const out = await renderToString(html`<null-probe-1 .item=${null}></null-probe-1>`);
+    // The component must receive null, not its constructor default.
+    assert.match(out, /<p>is-null<\/p>/);
+  });
+
+  test('undefined value: drops cleanly, component sees its constructor default', async () => {
+    class UndefProbe extends WebComponent {
+      static properties = { item: { type: Object } };
+      constructor() { super(); this.item = { sentinel: 'constructor-default' }; }
+      render() {
+        return html`<p>${this.item && this.item.sentinel ? this.item.sentinel : 'no-default'}</p>`;
+      }
+    }
+    UndefProbe.register('undef-probe-1');
+
+    const out = await renderToString(html`<undef-probe-1 .item=${undefined}></undef-probe-1>`);
+    // Component falls back to its constructor default because the binding
+    // emits nothing on the wire for undefined.
+    assert.match(out, /<p>constructor-default<\/p>/);
+    assert.equal(
+      out.includes('data-webjs-prop-item'), false,
+      'undefined value must not emit a data-webjs-prop attribute',
+    );
+  });
+
+  test('shadow DOM component: prop binding flows through DSD render', async () => {
+    class ShadowProbe extends WebComponent {
+      static shadow = true;
+      static properties = { label: { type: String } };
+      constructor() { super(); this.label = ''; }
+      render() {
+        return html`<span class="shadow-label">${this.label}</span>`;
+      }
+    }
+    ShadowProbe.register('shadow-probe-1');
+
+    const out = await renderToString(html`<shadow-probe-1 .label=${'rendered-in-shadow'}></shadow-probe-1>`);
+    // DSD template wrapper present
+    assert.match(out, /<template shadowrootmode="open">/);
+    // Component rendered the prop value inside the shadow tree
+    assert.match(out, /class="shadow-label">rendered-in-shadow</);
+  });
+
+  test('string value with HTML special chars round-trips through escape and back', async () => {
+    class HtmlStr extends WebComponent {
+      static properties = { text: { type: String } };
+      constructor() { super(); this.text = ''; }
+      render() {
+        return html`<p data-len=${String(this.text.length)}>${this.text}</p>`;
+      }
+    }
+    HtmlStr.register('html-str-probe-1');
+
+    const tricky = `Tags: <b>bold</b> & "quoted" & 'apos'`;
+    const out = await renderToString(html`<html-str-probe-1 .text=${tricky}></html-str-probe-1>`);
+    // The component received the raw string (its length matches), so the
+    // wire round-trip preserved every byte.
+    assert.match(out, new RegExp(`data-len="${tricky.length}"`));
+    // Text content escaped by escapeText on render: < => &lt;, etc.
+    // The exact escaping is the renderer's concern; we only need to
+    // verify the special chars made it through as content. Look for
+    // the literal substring "bold" inside an escaped <b> form.
+    assert.match(out, /&lt;b&gt;bold&lt;\/b&gt;/);
+    assert.match(out, /&amp;/);
+  });
+
+  test('light DOM <slot>: prop binding on the host AND on a slotted child', async () => {
+    class SlotChild extends WebComponent {
+      static properties = { item: { type: Object } };
+      constructor() { super(); this.item = null; }
+      render() {
+        return html`<em class="slotted">${this.item ? this.item.label : 'none'}</em>`;
+      }
+    }
+    SlotChild.register('slot-child-probe');
+
+    class SlotHost extends WebComponent {
+      static properties = { title: { type: String } };
+      constructor() { super(); this.title = ''; }
+      render() {
+        return html`
+          <section>
+            <h3>${this.title}</h3>
+            <div class="content"><slot></slot></div>
+          </section>
+        `;
+      }
+    }
+    SlotHost.register('slot-host-probe');
+
+    const data = { label: 'projected' };
+    const out = await renderToString(html`
+      <slot-host-probe .title=${'host-title'}>
+        <slot-child-probe .item=${data}></slot-child-probe>
+      </slot-host-probe>
+    `);
+    // Host's own prop is applied: title appears
+    assert.match(out, /<h3>host-title<\/h3>/);
+    // Slotted child's prop is applied: projected label appears
+    assert.match(out, /class="slotted">projected</);
+  });
+
+  test('light DOM <slot name>: named slot with prop binding on the slotted child', async () => {
+    class CardHost extends WebComponent {
+      render() {
+        return html`
+          <article>
+            <header><slot name="title"></slot></header>
+            <main><slot></slot></main>
+          </article>
+        `;
+      }
+    }
+    CardHost.register('card-host-probe');
+
+    class TitleProbe extends WebComponent {
+      static properties = { value: { type: String } };
+      constructor() { super(); this.value = ''; }
+      render() { return html`<h2 class="t">${this.value}</h2>`; }
+    }
+    TitleProbe.register('title-probe-1');
+
+    const out = await renderToString(html`
+      <card-host-probe>
+        <title-probe-1 slot="title" .value=${'Slotted Title'}></title-probe-1>
+        <p>body</p>
+      </card-host-probe>
+    `);
+    assert.match(out, /class="t">Slotted Title</);
+    assert.match(out, /<p>body<\/p>/);
+  });
+
+  test('repeat() directive: each iteration receives its own prop', async () => {
+    const { repeat } = await import('../packages/core/src/repeat.js');
+    class Row extends WebComponent {
+      static properties = { post: { type: Object } };
+      constructor() { super(); this.post = null; }
+      render() {
+        return html`<li data-id=${String(this.post && this.post.id)}>${this.post && this.post.title}</li>`;
+      }
+    }
+    Row.register('repeat-row-probe');
+
+    const posts = [
+      { id: 10, title: 'alpha' },
+      { id: 20, title: 'beta' },
+      { id: 30, title: 'gamma' },
+    ];
+    const out = await renderToString(html`
+      <ul>${repeat(posts, (p) => p.id, (p) => html`<repeat-row-probe .post=${p}></repeat-row-probe>`)}</ul>
+    `);
+    assert.match(out, /data-id="10">alpha</);
+    assert.match(out, /data-id="20">beta</);
+    assert.match(out, /data-id="30">gamma</);
+  });
+
+  test('deeply nested chain (3 levels) propagates props correctly', async () => {
+    class Leaf extends WebComponent {
+      static properties = { v: { type: String } };
+      constructor() { super(); this.v = ''; }
+      render() { return html`<span class="leaf">${this.v}</span>`; }
+    }
+    Leaf.register('chain-leaf');
+
+    class Mid extends WebComponent {
+      static properties = { down: { type: String } };
+      constructor() { super(); this.down = ''; }
+      render() { return html`<chain-leaf .v=${this.down}></chain-leaf>`; }
+    }
+    Mid.register('chain-mid');
+
+    class Top extends WebComponent {
+      static properties = { msg: { type: String } };
+      constructor() { super(); this.msg = ''; }
+      render() { return html`<chain-mid .down=${this.msg}></chain-mid>`; }
+    }
+    Top.register('chain-top');
+
+    const out = await renderToString(html`<chain-top .msg=${'deep'}></chain-top>`);
+    assert.match(out, /class="leaf">deep</);
+  });
+
+  test('attribute coexists with same-name prop binding (prop wins, attribute also serialized)', async () => {
+    // A subtle case: user writes both `foo="x"` AND `.foo=${y}`. The
+    // server emits both `foo="x"` and `data-webjs-prop-foo="..."`. The
+    // consumer applies the string attribute first, then overlays the
+    // typed prop. End behaviour: prop wins, but DOM has both attrs
+    // during SSR-to-hydration window.
+    class BothProbe extends WebComponent {
+      static properties = { mode: { type: String } };
+      constructor() { super(); this.mode = ''; }
+      render() { return html`<p>${this.mode}</p>`; }
+    }
+    BothProbe.register('both-probe-1');
+
+    const out = await renderToString(
+      html`<both-probe-1 mode="from-attr" .mode=${'from-prop'}></both-probe-1>`,
+    );
+    // Prop wins at render
+    assert.match(out, /<p>from-prop<\/p>/);
+    // Both attributes present on the element in the SSR output
+    assert.match(out, /mode="from-attr"/);
+    assert.match(out, /data-webjs-prop-mode="/);
+  });
 });
 
 // Client-side hydration tests live in test/client-property-bindings.test.js
