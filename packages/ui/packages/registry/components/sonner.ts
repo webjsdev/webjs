@@ -17,9 +17,8 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html, repeat } from '@webjskit/core';
 import { unsafeHTML } from '@webjskit/core/directives';
-import { repeat } from '@webjskit/core';
 import { cn } from '../lib/utils.ts';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';

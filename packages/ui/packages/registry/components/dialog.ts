@@ -199,6 +199,11 @@ export class UiDialog extends WebComponent {
   hide(): void { this.open = false; }
   toggle(): void { this.open = !this.open; }
 
+  // Back-compat getter: the previous API exposed `isOpen` while the
+  // new reactive prop is `open`. Tests + consumer code that read
+  // `dialog.isOpen` keep working.
+  get isOpen(): boolean { return this.open; }
+
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
     queueMicrotask(() => this._afterRender());

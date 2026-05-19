@@ -144,6 +144,10 @@ export class UiAlertDialog extends WebComponent {
   show(): void { this.open = true; }
   hide(): void { this.open = false; }
 
+  // Back-compat getter: tests + consumer code that read `el.isOpen`
+  // keep working alongside the reactive `open` prop.
+  get isOpen(): boolean { return this.open; }
+
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
     queueMicrotask(() => this._afterRender());
