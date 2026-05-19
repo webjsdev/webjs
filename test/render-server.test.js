@@ -26,8 +26,12 @@ test('drops event handlers on server', async () => {
   assert.equal(await renderToString(html`<button @click=${() => {}}>go</button>`), '<button >go</button>');
 });
 
-test('drops properties on server', async () => {
-  assert.equal(await renderToString(html`<input .value=${'typed'} />`), '<input  />');
+test('property bindings serialize into data-webjs-prop-* attributes on server', async () => {
+  // Previously these holes were dropped (lossy). Now they survive SSR
+  // via a side-channel attribute that the SSR walker reads for custom
+  // elements and the client renderer applies + strips on hydration.
+  const out = await renderToString(html`<input .value=${'typed'} />`);
+  assert.match(out, /data-webjs-prop-value="[^"]*typed[^"]*"/);
 });
 
 test('boolean attribute renders only when truthy', async () => {
