@@ -33,73 +33,86 @@
  *
  * Design tokens used: inherited from toggleClass.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
 const ROOT_BASE =
   'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
 
-export class UiToggleGroup extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'variant', 'size', 'spacing', 'type', 'orientation'];
+export class UiToggleGroup extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+    type: { type: String, reflect: true },
+    variant: { type: String, reflect: true },
+    size: { type: String, reflect: true },
+    spacing: { type: String, reflect: true },
+    orientation: { type: String, reflect: true },
+  };
+  declare value: string;
+  declare type: 'single' | 'multiple';
+  declare variant: ToggleVariant;
+  declare size: ToggleSize;
+  declare spacing: string;
+  declare orientation: 'horizontal' | 'vertical';
+
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.value = '';
+    this.type = 'single';
+    this.variant = 'default';
+    this.size = 'default';
+    this.spacing = '0';
+    this.orientation = 'horizontal';
   }
 
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'toggle-group');
-    if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
-    if (!this.hasAttribute('variant')) this.setAttribute('variant', 'default');
-    if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
-    if (!this.hasAttribute('spacing')) this.setAttribute('spacing', '0');
-    // shadcn's radix-* and base-* styles all expose orientation;
-    // default "horizontal" matches Radix ToggleGroup.Root.
-    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'horizontal');
-    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
     this.setAttribute('role', 'group');
-    this._applyClass();
-    this._reflect();
     this.addEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
+    super.disconnectedCallback?.();
   }
 
-  attributeChangedCallback(name: string): void {
-    if (name === 'orientation') {
-      this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
-    }
-    this._applyClass();
-    this._reflect();
-  }
-
-  private get _type(): 'single' | 'multiple' {
-    return (this.getAttribute('type') as 'single' | 'multiple') ?? 'single';
-  }
-
-  private get _values(): Set<string> {
-    const raw = this.getAttribute('value') ?? '';
+  get _values(): Set<string> {
+    const raw = this.value ?? '';
     return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
   }
 
-  private _setValues(values: Set<string>): void {
+  _setValues(values: Set<string>): void {
     const next = Array.from(values).join(',');
-    if (this._type === 'single') {
-      this.setAttribute('value', next.split(',')[0] ?? '');
+    if (this.type === 'single') {
+      this.value = next.split(',')[0] ?? '';
     } else {
-      this.setAttribute('value', next);
+      this.value = next;
     }
   }
 
-  private _applyClass(): void {
-    const userClass = this.getAttribute('class') ?? '';
-    const spacing = this.getAttribute('spacing') ?? '0';
-    this.setAttribute('data-variant', this.getAttribute('variant') ?? 'default');
-    this.setAttribute('data-size', this.getAttribute('size') ?? 'default');
-    this.setAttribute('data-spacing', spacing);
-    const gap = spacing === '0' ? '' : 'gap-1';
-    this.className = cn(ROOT_BASE, gap, userClass);
+  render() {
+    this.setAttribute('data-variant', this.variant);
+    this.setAttribute('data-size', this.size);
+    this.setAttribute('data-spacing', this.spacing);
+    this.setAttribute('data-orientation', this.orientation);
+    const gap = this.spacing === '0' ? '' : 'gap-1';
+    this.className = cn(ROOT_BASE, gap, this._userClass);
+    // Items live in the DOM via the slot. Update their state in a
+    // microtask so the slot adoption / projection has settled before we
+    // walk them.
+    queueMicrotask(() => this._updateItems());
+    return html`<slot></slot>`;
   }
 
-  private _reflect(): void {
+  _updateItems(): void {
     const values = this._values;
     const items = this.querySelectorAll<HTMLElement>('ui-toggle-group-item');
     items.forEach((item) => {
@@ -110,11 +123,11 @@ export class UiToggleGroup extends Base {
     });
   }
 
-  private _onItemClick = (e: CustomEvent): void => {
+  _onItemClick = (e: CustomEvent): void => {
     const v = e.detail?.value as string | undefined;
     if (!v) return;
     const values = this._values;
-    if (this._type === 'single') {
+    if (this.type === 'single') {
       values.clear();
       values.add(v);
     } else {
@@ -124,55 +137,78 @@ export class UiToggleGroup extends Base {
     this._setValues(values);
     this.dispatchEvent(
       new CustomEvent('ui-value-change', {
-        detail: { value: this.getAttribute('value') ?? '' },
+        detail: { value: this.value },
         bubbles: true,
       }),
     );
   };
 }
-defineElement('ui-toggle-group', UiToggleGroup);
+UiToggleGroup.register('ui-toggle-group');
 
 const ITEM_EXTRA =
   'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l';
 
-export class UiToggleGroupItem extends Base {
+export class UiToggleGroupItem extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+  };
+  declare value: string;
+
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.value = '';
+  }
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'toggle-group-item');
     this.setAttribute('role', 'button');
     this.setAttribute('tabindex', '0');
-    this._applyClass();
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
     this.removeEventListener('keydown', this._onKeyDown);
+    super.disconnectedCallback?.();
   }
-  private get _group(): UiToggleGroup | null {
+
+  get _group(): UiToggleGroup | null {
     return this.closest('ui-toggle-group') as UiToggleGroup | null;
   }
-  private _applyClass(): void {
-    const userClass = this.getAttribute('class') ?? '';
+
+  render() {
     const group = this._group;
     const variant = (group?.getAttribute('variant') ?? 'default') as ToggleVariant;
     const size = (group?.getAttribute('size') ?? 'default') as ToggleSize;
+    const spacing = group?.getAttribute('spacing') ?? '0';
     this.setAttribute('data-variant', variant);
     this.setAttribute('data-size', size);
-    this.setAttribute('data-spacing', group?.getAttribute('spacing') ?? '0');
-    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA, userClass);
+    this.setAttribute('data-spacing', spacing);
+    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA, this._userClass);
+    return html`<slot></slot>`;
   }
-  private _onClick = (): void => {
-    const v = this.getAttribute('value');
+
+  _onClick = (): void => {
+    const v = this.value;
     if (!v) return;
     this.dispatchEvent(
       new CustomEvent('ui-toggle-item-click', { detail: { value: v }, bubbles: true }),
     );
   };
-  private _onKeyDown = (e: KeyboardEvent): void => {
+
+  _onKeyDown = (e: KeyboardEvent): void => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       this._onClick();
     }
   };
 }
-defineElement('ui-toggle-group-item', UiToggleGroupItem);
+UiToggleGroupItem.register('ui-toggle-group-item');
