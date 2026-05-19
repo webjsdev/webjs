@@ -43,8 +43,12 @@ If running without interactive approval (sandbox, auto-approve, etc.):
 ## Mandatory workflow
 
 Every code change must include:
-1. Commit and push. COMMIT AND PUSH after each logical unit of work.
-   Always `git push` after committing. Don't accumulate changes. Automatic.
+1. Commit and push PER LOGICAL UNIT, not at the end. One feature, one fix,
+   one rename, one doc rewrite per commit. Always `git push` after
+   committing. Don't accumulate changes. If you have 5+ unstaged files
+   spanning different concerns, commit before continuing. The Claude Code
+   hook at `.claude/hooks/nudge-uncommitted.sh` enforces threshold 4 for
+   Claude users; Copilot users should self-enforce the same rule. Automatic.
 2. Server tests in test/unit/*.test.ts (node:test for actions, queries, utilities)
 3. Browser tests in test/browser/*.test.js (WTR + Playwright, real Chromium)
 4. Documentation updates (AGENTS.md for API, docs/ for user guides)
