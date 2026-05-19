@@ -16,6 +16,7 @@ const NAV_SECTIONS = [
       { href: '/docs/getting-started', label: 'Introduction' },
       { href: '/docs/ai-first', label: 'AI-First Development' },
       { href: '/docs/architecture', label: 'Architecture' },
+      { href: '/docs/no-build', label: 'No-Build Model' },
       { href: '/docs/configuration', label: 'Configuration' },
     ],
   },
