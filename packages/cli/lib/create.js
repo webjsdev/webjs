@@ -275,6 +275,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Cursor config + hooks
     '.cursor/hooks.json',
     '.cursor/hooks/nudge-uncommitted.sh',
+    // OpenCode plugins (loaded as TS by Bun at runtime)
+    '.opencode/plugins/nudge-uncommitted.ts',
     // Cross-agent config files
     '.cursorrules',
     '.windsurfrules',
