@@ -60,11 +60,6 @@ export const RULES = [
       'Component files that define a class extending WebComponent must register the class with ClassName.register(\'tag\') (or customElements.define). The server-side scanner derives the module URL from the file path at boot.',
   },
   {
-    name: 'no-server-imports-in-components',
-    description:
-      'Component files must not directly import from @prisma/client, node:*, or lib/ paths.',
-  },
-  {
     name: 'no-server-env-in-components',
     description:
       'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
@@ -572,33 +567,6 @@ export async function checkConventions(appDir, opts) {
             file: rel,
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
             fix: `Replace with \`declare ${bad}: <Type>;\` and set the default inside \`constructor()\` after \`super()\`.`,
-          });
-        }
-      }
-    }
-  }
-
-  // --- Rule: no-server-imports-in-components ---
-  if (isRuleEnabled('no-server-imports-in-components', overrides)) {
-    for (const { abs, rel, content } of files) {
-      if (!isComponentFile(rel)) continue;
-      // Skip server action files: they are allowed to import anything
-      if (isServerActionFile(abs, content)) continue;
-
-      const importPatterns = [
-        { re: /import\s+.*from\s+['"]@prisma\/client['"]/gm, label: '@prisma/client' },
-        { re: /import\s+.*from\s+['"]node:[^'"]+['"]/gm, label: 'node:* built-in' },
-        { re: /import\s+.*from\s+['"]\.{0,2}\/lib\/[^'"]*['"]/gm, label: 'lib/' },
-      ];
-
-      for (const { re, label } of importPatterns) {
-        const match = re.exec(content);
-        if (match) {
-          violations.push({
-            rule: 'no-server-imports-in-components',
-            file: rel,
-            message: `Component imports ${label} directly; this will break in the browser`,
-            fix: 'Move the import into a .server.{js,ts} file and call it via a server action',
           });
         }
       }
