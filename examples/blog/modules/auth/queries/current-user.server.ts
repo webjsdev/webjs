@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from '@webjskit/server';
-import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.ts';
+import { getUserByToken, SESSION_COOKIE } from '../../../lib/server/session.ts';
 import type { PublicUser } from '../types.ts';
 
 /**

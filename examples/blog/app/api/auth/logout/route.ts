@@ -1,6 +1,6 @@
 import { cookies } from '@webjskit/server';
 import { logout } from '../../../../modules/auth/actions/logout.server.ts';
-import { SESSION_COOKIE, clearSessionCookieHeader } from '../../../../lib/session.ts';
+import { SESSION_COOKIE, clearSessionCookieHeader } from '../../../../lib/server/session.ts';
 
 export async function POST() {
   await logout(cookies().get(SESSION_COOKIE));

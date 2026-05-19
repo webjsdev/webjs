@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/server/prisma.ts';
 import { formatComment } from '../utils/format.ts';
 import type { CommentFormatted } from '../types.ts';
 

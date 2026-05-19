@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/server/prisma.ts';
 import { currentUser } from '../../auth/queries/current-user.server.ts';
 import { publish } from '../utils/bus.ts';
 import { formatComment } from '../utils/format.ts';
