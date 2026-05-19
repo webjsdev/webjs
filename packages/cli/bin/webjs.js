@@ -191,16 +191,27 @@ async function main() {
       break;
     }
     case 'check': {
-      const { checkConventions, RULES } = await import('@webjskit/server/check');
-      const violations = await checkConventions(process.cwd());
+      const { checkConventions, RULES, loadConventionOverrides } = await import('@webjskit/server/check');
 
       if (rest.includes('--rules')) {
-        console.log('webjs check, available rules:\n');
+        const overrides = await loadConventionOverrides(process.cwd());
+        const anyOverride = Object.keys(overrides).length > 0;
+        console.log('webjs check, available rules:');
+        console.log('  All rules are ENABLED by default. A rule is only off when');
+        console.log('  package.json "webjs": { "conventions": { ... } } sets it');
+        console.log('  to false.\n');
         for (const r of RULES) {
-          console.log(`  ${r.name.padEnd(30)} ${r.description}`);
+          const off = overrides[r.name] === false;
+          const status = off ? '[disabled by override]' : '[enabled]';
+          console.log(`  ${r.name.padEnd(30)} ${status.padEnd(24)} ${r.description}`);
+        }
+        if (!anyOverride) {
+          console.log('\n  (no overrides found; every rule above is active in this project)');
         }
         break;
       }
+
+      const violations = await checkConventions(process.cwd());
 
       if (violations.length === 0) {
         console.log('webjs check: all conventions pass ✓');

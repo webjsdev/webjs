@@ -13,8 +13,10 @@ import { walk } from './fs-walk.js';
  * Each violation includes a machine-readable `rule` identifier, the offending
  * `file` (relative to appDir), a human-readable `message`, and a suggested
  * `fix`. Agents should iterate the array and apply (or propose) the fixes.
- * Rules can be disabled per-project via `webjs.conventions.js` or the
- * `"conventions"` key in `package.json`.
+ * Rules can be disabled per-project via the
+ * `"webjs": { "conventions": { … } }` key in `package.json`. That is
+ * the only supported config surface. If the key is absent, every
+ * rule defaults to enabled.
  *
  * @module check
  */
@@ -121,42 +123,38 @@ function isComponentFile(relPath) {
 }
 
 /**
- * Load overrides from `webjs.conventions.js` (default export) or the
- * `"conventions"` key in `package.json`. Returns a map of rule name to
- * boolean (true = enabled, false = disabled). Missing rules default to true.
+ * Public wrapper around `loadOverrides` for callers (CLI, docs tools)
+ * that want to inspect what's disabled in a project without running
+ * the full check pipeline.
+ *
+ * @param {string} appDir
+ * @returns {Promise<Record<string, boolean>>}
+ */
+export async function loadConventionOverrides(appDir) {
+  return loadOverrides(appDir);
+}
+
+/**
+ * Load overrides from the `"webjs": { "conventions": { … } }` key in
+ * `package.json`. Returns a map of rule name to boolean (true =
+ * enabled, false = disabled). Missing rules default to true.
  *
  * @param {string} appDir
  * @returns {Promise<Record<string, boolean>>}
  */
 async function loadOverrides(appDir) {
-  /** @type {Record<string, boolean>} */
-  let overrides = {};
-
-  // Try webjs.conventions.js first
   try {
-    const conventionsPath = join(appDir, 'webjs.conventions.js');
-    await stat(conventionsPath);
-    const { pathToFileURL } = await import('node:url');
-    const mod = await import(pathToFileURL(conventionsPath).toString());
-    const cfg = mod.default || mod;
-    if (cfg && typeof cfg === 'object') {
-      overrides = /** @type {Record<string, boolean>} */ (cfg);
+    const pkgPath = join(appDir, 'package.json');
+    const pkgText = await readFile(pkgPath, 'utf8');
+    const pkg = JSON.parse(pkgText);
+    if (pkg.webjs && typeof pkg.webjs === 'object'
+      && pkg.webjs.conventions && typeof pkg.webjs.conventions === 'object') {
+      return pkg.webjs.conventions;
     }
   } catch {
-    // No conventions file: try package.json
-    try {
-      const pkgPath = join(appDir, 'package.json');
-      const pkgText = await readFile(pkgPath, 'utf8');
-      const pkg = JSON.parse(pkgText);
-      if (pkg.conventions && typeof pkg.conventions === 'object') {
-        overrides = pkg.conventions;
-      }
-    } catch {
-      // No package.json or no conventions key: everything enabled
-    }
+    // No package.json: every rule defaults to enabled.
   }
-
-  return overrides;
+  return {};
 }
 
 /**
@@ -428,8 +426,9 @@ function findFieldInitializers(classBody, props) {
  * @param {string} appDir - absolute path to the app root (the directory
  *   containing `app/`, `modules/`, `components/`, etc.)
  * @param {{ rules?: Record<string, boolean> }} [opts] - programmatic
- *   overrides. Merged on top of file-based overrides (package.json /
- *   webjs.conventions.js). Set a rule to `false` to skip it.
+ *   overrides. Merged on top of file-based overrides loaded from
+ *   `package.json` `"webjs"."conventions"`. Set a rule to `false` to
+ *   skip it.
  * @returns {Promise<Violation[]>}
  *
  * @example

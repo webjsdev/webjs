@@ -23,17 +23,10 @@ webjs start [--port 3000]</pre>
     <h2>No build step</h2>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
       <p style="margin:0 0 .5rem;font-weight:600">Recommended for production: HTTP/2 at the edge</p>
-      <p style="margin:0">webjs's no-build, per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM / single-server deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1, so TLS termination is the proxy's responsibility, not the framework's.</p>
+      <p style="margin:0">webjs's per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1, so TLS termination is the proxy's responsibility, not the framework's.</p>
     </div>
-    <p>webjs has no bundler and no <code>webjs build</code> command. The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code>. There is no compile, bundle, or "prepare for production" phase. The Rails 7+ / Hotwire model:</p>
-    <ul>
-      <li>The browser fetches each module via the import graph, resolved through an <code>&lt;script type="importmap"&gt;</code> emitted in the document head.</li>
-      <li>For every page render, the SSR pipeline emits <code>&lt;link rel="modulepreload"&gt;</code> hints for the components on that page plus their transitive dependencies, so the browser fetches them in parallel instead of waterfall-ing through nested imports.</li>
-      <li>HTTP/2 multiplex at the edge makes per-file serving as fast as (or faster than) bundling. <code>webjs start</code> speaks plain HTTP/1.1 to its upstream. Let a reverse proxy (PaaS edge, nginx, Caddy, Traefik) terminate HTTP/2 to the browser.</li>
-      <li>Bare-specifier imports (<code>from "react"</code>) are auto-bundled per-package at server startup and served at <code>/__webjs/vendor/&lt;pkg&gt;.js</code>. These are immutable URLs that cache aggressively.</li>
-      <li>TypeScript files are transformed by esbuild on first request and cached by mtime. Same loader in dev and prod.</li>
-    </ul>
-    <p>Granular cache invalidation is a real benefit: edit one component, only that file's content hash changes, only that one re-downloads on the user's next visit. A bundler would invalidate the entire bundle on any change.</p>
+    <p>The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code>. There is no compile, bundle, or "prepare for production" phase. Production performance comes from HTTP/2 multiplex plus SSR-time <code>modulepreload</code> hints, not concatenation.</p>
+    <p>The full mechanism (importmap, module graph, vendor bundling, 103 Early Hints, granular cache invalidation) lives in <a href="/docs/no-build">No-Build Model</a>. This page covers the deployment-side concerns.</p>
 
     <h2>Production Features</h2>
 
@@ -73,21 +66,13 @@ readinessProbe:
   periodSeconds: 5</pre>
 
     <h2>HTTP/2: at the edge, not in webjs</h2>
-    <p>webjs delegates TLS termination + HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
+    <p>webjs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
     <ul>
       <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration: you get HTTP/2 to the browser the moment you deploy.</li>
       <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination. They handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
     </ul>
-    <p>HTTP/2 benefits for webjs apps:</p>
-    <ul>
-      <li>Multiplexed streams eliminate head-of-line blocking for per-file ES module serving (many small files in parallel over one connection).</li>
-      <li>Header compression (HPACK) amortizes header overhead across the many module fetches a typical page issues.</li>
-      <li>Server push is not used. <code>103 Early Hints</code> are used instead (see below). Most major edges (Cloudflare, fly-proxy, Fastly) forward these to the browser.</li>
-    </ul>
-
-    <h2>103 Early Hints</h2>
-    <p>In production, when a GET/HEAD request matches a page route, webjs sends a <code>103 Early Hints</code> response before starting SSR. The hints contain <code>Link: &lt;url&gt;; rel=modulepreload</code> headers for the page's JavaScript modules (or the bundle). This lets the browser start fetching JS while the server is still rendering the HTML.</p>
-    <p>Early Hints are automatic in production. They are disabled in dev mode because file churn during development could send stale URLs.</p>
+    <p>Multiplexed streams and header compression (HPACK) are what make per-file ESM competitive with bundling. <a href="/docs/no-build">No-Build Model</a> explains why, and which transport features matter for the import graph.</p>
+    <p><strong>Forwarding 103 Early Hints.</strong> webjs sends a <code>103 Early Hints</code> response carrying <code>Link: rel=modulepreload</code> headers before SSR begins, so the browser can start fetching JS while the server renders. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client transparently. If yours doesn't, the page still works (the headers are just lost) but you skip the head-start. Early Hints are disabled in dev because file churn could send stale URLs.</p>
 
     <h2>Pluggable Logger</h2>
     <p>webjs includes a minimal logger that writes structured JSON in production and human-readable lines in development:</p>
@@ -205,8 +190,8 @@ HEALTHCHECK CMD curl -f http://localhost:3000/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine. esbuild ships its own native binary, used at runtime for <code>.ts</code> transformation. No extra system packages.</li>
-      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjskit/server</code> (which depends on esbuild) is a runtime dependency, so the TS loader stays available in production.</li>
+      <li><code>node:slim</code> works fine. The primary TypeScript stripper is Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed for the common case.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjskit/server</code> is a runtime dependency, which keeps the esbuild fallback available for the rare third-party file that uses non-erasable TypeScript syntax. See <a href="/docs/no-build">No-Build Model</a> for when the fallback kicks in.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
