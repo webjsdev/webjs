@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '../../../lib/server/prisma.ts';
+import { COMMENT_MAX_LENGTH } from '../../../lib/constants.ts';
 import { currentUser } from '../../auth/queries/current-user.server.ts';
 import { publish } from '../utils/bus.ts';
 import { formatComment } from '../utils/format.ts';
@@ -20,7 +21,7 @@ export async function createComment(
   const body = typeof (input as any)?.body === 'string' ? (input as any).body.trim() : '';
   if (!Number.isFinite(postId)) return { success: false, error: 'postId required', status: 400 };
   if (!body) return { success: false, error: 'body is required', status: 400 };
-  if (body.length > 2000) return { success: false, error: 'body too long', status: 400 };
+  if (body.length > COMMENT_MAX_LENGTH) return { success: false, error: 'body too long', status: 400 };
 
   const post = await prisma.post.findUnique({ where: { id: postId } });
   if (!post) return { success: false, error: 'Post not found', status: 404 };

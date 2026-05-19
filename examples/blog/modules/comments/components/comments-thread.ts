@@ -2,6 +2,7 @@ import { WebComponent, html, repeat, connectWS } from '@webjskit/core';
 import '../../../components/muted-text.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';
+import { COMMENT_MAX_LENGTH } from '../../../lib/constants.ts';
 import type { CommentFormatted } from '../types.ts';
 
 type State = { comments: CommentFormatted[]; busy: boolean; error: string | null };
@@ -94,7 +95,8 @@ export class CommentsThread extends WebComponent {
       ${this.signedIn
         ? html`<form class="flex gap-2 p-3 bg-bg-elev border border-border rounded" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
             <input class="${inputClass()} flex-1"
-                   placeholder="Add a comment…" ?disabled=${busy} autocomplete="off">
+                   placeholder="Add a comment…" maxlength=${COMMENT_MAX_LENGTH}
+                   ?disabled=${busy} autocomplete="off">
             <button class=${buttonClass({ size: 'sm' })} type="submit" ?disabled=${busy}>Post</button>
           </form>
           ${error ? html`<p class="mt-2 text-accent font-mono text-xs leading-snug">${error}</p>` : ''}`
