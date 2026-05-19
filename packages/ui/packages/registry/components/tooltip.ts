@@ -68,6 +68,10 @@ export class UiTooltip extends WebComponent {
     return html`<slot></slot>`;
   }
 
+  // Back-compat getter: tests + consumer code that read `el.isOpen`
+  // keep working alongside the reactive `open` prop.
+  get isOpen(): boolean { return this.open; }
+
   show(): void {
     clearTimeout(this._showTimer);
     clearTimeout(this._hideTimer);
