@@ -49,7 +49,7 @@
  * Design tokens used: --background, --border, --muted-foreground, --foreground.
  */
 
-import { cn, Base, defineElement } from '../../lib/utils.ts';
+import { cn, Base, defineElement } from '../../lib/utils/cn.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers for static subparts. Compose with plain elements.
