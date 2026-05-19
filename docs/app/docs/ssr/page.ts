@@ -119,9 +119,27 @@ async function loadExpensiveItems() {
     <ol>
       <li>The class is registered via <code>Class.register('tag')</code> .</li>
       <li>The browser upgrades every instance of that tag in the document, calling <code>connectedCallback()</code>.</li>
-      <li>In <code>connectedCallback</code>, if <code>this.shadowRoot</code> already exists (from DSD), webjs skips <code>attachShadow()</code> and re-renders into the existing shadow root. This means the DSD content serves as the initial paint, and the client render just adds event listeners and reactive bindings.</li>
+      <li>In <code>connectedCallback</code>, the framework first applies any <code>data-webjs-prop-*</code> attributes emitted by SSR for <code>.prop=\${value}</code> bindings (decoding via the wire serializer, assigning as JS properties, stripping the attributes from the live DOM).</li>
+      <li>If <code>this.shadowRoot</code> already exists (from DSD), webjs skips <code>attachShadow()</code> and re-renders into the existing shadow root. The DSD content serves as the initial paint, and the client render just adds event listeners and reactive bindings.</li>
       <li>The fine-grained client renderer preserves focus, cursor position, scroll offset, and form state across subsequent state updates.</li>
     </ol>
+
+    <h2>Template-hole SSR coverage</h2>
+    <p>Each <code>html\`\`</code> hole has well-defined SSR semantics:</p>
+    <table>
+      <thead>
+        <tr><th>Hole</th><th>Server (SSR)</th><th>Client</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>&lt;div&gt;\${x}&lt;/div&gt;</code> (text)</td><td>Rendered with HTML escaping</td><td>Same</td></tr>
+        <tr><td><code>class=\${x}</code> (attribute)</td><td>Serialized as <code>class="x"</code></td><td>Same</td></tr>
+        <tr><td><code>?disabled=\${b}</code> (boolean)</td><td>Emits <code>disabled=""</code> iff truthy</td><td>Same</td></tr>
+        <tr><td><code>.prop=\${v}</code> on a <strong>custom element</strong></td><td>Round-trips via <code>data-webjs-prop-*</code> attribute carrying the wire-encoded value; consumed by the SSR walker before <code>render()</code></td><td>Applied + stripped on <code>connectedCallback</code></td></tr>
+        <tr><td><code>.prop=\${v}</code> on a <strong>native element</strong></td><td>Dropped (no SSR walker for native tags). Use the attribute form for SSR-visible values.</td><td>Applied directly as <code>el[prop] = v</code> when the template runs in the browser</td></tr>
+        <tr><td><code>@click=\${fn}</code> (event listener)</td><td>Dropped (no event loop on the server)</td><td>Bound via <code>addEventListener</code></td></tr>
+      </tbody>
+    </table>
+    <p>The custom-element <code>.prop</code> path supports rich types out of the box: Array, Object, Date, Map, Set, BigInt, and reference cycles. Functions, class instances with private state, and DOM nodes are unserializable; they drop with a dev warning. See <a href="/docs/components">Components</a> for the full property-binding semantics.</p>
 
     <h2>Metadata in &lt;head&gt;</h2>
     <p>The SSR pipeline collects metadata from the layout chain and the page, then injects it into the document <code>&lt;head&gt;</code>. You declare metadata via a named export:</p>

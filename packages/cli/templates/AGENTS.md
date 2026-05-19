@@ -376,9 +376,16 @@ the click handler is inert). Two consequences for how you write code:
    hydration.
 3. **Server-known data goes through the page function**, not into
    `connectedCallback`. Fetch in the page (which runs on the server),
-   pass the result down as a prop/attribute. SSR applies attributes
-   before `render()`, so the first paint has the right value with no
-   flash.
+   pass the result down via `.prop=${value}` (custom elements) or
+   `attr=${string}` (native elements). For custom elements, the wire
+   serializer round-trips Array / Object / Date / Map / Set / BigInt
+   through the SSR `data-webjs-prop-*` side-channel, so the
+   component's first paint already has the rich-typed value with no
+   flash. The framework owns the attribute, applies it on
+   `connectedCallback`, then strips it from the live DOM. For native
+   elements use `value=${v}` / `checked=${b}` etc.; `.value` on a
+   native element drops at SSR (the property form is for client-only
+   re-render scenarios like controlled inputs via `.value=${live(v)}`).
 4. **For write-paths, prefer `<form>` + server action over `fetch`.**
    Plain forms POST without JS; the client router upgrades them to
    partial-swaps automatically when scripts are active. One
