@@ -157,7 +157,11 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    preferences (theme, sidebar collapsed, etc.).
 5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
    -- --name <description>`. Access via `import { prisma } from
-   '../../../lib/prisma.ts'`. Never `new PrismaClient()`.
+   '../../../lib/prisma.ts'` **only inside `.server.{js,ts}` files,
+   `route.ts` handlers, or `middleware.ts`**. Never new `PrismaClient()`.
+   Components, pages, and layouts call into the wrapped server query
+   instead; the framework rewrites that import to an RPC stub on the
+   browser side, so prisma source never reaches the client.
 
 To switch to Postgres or MySQL: change `provider` in
 `prisma/schema.prisma` and the `DATABASE_URL` in `.env`. Do this only
@@ -243,7 +247,7 @@ modules/
 - One exported function per server action/query file
 - Server actions must use `'use server'` pragma or `.server.ts` extension
 - Components must call `Class.register('tag')`
-- Never import `@prisma/client`, `node:*`, or `lib/` directly from components. Use server actions instead
+- **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` holds both server-only infra (`lib/prisma.ts`) and browser-safe utilities (`lib/utils.ts` with `cn`); the convention is "if a `lib/` file needs Node APIs, only import it from server-only files."
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules
 
 ---
