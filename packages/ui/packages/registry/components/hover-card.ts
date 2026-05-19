@@ -25,7 +25,8 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` defaults (the auto-centering
@@ -36,35 +37,56 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 export const hoverCardContentClass = (): string =>
   'fixed z-50 w-64 m-0 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
 
-export class UiHoverCard extends Base {
-  static get observedAttributes(): string[] {
-    return ['open'];
-  }
-  private _showTimer: number | undefined;
-  private _hideTimer: number | undefined;
+export class UiHoverCard extends WebComponent {
+  static properties = {
+    open: { type: Boolean, reflect: true },
+  };
+  declare open: boolean;
 
-  connectedCallback(): void {
+  _showTimer: number | undefined;
+  _hideTimer: number | undefined;
+
+  constructor() {
+    super();
+    this.open = false;
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'hover-card');
-    this._reflect();
   }
-  attributeChangedCallback(): void {
-    this._reflect();
-    if (this.hasAttribute('open')) this._reposition();
+
+  render() {
+    this.setAttribute('data-state', this.open ? 'open' : 'closed');
+    queueMicrotask(() => this._syncContent());
+    return html`<slot></slot>`;
   }
+
   show(): void {
     clearTimeout(this._hideTimer);
     const delay = Number(this.getAttribute('open-delay') ?? 700);
-    this._showTimer = window.setTimeout(() => this.setAttribute('open', ''), delay);
+    this._showTimer = window.setTimeout(() => { this.open = true; }, delay);
   }
+
   hide(): void {
     clearTimeout(this._showTimer);
     const delay = Number(this.getAttribute('close-delay') ?? 300);
-    this._hideTimer = window.setTimeout(() => this.removeAttribute('open'), delay);
+    this._hideTimer = window.setTimeout(() => { this.open = false; }, delay);
   }
-  _reposition(): void {
-    const trigger = this.querySelector<HTMLElement>(':scope > ui-hover-card-trigger');
-    const content = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
-    if (!trigger || !content) return;
+
+  _syncContent(): void {
+    const content = this.querySelector<HTMLElement>('ui-hover-card-content');
+    if (!content) return;
+    content.setAttribute('data-state', this.open ? 'open' : 'closed');
+    if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
+      if (this.open) (content as HTMLElement & { showPopover: () => void }).showPopover();
+      else (content as HTMLElement & { hidePopover: () => void }).hidePopover();
+    }
+    if (this.open) this._reposition(content);
+  }
+
+  _reposition(content: HTMLElement): void {
+    const trigger = this.querySelector<HTMLElement>('ui-hover-card-trigger');
+    if (!trigger) return;
     positionFloating(trigger, content, {
       side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
       align: (content.getAttribute('align') ?? 'center') as PopoverAlign,
@@ -72,58 +94,67 @@ export class UiHoverCard extends Base {
       alignOffset: Number(content.getAttribute('align-offset') ?? 0),
     });
   }
-  private _reflect(): void {
-    const open = this.hasAttribute('open');
-    this.setAttribute('data-state', open ? 'open' : 'closed');
-    const content = this.querySelector<HTMLElement>(':scope > ui-hover-card-content');
-    if (!content) return;
-    content.setAttribute('data-state', open ? 'open' : 'closed');
-    if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
-      if (open) (content as HTMLElement & { showPopover: () => void }).showPopover();
-      else (content as HTMLElement & { hidePopover: () => void }).hidePopover();
-    }
-  }
 }
-defineElement('ui-hover-card', UiHoverCard);
+UiHoverCard.register('ui-hover-card');
 
-export class UiHoverCardTrigger extends Base {
-  connectedCallback(): void {
+export class UiHoverCardTrigger extends WebComponent {
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'hover-card-trigger');
     this.addEventListener('mouseenter', this._onEnter);
     this.addEventListener('mouseleave', this._onLeave);
     this.addEventListener('focusin', this._onEnter);
     this.addEventListener('focusout', this._onLeave);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('mouseenter', this._onEnter);
     this.removeEventListener('mouseleave', this._onLeave);
     this.removeEventListener('focusin', this._onEnter);
     this.removeEventListener('focusout', this._onLeave);
+    super.disconnectedCallback?.();
   }
-  private _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
-  private _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
-}
-defineElement('ui-hover-card-trigger', UiHoverCardTrigger);
 
-export class UiHoverCardContent extends Base {
+  render() {
+    return html`<slot></slot>`;
+  }
+
+  _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+}
+UiHoverCardTrigger.register('ui-hover-card-trigger');
+
+export class UiHoverCardContent extends WebComponent {
+  _userClass: string = '';
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'hover-card-content');
     this.setAttribute('role', 'dialog');
     // Opt into the native top-layer via the Popover API in manual mode.
     // Manual (rather than auto) avoids the native light-dismiss closing
     // the card when the cursor is briefly off the trigger.
     if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(hoverCardContentClass(), userClass);
     // Keep open while pointer is over the content itself.
     this.addEventListener('mouseenter', this._onEnter);
     this.addEventListener('mouseleave', this._onLeave);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('mouseenter', this._onEnter);
     this.removeEventListener('mouseleave', this._onLeave);
+    super.disconnectedCallback?.();
   }
-  private _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
-  private _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+
+  render() {
+    this.className = cn(hoverCardContentClass(), this._userClass);
+    return html`<slot></slot>`;
+  }
+
+  _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
 }
-defineElement('ui-hover-card-content', UiHoverCardContent);
+UiHoverCardContent.register('ui-hover-card-content');
