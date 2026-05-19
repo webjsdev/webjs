@@ -283,13 +283,34 @@ Scripts:
 - `predev` hook auto-runs `prisma generate` before `npm run dev`
 - `prestart` hook runs `prisma migrate deploy` before `npm start` (idempotent in prod)
 
-Always import the client from `lib/prisma.ts` (never `new PrismaClient()` directly -
-the singleton avoids opening a new connection on every dev-server reload):
+Always import the client from `lib/prisma.ts` (never `new PrismaClient()`
+directly). The singleton avoids opening a new connection on every dev-server
+reload.
 
 ```ts
+// modules/users/queries/list-users.server.ts     ← must be a .server.ts file
+'use server';
 import { prisma } from '../../../lib/prisma.ts';
-const users = await prisma.user.findMany();
+
+export async function listUsers() {
+  return prisma.user.findMany();
+}
 ```
+
+**Where prisma imports can live** (this is enforced by `webjs check`):
+
+| File | Can `import { prisma } from '...lib/prisma.ts'`? |
+|---|---|
+| `**/*.server.{js,ts}` (server actions, queries) | Yes |
+| `app/**/route.ts` (HTTP handlers) | Yes (server-only execution, file never reaches the browser) |
+| `middleware.ts` (root and per-segment) | Yes (server-only) |
+| `app/**/{page,layout,loading,error,not-found}.{js,ts}` | **No.** These files load in the browser to register components, and prisma's transitive imports would crash. The `no-server-imports-in-pages` lint rule catches this. |
+| `components/**/*.ts`, `modules/*/components/**/*.ts` | **No.** Components are isomorphic. The `no-server-imports-in-components` lint rule catches this. |
+
+The pattern for **any** file that loads in the browser (page, layout,
+component): wrap the prisma call in a `.server.{js,ts}` file and import
+the function. The dev server rewrites the import into an RPC stub for the
+browser, so the prisma source never reaches the client.
 
 To switch to Postgres or MySQL: change `provider` in `prisma/schema.prisma`
 and the `DATABASE_URL` in `.env`.
