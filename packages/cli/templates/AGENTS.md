@@ -653,7 +653,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
 1. Branch before editing. Never push to `main` directly.
 2. Every code change comes with: unit test(s), AGENTS.md / docs updates if
    the feature surface changed, `webjs check` passing.
-3. Commit and push after each logical unit. No AI attribution trailers.
+3. Commit and push **per logical unit**, not at the end. A logical unit is one
+   feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
+   spanning different concerns, commit the current group before continuing.
+   The `.claude/hooks/nudge-uncommitted.sh` hook fires at threshold 4 to remind
+   you. No AI attribution trailers.
 4. When unsure how a framework feature works, `grep` or `cat` the
    relevant `node_modules/@webjskit/*/src/` file before asking the user.
 

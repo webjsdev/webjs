@@ -53,8 +53,14 @@ The user should never have to ask for tests or documentation.
 
 ## Git rules
 
-- COMMIT AND PUSH OFTEN. After each logical unit of work - don't accumulate
-  changes. Always `git push` after committing. This is automatic.
+- COMMIT AND PUSH PER LOGICAL UNIT, NOT AT THE END. One feature, one fix,
+  one rename, one doc rewrite per commit. Always `git push` after
+  committing. This is automatic.
+- HARD LIMIT: if you have 5+ unstaged files spanning different concerns,
+  commit before continuing. The Claude Code hook at
+  `.claude/hooks/nudge-uncommitted.sh` fires at threshold 4. Windsurf
+  users should self-enforce the same rule. Batching multiple logical units
+  into one commit is the failure mode this rule exists to prevent.
 - Meaningful commit messages: what changed and why
 - NEVER add Co-Authored-By or AI attribution trailers to commits
 - NEVER use em-dashes (U+2014), a hyphen-as-pause (` - `), or a
