@@ -656,8 +656,22 @@ composition, so a nested shell ends up dropped by the HTML parser.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.
-   The `.claude/hooks/nudge-uncommitted.sh` hook fires at threshold 4 to remind
-   you. No AI attribution trailers.
+   The framework ships a `nudge-uncommitted` hook for several agents that
+   fires at threshold 4:
+
+   | Agent | Hook path | Doc |
+   |---|---|---|
+   | Claude Code | `.claude/hooks/nudge-uncommitted.sh` (`PostToolUse`) | `.claude/settings.json` |
+   | Gemini CLI | `.gemini/hooks/nudge-uncommitted.sh` (`AfterTool`) | `.gemini/settings.json` |
+   | Cursor 1.7+ | `.cursor/hooks/nudge-uncommitted.sh` (`afterFileEdit`) | `.cursor/hooks.json` |
+   | Windsurf | text rule only (post-write hooks cannot inject context) | `.windsurfrules` |
+   | GitHub Copilot | text rule only (no hooks API) | `.github/copilot-instructions.md` |
+   | OpenCode | text rule only for now (TS plugin support planned) | `AGENTS.md` |
+   | Google Antigravity | text rule only (no hooks API) | `AGENTS.md` |
+
+   Tool-agnostic fallback: `.hooks/pre-commit` runs `webjs test` + `webjs check`
+   on every commit, regardless of which agent (or human) made it. No AI
+   attribution trailers in commit messages.
 4. When unsure how a framework feature works, `grep` or `cat` the
    relevant `node_modules/@webjskit/*/src/` file before asking the user.
 
