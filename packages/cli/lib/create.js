@@ -35,8 +35,11 @@ const UI_REGISTRY_ROOT = resolve(
 /**
  * Read a single @webjskit/ui registry component, rewrite its relative import
  * of `../lib/utils.ts` so it resolves correctly when written to
- * `components/ui/<name>.ts` in the scaffolded app (which puts utils at
- * `lib/utils.ts`, i.e. two levels up), and return the rewritten source.
+ * `components/ui/<name>.ts` in the scaffolded app. The scaffold puts the
+ * cn() helper at `lib/utils/cn.ts` (the lib/ root is reserved for app-wide
+ * non-utility files; lib/utils/ holds helper functions grouped by concern).
+ * From `components/ui/<x>.ts` the equivalent path is two-up + into the
+ * utils/ folder: `../../lib/utils/cn.ts`.
  *
  * @param {string} name  component name without `.ts` (e.g. 'button')
  * @returns {Promise<string|null>} source or null if not found
@@ -45,13 +48,9 @@ async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
   if (!existsSync(src)) return null;
   const raw = await readFile(src, 'utf8');
-  // The registry source lives at <registry>/components/<x>.ts and imports
-  // its sibling utils via '../lib/utils.ts'. Once copied to the user's
-  // project at components/ui/<x>.ts, the equivalent path is two-up:
-  // '../../lib/utils.ts'. Same rewrite for the unquoted form.
   return raw
-    .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+    .replaceAll("'../lib/utils.ts'", "'../../lib/utils/cn.ts'")
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils/cn.ts"');
 }
 
 /**
@@ -72,23 +71,26 @@ async function copyUiComponents(appDir, names) {
 }
 
 /**
- * Write `lib/utils.ts` (the `cn()` helper) and `components.json` so the
- * scaffolded app is pre-initialised for `webjs ui add`. Reads `lib/utils.ts`
- * verbatim from the registry source so we never drift.
+ * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
+ * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
+ * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
+ * scaffolded app so we never drift from the source.
  *
  * @param {string} appDir
  */
 async function writeUiBootstrap(appDir) {
-  // 1) lib/utils.ts: the cn() helper
+  // 1) lib/utils/cn.ts: the cn() helper
   const utilsSrc = join(UI_REGISTRY_ROOT, 'lib', 'utils.ts');
   if (existsSync(utilsSrc)) {
     const content = await readFile(utilsSrc, 'utf8');
-    await mkdir(join(appDir, 'lib'), { recursive: true });
-    await writeFile(join(appDir, 'lib', 'utils.ts'), content);
+    await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
+    await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), content);
   }
 
   // 2) components.json: the same shape `webjsui init` writes for webjs
-  // projects (see packages/ui/src/utils/detect-project.js).
+  // projects (see packages/ui/src/utils/detect-project.js). The utils
+  // alias points at lib/utils/cn so get-config.js's `+ '.ts'` resolves
+  // to lib/utils/cn.ts.
   const componentsJson = {
     $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
@@ -99,7 +101,7 @@ async function writeUiBootstrap(appDir) {
     },
     aliases: {
       components: 'components',
-      utils: 'lib/utils',
+      utils: 'lib/utils/cn',
       ui: 'components/ui',
       lib: 'lib',
     },
@@ -334,10 +336,16 @@ model User {
 }
 `);
 
-  await writeFile(join(appDir, 'lib', 'prisma.ts'), `/**
+  await mkdir(join(appDir, 'lib', 'server'), { recursive: true });
+  await writeFile(join(appDir, 'lib', 'server', 'prisma.ts'), `/**
  * Prisma client singleton. The \`globalThis\` trick keeps a single
  * instance across dev-server module reloads, so we don't open a new
  * DB connection on every file change.
+ *
+ * Lives under lib/server/ because the Prisma client is server-only:
+ * any file at lib/server/ must never be imported from pages, layouts,
+ * or components. Import it from .server.{js,ts} actions, route.ts
+ * handlers, or middleware.ts instead.
  */
 import { PrismaClient } from '@prisma/client';
 
@@ -464,10 +472,25 @@ export type ActionResult<T> =
     }
 
     const libDir = join(appDir, 'lib');
-    await mkdir(libDir, { recursive: true });
-    const uiSrc = join(TEMPLATES, 'lib', 'ui.ts');
+    await mkdir(join(libDir, 'utils'), { recursive: true });
+    const uiSrc = join(TEMPLATES, 'lib', 'utils', 'ui.ts');
     if (existsSync(uiSrc)) {
-      await cp(uiSrc, join(libDir, 'ui.ts'));
+      await cp(uiSrc, join(libDir, 'utils', 'ui.ts'));
+    }
+
+    // Demonstrate the lib/ structure end to end: a server-only example
+    // (lib/server/utils/logger.ts) and a browser-safe app-wide example
+    // (lib/constants.ts). AI agents see populated folders, not just
+    // documented conventions.
+    await mkdir(join(libDir, 'server', 'utils'), { recursive: true });
+    const loggerSrc = join(TEMPLATES, 'lib', 'server', 'utils', 'logger.ts');
+    if (existsSync(loggerSrc)) {
+      await cp(loggerSrc, join(libDir, 'server', 'utils', 'logger.ts'));
+    }
+    const constantsSrc = join(TEMPLATES, 'lib', 'constants.ts');
+    if (existsSync(constantsSrc)) {
+      const content = (await readFile(constantsSrc, 'utf8')).replace(/\{\{APP_NAME\}\}/g, name);
+      await writeFile(join(libDir, 'constants.ts'), content);
     }
 
     // Pre-initialise @webjskit/ui so the scaffold boots ready for
@@ -820,6 +843,7 @@ ThemeToggle.register('theme-toggle');
     app/api/health/route.ts
     app/api/users/route.ts               ← thin wrapper over server actions
     modules/users/{actions,queries,types.ts}
+    lib/server/prisma.ts                 ← server-only Prisma singleton
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   } else if (isSaas) {
@@ -830,10 +854,13 @@ ThemeToggle.register('theme-toggle');
     app/globals.css                      ← @webjskit/ui theme tokens
     components.json                      ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input,
-                    dialog,form,field,switch,checkbox}.ts
+                    dialog,switch,checkbox}.ts
     components/theme-toggle.ts
     modules/auth/{actions,queries,types.ts}
-    lib/{auth,prisma,password,utils}.ts  ← utils.ts is the cn() helper
+    lib/constants.ts                     ← app-wide browser-safe constants
+    lib/server/{prisma,password,auth}.ts ← server-only infrastructure
+    lib/server/utils/logger.ts           ← server-only helper example
+    lib/utils/{cn,ui}.ts                 ← browser-safe helpers grouped by concern
     prisma/schema.prisma                 ← User model
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
@@ -844,16 +871,19 @@ ThemeToggle.register('theme-toggle');
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
-    lib/ui.ts                    ← Tailwind class-bundle helpers (app-wide)
-    lib/utils.ts                 ← cn() helper for ui-* components
+    lib/constants.ts             ← app-wide browser-safe constants
+    lib/server/prisma.ts         ← server-only Prisma singleton
+    lib/server/utils/logger.ts   ← server-only helper example
+    lib/utils/cn.ts              ← cn() helper for ui-* components
+    lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
     modules/
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
   // Post-scaffold guidance. The full-stack and saas templates ship with
-  // @webjskit/ui already initialised (components.json, lib/utils.ts, the
-  // standard kit under components/ui/), so the user only runs `webjs dev`.
+  // @webjskit/ui already initialised (components.json, lib/utils/cn.ts,
+  // the standard kit under components/ui/), so the user only runs `webjs dev`.
   // The api template has no UI; we only mention `webjs ui` in case the
   // user later adds one.
   const uiNote = isApi

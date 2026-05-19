@@ -68,7 +68,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
 
     // Bootstrap files
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
-    assert.ok(await exists(join(appDir, 'lib', 'utils.ts')), 'lib/utils.ts should exist');
+    assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'app', 'globals.css')), 'app/globals.css should exist');
 
     // components.json shape matches what webjsui init writes for webjs
@@ -76,7 +76,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.equal(cfg.tailwind.css, 'app/globals.css');
     assert.equal(cfg.tailwind.baseColor, 'neutral');
     assert.equal(cfg.aliases.ui, 'components/ui');
-    assert.equal(cfg.aliases.utils, 'lib/utils');
+    assert.equal(cfg.aliases.utils, 'lib/utils/cn');
 
     // Standard component kit
     for (const name of ['button', 'card', 'alert', 'badge', 'separator', 'label', 'input']) {
@@ -88,7 +88,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
 
     // Relative import to cn() helper is rewritten for components/ui/ depth
     const button = await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8');
-    assert.match(button, /from '\.\.\/\.\.\/lib\/utils\.ts'/);
+    assert.match(button, /from '\.\.\/\.\.\/lib\/utils\/cn\.ts'/);
     assert.doesNotMatch(button, /from '\.\.\/lib\/utils\.ts'/);
 
     // Tier-1 button source exports the buttonClass function (no custom element).
@@ -220,11 +220,11 @@ test('api scaffold route imports resolve to real modules/ files', async () => {
   }
 });
 
-test('lib/utils.ts ships the cn() helper + Base + defineElement', async () => {
+test('lib/utils/cn.ts ships the cn() helper + Base + defineElement', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
-    const utils = await readFile(join(cwd, 'demo', 'lib', 'utils.ts'), 'utf8');
+    const utils = await readFile(join(cwd, 'demo', 'lib', 'utils', 'cn.ts'), 'utf8');
     assert.match(utils, /export function cn/);
     assert.match(utils, /ClassValue/);
     // Tier-2 custom elements (when added via `webjs ui add dialog`) import
