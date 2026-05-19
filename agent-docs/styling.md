@@ -12,7 +12,7 @@ durations). Consume via utility classes (`text-fg`, `bg-bg-elev`,
 
 **DRY via JS helpers, not `@apply`.** When the same bundle of Tailwind
 classes repeats across 2+ places, extract it into a helper in
-`app/_utils/ui.ts`:
+`lib/utils/ui.ts`:
 
 ```ts
 import { html } from '@webjskit/core';
@@ -35,7 +35,7 @@ export function backLink(href: string, label: string) {
 
 ```ts
 // app/blog/[slug]/page.ts
-import { rubric, backLink } from '../../_utils/ui.ts';
+import { rubric, backLink } from '../../../lib/utils/ui.ts';
 
 export default function Post({ params }) {
   return html`
@@ -51,7 +51,7 @@ export default function Post({ params }) {
 | Repeats | Action |
 |---|---|
 | Once | Inline the classes. |
-| 2–3 times, identical | Extract to `_utils/ui.ts`. |
+| 2–3 times, identical | Extract to `lib/utils/ui.ts`. |
 | Varies by 1–2 props | Extract with a small parameter (`mb: 'sm' \| 'md'`). |
 | Radically different per call site | Keep inline. Don't force-fit. |
 

@@ -44,7 +44,6 @@ app/                         thin route adapters
     posts/new/page.ts        /dashboard/posts/new
   (marketing)/about/page.ts  /about (route group, parens not in URL)
   ui-demo/page.ts            /ui-demo (showcases the @webjskit/ui kit)
-  _utils/format.ts           private folder (underscore, not routable)
   api/
     hello/route.ts           GET /api/hello
     posts/route.ts           GET/POST /api/posts
