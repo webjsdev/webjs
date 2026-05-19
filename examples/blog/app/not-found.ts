@@ -1,5 +1,5 @@
 import { html } from '@webjskit/core';
-import { displayH1 } from './_utils/ui.ts';
+import { displayH1 } from '../lib/utils/ui.ts';
 
 export default function NotFound() {
   return html`
