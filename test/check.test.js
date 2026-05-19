@@ -517,9 +517,32 @@ test('tests-exist: passes when a test file mentions the module name', async () =
   }
 });
 
-/* -------------------- package.json / webjs.conventions.js overrides -------------------- */
+/* -------------------- package.json webjs.conventions overrides -------------------- */
 
-test('override via package.json "conventions" disables a rule', async () => {
+test('override via package.json "webjs.conventions" disables a rule', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'bad.js'),
+      `import { WebComponent } from '@webjskit/core';\n` +
+      `class BadComp extends WebComponent {}\nBadComp.register('badcomp');\n`,
+    );
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'x',
+        webjs: { conventions: { 'tag-name-has-hyphen': false } },
+      }),
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'tag-name-has-hyphen'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('top-level "conventions" key in package.json is ignored (no legacy fallback)', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -536,13 +559,16 @@ test('override via package.json "conventions" disables a rule', async () => {
       }),
     );
     const violations = await checkConventions(appDir);
-    assert.equal(violations.find((v) => v.rule === 'tag-name-has-hyphen'), undefined);
+    assert.ok(
+      violations.find((v) => v.rule === 'tag-name-has-hyphen'),
+      'top-level "conventions" must not disable the rule',
+    );
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('override via webjs.conventions.js disables a rule', async () => {
+test('a webjs.conventions.js file is ignored (no legacy fallback)', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -556,7 +582,10 @@ test('override via webjs.conventions.js disables a rule', async () => {
       `export default { 'tag-name-has-hyphen': false };\n`,
     );
     const violations = await checkConventions(appDir);
-    assert.equal(violations.find((v) => v.rule === 'tag-name-has-hyphen'), undefined);
+    assert.ok(
+      violations.find((v) => v.rule === 'tag-name-has-hyphen'),
+      'webjs.conventions.js must not disable the rule',
+    );
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
