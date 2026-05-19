@@ -35,8 +35,10 @@ const UI_REGISTRY_ROOT = resolve(
 /**
  * Read a single @webjskit/ui registry component, rewrite its relative import
  * of `../lib/utils.ts` so it resolves correctly when written to
- * `components/ui/<name>.ts` in the scaffolded app (which puts utils at
- * `lib/utils.ts`, i.e. two levels up), and return the rewritten source.
+ * `components/ui/<name>.ts` in the scaffolded app. The scaffold puts cn()
+ * at `lib/utils/cn.ts` (folder-grouped with other browser-safe helpers).
+ * From `components/ui/<x>.ts`, the equivalent path is two-up plus into the
+ * utils/ folder: `../../lib/utils/cn.ts`.
  *
  * @param {string} name  component name without `.ts` (e.g. 'button')
  * @returns {Promise<string|null>} source or null if not found
@@ -45,13 +47,9 @@ async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
   if (!existsSync(src)) return null;
   const raw = await readFile(src, 'utf8');
-  // The registry source lives at <registry>/components/<x>.ts and imports
-  // its sibling utils via '../lib/utils.ts'. Once copied to the user's
-  // project at components/ui/<x>.ts, the equivalent path is two-up:
-  // '../../lib/utils.ts'. Same rewrite for the unquoted form.
   return raw
-    .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+    .replaceAll("'../lib/utils.ts'", "'../../lib/utils/cn.ts'")
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils/cn.ts"');
 }
 
 /**
@@ -72,23 +70,26 @@ async function copyUiComponents(appDir, names) {
 }
 
 /**
- * Write `lib/utils.ts` (the `cn()` helper) and `components.json` so the
- * scaffolded app is pre-initialised for `webjs ui add`. Reads `lib/utils.ts`
- * verbatim from the registry source so we never drift.
+ * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
+ * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
+ * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
+ * scaffolded app so cn() sits in the same folder as the other browser-safe
+ * helpers (ui.ts, format.ts).
  *
  * @param {string} appDir
  */
 async function writeUiBootstrap(appDir) {
-  // 1) lib/utils.ts: the cn() helper
+  // 1) lib/utils/cn.ts: the cn() helper
   const utilsSrc = join(UI_REGISTRY_ROOT, 'lib', 'utils.ts');
   if (existsSync(utilsSrc)) {
     const content = await readFile(utilsSrc, 'utf8');
-    await mkdir(join(appDir, 'lib'), { recursive: true });
-    await writeFile(join(appDir, 'lib', 'utils.ts'), content);
+    await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
+    await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), content);
   }
 
   // 2) components.json: the same shape `webjsui init` writes for webjs
-  // projects (see packages/ui/src/utils/detect-project.js).
+  // projects (see packages/ui/src/utils/detect-project.js). The utils alias
+  // is lib/utils/cn so get-config.js's `+ '.ts'` resolves to lib/utils/cn.ts.
   const componentsJson = {
     $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
@@ -99,7 +100,7 @@ async function writeUiBootstrap(appDir) {
     },
     aliases: {
       components: 'components',
-      utils: 'lib/utils',
+      utils: 'lib/utils/cn',
       ui: 'components/ui',
       lib: 'lib',
     },
@@ -453,9 +454,9 @@ export type ActionResult<T> =
   if (!isApi) {
     // Full-stack and SaaS templates: layout + page + theme toggle + Tailwind
 
-    // Copy the Tailwind browser runtime + _utils/ui.ts helpers from the
-    // scaffold templates directory so the app boots with the exact blog
-    // example architecture: light DOM + Tailwind + JS helpers.
+    // Copy the Tailwind browser runtime + lib/utils/ui.ts helpers from
+    // the scaffold templates directory so the app boots with the exact
+    // blog example architecture: light DOM + Tailwind + JS helpers.
     const publicDir = join(appDir, 'public');
     await mkdir(publicDir, { recursive: true });
     const tailwindSrc = join(TEMPLATES, 'public', 'tailwind-browser.js');
@@ -463,15 +464,15 @@ export type ActionResult<T> =
       await cp(tailwindSrc, join(publicDir, 'tailwind-browser.js'));
     }
 
-    const utilsDir = join(appDir, 'app', '_utils');
+    const utilsDir = join(appDir, 'lib', 'utils');
     await mkdir(utilsDir, { recursive: true });
-    const uiSrc = join(TEMPLATES, 'app', '_utils', 'ui.ts');
+    const uiSrc = join(TEMPLATES, 'lib', 'utils', 'ui.ts');
     if (existsSync(uiSrc)) {
       await cp(uiSrc, join(utilsDir, 'ui.ts'));
     }
 
     // Pre-initialise @webjskit/ui so the scaffold boots ready for
-    // `webjs ui add <name>`: writes components.json + lib/utils.ts +
+    // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
     // app/globals.css (the shadcn theme).
     await writeUiBootstrap(appDir);
 
@@ -653,7 +654,7 @@ ${SHADCN_THEME}
 `);
 
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
-import { rubric, displayH1, accentLink } from './_utils/ui.ts';
+import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
 import {
@@ -833,26 +834,27 @@ ThemeToggle.register('theme-toggle');
                     dialog,form,field,switch,checkbox}.ts
     components/theme-toggle.ts
     modules/auth/{actions,queries,types.ts}
-    lib/{auth,prisma,password,utils}.ts  ← utils.ts is the cn() helper
+    lib/{auth,prisma,password}.ts
+    lib/utils/cn.ts                      ← cn() helper for ui-* components
     prisma/schema.prisma                 ← User model
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   } else {
     console.log(`  ${name}/
     app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
-    app/_utils/ui.ts             ← JS helpers for repeated class bundles
     app/globals.css              ← @webjskit/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
-    lib/utils.ts                 ← cn() helper for ui-* components
+    lib/utils/cn.ts              ← cn() helper for ui-* components
+    lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
     modules/
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
   // Post-scaffold guidance. The full-stack and saas templates ship with
-  // @webjskit/ui already initialised (components.json, lib/utils.ts, the
+  // @webjskit/ui already initialised (components.json, lib/utils/cn.ts, the
   // standard kit under components/ui/), so the user only runs `webjs dev`.
   // The api template has no UI; we only mention `webjs ui` in case the
   // user later adds one.
