@@ -136,7 +136,13 @@ export class UiTabs extends WebComponent {
   render() {
     this.setAttribute('data-orientation', this.orientation);
     this.className = cn(TABS_BASE, this._userClass);
-    queueMicrotask(() => this._syncChildren());
+    // _syncChildren has to wait until the descendant <ui-tabs-list> and
+    // <ui-tabs-trigger> components have completed their own slot
+    // projections; otherwise this.querySelectorAll('ui-tabs-trigger')
+    // returns 0 nodes because the triggers are still in their captured-
+    // authored fragment. One animation frame is enough for the nested
+    // projection cascade to settle.
+    requestAnimationFrame(() => this._syncChildren());
     // Fire value-change event when value mutates after first render.
     if (this._lastValue !== this.value) {
       const prev = this._lastValue;
@@ -225,6 +231,13 @@ export class UiTabsTrigger extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    // Attach listeners every time the host reconnects. The light-DOM slot
+    // dance (parent's captureAuthoredChildren disconnects us, projection
+    // reconnects us) causes a disconnect/reconnect cycle on first mount;
+    // firstUpdated only runs once and would leave the listeners orphaned
+    // after the intermediate disconnectedCallback removes them.
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
     super.connectedCallback?.();
   }
 
@@ -232,8 +245,6 @@ export class UiTabsTrigger extends WebComponent {
     this.setAttribute('data-slot', 'tabs-trigger');
     this.setAttribute('role', 'tab');
     this.setAttribute('tabindex', '-1');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', this._onKeyDown);
   }
 
   disconnectedCallback(): void {

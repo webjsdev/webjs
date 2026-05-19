@@ -64,7 +64,10 @@ export class UiTooltip extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._syncContent());
+    // Wait one frame: <ui-tooltip-content> is a descendant WebComponent
+    // whose own first render + slot projection runs after ours; microtask
+    // timing would query before its data-state attribute reflects.
+    requestAnimationFrame(() => this._syncContent());
     return html`<slot></slot>`;
   }
 
@@ -100,6 +103,10 @@ export class UiTooltip extends WebComponent {
     // search since :scope > would only see the slot wrapper.
     const content = this.querySelector<HTMLElement>('ui-tooltip-content');
     if (!content) return;
+    // showPopover throws InvalidStateError on disconnected elements. The
+    // tooltip can be torn down between the RAF schedule and its callback
+    // (test teardown, route transition); bail out silently in that case.
+    if (!content.isConnected) return;
     content.setAttribute('data-state', this.open ? 'open' : 'closed');
     if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
       if (this.open) (content as HTMLElement & { showPopover: () => void }).showPopover();
@@ -122,12 +129,19 @@ export class UiTooltip extends WebComponent {
 UiTooltip.register('ui-tooltip');
 
 export class UiTooltipTrigger extends WebComponent {
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'tooltip-trigger');
+  connectedCallback(): void {
+    // Listeners go in connectedCallback (not firstUpdated) so they
+    // re-attach across the disconnect/reconnect cycle that light-DOM
+    // slot projection triggers on first mount.
     this.addEventListener('mouseenter', this._onEnter);
     this.addEventListener('mouseleave', this._onLeave);
     this.addEventListener('focusin', this._onEnter);
     this.addEventListener('focusout', this._onLeave);
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
+    this.setAttribute('data-slot', 'tooltip-trigger');
   }
 
   disconnectedCallback(): void {

@@ -70,13 +70,17 @@ export class UiToggleGroup extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    // Attach listeners every reconnect: light-DOM slot projection causes
+    // a disconnect/reconnect on first mount and firstUpdated runs only
+    // once, so listeners would be orphaned by the intermediate
+    // disconnectedCallback removeEventListener call.
+    this.addEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
     super.connectedCallback?.();
   }
 
   firstUpdated(): void {
     this.setAttribute('data-slot', 'toggle-group');
     this.setAttribute('role', 'group');
-    this.addEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -105,10 +109,11 @@ export class UiToggleGroup extends WebComponent {
     this.setAttribute('data-orientation', this.orientation);
     const gap = this.spacing === '0' ? '' : 'gap-1';
     this.className = cn(ROOT_BASE, gap, this._userClass);
-    // Items live in the DOM via the slot. Update their state in a
-    // microtask so the slot adoption / projection has settled before we
-    // walk them.
-    queueMicrotask(() => this._updateItems());
+    // Items live in the DOM via the slot. Run after a frame so the
+    // descendant slot projections (each <ui-toggle-group-item> also runs
+    // its own first render with captureAuthoredChildren + slot) have
+    // settled before we walk them.
+    requestAnimationFrame(() => this._updateItems());
     return html`<slot></slot>`;
   }
 
@@ -163,6 +168,8 @@ export class UiToggleGroupItem extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
     super.connectedCallback?.();
   }
 
@@ -170,8 +177,6 @@ export class UiToggleGroupItem extends WebComponent {
     this.setAttribute('data-slot', 'toggle-group-item');
     this.setAttribute('role', 'button');
     this.setAttribute('tabindex', '0');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', this._onKeyDown);
   }
 
   disconnectedCallback(): void {

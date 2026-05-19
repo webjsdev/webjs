@@ -130,7 +130,9 @@ export class UiDropdownMenu extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._afterRender());
+    // <ui-dropdown-menu-content> is a descendant WebComponent; wait one
+    // frame so its slot projection settles before _afterRender walks it.
+    requestAnimationFrame(() => this._afterRender());
     return html`<slot></slot>`;
   }
 
@@ -289,9 +291,13 @@ UiDropdownMenu.register('ui-dropdown-menu');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuTrigger extends WebComponent {
+  connectedCallback(): void {
+    this.addEventListener('click', this._onClick);
+    super.connectedCallback?.();
+  }
+
   firstUpdated(): void {
     this.setAttribute('data-slot', 'dropdown-menu-trigger');
-    this.addEventListener('click', this._onClick);
   }
 
   disconnectedCallback(): void {
@@ -351,6 +357,10 @@ export class UiDropdownMenuItem extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('pointerenter', this._onPointerEnter);
+    this.addEventListener('focus', this._onFocus);
+    this.addEventListener('blur', this._onBlur);
     super.connectedCallback?.();
   }
 
@@ -358,10 +368,6 @@ export class UiDropdownMenuItem extends WebComponent {
     this.setAttribute('data-slot', 'dropdown-menu-item');
     this.setAttribute('role', 'menuitem');
     this.setAttribute('tabindex', '-1');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('pointerenter', this._onPointerEnter);
-    this.addEventListener('focus', this._onFocus);
-    this.addEventListener('blur', this._onBlur);
   }
 
   disconnectedCallback(): void {
@@ -511,10 +517,14 @@ export class UiDropdownMenuSub extends WebComponent {
     this.open = false;
   }
 
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-sub');
+  connectedCallback(): void {
     this.addEventListener('pointerenter', this._pointerEnterHandler);
     this.addEventListener('pointerleave', this._pointerLeaveHandler);
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
+    this.setAttribute('data-slot', 'dropdown-menu-sub');
   }
 
   disconnectedCallback(): void {
@@ -526,7 +536,9 @@ export class UiDropdownMenuSub extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._afterRender());
+    // Sub-trigger + sub-content are descendant WebComponents; wait one
+    // frame so their slot projections settle before we walk for them.
+    requestAnimationFrame(() => this._afterRender());
     return html`<slot></slot>`;
   }
 
@@ -603,6 +615,8 @@ export class UiDropdownMenuSubTrigger extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('pointerenter', this._onPointerEnter);
     super.connectedCallback?.();
   }
 
@@ -617,8 +631,6 @@ export class UiDropdownMenuSubTrigger extends WebComponent {
       const svg = tmp.firstChild;
       if (svg) this.appendChild(svg);
     }
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('pointerenter', this._onPointerEnter);
   }
 
   disconnectedCallback(): void {

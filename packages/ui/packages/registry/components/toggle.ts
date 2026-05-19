@@ -86,14 +86,18 @@ export class UiToggle extends WebComponent {
   connectedCallback(): void {
     // Capture authored class before the first render writes ours.
     this._userClass = this.getAttribute('class') ?? '';
+    // Attach listeners every reconnect. Light-DOM slot projection causes
+    // a disconnect/reconnect cycle on first mount; firstUpdated only
+    // runs once, so listeners attached there get orphaned by the
+    // intermediate disconnectedCallback removal.
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
     super.connectedCallback?.();
   }
 
   firstUpdated(): void {
     this.setAttribute('data-slot', 'toggle');
     this.setAttribute('role', 'button');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', this._onKeyDown);
   }
 
   disconnectedCallback(): void {

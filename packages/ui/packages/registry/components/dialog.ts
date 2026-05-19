@@ -206,7 +206,10 @@ export class UiDialog extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._afterRender());
+    // <ui-dialog-content> is a descendant WebComponent whose first render +
+    // slot projection runs after ours; wait one frame before _afterRender
+    // walks for it (otherwise querySelector returns null on first mount).
+    requestAnimationFrame(() => this._afterRender());
     return html`
       <slot></slot>
       <dialog data-slot="dialog-native" class=${NATIVE_DIALOG_CLASS}>
@@ -258,9 +261,15 @@ UiDialog.register('ui-dialog');
 // --------------------------------------------------------------------------
 
 export class UiDialogTrigger extends WebComponent {
+  connectedCallback(): void {
+    // Listener in connectedCallback so it re-attaches across the
+    // disconnect/reconnect cycle from light-DOM slot projection.
+    this.addEventListener('click', this._onClick);
+    super.connectedCallback?.();
+  }
+
   firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-trigger');
-    this.addEventListener('click', this._onClick);
   }
 
   disconnectedCallback(): void {
@@ -321,9 +330,13 @@ UiDialogContent.register('ui-dialog-content');
 // --------------------------------------------------------------------------
 
 export class UiDialogClose extends WebComponent {
+  connectedCallback(): void {
+    this.addEventListener('click', this._onClick);
+    super.connectedCallback?.();
+  }
+
   firstUpdated(): void {
     this.setAttribute('data-slot', 'dialog-close');
-    this.addEventListener('click', this._onClick);
   }
 
   disconnectedCallback(): void {

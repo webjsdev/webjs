@@ -57,7 +57,9 @@ export class UiHoverCard extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._syncContent());
+    // Wait one frame: <ui-hover-card-content> is a descendant WebComponent
+    // whose own first render + slot projection runs after ours.
+    requestAnimationFrame(() => this._syncContent());
     return html`<slot></slot>`;
   }
 
@@ -80,6 +82,10 @@ export class UiHoverCard extends WebComponent {
   _syncContent(): void {
     const content = this.querySelector<HTMLElement>('ui-hover-card-content');
     if (!content) return;
+    // showPopover throws InvalidStateError on disconnected elements; bail
+    // out when the host has been torn down between the RAF schedule and
+    // this callback (test teardown, route transition).
+    if (!content.isConnected) return;
     content.setAttribute('data-state', this.open ? 'open' : 'closed');
     if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
       if (this.open) (content as HTMLElement & { showPopover: () => void }).showPopover();
@@ -102,12 +108,19 @@ export class UiHoverCard extends WebComponent {
 UiHoverCard.register('ui-hover-card');
 
 export class UiHoverCardTrigger extends WebComponent {
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'hover-card-trigger');
+  connectedCallback(): void {
+    // Listeners in connectedCallback (not firstUpdated): light-DOM slot
+    // projection triggers a disconnect/reconnect cycle on first mount,
+    // and firstUpdated runs only once.
     this.addEventListener('mouseenter', this._onEnter);
     this.addEventListener('mouseleave', this._onLeave);
     this.addEventListener('focusin', this._onEnter);
     this.addEventListener('focusout', this._onLeave);
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
+    this.setAttribute('data-slot', 'hover-card-trigger');
   }
 
   disconnectedCallback(): void {
@@ -132,6 +145,11 @@ export class UiHoverCardContent extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    // Listeners in connectedCallback so the disconnect/reconnect cycle
+    // from light-DOM slot projection doesn't leave the content panel
+    // without its hover handlers.
+    this.addEventListener('mouseenter', this._onEnter);
+    this.addEventListener('mouseleave', this._onLeave);
     super.connectedCallback?.();
   }
 
@@ -142,9 +160,6 @@ export class UiHoverCardContent extends WebComponent {
     // Manual (rather than auto) avoids the native light-dismiss closing
     // the card when the cursor is briefly off the trigger.
     if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
-    // Keep open while pointer is over the content itself.
-    this.addEventListener('mouseenter', this._onEnter);
-    this.addEventListener('mouseleave', this._onLeave);
   }
 
   disconnectedCallback(): void {

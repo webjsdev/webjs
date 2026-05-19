@@ -150,7 +150,10 @@ export class UiAlertDialog extends WebComponent {
 
   render() {
     this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    queueMicrotask(() => this._afterRender());
+    // <ui-alert-dialog-content> is a descendant WebComponent whose first
+    // render + slot projection runs after ours; wait one frame so
+    // querySelector resolves it.
+    requestAnimationFrame(() => this._afterRender());
     return html`
       <slot></slot>
       <dialog data-slot="alert-dialog-native" class=${NATIVE_DIALOG_CLASS}>
@@ -196,9 +199,13 @@ export class UiAlertDialog extends WebComponent {
 UiAlertDialog.register('ui-alert-dialog');
 
 export class UiAlertDialogTrigger extends WebComponent {
+  connectedCallback(): void {
+    this.addEventListener('click', this._onClick);
+    super.connectedCallback?.();
+  }
+
   firstUpdated(): void {
     this.setAttribute('data-slot', 'alert-dialog-trigger');
-    this.addEventListener('click', this._onClick);
   }
 
   disconnectedCallback(): void {
@@ -278,13 +285,13 @@ export class UiAlertDialogCancel extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
     super.connectedCallback?.();
   }
 
   firstUpdated(): void {
     this.setAttribute('data-slot', 'alert-dialog-cancel');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -307,13 +314,13 @@ export class UiAlertDialogAction extends WebComponent {
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
     super.connectedCallback?.();
   }
 
   firstUpdated(): void {
     this.setAttribute('data-slot', 'alert-dialog-action');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
   }
 
   disconnectedCallback(): void {
