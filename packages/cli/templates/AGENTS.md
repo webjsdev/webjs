@@ -307,6 +307,28 @@ import { fixture, waitForUpdate } from '@webjskit/core/testing';
 import { rateLimit, cache, createAuth, Credentials, Session } from '@webjskit/server';
 ```
 
+## Environment variables (server vs browser)
+
+Server-only is the default. Any `process.env.X` read on the server stays on the server. Names that start with `WEBJS_PUBLIC_` are also exposed in the browser as `process.env.X`, via an inline script injected at SSR time. No build step.
+
+```sh
+# .env
+DATABASE_URL=postgres://...            # server-only
+AUTH_SECRET=...                        # server-only
+WEBJS_PUBLIC_API_URL=https://x.com     # browser too
+```
+
+```ts
+// Server-side (page function, action, middleware, route handler):
+const dburl = process.env.DATABASE_URL;             // works
+
+// Browser-side (component render method, client-only utilities):
+const url = process.env.WEBJS_PUBLIC_API_URL;       // works
+const secret = process.env.AUTH_SECRET;             // undefined (fail-closed)
+```
+
+`process.env.NODE_ENV` is also defined in the browser (`'development'` in `webjs dev`, `'production'` in `webjs start`), so vendor bundles that probe it work without setup. Full docs: [Configuration](https://docs.webjs.com/docs/configuration).
+
 ## Component pattern
 
 ```ts

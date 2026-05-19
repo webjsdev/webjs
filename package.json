@@ -16,6 +16,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .hooks 2>/dev/null || true",
     "dev": "node scripts/dev-all.js",
     "test": "node --test test/*.test.js",
     "test:browser": "wtr",

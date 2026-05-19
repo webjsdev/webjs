@@ -1312,5 +1312,33 @@ test('ssrPage: response attaches a csrf set-cookie when request has no token', a
   assert.ok(setCookie && /csrf/i.test(setCookie), `expected csrf cookie, got ${setCookie}`);
 });
 
+test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', async () => {
+  const prevApi = process.env.WEBJS_PUBLIC_API_URL;
+  const prevSecret = process.env.NOT_PUBLIC_SECRET;
+  process.env.WEBJS_PUBLIC_API_URL = 'https://api.example.test';
+  process.env.NOT_PUBLIC_SECRET = 'must-not-leak';
+  try {
+    const { route, appDir } = await makeRoute({
+      pageSrc:
+        `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+        `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+    });
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    const body = await resp.text();
+    assert.ok(body.includes('window.process.env'), 'shim assignment should appear in head');
+    assert.ok(body.includes('"WEBJS_PUBLIC_API_URL":"https://api.example.test"'));
+    assert.ok(body.includes('"NODE_ENV":"production"'), 'NODE_ENV must reflect dev:false');
+    assert.equal(
+      body.includes('must-not-leak'), false,
+      'unprefixed env values must not appear in the SSR output',
+    );
+  } finally {
+    if (prevApi === undefined) delete process.env.WEBJS_PUBLIC_API_URL;
+    else process.env.WEBJS_PUBLIC_API_URL = prevApi;
+    if (prevSecret === undefined) delete process.env.NOT_PUBLIC_SECRET;
+    else process.env.NOT_PUBLIC_SECRET = prevSecret;
+  }
+});
+
 /* ------------ bundle mode skips per-file preloads ------------ */
 

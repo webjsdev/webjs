@@ -797,6 +797,38 @@ webjs ui list / view <name>                           # browse the registry
 
 ---
 
+## Environment variables: server-only by default, `WEBJS_PUBLIC_*` reaches the browser
+
+Every `process.env.X` read on the server is server-only. Names without
+the `WEBJS_PUBLIC_` prefix never reach the browser. Names that DO start
+with `WEBJS_PUBLIC_` are exposed in the browser as `process.env.X` via
+an inline `<script>` injected in the SSR head before any module code
+runs. No build step, no transform, no static substitution. The shim
+is the no-build equivalent of Next.js's `NEXT_PUBLIC_` convention.
+
+```sh
+# .env
+DATABASE_URL=postgres://...               # server-only
+AUTH_SECRET=...                           # server-only
+WEBJS_PUBLIC_API_URL=https://api.x.com    # available in browser
+WEBJS_PUBLIC_STRIPE_KEY=pk_live_abc       # available in browser
+```
+
+```ts
+// components/checkout.ts (runs in the browser)
+const url = process.env.WEBJS_PUBLIC_API_URL;  // works
+const dsn = process.env.DATABASE_URL;          // undefined (fail-closed)
+```
+
+The shim also defines `process.env.NODE_ENV` (`'development'` in
+`webjs dev`, `'production'` in `webjs start`), so vendor bundles that
+probe it (lit, react, etc.) work without ReferenceError. Implementation
+in `packages/server/src/ssr.js` (`publicEnvShim()`); see
+[`/docs/configuration`](https://docs.webjs.com/docs/configuration) for
+the user-facing explanation.
+
+---
+
 ## CONVENTIONS.md and the lint config: complementary, not redundant
 
 Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read

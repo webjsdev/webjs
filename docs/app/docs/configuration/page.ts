@@ -73,7 +73,30 @@ webjs db studio       # prisma studio</pre>
     <h2>Environment Variables</h2>
     <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). There's no built-in <code>.env</code> loader, so use <code>dotenv</code> or pass vars via the shell:</p>
     <pre>DATABASE_URL=postgres://... webjs start</pre>
-    <blockquote><strong>Warning:</strong> never reference <code>process.env</code> in component code that runs on the client. It's undefined in the browser and would leak server secrets if it worked.</blockquote>
+
+    <h3>Server-only env vars (the default)</h3>
+    <p>Any environment variable that does not start with <code>WEBJS_PUBLIC_</code> is <strong>server-only</strong>. It is never sent to the browser. <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, OAuth client secrets, third-party API keys: read them in server actions, route handlers, middleware, or page functions, and pass derived values (not the raw secret) to components.</p>
+
+    <h3>Public env vars (WEBJS_PUBLIC_*)</h3>
+    <p>Any env var whose name starts with <code>WEBJS_PUBLIC_</code> is exposed to the browser as <code>process.env.WEBJS_PUBLIC_X</code>. webjs injects an inline script in the SSR'd HTML head that sets <code>window.process.env</code> before any user code or vendor bundle runs. Components can read these directly:</p>
+    <pre>// app/.env (loaded via dotenv or shell)
+WEBJS_PUBLIC_API_URL=https://api.example.com
+WEBJS_PUBLIC_STRIPE_KEY=pk_live_abc
+SENTRY_DSN=https://x@sentry.io/y      # server-only, no prefix
+
+// components/checkout.ts
+class Checkout extends WebComponent {
+  render() {
+    return html\`&lt;a href=\${process.env.WEBJS_PUBLIC_API_URL + '/pay'}&gt;Pay&lt;/a&gt;\`;
+  }
+}</pre>
+    <p>This is the no-build equivalent of Next.js's <code>NEXT_PUBLIC_</code> convention. There is no transform step. The value is a real property read on a real <code>window.process.env</code> object in the browser.</p>
+
+    <p><strong>NODE_ENV is always defined in the browser.</strong> The shim sets <code>process.env.NODE_ENV</code> to <code>'development'</code> in <code>webjs dev</code> or <code>'production'</code> in <code>webjs start</code>. Vendor bundles that probe <code>process.env.NODE_ENV</code> (lit, react, others) read the right value with no extra config.</p>
+
+    <p><strong>Naming and safety.</strong> The prefix is fail-closed. An env var without <code>WEBJS_PUBLIC_</code> in its name cannot accidentally reach the browser at runtime, even if a component naively writes <code>process.env.DATABASE_URL</code>. The value will read as <code>undefined</code>, the same way a typo would. There is no way to opt out of the prefix, by design.</p>
+
+    <p><strong>The SSR-time gap, and the lint rule that closes it.</strong> A component's <code>render()</code> runs on the server during SSR. If a component reads <code>process.env.SECRET</code> there and interpolates it into the HTML output, the secret gets shipped to every browser even though the runtime shim does not expose it. To catch this at write time, <code>webjs check</code> ships a <code>no-server-env-in-components</code> rule that flags any <code>process.env.X</code> read in a component file when <code>X</code> is not <code>WEBJS_PUBLIC_*</code> and not <code>NODE_ENV</code>. The fix is always one of: rename to <code>WEBJS_PUBLIC_*</code> if the value is intended for the browser, or read it in a page function / server action / middleware and pass a derived value to the component as an attribute.</p>
 
     <h2>Programmatic API</h2>
     <pre>import { startServer, createRequestHandler } from '@webjskit/server';
