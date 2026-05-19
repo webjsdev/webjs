@@ -1,6 +1,7 @@
 import { render as clientRender } from './render-client.js';
 import { isCSS, adoptStyles } from './css.js';
 import { register, tagOf } from './registry.js';
+import { parse as deserializeProp } from './serialize.js';
 import {
   captureAuthoredChildren,
   adoptSSRAssignments,
@@ -314,6 +315,19 @@ export class WebComponent extends Base {
 
   connectedCallback() {
     if (!isBrowser) return;
+
+    // Apply any `data-webjs-prop-*` attributes emitted by SSR. The server
+    // emits these for `.prop=${val}` bindings in parent templates so
+    // rich-typed values (Array, Object, Date, Map, Set, BigInt, cycles)
+    // round-trip through the rendered HTML. Once applied, the attributes
+    // are stripped so the settled DOM matches what the user would expect
+    // from the JS source: no framework artifacts left on the element.
+    // One-time per element. Subsequent reconnections do nothing.
+    if (!this.__webjsPropsHydrated) {
+      this.__webjsPropsHydrated = true;
+      this._hydratePropAttrs();
+    }
+
     const Ctor = /** @type any */ (this.constructor);
 
     // Selective hydration: defer activation until the element scrolls into
@@ -357,6 +371,39 @@ export class WebComponent extends Base {
    *
    * @private
    */
+  /**
+   * Read `data-webjs-prop-*` attributes (emitted by SSR for `.prop=${val}`
+   * bindings in parent templates), decode each via the wire serializer,
+   * assign the decoded value to the corresponding camelCase property on
+   * this instance, and remove the attribute from the DOM. After this
+   * runs, inspecting the element shows the same attributes the developer
+   * would expect from the JS source.
+   *
+   * @private
+   */
+  _hydratePropAttrs() {
+    /** @type {string[]} */
+    const names = [];
+    const attrs = this.attributes;
+    for (let i = 0; i < attrs.length; i++) {
+      const n = attrs[i].name;
+      if (n.startsWith('data-webjs-prop-')) names.push(n);
+    }
+    for (const fullName of names) {
+      const raw = this.getAttribute(fullName);
+      this.removeAttribute(fullName);
+      if (raw == null) continue;
+      const propName = camelCase(fullName.slice('data-webjs-prop-'.length));
+      try {
+        /** @type any */ (this)[propName] = deserializeProp(raw);
+      } catch (err) {
+        console.warn(
+          `[webjs] failed to decode ${fullName} on <${this.tagName.toLowerCase()}>: ${err && err.message}`
+        );
+      }
+    }
+  }
+
   _activate() {
     this._connected = true;
     const Ctor = /** @type any */ (this.constructor);
