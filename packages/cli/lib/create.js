@@ -272,6 +272,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
+    // Cursor config + hooks
+    '.cursor/hooks.json',
+    '.cursor/hooks/nudge-uncommitted.sh',
     // Cross-agent config files
     '.cursorrules',
     '.windsurfrules',
@@ -297,6 +300,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   for (const hook of ['nudge-uncommitted.sh']) {
     const hookPath = join(appDir, '.gemini', 'hooks', hook);
+    if (existsSync(hookPath)) await chmod(hookPath, 0o755);
+  }
+  for (const hook of ['nudge-uncommitted.sh']) {
+    const hookPath = join(appDir, '.cursor', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
   // Make git pre-commit hook executable
