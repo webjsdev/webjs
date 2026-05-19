@@ -482,6 +482,175 @@ test('no-server-imports-in-components: skips .server.ts files (they may import a
   }
 });
 
+/* -------------------- no-server-imports-in-pages -------------------- */
+
+test('no-server-imports-in-pages: flags @prisma/client in app/page.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.ts'),
+      `import { prisma } from '@prisma/client';\nexport default function Page() { return null; }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'no-server-imports-in-pages');
+    assert.ok(v, 'page.ts must flag @prisma/client import');
+    assert.match(v.message, /@prisma\/client/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: flags node:* in app/layout.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'layout.ts'),
+      `import { readFile } from 'node:fs/promises';\nexport default function Layout() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'no-server-imports-in-pages');
+    assert.ok(v, 'layout.ts must flag node:* import');
+    assert.match(v.message, /node:/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: flags lib/ imports in app/loading.ts and error.ts and not-found.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(join(appDir, 'lib', 'prisma.ts'), `export const prisma = {};\n`);
+    await writeFile(
+      join(appDir, 'app', 'loading.ts'),
+      `import { prisma } from '../lib/prisma.ts';\nexport default function L() {}\n`,
+    );
+    await writeFile(
+      join(appDir, 'app', 'error.ts'),
+      `import { prisma } from '../lib/prisma.ts';\nexport default function E() {}\n`,
+    );
+    await writeFile(
+      join(appDir, 'app', 'not-found.ts'),
+      `import { prisma } from '../lib/prisma.ts';\nexport default function NF() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const flagged = violations.filter((v) => v.rule === 'no-server-imports-in-pages');
+    assert.equal(flagged.length, 3, 'one violation per file');
+    const files = flagged.map((v) => v.file).sort();
+    assert.deepEqual(files, [
+      join('app', 'error.ts'),
+      join('app', 'loading.ts'),
+      join('app', 'not-found.ts'),
+    ]);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: EXEMPTS route.ts (server-only HTTP handler)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'users'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'users', 'route.ts'),
+      `import { prisma } from '@prisma/client';\nexport async function GET() { return prisma.user.findMany(); }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-imports-in-pages'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: EXEMPTS middleware.ts (server-only)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFile(
+      join(appDir, 'middleware.ts'),
+      `import { prisma } from '@prisma/client';\nexport default async function mw(req, next) { return next(); }\n`,
+    );
+    // Also test app/middleware.ts location.
+    await mkdir(join(appDir, 'app', 'admin'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'admin', 'middleware.ts'),
+      `import { prisma } from '@prisma/client';\nexport default async function mw(req, next) { return next(); }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-imports-in-pages'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: EXEMPTS metadata routes (sitemap, robots, etc.)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    for (const name of ['sitemap.ts', 'robots.ts', 'manifest.ts', 'icon.ts', 'opengraph-image.ts', 'twitter-image.ts', 'apple-icon.ts']) {
+      await writeFile(
+        join(appDir, 'app', name),
+        `import { prisma } from '@prisma/client';\nexport default function gen() {}\n`,
+      );
+    }
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-imports-in-pages'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: EXEMPTS page.server.ts (server-only by convention)', async () => {
+  // A page file with the .server.ts suffix is server-only by file
+  // convention. Browser never loads it, so direct prisma is fine.
+  // (Unusual pattern but the rule shouldn't fire.)
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.server.ts'),
+      `'use server';\nimport { prisma } from '@prisma/client';\nexport default function P() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-imports-in-pages'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: page.ts WITHOUT a server import passes cleanly', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.ts'),
+      `import { html } from '@webjskit/core';\nexport default function Page() { return html\`<p>hello</p>\`; }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-server-imports-in-pages'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-server-imports-in-pages: nested page in route group still flagged', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', '(marketing)', 'about'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', '(marketing)', 'about', 'page.ts'),
+      `import { prisma } from '@prisma/client';\nexport default function Page() {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((x) => x.rule === 'no-server-imports-in-pages');
+    assert.ok(v, 'nested page.ts under (route-group) must still flag');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 /* -------------------- no-server-env-in-components -------------------- */
 
 test('no-server-env-in-components: flags non-public process.env reads in components', async () => {
