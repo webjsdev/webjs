@@ -13,7 +13,7 @@
  *     <svg>…</svg>
  *   </button>
  *
- * Usage (custom element: handles state for you):
+ * Usage (custom element handles state for you):
  *   <ui-toggle aria-label="Toggle bold">
  *     <svg>…</svg>
  *   </ui-toggle>
@@ -21,7 +21,8 @@
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 
 // cursor-pointer + select-none on BASE for both call sites: the
 // class-helper applied to a native <button> (where shadcn's upstream
@@ -53,69 +54,80 @@ export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize }
 }
 
 // --------------------------------------------------------------------------
-// <ui-toggle> manages pressed state + aria-pressed + data-state on a host
-// button. Convenience when you want state without writing the toggling JS.
+// <ui-toggle> owns stateful pressed / aria-pressed / data-state on a
+// host button. Authored children (an icon, a label, etc.) project
+// through the default slot.
 // --------------------------------------------------------------------------
 
-export class UiToggle extends Base {
-  static get observedAttributes(): string[] {
-    return ['pressed', 'variant', 'size', 'disabled'];
+export class UiToggle extends WebComponent {
+  static properties = {
+    pressed: { type: Boolean, reflect: true },
+    variant: { type: String, reflect: true },
+    size: { type: String, reflect: true },
+    disabled: { type: Boolean, reflect: true },
+  };
+  declare pressed: boolean;
+  declare variant: ToggleVariant;
+  declare size: ToggleSize;
+  declare disabled: boolean;
+
+  // Snapshot the author's class attribute at attach time so subsequent
+  // re-renders (variant / size change) merge with it instead of stomping.
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.pressed = false;
+    this.variant = 'default';
+    this.size = 'default';
+    this.disabled = false;
   }
 
   connectedCallback(): void {
+    // Capture authored class before the first render writes ours.
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'toggle');
     this.setAttribute('role', 'button');
-    this.setAttribute('tabindex', this.hasAttribute('disabled') ? '-1' : '0');
-    this._applyClass();
-    this._reflect();
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
     this.removeEventListener('keydown', this._onKeyDown);
-  }
-  attributeChangedCallback(name: string): void {
-    if (name === 'pressed' || name === 'disabled') this._reflect();
-    if (name === 'variant' || name === 'size') this._applyClass();
+    super.disconnectedCallback?.();
   }
 
-  get pressed(): boolean {
-    return this.hasAttribute('pressed');
-  }
-  set pressed(v: boolean) {
-    if (v) this.setAttribute('pressed', '');
-    else this.removeAttribute('pressed');
-  }
-
-  private _applyClass(): void {
-    const userClass = this.getAttribute('class') ?? '';
-    const variant = (this.getAttribute('variant') ?? 'default') as ToggleVariant;
-    const size = (this.getAttribute('size') ?? 'default') as ToggleSize;
-    this.className = cn(toggleClass({ variant, size }), userClass);
-  }
-
-  private _reflect(): void {
-    const on = this.pressed;
-    this.setAttribute('data-state', on ? 'on' : 'off');
-    this.setAttribute('aria-pressed', String(on));
-    if (this.hasAttribute('disabled')) this.setAttribute('aria-disabled', 'true');
+  render() {
+    // Host-level attributes that derive from reactive props get applied
+    // on every render. Setting non-observed attributes here (data-state,
+    // aria-pressed, tabindex, aria-disabled) does not re-enter render.
+    this.className = cn(toggleClass({ variant: this.variant, size: this.size }), this._userClass);
+    this.setAttribute('data-state', this.pressed ? 'on' : 'off');
+    this.setAttribute('aria-pressed', String(this.pressed));
+    this.setAttribute('tabindex', this.disabled ? '-1' : '0');
+    if (this.disabled) this.setAttribute('aria-disabled', 'true');
     else this.removeAttribute('aria-disabled');
+    return html`<slot></slot>`;
   }
 
-  private _onClick = (): void => {
-    if (this.hasAttribute('disabled')) return;
+  _onClick = (): void => {
+    if (this.disabled) return;
     this.pressed = !this.pressed;
     this.dispatchEvent(
       new CustomEvent('ui-pressed-change', { detail: { pressed: this.pressed }, bubbles: true }),
     );
   };
 
-  private _onKeyDown = (e: KeyboardEvent): void => {
+  _onKeyDown = (e: KeyboardEvent): void => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       this._onClick();
     }
   };
 }
-defineElement('ui-toggle', UiToggle);
+UiToggle.register('ui-toggle');
