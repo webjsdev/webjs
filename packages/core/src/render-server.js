@@ -202,12 +202,22 @@ async function renderTemplate(tr, ctx) {
           state = 'in-tag';
           attrName = '';
         } else if (prefix === '.') {
-          // Property binding. Serialize via the wire format and emit
-          // as a `data-webjs-prop-<kebab-name>` side-channel attribute.
-          // The SSR walker reads it before calling instance.render();
-          // the client renderer applies + strips it on hydration so
-          // the settled DOM is clean.
+          // Property binding. Only meaningful on custom elements (which
+          // have a hyphen in the tag name and a WebComponent subclass
+          // that knows how to apply + strip data-webjs-prop-* on
+          // hydration). For native elements (`<input .value=${v}>`)
+          // the attribute would be dead weight (nothing consumes it),
+          // so we drop it the same way the old behaviour did. The
+          // client renderer still applies the property when the
+          // template runs in the browser, which is the only place a
+          // page-level `.prop` on a native element could have set the
+          // property to begin with.
           out = out.slice(0, attrStart);
+          if (!currentTag.includes('-')) {
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
           try {
             const encoded = await stringify(val);
             out += `data-webjs-prop-${kebabCase(name)}="${escapeAttr(encoded)}"`;
@@ -687,6 +697,22 @@ function kebabCase(s) {
 }
 
 /**
+ * Reverse `escapeAttr` on a server-side attribute value. Needed
+ * because `parseAttrs` returns the literal characters between the
+ * quote marks; HTML entities are not decoded by the regex. The
+ * browser handles this automatically, so client-side reads via
+ * `getAttribute()` do not need the same step.
+ *
+ * @param {string} s
+ */
+function unescapeAttr(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
+/**
  * Decode `data-webjs-prop-<kebab>` attributes from a parsed attribute
  * map, returning a map of camelCase property name to decoded value.
  * Mutates `attrs` by deleting the consumed entries so they do not
@@ -702,7 +728,7 @@ function consumePropAttrs(attrs) {
     if (!key.startsWith('data-webjs-prop-')) continue;
     const propName = camelCase(key.slice('data-webjs-prop-'.length));
     try {
-      props[propName] = parse(attrs[key]);
+      props[propName] = parse(unescapeAttr(attrs[key]));
     } catch {
       // Malformed payload. Skip silently so the rest of the component
       // can still render. The client-side hydration will also try and
