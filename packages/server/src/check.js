@@ -65,6 +65,11 @@ export const RULES = [
       'Component files must not directly import from @prisma/client, node:*, or lib/ paths.',
   },
   {
+    name: 'no-server-imports-in-pages',
+    description:
+      'Page-like files under app/ (page, layout, loading, error, not-found) load in the browser as ES modules so that transitively imported components can register. They must not directly import @prisma/client, node:*, or lib/ paths because those would also load in the browser and crash. Wrap server-side access in a .server.{js,ts} file and import the function (the framework rewrites that import to an RPC stub on the browser side). Server-only files that never load in the browser, route.ts, middleware.ts, and metadata routes (sitemap.ts, robots.ts, manifest.ts, opengraph-image.ts, twitter-image.ts, apple-icon.ts, icon.ts), are exempt.',
+  },
+  {
     name: 'no-server-env-in-components',
     description:
       'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
@@ -125,6 +130,32 @@ function isServerActionFile(filePath, content) {
 function isComponentFile(relPath) {
   const segments = relPath.split(sep);
   return segments.includes('components');
+}
+
+/**
+ * Check whether a file is a "page-like" module under app/, meaning a
+ * module that loads in the browser as part of the page bundle (so its
+ * top-level imports must be browser-safe). The framework loads these
+ * client-side to let transitively imported components register.
+ *
+ * Includes: page, layout, loading, error, not-found.
+ * Excludes: route (HTTP handler, server-only), middleware (server-only),
+ * metadata routes like sitemap, robots, manifest, icon, opengraph-image,
+ * twitter-image, apple-icon (all server-only).
+ *
+ * @param {string} relPath path relative to appDir
+ * @returns {boolean}
+ */
+function isPageLikeFile(relPath) {
+  const segments = relPath.split(sep);
+  if (segments[0] !== 'app') return false;
+  const filename = segments[segments.length - 1];
+  const base = filename.replace(/\.m?[jt]s$/, '');
+  return base === 'page'
+    || base === 'layout'
+    || base === 'loading'
+    || base === 'error'
+    || base === 'not-found';
 }
 
 /**
@@ -599,6 +630,36 @@ export async function checkConventions(appDir, opts) {
             file: rel,
             message: `Component imports ${label} directly; this will break in the browser`,
             fix: 'Move the import into a .server.{js,ts} file and call it via a server action',
+          });
+        }
+      }
+    }
+  }
+
+  // --- Rule: no-server-imports-in-pages ---
+  // page.ts, layout.ts, loading.ts, error.ts, not-found.ts all load
+  // in the browser as ES modules so that transitively imported
+  // components register. A top-level import of @prisma/client,
+  // node:*, or lib/ would also load in the browser and crash.
+  if (isRuleEnabled('no-server-imports-in-pages', overrides)) {
+    for (const { abs, rel, content } of files) {
+      if (!isPageLikeFile(rel)) continue;
+      if (isServerActionFile(abs, content)) continue;
+
+      const importPatterns = [
+        { re: /import\s+.*from\s+['"]@prisma\/client['"]/gm, label: '@prisma/client' },
+        { re: /import\s+.*from\s+['"]node:[^'"]+['"]/gm, label: 'node:* built-in' },
+        { re: /import\s+.*from\s+['"]\.{0,2}\/lib\/[^'"]*['"]/gm, label: 'lib/' },
+      ];
+
+      for (const { re, label } of importPatterns) {
+        const match = re.exec(content);
+        if (match) {
+          violations.push({
+            rule: 'no-server-imports-in-pages',
+            file: rel,
+            message: `Page-like file imports ${label} directly; this loads in the browser and will crash`,
+            fix: 'Wrap the access in a .server.{js,ts} file and import the function (the framework rewrites that import to an RPC stub on the browser side)',
           });
         }
       }
