@@ -653,7 +653,7 @@ ${SHADCN_THEME}
 `);
 
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
-import { rubric, displayH1, accentLink } from '../lib/ui.ts';
+import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
 import {

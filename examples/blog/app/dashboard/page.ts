@@ -9,7 +9,7 @@ import {
 } from '../../components/ui/card.ts';
 import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
-import { rubric, clampH1, stat, accentLink } from '../../lib/ui.ts';
+import { rubric, clampH1, stat, accentLink } from '../../lib/utils/ui.ts';
 
 export const metadata = { title: 'Dashboard: webjs blog' };
 
