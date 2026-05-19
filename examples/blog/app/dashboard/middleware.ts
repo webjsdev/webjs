@@ -1,5 +1,5 @@
 import { cookies } from '@webjskit/server';
-import { getUserByToken, SESSION_COOKIE } from '../../lib/session.ts';
+import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
 
 /**
  * /dashboard/* access control. If no session → 302 to /login.

@@ -138,7 +138,7 @@ docs". That is the agent's default behavior in a webjs project.
 <!-- OVERRIDE -->
 
 Every webjs app uses **Prisma + SQLite** for persistence by default. The
-scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` (singleton), the
+scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` (singleton), the
 `predev` / `prestart` hooks that run `prisma generate` / `prisma migrate
 deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
 
@@ -157,7 +157,7 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    preferences (theme, sidebar collapsed, etc.).
 5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
    -- --name <description>`. Access via `import { prisma } from
-   '../../../lib/prisma.ts'`. Never `new PrismaClient()`.
+   '../../../lib/prisma.server.ts'`. Never `new PrismaClient()`.
 
 To switch to Postgres or MySQL: change `provider` in
 `prisma/schema.prisma` and the `DATABASE_URL` in `.env`. Do this only
@@ -188,7 +188,7 @@ When the user asks the agent to build their actual app:
    doesn't use it.
 5. **Keep:** the Prisma setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
-   `lib/prisma.ts`, the directory conventions, the design tokens in
+   `lib/prisma.server.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
 
 The scaffold exists so the agent doesn't reinvent the directory layout,
@@ -741,7 +741,7 @@ Where the data lives, where to read it:
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 import type { ActionResult } from '../types.ts';
 
 export async function createPost(input: {

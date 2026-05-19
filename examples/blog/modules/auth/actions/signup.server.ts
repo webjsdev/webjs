@@ -1,8 +1,8 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.ts';
-import { hashPassword } from '../../../lib/password.ts';
-import { createSession } from '../../../lib/session.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
+import { hashPassword } from '../../../lib/password.server.ts';
+import { createSession } from '../../../lib/session.server.ts';
 import { validateSignup } from '../utils/validate.ts';
 import type { ActionResult, PublicUser } from '../types.ts';
 
