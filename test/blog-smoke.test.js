@@ -126,20 +126,26 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
     }
   });
 
-  test('/ui-demo renders BOTH class-helper output AND Tier-2 ui-dialog', async () => {
+  test('/ui-demo renders class-helper output + native <dialog>', async () => {
     const html = await fetch(baseUrl + '/ui-demo').then((r) => r.text());
 
     // Tier 1: cardClass + buttonClass output present.
     assert.match(html, /rounded-xl border bg-card/, 'cardClass output present');
     assert.match(html, /bg-primary text-primary-foreground hover:bg-primary/, 'buttonClass output present');
 
-    // Tier 2: <ui-dialog> + subparts rendered as custom elements.
-    for (const tag of ['ui-dialog', 'ui-dialog-trigger', 'ui-dialog-content']) {
-      assert.match(html, new RegExp(`<${tag}\\b`), `expected <${tag}> on /ui-demo`);
-    }
+    // Dialog is now Tier-1 too: native <dialog> with dialogClass styling.
+    // No <ui-dialog> / <ui-dialog-content> / etc. custom elements anymore.
+    assert.match(html, /<dialog\b/, 'native <dialog> rendered on /ui-demo');
+    assert.match(html, /backdrop:bg-black\/50/, 'dialogClass output present');
 
-    // No stale Tier-1 tags.
-    for (const tag of ['ui-button', 'ui-card', 'ui-card-header', 'ui-input', 'ui-label', 'ui-alert', 'ui-badge']) {
+    // No stale Tier-2 ui-dialog tags after the Tier-1 pivot.
+    for (const tag of [
+      'ui-dialog', 'ui-dialog-trigger', 'ui-dialog-content',
+      'ui-dialog-header', 'ui-dialog-title', 'ui-dialog-description',
+      'ui-dialog-footer', 'ui-dialog-close',
+      // also legacy Tier-1 tags that should never appear:
+      'ui-button', 'ui-card', 'ui-card-header', 'ui-input', 'ui-label', 'ui-alert', 'ui-badge',
+    ]) {
       assert.doesNotMatch(html, new RegExp(`<${tag}\\b`), `/ui-demo should not render <${tag}>`);
     }
   });

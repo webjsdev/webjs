@@ -16,8 +16,15 @@ import {
 } from '../../components/ui/alert.ts';
 import { inputClass } from '../../components/ui/input.ts';
 import { labelClass } from '../../components/ui/label.ts';
-// Tier-2 components are real custom elements: register by side-effect import.
-import '../../components/ui/dialog.ts';
+// Dialog migrated to Tier-1: class helpers + openDialog over native <dialog>.
+import {
+  dialogClass,
+  dialogHeaderClass,
+  dialogTitleClass,
+  dialogDescriptionClass,
+  dialogFooterClass,
+  openDialog,
+} from '../../components/ui/dialog.ts';
 
 export const metadata = {
   title: 'UI Demo · webjs',
@@ -63,27 +70,24 @@ export default function UiDemo() {
 
       <h2 class="text-2xl font-semibold mt-12 mb-4">Tier 2: stateful custom elements</h2>
 
-      <ui-dialog>
-        <ui-dialog-trigger>
-          <button class=${buttonClass({ variant: 'outline' })}>Open dialog</button>
-        </ui-dialog-trigger>
-        <ui-dialog-content>
-          <ui-dialog-header>
-            <ui-dialog-title>Edit profile</ui-dialog-title>
-            <ui-dialog-description>Make changes to your profile here.</ui-dialog-description>
-          </ui-dialog-header>
-          <div class="grid gap-3 my-4">
-            <label class=${labelClass()} for="dialog-name">Name</label>
-            <input class=${inputClass()} id="dialog-name" placeholder="Your name">
-          </div>
-          <ui-dialog-footer>
-            <ui-dialog-close>
-              <button class=${buttonClass({ variant: 'outline' })}>Cancel</button>
-            </ui-dialog-close>
-            <button class=${buttonClass()}>Save</button>
-          </ui-dialog-footer>
-        </ui-dialog-content>
-      </ui-dialog>
+      <button class=${buttonClass({ variant: 'outline' })}
+              @click=${(e: MouseEvent) => openDialog(e.currentTarget as HTMLElement)}>
+        Open dialog
+      </button>
+      <dialog class=${dialogClass()}>
+        <div class=${dialogHeaderClass()}>
+          <h2 class=${dialogTitleClass()}>Edit profile</h2>
+          <p class=${dialogDescriptionClass()}>Make changes to your profile here.</p>
+        </div>
+        <div class="grid gap-3 my-4">
+          <label class=${labelClass()} for="dialog-name">Name</label>
+          <input class=${inputClass()} id="dialog-name" placeholder="Your name">
+        </div>
+        <form method="dialog" class=${dialogFooterClass()}>
+          <button class=${buttonClass({ variant: 'outline' })}>Cancel</button>
+          <button class=${buttonClass()}>Save</button>
+        </form>
+      </dialog>
 
       <p class="mt-12 text-sm text-fg-subtle">
         Tier-1 helpers compile to plain Tailwind class strings at SSR time -
