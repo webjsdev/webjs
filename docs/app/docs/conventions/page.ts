@@ -19,7 +19,7 @@ export default function Conventions() {
       <li><strong>Code style</strong>: TypeScript extensions, const/let preferences, async/await patterns.</li>
     </ul>
 
-    <h3>How to Override</h3>
+    <h3>How to Override Architectural Conventions</h3>
     <p>Sections in <code>CONVENTIONS.md</code> marked with <code>&lt;!-- OVERRIDE --&gt;</code> are customization points. Edit these to match your team's preferences. For example, if you prefer shadow DOM components by default (the scaffold defaults to light DOM + Tailwind):</p>
 
     <pre># Component patterns  &lt;!-- OVERRIDE --&gt;
@@ -28,37 +28,42 @@ export default function Conventions() {
 - Author styles via static styles = css\`...\`
 - Always call register()</pre>
 
-    <p>AI agents read <code>CONVENTIONS.md</code> before every task and follow the overrides. You can also disable specific convention rules in <code>package.json</code>:</p>
+    <p>AI agents read <code>CONVENTIONS.md</code> before every task and follow the overrides. The markdown is for the <em>architectural</em> conventions the linter can't enforce.</p>
 
+    <h2>webjs check &amp; lint rules</h2>
+    <p>The <code>webjs check</code> command runs a set of boolean lint rules: one function per action, components register themselves, tag names have hyphens, and so on. These rules are a <strong>separate surface</strong> from <code>CONVENTIONS.md</code>: they are not listed in the markdown, and editing the markdown does not change which rules run.</p>
+
+    <h3>Single source of truth</h3>
+    <p>The <strong>active rules for a project</strong> are determined by the <code>"webjs": { "conventions": { … } }</code> key in <code>package.json</code>. That is the only supported config surface. If it's absent, <strong>every default rule is enabled</strong> and AI agents must follow all of them.</p>
+
+    <h3>Discover the active rule set</h3>
+    <pre># Validate the project
+webjs check
+
+# List every rule, its description, and current enabled state
+webjs check --rules</pre>
+    <p><code>webjs check --rules</code> is the <strong>authoritative</strong> catalogue. It reads the project's config and tells you which rules are enabled and which are disabled by an override. Do not maintain a separate rule list in prose or in this documentation; it will drift.</p>
+
+    <h3>Disable a rule</h3>
+    <p>Add the rule name to <code>package.json</code> with a value of <code>false</code>:</p>
     <pre>{
   "webjs": {
     "conventions": {
       "tests-exist": false,
-      "one-function-per-action": true
+      "actions-in-modules": false
     }
   }
 }</pre>
+    <p>Only <code>false</code> is meaningful. There is no way to tweak a rule's behavior, only switch it off.</p>
 
-    <h2>webjs check</h2>
-    <p>The <code>webjs check</code> command validates your app against the conventions. It checks for common mistakes and enforces project structure rules.</p>
-
-    <pre># Validate the entire app
-webjs check
-
-# List all available rules
-webjs check --rules</pre>
-
-    <p>What <code>webjs check</code> validates:</p>
-    <ul>
-      <li><strong>Actions in modules</strong>: server actions live under <code>modules/&lt;feature&gt;/actions/</code>, not scattered in random directories.</li>
-      <li><strong>One function per action</strong>: each <code>.server.ts</code> file exports a single named async function.</li>
-      <li><strong>Components have register()</strong>: every component class calls <code>Class.register('tag')</code> at module top level.</li>
-      <li><strong>No server imports in client code</strong>: <code>@prisma/client</code>, <code>node:*</code>, and other server-only modules are not imported from components or pages.</li>
-      <li><strong>Tests exist for modules</strong>: every module under <code>modules/</code> has corresponding test files.</li>
-      <li><strong>Tag names have hyphens</strong>: custom element tags contain at least one hyphen (HTML spec requirement).</li>
-    </ul>
-
-    <p>Run <code>webjs check</code> before every commit. AI agents run it automatically as part of their workflow.</p>
+    <h3>Workflow for AI agents</h3>
+    <ol>
+      <li>Read <code>CONVENTIONS.md</code> for architectural conventions.</li>
+      <li>Run <code>webjs check --rules</code> to learn which lint rules are active.</li>
+      <li>Treat every rule not explicitly disabled as binding.</li>
+      <li>To change which rules are active, edit the <code>webjs.conventions</code> block in <code>package.json</code>. Never embed a rule list into prose.</li>
+      <li>Run <code>webjs check</code> before every commit. AI agents run it automatically as part of their workflow.</li>
+    </ol>
 
     <h2>webjs test</h2>
     <p>webjs ships a testing setup based on <code>node:test</code> and WTR + Playwright.</p>

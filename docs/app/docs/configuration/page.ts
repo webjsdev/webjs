@@ -59,6 +59,17 @@ webjs db studio       # prisma studio</pre>
       <li><code>checkJs</code>: type-check <code>.js</code> files too (for mixed codebases)</li>
     </ul>
 
+    <h2>package.json (lint rule overrides)</h2>
+    <p>The only project-level webjs config that lives in <code>package.json</code> is the <code>"webjs": { "conventions": { … } }</code> block, which disables individual <code>webjs check</code> lint rules. If the block is absent, every default rule is enabled.</p>
+    <pre>{
+  "webjs": {
+    "conventions": {
+      "tests-exist": false
+    }
+  }
+}</pre>
+    <p>See <a href="/docs/conventions">Conventions &amp; AI Workflow</a> for the rule catalogue, the workflow for AI agents, and what <code>webjs check --rules</code> prints. This page does not duplicate the list; the linter's <code>RULES</code> array is the single source of truth.</p>
+
     <h2>Environment Variables</h2>
     <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). There's no built-in <code>.env</code> loader, so use <code>dotenv</code> or pass vars via the shell:</p>
     <pre>DATABASE_URL=postgres://... webjs start</pre>
