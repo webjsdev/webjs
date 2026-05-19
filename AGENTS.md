@@ -118,10 +118,14 @@ bypass/autonomous mode).
    unit is complete (tests pass, the change makes sense in
    isolation), commit it. Do not pile multiple logical changes into
    one commit. If you find yourself with 5+ unstaged files spanning
-   different concerns, you already waited too long. The
-   `.claude/hooks/nudge-uncommitted.sh` hook fires at threshold 4 to
-   catch this; do not ignore the reminder. Push after each commit
-   so the remote stays in sync.
+   different concerns, you already waited too long. Push after each
+   commit so the remote stays in sync. Scaffolded apps ship hook
+   coverage for Claude Code (`PostToolUse`), Gemini CLI
+   (`AfterTool`), and Cursor 1.7+ (`afterFileEdit`), all firing at
+   threshold 4. Other agents (Windsurf, Copilot, OpenCode,
+   Antigravity) fall back to the text rules in this file and
+   `.cursorrules` / `.windsurfrules` / `copilot-instructions.md`.
+   The framework repo itself uses the Claude Code hook only.
 3. **Meaningful commit messages.** Describe what changed and why. Imperative
    mood, under 72 chars on the first line. Body explains the reason,
    not the diff (the diff is right there).
