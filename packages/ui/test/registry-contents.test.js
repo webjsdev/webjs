@@ -45,7 +45,7 @@ const V1_COMPONENTS = [
 // became pure class helpers on native HTML (Popover API,
 // <details>/<summary>). They no longer extend Base or call defineElement.
 const TIER_2 = new Set([
-  'progress', 'toggle', 'toggle-group',
+  'toggle', 'toggle-group',
   'dialog', 'alert-dialog', 'tooltip', 'hover-card',
   'tabs',
   'dropdown-menu', 'sonner',

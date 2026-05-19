@@ -3,10 +3,10 @@
  * with internal state that mutates on interaction. Runs in real Chromium
  * via WTR + Playwright.
  *
- * Covers: tabs, accordion, collapsible, progress.
+ * Covers: tabs, accordion, collapsible, toggle-group, sonner.
  *
- * Tier-1 components (switch, checkbox, radio-group, toggle) are class
- * helpers, not custom elements: their assertions live in
+ * Tier-1 components (switch, checkbox, radio-group, toggle, progress)
+ * are class helpers, not custom elements: their assertions live in
  * `packages/ui/test/class-helpers.test.js`.
  */
 import { html } from '../../packages/core/src/html.js';
@@ -299,50 +299,6 @@ suite('ui-collapsible', () => {
     root.remove();
   });
 });
-suite('ui-progress', () => {
-  suiteSetup(async () => {
-    await import(`${COMPONENTS_DIR}/progress.ts`);
-  });
-
-  test('renders with role="progressbar" on the host', async () => {
-    const root = await mount(html`<ui-progress value="0"></ui-progress>`);
-    // ui-progress sets role="progressbar" on itself, not a descendant.
-    const bar = root.querySelector('ui-progress[role="progressbar"]');
-    assert.ok(bar);
-    root.remove();
-  });
-
-  test('value attribute reflects to inner indicator transform', async () => {
-    const root = await mount(html`<ui-progress value="40"></ui-progress>`);
-    const indicator = root.querySelector('[data-slot="progress-indicator"]');
-    assert.ok(indicator);
-    // value=40 → offset=60 → transform: translateX(-60%)
-    assert.match(indicator.getAttribute('style') || '', /-60%/);
-    root.remove();
-  });
-
-  test('aria-valuenow reflects current value', async () => {
-    const root = await mount(html`<ui-progress value="75"></ui-progress>`);
-    const bar = root.querySelector('[role="progressbar"]');
-    assert.equal(bar.getAttribute('aria-valuenow'), '75');
-    root.remove();
-  });
-
-  test('aria-valuemax reflects max attribute', async () => {
-    const root = await mount(html`<ui-progress value="50" max="200"></ui-progress>`);
-    const bar = root.querySelector('[role="progressbar"]');
-    assert.equal(bar.getAttribute('aria-valuemax'), '200');
-    root.remove();
-  });
-
-  test('value=0 yields full negative offset (translateX(-100%))', async () => {
-    const root = await mount(html`<ui-progress value="0"></ui-progress>`);
-    const indicator = root.querySelector('[data-slot="progress-indicator"]');
-    assert.match(indicator.getAttribute('style') || '', /-100%/);
-    root.remove();
-  });
-});
-
 suite('ui-toggle-group', () => {
   suiteSetup(async () => {
     await import(`${COMPONENTS_DIR}/toggle-group.ts`);

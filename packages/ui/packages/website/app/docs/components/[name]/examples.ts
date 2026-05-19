@@ -64,6 +64,7 @@ import {
   tableCellClass,
 } from '../../../../components/ui/table.ts';
 import { toggleClass } from '../../../../components/ui/toggle.ts';
+import { progressClass } from '../../../../components/ui/progress.ts';
 import { tabsListClass } from '../../../../components/ui/tabs.ts';
 import {
   breadcrumbListClass,
@@ -282,7 +283,7 @@ const EXAMPLES: Record<string, string> = {
 
   progress: `
     <div class="w-64">
-      <ui-progress value="42"></ui-progress>
+      <progress value="42" max="100" class="${progressClass()}"></progress>
     </div>
   `,
 
