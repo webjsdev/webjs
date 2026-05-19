@@ -348,12 +348,14 @@ page functions (server).
 | Syntax            | Meaning |
 | ----------------- | ------- |
 | `<div>${x}</div>` | Text child (primitives, arrays, `TemplateResult`s). |
-| `class=${x}`      | Attribute. Value stringified and HTML-escaped. |
-| `@click=${fn}`    | Event listener (client-only). |
-| `.value=${v}`     | DOM property (not attribute). |
-| `?disabled=${b}`  | Boolean attribute. Present iff value is truthy. |
+| `class=${x}`      | Attribute. Value stringified and HTML-escaped. SSR-safe. |
+| `@click=${fn}`    | Event listener. Client-only by design (no event loop on the server). Drops at SSR. |
+| `.value=${v}`     | DOM property (not attribute). On custom elements, round-trips through SSR via a `data-webjs-prop-*` side-channel attribute (wire serializer handles Array/Object/Date/Map/Set/BigInt). On native elements, drops at SSR (use the attribute form for SSR-visible initial values). |
+| `?disabled=${b}`  | Boolean attribute. Present iff value is truthy. SSR-safe. |
 
 Event/property/boolean-prefixed attributes **must be unquoted**.
+
+**SSR coverage matrix.** Every `html` hole produces the same output server-side and client-side, with two intentional exceptions: `@event` listeners (no server event loop) and `.prop` on native elements (no SSR walker for native tags). For custom elements, the SSR walker reads `data-webjs-prop-*` before calling `instance.render()`; the client renderer applies and strips the same attribute on `connectedCallback`. Net result: `<my-comp .data=${richObject}>` works end-to-end, including the page-fetches-data-passes-to-component pattern.
 
 ---
 

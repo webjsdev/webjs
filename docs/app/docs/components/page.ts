@@ -553,7 +553,11 @@ render() {
 
     <pre>html\`&lt;my-chart .data=\${this.chartData} .options=\${{ animate: true }}&gt;&lt;/my-chart&gt;\`</pre>
 
-    <p>Property bindings are <strong>stripped during SSR</strong> (there is no DOM object to set a property on). Use them for client-only interactivity.</p>
+    <p><strong>On custom elements, property bindings round-trip through SSR.</strong> The renderer serializes the value via webjs's wire format (which handles Array, Object, Date, Map, Set, BigInt, and reference cycles) and emits it as a <code>data-webjs-prop-*</code> attribute. The SSR walker reads the attribute before calling <code>render()</code> so the component's first paint includes the bound value. On the client, <code>connectedCallback</code> applies and strips the attribute. End-to-end DX: <code>html\`&lt;post-list .posts=\${posts}&gt;&lt;/post-list&gt;\`</code> in a page function just works, with rich types preserved.</p>
+
+    <p><strong>On native elements (<code>&lt;input&gt;</code>, <code>&lt;button&gt;</code>, etc.), property bindings still drop at SSR.</strong> Native elements have no SSR walker that would consume the side-channel attribute, and the framework's HTML primitives already cover this case via the attribute form (<code>value=\${v}</code>, <code>checked=\${b}</code>). When the template runs in the browser (component <code>render()</code>, dynamic re-renders), the property is set normally. The property form is most useful for two-way controlled inputs via <code>.value=\${live(v)}</code> paired with an <code>@input</code> handler.</p>
+
+    <p><strong>Unserializable values</strong> (functions, class instances with private state, DOM nodes) drop at SSR with a single-line dev warning. The browser sees the property as <code>undefined</code>. Use <code>@event=\${fn}</code> for callbacks or set imperatively in <code>firstUpdated</code> for client-only references.</p>
 
     <h3>Boolean Attributes: <code>?attr=\${flag}</code></h3>
     <p>Adds the attribute if the value is truthy, removes it if falsy. This is the correct way to handle boolean HTML attributes like <code>disabled</code>, <code>checked</code>, <code>hidden</code>, and <code>readonly</code>:</p>
