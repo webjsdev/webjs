@@ -279,7 +279,12 @@ sitemap.js                  metadata route → /sitemap.xml
 robots.js                   metadata route → /robots.txt
 manifest.js                 metadata route → /manifest.json
 icon.js / opengraph-image.js / twitter-image.js / apple-icon.js
-lib/                        cross-cutting infra (prisma.js, session.js, password.js)
+lib/                        app-wide code (not module-specific)
+  server/                   server-only subfolder (prisma.js, session.js, password.js)
+    utils/                  server-only helpers (logger, mailer, audit)
+  utils/                    browser-safe helpers grouped by concern (cn.ts, ui.ts, format.ts)
+  constants.ts              app-wide browser-safe values
+  *.ts                      anything else app-wide that runs in the browser
 modules/                    feature-scoped (actions + queries + UI)
   <feature>/
     actions/                mutations (one file per action, `'use server'`)
@@ -591,7 +596,9 @@ Framework wraps the sibling page in `Suspense({ fallback: <your loading>, childr
 - **`modules/<feature>/components/*.{js,ts}`** for feature-owned web components. Shared UI lives in top-level `components/`.
 - **`modules/<feature>/utils/*.{js,ts}`** for pure helpers. No `'use server'`, no DB access.
 - **`modules/<feature>/types.{js,ts}`** for JSDoc typedefs and TS types.
-- **`lib/*.{js,ts}`** for cross-cutting infra: `prisma.{js,ts}` singleton, `password.{js,ts}`, external clients.
+- **`lib/`** for app-wide code that's not module-specific. Two halves by reachability:
+  - **`lib/server/`** holds server-only code (`prisma.{js,ts}` singleton, `session.{js,ts}`, `password.{js,ts}`, mailers, external server clients). Anything that needs Node APIs lives here. Sub-folder `lib/server/utils/` groups server-only helpers (logger, audit, mailer).
+  - **`lib/` everywhere else** holds browser-safe code (runs in the browser, or both server and browser). `lib/utils/` groups browser-safe helper functions by concern (`cn.ts`, `ui.ts`, `format.ts`). Files at the root of `lib/` (like `lib/constants.ts`) carry app-wide values, shared types, or thin helpers that don't fit a utils/ grouping.
 
 ### Return shape: the `ActionResult<T>` envelope
 
@@ -769,7 +776,7 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
 3. **Default to a real database, Prisma + SQLite. NEVER use JSON files,
    in-memory arrays, or localStorage as a substitute for persistence.**
-   Every scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` singleton,
+   Every scaffold ships `prisma/schema.prisma`, `lib/server/prisma.ts` singleton,
    and `npm run db:*` scripts. The convention check `no-json-data-files`
    flags JSON-as-database.
 4. **Treat the scaffold as REFERENCE, not the final product.** Replace
@@ -907,7 +914,7 @@ export default async function User({ params }: { params: { id: string } }) {
 ```ts
 // modules/users/actions/update-profile.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/server/prisma.ts';
 export async function updateProfile(input: { name: string }) {
   const name = String(input?.name || '').trim();
   if (!name) return { success: false, error: 'name required', status: 400 };

@@ -19,7 +19,7 @@ the app the user actually asked for.
 **Non-negotiables for every webjs app:**
 
 1. **Use Prisma + SQLite for persistence.** It's already wired up
-   (`prisma/schema.prisma`, `lib/prisma.ts`, `npm run db:migrate`,
+   (`prisma/schema.prisma`, `lib/server/prisma.ts`, `npm run db:migrate`,
    `predev` hook running `prisma generate`). For any data the app
    stores (todos, posts, messages, products, comments, anything),
    define a Prisma model and persist there.
@@ -283,11 +283,13 @@ Scripts:
 - `predev` hook auto-runs `prisma generate` before `npm run dev`
 - `prestart` hook runs `prisma migrate deploy` before `npm start` (idempotent in prod)
 
-Always import the client from `lib/prisma.ts` (never `new PrismaClient()` directly -
-the singleton avoids opening a new connection on every dev-server reload):
+Always import the client from `lib/server/prisma.ts` (never `new PrismaClient()` directly,
+the singleton avoids opening a new connection on every dev-server reload). The file
+lives under `lib/server/` because it's server-only: import it from `.server.{js,ts}`
+actions, `route.ts` handlers, or `middleware.ts`, never from pages or components.
 
 ```ts
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/server/prisma.ts';
 const users = await prisma.user.findMany();
 ```
 
@@ -398,7 +400,7 @@ See [Progressive Enhancement](https://docs.webjs.dev/docs/progressive-enhancemen
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/server/prisma.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   if (!input.title) return { success: false, error: 'title required', status: 400 };
@@ -628,12 +630,20 @@ composition, so a nested shell ends up dropped by the HTML parser.
    server-only dependency from a page, layout, loading.ts, error.ts,
    not-found.ts, or component will crash the browser at module load.
    Wrap the access in a `.server.{js,ts}` file; the framework
-   rewrites that import into an RPC stub for the browser. `lib/`
-   holds both server-only infra (`lib/prisma.ts`, `lib/session.ts`)
-   and browser-safe utilities (`lib/utils.ts` with `cn`, design-
-   system helpers). Server-only `lib/*` files must only be imported
-   from `.server.ts`/`route.ts`/`middleware.ts`; browser-safe `lib/*`
-   files (like `lib/utils.ts`) can be imported anywhere.
+   rewrites that import into an RPC stub for the browser. The `lib/`
+   layout makes the split visible by path:
+   - `lib/server/` is server-only (`prisma.ts`, `session.ts`,
+     `password.ts`, mailers, external server clients, plus a
+     `lib/server/utils/` subfolder for server-only helpers like
+     `logger.ts`). Import these only from `.server.{js,ts}`,
+     `route.ts`, or `middleware.ts`.
+   - `lib/` everywhere else is browser-safe (runs in the browser, or
+     on both server and browser). `lib/utils/` groups helper functions
+     by concern (`cn.ts` for class merging, `ui.ts` for Tailwind
+     helpers, `format.ts` for formatters). Files at the root of `lib/`
+     (like `lib/constants.ts`) hold app-wide values, shared types, or
+     thin helpers that don't fit a utils/ grouping. These can be
+     imported from anywhere, including components and pages.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
 4. Use `setState()`. Never mutate `this.state` directly.

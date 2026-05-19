@@ -138,7 +138,7 @@ docs". That is the agent's default behavior in a webjs project.
 <!-- OVERRIDE -->
 
 Every webjs app uses **Prisma + SQLite** for persistence by default. The
-scaffold ships `prisma/schema.prisma`, `lib/prisma.ts` (singleton), the
+scaffold ships `prisma/schema.prisma`, `lib/server/prisma.ts` (singleton), the
 `predev` / `prestart` hooks that run `prisma generate` / `prisma migrate
 deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
 
@@ -157,7 +157,7 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    preferences (theme, sidebar collapsed, etc.).
 5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
    -- --name <description>`. Access via `import { prisma } from
-   '../../../lib/prisma.ts'` **only inside `.server.{js,ts}` files,
+   '../../../lib/server/prisma.ts'` **only inside `.server.{js,ts}` files,
    `route.ts` handlers, or `middleware.ts`**. Never new `PrismaClient()`.
    Components, pages, and layouts call into the wrapped server query
    instead; the framework rewrites that import to an RPC stub on the
@@ -192,7 +192,7 @@ When the user asks the agent to build their actual app:
    doesn't use it.
 5. **Keep:** the Prisma setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
-   `lib/prisma.ts`, the directory conventions, the design tokens in
+   `lib/server/prisma.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
 
 The scaffold exists so the agent doesn't reinvent the directory layout,
@@ -247,7 +247,7 @@ modules/
 - One exported function per server action/query file
 - Server actions must use `'use server'` pragma or `.server.ts` extension
 - Components must call `Class.register('tag')`
-- **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` holds both server-only infra (`lib/prisma.ts`) and browser-safe utilities (`lib/utils.ts` with `cn`); the convention is "if a `lib/` file needs Node APIs, only import it from server-only files."
+- **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` makes the split visible by path. `lib/server/` (and `lib/server/utils/`) hold server-only infra (`lib/server/prisma.ts`, `lib/server/session.ts`, `lib/server/password.ts`, `lib/server/utils/logger.ts`). The rest of `lib/` is browser-safe (`lib/constants.ts` at the root for app-wide values; `lib/utils/cn.ts` and `lib/utils/ui.ts` for helper functions grouped by concern). Browser-safe `lib/` files can be imported from anywhere; server-only `lib/server/` files must only be imported from `.server.{js,ts}` / `route.ts` / `middleware.ts`.
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules
 
 ---
@@ -497,10 +497,10 @@ and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
 
 **Dedup repeated Tailwind class bundles with JS helpers, not `@apply`.**
 When the same string of classes appears in 2+ places, extract it into a
-small function in `app/_utils/ui.ts`:
+small function in `lib/utils/ui.ts`:
 
 ```ts
-// app/_utils/ui.ts
+// lib/utils/ui.ts
 import { html } from '@webjskit/core';
 
 export function rubric(label: string) {
@@ -514,7 +514,7 @@ Consume:
 
 ```ts
 // app/page.ts
-import { rubric } from './_utils/ui.ts';
+import { rubric } from '../lib/utils/ui.ts';
 
 export default function Home() {
   return html`
