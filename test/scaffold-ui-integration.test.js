@@ -31,6 +31,8 @@ const TIER1_TAGS = [
   'ui-badge', 'ui-separator', 'ui-skeleton', 'ui-aspect-ratio', 'ui-kbd',
   'ui-checkbox', 'ui-radio-group', 'ui-switch', 'ui-native-select',
   'ui-avatar', 'ui-table', 'ui-toggle', 'ui-breadcrumb', 'ui-pagination',
+  // Migrated to Tier 1 (native <progress value max>) in feat/ui-progress-tier1.
+  'ui-progress',
 ];
 
 const TIER1_HELPERS_BUTTON = ['buttonClass'];
