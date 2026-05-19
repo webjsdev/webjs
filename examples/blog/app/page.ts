@@ -5,7 +5,7 @@ import '../modules/chat/components/chat-box.ts';
 
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
 import { currentUser } from '../modules/auth/queries/current-user.server.ts';
-import { rubric, stat, banner, accentLink, sectionH2 } from './_utils/ui.ts';
+import { rubric, stat, banner, accentLink, sectionH2 } from '../lib/utils/ui.ts';
 
 export const metadata = {
   title: 'webjs blog',
