@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/password.ts: pure crypto, no database needed.
+ * Unit tests for lib/password.server.ts: pure crypto, no database needed.
  *
  * Run with Node >= 23.6 (native type-stripping):
  *   node --test test/unit/password.test.ts
@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hashPassword, verifyPassword } from '../../lib/password.ts';
+import { hashPassword, verifyPassword } from '../../lib/password.server.ts';
 
 test('hashPassword produces a scrypt$salt$hash string', async () => {
   const hash = await hashPassword('test-password-123');

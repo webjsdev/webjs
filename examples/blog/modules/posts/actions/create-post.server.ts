@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 import { slugify, formatPost } from '../utils/slugify.ts';
 import { currentUser } from '../../auth/queries/current-user.server.ts';
 import { listPosts } from '../queries/list-posts.server.ts';
