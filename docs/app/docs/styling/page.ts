@@ -132,9 +132,9 @@ Card.register('my-card');</pre>
     <p>CSS custom properties <strong>inherit through shadow DOM boundaries</strong>. Define them once on <code>:root</code> (as the blog example does in its layout) and both light-DOM and shadow-DOM components can consume them via Tailwind classes (<code>text-fg</code>, <code>bg-bg-elev</code>) or bare CSS (<code>var(--fg)</code>).</p>
 
     <h2>DRY'ing up repeated Tailwind classes via JS helpers</h2>
-    <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>app/_utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
+    <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>lib/utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
 
-    <pre>// app/_utils/ui.ts
+    <pre>// lib/utils/ui.ts
 import { html } from '@webjskit/core';
 
 /** \`label\` kicker: small caps, accent colour, above headings. */
@@ -153,7 +153,7 @@ export function backLink(href: string, label: string) {
 
     <p>Consume anywhere:</p>
     <pre>// app/blog/[slug]/page.ts
-import { rubric, backLink } from '../../_utils/ui.ts';
+import { rubric, backLink } from '../../../lib/utils/ui.ts';
 
 export default function Post({ params }) {
   return html\`
