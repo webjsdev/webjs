@@ -5,6 +5,7 @@ import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
 import { isUnsafeHTML, isLive } from './directives.js';
+import { stringify, parse } from './serialize.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -195,8 +196,31 @@ async function renderTemplate(tr, ctx) {
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
-        if (prefix === '@' || prefix === '.') {
+        if (prefix === '@') {
+          // Event listener. Client-only behaviour, drop at SSR.
           out = out.slice(0, attrStart);
+          state = 'in-tag';
+          attrName = '';
+        } else if (prefix === '.') {
+          // Property binding. Serialize via the wire format and emit
+          // as a `data-webjs-prop-<kebab-name>` side-channel attribute.
+          // The SSR walker reads it before calling instance.render();
+          // the client renderer applies + strips it on hydration so
+          // the settled DOM is clean.
+          out = out.slice(0, attrStart);
+          try {
+            const encoded = await stringify(val);
+            out += `data-webjs-prop-${kebabCase(name)}="${escapeAttr(encoded)}"`;
+          } catch (e) {
+            // Unserializable value (function, class instance with
+            // private state, DOM node, etc.). Drop with a warning so
+            // SSR does not crash. Same constraint as Next.js RSC.
+            console.warn(
+              `[webjs] property binding .${name} has an unserializable `
+              + `value during SSR. Dropping. The browser will see the `
+              + `property as undefined. Detail: ${e && e.message}`
+            );
+          }
           state = 'in-tag';
           attrName = '';
         } else if (prefix === '?') {
@@ -256,7 +280,14 @@ async function injectDSD(html, ctx) {
       const isShadow = /** @type any */ (Cls).shadow === true;
       const instance = new /** @type any */ (Cls)();
       const attrMap = parseAttrs(attrs);
+      // Decode `data-webjs-prop-*` attributes first (rich-typed values
+      // emitted for `.prop=${val}` bindings in the parent template),
+      // then coerce the ordinary string attributes by `static
+      // properties` type. Property bindings take priority on a name
+      // collision because they preserve the original JS reference.
+      const propValues = consumePropAttrs(attrMap);
       applyAttrsToInstance(instance, attrMap, Cls);
+      for (const [k, v] of Object.entries(propValues)) instance[k] = v;
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
       // Render the template to HTML. injectDSD recurses on the result so
@@ -641,6 +672,45 @@ function applyAttrsToInstance(instance, attrs, Cls) {
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/**
+ * Inverse of camelCase. `userName` -> `user-name`, `userID` -> `user-i-d`.
+ * Used to serialize property-binding names into HTML attribute names,
+ * which are case-insensitive in the parser. The original JS property
+ * name is recovered via camelCase() on the consumer side.
+ *
+ * @param {string} s
+ */
+function kebabCase(s) {
+  return s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * Decode `data-webjs-prop-<kebab>` attributes from a parsed attribute
+ * map, returning a map of camelCase property name to decoded value.
+ * Mutates `attrs` by deleting the consumed entries so they do not
+ * appear in the rendered output a second time.
+ *
+ * @param {Record<string,string>} attrs
+ * @returns {Record<string, unknown>}
+ */
+function consumePropAttrs(attrs) {
+  /** @type {Record<string, unknown>} */
+  const props = {};
+  for (const key of Object.keys(attrs)) {
+    if (!key.startsWith('data-webjs-prop-')) continue;
+    const propName = camelCase(key.slice('data-webjs-prop-'.length));
+    try {
+      props[propName] = parse(attrs[key]);
+    } catch {
+      // Malformed payload. Skip silently so the rest of the component
+      // can still render. The client-side hydration will also try and
+      // fail, which is fine: undefined-prop semantics.
+    }
+    delete attrs[key];
+  }
+  return props;
 }
 
 // ---------------------------------------------------------------------------
