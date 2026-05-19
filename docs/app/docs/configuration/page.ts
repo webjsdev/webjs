@@ -94,7 +94,9 @@ class Checkout extends WebComponent {
 
     <p><strong>NODE_ENV is always defined in the browser.</strong> The shim sets <code>process.env.NODE_ENV</code> to <code>'development'</code> in <code>webjs dev</code> or <code>'production'</code> in <code>webjs start</code>. Vendor bundles that probe <code>process.env.NODE_ENV</code> (lit, react, others) read the right value with no extra config.</p>
 
-    <p><strong>Naming and safety.</strong> The prefix is fail-closed. An env var without <code>WEBJS_PUBLIC_</code> in its name cannot accidentally reach the browser, even if a component naively writes <code>process.env.DATABASE_URL</code>. The value will read as <code>undefined</code>, the same way a typo would. There is no way to opt out of the prefix, by design.</p>
+    <p><strong>Naming and safety.</strong> The prefix is fail-closed. An env var without <code>WEBJS_PUBLIC_</code> in its name cannot accidentally reach the browser at runtime, even if a component naively writes <code>process.env.DATABASE_URL</code>. The value will read as <code>undefined</code>, the same way a typo would. There is no way to opt out of the prefix, by design.</p>
+
+    <p><strong>The SSR-time gap, and the lint rule that closes it.</strong> A component's <code>render()</code> runs on the server during SSR. If a component reads <code>process.env.SECRET</code> there and interpolates it into the HTML output, the secret gets shipped to every browser even though the runtime shim does not expose it. To catch this at write time, <code>webjs check</code> ships a <code>no-server-env-in-components</code> rule that flags any <code>process.env.X</code> read in a component file when <code>X</code> is not <code>WEBJS_PUBLIC_*</code> and not <code>NODE_ENV</code>. The fix is always one of: rename to <code>WEBJS_PUBLIC_*</code> if the value is intended for the browser, or read it in a page function / server action / middleware and pass a derived value to the component as an attribute.</p>
 
     <h2>Programmatic API</h2>
     <pre>import { startServer, createRequestHandler } from '@webjskit/server';
