@@ -20,7 +20,8 @@
  *
  * Design tokens used: --primary.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 
 const ROOT_CLASS = 'relative h-2 w-full overflow-hidden rounded-full bg-primary/20';
 const INDICATOR_CLASS = 'h-full w-full flex-1 bg-primary transition-all';
@@ -38,62 +39,65 @@ function installStyles(): void {
   document.head.appendChild(style);
 }
 
-export class UiProgress extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'max'];
-  }
+export class UiProgress extends WebComponent {
+  static properties = {
+    value: { type: Number, reflect: true },
+    max: { type: Number, reflect: true },
+  };
+  declare value: number;
+  declare max: number;
 
-  private _indicator: HTMLDivElement | null = null;
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.value = 0;
+    this.max = 100;
+  }
 
   connectedCallback(): void {
     installStyles();
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'progress');
     this.setAttribute('role', 'progressbar');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(ROOT_CLASS, userClass);
-    if (!this._indicator) {
-      this._indicator = document.createElement('div');
-      this._indicator.setAttribute('data-slot', 'progress-indicator');
-      this._indicator.className = INDICATOR_CLASS;
-      this.appendChild(this._indicator);
-    }
-    this._reflect();
   }
 
-  attributeChangedCallback(): void {
-    this._reflect();
-  }
-
-  private _reflect(): void {
+  render() {
+    // Treat a missing or non-finite `value` as indeterminate. The class
+    // helper merges the author's authored class with our root class on
+    // every render so a runtime class change is preserved.
     const rawValue = this.getAttribute('value');
-    const value = Number(rawValue ?? '0');
-    const max = Number(this.getAttribute('max') ?? '100');
-    const clamped = Math.max(0, Math.min(max, isFinite(value) ? value : 0));
+    const valueIsMissing = rawValue === null || rawValue === '' || !isFinite(this.value);
+    const max = isFinite(this.max) && this.max > 0 ? this.max : 100;
+    const clamped = Math.max(0, Math.min(max, valueIsMissing ? 0 : this.value));
     const pct = max > 0 ? (clamped / max) * 100 : 0;
+    const state = valueIsMissing
+      ? 'indeterminate'
+      : clamped >= max
+        ? 'complete'
+        : 'loading';
+
+    this.className = cn(ROOT_CLASS, this._userClass);
     this.setAttribute('aria-valuenow', String(clamped));
     this.setAttribute('aria-valuemin', '0');
     this.setAttribute('aria-valuemax', String(max));
-    // Radix/shadcn data-attribute portability: class strings like
-    //   data-[state=loading]:animate-pulse
-    //   data-[state=indeterminate]:bg-muted
-    // can target our progress now. State = indeterminate when `value`
-    // is absent/null (matches Radix), loading while strictly less than
-    // max, complete on reach.
-    const state =
-      rawValue === null || rawValue === '' || !isFinite(value)
-        ? 'indeterminate'
-        : clamped >= max
-          ? 'complete'
-          : 'loading';
     this.setAttribute('data-state', state);
     this.setAttribute('data-value', String(clamped));
     this.setAttribute('data-max', String(max));
-    if (this._indicator) {
-      this._indicator.setAttribute('data-state', state);
-      this._indicator.setAttribute('data-value', String(clamped));
-      this._indicator.setAttribute('data-max', String(max));
-      this._indicator.style.transform = `translateX(-${100 - pct}%)`;
-    }
+
+    return html`
+      <div
+        class=${INDICATOR_CLASS}
+        data-slot="progress-indicator"
+        data-state=${state}
+        data-value=${String(clamped)}
+        data-max=${String(max)}
+        style=${`transform: translateX(-${100 - pct}%)`}></div>
+    `;
   }
 }
-defineElement('ui-progress', UiProgress);
+UiProgress.register('ui-progress');
