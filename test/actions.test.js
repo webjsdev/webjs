@@ -26,7 +26,7 @@ async function scaffold(files) {
 
 test('webjs wire format round-trips Date / Map / BigInt across invokeAction', async () => {
   const dir = await scaffold({
-    'actions/rich.server.js': `
+    'actions/rich.server.js': `'use server';
       export async function now() { return new Date(1234567890000); }
       export async function bag() {
         return { big: 9007199254740993n, set: new Set(['a','b']), map: new Map([[1, 'one']]) };
@@ -59,16 +59,20 @@ test('webjs wire format round-trips Date / Map / BigInt across invokeAction', as
   }
 });
 
-test('detects *.server.js and "use server" pragma files', async () => {
+test('isServerFile is path-only: .server.* yes, anything else no', async () => {
   const dir = await scaffold({
     'actions/a.server.js': 'export const hello = async () => 1',
     'actions/b.js': `'use server';\nexport const bye = async () => 2`,
     'actions/c.js': 'export const plain = () => 3',
   });
   try {
-    assert.equal(await isServerFile(join(dir, 'actions/a.server.js')), true);
-    assert.equal(await isServerFile(join(dir, 'actions/b.js')), true);
-    assert.equal(await isServerFile(join(dir, 'actions/c.js')), false);
+    // .server.{js,ts} extension is the only path-level marker.
+    assert.equal(isServerFile(join(dir, 'actions/a.server.js')), true);
+    // 'use server' WITHOUT the extension is no longer server-only. The
+    // lint rule `use-server-needs-extension` flags it instead; the file
+    // serves to the browser as plain source.
+    assert.equal(isServerFile(join(dir, 'actions/b.js')), false);
+    assert.equal(isServerFile(join(dir, 'actions/c.js')), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -76,7 +80,7 @@ test('detects *.server.js and "use server" pragma files', async () => {
 
 test('stubs server module and invokes action by hash/fn', async () => {
   const dir = await scaffold({
-    'actions/math.server.js': `
+    'actions/math.server.js': `'use server';
       export async function add(a, b) { return a + b; }
       export async function mul(a, b) { return a * b; }
     `,
