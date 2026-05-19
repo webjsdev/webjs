@@ -1340,5 +1340,82 @@ test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', as
   }
 });
 
+test('SSR runtime guard: a component reading process.env.SECRET emits undefined, not the secret value', async () => {
+  // End-to-end check that the env-guard proxy fires when a real
+  // component's render() interpolates a non-public env var into its
+  // template. The SSR output must contain 'undefined' or empty, never
+  // the actual secret value.
+  const prev = process.env.LEAK_TEST_SECRET;
+  process.env.LEAK_TEST_SECRET = 'this-must-never-appear-in-html';
+  try {
+    const { route, appDir } = await makeRoute({
+      pageSrc:
+        `import { html, WebComponent } from ${JSON.stringify(WEBJS_MODULE_URL)};\n` +
+        `class LeakProbe extends WebComponent {\n` +
+        `  render() { return html\`<div data-leaked=\${String(process.env.LEAK_TEST_SECRET)}>x</div>\`; }\n` +
+        `}\n` +
+        `LeakProbe.register('leak-probe');\n` +
+        `export default function Page() { return html\`<leak-probe></leak-probe>\`; }\n`,
+    });
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    const body = await resp.text();
+    assert.equal(
+      body.includes('this-must-never-appear-in-html'), false,
+      'the secret must not appear in the SSR output (the env-guard proxy must have filtered it)',
+    );
+    // Component rendered something (the leak-probe tag is present)
+    assert.ok(body.includes('leak-probe'));
+  } finally {
+    if (prev === undefined) delete process.env.LEAK_TEST_SECRET;
+    else process.env.LEAK_TEST_SECRET = prev;
+  }
+});
+
+test('SSR runtime guard: WEBJS_PUBLIC_* values DO render into HTML (they are public)', async () => {
+  const prev = process.env.WEBJS_PUBLIC_RENDER_TEST;
+  process.env.WEBJS_PUBLIC_RENDER_TEST = 'public-value-ok';
+  try {
+    const { route, appDir } = await makeRoute({
+      pageSrc:
+        `import { html, WebComponent } from ${JSON.stringify(WEBJS_MODULE_URL)};\n` +
+        `class PublicProbe extends WebComponent {\n` +
+        `  render() { return html\`<div data-v=\${process.env.WEBJS_PUBLIC_RENDER_TEST}>x</div>\`; }\n` +
+        `}\n` +
+        `PublicProbe.register('public-probe');\n` +
+        `export default function Page() { return html\`<public-probe></public-probe>\`; }\n`,
+    });
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    const body = await resp.text();
+    assert.ok(body.includes('public-value-ok'), 'WEBJS_PUBLIC_* values must still render');
+  } finally {
+    if (prev === undefined) delete process.env.WEBJS_PUBLIC_RENDER_TEST;
+    else process.env.WEBJS_PUBLIC_RENDER_TEST = prev;
+  }
+});
+
+test('SSR runtime guard: a page function still has full env access (NOT in render scope)', async () => {
+  const prev = process.env.PAGE_FN_SECRET;
+  process.env.PAGE_FN_SECRET = 'visible-in-page-fn';
+  try {
+    const { route, appDir } = await makeRoute({
+      pageSrc:
+        `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+        `export default function Page() {\n` +
+        `  const v = String(process.env.PAGE_FN_SECRET);\n` +
+        `  return html\`<p>\${v}</p>\`;\n` +
+        `}\n`,
+    });
+    const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+    const body = await resp.text();
+    assert.ok(
+      body.includes('visible-in-page-fn'),
+      'page functions are NOT in component render scope and must see the real env',
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PAGE_FN_SECRET;
+    else process.env.PAGE_FN_SECRET = prev;
+  }
+});
+
 /* ------------ bundle mode skips per-file preloads ------------ */
 
