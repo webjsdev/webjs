@@ -5,7 +5,7 @@ import '../../../modules/comments/components/comments-thread.ts';
 import { getPost } from '../../../modules/posts/queries/get-post.server.ts';
 import { listComments } from '../../../modules/comments/queries/list-comments.server.ts';
 import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';
-import { rubric, backLink, displayH1, stat } from '../../_utils/ui.ts';
+import { rubric, backLink, displayH1, stat } from '../../../lib/utils/ui.ts';
 
 type Ctx = { params: { slug: string } };
 
