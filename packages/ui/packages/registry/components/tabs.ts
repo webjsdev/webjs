@@ -36,7 +36,8 @@
  * --input, --ring.
  */
 
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers
@@ -105,40 +106,50 @@ function installStyles(): void {
 // <ui-tabs> owns active `value` and `orientation`, broadcasts to children.
 // --------------------------------------------------------------------------
 
-export class UiTabs extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'orientation'];
+export class UiTabs extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+    orientation: { type: String, reflect: true },
+  };
+  declare value: string;
+  declare orientation: 'horizontal' | 'vertical';
+
+  _userClass: string = '';
+  _lastValue: string = '';
+
+  constructor() {
+    super();
+    this.value = '';
+    this.orientation = 'horizontal';
   }
 
   connectedCallback(): void {
     installStyles();
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'tabs');
-    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'horizontal');
-    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(TABS_BASE, userClass);
+  }
+
+  render() {
+    this.setAttribute('data-orientation', this.orientation);
+    this.className = cn(TABS_BASE, this._userClass);
     queueMicrotask(() => this._syncChildren());
-  }
-
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
-    if (oldVal === newVal) return;
-    if (name === 'orientation') {
-      this.setAttribute('data-orientation', newVal ?? 'horizontal');
+    // Fire value-change event when value mutates after first render.
+    if (this._lastValue !== this.value) {
+      const prev = this._lastValue;
+      this._lastValue = this.value;
+      if (prev !== '' || this.value !== '') {
+        queueMicrotask(() => {
+          this.dispatchEvent(
+            new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
+          );
+        });
+      }
     }
-    if (name === 'value') {
-      this._syncChildren();
-      this.dispatchEvent(
-        new CustomEvent('ui-value-change', { detail: { value: newVal }, bubbles: true }),
-      );
-    }
-  }
-
-  get value(): string {
-    return this.getAttribute('value') ?? '';
-  }
-
-  set value(v: string) {
-    this.setAttribute('value', v);
+    return html`<slot></slot>`;
   }
 
   _syncChildren(): void {
@@ -158,53 +169,93 @@ export class UiTabs extends Base {
     });
   }
 }
-defineElement('ui-tabs', UiTabs);
+UiTabs.register('ui-tabs');
 
 // --------------------------------------------------------------------------
 // <ui-tabs-list> is the container for triggers. Applies role="tablist".
 // --------------------------------------------------------------------------
 
-export class UiTabsList extends Base {
+export class UiTabsList extends WebComponent {
+  static properties = {
+    variant: { type: String, reflect: true },
+  };
+  declare variant: TabsListVariant;
+
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.variant = 'default';
+  }
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'tabs-list');
     this.setAttribute('role', 'tablist');
-    if (!this.hasAttribute('variant')) this.setAttribute('variant', 'default');
-    this.setAttribute('data-variant', this.getAttribute('variant') ?? 'default');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(tabsListClass({ variant: this.getAttribute('variant') as TabsListVariant }), userClass);
+  }
+
+  render() {
+    this.setAttribute('data-variant', this.variant);
+    this.className = cn(tabsListClass({ variant: this.variant }), this._userClass);
+    return html`<slot></slot>`;
   }
 }
-defineElement('ui-tabs-list', UiTabsList);
+UiTabsList.register('ui-tabs-list');
 
 // --------------------------------------------------------------------------
 // <ui-tabs-trigger value="..."> is the tab button. Click + keyboard nav.
 // --------------------------------------------------------------------------
 
-export class UiTabsTrigger extends Base {
+export class UiTabsTrigger extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+  };
+  declare value: string;
+
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.value = '';
+  }
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'tabs-trigger');
     this.setAttribute('role', 'tab');
     this.setAttribute('tabindex', '-1');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(TABS_TRIGGER_CLASS, userClass);
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
     this.removeEventListener('keydown', this._onKeyDown);
+    super.disconnectedCallback?.();
   }
 
-  private get _tabs(): UiTabs | null {
+  render() {
+    this.className = cn(TABS_TRIGGER_CLASS, this._userClass);
+    return html`<slot></slot>`;
+  }
+
+  get _tabs(): UiTabs | null {
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
-  private _onClick = (): void => {
-    const value = this.getAttribute('value');
-    if (value != null) this._tabs?.setAttribute('value', value);
+  _onClick = (): void => {
+    if (this.value) this._tabs?.setAttribute('value', this.value);
   };
 
-  private _onKeyDown = (e: KeyboardEvent): void => {
+  _onKeyDown = (e: KeyboardEvent): void => {
     const tabs = this._tabs;
     if (!tabs) return;
     const orientation = tabs.getAttribute('orientation') ?? 'horizontal';
@@ -232,19 +283,39 @@ export class UiTabsTrigger extends Base {
     }
   };
 }
-defineElement('ui-tabs-trigger', UiTabsTrigger);
+UiTabsTrigger.register('ui-tabs-trigger');
 
 // --------------------------------------------------------------------------
 // <ui-tabs-content value="..."> is the panel content. Shown when value matches.
 // --------------------------------------------------------------------------
 
-export class UiTabsContent extends Base {
+export class UiTabsContent extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+  };
+  declare value: string;
+
+  _userClass: string = '';
+
+  constructor() {
+    super();
+    this.value = '';
+  }
+
   connectedCallback(): void {
+    this._userClass = this.getAttribute('class') ?? '';
+    super.connectedCallback?.();
+  }
+
+  firstUpdated(): void {
     this.setAttribute('data-slot', 'tabs-content');
     this.setAttribute('role', 'tabpanel');
     this.setAttribute('tabindex', '0');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(TABS_CONTENT_CLASS, userClass);
+  }
+
+  render() {
+    this.className = cn(TABS_CONTENT_CLASS, this._userClass);
+    return html`<slot></slot>`;
   }
 }
-defineElement('ui-tabs-content', UiTabsContent);
+UiTabsContent.register('ui-tabs-content');
