@@ -785,21 +785,49 @@ webjs ui list / view <name>                           # browse the registry
 
 ---
 
-## CONVENTIONS.md: overridable project conventions
+## CONVENTIONS.md and the lint config: complementary, not redundant
 
-Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it
-before writing code. Users can edit any section. Sections marked
-`<!-- OVERRIDE -->` are the customization points. `webjs check` reads
-both built-in rules and overrides.
+Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read
+it before writing code. Sections marked `<!-- OVERRIDE -->` are the
+customization points. **`CONVENTIONS.md` is markdown prose for
+architectural conventions** (modules layout, styling, testing, git
+workflow) that the linter can't enforce programmatically.
 
-**`CONVENTIONS.md` vs `webjs check` are separate.** Markdown is for humans
-and AI. The linter is hardcoded in `@webjskit/server/src/check.js`. To turn
-off a rule, set it to `false` in `package.json` `webjs.conventions` or in
-`webjs.conventions.js`. Built-in rules: `actions-in-modules`,
-`one-function-per-action`, `components-have-register`,
-`no-server-imports-in-components`, `tests-exist`, `tag-name-has-hyphen`,
-`reactive-props-use-declare`, `no-json-data-files`,
-`shell-in-non-root-layout`, `erasable-typescript-only`.
+**`webjs check` rules are a separate, narrower surface.** They are
+boolean checks defined in `@webjskit/server/src/check.js`'s `RULES`
+array. Their source of truth at the project level is the
+`"webjs": { "conventions": { … } }` key in `package.json`. That is
+the only supported config surface.
+
+**No override present → every default rule is enabled.** AI agents
+treat all rules as active unless the config explicitly sets one to
+`false`.
+
+**Do NOT maintain a list of rules in prose.** Run `webjs check --rules`
+to enumerate them. The command prints every rule's name, description,
+and current enabled state (taking project overrides into account). The
+`RULES` array in `check.js` is the only catalogue; everything else
+defers to it.
+
+### Disabling a rule
+
+```jsonc
+// package.json
+{
+  "webjs": {
+    "conventions": { "tests-exist": false }
+  }
+}
+```
+
+### What AI agents must do
+
+1. Read `CONVENTIONS.md` for architectural conventions.
+2. Run `webjs check --rules` to learn which lint rules are active for
+   this project.
+3. Treat every rule not explicitly disabled in the config as binding.
+4. When asked to change which rules are active, edit the
+   `webjs.conventions` block in `package.json` (never the prose).
 
 ---
 
