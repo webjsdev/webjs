@@ -335,7 +335,7 @@ model User {
 }
 `);
 
-  await writeFile(join(appDir, 'lib', 'prisma.ts'), `/**
+  await writeFile(join(appDir, 'lib', 'prisma.server.ts'), `/**
  * Prisma client singleton. The \`globalThis\` trick keeps a single
  * instance across dev-server module reloads, so we don't open a new
  * DB connection on every file change.
@@ -834,7 +834,7 @@ ThemeToggle.register('theme-toggle');
                     dialog,form,field,switch,checkbox}.ts
     components/theme-toggle.ts
     modules/auth/{actions,queries,types.ts}
-    lib/{auth,prisma,password}.ts
+    lib/{auth,prisma,password}.server.ts
     lib/utils/cn.ts                      ← cn() helper for ui-* components
     prisma/schema.prisma                 ← User model
     CONVENTIONS.md, AGENTS.md, CLAUDE.md

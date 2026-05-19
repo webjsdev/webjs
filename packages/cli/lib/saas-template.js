@@ -50,9 +50,9 @@ export async function writeSaasFiles(appDir) {
   // the saas auth pages use raw <form> + label/input class helpers instead.
   await copyUiComponents(appDir, ['dialog', 'switch', 'checkbox']);
 
-  // lib/prisma.ts
+  // lib/prisma.server.ts
   await mkdir(join(appDir, 'lib'), { recursive: true });
-  await writeFile(join(appDir, 'lib', 'prisma.ts'), [
+  await writeFile(join(appDir, 'lib', 'prisma.server.ts'), [
     "import { PrismaClient } from '@prisma/client';",
     "",
     "const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };",
@@ -61,8 +61,8 @@ export async function writeSaasFiles(appDir) {
     "",
   ].join('\n'));
 
-  // lib/password.ts
-  await writeFile(join(appDir, 'lib', 'password.ts'), [
+  // lib/password.server.ts
+  await writeFile(join(appDir, 'lib', 'password.server.ts'), [
     "import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';",
     "import { promisify } from 'node:util';",
     "",
@@ -82,11 +82,11 @@ export async function writeSaasFiles(appDir) {
     "",
   ].join('\n'));
 
-  // lib/auth.ts
-  await writeFile(join(appDir, 'lib', 'auth.ts'), [
+  // lib/auth.server.ts
+  await writeFile(join(appDir, 'lib', 'auth.server.ts'), [
     "import { createAuth, Credentials } from '@webjskit/server';",
-    "import { prisma } from './prisma.ts';",
-    "import { compare } from './password.ts';",
+    "import { prisma } from './prisma.server.ts';",
+    "import { compare } from './password.server.ts';",
     "",
     "export const { auth, signIn, signOut, handlers } = createAuth({",
     "  providers: [",
@@ -132,8 +132,8 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'modules', 'auth', 'actions', 'signup.server.ts'), [
     "'use server';",
     "",
-    "import { prisma } from '../../../lib/prisma.ts';",
-    "import { hash } from '../../../lib/password.ts';",
+    "import { prisma } from '../../../lib/prisma.server.ts';",
+    "import { hash } from '../../../lib/password.server.ts';",
     "",
     "export async function signup(input: { name: string; email: string; password: string }) {",
     "  const exists = await prisma.user.findUnique({ where: { email: input.email } });",
@@ -150,7 +150,7 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'modules', 'auth', 'queries', 'current-user.server.ts'), [
     "'use server';",
     "",
-    "import { auth } from '../../../lib/auth.ts';",
+    "import { auth } from '../../../lib/auth.server.ts';",
     "",
     "export async function currentUser() {",
     "  const session = await auth();",
@@ -175,8 +175,8 @@ export async function writeSaasFiles(appDir) {
 
   // test/unit/auth.test.ts: minimal stub so the scaffold passes
   // `webjs check` (tests-exist) and `webjs test` runs cleanly out of the
-  // box. The signup/current-user functions import from lib/prisma.ts and
-  // lib/auth.ts, both of which need `prisma generate` to have run before
+  // box. The signup/current-user functions import from lib/prisma.server.ts
+  // and lib/auth.server.ts, both of which need `prisma generate` to have run before
   // they can be imported, so we deliberately test only the runtime-
   // dependency-free types.ts here. Replace with real tests once Prisma
   // is set up (run `npm install && npx prisma migrate dev --name init`).
@@ -224,7 +224,7 @@ export async function writeSaasFiles(appDir) {
   // app/api/auth/[...path]/route.ts
   await mkdir(join(appDir, 'app', 'api', 'auth', '[...path]'), { recursive: true });
   await writeFile(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts'), [
-    "import { handlers } from '../../../../../lib/auth.ts';",
+    "import { handlers } from '../../../../../lib/auth.server.ts';",
     "export const GET = handlers.GET;",
     "export const POST = handlers.POST;",
     "",
@@ -321,7 +321,7 @@ export async function writeSaasFiles(appDir) {
   // app/dashboard/middleware.ts
   await mkdir(join(appDir, 'app', 'dashboard', 'settings'), { recursive: true });
   await writeFile(join(appDir, 'app', 'dashboard', 'middleware.ts'), [
-    "import { auth } from '../../lib/auth.ts';",
+    "import { auth } from '../../lib/auth.server.ts';",
     "",
     "export default async function requireAuth(req: Request, next: () => Promise<Response>) {",
     "  const session = await auth();",
