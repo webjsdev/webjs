@@ -8,7 +8,7 @@ export default function Auth() {
     <p>webjs provides NextAuth-style authentication with OAuth providers, credentials login, and JWT sessions. No external auth library needed.</p>
 
     <h2>Setup</h2>
-    <pre>// lib/auth.ts: create once
+    <pre>// lib/auth.server.ts: create once
 import { createAuth, Credentials, Google, GitHub } from '@webjskit/server';
 import { prisma } from './prisma.ts';
 
@@ -33,13 +33,13 @@ export const { auth, signIn, signOut, handlers } = createAuth({
 
     <h2>Mount the auth API route</h2>
     <pre>// app/api/auth/[...path]/route.ts
-import { handlers } from '../../../../lib/auth.ts';
+import { handlers } from '../../../../lib/auth.server.ts';
 export const GET = handlers.GET;
 export const POST = handlers.POST;</pre>
 
     <h2>Read the session</h2>
     <pre>// In any page or server action:
-import { auth } from '../lib/auth.ts';
+import { auth } from '../lib/auth.server.ts';
 
 export default async function Dashboard() {
   const session = await auth();
@@ -49,7 +49,7 @@ export default async function Dashboard() {
 
     <h2>Sign in and sign out</h2>
     <pre>// Server actions
-import { signIn, signOut } from '../lib/auth.ts';
+import { signIn, signOut } from '../lib/auth.server.ts';
 
 export async function login(credentials) {
   return signIn('credentials', credentials);

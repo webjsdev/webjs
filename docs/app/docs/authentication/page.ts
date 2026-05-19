@@ -29,7 +29,7 @@ app/
     middleware.ts      : require auth, redirect to /login</pre>
 
     <h2>Password Hashing</h2>
-    <pre>// lib/password.ts
+    <pre>// lib/password.server.ts
 import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -54,7 +54,7 @@ export async function verifyPassword(
 }</pre>
 
     <h2>Session Cookies</h2>
-    <pre>// lib/session.ts
+    <pre>// lib/session.server.ts
 export const SESSION_COOKIE = 'my_session';
 
 export async function createSession(userId: number) {
@@ -72,7 +72,7 @@ export function sessionCookieHeader(token: string, opts = {}) {
     <pre>// modules/auth/queries/current-user.server.ts
 'use server';
 import { cookies } from '@webjskit/server';
-import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.ts';
+import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.server.ts';
 
 export async function currentUser() {
   const token = cookies().get(SESSION_COOKIE);
@@ -83,7 +83,7 @@ export async function currentUser() {
     <h2>Route Protection via Middleware</h2>
     <pre>// app/dashboard/middleware.ts
 import { cookies } from '@webjskit/server';
-import { getUserByToken, SESSION_COOKIE } from '../../lib/session.ts';
+import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
 
 export default async function requireAuth(
   req: Request,

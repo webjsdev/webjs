@@ -102,7 +102,7 @@ export async function createPost(
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. webjs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
-      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
+      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.server.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
       <li><strong><code>no-json-data-files</code> convention check.</strong> <code>webjs check</code> flags JSON files used as a fake database (<code>data/todos.json</code>, <code>db.json</code>, etc.) so an agent that takes the shortcut gets caught before shipping.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
@@ -122,7 +122,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
       <li><strong>Add a component</strong>: create a file, extend <code>WebComponent</code>, set <code>static properties</code>, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
-      <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
+      <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.server.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
       <li><strong>Add a database model</strong>: edit <code>prisma/schema.prisma</code>, run <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>

@@ -241,7 +241,7 @@ modules/
 
 **Rules:**
 - One exported function per server action/query file
-- Server actions must use `'use server'` pragma or `.server.ts` extension
+- Server actions need BOTH the `.server.{js,ts}` extension AND a `'use server'` directive at the top. Extension alone marks a server-only utility (source-protected, not RPC-callable). Directive alone is a lint violation (`use-server-needs-extension`).
 - Components must call `Class.register('tag')`
 - Never import `@prisma/client`, `node:*`, or `lib/` directly from components. Use server actions instead
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules

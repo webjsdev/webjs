@@ -63,12 +63,18 @@ can load it without booting the full server.
 ## Package-specific invariants
 
 1. **Server-file source is unreachable from the browser.** `dev.js`
-   re-verifies every JS/TS request against the server-file predicate
-   (filename suffix `.server.{js,ts}` OR `'use server'` directive in
-   the first 5 lines) before serving bytes. A server file ALWAYS
-   responds with a generated RPC stub, never its source, regardless
-   of route-index state, FS race conditions, or developer error.
-   Regression tests: `test/server-file-guardrail.test.js`.
+   re-verifies every JS/TS request against the path-level server-file
+   predicate (filename suffix `.server.{js,ts,mjs,mts}`) before
+   serving bytes. A server file ALWAYS responds with a generated
+   stub, never its source, regardless of route-index state, FS race
+   conditions, or developer error. The stub variant depends on
+   whether the file declares `'use server'`: a server action (with
+   the directive) returns the RPC stub; a server-only utility
+   (without) returns a throw-at-load stub. The `'use server'`
+   directive WITHOUT the extension is silently ignored at the runtime
+   layer (a `webjs check` lint rule flags it instead) and the file
+   serves as plain source. Regression tests live at
+   `test/server-file-guardrail.test.js`.
 2. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via chokidar → SSE.
 3. **One pluggable cache store, four built-in consumers.** `cache.js`
