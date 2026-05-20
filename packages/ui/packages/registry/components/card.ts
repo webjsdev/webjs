@@ -1,9 +1,15 @@
 /**
- * Card: visual container. Pure class-helper functions; compose with any
- * element you like (most commonly `<div>`).
+ * Card: visual container. Tier-1 class helpers; compose with `<div>`
+ * (or any element) for each subpart.
  *
  * shadcn parity:
- *   Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter.
+ *   Card (size: default | sm)  → cardClass({ size })
+ *   CardHeader                 → cardHeaderClass()
+ *   CardTitle                  → cardTitleClass()
+ *   CardDescription            → cardDescriptionClass()
+ *   CardAction                 → cardActionClass()
+ *   CardContent                → cardContentClass()
+ *   CardFooter                 → cardFooterClass()
  *
  * Usage:
  *   <div class=${cardClass()}>

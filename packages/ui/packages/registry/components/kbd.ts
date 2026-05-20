@@ -1,7 +1,10 @@
 /**
- * Kbd: keyboard chord display. Pure class helpers; use with native `<kbd>`.
+ * Kbd: keyboard chord display. Tier-1 class helpers; compose with the
+ * native `<kbd>` element for correct semantics.
  *
- * shadcn parity: Kbd, KbdGroup.
+ * shadcn parity:
+ *   Kbd       → kbdClass()
+ *   KbdGroup  → kbdGroupClass()
  *
  * Usage:
  *   <kbd class=${kbdClass()}>⌘</kbd>

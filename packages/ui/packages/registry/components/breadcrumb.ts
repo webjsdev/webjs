@@ -1,9 +1,15 @@
 /**
- * Breadcrumb: semantic nav with breadcrumb list. Pure class helpers; use
- * native `<nav>`, `<ol>`, `<li>`, `<a>`, `<span>`.
+ * Breadcrumb: semantic nav with breadcrumb list. Tier-1 class helpers;
+ * compose with native `<nav>` + `<ol>` + `<li>` + `<a>` / `<span>`.
  *
- * shadcn parity: Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink,
- * BreadcrumbPage, BreadcrumbSeparator, BreadcrumbEllipsis.
+ * shadcn parity:
+ *   Breadcrumb           → <nav aria-label="breadcrumb" data-slot="breadcrumb">
+ *   BreadcrumbList       → breadcrumbListClass()
+ *   BreadcrumbItem       → breadcrumbItemClass()
+ *   BreadcrumbLink       → breadcrumbLinkClass()
+ *   BreadcrumbPage       → breadcrumbPageClass() (with aria-current="page")
+ *   BreadcrumbSeparator  → breadcrumbSeparatorClass() (aria-hidden + role="presentation")
+ *   BreadcrumbEllipsis   → breadcrumbEllipsisClass()
  *
  * Usage:
  *   <nav aria-label="breadcrumb" data-slot="breadcrumb">

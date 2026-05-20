@@ -1,10 +1,12 @@
 /**
- * Switch: toggle styled as a sliding pill. A hidden native `<input
- * type="checkbox" role="switch">` handles form submission and keyboard.
- * A sibling `<span>` provides the visual track + thumb.
+ * Switch: toggle styled as a sliding pill. Tier-1 class helpers. A
+ * hidden native `<input type="checkbox" role="switch">` handles form
+ * submission + keyboard; a sibling `<span>` provides the visual track +
+ * thumb (positioned via the `peer-checked:` variant).
  *
- * shadcn parity: matches shadcn Switch visual (rounded pill, animated thumb,
- * primary fill when checked). Supports `size: default | sm`.
+ * shadcn parity:
+ *   Switch (size: default | sm)  → switchInputClass() on a hidden <input> +
+ *                                   switchTrackClass({ size }) on a sibling <span>
  *
  * Usage:
  *   <label class="inline-flex items-center gap-2">

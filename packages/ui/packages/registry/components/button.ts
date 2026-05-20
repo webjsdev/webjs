@@ -1,11 +1,12 @@
 /**
- * Button: styled `<button>` via a class-helper function. Use with a real
- * native element so form submission, focus, keyboard activation, screen-reader
- * semantics all "just work".
+ * Button: styled native `<button>`. Tier-1 class helper. Compose with a
+ * real `<button>` (or `<a>` for link-styled buttons) so form submission,
+ * focus, keyboard activation, and screen-reader semantics all "just work".
  *
  * shadcn parity:
- *   variants: default | destructive | outline | secondary | ghost | link
- *   sizes:    default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg
+ *   Button (variant: default | destructive | outline | secondary | ghost | link)
+ *         (size:    default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg)
+ *                                            → buttonClass({ variant, size })
  *
  * Usage:
  *   <button class=${buttonClass()} type="submit">Save</button>
@@ -13,9 +14,8 @@
  *   <button class=${buttonClass({ size: 'icon' })} aria-label="Settings">⚙</button>
  *   <a       class=${buttonClass({ variant: 'link' })} href="/about">About</a>
  *
- * The shadcn React component supports `asChild` to apply Button styles to a
- * different element. The web equivalent is just calling buttonClass() and
- * spreading the classes onto whatever element you want: no Slot needed.
+ * shadcn React's `asChild` (Slot) prop has no equivalent here: just call
+ * `buttonClass(...)` and spread the classes onto whatever element you want.
  *
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
