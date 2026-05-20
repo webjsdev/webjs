@@ -74,7 +74,9 @@ async function render(value, ctx) {
     return render(/** @type any */ (value).value, ctx);
   }
   // until() on the server: render the first synchronous candidate, or
-  // Promise.race over all Promise candidates.
+  // await the first Promise to settle when all candidates are Promises.
+  // Rejections are swallowed (treated as "no value"); if every candidate
+  // rejects, render empty rather than crash the SSR pipeline.
   if (isUntil(value)) {
     const args = /** @type any */ (value).args;
     for (const a of args) {
@@ -83,8 +85,12 @@ async function render(value, ctx) {
       }
     }
     if (args.length > 0) {
-      const winner = await Promise.race(args);
-      return render(winner, ctx);
+      try {
+        const winner = await Promise.race(args.map((p) => Promise.resolve(p).catch(() => undefined)));
+        return render(winner, ctx);
+      } catch {
+        return '';
+      }
     }
     return '';
   }
@@ -885,8 +891,12 @@ async function streamRender(value, ctx, controller) {
       }
     }
     if (args.length > 0) {
-      const winner = await Promise.race(args);
-      return streamRender(winner, ctx, controller);
+      try {
+        const winner = await Promise.race(args.map((p) => Promise.resolve(p).catch(() => undefined)));
+        return streamRender(winner, ctx, controller);
+      } catch {
+        return;
+      }
     }
     return;
   }

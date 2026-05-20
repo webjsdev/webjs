@@ -681,6 +681,27 @@ function isInShadowRootEl(el) {
  * @param {unknown} value
  */
 function applyChild(part, value) {
+  // Drop directive state from prior renders when the new value is for a
+  // different directive (or no directive at all). Keeps __untilState
+  // from leaking across replacements, __guardDeps from causing a stale
+  // short-circuit, etc. Done once per outermost applyChild call; the
+  // directive handlers recurse via applyChildInner (no re-clear) so
+  // their own state survives the recursion.
+  clearStaleDirectiveState(part, value);
+  return applyChildInner(part, value);
+}
+
+/**
+ * Internal dispatch. Used both by `applyChild` (which first clears
+ * stale per-part directive state) and by directive handlers that
+ * recurse with a different value at the same part. Recursing via
+ * `applyChild` would clear the directive state that was just set,
+ * because the inner value almost always isn't itself a directive.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function applyChildInner(part, value) {
   const marker = part.marker;
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
@@ -707,7 +728,7 @@ function applyChild(part, value) {
       teardownChild(part);
     }
     /** @type any */ (part).__keyedKey = v.key;
-    applyChild(part, v.value);
+    applyChildInner(part, v.value);
     return;
   }
 
@@ -722,7 +743,7 @@ function applyChild(part, value) {
       return;
     }
     /** @type any */ (part).__guardDeps = v.deps.slice();
-    applyChild(part, v.fn());
+    applyChildInner(part, v.fn());
     return;
   }
 
@@ -799,9 +820,6 @@ function applyChild(part, value) {
       part.child = undefined;
     } else if (c.kind === 'async-stream') {
       teardownAsyncStream(c);
-      part.child = undefined;
-    } else if (c.kind === 'until') {
-      teardownUntil(c);
       part.child = undefined;
     } else if ('strings' in /** @type any */ (part.child)) {
       // Previous was a TemplateInstance.
@@ -1059,14 +1077,22 @@ function shallowEqualArray(a, b) {
 
 /** @param {Extract<BoundPart, {kind:'child'}>} part */
 function teardownChild(part) {
+  // Always abort any in-flight directive state on the part, even if
+  // `part.child` itself is something else (e.g. an `until` directive
+  // installed __untilState but applyChild's recursion overwrote
+  // part.child to the rendered fallback shape).
+  const partAny = /** @type any */ (part);
+  if (partAny.__untilState) {
+    partAny.__untilState.aborted = true;
+    partAny.__untilState = undefined;
+  }
+
   if (!part.child) return;
   const c = /** @type any */ (part.child);
   if (c.kind === 'repeat') {
     teardownRepeat(c);
   } else if (c.kind === 'async-stream') {
     teardownAsyncStream(c);
-  } else if (c.kind === 'until') {
-    teardownUntil(c);
   } else if ('strings' in c) {
     const inst = /** @type TemplateInstance */ (part.child);
     disposeInstance(inst);
@@ -1077,6 +1103,34 @@ function teardownChild(part) {
     }
   }
   part.child = undefined;
+}
+
+/**
+ * Clear per-part directive state slots that don't apply to the value
+ * currently being rendered. Prevents stale `__guardDeps` from short-
+ * circuiting a render when the directive at this position is no longer
+ * a guard, stale `__cacheMap` from accumulating across non-cache
+ * renders, and stale `__untilState` from letting a prior Promise
+ * resolution overwrite newer DOM.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function clearStaleDirectiveState(part, value) {
+  const partAny = /** @type any */ (part);
+  if (partAny.__untilState && !isUntil(value)) {
+    partAny.__untilState.aborted = true;
+    partAny.__untilState = undefined;
+  }
+  if (partAny.__guardDeps !== undefined && !isGuard(value)) {
+    partAny.__guardDeps = undefined;
+  }
+  if (partAny.__cacheMap && !isCache(value)) {
+    partAny.__cacheMap = undefined;
+  }
+  if (partAny.__keyedKey !== undefined && !isKeyed(value)) {
+    partAny.__keyedKey = undefined;
+  }
 }
 
 /* ================================================================
@@ -1158,7 +1212,7 @@ function applyCache(part, inner) {
   // standard applyChild path. The currentIsInstance branch already
   // handled detaching the prior instance; if part.child still holds a
   // non-instance shape, applyChild will tear it down generically.
-  applyChild(part, inner);
+  applyChildInner(part, inner);
 }
 
 /* ================================================================
@@ -1170,25 +1224,34 @@ function applyCache(part, inner) {
  *
  * Priority is left-to-right: args[0] has the highest priority. The
  * highest-priority synchronous candidate (if any) renders immediately.
- * Promise candidates are awaited in the background; when one resolves
- * AND no higher-priority Promise has resolved yet, its result becomes
- * the rendered value. A render token per cycle guards against late
- * resolves from a prior `until()` call overwriting newer DOM.
+ * Strictly-higher-priority Promises are awaited in the background; when
+ * one resolves AND no higher-priority Promise has already resolved, its
+ * result becomes the rendered value.
+ *
+ * The directive's state lives on `part.__untilState` (a stable slot
+ * that survives `applyChild`'s overwrites of `part.child`). When a new
+ * render replaces the directive, the prior state's `aborted` flag flips
+ * to `true` so any in-flight Promise resolutions short-circuit instead
+ * of overwriting newer DOM.
  *
  * @param {Extract<BoundPart, {kind:'child'}>} part
  * @param {readonly unknown[]} args
  */
 function applyUntil(part, args) {
-  // Abort any in-flight tracking from the prior render of this part.
-  const prevState = /** @type any */ (part.child);
-  if (prevState && prevState.kind === 'until') {
-    prevState.aborted = true;
+  // Abort the prior render's tracking, if any. The state lives on the
+  // part via a stable slot because `applyChild` recursion overwrites
+  // `part.child` to the rendered sync candidate's shape.
+  const partAny = /** @type any */ (part);
+  if (partAny.__untilState) {
+    partAny.__untilState.aborted = true;
   }
 
-  /** @type {{kind:'until', aborted:boolean, highestRendered:number, lastApplied: any}} */
-  const state = { kind: 'until', aborted: false, highestRendered: Infinity, lastApplied: undefined };
+  /** @type {{aborted:boolean, highestResolved:number}} */
+  const state = { aborted: false, highestResolved: Infinity };
+  partAny.__untilState = state;
 
-  // Find the first synchronous candidate (highest priority sync value).
+  // Highest-priority synchronous candidate. If found, render it now
+  // and cap further Promise subscription to strictly-higher priorities.
   let firstSyncIdx = -1;
   let firstSyncVal = undefined;
   for (let i = 0; i < args.length; i++) {
@@ -1200,52 +1263,41 @@ function applyUntil(part, args) {
     }
   }
 
-  // Render the sync candidate (or empty if none).
   if (firstSyncIdx === -1) {
-    applyChild(part, '');
+    applyChildInner(part, '');
+    state.highestResolved = Infinity;
   } else {
-    applyChild(part, firstSyncVal);
+    applyChildInner(part, firstSyncVal);
+    state.highestResolved = firstSyncIdx;
   }
 
-  // `applyChild` overwrites part.child. Install our state AFTER applying
-  // so the teardown path can find us on the next render.
-  /** @type any */ (part).__untilState = state;
-  state.highestRendered = firstSyncIdx === -1 ? Infinity : firstSyncIdx;
-
-  // Subscribe to Promises with priority lower than the rendered sync
-  // candidate. Strictly higher-priority Promises (lower index) can still
-  // win and overwrite the current render when they resolve.
-  for (let i = 0; i < args.length; i++) {
-    if (i === firstSyncIdx) continue;
+  // Subscribe to higher-priority Promises. A resolved value wins only
+  // when its index is strictly less than `state.highestResolved`.
+  const cap = firstSyncIdx === -1 ? args.length : firstSyncIdx;
+  for (let i = 0; i < cap; i++) {
     const a = args[i];
     if (!a || typeof (/** @type any */ (a).then) !== 'function') continue;
-    // Lower-priority Promises (i > firstSyncIdx) shouldn't overwrite the
-    // rendered sync value once it's in place, so skip them.
-    if (firstSyncIdx !== -1 && i > firstSyncIdx) continue;
 
     /** @type Promise<unknown> */ (a).then(
       (resolved) => {
         if (state.aborted) return;
-        if (i >= state.highestRendered) return;
-        state.highestRendered = i;
-        applyChild(part, resolved);
-        // After applyChild, reinstall the state marker.
-        /** @type any */ (part).__untilState = state;
+        if (i >= state.highestResolved) return;
+        state.highestResolved = i;
+        applyChildInner(part, resolved);
       },
-      () => {},
+      () => {
+        // Swallow rejection. A rejected Promise is treated as "no value";
+        // the existing render stays in place.
+      },
     );
   }
-
-  // Replace part.child sentinel so teardownChild can find this state.
-  // applyChild already set part.child to the rendered value's shape; we
-  // chain our state via __untilState (read by teardownChild via a
-  // wrapper kind). Use a sentinel `until` state stored separately so
-  // applyChild's generic path still works on the actual rendered value.
-  // The teardown path checks for __untilState specifically.
-  /** @type any */ (part).__untilStateLive = state;
 }
 
-/** @param {{aborted:boolean}} state */
+/**
+ * Abort an `until` directive's in-flight Promise tracking. Called from
+ * `teardownChild` when the part is being reset.
+ * @param {{aborted:boolean}} state
+ */
 function teardownUntil(state) {
   state.aborted = true;
 }
@@ -1268,11 +1320,15 @@ function teardownUntil(state) {
 function applyAsyncAppend(part, dir) {
   teardownChild(part);
 
+  const iterator = /** @type AsyncIterator<unknown> */ (
+    dir.iterable[Symbol.asyncIterator]()
+  );
   /** @type {AsyncStreamState} */
   const state = {
     kind: 'async-stream',
     mode: 'append',
     aborted: false,
+    iterator,
     /** @type {ChildNode[]} */ nodes: [],
   };
   part.child = state;
@@ -1290,11 +1346,15 @@ function applyAsyncAppend(part, dir) {
 function applyAsyncReplace(part, dir) {
   teardownChild(part);
 
+  const iterator = /** @type AsyncIterator<unknown> */ (
+    dir.iterable[Symbol.asyncIterator]()
+  );
   /** @type {AsyncStreamState} */
   const state = {
     kind: 'async-stream',
     mode: 'replace',
     aborted: false,
+    iterator,
     /** @type {ChildNode[]} */ nodes: [],
   };
   part.child = state;
@@ -1307,14 +1367,18 @@ function applyAsyncReplace(part, dir) {
  *   kind: 'async-stream',
  *   mode: 'append' | 'replace',
  *   aborted: boolean,
+ *   iterator: AsyncIterator<unknown>,
  *   nodes: ChildNode[],
  * }} AsyncStreamState
  */
 
 /**
- * Consume an AsyncIterable for `asyncAppend` / `asyncReplace`. Each yield
- * renders one chunk of DOM. For `append`, chunks accumulate before the
- * marker; for `replace`, the prior nodes are removed first.
+ * Consume an AsyncIterable for `asyncAppend` / `asyncReplace`. Drives
+ * the iterator with an explicit `.next()` loop (rather than `for await`)
+ * so that `teardownAsyncStream` can call `iterator.return()` to break
+ * a generator parked on an `await`. The `aborted` flag is also checked
+ * after every `next()` resolve to short-circuit if abortion happened
+ * while the iterator was suspended.
  *
  * @param {AsyncStreamState} state
  * @param {Extract<BoundPart, {kind:'child'}>} part
@@ -1324,9 +1388,11 @@ async function consumeAsyncStream(state, part, dir) {
   const marker = part.marker;
   let i = 0;
   try {
-    for await (const value of dir.iterable) {
+    while (!state.aborted) {
+      const result = await state.iterator.next();
       if (state.aborted) break;
-      const mapped = dir.mapper ? dir.mapper(value, i) : value;
+      if (result.done) break;
+      const mapped = dir.mapper ? dir.mapper(result.value, i) : result.value;
       const newNodes = renderToNodes(mapped);
 
       if (state.mode === 'replace') {
@@ -1377,11 +1443,26 @@ function renderToNodes(value) {
   return [document.createTextNode(String(value))];
 }
 
-/** @param {AsyncStreamState} state */
+/**
+ * Abort an async-stream directive. Sets `aborted = true` (so the next
+ * `await iterator.next()` resolution short-circuits), removes all nodes
+ * rendered so far, and explicitly calls `iterator.return()` so a
+ * generator parked on `await` can unwind via its `finally` blocks
+ * instead of leaking.
+ * @param {AsyncStreamState} state
+ */
 function teardownAsyncStream(state) {
   state.aborted = true;
   for (const n of state.nodes) {
     if (n.parentNode) n.parentNode.removeChild(n);
   }
   state.nodes = [];
+  // Best-effort iterator cleanup. `.return()` is optional on AsyncIterators;
+  // generators built via `async function*` provide it and run their
+  // `finally` blocks. Swallow any rejection so teardown can't throw.
+  try {
+    state.iterator.return?.()?.catch?.(() => {});
+  } catch {
+    // ignore
+  }
 }

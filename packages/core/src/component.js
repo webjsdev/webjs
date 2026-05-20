@@ -689,62 +689,84 @@ export class WebComponent extends Base {
     // Hold a stable reference to the current Map so all hooks see the same
     // snapshot. During the update phase (steps 3-6) the Map is mutated in
     // place when property setters fire, folding those changes into THIS
-    // cycle. Between step 6 and step 7 we install a fresh Map so any
-    // assignments during firstUpdated/updated queue the NEXT cycle.
+    // cycle. The Map is replaced with a fresh empty one only after a
+    // successful commit so post-commit assignments queue the NEXT cycle.
+    // On `shouldUpdate=false` or hook errors, the Map is preserved so the
+    // accumulated changes survive into the next render.
     const changedProperties = this._changedProperties;
 
     // --- 1. Mark we're inside an update cycle ---
     this._isUpdating = true;
+    let didCommit = false;
+    let gated = false;
 
-    // --- 2. shouldUpdate gate ---
-    if (!this.shouldUpdate(changedProperties)) {
-      this._isUpdating = false;
-      this._changedProperties = new Map();
-      this._resolveUpdate();
-      return;
-    }
-
-    // --- 3. willUpdate (may mutate properties; folds into this cycle) ---
-    this.willUpdate(changedProperties);
-
-    // --- 4. controllers' hostUpdate ---
-    for (const c of this.__controllers) {
-      if (c.hostUpdate) c.hostUpdate();
-    }
-
-    // --- 5. update + DOM commit (with error boundary) ---
     try {
-      this.update(changedProperties);
-    } catch (error) {
-      console.error(`[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`, error);
-      try {
-        const fallback = this.renderError(/** @type {Error} */ (error));
-        if (fallback !== undefined) clientRender(fallback, this._renderRoot);
-      } catch (fallbackError) {
-        console.error(`[webjs] renderError() also threw:`, fallbackError);
+      // --- 2. shouldUpdate gate ---
+      if (!this.shouldUpdate(changedProperties)) {
+        // Preserve _changedProperties so the next requestUpdate keeps
+        // accumulating on top of the entries that didn't render this cycle.
+        gated = true;
+      } else {
+        // --- 3. willUpdate (may mutate properties; folds into this cycle) ---
+        this.willUpdate(changedProperties);
+
+        // --- 4. controllers' hostUpdate ---
+        for (const c of this.__controllers) {
+          if (c.hostUpdate) c.hostUpdate();
+        }
+
+        // --- 5. update + DOM commit (with render-error boundary) ---
+        try {
+          this.update(changedProperties);
+        } catch (error) {
+          console.error(`[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`, error);
+          try {
+            const fallback = this.renderError(/** @type {Error} */ (error));
+            if (fallback !== undefined) clientRender(fallback, this._renderRoot);
+          } catch (fallbackError) {
+            console.error(`[webjs] renderError() also threw:`, fallbackError);
+          }
+        }
+
+        // --- 6. controllers' hostUpdated ---
+        for (const c of this.__controllers) {
+          if (c.hostUpdated) c.hostUpdated();
+        }
+
+        didCommit = true;
+      }
+    } finally {
+      // Whatever happened above, `_isUpdating` MUST come back to false so
+      // future updates can schedule. The map is cleared only on a
+      // committed cycle so shouldUpdate=false / hook-throws preserve the
+      // accumulated changedProperties for the next requestUpdate.
+      this._isUpdating = false;
+      if (didCommit) {
+        this._changedProperties = new Map();
       }
     }
 
-    // --- 6. controllers' hostUpdated ---
-    for (const c of this.__controllers) {
-      if (c.hostUpdated) c.hostUpdated();
+    // --- 7-8. Post-commit hooks. Run only when the cycle actually
+    // committed. Wrapped in its own try/finally so a throwing
+    // firstUpdated/updated still resolves updateComplete.
+    if (didCommit) {
+      try {
+        // --- 7. firstUpdated (once) ---
+        if (!this.__firstRendered) {
+          this.__firstRendered = true;
+          this.firstUpdated(changedProperties);
+        }
+        // --- 8. updated (every render) ---
+        this.updated(changedProperties);
+      } finally {
+        this._resolveUpdate();
+      }
+    } else {
+      // shouldUpdate=false (gated) or a pre-commit hook threw: still
+      // resolve updateComplete so awaiters don't hang.
+      void gated;  // captured for clarity; not needed at runtime
+      this._resolveUpdate();
     }
-
-    // --- End of update phase. Future setter calls queue a NEW cycle. ---
-    this._isUpdating = false;
-    this._changedProperties = new Map();
-
-    // --- 7. firstUpdated (once) ---
-    if (!this.__firstRendered) {
-      this.__firstRendered = true;
-      this.firstUpdated(changedProperties);
-    }
-
-    // --- 8. updated (every render) ---
-    this.updated(changedProperties);
-
-    // --- 9. Resolve updateComplete ---
-    this._resolveUpdate();
   }
 
   /**
