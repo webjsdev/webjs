@@ -536,11 +536,24 @@ function updateInstance(inst, values) {
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
 function clearInstance(inst, container) {
-  // Dispose event listeners on event parts and rescue any projected
-  // children sitting inside slot parts so they survive teardown of a
-  // collapsing conditional fragment.
+  // Dispose event listeners on event parts, unbind active refs on
+  // element parts, and rescue any projected children sitting inside
+  // slot parts so they survive teardown of a collapsing conditional
+  // fragment.
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'element') {
+      const prev = /** @type any */ (p).lastTarget;
+      if (prev) {
+        if (typeof prev === 'function') {
+          try { prev(undefined); } catch { /* swallow */ }
+        } else if (typeof prev === 'object') {
+          prev.value = undefined;
+        }
+        /** @type any */ (p).lastTarget = undefined;
+        /** @type any */ (p).__lastEl = undefined;
+      }
+    }
     if (p.kind === 'slot') {
       const host = findSlotHost(p.slotEl);
       if (host) moveSlotChildrenToPending(host, p.slotEl);
@@ -1020,6 +1033,21 @@ function buildDetached(tr) {
 function disposeInstance(inst) {
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'element') {
+      // Unbind any active ref so the user observes the element being
+      // removed (callback receives undefined / Ref.value cleared).
+      // Mirrors lit-html's cleanup-on-disconnect for element parts.
+      const prev = /** @type any */ (p).lastTarget;
+      if (prev) {
+        if (typeof prev === 'function') {
+          try { prev(undefined); } catch { /* swallow */ }
+        } else if (typeof prev === 'object') {
+          prev.value = undefined;
+        }
+        /** @type any */ (p).lastTarget = undefined;
+        /** @type any */ (p).__lastEl = undefined;
+      }
+    }
   }
 }
 
@@ -1316,15 +1344,30 @@ function applyCache(part, inner) {
  * @param {readonly unknown[]} args
  */
 function applyUntil(part, args) {
-  // Carry forward the prior render's `highestResolved` so a re-render
-  // with the same already-resolved Promise doesn't drop back to the
-  // synchronous fallback. The state itself stays on a stable slot so
-  // `applyChild`'s recursion (which overwrites `part.child`) can't
-  // clobber it.
+  // Carry forward the prior render's `highestResolved` ONLY when the
+  // args list is unchanged. When any argument identity changes, prior
+  // priorities no longer apply (a Promise that won at index 0 may now
+  // sit at a different index, or have been replaced entirely); the
+  // state must reset to Infinity so the new args' Promises can compete.
+  //
+  // For TemplateResult args, compare by `strings` array identity rather
+  // than the wrapper object identity. `html\`loading...\`` evaluates to
+  // a fresh TemplateResult on every call but the strings array is
+  // interned per call site, so the conceptual value is unchanged.
   const partAny = /** @type any */ (part);
   const prevState = partAny.__untilState;
-  const carriedHighest = prevState ? prevState.highestResolved : Infinity;
+  const prevArgs = partAny.__untilArgs;
+  const argEq = (a, b) => {
+    if (Object.is(a, b)) return true;
+    if (isTemplate(a) && isTemplate(b)
+        && /** @type any */ (a).strings === /** @type any */ (b).strings) return true;
+    return false;
+  };
+  const argsEqual = prevArgs && prevArgs.length === args.length
+    && prevArgs.every((a, i) => argEq(a, args[i]));
+  const carriedHighest = argsEqual && prevState ? prevState.highestResolved : Infinity;
   if (prevState) prevState.aborted = true;
+  partAny.__untilArgs = args.slice();
 
   /** @type {{aborted:boolean, highestResolved:number}} */
   const state = { aborted: false, highestResolved: carriedHighest };
@@ -1343,21 +1386,24 @@ function applyUntil(part, args) {
     }
   }
 
-  if (firstSyncIdx !== -1 && firstSyncIdx < state.highestResolved) {
-    // The sync candidate beats any previously-rendered Promise value.
+  if (firstSyncIdx !== -1 && firstSyncIdx <= state.highestResolved) {
+    // The sync candidate beats any previously-rendered Promise value
+    // (when firstSyncIdx < state.highestResolved) OR re-renders the
+    // sync fallback at the same priority slot (when ===), in case its
+    // value changed between renders.
     applyChildInner(part, firstSyncVal);
     state.highestResolved = firstSyncIdx;
-  } else if (firstSyncIdx === -1 && carriedHighest === Infinity) {
-    // No sync candidate AND nothing has resolved yet across renders:
-    // render empty as the initial fallback (first-ever render of this
-    // part with an all-Promise args list).
+  } else if (firstSyncIdx === -1 && !partAny.__untilEverRendered) {
+    // First-ever render of this part with all-Promise args: render
+    // empty as the initial fallback while Promises settle.
     applyChildInner(part, '');
   }
-  // Else: either there is no sync candidate but a higher-priority
-  // Promise from a prior render already won (carriedHighest !== Inf),
-  // OR the sync candidate is lower-priority than what's already
-  // rendered. Either way: leave the existing DOM in place. This
-  // prevents the "all-Promises wipes prior content" flash.
+  // Else: either there is no sync candidate but the part has rendered
+  // before (preserve existing DOM until a Promise resolves), OR the
+  // sync candidate is lower-priority than what's already rendered.
+  // Either way: leave the existing DOM in place. This prevents the
+  // "all-Promises wipes prior content" flash on re-renders.
+  partAny.__untilEverRendered = true;
 
   // Subscribe to Promises with priority strictly less than what's
   // currently rendered. (Lower index = higher priority in lit's model.)

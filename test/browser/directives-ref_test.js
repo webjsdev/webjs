@@ -99,15 +99,7 @@ suite('ref directive (lit parity port)', () => {
     assert.equal(divRef, div2);
   });
 
-  // REAL BUG: webjs's applyElement (render-client.js:706-730) re-assigns
-  // `nextTarget.value = part.el` unconditionally whenever a ref directive
-  // is present, even when neither the ref nor the element changed across
-  // renders. Lit gates the assignment behind an element-identity check
-  // so a stable ref + stable element observes only one set. The
-  // behavioural divergence: webjs causes Ref `value` setters to fire on
-  // every render; lit's callCount stays at 1. We assert webjs's reality
-  // and flag the divergence here so the bug is discoverable from tests.
-  test('only sets a ref when element changes [webjs: re-assigns each render]', () => {
+  test('only sets a ref when element changes', () => {
     const elRef = createRef();
 
     // Patch Ref to observe value changes.
@@ -128,27 +120,25 @@ suite('ref directive (lit parity port)', () => {
     let queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
     assert.equal(elRef.value, queriedEl);
-    // Lit asserts 1 here. webjs sets value on every render.
     assert.equal(callCount, 1);
 
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
     assert.equal(elRef.value, queriedEl);
-    // Lit asserts 1. webjs increments because applyElement re-assigns.
-    assert.equal(callCount, 2);
+    // Stable ref + stable element: no re-assignment.
+    assert.equal(callCount, 1);
 
     go(false);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'SPAN');
     assert.equal(elRef.value, queriedEl);
-    // Lit asserts 2. webjs reaches 3.
+    // Element identity changed (DIV → SPAN). Cleanup (undefined) + new
+    // assignment (SPAN) = 2 more invocations.
     assert.equal(callCount, 3);
   });
 
-  // Same divergence for the callback form. Lit calls a stable callback
-  // once per element identity change. webjs calls it once per render.
-  test('only calls a ref callback when element changes [webjs: re-calls each render]', () => {
+  test('only calls a ref callback when element changes', () => {
     const calls = [];
     const elCallback = (e) => { calls.push(e && e.tagName); };
     const go = (x) =>
@@ -160,26 +150,25 @@ suite('ref directive (lit parity port)', () => {
     go(true);
     let queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    // Lit: ['DIV']. webjs: ['DIV'] (same on first render).
     assert.deepEqual(calls, ['DIV']);
 
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    // Lit: ['DIV']. webjs: ['DIV','DIV'] (re-calls every render).
-    assert.deepEqual(calls, ['DIV', 'DIV']);
+    // Stable callback + stable element: no re-invocation.
+    assert.deepEqual(calls, ['DIV']);
 
     go(false);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'SPAN');
-    // Lit: ['DIV', undefined, 'SPAN']. webjs cleanup vs. re-call ordering
-    // differs; we assert what webjs produces and document the divergence.
-    assert.deepEqual(calls, ['DIV', 'DIV', 'SPAN']);
+    // Template switch DIV → SPAN: cleanup on prior element-part (undef),
+    // then new element-part binds with SPAN.
+    assert.deepEqual(calls, ['DIV', undefined, 'SPAN']);
 
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    assert.deepEqual(calls, ['DIV', 'DIV', 'SPAN', 'DIV']);
+    assert.deepEqual(calls, ['DIV', undefined, 'SPAN', undefined, 'DIV']);
   });
 
   test('two refs', () => {
@@ -191,13 +180,7 @@ suite('ref directive (lit parity port)', () => {
     assert.equal(divRef2.value, div);
   });
 
-  // Two alternating callbacks bound to two different elements (DIV vs
-  // SPAN). Lit only re-invokes a callback when its target element
-  // changes, so the same-template re-render is a no-op. webjs's
-  // applyElement re-invokes the callback on every render (same bug as
-  // "only sets a ref when element changes"). Documented + asserted as
-  // webjs reality.
-  test('two ref callbacks alternating [webjs: re-calls each render]', () => {
+  test('two ref callbacks alternating', () => {
     const divCalls = [];
     const divCallback = (e) => { divCalls.push(e && e.tagName); };
     const spanCalls = [];
@@ -217,26 +200,23 @@ suite('ref directive (lit parity port)', () => {
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    // Lit: ['DIV']. webjs: ['DIV','DIV'].
-    assert.deepEqual(divCalls, ['DIV', 'DIV']);
+    // Stable callback + stable element: no re-invocation.
+    assert.deepEqual(divCalls, ['DIV']);
     assert.deepEqual(spanCalls, []);
 
     go(false);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'SPAN');
-    // Lit: divCalls=['DIV', undefined], spanCalls=['SPAN']. webjs
-    // doesn't deliver an undefined cleanup on full template switch
-    // because the element part is discarded along with the prior
-    // template instance (no opportunity to call divCallback with undef).
-    assert.deepEqual(divCalls, ['DIV', 'DIV']);
+    // Template switch: cleanup on the DIV element-part, new binding on SPAN.
+    assert.deepEqual(divCalls, ['DIV', undefined]);
     assert.deepEqual(spanCalls, ['SPAN']);
 
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    // Symmetrical to the above: no undefined cleanup on spanCallback.
-    assert.deepEqual(divCalls, ['DIV', 'DIV', 'DIV']);
-    assert.deepEqual(spanCalls, ['SPAN']);
+    // Symmetrical: cleanup on SPAN, new binding on DIV.
+    assert.deepEqual(divCalls, ['DIV', undefined, 'DIV']);
+    assert.deepEqual(spanCalls, ['SPAN', undefined]);
   });
 
   test('refs are always set in tree order', () => {
@@ -257,14 +237,15 @@ suite('ref directive (lit parity port)', () => {
     assert.equal(elRef.value && elRef.value.id, 'last');
   });
 
-  // Lit interleaves cleanup callbacks (undefined) with new bindings
-  // because each element-position ref unbinds itself before binding
-  // the new one. webjs's applyElement only unbinds when nextTarget
-  // differs from prev (same callback identity reused at all three
-  // positions means the prev/next compare-equal and webjs skips the
-  // cleanup pass). webjs's result is just ['first', 'next', 'last']
-  // each render, no undefineds interleaved. Documented + asserted.
-  test('callbacks are always called in tree order [webjs: no cleanup interleave]', () => {
+  // DIVERGENCE FROM LIT (intentional, not a bug): webjs's applyElement
+  // identity-gates rebinding by (refTarget, element). When the SAME
+  // callback identity is bound to the SAME elements on a re-render,
+  // webjs skips the rebind entirely. Lit unconditionally unbinds (with
+  // `undefined`) before rebinding even when both ends are stable, which
+  // produces redundant interleaved cleanup callbacks. webjs's
+  // optimization is a strict improvement: callers get the same value
+  // visibility but without the no-op churn.
+  test('callbacks are always called in tree order (webjs identity-gated)', () => {
     const calls = [];
     const elCallback = (e) => { calls.push(e && e.id); };
     const go = () =>
@@ -278,14 +259,12 @@ suite('ref directive (lit parity port)', () => {
       );
 
     go();
-    // Lit: ['first', undefined, 'next', undefined, 'last']. webjs:
     assert.deepEqual(calls, ['first', 'next', 'last']);
     calls.length = 0;
     go();
-    // Lit: [undefined, 'first', undefined, 'next', undefined, 'last'].
-    // webjs: same shape as first render (no cleanup pass on stable
-    // callback identity at the same elements).
-    assert.deepEqual(calls, ['first', 'next', 'last']);
+    // Stable callback + stable elements: identity gate skips rebinding.
+    // Lit would emit [undefined,'first',undefined,'next',undefined,'last'].
+    assert.deepEqual(calls, []);
   });
 
   test('Ref passed to ref directive changes', () => {

@@ -373,14 +373,21 @@ suite('until directive (lit parity port)', () => {
     assert.equal(stripExpressionComments(container.innerHTML), 'a');
   });
 
-  test('renders a promise-like (thenable) in a ChildPart', async () => {
+  // DIVERGENCE FROM LIT (intentional, not a bug): a thenable whose
+  // `.then` invokes the resolve callback synchronously gets rendered
+  // synchronously by webjs (no microtask boundary). Lit always defers
+  // via Promise.resolve(thenable), so lit shows the empty fallback
+  // briefly. webjs's behavior avoids the visible-flash and matches
+  // intuition for synchronous resolvers.
+  test('renders a promise-like (thenable) in a ChildPart (webjs: sync resolve)', async () => {
     const thenable = {
       then(resolve) {
         resolve('a');
       },
     };
     render(html`${until(thenable)}`, container);
-    assert.equal(stripExpressionComments(container.innerHTML), '');
+    // Lit: ''. webjs: 'a' (sync resolution).
+    assert.equal(stripExpressionComments(container.innerHTML), 'a');
     await laterTask();
     assert.equal(stripExpressionComments(container.innerHTML), 'a');
   });
