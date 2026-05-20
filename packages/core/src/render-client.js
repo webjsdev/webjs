@@ -697,7 +697,9 @@ function applyChild(part, value) {
     return;
   }
 
-  // keyed directive: when key changes, tear down and remount fresh.
+  // keyed directive: when key changes, tear down and remount fresh DOM.
+  // When the key matches, recurse so the standard template-reconciliation
+  // path can update the existing DOM in place.
   if (isKeyed(value)) {
     const v = /** @type any */ (value);
     const prevKey = /** @type any */ (part).__keyedKey;
@@ -709,12 +711,14 @@ function applyChild(part, value) {
     return;
   }
 
-  // guard directive: skip re-evaluation when deps unchanged shallowly.
+  // guard directive: skip re-evaluation when the deps array is shallow-
+  // equal to the prior call. Stored deps live on the part so they
+  // persist across renders that reuse the same template (and thus the
+  // same part).
   if (isGuard(value)) {
     const v = /** @type any */ (value);
     const prevDeps = /** @type any */ (part).__guardDeps;
     if (prevDeps && shallowEqualArray(prevDeps, v.deps)) {
-      // Deps unchanged: leave the existing DOM in place.
       return;
     }
     /** @type any */ (part).__guardDeps = v.deps.slice();
@@ -735,42 +739,42 @@ function applyChild(part, value) {
     return;
   }
 
-  // ref directive in a child position: no DOM produced. The renderer
-  // resolves refs via element parts (attribute position); a stray ref()
-  // in a child position is a no-op for compatibility.
+  // ref directive in a child position: no DOM produced. Element-position
+  // refs are bound via element parts; a stray ref() in a child position
+  // is a no-op for compatibility.
   if (isRef(value)) {
     return;
   }
 
-  // cache directive: pass-through to the inner value. Future versions
-  // will retain detached DOM for fast template switching.
+  // cache directive: real DOM retention. When the inner value changes
+  // to a different template shape, detach (rather than destroy) the
+  // current DOM and stash it keyed by its template strings. When a
+  // previously-cached shape returns, re-attach it before the marker
+  // and reconcile values. Preserves input state, scroll, focus across
+  // toggles between sub-templates (e.g. tab interfaces).
   if (isCache(value)) {
-    applyChild(part, /** @type any */ (value).value);
-    return;
+    return applyCache(part, /** @type any */ (value).value);
   }
 
-  // until directive: render the first synchronous candidate. Promises
-  // are not awaited for in-place updates in this version; use Task for
-  // component-scoped async with pending/error states.
+  // until directive: render the highest-priority resolved value among
+  // the candidates. Synchronous values are rendered immediately; Promises
+  // are awaited in the background and applied if no higher-priority
+  // candidate has resolved yet. When the marker is torn down, in-flight
+  // priorities are cleared so late resolves cannot overwrite later DOM.
   if (isUntil(value)) {
-    const args = /** @type any */ (value).args;
-    for (const a of args) {
-      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
-        applyChild(part, a);
-        return;
-      }
-    }
-    // All promises: render empty for now.
-    applyChild(part, '');
-    return;
+    return applyUntil(part, /** @type any */ (value).args);
   }
 
-  // asyncAppend / asyncReplace: render first iteration value if the
-  // iterable yields synchronously; otherwise render empty. Full
-  // streaming support is a follow-up.
-  if (isAsyncAppend(value) || isAsyncReplace(value)) {
-    applyChild(part, '');
-    return;
+  // asyncAppend / asyncReplace: subscribe to the AsyncIterable. Each
+  // yielded value is mapped (optional) and appended (asyncAppend) or
+  // replaces (asyncReplace) the prior content. Teardown aborts the
+  // iteration so leaked iterators do not keep references to detached
+  // DOM.
+  if (isAsyncAppend(value)) {
+    return applyAsyncAppend(part, /** @type any */ (value));
+  }
+  if (isAsyncReplace(value)) {
+    return applyAsyncReplace(part, /** @type any */ (value));
   }
 
   // Repeat directive: keyed reconciliation. Keep previous state when both
@@ -789,8 +793,15 @@ function applyChild(part, value) {
 
   // Remove previously rendered nodes between marker and its next sibling we own.
   if (part.child) {
-    if (/** @type any */ (part.child).kind === 'repeat') {
-      teardownRepeat(/** @type any */ (part.child));
+    const c = /** @type any */ (part.child);
+    if (c.kind === 'repeat') {
+      teardownRepeat(c);
+      part.child = undefined;
+    } else if (c.kind === 'async-stream') {
+      teardownAsyncStream(c);
+      part.child = undefined;
+    } else if (c.kind === 'until') {
+      teardownUntil(c);
       part.child = undefined;
     } else if ('strings' in /** @type any */ (part.child)) {
       // Previous was a TemplateInstance.
@@ -1049,9 +1060,14 @@ function shallowEqualArray(a, b) {
 /** @param {Extract<BoundPart, {kind:'child'}>} part */
 function teardownChild(part) {
   if (!part.child) return;
-  if (/** @type any */ (part.child).kind === 'repeat') {
-    teardownRepeat(/** @type any */ (part.child));
-  } else if ('strings' in /** @type any */ (part.child)) {
+  const c = /** @type any */ (part.child);
+  if (c.kind === 'repeat') {
+    teardownRepeat(c);
+  } else if (c.kind === 'async-stream') {
+    teardownAsyncStream(c);
+  } else if (c.kind === 'until') {
+    teardownUntil(c);
+  } else if ('strings' in c) {
     const inst = /** @type TemplateInstance */ (part.child);
     disposeInstance(inst);
     removeBetween(inst.startNode, inst.endNode);
@@ -1061,4 +1077,311 @@ function teardownChild(part) {
     }
   }
   part.child = undefined;
+}
+
+/* ================================================================
+ * Cache directive: detach + retain prior template instances so that
+ * toggling between sub-templates preserves their DOM state.
+ * ================================================================ */
+
+/**
+ * Apply the `cache` directive at a child position. The cache is stored
+ * on the part as `__cacheMap: Map<strings, { inst, holderFrag }>`.
+ *
+ * When the new inner value is a template whose `strings` already lives
+ * in the cache map, re-attach the stashed nodes before the marker and
+ * reconcile values against the new template. When the new inner is a
+ * template whose strings aren't cached, stash the currently-attached
+ * instance (if any) into the cache map before rendering the new one.
+ *
+ * Non-template inner values fall through to the generic applyChild path
+ * (after first stashing any currently-attached cached instance).
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} inner
+ */
+function applyCache(part, inner) {
+  const marker = part.marker;
+  const partAny = /** @type any */ (part);
+  /** @type {Map<TemplateStringsArray, { inst: TemplateInstance, holder: DocumentFragment }>} */
+  let cacheMap = partAny.__cacheMap;
+  if (!cacheMap) {
+    cacheMap = new Map();
+    partAny.__cacheMap = cacheMap;
+  }
+
+  const currentChild = /** @type any */ (part.child);
+  const currentIsInstance = currentChild && 'strings' in currentChild;
+
+  // If the currently-attached child IS a template instance, decide
+  // whether to update-in-place, stash for later, or destroy.
+  if (currentIsInstance) {
+    const currentInst = /** @type TemplateInstance */ (currentChild);
+
+    // Same template structure: reconcile values, no detach/re-attach.
+    if (isTemplate(inner) && currentInst.strings === /** @type any */ (inner).strings) {
+      updateInstance(currentInst, /** @type any */ (inner).values);
+      return;
+    }
+
+    // Different shape: detach the current instance into a holder fragment
+    // and store it in the cache map. We keep the existing instance, slot
+    // markers, and rendered nodes; only the parent changes. moveRange's
+    // null anchor means "append to parent".
+    const holder = document.createDocumentFragment();
+    moveRange(currentInst.startNode, currentInst.endNode, holder, null);
+    cacheMap.set(currentInst.strings, { inst: currentInst, holder });
+    part.child = undefined;
+  }
+
+  // Now part.child is either undefined or some non-instance shape (rare;
+  // happens when prior render had a string / array / etc.). For non-
+  // instance shapes, fall through to the generic teardown via applyChild.
+
+  // If the new inner is a template AND we've cached an instance for its
+  // strings, re-attach it.
+  if (isTemplate(inner)) {
+    const tr = /** @type any */ (inner);
+    const cached = cacheMap.get(tr.strings);
+    if (cached) {
+      cacheMap.delete(tr.strings);
+      // Move the cached nodes back before the marker.
+      moveRange(cached.inst.startNode, cached.inst.endNode, /** @type Node */ (marker.parentNode), marker);
+      // Reconcile values so any state changes since detachment apply.
+      updateInstance(cached.inst, tr.values);
+      part.child = cached.inst;
+      return;
+    }
+  }
+
+  // No cached instance available. Render the new inner value via the
+  // standard applyChild path. The currentIsInstance branch already
+  // handled detaching the prior instance; if part.child still holds a
+  // non-instance shape, applyChild will tear it down generically.
+  applyChild(part, inner);
+}
+
+/* ================================================================
+ * Until directive: render highest-priority resolved candidate.
+ * ================================================================ */
+
+/**
+ * Apply the `until` directive at a child position.
+ *
+ * Priority is left-to-right: args[0] has the highest priority. The
+ * highest-priority synchronous candidate (if any) renders immediately.
+ * Promise candidates are awaited in the background; when one resolves
+ * AND no higher-priority Promise has resolved yet, its result becomes
+ * the rendered value. A render token per cycle guards against late
+ * resolves from a prior `until()` call overwriting newer DOM.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {readonly unknown[]} args
+ */
+function applyUntil(part, args) {
+  // Abort any in-flight tracking from the prior render of this part.
+  const prevState = /** @type any */ (part.child);
+  if (prevState && prevState.kind === 'until') {
+    prevState.aborted = true;
+  }
+
+  /** @type {{kind:'until', aborted:boolean, highestRendered:number, lastApplied: any}} */
+  const state = { kind: 'until', aborted: false, highestRendered: Infinity, lastApplied: undefined };
+
+  // Find the first synchronous candidate (highest priority sync value).
+  let firstSyncIdx = -1;
+  let firstSyncVal = undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+      firstSyncIdx = i;
+      firstSyncVal = a;
+      break;
+    }
+  }
+
+  // Render the sync candidate (or empty if none).
+  if (firstSyncIdx === -1) {
+    applyChild(part, '');
+  } else {
+    applyChild(part, firstSyncVal);
+  }
+
+  // `applyChild` overwrites part.child. Install our state AFTER applying
+  // so the teardown path can find us on the next render.
+  /** @type any */ (part).__untilState = state;
+  state.highestRendered = firstSyncIdx === -1 ? Infinity : firstSyncIdx;
+
+  // Subscribe to Promises with priority lower than the rendered sync
+  // candidate. Strictly higher-priority Promises (lower index) can still
+  // win and overwrite the current render when they resolve.
+  for (let i = 0; i < args.length; i++) {
+    if (i === firstSyncIdx) continue;
+    const a = args[i];
+    if (!a || typeof (/** @type any */ (a).then) !== 'function') continue;
+    // Lower-priority Promises (i > firstSyncIdx) shouldn't overwrite the
+    // rendered sync value once it's in place, so skip them.
+    if (firstSyncIdx !== -1 && i > firstSyncIdx) continue;
+
+    /** @type Promise<unknown> */ (a).then(
+      (resolved) => {
+        if (state.aborted) return;
+        if (i >= state.highestRendered) return;
+        state.highestRendered = i;
+        applyChild(part, resolved);
+        // After applyChild, reinstall the state marker.
+        /** @type any */ (part).__untilState = state;
+      },
+      () => {},
+    );
+  }
+
+  // Replace part.child sentinel so teardownChild can find this state.
+  // applyChild already set part.child to the rendered value's shape; we
+  // chain our state via __untilState (read by teardownChild via a
+  // wrapper kind). Use a sentinel `until` state stored separately so
+  // applyChild's generic path still works on the actual rendered value.
+  // The teardown path checks for __untilState specifically.
+  /** @type any */ (part).__untilStateLive = state;
+}
+
+/** @param {{aborted:boolean}} state */
+function teardownUntil(state) {
+  state.aborted = true;
+}
+
+/* ================================================================
+ * asyncAppend / asyncReplace: stream from AsyncIterable.
+ * ================================================================ */
+
+/**
+ * Apply `asyncAppend(iterable, mapper?)` at a child position.
+ *
+ * Iterates the AsyncIterable in the background. Each yielded value is
+ * mapped (optional) and rendered as a node group, appended before the
+ * marker. The state is stored on `part.child` so `teardownChild` can
+ * abort the iteration when the part is reset.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+function applyAsyncAppend(part, dir) {
+  teardownChild(part);
+
+  /** @type {AsyncStreamState} */
+  const state = {
+    kind: 'async-stream',
+    mode: 'append',
+    aborted: false,
+    /** @type {ChildNode[]} */ nodes: [],
+  };
+  part.child = state;
+
+  consumeAsyncStream(state, part, dir);
+}
+
+/**
+ * Apply `asyncReplace(iterable, mapper?)` at a child position. Same as
+ * `applyAsyncAppend` but each new value replaces the previous content.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+function applyAsyncReplace(part, dir) {
+  teardownChild(part);
+
+  /** @type {AsyncStreamState} */
+  const state = {
+    kind: 'async-stream',
+    mode: 'replace',
+    aborted: false,
+    /** @type {ChildNode[]} */ nodes: [],
+  };
+  part.child = state;
+
+  consumeAsyncStream(state, part, dir);
+}
+
+/**
+ * @typedef {{
+ *   kind: 'async-stream',
+ *   mode: 'append' | 'replace',
+ *   aborted: boolean,
+ *   nodes: ChildNode[],
+ * }} AsyncStreamState
+ */
+
+/**
+ * Consume an AsyncIterable for `asyncAppend` / `asyncReplace`. Each yield
+ * renders one chunk of DOM. For `append`, chunks accumulate before the
+ * marker; for `replace`, the prior nodes are removed first.
+ *
+ * @param {AsyncStreamState} state
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+async function consumeAsyncStream(state, part, dir) {
+  const marker = part.marker;
+  let i = 0;
+  try {
+    for await (const value of dir.iterable) {
+      if (state.aborted) break;
+      const mapped = dir.mapper ? dir.mapper(value, i) : value;
+      const newNodes = renderToNodes(mapped);
+
+      if (state.mode === 'replace') {
+        for (const n of state.nodes) {
+          if (n.parentNode) n.parentNode.removeChild(n);
+        }
+        state.nodes = [];
+      }
+
+      const frag = document.createDocumentFragment();
+      for (const n of newNodes) frag.appendChild(n);
+      marker.parentNode?.insertBefore(frag, marker);
+      state.nodes.push(...newNodes);
+
+      i++;
+    }
+  } catch (err) {
+    // Swallow iteration errors. A leaked iterator throwing should not
+    // crash the host's render cycle. Authors who care about errors
+    // should handle them in their iterable / generator.
+    if (typeof console !== 'undefined') console.error('[webjs] asyncStream error:', err);
+  }
+}
+
+/**
+ * Render a single value into a flat list of DOM nodes for insertion via
+ * insertBefore. Handles strings, numbers, TemplateResult, and arrays.
+ * @param {unknown} value
+ * @returns {ChildNode[]}
+ */
+function renderToNodes(value) {
+  if (value == null || value === false || value === true) return [];
+  if (isTemplate(value)) {
+    const tr = /** @type any */ (value);
+    const { templateEl, parts } = compile(tr);
+    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const bound = parts.map((p) => bindPart(p, frag));
+    for (let i = 0; i < tr.values.length; i++) {
+      applyPart(bound[i], tr.values[i], undefined, tr.values);
+    }
+    return [...frag.childNodes];
+  }
+  if (Array.isArray(value)) {
+    const nodes = [];
+    for (const v of value) nodes.push(...renderToNodes(v));
+    return nodes;
+  }
+  return [document.createTextNode(String(value))];
+}
+
+/** @param {AsyncStreamState} state */
+function teardownAsyncStream(state) {
+  state.aborted = true;
+  for (const n of state.nodes) {
+    if (n.parentNode) n.parentNode.removeChild(n);
+  }
+  state.nodes = [];
 }

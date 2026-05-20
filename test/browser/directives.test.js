@@ -24,7 +24,7 @@ const assert = {
 
 suite('Directives in a real browser', () => {
 
-  // --- keyed: renders the wrapped template, tears down on key change ---
+  // --- keyed: renders + remount-on-key-change ---
 
   test('keyed: renders the wrapped template in the DOM', () => {
     const el = document.createElement('div');
@@ -35,14 +35,34 @@ suite('Directives in a real browser', () => {
     el.remove();
   });
 
-  // Note: keyed's "preserve on same key / remount on different key"
-  // optimization relies on per-part state that is not yet plumbed through
-  // the render-client part lifecycle. Today the renderer reconciles based
-  // on template structure regardless of key. Adding strict key-based
-  // remount semantics is tracked under the follow-up AsyncDirective /
-  // part-state work in the lit-API parity initiative.
+  test('keyed: same key preserves DOM identity across renders', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    // Stable factory so the outer html`` shares strings across calls.
+    const make = (k, text) => html`<div>${keyed(k, html`<span class="x">${text}</span>`)}</div>`;
+    render(make('a', 'hi'), el);
+    const before = el.querySelector('span.x');
+    render(make('a', 'hi again'), el);
+    const after = el.querySelector('span.x');
+    assert.strictEqual(before, after, 'Same key should preserve the span node');
+    assert.equal(after.textContent, 'hi again');
+    el.remove();
+  });
 
-  // --- guard: invokes the function and renders the result ---
+  test('keyed: different key remounts the DOM', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const make = (k) => html`<div>${keyed(k, html`<span class="y">${k}</span>`)}</div>`;
+    render(make('a'), el);
+    const before = el.querySelector('span.y');
+    render(make('b'), el);
+    const after = el.querySelector('span.y');
+    assert.notStrictEqual(before, after, 'Different key should remount');
+    assert.equal(after.textContent, 'b');
+    el.remove();
+  });
+
+  // --- guard: per-part memoization on shallow-equal deps ---
 
   test('guard: invokes the function and renders the result', () => {
     const el = document.createElement('div');
@@ -57,10 +77,56 @@ suite('Directives in a real browser', () => {
     el.remove();
   });
 
-  // Note: guard's "skip when deps unchanged" memoization relies on per-part
-  // state that is not yet plumbed through the render-client part lifecycle.
-  // For component-scoped memoization today, compute in willUpdate(cp) and
-  // cache on the component instance.
+  test('guard: skips re-eval when deps array is shallow-equal', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    let calls = 0;
+    // Stable factory so the outer template strings are reused across
+    // renders and the part state persists.
+    const make = (deps) => html`<div>${guard(deps, () => { calls++; return html`<p>v${calls}</p>`; })}</div>`;
+    render(make([1, 2]), el);
+    assert.equal(calls, 1);
+    assert.equal(el.querySelector('p').textContent, 'v1');
+
+    render(make([1, 2]), el);
+    assert.equal(calls, 1, 'fn skipped on identical deps');
+    assert.equal(el.querySelector('p').textContent, 'v1');
+
+    render(make([1, 3]), el);
+    assert.equal(calls, 2, 'fn re-fired on changed deps');
+    assert.equal(el.querySelector('p').textContent, 'v2');
+    el.remove();
+  });
+
+  // --- cache: DOM retention across template toggles ---
+
+  test('cache: toggling between templates preserves input state and DOM identity', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const tplA = (text) => html`<form><input class="a" value=${text}></form>`;
+    const tplB = (text) => html`<section class="b"><p>${text}</p></section>`;
+    const make = (which) => html`<div>${cache(which === 'a' ? tplA('A1') : tplB('B1'))}</div>`;
+
+    render(make('a'), el);
+    const inputA = el.querySelector('input.a');
+    assert.ok(inputA);
+    // User types into the input.
+    inputA.value = 'user-typed';
+
+    // Switch to template B. Template A is detached (not destroyed).
+    render(make('b'), el);
+    assert.ok(el.querySelector('section.b'));
+    assert.equal(el.querySelector('input.a'), null);
+
+    // Switch back to A. The detached node is re-attached with its
+    // user-typed value still intact.
+    render(make('a'), el);
+    const inputAReturned = el.querySelector('input.a');
+    assert.ok(inputAReturned);
+    assert.strictEqual(inputAReturned, inputA, 'Re-attached node is the same identity');
+    assert.equal(inputAReturned.value, 'user-typed', 'Input state preserved across detach/re-attach');
+    el.remove();
+  });
 
   // --- templateContent: clone the template element's content ---
 
@@ -113,18 +179,89 @@ suite('Directives in a real browser', () => {
     el.remove();
   });
 
-  // --- asyncAppend / asyncReplace: first paint empty ---
+  // --- asyncAppend: streams every yielded value, appending ---
 
-  test('asyncAppend / asyncReplace: render empty on first paint (streaming deferred)', () => {
-    async function* gen() { yield 'one'; yield 'two'; }
+  test('asyncAppend: streams every yielded value, appending', async () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
-    render(html`<div>${asyncAppend(gen())}</div>`, el);
-    // The div is present but its child content is empty.
-    assert.equal(el.querySelector('div').textContent, '');
+    const yields = [];
+    let resolveAll;
+    const allYielded = new Promise(r => { resolveAll = r; });
+    async function* gen() {
+      for (const v of ['one', 'two', 'three']) {
+        yields.push(v);
+        yield v;
+        await Promise.resolve();
+      }
+      resolveAll();
+    }
+    render(html`<ul>${asyncAppend(gen(), (v, i) => html`<li>${i}:${v}</li>`)}</ul>`, el);
+    await allYielded;
+    // Allow microtasks to flush DOM updates.
+    await new Promise(r => setTimeout(r, 10));
+    const items = [...el.querySelectorAll('li')];
+    assert.equal(items.length, 3);
+    assert.equal(items[0].textContent, '0:one');
+    assert.equal(items[1].textContent, '1:two');
+    assert.equal(items[2].textContent, '2:three');
+    el.remove();
+  });
 
-    render(html`<section>${asyncReplace(gen())}</section>`, el);
-    assert.equal(el.querySelector('section').textContent, '');
+  test('asyncAppend: works without a mapper, rendering raw yielded values as text', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    async function* gen() { yield 'a'; yield 'b'; }
+    render(html`<div>${asyncAppend(gen())}</div>`, el);
+    await new Promise(r => setTimeout(r, 10));
+    assert.ok(el.textContent.includes('a'));
+    assert.ok(el.textContent.includes('b'));
+    el.remove();
+  });
+
+  // --- asyncReplace: each yield replaces the prior content ---
+
+  test('asyncReplace: each yield replaces the prior content', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    async function* gen() {
+      yield 'first';
+      await Promise.resolve();
+      yield 'second';
+      await Promise.resolve();
+      yield 'third';
+    }
+    render(html`<output>${asyncReplace(gen(), (v) => html`<span>${v}</span>`)}</output>`, el);
+    await new Promise(r => setTimeout(r, 10));
+    const spans = el.querySelectorAll('span');
+    assert.equal(spans.length, 1, 'Only the latest yielded span remains');
+    assert.equal(spans[0].textContent, 'third');
+    el.remove();
+  });
+
+  // --- async stream teardown: re-render with a different value aborts iteration ---
+
+  test('async stream: re-rendering with a non-stream value tears down', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    let canceled = false;
+    async function* gen() {
+      try {
+        yield 'a';
+        await new Promise(() => {});  // hang forever
+      } finally {
+        canceled = true;
+      }
+    }
+    const make = (val) => html`<div>${val}</div>`;
+    render(make(asyncAppend(gen(), (v) => html`<i>${v}</i>`)), el);
+    await new Promise(r => setTimeout(r, 10));
+    assert.ok(el.querySelector('i'));
+
+    // Replace the stream with a plain string. The prior iteration's nodes
+    // get torn down, and state.aborted flips to true so the iterator's
+    // finally block runs on the next pump.
+    render(make('plain'), el);
+    assert.equal(el.querySelector('i'), null, 'Stream-rendered nodes were removed');
     el.remove();
   });
 });

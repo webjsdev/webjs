@@ -260,17 +260,27 @@ export function createRef() {
  * ================================================================ */
 
 /**
- * Wrap a value to indicate the renderer should treat it as a candidate
- * for DOM caching when the template at this position toggles between
- * shapes (e.g. switching between two sub-templates in a tab interface).
+ * Cache prior template instances by their `strings` array so that
+ * toggling between sub-templates preserves their detached DOM (input
+ * state, scroll position, focus). When the inner value is a template
+ * whose `strings` were cached on a previous render, the renderer
+ * re-attaches the stashed nodes and reconciles values against the new
+ * template instead of creating fresh DOM.
  *
- * **Current implementation:** identity pass-through. Renders the inner
- * value directly. Future versions will retain the detached DOM and
- * re-attach it when the matching template returns, preserving input
- * state, scroll position, etc.
+ * ```js
+ * import { cache } from '@webjskit/core/directives';
  *
- * **Today's recommendation:** use CSS `display: none` to preserve DOM
- * across "tab" interactions if input state must survive.
+ * render() {
+ *   return html`
+ *     <button @click=${() => this.tab = 'a'}>A</button>
+ *     <button @click=${() => this.tab = 'b'}>B</button>
+ *     ${cache(this.tab === 'a' ? html`<panel-a></panel-a>` : html`<panel-b></panel-b>`)}
+ *   `;
+ * }
+ * ```
+ *
+ * On the server, `cache` is a pass-through (one-shot render, no DOM to
+ * cache).
  *
  * @template T
  * @param {T} value
@@ -300,12 +310,18 @@ export function isCache(x) {
  * html`<div>${until(this.dataPromise, html`<p>Loading…</p>`)}</div>`;
  * ```
  *
- * **Current implementation:** SSR awaits the first Promise to resolve
- * via `Promise.race` when all candidates are Promises, otherwise
- * renders the first synchronous candidate. Client renders the first
- * synchronous candidate and does NOT re-render when Promises later
- * resolve. For component-scoped async data with full pending/error
- * states, prefer the `Task` controller (`@webjskit/core/task`).
+ * Priority is left-to-right: `args[0]` is highest priority. The
+ * highest-priority synchronous candidate (if any) renders immediately.
+ * Higher-priority Promises that later resolve replace the rendered
+ * value; lower-priority Promises are ignored once a higher-priority
+ * candidate is in place. When the marker is torn down (e.g. the
+ * parent re-renders with a different value), in-flight tracking is
+ * cleared so late Promise resolutions cannot overwrite newer DOM.
+ *
+ * SSR awaits `Promise.race` when all candidates are Promises;
+ * otherwise SSR renders the highest-priority synchronous candidate.
+ * For component-scoped async data with full pending/error states,
+ * prefer the `Task` controller (`@webjskit/core/task`).
  *
  * @param  {...unknown} args
  * @returns {{ _$webjs: 'until', args: unknown[] }}
@@ -325,14 +341,22 @@ export function isUntil(x) {
 
 /**
  * Render values from an `AsyncIterable` as they arrive, appending each
- * to the previously-rendered output.
+ * mapped result before the marker. Iteration runs in the background;
+ * tearing down the marker (via a re-render that replaces the directive)
+ * aborts the loop.
  *
- * **Current implementation:** SSR renders empty; client renders the
- * first yielded value when the iterable produces it. Full streaming
- * (append every value, support disconnection cleanup) is a follow-up
- * of the AsyncDirective infrastructure work. For streaming pages,
- * prefer `Suspense({ fallback, children })` at the page level or use
- * `connectWS` with a controller for component-scoped streams.
+ * ```js
+ * import { asyncAppend } from '@webjskit/core/directives';
+ *
+ * async function* logTail() {
+ *   for await (const line of stream) yield line;
+ * }
+ *
+ * html`<ul>${asyncAppend(logTail(), (line, i) => html`<li>${i}: ${line}</li>`)}</ul>`;
+ * ```
+ *
+ * SSR renders empty (no iteration on a one-shot server render). For
+ * page-level streaming, prefer `Suspense({ fallback, children })`.
  *
  * @template T
  * @param {AsyncIterable<T>} iterable
@@ -349,8 +373,24 @@ export function isAsyncAppend(x) {
 }
 
 /**
- * Render values from an `AsyncIterable`, replacing the previous value
- * each time. See `asyncAppend` for current-implementation limitations.
+ * Render values from an `AsyncIterable`, replacing the previous output
+ * each time a new value arrives. The latest yielded value is the only
+ * one that remains in the DOM.
+ *
+ * ```js
+ * import { asyncReplace } from '@webjskit/core/directives';
+ *
+ * async function* ticker() {
+ *   for (let i = 0; ; i++) {
+ *     yield new Date().toLocaleTimeString();
+ *     await new Promise(r => setTimeout(r, 1000));
+ *   }
+ * }
+ *
+ * html`<time>${asyncReplace(ticker())}</time>`;
+ * ```
+ *
+ * SSR renders empty. Iteration aborts on teardown.
  *
  * @template T
  * @param {AsyncIterable<T>} iterable

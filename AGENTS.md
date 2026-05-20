@@ -219,11 +219,11 @@ lit-html parity. AI agents writing lit-shaped directive code land on familiar na
 | `guard(deps, fn)` | Memoize sub-template; client skips re-eval when deps unchanged | `${guard([this.title], () => html\`<h1>\${this.title}</h1>\`)}` |
 | `templateContent(tpl)` | Render content of a `<template>` element | `${templateContent(this.shadowRoot.getElementById('tpl'))}` |
 | `ref(refOrCallback)` + `createRef()` | Bind a Ref or callback to the element | `<input ${ref(this._inputRef)}>` |
-| `cache(value)` | Pass-through marker; future versions retain detached DOM | `${cache(this.active ? viewA : viewB)}` |
-| `until(...args)` | Render first sync value; server awaits Promise.race if all are Promises | `${until(this.dataPromise, html\`<p>Loading…</p>\`)}` |
-| `asyncAppend(iter, mapper?)`, `asyncReplace(iter, mapper?)` | Stream values from an AsyncIterable. Full streaming support pending. | `${asyncAppend(stream)}` |
+| `cache(value)` | Retain detached DOM when toggling sub-templates (preserves input state, scroll, focus) | `${cache(this.active ? viewA : viewB)}` |
+| `until(...args)` | Render highest-priority resolved candidate; higher-priority Promises that later resolve replace lower-priority output | `${until(this.dataPromise, html\`<p>Loading…</p>\`)}` |
+| `asyncAppend(iter, mapper?)`, `asyncReplace(iter, mapper?)` | Stream values from an AsyncIterable. Iteration aborts on teardown. | `${asyncAppend(stream, (v, i) => html\`<li>\${v}</li>\`)}` |
 
-Notes on current scope: `cache` is currently an identity pass-through; `asyncAppend` / `asyncReplace` render empty on first paint pending the AsyncDirective infrastructure work. For full pending/error states in components, prefer the `Task` controller. For page-level streaming, use `Suspense`. Everything else (`classMap`, `styleMap`, `ifDefined`, `when`, `choose`, `map`, `join`, `range`) uses native patterns: conditional classes via filter+join, conditional render via ternary, etc.
+For component-scoped async data with full pending/error states, `Task` is usually a better fit than `until`. For page-level streaming, `Suspense` is the structural primitive. Everything else (`classMap`, `styleMap`, `ifDefined`, `when`, `choose`, `map`, `join`, `range`) uses native patterns: conditional classes via filter+join, conditional render via ternary, etc.
 
 ### Context & Task
 
