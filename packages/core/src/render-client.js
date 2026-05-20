@@ -1,7 +1,7 @@
 import { isTemplate, MARKER } from './html.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
-import { isUnsafeHTML, isLive } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef } from './directives.js';
 import {
   LIGHT_SLOT_ATTR,
   PROJECTION_ATTR,
@@ -697,6 +697,51 @@ function applyChild(part, value) {
     return;
   }
 
+  // keyed directive: when key changes, tear down and remount fresh.
+  if (isKeyed(value)) {
+    const v = /** @type any */ (value);
+    const prevKey = /** @type any */ (part).__keyedKey;
+    if (prevKey !== undefined && !Object.is(prevKey, v.key)) {
+      teardownChild(part);
+    }
+    /** @type any */ (part).__keyedKey = v.key;
+    applyChild(part, v.value);
+    return;
+  }
+
+  // guard directive: skip re-evaluation when deps unchanged shallowly.
+  if (isGuard(value)) {
+    const v = /** @type any */ (value);
+    const prevDeps = /** @type any */ (part).__guardDeps;
+    if (prevDeps && shallowEqualArray(prevDeps, v.deps)) {
+      // Deps unchanged: leave the existing DOM in place.
+      return;
+    }
+    /** @type any */ (part).__guardDeps = v.deps.slice();
+    applyChild(part, v.fn());
+    return;
+  }
+
+  // templateContent directive: clone the content of a <template> element.
+  if (isTemplateContent(value)) {
+    teardownChild(part);
+    const tpl = /** @type any */ (value).template;
+    if (tpl && tpl.content) {
+      const frag = tpl.content.cloneNode(true);
+      const nodes = [...frag.childNodes];
+      marker.parentNode?.insertBefore(frag, marker);
+      part.child = nodes;
+    }
+    return;
+  }
+
+  // ref directive in a child position: no DOM produced. The renderer
+  // resolves refs via element parts (attribute position); a stray ref()
+  // in a child position is a no-op for compatibility.
+  if (isRef(value)) {
+    return;
+  }
+
   // Repeat directive: keyed reconciliation. Keep previous state when both
   // old and new are repeats; otherwise tear down and rebuild.
   if (isRepeat(value)) {
@@ -953,6 +998,21 @@ function moveRange(start, end, parent, anchor) {
     n = next;
   }
   parent.insertBefore(frag, anchor);
+}
+
+/**
+ * Shallow array equality (Object.is on each element). Used by the
+ * `guard` directive to skip re-evaluation when deps are unchanged.
+ * @param {readonly unknown[]} a
+ * @param {readonly unknown[]} b
+ */
+function shallowEqualArray(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!Object.is(a[i], b[i])) return false;
+  }
+  return true;
 }
 
 /** @param {Extract<BoundPart, {kind:'child'}>} part */

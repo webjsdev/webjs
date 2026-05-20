@@ -1,28 +1,17 @@
 /**
  * Built-in directives for the webjs `html` tagged template system.
  *
- * webjs follows a "less is more" philosophy: only directives that solve
- * problems with NO native alternative are included. AI agents don't need
- * syntax sugar: they can write ternaries, string concatenation, and
- * lifecycle hooks just fine.
+ * lit-html parity. Imports look like:
  *
- * **What's here:**
- * - `unsafeHTML(str)`: render trusted raw HTML (no alternative in templates)
+ * ```js
+ * import { html } from '@webjskit/core';
+ * import {
+ *   unsafeHTML, live,
+ *   keyed, guard, templateContent, ref, createRef,
+ * } from '@webjskit/core/directives';
+ * ```
  *
- * **What's NOT here (and why):**
- * - classMap → use `class=${'btn ' + (active ? 'active' : '')}`
- * - styleMap → use `style=${'color:' + color}`
- * - ifDefined → use `attr=${val ?? null}` (null removes the attribute)
- * - when/choose → use ternary `${cond ? a : b}` or if/else before the template
- * - guard → memoize in `willUpdate()` lifecycle hook
- * - ref → use `this.query('#el')` in `firstUpdated()` or `updated()`
- * - cache → use CSS `display:none` to preserve DOM instead of removing
- * - until → use the `Task` controller for component-scoped async data
- * - live → set `.value` via property binding `.value=${val}` and handle
- *   input events with `@input=${e => this.setState({val: e.target.value})}`
- *
- * `repeat()` is in its own file (`./repeat.js`): it's essential for keyed
- * list reconciliation and has no native alternative.
+ * `repeat()` lives in `./repeat.js` (re-exported from the package root).
  *
  * @module directives
  */
@@ -106,4 +95,161 @@ export function live(value) {
  */
 export function isLive(x) {
   return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'live';
+}
+
+/* ================================================================
+ * keyed (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Wrap a template with a key. When the key changes between renders, the
+ * renderer discards the prior DOM and creates fresh. Useful for forcing
+ * a remount when the logical identity of the rendered content changes
+ * even though the template literal structure is the same.
+ *
+ * ```js
+ * import { keyed } from '@webjskit/core/directives';
+ *
+ * // Form fully resets (input values, focus, etc.) when userId changes.
+ * html`${keyed(this.userId, html`<edit-form .user=${this.user}></edit-form>`)}`;
+ * ```
+ *
+ * On the server, the key is ignored (one-shot render). In the browser,
+ * the renderer compares the new key to the previously-rendered key at
+ * the same position and remounts on inequality.
+ *
+ * @template T
+ * @param {unknown} key  Compared with `Object.is` against the previous render.
+ * @param {T} template   Any value the renderer accepts (typically a `TemplateResult`).
+ * @returns {{ _$webjs: 'keyed', key: unknown, value: T }}
+ */
+export function keyed(key, template) {
+  return { _$webjs: 'keyed', key, value: template };
+}
+
+/** @param {unknown} x */
+export function isKeyed(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'keyed';
+}
+
+/* ================================================================
+ * guard (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Memoize a sub-template by its dependencies. If the deps array hasn't
+ * changed shallowly between renders, the renderer skips re-evaluating
+ * the value-producing function.
+ *
+ * ```js
+ * import { guard } from '@webjskit/core/directives';
+ *
+ * render() {
+ *   return html`
+ *     <header>${guard([this.title], () => html`<h1>${this.title}</h1>`)}</header>
+ *     <main>${this.body}</main>
+ *   `;
+ * }
+ * ```
+ *
+ * On the server, `fn()` is always invoked (one-shot render, no cache).
+ * In the browser, the renderer maintains a per-part cache keyed by the
+ * shallow-compared deps array.
+ *
+ * @template T
+ * @param {readonly unknown[]} deps  Shallow-compared between renders
+ * @param {() => T} fn               Value-producing function
+ * @returns {{ _$webjs: 'guard', deps: readonly unknown[], fn: () => T }}
+ */
+export function guard(deps, fn) {
+  return { _$webjs: 'guard', deps, fn };
+}
+
+/** @param {unknown} x */
+export function isGuard(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'guard';
+}
+
+/* ================================================================
+ * templateContent (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Render the content of a `<template>` element. The template's content
+ * is cloned on the client; on the server, its `innerHTML` is emitted.
+ *
+ * ```js
+ * import { templateContent } from '@webjskit/core/directives';
+ *
+ * const tpl = document.querySelector('#my-tpl');
+ * html`<div>${templateContent(tpl)}</div>`;
+ * ```
+ *
+ * The HTML inside the template element is trusted: it is NOT escaped.
+ * Do not pass templates whose content was assembled from user input.
+ *
+ * @param {HTMLTemplateElement | { innerHTML?: string, content?: DocumentFragment }} template
+ * @returns {{ _$webjs: 'template-content', template: any }}
+ */
+export function templateContent(template) {
+  return { _$webjs: 'template-content', template };
+}
+
+/** @param {unknown} x */
+export function isTemplateContent(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'template-content';
+}
+
+/* ================================================================
+ * ref (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Bind a Ref object or callback to the element produced at this position.
+ *
+ * ```js
+ * import { createRef, ref } from '@webjskit/core/directives';
+ *
+ * class MyForm extends WebComponent {
+ *   _input = createRef();
+ *   render() {
+ *     return html`<input ${ref(this._input)}>`;
+ *   }
+ *   firstUpdated() {
+ *     this._input.value?.focus();
+ *   }
+ * }
+ * ```
+ *
+ * Pass a callback instead of a Ref object to receive the element directly:
+ *
+ * ```js
+ * html`<input ${ref((el) => this._captureEl(el))}>`;
+ * ```
+ *
+ * On the server, `ref()` is a no-op: no DOM exists yet. The reference is
+ * populated after the first client-side render. The callback receives
+ * `undefined` when the element is removed.
+ *
+ * @param {{ value: unknown } | ((el: Element | undefined) => void)} refOrCallback
+ * @returns {{ _$webjs: 'ref', target: any }}
+ */
+export function ref(refOrCallback) {
+  return { _$webjs: 'ref', target: refOrCallback };
+}
+
+/** @param {unknown} x */
+export function isRef(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'ref';
+}
+
+/**
+ * Create a Ref object suitable for `ref()`. The element is assigned to
+ * `ref.value` after the first render commit.
+ *
+ * @template {Element} T
+ * @returns {{ value: T | undefined }}
+ */
+export function createRef() {
+  return { value: undefined };
 }

@@ -4,7 +4,7 @@ import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef } from './directives.js';
 import { stringify, parse } from './serialize.js';
 
 /**
@@ -51,6 +51,23 @@ async function render(value, ctx) {
   // live() on the server just unwraps and renders the inner value.
   if (isLive(value)) {
     return render(/** @type any */ (value).value, ctx);
+  }
+  // keyed() on the server: render the wrapped template; key is client-only.
+  if (isKeyed(value)) {
+    return render(/** @type any */ (value).value, ctx);
+  }
+  // guard() on the server: always invoke the value function (no cache on SSR).
+  if (isGuard(value)) {
+    return render(/** @type any */ (value).fn(), ctx);
+  }
+  // templateContent() on the server: emit the template's innerHTML verbatim.
+  if (isTemplateContent(value)) {
+    const tpl = /** @type any */ (value).template;
+    return String(tpl?.innerHTML ?? '');
+  }
+  // ref() on the server: no-op (no DOM yet). Returns empty string.
+  if (isRef(value)) {
+    return '';
   }
   if (Array.isArray(value)) {
     const parts = await Promise.all(value.map((v) => render(v, ctx)));
@@ -818,6 +835,20 @@ async function streamRender(value, ctx, controller) {
   }
   if (isLive(value)) {
     return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isKeyed(value)) {
+    return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isGuard(value)) {
+    return streamRender(/** @type any */ (value).fn(), ctx, controller);
+  }
+  if (isTemplateContent(value)) {
+    const tpl = /** @type any */ (value).template;
+    controller.enqueue(String(tpl?.innerHTML ?? ''));
+    return;
+  }
+  if (isRef(value)) {
+    return;
   }
   if (Array.isArray(value)) {
     for (const v of value) await streamRender(v, ctx, controller);
