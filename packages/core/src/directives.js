@@ -8,6 +8,7 @@
  * import {
  *   unsafeHTML, live,
  *   keyed, guard, templateContent, ref, createRef,
+ *   cache, until, asyncAppend, asyncReplace,
  * } from '@webjskit/core/directives';
  * ```
  *
@@ -252,4 +253,115 @@ export function isRef(x) {
  */
 export function createRef() {
   return { value: undefined };
+}
+
+/* ================================================================
+ * cache (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Wrap a value to indicate the renderer should treat it as a candidate
+ * for DOM caching when the template at this position toggles between
+ * shapes (e.g. switching between two sub-templates in a tab interface).
+ *
+ * **Current implementation:** identity pass-through. Renders the inner
+ * value directly. Future versions will retain the detached DOM and
+ * re-attach it when the matching template returns, preserving input
+ * state, scroll position, etc.
+ *
+ * **Today's recommendation:** use CSS `display: none` to preserve DOM
+ * across "tab" interactions if input state must survive.
+ *
+ * @template T
+ * @param {T} value
+ * @returns {{ _$webjs: 'cache', value: T }}
+ */
+export function cache(value) {
+  return { _$webjs: 'cache', value };
+}
+
+/** @param {unknown} x */
+export function isCache(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'cache';
+}
+
+/* ================================================================
+ * until (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Render the first synchronous value from a list of candidates. Any
+ * Promises in the list are unwrapped on the server (the first to
+ * resolve wins).
+ *
+ * ```js
+ * import { until } from '@webjskit/core/directives';
+ *
+ * html`<div>${until(this.dataPromise, html`<p>Loading…</p>`)}</div>`;
+ * ```
+ *
+ * **Current implementation:** SSR awaits the first Promise to resolve
+ * via `Promise.race` when all candidates are Promises, otherwise
+ * renders the first synchronous candidate. Client renders the first
+ * synchronous candidate and does NOT re-render when Promises later
+ * resolve. For component-scoped async data with full pending/error
+ * states, prefer the `Task` controller (`@webjskit/core/task`).
+ *
+ * @param  {...unknown} args
+ * @returns {{ _$webjs: 'until', args: unknown[] }}
+ */
+export function until(...args) {
+  return { _$webjs: 'until', args };
+}
+
+/** @param {unknown} x */
+export function isUntil(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'until';
+}
+
+/* ================================================================
+ * asyncAppend / asyncReplace (lit-html parity)
+ * ================================================================ */
+
+/**
+ * Render values from an `AsyncIterable` as they arrive, appending each
+ * to the previously-rendered output.
+ *
+ * **Current implementation:** SSR renders empty; client renders the
+ * first yielded value when the iterable produces it. Full streaming
+ * (append every value, support disconnection cleanup) is a follow-up
+ * of the AsyncDirective infrastructure work. For streaming pages,
+ * prefer `Suspense({ fallback, children })` at the page level or use
+ * `connectWS` with a controller for component-scoped streams.
+ *
+ * @template T
+ * @param {AsyncIterable<T>} iterable
+ * @param {(value: T, index: number) => unknown} [mapper]
+ * @returns {{ _$webjs: 'async-append', iterable: AsyncIterable<T>, mapper?: (v: T, i: number) => unknown }}
+ */
+export function asyncAppend(iterable, mapper) {
+  return { _$webjs: 'async-append', iterable, mapper };
+}
+
+/** @param {unknown} x */
+export function isAsyncAppend(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'async-append';
+}
+
+/**
+ * Render values from an `AsyncIterable`, replacing the previous value
+ * each time. See `asyncAppend` for current-implementation limitations.
+ *
+ * @template T
+ * @param {AsyncIterable<T>} iterable
+ * @param {(value: T, index: number) => unknown} [mapper]
+ * @returns {{ _$webjs: 'async-replace', iterable: AsyncIterable<T>, mapper?: (v: T, i: number) => unknown }}
+ */
+export function asyncReplace(iterable, mapper) {
+  return { _$webjs: 'async-replace', iterable, mapper };
+}
+
+/** @param {unknown} x */
+export function isAsyncReplace(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'async-replace';
 }

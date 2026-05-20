@@ -1,7 +1,7 @@
 import { isTemplate, MARKER } from './html.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
 import {
   LIGHT_SLOT_ATTR,
   PROJECTION_ATTR,
@@ -739,6 +739,37 @@ function applyChild(part, value) {
   // resolves refs via element parts (attribute position); a stray ref()
   // in a child position is a no-op for compatibility.
   if (isRef(value)) {
+    return;
+  }
+
+  // cache directive: pass-through to the inner value. Future versions
+  // will retain detached DOM for fast template switching.
+  if (isCache(value)) {
+    applyChild(part, /** @type any */ (value).value);
+    return;
+  }
+
+  // until directive: render the first synchronous candidate. Promises
+  // are not awaited for in-place updates in this version; use Task for
+  // component-scoped async with pending/error states.
+  if (isUntil(value)) {
+    const args = /** @type any */ (value).args;
+    for (const a of args) {
+      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+        applyChild(part, a);
+        return;
+      }
+    }
+    // All promises: render empty for now.
+    applyChild(part, '');
+    return;
+  }
+
+  // asyncAppend / asyncReplace: render first iteration value if the
+  // iterable yields synchronously; otherwise render empty. Full
+  // streaming support is a follow-up.
+  if (isAsyncAppend(value) || isAsyncReplace(value)) {
+    applyChild(part, '');
     return;
   }
 

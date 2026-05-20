@@ -4,7 +4,7 @@ import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
 import { stringify, parse } from './serialize.js';
 
 /**
@@ -67,6 +67,30 @@ async function render(value, ctx) {
   }
   // ref() on the server: no-op (no DOM yet). Returns empty string.
   if (isRef(value)) {
+    return '';
+  }
+  // cache() on the server: pass-through to the inner value.
+  if (isCache(value)) {
+    return render(/** @type any */ (value).value, ctx);
+  }
+  // until() on the server: render the first synchronous candidate, or
+  // Promise.race over all Promise candidates.
+  if (isUntil(value)) {
+    const args = /** @type any */ (value).args;
+    for (const a of args) {
+      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+        return render(a, ctx);
+      }
+    }
+    if (args.length > 0) {
+      const winner = await Promise.race(args);
+      return render(winner, ctx);
+    }
+    return '';
+  }
+  // asyncAppend / asyncReplace on the server: render empty. Full
+  // streaming is a follow-up; pages should use Suspense for streaming.
+  if (isAsyncAppend(value) || isAsyncReplace(value)) {
     return '';
   }
   if (Array.isArray(value)) {
@@ -848,6 +872,25 @@ async function streamRender(value, ctx, controller) {
     return;
   }
   if (isRef(value)) {
+    return;
+  }
+  if (isCache(value)) {
+    return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isUntil(value)) {
+    const args = /** @type any */ (value).args;
+    for (const a of args) {
+      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+        return streamRender(a, ctx, controller);
+      }
+    }
+    if (args.length > 0) {
+      const winner = await Promise.race(args);
+      return streamRender(winner, ctx, controller);
+    }
+    return;
+  }
+  if (isAsyncAppend(value) || isAsyncReplace(value)) {
     return;
   }
   if (Array.isArray(value)) {

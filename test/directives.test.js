@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { html, renderToString } from '../packages/core/index.js';
-import { unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard, templateContent, isTemplateContent, ref, isRef, createRef } from '../packages/core/src/directives.js';
+import { unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard, templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache, until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace } from '../packages/core/src/directives.js';
 
 // --- unsafeHTML ---
 
