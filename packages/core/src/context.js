@@ -216,12 +216,12 @@ export class ContextProvider {
   }
 
   /** Called by the host's controller lifecycle when the element connects. */
-  onMount() {
+  hostConnected() {
     this._host.addEventListener('context-request', this._onRequest);
   }
 
   /** Called by the host's controller lifecycle when the element disconnects. */
-  onUnmount() {
+  hostDisconnected() {
     this._host.removeEventListener('context-request', this._onRequest);
     this._subscriptions.clear();
   }
@@ -235,7 +235,7 @@ export class ContextProvider {
  * A ReactiveController that consumes a context value from an ancestor
  * provider.
  *
- * On `onMount` it dispatches a `ContextRequestEvent`. If a provider
+ * On `hostConnected` it dispatches a `ContextRequestEvent`. If a provider
  * for the matching context key exists higher in the DOM tree, the consumer
  * receives the current value immediately (and, if `subscribe: true`, all
  * future updates as well).
@@ -288,12 +288,12 @@ export class ContextConsumer {
   }
 
   /** Called by the host's controller lifecycle when the element connects. */
-  onMount() {
+  hostConnected() {
     this._dispatchRequest();
   }
 
   /** Called by the host's controller lifecycle when the element disconnects. */
-  onUnmount() {
+  hostDisconnected() {
     if (this._unsubscribe) {
       this._unsubscribe();
       this._unsubscribe = undefined;

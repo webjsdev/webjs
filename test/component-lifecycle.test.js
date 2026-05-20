@@ -222,13 +222,13 @@ test('disconnectedCallback clears _connected', () => {
 
 /* -------------------- controllers: dispatch -------------------- */
 
-test('controller hooks fire in order: onMount → beforeRender → afterRender → onUnmount', async () => {
+test('controller hooks fire in order: hostConnected → hostUpdate → hostUpdated → hostDisconnected', async () => {
   const calls = [];
   const ctrl = {
-    onMount() { calls.push('onMount'); },
-    beforeRender() { calls.push('beforeRender'); },
-    afterRender() { calls.push('afterRender'); },
-    onUnmount() { calls.push('onUnmount'); },
+    hostConnected() { calls.push('hostConnected'); },
+    hostUpdate() { calls.push('hostUpdate'); },
+    hostUpdated() { calls.push('hostUpdated'); },
+    hostDisconnected() { calls.push('hostDisconnected'); },
   };
 
   class C extends WebComponent {
@@ -241,12 +241,12 @@ test('controller hooks fire in order: onMount → beforeRender → afterRender �
   await Promise.resolve();    // let microtask render flush
   await Promise.resolve();
   el.remove();
-  assert.ok(calls.indexOf('onMount') < calls.indexOf('beforeRender'));
-  assert.ok(calls.indexOf('beforeRender') < calls.indexOf('afterRender'));
-  assert.ok(calls.indexOf('onUnmount') > calls.indexOf('afterRender'));
+  assert.ok(calls.indexOf('hostConnected') < calls.indexOf('hostUpdate'));
+  assert.ok(calls.indexOf('hostUpdate') < calls.indexOf('hostUpdated'));
+  assert.ok(calls.indexOf('hostDisconnected') > calls.indexOf('hostUpdated'));
 });
 
-test('addController on an already-connected host fires onMount immediately', () => {
+test('addController on an already-connected host fires hostConnected immediately', () => {
   let called = false;
   class C extends WebComponent {
     render() { return html``; }
@@ -254,13 +254,13 @@ test('addController on an already-connected host fires onMount immediately', () 
   C.register('ctrl-late');
   const el = document.createElement('ctrl-late');
   document.body.appendChild(el);
-  el.addController({ onMount() { called = true; } });
+  el.addController({ hostConnected() { called = true; } });
   assert.equal(called, true);
 });
 
 test('removeController detaches a controller', async () => {
   let updates = 0;
-  const ctrl = { beforeRender() { updates++; } };
+  const ctrl = { hostUpdate() { updates++; } };
   class C extends WebComponent {
     constructor() { super(); this.addController(ctrl); }
     render() { return html``; }
@@ -272,7 +272,7 @@ test('removeController detaches a controller', async () => {
   el.removeController(ctrl);
   el.setState({ foo: 1 });
   await Promise.resolve();
-  assert.equal(updates, 1, 'beforeRender only fired once: once removed, no more');
+  assert.equal(updates, 1, 'hostUpdate only fired once: once removed, no more');
 });
 
 /* -------------------- setState batching -------------------- */

@@ -218,7 +218,7 @@ test('Task.abort: aborts the signal of the in-flight task', async () => {
   await runPromise;
 });
 
-test('Task: onUnmount aborts in-flight task', async () => {
+test('Task: hostDisconnected aborts in-flight task', async () => {
   const host = createMockHost();
   let capturedSignal;
   let resolve;
@@ -234,7 +234,7 @@ test('Task: onUnmount aborts in-flight task', async () => {
 
   const runPromise = task.run();
 
-  task.onUnmount();
+  task.hostDisconnected();
   assert.equal(capturedSignal.aborted, true);
 
   resolve();
@@ -245,7 +245,7 @@ test('Task: onUnmount aborts in-flight task', async () => {
 // Auto-run
 // ---------------------------------------------------------------------------
 
-test('Task: auto-run triggers when args change on beforeRender', async () => {
+test('Task: auto-run triggers when args change on hostUpdate', async () => {
   const host = createMockHost();
   let currentQuery = 'foo';
   let runCount = 0;
@@ -256,20 +256,20 @@ test('Task: auto-run triggers when args change on beforeRender', async () => {
     autoRun: true,
   });
 
-  // First beforeRender: prevArgs is null so it always runs.
-  task.beforeRender();
+  // First hostUpdate: prevArgs is null so it always runs.
+  task.hostUpdate();
   // run() is async, give it a tick to settle.
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(runCount, 1);
 
   // Same args: should not re-run.
-  task.beforeRender();
+  task.hostUpdate();
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(runCount, 1);
 
   // Changed args: should re-run.
   currentQuery = 'bar';
-  task.beforeRender();
+  task.hostUpdate();
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(runCount, 2);
 
@@ -277,7 +277,7 @@ test('Task: auto-run triggers when args change on beforeRender', async () => {
   assert.equal(task.value, 'result:bar');
 });
 
-test('Task: autoRun false does not run on beforeRender', () => {
+test('Task: autoRun false does not run on hostUpdate', () => {
   const host = createMockHost();
   let runCount = 0;
 
@@ -287,7 +287,7 @@ test('Task: autoRun false does not run on beforeRender', () => {
     autoRun: false,
   });
 
-  task.beforeRender();
+  task.hostUpdate();
   assert.equal(runCount, 0);
 });
 

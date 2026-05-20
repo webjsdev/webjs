@@ -300,9 +300,9 @@ class StudentCard extends WebComponent {
 
 | Hook | When | Use for |
 |---|---|---|
-| controllers' `beforeRender()` | Before render | Pre-render logic |
+| controllers' `hostUpdate()` | Before render | Pre-render logic |
 | `render()` | Render phase | Return `TemplateResult` |
-| controllers' `afterRender()` | After render | Post-render logic |
+| controllers' `hostUpdated()` | After render | Post-render logic |
 | `firstUpdated()` | After first render only | One-time DOM setup |
 
 No `shouldUpdate`/`willUpdate`/`updated`/`changedProperties`. Compute inputs at top of `render()`. Use `queueMicrotask()` after `setState()` for post-render side effects.

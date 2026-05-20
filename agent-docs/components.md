@@ -37,11 +37,11 @@ class FetchController {
     this.data = null;
     host.addController(this);     // ← register
   }
-  async onMount() {
+  async hostConnected() {
     this.data = await (await fetch(this.url)).json();
     this.host.requestUpdate();
   }
-  onUnmount() { /* cleanup */ }
+  hostDisconnected() { /* cleanup */ }
 }
 
 class MyEl extends WebComponent {

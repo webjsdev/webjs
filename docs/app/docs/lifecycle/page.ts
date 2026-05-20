@@ -10,9 +10,9 @@ export default function Lifecycle() {
     <h2>The Update Cycle</h2>
     <p>When <code>setState()</code> or a property change triggers a re-render:</p>
     <ol>
-      <li>Controllers' <code>beforeRender()</code></li>
+      <li>Controllers' <code>hostUpdate()</code></li>
       <li><code>render()</code> + DOM commit (with error boundary)</li>
-      <li>Controllers' <code>afterRender()</code></li>
+      <li>Controllers' <code>hostUpdated()</code></li>
       <li><code>firstUpdated()</code> runs once, on the first render only</li>
     </ol>
 
@@ -89,7 +89,7 @@ this.setState({ name: 'updated' });
         <tr><td><code>disconnectedCallback()</code></td><td>❌</td><td>✅</td></tr>
         <tr><td><code>firstUpdated()</code></td><td>❌</td><td>✅</td></tr>
         <tr><td><code>attributeChangedCallback()</code></td><td>❌</td><td>✅</td></tr>
-        <tr><td>controllers' <code>beforeRender</code> / <code>afterRender</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td>controllers' <code>hostUpdate</code> / <code>hostUpdated</code></td><td>❌</td><td>✅</td></tr>
       </tbody>
     </table>
 

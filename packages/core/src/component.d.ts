@@ -43,10 +43,10 @@ export interface PropertyDeclaration<T = unknown> {
 
 /** Reactive controller protocol (Lit-compatible). */
 export interface ReactiveController {
-  onMount?(): void;
-  onUnmount?(): void;
-  beforeRender?(): void;
-  afterRender?(): void;
+  hostConnected?(): void;
+  hostDisconnected?(): void;
+  hostUpdate?(): void;
+  hostUpdated?(): void;
 }
 
 /**
