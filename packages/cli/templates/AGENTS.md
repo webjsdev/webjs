@@ -416,6 +416,70 @@ the click handler is inert). Two consequences for how you write code:
 
 See [Progressive Enhancement](https://docs.webjs.dev/docs/progressive-enhancement) for the full design rationale.
 
+## Lit muscle-memory gotchas (read if you have written lit before)
+
+Webjs's runtime API matches lit. The `WebComponent` base class,
+`static properties`, the lifecycle hooks, ReactiveControllers, the
+directive set, `html` / `css` tagged templates. The **rendering
+model**, however, is different. Pure-lit patterns that work fine in a
+client-only lit app break in webjs's SSR pipeline or its reactivity
+system. Read this section before reaching for lit idioms.
+
+### Mental model. JS opt-in per behavior, not per component
+
+Lit hydrates per component. You decide at the component boundary
+whether JS ships and runs for that island.
+
+Webjs ships JS per **interactive behavior**, not per component. Every
+component is server-rendered. JavaScript is requested by the specific
+holes you write in the template.
+
+- `@click=${...}`, `@input=${...}`, any event binding requests JS.
+- `setState({...})` requests JS for reactive updates.
+- `.prop=${richObject}` requests JS for property hydration.
+- A controller like `Task` requests JS for that async behavior.
+- A plain `<a href>`, a `<form action method>` submission, or a
+  purely display-time component (no event listeners, no `setState`,
+  no property bindings) does **not** request JS.
+
+A single component can mix both. A product card with server-rendered
+title, price, image, plus a "View" link (no JS) and an "Add to cart"
+button with a `@click` (JS for that one behavior) is correct webjs
+style. The framework loads JS for the component because of the
+`@click` and runs it, while the rest of the card stays exactly as the
+server painted it.
+
+Practical consequences for agents writing webjs code.
+
+1. Never reach for `fetch()` plus a `@click` handler when a `<form>`
+   plus a server action would do. The form is free (no JS), the
+   server action is typed and CSRF-protected, the result reaches the
+   page through normal navigation.
+2. Never make first paint depend on hydration. A blank skeleton until
+   JS runs means the feature was written wrong.
+3. Don't think binary about "static vs interactive components." Pick
+   interactive primitives per behavior. A page with ten components
+   can ship zero JS for eight of them and handlers only for the two
+   that need it.
+
+### Gotchas at a glance
+
+| Lit pattern | What breaks in webjs | Webjs equivalent |
+|---|---|---|
+| Fetch in `connectedCallback` / `firstUpdated` | Empty first paint (neither hook runs in SSR) | Fetch in the page function, pass as props |
+| `Task` for initial-paint data | SSR ships the pending state, flashes to resolved on hydration | Page function fetch, pass as props (`Task` is fine for client-time async) |
+| `window.X` / `document.X` in constructor or `render()` | SSR crash | Move to `connectedCallback` |
+| Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
+| Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
+| `@property()` decorator | Banned by invariant 10 (erasable TS) | `static properties = { ... }` plus `declare` |
+| `static styles = css` block without `static shadow = true` | Styles leak globally; the framework warns at runtime | Add `static shadow = true`, or use Tailwind utilities |
+| `willUpdate` computing SSR-visible derived state | Field is `undefined` in SSR HTML (hook is client-only) | Compute inline in `render()` |
+| `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
+
+The full annotated catalog with code examples lives in the framework
+repo at
+[`agent-docs/lit-muscle-memory-gotchas.md`](https://github.com/vivek7405/webjs/blob/main/agent-docs/lit-muscle-memory-gotchas.md).
+
 ## Server action pattern
 
 ```ts
