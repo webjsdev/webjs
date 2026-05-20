@@ -101,21 +101,23 @@ export class UiTabs extends WebComponent {
   }
 
   render() {
-    // Dispatch ui-value-change after first render whenever value changes.
-    // Children re-render when they see the broadcast on the next RAF.
+    // Side effects: dispatch ui-value-change + broadcast to children
+    // when value transitions. Both require a real DOM (CustomEvent,
+    // dispatchEvent, requestAnimationFrame) so guard against SSR where
+    // linkedom doesn't implement them.
     if (this._lastValue !== this.value) {
       const prev = this._lastValue;
       this._lastValue = this.value;
-      if (prev !== '' || this.value !== '') {
-        queueMicrotask(() => {
-          this.dispatchEvent(
-            new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
-          );
-        });
+      if (typeof window !== 'undefined') {
+        if (prev !== '' || this.value !== '') {
+          queueMicrotask(() => {
+            this.dispatchEvent(
+              new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
+            );
+          });
+        }
+        requestAnimationFrame(() => this._broadcast());
       }
-      // Broadcast to descendants on the next frame (after their own first
-      // render has settled if this is the initial mount).
-      requestAnimationFrame(() => this._broadcast());
     }
     return html`<div
       data-slot="tabs"
@@ -173,7 +175,11 @@ export class UiTabsTrigger extends WebComponent {
     this.value = '';
   }
 
+  // render() runs server-side too; linkedom doesn't implement closest()
+  // on custom elements. Return null during SSR; the client re-renders
+  // with the parent reference after hydration.
   get _tabs(): UiTabs | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
@@ -239,18 +245,23 @@ export class UiTabsContent extends WebComponent {
   }
 
   get _tabs(): UiTabs | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
   render() {
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
+    // Toggle `hidden` on the host so it (and its rendered content) is
+    // removed from layout when inactive. Setting hidden only on the
+    // inner <section> would leave the <ui-tabs-content> host taking
+    // visual space as an empty box (light DOM, no :host CSS).
+    this.toggleAttribute('hidden', !active);
     return html`<section
       data-slot="tabs-content"
       role="tabpanel"
       tabindex="0"
       data-state=${active ? 'active' : 'inactive'}
-      ?hidden=${!active}
       class=${TABS_CONTENT_CLASS}
     ><slot></slot></section>`;
   }

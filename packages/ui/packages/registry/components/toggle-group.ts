@@ -88,7 +88,7 @@ export class UiToggleGroup extends WebComponent {
     // Items live under <slot>, but their state needs to be reflected
     // after they have finished their own first render. One frame is
     // enough; this is the same RAF-defer pattern used by tabs.
-    requestAnimationFrame(() => this._reflectItems());
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._reflectItems());
     return html`<div
       data-slot="toggle-group"
       role="group"
@@ -103,11 +103,13 @@ export class UiToggleGroup extends WebComponent {
 
   _reflectItems(): void {
     const values = this._values;
-    this.querySelectorAll<HTMLElement>('ui-toggle-group-item').forEach((item) => {
-      const v = item.getAttribute('value');
-      const on = !!v && values.has(v);
-      item.setAttribute('data-state', on ? 'on' : 'off');
-      item.setAttribute('aria-pressed', String(on));
+    this.querySelectorAll<UiToggleGroupItem>('ui-toggle-group-item').forEach((item) => {
+      const on = !!item.value && values.has(item.value);
+      // Reflect both on the host (for CSS sibling selectors like
+      // data-[spacing=0]:first:rounded-l-md that need to target the host
+      // as a sibling of other items) and as a reactive prop so the
+      // item's render() refreshes its inner styling.
+      item.pressed = on;
     });
   }
 
@@ -144,16 +146,41 @@ UiToggleGroup.register('ui-toggle-group');
 export class UiToggleGroupItem extends WebComponent {
   static properties = {
     value: { type: String, reflect: true },
+    pressed: { type: Boolean, reflect: true },
   };
   declare value: string;
+  declare pressed: boolean;
 
   constructor() {
     super();
     this.value = '';
+    this.pressed = false;
   }
 
+  // render() runs server-side too. linkedom doesn't implement closest()
+  // on custom elements, so guard it; the client re-renders with the
+  // real parent reference after hydration.
   get _group(): UiToggleGroup | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-toggle-group') as UiToggleGroup | null;
+  }
+
+  // Compound-component caveat: the host element carries the visual
+  // class + data-* attributes (not an inner <button>) so CSS sibling
+  // selectors like `data-[spacing=0]:first:rounded-l-md` match it as
+  // a sibling of other items in the group. Click + keyboard listeners
+  // also live on the host (not on an inner element) because the
+  // click target IS the host: the styled element under the cursor.
+  connectedCallback(): void {
+    this.addEventListener('click', this._onClick);
+    this.addEventListener('keydown', this._onKeyDown);
+    super.connectedCallback?.();
+  }
+
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this._onClick);
+    this.removeEventListener('keydown', this._onKeyDown);
+    super.disconnectedCallback?.();
   }
 
   render() {
@@ -161,15 +188,16 @@ export class UiToggleGroupItem extends WebComponent {
     const variant = (group?.variant ?? 'default') as ToggleVariant;
     const size = (group?.size ?? 'default') as ToggleSize;
     const spacing = group?.spacing ?? '0';
-    return html`<button
-      type="button"
-      data-slot="toggle-group-item"
-      data-variant=${variant}
-      data-size=${size}
-      data-spacing=${spacing}
-      class=${cn(toggleClass({ variant, size }), ITEM_EXTRA)}
-      @click=${this._onClick}
-    ><slot></slot></button>`;
+    this.setAttribute('data-slot', 'toggle-group-item');
+    this.setAttribute('role', 'button');
+    this.setAttribute('tabindex', '0');
+    this.setAttribute('data-variant', variant);
+    this.setAttribute('data-size', size);
+    this.setAttribute('data-spacing', spacing);
+    this.setAttribute('data-state', this.pressed ? 'on' : 'off');
+    this.setAttribute('aria-pressed', String(this.pressed));
+    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA);
+    return html`<slot></slot>`;
   }
 
   _onClick = (): void => {
@@ -177,6 +205,13 @@ export class UiToggleGroupItem extends WebComponent {
     this.dispatchEvent(
       new CustomEvent('ui-toggle-item-click', { detail: { value: this.value }, bubbles: true }),
     );
+  };
+
+  _onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      this._onClick();
+    }
   };
 }
 UiToggleGroupItem.register('ui-toggle-group-item');

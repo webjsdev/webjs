@@ -112,9 +112,12 @@ suite('ui-tabs', () => {
       </ui-tabs>
     `);
     await tick();
-    const panelB = root.querySelector('ui-tabs-content[value="b"] [role="tabpanel"]');
+    const contentB = root.querySelector('ui-tabs-content[value="b"]');
+    const panelB = contentB.querySelector('[role="tabpanel"]');
     assert.equal(panelB.getAttribute('role'), 'tabpanel');
-    assert.ok(panelB.hasAttribute('hidden'), 'inactive pane has hidden attr');
+    // The host element gets `hidden` (so its rendered content is removed
+    // from layout); the inner panel still carries the role for ARIA.
+    assert.ok(contentB.hasAttribute('hidden'), 'inactive pane host has hidden attr');
     root.remove();
   });
 
@@ -203,10 +206,11 @@ suite('ui-toggle-group', () => {
     const tg = root.querySelector('ui-toggle-group');
     let detail = null;
     tg.addEventListener('ui-value-change', (e) => { detail = e.detail; });
-    // Click the inner <button> the item renders, not the host wrapper.
-    // The host is now just a slot host; the inner button carries the
-    // @click handler that fires the bubbling ui-toggle-item-click event.
-    root.querySelector('ui-toggle-group-item[value="b"] button').click();
+    // toggle-group-item is host-styled (the host element carries the
+    // visual class + data-state, so CSS sibling selectors like
+    // data-[spacing=0]:first:rounded-l-md target it correctly). Click
+    // events go to the host's slot, which has the @click handler.
+    root.querySelector('ui-toggle-group-item[value="b"]').click();
     await tick();
     assert.equal(tg.getAttribute('value'), 'b');
     assert.equal(detail?.value, 'b');

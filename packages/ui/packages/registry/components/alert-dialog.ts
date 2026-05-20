@@ -134,7 +134,7 @@ export class UiAlertDialog extends WebComponent {
   render() {
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => {
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
         if (this.open) this._setup();
         else this._teardown();
       });
@@ -219,7 +219,9 @@ export class UiAlertDialogContent extends WebComponent {
     ><slot></slot></div>`;
   }
 
+  // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _parent(): UiAlertDialog | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-alert-dialog') as UiAlertDialog | null;
   }
 }

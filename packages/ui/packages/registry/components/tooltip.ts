@@ -90,7 +90,7 @@ export class UiTooltip extends WebComponent {
     // call from render() body itself.
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => this._syncContent());
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._syncContent());
     }
     return html`<div
       data-slot="tooltip"

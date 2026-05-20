@@ -113,7 +113,7 @@ export class UiDropdownMenu extends WebComponent {
   render() {
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => this._afterRender());
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._afterRender());
     }
     return html`<div data-slot="dropdown-menu" data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
@@ -442,7 +442,7 @@ export class UiDropdownMenuSub extends WebComponent {
   render() {
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => this._afterRender());
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._afterRender());
     }
     return html`<div
       data-slot="dropdown-menu-sub"
@@ -503,7 +503,9 @@ export class UiDropdownMenuSub extends WebComponent {
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
 export class UiDropdownMenuSubTrigger extends WebComponent {
+  // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _sub(): UiDropdownMenuSub | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
   }
 

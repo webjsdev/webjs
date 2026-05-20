@@ -39,7 +39,7 @@
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html, unsafeHTML } from '@webjskit/core';
 import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------
@@ -175,7 +175,7 @@ export class UiDialog extends WebComponent {
     // (the named slot projection cascade).
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => {
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
         if (this.open) this._setup();
         else this._teardown();
         this.dispatchEvent(
@@ -267,16 +267,24 @@ export class UiDialogContent extends WebComponent {
     >
       <slot></slot>
       ${wantClose
-        ? html`<ui-dialog-close
+        ? html`<button
+            type="button"
             aria-label="Close"
+            data-slot="dialog-close"
             class=${dialogCloseButtonClass()}
-            .innerHTML=${DIALOG_CLOSE_X_SVG}
-          ></ui-dialog-close>`
+            @click=${this._onAutoCloseClick}
+          >${unsafeHTML(DIALOG_CLOSE_X_SVG)}</button>`
         : ''}
     </div>`;
   }
 
+  _onAutoCloseClick = (): void => {
+    (this.closest('ui-dialog') as UiDialog | null)?.hide();
+  };
+
+  // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _parent(): UiDialog | null {
+    if (typeof this.closest !== 'function') return null;
     return this.closest('ui-dialog') as UiDialog | null;
   }
 }

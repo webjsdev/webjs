@@ -66,7 +66,7 @@ export class UiHoverCard extends WebComponent {
   render() {
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
-      requestAnimationFrame(() => this._syncContent());
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._syncContent());
     }
     return html`<div
       data-slot="hover-card"
