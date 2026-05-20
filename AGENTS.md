@@ -298,16 +298,22 @@ class StudentCard extends WebComponent {
 | `hasChanged` | strict `!==` | Custom change detection |
 | `converter` | type-based | Custom attribute ↔ property serialization |
 
-### Lifecycle (less-is-more)
+### Lifecycle (lit-aligned)
 
-| Hook | When | Use for |
-|---|---|---|
-| controllers' `hostUpdate()` | Before render | Pre-render logic |
-| `render()` | Render phase | Return `TemplateResult` |
-| controllers' `hostUpdated()` | After render | Post-render logic |
-| `firstUpdated()` | After first render only | One-time DOM setup |
+Every update cycle runs these hooks in order. All receive a `changedProperties` Map: keys are property names (or `'state'` for setState patches), values are the previous value before the change.
 
-No `shouldUpdate`/`willUpdate`/`updated`/`changedProperties`. Compute inputs at top of `render()`. Use `queueMicrotask()` after `setState()` for post-render side effects.
+| # | Hook | When | Use for |
+|---|---|---|---|
+| 1 | `shouldUpdate(changedProperties)` | Update queued | Return `false` to skip this update. Default `true`. |
+| 2 | `willUpdate(changedProperties)` | Pre-render | Compute derived values. Property assignments fold into THIS cycle without re-triggering. |
+| 3 | controllers' `hostUpdate()` | Pre-render | Controller pre-render logic |
+| 4 | `update(changedProperties)` | Render phase | Default calls `render()` + commits. Override to wrap or short-circuit (rare). |
+| 5 | controllers' `hostUpdated()` | Post-render | Controller post-render logic |
+| 6 | `firstUpdated(changedProperties)` | After first render only | One-time DOM setup |
+| 7 | `updated(changedProperties)` | After every render | Post-render DOM work conditional on what changed |
+| 8 | `updateComplete` Promise | Resolves last | `await el.updateComplete` after triggering an update |
+
+The `update()` body has an error boundary that calls `renderError(error)` if `render()` throws. All hooks are **client-only**; SSR doesn't call them (SSR walker calls `instance.render()` directly).
 
 **ReactiveControllers** are composable lifecycle logic via `host.addController(this)`. Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers. See `agent-docs/components.md`.
 

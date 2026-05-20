@@ -369,3 +369,246 @@ test('default hasChanged treats NaN !== NaN correctly (via strict inequality sem
   el.n = NaN;   // same NaN, but strict inequality says changed
   assert.equal(updates, 2);
 });
+
+/* -------------------- Phase 2: lit lifecycle hooks -------------------- */
+
+test('changedProperties: property setter records (name, oldValue) entries', async () => {
+  class C extends WebComponent {
+    static properties = { count: { type: Number } };
+    constructor() { super(); this.count = 0; this._captured = null; }
+    updated(cp) { this._captured = new Map(cp); }
+    render() { return html``; }
+  }
+  C.register('cp-prop');
+  const el = document.createElement('cp-prop');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  el._captured = null;
+
+  el.count = 5;
+  await el.updateComplete;
+  assert.equal(el._captured.has('count'), true);
+  assert.equal(el._captured.get('count'), 0);
+});
+
+test('changedProperties: setState records a "state" entry with the prior bag', async () => {
+  class C extends WebComponent {
+    constructor() { super(); this.state = { n: 1 }; this._captured = null; }
+    updated(cp) { this._captured = new Map(cp); }
+    render() { return html``; }
+  }
+  C.register('cp-state');
+  const el = document.createElement('cp-state');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  el._captured = null;
+
+  el.setState({ n: 2 });
+  await el.updateComplete;
+  assert.equal(el._captured.has('state'), true);
+  assert.deepEqual(el._captured.get('state'), { n: 1 });
+  assert.deepEqual(el.state, { n: 2 });
+});
+
+test('shouldUpdate returning false skips update and updated() hook', async () => {
+  let renders = 0, updatedCalls = 0;
+  class C extends WebComponent {
+    static properties = { val: { type: Number } };
+    constructor() { super(); this.val = 0; }
+    shouldUpdate(_cp) { return this.val < 5; }
+    updated(_cp) { updatedCalls++; }
+    render() { renders++; return html``; }
+  }
+  C.register('su-gate');
+  const el = document.createElement('su-gate');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  const baselineRenders = renders;
+  const baselineUpdated = updatedCalls;
+
+  el.val = 10;                             // shouldUpdate returns false
+  await el.updateComplete;
+  assert.equal(renders, baselineRenders);  // no render
+  assert.equal(updatedCalls, baselineUpdated); // no updated() either
+});
+
+test('willUpdate runs pre-render and can set properties without re-triggering', async () => {
+  let willRuns = 0, updateRuns = 0;
+  class C extends WebComponent {
+    static properties = {
+      a: { type: Number },
+      b: { type: Number, state: true },
+    };
+    constructor() { super(); this.a = 0; this.b = -1; }
+    willUpdate(cp) {
+      willRuns++;
+      if (cp.has('a')) this.b = this.a * 2;  // mutate during willUpdate
+    }
+    updated() { updateRuns++; }
+    render() { return html``; }
+  }
+  C.register('wu-fold');
+  const el = document.createElement('wu-fold');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  const wuBaseline = willRuns;
+  const updBaseline = updateRuns;
+
+  el.a = 7;
+  await el.updateComplete;
+  assert.equal(el.b, 14);
+  assert.equal(willRuns, wuBaseline + 1);
+  // Single render even though willUpdate set `b`.
+  assert.equal(updateRuns, updBaseline + 1);
+});
+
+test('updated runs after every render commit; firstUpdated runs once', async () => {
+  let firsts = 0, updates = 0;
+  class C extends WebComponent {
+    static properties = { v: { type: Number } };
+    constructor() { super(); this.v = 0; }
+    firstUpdated(_cp) { firsts++; }
+    updated(_cp) { updates++; }
+    render() { return html``; }
+  }
+  C.register('fu-vs-u');
+  const el = document.createElement('fu-vs-u');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  assert.equal(firsts, 1);
+  assert.equal(updates, 1);
+
+  el.v = 1;
+  await el.updateComplete;
+  assert.equal(firsts, 1);  // still 1
+  assert.equal(updates, 2);
+
+  el.v = 2;
+  await el.updateComplete;
+  assert.equal(updates, 3);
+});
+
+test('firstUpdated receives changedProperties Map with initial values', async () => {
+  let captured = null;
+  class C extends WebComponent {
+    static properties = { n: { type: Number } };
+    constructor() { super(); this.n = 42; }
+    firstUpdated(cp) { captured = new Map(cp); }
+    render() { return html``; }
+  }
+  C.register('fu-cp');
+  const el = document.createElement('fu-cp');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  assert.equal(captured.has('n'), true);
+  assert.equal(captured.get('n'), undefined);  // initial oldValue
+});
+
+test('update() override can short-circuit the commit', async () => {
+  let renderCalls = 0;
+  class C extends WebComponent {
+    static properties = { n: { type: Number } };
+    constructor() { super(); this.n = 0; this._allowRender = true; }
+    update(cp) {
+      if (this._allowRender) super.update?.(cp);
+    }
+    render() { renderCalls++; return html``; }
+  }
+  // super.update calls render+commit. Since we're not actually calling super,
+  // we need to manually invoke render to count it. Simpler: just check the
+  // override is called.
+  let updateCalls = 0;
+  class D extends WebComponent {
+    static properties = { n: { type: Number } };
+    constructor() { super(); this.n = 0; }
+    update(cp) { updateCalls++; /* no render */ }
+    render() { renderCalls++; return html``; }
+  }
+  D.register('upd-override');
+  const el = document.createElement('upd-override');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  assert.equal(updateCalls, 1);
+  assert.equal(renderCalls, 0);  // override didn't call super, so render never ran
+});
+
+test('updateComplete resolves after the next render', async () => {
+  class C extends WebComponent {
+    static properties = { v: { type: Number } };
+    constructor() { super(); this.v = 0; this._renderedV = null; }
+    updated() { this._renderedV = this.v; }
+    render() { return html``; }
+  }
+  C.register('uc-resolve');
+  const el = document.createElement('uc-resolve');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  assert.equal(el._renderedV, 0);
+
+  el.v = 99;
+  const settled = await el.updateComplete;
+  assert.equal(el._renderedV, 99);
+  assert.equal(typeof settled, 'boolean');
+});
+
+test('getUpdateComplete can be overridden to chain additional async work', async () => {
+  let extraAwaited = false;
+  class C extends WebComponent {
+    static properties = { v: { type: Number } };
+    constructor() { super(); this.v = 0; }
+    async getUpdateComplete() {
+      const r = await super.getUpdateComplete();
+      await new Promise(res => setTimeout(res, 1));
+      extraAwaited = true;
+      return r;
+    }
+    render() { return html``; }
+  }
+  C.register('uc-override');
+  const el = document.createElement('uc-override');
+  document.body.appendChild(el);
+  await el.updateComplete;
+  assert.equal(extraAwaited, true);
+});
+
+test('hook order: shouldUpdate → willUpdate → hostUpdate → update → hostUpdated → firstUpdated → updated', async () => {
+  const order = [];
+  class C extends WebComponent {
+    static properties = { n: { type: Number } };
+    constructor() { super(); this.n = 0; }
+    shouldUpdate() { order.push('shouldUpdate'); return true; }
+    willUpdate() { order.push('willUpdate'); }
+    update(cp) { order.push('update'); super.update?.(cp); }
+    firstUpdated() { order.push('firstUpdated'); }
+    updated() { order.push('updated'); }
+    render() { order.push('render'); return html``; }
+  }
+  const controller = {
+    hostUpdate() { order.push('hostUpdate'); },
+    hostUpdated() { order.push('hostUpdated'); },
+  };
+  C.register('hook-order');
+  const el = document.createElement('hook-order');
+  el.addController(controller);
+  document.body.appendChild(el);
+  await el.updateComplete;
+
+  // Default update() calls render() internally, but we override here
+  // and DO call super.update?.(cp) which invokes the default impl.
+  // The default impl is defined on the prototype; super.update?.(cp) on
+  // a direct WebComponent subclass calls the WebComponent.prototype.update
+  // method which does the render+commit.
+  assert.deepEqual(
+    order,
+    [
+      'shouldUpdate',
+      'willUpdate',
+      'hostUpdate',
+      'update',
+      'render',
+      'hostUpdated',
+      'firstUpdated',
+      'updated',
+    ],
+  );
+});
