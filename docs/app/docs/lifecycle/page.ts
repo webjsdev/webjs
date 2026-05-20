@@ -5,64 +5,85 @@ export const metadata = { title: 'Lifecycle Hooks | webjs' };
 export default function Lifecycle() {
   return html`
     <h1>Lifecycle Hooks</h1>
-    <p>webjs follows a <strong>"less is more"</strong> philosophy for lifecycle hooks. Only hooks with no native workaround are included. AI agents don't need abstractions for things that a few lines of code can handle.</p>
+    <p>webjs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic webjs code without framework-specific translation.</p>
 
     <h2>The Update Cycle</h2>
-    <p>When <code>setState()</code> or a property change triggers a re-render:</p>
+    <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names (or <code>'state'</code> for <code>setState</code> patches) and values are the previous value before the change.</p>
     <ol>
+      <li><code>shouldUpdate(changedProperties)</code> returns <code>false</code> to skip this update entirely.</li>
+      <li><code>willUpdate(changedProperties)</code> is the pre-render hook. Safe to set reactive properties; assignments fold into this cycle.</li>
       <li>Controllers' <code>hostUpdate()</code></li>
-      <li><code>render()</code> + DOM commit (with error boundary)</li>
+      <li><code>update(changedProperties)</code> is the render-and-commit step. The default implementation calls <code>render()</code> and commits to the render root.</li>
       <li>Controllers' <code>hostUpdated()</code></li>
-      <li><code>firstUpdated()</code> runs once, on the first render only</li>
+      <li><code>firstUpdated(changedProperties)</code> runs once, on the first render only.</li>
+      <li><code>updated(changedProperties)</code> runs after every render commit.</li>
+      <li><code>updateComplete</code> Promise resolves.</li>
     </ol>
 
     <h2>render()</h2>
-    <p>The core of every component. Returns a <code>TemplateResult</code> via the <code>html</code> tag. Called on every state change.</p>
+    <p>The template the component should produce for the current state. Returns a <code>TemplateResult</code> via the <code>html</code> tag.</p>
     <pre>render() {
-  // Derived state goes here, before the template:
-  const filtered = this.state.items.filter(i =&gt; i.active);
-  const count = filtered.length;
-
   return html\`
-    &lt;p&gt;\${count} active items&lt;/p&gt;
-    &lt;ul&gt;\${filtered.map(i =&gt; html\`&lt;li&gt;\${i.name}&lt;/li&gt;\`)}&lt;/ul&gt;
+    &lt;p&gt;\${this.filtered.length} active items&lt;/p&gt;
+    &lt;ul&gt;\${this.filtered.map(i =&gt; html\`&lt;li&gt;\${i.name}&lt;/li&gt;\`)}&lt;/ul&gt;
   \`;
 }</pre>
-    <p>No <code>willUpdate</code> needed. Compute derived state at the top of <code>render()</code>.</p>
 
-    <h2>setState(patch)</h2>
-    <p>Shallow-merges the patch into <code>this.state</code> and schedules a microtask-batched re-render. Multiple <code>setState</code> calls within the same microtask are batched into one render.</p>
-    <pre>this.setState({ count: this.state.count + 1 });
-this.setState({ name: 'updated' });
-// Only one render happens</pre>
+    <h2>shouldUpdate(changedProperties)</h2>
+    <p>Decide whether to render at all. Default returns <code>true</code>. Use to skip expensive renders when only irrelevant properties changed.</p>
+    <pre>shouldUpdate(cp) {
+  return cp.has('items') || cp.has('mode');
+}</pre>
 
-    <h2>firstUpdated()</h2>
-    <p>Called once after the first render. The shadow DOM is populated, so you can query elements. Use for one-time setup: focus, measurements, third-party library init.</p>
+    <h2>willUpdate(changedProperties)</h2>
+    <p>Compute derived values from inputs before <code>render()</code> reads them. Property assignments inside <code>willUpdate</code> fold into the current cycle without triggering another update.</p>
+    <pre>willUpdate(cp) {
+  if (cp.has('items')) {
+    this.totalCount = this.items.length;
+  }
+}</pre>
+
+    <h2>update(changedProperties)</h2>
+    <p>The render-and-commit step. The default implementation calls <code>render()</code> and commits to the render root. Override only when you need to wrap or short-circuit the commit. Most users override <code>render()</code> instead.</p>
+
+    <h2>updated(changedProperties)</h2>
+    <p>Post-render DOM work. Runs after every commit (both the first render and all subsequent ones). Inspect <code>changedProperties</code> to branch on what changed this cycle. This is the right place for ad-hoc DOM work that previously needed <code>requestAnimationFrame</code> shims.</p>
+    <pre>updated(cp) {
+  if (cp.has('open') && this.open) {
+    this.querySelector('input')?.focus();
+  }
+}</pre>
+
+    <h2>firstUpdated(changedProperties)</h2>
+    <p>Runs once, after the first render. Use for one-time DOM-dependent setup: focus, measurements, third-party library init on a DOM node. The <code>changedProperties</code> Map on the first render contains every reactive property that has a value, with <code>undefined</code> as the old value.</p>
     <pre>firstUpdated() {
-  this.shadowRoot.querySelector('input')?.focus();
+  this.shadowRoot?.querySelector('input')?.focus();
   this._chart = new Chart(this.shadowRoot.querySelector('canvas'));
 }</pre>
-    <p><code>connectedCallback</code> fires <em>before</em> the first render, so shadow children don't exist there yet. That's why <code>firstUpdated</code> exists.</p>
+    <p><code>connectedCallback</code> fires <em>before</em> the first render, so shadow children don't exist there yet. <code>firstUpdated</code> is the post-render equivalent.</p>
+
+    <h2>updateComplete (and getUpdateComplete)</h2>
+    <p>A Promise that resolves after the next render commit. <code>await el.updateComplete</code> in tests or in code that needs to read the post-render DOM after triggering an update. Override <code>getUpdateComplete()</code> to chain additional async work.</p>
+    <pre>el.count = 5;
+await el.updateComplete;
+// DOM now reflects count = 5</pre>
+
+    <h2>setState(patch)</h2>
+    <p>Shallow-merges the patch into <code>this.state</code> and schedules a microtask-batched re-render. Multiple <code>setState</code> calls within the same microtask coalesce into one render. The <code>changedProperties</code> Map includes a <code>'state'</code> entry whose old value is the previous state bag, so lifecycle hooks can detect setState invocations.</p>
+    <pre>this.setState({ count: this.state.count + 1 });
+this.setState({ name: 'updated' });
+// One render. changedProperties.has('state') is true; .get('state') is the prior bag.</pre>
+
+    <h2>requestUpdate(name, oldValue)</h2>
+    <p>Manually schedule a re-render. Optionally record a property change so hooks see it in <code>changedProperties</code>. Used by controllers and code that mutates outside the reactive property system.</p>
+    <pre>this.requestUpdate('items', oldItems);</pre>
 
     <h2>renderError(error)</h2>
-    <p>Called when <code>render()</code> throws. Return a fallback template to show instead of crashing the page.</p>
+    <p>Runs when <code>update()</code>/<code>render()</code> throws. Return a fallback template to show instead of crashing the page.</p>
     <pre>renderError(error) {
   return html\`&lt;p style="color:red"&gt;Error: \${error.message}&lt;/p&gt;\`;
 }</pre>
     <p>Without this, one broken component would crash the entire page. The default implementation renders nothing and logs to console.</p>
-
-    <h2>What's NOT included (and why)</h2>
-    <table>
-      <thead><tr><th>Hook</th><th>Native workaround</th></tr></thead>
-      <tbody>
-        <tr><td><code>shouldUpdate</code></td><td>Return early from <code>render()</code> with an if-statement</td></tr>
-        <tr><td><code>willUpdate</code></td><td>Compute at the top of <code>render()</code></td></tr>
-        <tr><td><code>updated</code></td><td>Use <code>queueMicrotask()</code> after <code>setState()</code></td></tr>
-        <tr><td><code>changedProperties</code></td><td>Track manually with <code>this._prev = {...this.state}</code></td></tr>
-        <tr><td><code>query(sel)</code></td><td><code>this.shadowRoot.querySelector(sel)</code></td></tr>
-      </tbody>
-    </table>
-    <p>These abstractions add API surface without solving problems that native code can't. Fewer hooks = fewer concepts for AI agents to choose between.</p>
 
     <h2>Native Web Component Callbacks</h2>
     <p>These are provided by <code>HTMLElement</code> itself and work as normal in webjs components:</p>
