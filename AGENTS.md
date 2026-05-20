@@ -43,141 +43,58 @@ config files that each agent reads automatically.**
 
 ### Before starting ANY work: verify and sync the branch
 
-**FIRST thing before writing any code, every time:**
+1. `git branch --show-current`. If on `main` / `master`, **STOP**. Create a feature branch: `git checkout -b feature/<task-slug>`.
+2. Verify the branch matches the task. Don't mix unrelated work.
+3. Sync with parent: `git fetch origin && git log HEAD..origin/main --oneline`. If there are upstream commits, `git rebase origin/main` before starting.
 
-1. Run `git branch --show-current` to check what branch you're on.
-2. If on `main` or `master`, **STOP. Do not edit files.** Ask the user
-   which branch to work on, or create one: `git checkout -b feature/<name>`.
-3. If on a feature branch, verify it matches the task. If the user asks
-   to "add a contact page" but you're on `fix/login-redirect`, ask before
-   proceeding. Don't mix unrelated work on the wrong branch.
-4. **Sync with parent branch.** Before making any changes, check if the
-   parent branch (usually `main`) has new commits that this branch doesn't:
-   ```
-   git fetch origin
-   git log HEAD..origin/main --oneline
-   ```
-   If there are upstream changes, rebase or merge before starting work:
-   ```
-   git rebase origin/main    # preferred: clean linear history
-   ```
-   If the rebase has conflicts, resolve them before proceeding.
-
-The Claude Code hook (`.claude/hooks/guard-branch-context.sh`) enforces
-step 2 programmatically by intercepting Edit/Write calls when on main.
-Other agents must check manually as their first action.
+Claude Code enforces step 1 via `.claude/hooks/guard-branch-context.sh` (intercepts Edit/Write when on main). Other agents check manually.
 
 ### Autonomous mode (sandbox / bypass permissions)
 
-When the user runs the agent in sandbox mode, bypass-permissions mode,
-or any mode where interactive approval is disabled, the agent MUST NOT
-ask questions or wait for permission. Instead, it should **auto-decide
-using these defaults:**
+When interactive approval is disabled, never block on questions. Auto-decide using these defaults:
 
-| Decision | Autonomous default | Rationale |
-|---|---|---|
-| On `main`, need a branch | Auto-create `feature/<task-slug>` | Never pollute main |
-| Parent branch has new commits | Auto-rebase before starting | Avoid conflicts |
-| Ready to merge | Auto-merge, no prompt | User opted into full autonomy |
-| Delete branch after merge? | **Delete** feature/fix branches, **keep** long-lived (dev, staging, release/*) | Feature branches are disposable |
-| Commit message | Auto-generate meaningful message | Never ask "what should the message be?" |
-| Tests failing | Fix them, don't ask | User expects working code |
-| Convention violations | Fix them, don't ask | User expects clean code |
+| Decision | Autonomous default |
+|---|---|
+| On `main`, need a branch | Auto-create `feature/<task-slug>` |
+| Parent has new commits | Auto-rebase before starting |
+| Ready to merge | Auto-merge, no prompt |
+| Delete branch after merge | **Delete** feature/fix branches, **keep** long-lived (dev, staging, release/*) |
+| Commit message | Auto-generate meaningful message |
+| Tests failing / conventions violated | Fix them, don't ask |
 
-**The principle:** in autonomous mode the agent should be MORE disciplined,
-not less. It follows every rule in this file but makes decisions instead
-of blocking on questions. The quality bar is the same: tests pass,
-conventions valid, docs updated, commits clean.
+The principle: autonomous mode is MORE disciplined, not less. Same quality bar (tests pass, conventions valid, docs updated, commits clean).
 
-### Code workflow (mandatory, never skip)
+### Code workflow (mandatory)
 
-Every code change MUST include the following, **automatically, without the user asking:**
+Every code change MUST include, automatically:
 
-1. **Tests.** Unit test for logic (server actions, queries, components),
-   E2E test for user-facing behaviour (pages, forms, navigation). See
-   `agent-docs/testing.md` for the test matrix. Run `webjs test` after
-   every change. Never report work as done with failing tests.
-
-2. **Documentation.** Update `AGENTS.md` when adding API surface. Update
-   `CONVENTIONS.md` when adding conventions. If the project has `docs/` or
-   `website/` directories, update them for user-facing features.
-
+1. **Tests.** Unit test for logic, E2E for user-facing behaviour. See `agent-docs/testing.md`. Run `webjs test`; never report work done with failing tests.
+2. **Documentation.** Update `AGENTS.md` for new API surface, `CONVENTIONS.md` for new conventions, `docs/` or `website/` for user-facing features.
 3. **Convention validation.** Run `webjs check` and fix violations.
 
-### Git workflow (mandatory, never skip)
+### Git workflow (mandatory)
 
-**The model:** Always work on a feature branch. On a feature branch,
-commit and push freely with no permissions needed. The only gate is
-merging back into main, which requires user approval (unless in
-bypass/autonomous mode).
+The model: always work on a feature branch. Commit + push freely there. The only gate is merging back into main (requires user approval unless in bypass mode).
 
-1. **Create a feature branch first.** Before any code change:
-   `git checkout -b feature/<task-slug>`. Never edit directly on main.
-2. **Commit per logical unit, not at the end.** A logical unit is
-   one feature, one fix, one rename, one doc rewrite. As soon as a
-   unit is complete (tests pass, the change makes sense in
-   isolation), commit it. Do not pile multiple logical changes into
-   one commit. If you find yourself with 5+ unstaged files spanning
-   different concerns, you already waited too long. Push after each
-   commit so the remote stays in sync. Scaffolded apps ship hook
-   coverage for Claude Code (`PostToolUse`), Gemini CLI
-   (`AfterTool`), Cursor 1.7+ (`afterFileEdit`), and OpenCode
-   (`tool.execute.after` TS plugin), all firing at threshold 4.
-   Other agents (Windsurf, Copilot, Antigravity) fall back to the
-   text rules in this file and `.cursorrules` / `.windsurfrules` /
-   `copilot-instructions.md`. The framework repo itself uses the
-   Claude Code hook only.
-3. **Meaningful commit messages.** Describe what changed and why. Imperative
-   mood, under 72 chars on the first line. Body explains the reason,
-   not the diff (the diff is right there).
-4. **No AI attribution in commits.** NEVER add `Co-Authored-By: Claude`,
-   `Generated by AI`, `AI-assisted`, or any similar trailer or prefix.
-5. **Pull requests via the GitHub CLI, always.** Create a PR for every
-   feature branch with `gh pr create`. When the user asks to "merge to
-   main" (or any equivalent phrasing), the workflow is ALWAYS:
-   `gh pr create` → confirm with user → `gh pr merge`. Never run a
-   local `git merge` / `git push origin main` to land work on main,
-   even when the local clone has permission to push. This keeps the
-   merge auditable, runs branch protections + CI, and produces a real
-   PR record.
-6. **Never push to main.** Always push to the feature branch and create a PR.
-7. **NEVER merge without user permission.** Before merging ANY branch into
-   ANY other, ask exactly:
-
+1. **Feature branch first.** `git checkout -b feature/<task-slug>`. Never edit on main.
+2. **Commit per logical unit.** One feature, one fix, one rename, one doc rewrite. As soon as a unit is complete and tests pass, commit it. If you have 5+ unstaged files spanning different concerns, you waited too long. Push after each commit. Scaffolded apps ship hook coverage for Claude Code (`PostToolUse`), Gemini CLI (`AfterTool`), Cursor 1.7+ (`afterFileEdit`), and OpenCode (`tool.execute.after` TS plugin), all firing at threshold 4. Windsurf / Copilot / Antigravity fall back to the text rules in this file plus `.cursorrules` / `.windsurfrules` / `copilot-instructions.md`. The framework repo itself uses the Claude Code hook only.
+3. **Meaningful commit messages.** Imperative mood, under 72 chars; body explains *why*, not the diff.
+4. **No AI attribution in commits.** Never add `Co-Authored-By: Claude`, `Generated by AI`, or similar.
+5. **PRs via `gh`, always.** When the user says "merge to main", the workflow is ALWAYS `gh pr create` → confirm → `gh pr merge`. Never run a local `git merge` + `git push origin main`, even when permitted.
+6. **Never push to main.** Always push to the feature branch.
+7. **Never merge without permission.** Ask exactly:
    > Ready to merge `<branch>` into `<target>`?
    > After merging, should `<branch>` be **deleted** or **kept**?
-
    Wait for explicit approval AND the delete/keep preference.
 8. **Run tests before committing.** `webjs test` must pass.
-
-### What "automatically" means, a concrete example
-
-When a user says "add a contact page", the agent delivers ALL of this
-without being asked:
-
-```
-app/contact/page.ts                            ← the page
-modules/contact/actions/send-message.server.ts ← the server action
-modules/contact/types.ts                       ← type definitions
-test/unit/contact.test.ts                      ← unit test for the action
-test/e2e/contact.test.ts                       ← E2E test for the form flow
-AGENTS.md                                      ← updated if new API/conventions
-docs/app/docs/contact/page.ts                  ← doc page (if docs/ exists)
-```
-
-Plus: a git commit with a meaningful message, tests passing, conventions valid.
 
 ---
 
 ## Working in the webjs framework repo itself
 
-When editing the framework monorepo (this repo, not a scaffolded app):
-**`packages/` is plain `.js` with JSDoc. Never add `.ts` files there.**
-The framework ships buildless: source in `node_modules/` must equal source
-that runs. TypeScript is fine in `examples/`, `docs/`, `website/`.
+When editing the framework monorepo (this repo, not a scaffolded app): **`packages/` is plain `.js` with JSDoc. Never add `.ts` files there.** The framework ships buildless. TypeScript is fine in `examples/`, `docs/`, `website/`.
 
-See `agent-docs/framework-dev.md` for monorepo commands, workspace
-package layout, reference codebases, and per-feature update checklists.
+See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, reference codebases, and per-feature update checklists.
 
 ---
 
@@ -185,77 +102,35 @@ package layout, reference codebases, and per-feature update checklists.
 
 An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rails.
 
-- **Sensible defaults, overridable.** Memory store for dev, Redis when
-  you configure it. HTTP caching via standard `Cache-Control` headers.
-- **Built-in essentials.** Auth, sessions, caching, cache store, rate
-  limiting, all with pluggable adapters.
+- **Sensible defaults, overridable.** Memory store in dev, Redis when configured. HTTP caching via standard `Cache-Control`.
+- **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
-- **JSDoc or TypeScript (erasable only).** Plain `.js` with JSDoc is
-  default. `.ts` / `.mts` is stripped via Node 24+'s built-in
-  `module.stripTypeScriptTypes` (whitespace replacement, byte-exact
-  position preservation, no sourcemap overhead). Requires
-  `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json, which
-  rejects `enum`, `namespace` with values, constructor parameter
-  properties, legacy decorators with `emitDecoratorMetadata`, and
-  `import = require` at edit time. If you turn the flag off and use
-  non-erasable syntax, the dev server falls back to esbuild and ships
-  inline sourcemaps for those files (slower, ~3x wire bytes). The
-  `erasable-typescript-only` convention check enforces the flag.
-- **Node 24+ required** for the default strip-types behavior.
-- **SSR + CSR by default.** Pages are server-rendered (real HTML).
-  Interactive web components render as light DOM by default. Shadow
-  DOM is opt-in via `static shadow = true` with Declarative Shadow
-  DOM SSR.
-- **Progressive enhancement is the default architecture.** Pages and
-  every web component are SSR'd. Each component's `render()` runs on
-  the server so its initial HTML is in the response. With JS disabled:
-  content reads, `<a>` links navigate, `<form>` server actions submit,
-  display-only custom elements render correctly. JavaScript is opt-in
-  *per interactive behavior*: when you add `@click=${…}`, `setState()`,
-  or any stateful logic, you're asking for JS to handle that
-  interactivity. The component's *initial* paint is HTML either way.
-  Never write features whose first paint depends on hydration, and
-  never use `fetch` + JS handlers for write-paths where a `<form>` +
-  server action would do the job.
-- **Tailwind CSS is the default styling convention.** Custom CSS still
-  works, but light-DOM components authoring CSS MUST prefix selectors
-  with the component tag.
-- **Server actions with rich types.** A `*.server.{js,ts}` file that
-  also declares `'use server'` at the top exports functions
-  importable from the client. The import is rewritten into a typed
-  RPC stub. Wire round-trips `Date`, `Map`, `Set`, `BigInt`, `Error`,
-  `TypedArray`, `Blob`, `File`, `FormData`, registered Symbols, and
-  reference cycles.
-- **Server-file source is unreachable from the browser (framework
-  invariant).** Every `.server.{js,ts}` file is source-protected by
-  the HTTP layer: the dev server re-verifies the path on every
-  request and returns either a generated RPC stub (when the file has
-  `'use server'`) or a throw-at-load stub (server-only utility) but
-  never the real source.
+- **JSDoc or erasable TypeScript.** Plain `.js` with JSDoc is default. `.ts` / `.mts` is stripped via Node 24+'s built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap). See invariant 10 + `agent-docs/typescript.md`.
+- **Node 24+ required** for default strip-types behaviour.
+- **SSR + CSR by default.** Pages are server-rendered (real HTML). Components render as light DOM by default; shadow DOM is opt-in via `static shadow = true` with Declarative Shadow DOM SSR.
+- **Progressive enhancement is the default architecture.** Pages and every web component are SSR'd. With JS disabled: content reads, `<a>` links navigate, `<form>` server actions submit, display-only custom elements render. JS is opt-in *per interactive behaviour*: adding `@click=${…}` or `setState()` requests JS for that interactivity. Never write features whose first paint depends on hydration; never use `fetch` + JS handlers for write-paths where a `<form>` + server action would do.
+- **Tailwind CSS is the default styling convention.** Custom CSS works; light-DOM components authoring CSS MUST prefix selectors with the component tag.
+- **Server actions with rich types.** A `*.server.{js,ts}` file with `'use server'` exports functions importable from the client. The import is rewritten to a typed RPC stub. Wire round-trips `Date`, `Map`, `Set`, `BigInt`, `Error`, `TypedArray`, `Blob`, `File`, `FormData`, registered Symbols, reference cycles.
+- **Server-file source is unreachable from the browser (framework invariant).** Every `.server.{js,ts}` file is source-protected by the HTTP layer: the dev server returns either a generated RPC stub (when the file has `'use server'`) or a throw-at-load stub (server-only utility), never source.
 
 ---
 
 ## Framework source: where to find it
 
-Plain JS with JSDoc lives in `node_modules/@webjskit/`. What you read
-is what runs. Reach for source when debugging:
+Plain JS with JSDoc lives in `node_modules/@webjskit/`. What you read is what runs.
 
 ```
 node_modules/@webjskit/
-  core/                 renderer, WebComponent, directives, Task, Context, router, testing
-  server/               dev + prod server, SSR, router, actions, auth, sessions, cache
-  cli/                  webjs binary
-  ts-plugin/            tsserver plugin: go-to-definition, attribute auto-complete
-  ui/                   component library + `webjs ui` CLI
+  core/        renderer, WebComponent, directives, Task, Context, router, testing
+  server/      dev + prod server, SSR, router, actions, auth, sessions, cache
+  cli/         webjs binary
+  ts-plugin/   tsserver plugin: go-to-definition, attribute autocomplete
+  ui/          component library + `webjs ui` CLI
 ```
 
-Concrete starting points. SSR pipeline → `@webjskit/server/src/ssr.js`.
-Client hydration → `@webjskit/core/src/render-client.js`. Client router
-→ `@webjskit/core/src/router-client.js`. Convention rules → `@webjskit/
-server/src/check.js`.
+Starting points: SSR pipeline → `@webjskit/server/src/ssr.js`. Client hydration → `@webjskit/core/src/render-client.js`. Client router → `@webjskit/core/src/router-client.js`. Convention rules → `@webjskit/server/src/check.js`.
 
-For UI debugging, use the Playwright MCP server (configured in
-`.claude.json`) instead of writing one-shot Bash scripts.
+For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts.
 
 ---
 
@@ -300,7 +175,7 @@ public/*                    static assets, served at /<name>
 prisma/schema.prisma        data models
 ```
 
-Every file is a plain ES module. No config required.
+Every file is a plain ES module.
 
 ---
 
@@ -310,24 +185,24 @@ Every file is a plain ES module. No config required.
 import { html, css, WebComponent, render, renderToString } from '@webjskit/core';
 ```
 
-| Export            | Purpose |
-| ----------------- | ------- |
-| `html`            | Tagged template literal → `TemplateResult`. |
-| `css`             | Tagged template literal → `CSSResult`. Use in `static styles`. |
-| `WebComponent`    | Base class for interactive components. |
-| `register(tag,C)` | Tag → class binding. Auto-called by `Class.register('tag')`. |
-| `render(v, el)`   | Client-side render into a DOM element. |
-| `renderToString`  | Server-side **async** render → HTML string with DSD. |
-| `notFound()`      | Throw to return 404 rendered via `not-found.js`. |
-| `redirect(url)`   | Throw to return 307 (default) or 308 redirect. |
-| `expose(p, fn)`   | Tag a server action ALSO reachable at a REST path. |
+| Export | Purpose |
+|---|---|
+| `html` | Tagged template literal → `TemplateResult`. |
+| `css` | Tagged template literal → `CSSResult`. Use in `static styles`. |
+| `WebComponent` | Base class for interactive components. |
+| `register(tag, C)` | Tag → class binding. Auto-called by `Class.register('tag')`. |
+| `render(v, el)` | Client-side render into a DOM element. |
+| `renderToString` | Server-side **async** render → HTML string with DSD. |
+| `notFound()` | Throw to return 404 rendered via `not-found.js`. |
+| `redirect(url)` | Throw to return 307 (default) or 308 redirect. |
+| `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. |
 | `repeat(items, k, t)` | Keyed list directive. Preserves DOM identity on reorder. |
 | `Suspense({fallback, children})` | Streaming boundary. |
-| `connectWS(url, handlers)` | Client WebSocket with auto-reconnect, JSON, queued sends. |
+| `connectWS(url, handlers)` | Client WebSocket: auto-reconnect, JSON, queued sends. |
 | `richFetch<T>(url, init?)` | Content-negotiated fetch with rich-type encoding. |
-| `navigate(url, opts?)` | Programmatic client-router nav. Pushes history. With `{replace}`, swaps in place. |
-| `revalidate(url?)` | Evict snapshot-cache for one URL or clear the whole cache. Call after server-action mutations. |
-| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region for non-layout cases. |
+| `navigate(url, opts?)` | Programmatic client-router nav. `{replace}` swaps in place. |
+| `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
+| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
 
 ### Directives, from `import { … } from '@webjskit/core/directives'`
 
@@ -353,17 +228,17 @@ page functions (server).
 
 ### `html` expression prefixes
 
-| Syntax            | Meaning |
-| ----------------- | ------- |
+| Syntax | Meaning |
+|---|---|
 | `<div>${x}</div>` | Text child (primitives, arrays, `TemplateResult`s). |
-| `class=${x}`      | Attribute. Value stringified and HTML-escaped. SSR-safe. |
-| `@click=${fn}`    | Event listener. Client-only by design (no event loop on the server). Drops at SSR. |
-| `.value=${v}`     | DOM property (not attribute). On custom elements, round-trips through SSR via a `data-webjs-prop-*` side-channel attribute (wire serializer handles Array/Object/Date/Map/Set/BigInt). On native elements, drops at SSR (use the attribute form for SSR-visible initial values). |
-| `?disabled=${b}`  | Boolean attribute. Present iff value is truthy. SSR-safe. |
+| `class=${x}` | Attribute. Stringified and HTML-escaped. SSR-safe. |
+| `@click=${fn}` | Event listener. Client-only (no server event loop). Drops at SSR. |
+| `.value=${v}` | DOM property. On custom elements, round-trips through SSR via `data-webjs-prop-*` (wire serializer handles Array/Object/Date/Map/Set/BigInt). On native elements, drops at SSR (use the attribute form for SSR-visible initial values). |
+| `?disabled=${b}` | Boolean attribute. Present iff truthy. SSR-safe. |
 
 Event/property/boolean-prefixed attributes **must be unquoted**.
 
-**SSR coverage matrix.** Every `html` hole produces the same output server-side and client-side, with two intentional exceptions: `@event` listeners (no server event loop) and `.prop` on native elements (no SSR walker for native tags). For custom elements, the SSR walker reads `data-webjs-prop-*` before calling `instance.render()`; the client renderer applies and strips the same attribute on `connectedCallback`. Net result: `<my-comp .data=${richObject}>` works end-to-end, including the page-fetches-data-passes-to-component pattern.
+**SSR coverage matrix.** Every `html` hole produces the same output server and client, with two exceptions: `@event` listeners (no server event loop) and `.prop` on native elements (no SSR walker for native tags). For custom elements, the SSR walker reads `data-webjs-prop-*` before `instance.render()`; the client renderer applies and strips the same attribute on `connectedCallback`. Net result: `<my-comp .data=${richObject}>` works end-to-end.
 
 ---
 
@@ -395,10 +270,7 @@ Declared attribute changes auto-trigger re-render.
 
 ### Typed props in TypeScript via the `declare` pattern
 
-The framework installs reactive getter/setter on `this` via
-`Object.defineProperty`. A `student: Student = { … }` class-field
-initializer compiles to `[[Define]]` semantics that overwrite the
-accessor AFTER `super()`, silently breaking reactivity. Use `declare`:
+The framework installs reactive getter/setter on `this` via `Object.defineProperty`. A `student: Student = { … }` class-field initializer compiles to `[[Define]]` semantics that overwrite the accessor AFTER `super()`, silently breaking reactivity. Use `declare`:
 
 ```ts
 class StudentCard extends WebComponent {
@@ -433,56 +305,22 @@ class StudentCard extends WebComponent {
 | controllers' `afterRender()` | After render | Post-render logic |
 | `firstUpdated()` | After first render only | One-time DOM setup |
 
-No `shouldUpdate`/`willUpdate`/`updated`/`changedProperties`. Compute
-inputs at top of `render()`. Use `queueMicrotask()` after `setState()`
-for post-render side effects.
+No `shouldUpdate`/`willUpdate`/`updated`/`changedProperties`. Compute inputs at top of `render()`. Use `queueMicrotask()` after `setState()` for post-render side effects.
 
-**ReactiveControllers** are composable lifecycle logic via `host.addController(this)`.
-Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers.
-See `agent-docs/components.md` for the full pattern.
+**ReactiveControllers** are composable lifecycle logic via `host.addController(this)`. Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers. See `agent-docs/components.md`.
 
-### SSR-safe state defaults (progressive enhancement)
+### SSR-safe state (progressive enhancement)
 
-The SSR pipeline does this for every web component on a page (see
-`packages/core/src/render-server.js:229-293` `injectDSD`):
+The SSR pipeline runs the constructor, applies attributes, calls `instance.render()`, and inlines the result. **It does NOT call `connectedCallback`, `firstUpdated`, or any browser-only hook.** Those run after script load.
 
-1. `new Cls()` runs the constructor
-2. applies the element's attributes to the instance
-3. calls `instance.render()`, synchronously or by `await`ing the Promise
-4. inlines the rendered HTML as the element's children (light DOM) or
-   wraps it in `<template shadowrootmode="open">…</template>` (shadow DOM)
+Rules:
 
-**It does NOT call `connectedCallback`, `firstUpdated`, or any other
-browser-only lifecycle hook.** Those run only after the script loads
-in the browser.
+- **Defaults for first paint go in the constructor** (after `super()`).
+- **Browser-only data** (localStorage, viewport, `navigator.*`, `matchMedia`) goes in `connectedCallback`, then `setState` to refine.
+- **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
+- **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
-The rule for AI agents writing components:
-
-- **Defaults that should appear in the first paint go in the
-  constructor.** Set `this.state = { … }` and `this.someProp = default`
-  in `constructor()` after `super()`. The SSR pipeline uses these
-  exact values for the first render.
-- **Browser-only data** (a user's `localStorage`, viewport size,
-  online status, timezone, current scroll position, `navigator.userAgent`,
-  `matchMedia(...)`) goes in `connectedCallback`. Read the value, then
-  call `setState({ … })` to refine the render. The SSR'd HTML shows the
-  sensible default. The browser refines it after hydration.
-- **Server-known data** (session, accept-language, theme cookie, the
-  request URL) goes through the page function. Pass it down as a
-  prop or attribute on the component. SSR applies attributes BEFORE
-  calling `render()`, so the first paint has the right value with zero
-  flash.
-- **For values where flicker is unacceptable** (theme color, RTL
-  direction), use a synchronous inline `<script>` in the root layout's
-  `<head>` to set the final value on `document.documentElement` before
-  custom elements upgrade. CSS reads from that attribute and paints
-  once. See the bootstrap script in scaffolded `app/layout.ts`.
-
-**Anti-pattern (never write this):** a component whose first paint is
-empty / placeholder because the real data is fetched in
-`connectedCallback` or `firstUpdated`. That defeats SSR and breaks
-progressive enhancement. Fetch on the server in the page function
-instead, and pass the data down.
+**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth.
 
 ### Light DOM (default) vs Shadow DOM (opt-in)
 
@@ -492,23 +330,16 @@ Light DOM is default because global CSS and Tailwind classes apply directly.
 |---|---|
 | Global / Tailwind CSS, simple composition | **Light DOM** (default) |
 | `static styles = css\`\`` scoped styles | Shadow DOM (`static shadow = true`) |
-| `<slot>` content projection | **Either.** Same `<slot>` / `<slot name="x">` / fallback / `assignedNodes` / `slotchange` API in both modes. Light DOM uses framework projection; shadow DOM uses native. |
+| `<slot>` projection | **Either.** Same API; light DOM uses framework projection. |
 | Third-party isolation | Shadow DOM |
 
-**Light-DOM CSS-prefix rule (invariant):** if a light-DOM component
-authors custom CSS, every class selector MUST be prefixed with the
-component's tag name (`.my-card__body` or `my-card .body`). Prefer
-Tailwind utilities first. They're unique by construction.
+**Light-DOM CSS-prefix rule (invariant):** if a light-DOM component authors custom CSS, every class selector MUST be prefixed with the tag name (`.my-card__body` or `my-card .body`). Prefer Tailwind utilities first; they're unique by construction.
 
-See `agent-docs/components.md` for the prefix patterns and
-`agent-docs/styling.md` for vanilla-CSS-only opt-out.
+See `agent-docs/components.md` for prefix patterns and `agent-docs/styling.md` for vanilla-CSS-only opt-out.
 
 ### Editor intelligence
 
-Add `@webjskit/ts-plugin` to `tsconfig.json` `plugins`. It ships with
-`ts-lit-plugin` bundled. Gets you: attribute autocomplete, type-checked
-attribute values, go-to-definition from `<my-counter>` to the class,
-suppression of "Unknown tag" warnings.
+Add `@webjskit/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugin`: attribute autocomplete, type-checked attribute values, go-to-definition from `<my-counter>` to the class, no "Unknown tag" noise.
 
 ---
 
@@ -518,85 +349,81 @@ suppression of "Unknown tag" warnings.
 
 - Default export is a possibly-async function receiving `{ params, searchParams, url }`.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
-- Named exports: `metadata` (static object), `generateMetadata(ctx)` (async function, takes precedence).
-- See `agent-docs/metadata.md` for the full metadata field reference.
-- Page modules also load on the client (so transitively imported components register). Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything that needs Node APIs) goes only in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
+- Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). See `agent-docs/metadata.md`.
+- Page modules also load on the client so transitively imported components register. Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything needing Node APIs) goes only in `.server.{js,ts}`, `route.ts`, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
 
 ### Layouts (`app/**/layout.{js,ts}`)
 
-- Default export receives `{ children, params, searchParams, url }`.
-- Must embed `children` in returned template.
-- Nest by folder.
+- Default export receives `{ children, params, searchParams, url }`. Must embed `children`. Nest by folder.
 
 **Document shell ownership:**
 
 - By default the framework auto-emits `<!doctype><html lang="en"><head></head><body>` around every composition.
-- The **root layout** (`app/layout.{js,ts}` exactly) MAY optionally write its own `<!doctype><html><head></head><body>` to override `<html>`/`<body>` attributes (lang, dir, theme, classes). The framework splices required tags (importmap, modulepreload, title, meta) into the user's `<head>` alongside what's there.
-- **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Enforced by `webjs check`'s `shell-in-non-root-layout` rule.
+- The **root layout** (`app/layout.{js,ts}` exactly) MAY optionally write its own `<!doctype><html><head></head><body>` to override `<html>`/`<body>` attributes. The framework splices required tags (importmap, modulepreload, title, meta) into the user's `<head>`.
+- **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Enforced by the `shell-in-non-root-layout` rule.
 - `metadata` exports merge across nested layouts (deepest wins).
 
 ### Error boundaries (`app/**/error.{js,ts}`)
 
 - Default export receives `{ error, ...ctx }`. Returns a `TemplateResult`.
-- Catches errors thrown during sibling-page / deeper-segment render (not notFound/redirect, which are sentinels).
-- Innermost boundary wins. If it throws, next-outer catches.
-- In prod, only `error.message` is sent. Never the stack.
+- Catches errors from sibling-page / deeper-segment render (not notFound/redirect, which are sentinels).
+- Innermost wins; if it throws, next-outer catches.
+- In prod only `error.message` is sent, never the stack.
 
 ### Loading states (`app/**/loading.{js,ts}`)
 
-Framework wraps the sibling page in `Suspense({ fallback: <your loading>, children: <async page> })`. The fallback flushes immediately while the page function resolves.
+Framework wraps the sibling page in `Suspense({ fallback: <loading>, children: <async page> })`. Fallback flushes immediately while the page function resolves.
 
 ### Metadata routes
 
-`sitemap.{js,ts}`, `robots.{js,ts}`, `manifest.{js,ts}`, `icon.{js,ts}`, `apple-icon.{js,ts}`, `opengraph-image.{js,ts}`, `twitter-image.{js,ts}` live at app root or static segments only (not inside `[dynamic]` folders). Each default-exports a possibly-async function.
+`sitemap.{js,ts}`, `robots.{js,ts}`, `manifest.{js,ts}`, `icon.{js,ts}`, `apple-icon.{js,ts}`, `opengraph-image.{js,ts}`, `twitter-image.{js,ts}` live at app root or static segments only (not inside `[dynamic]`). Each default-exports a possibly-async function.
 
 ### Route handlers (`app/**/route.{js,ts}`)
 
 - Export named async functions per method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. Each receives `(Request, { params })` and returns a `Response` or any value (auto-JSON).
-- Can live anywhere under `app/`. A folder cannot have both `page.js` and `route.js`.
-- **WebSocket support**: export `WS(ws, req, { params })` from the same `route.js` to turn the URL into a WebSocket endpoint. In dev mode the module is re-imported per connection, so store shared state on `globalThis`. See `agent-docs/advanced.md`.
+- A folder cannot have both `page.js` and `route.js`.
+- **WebSocket support:** export `WS(ws, req, { params })` from the same `route.js` to turn the URL into a WS endpoint. In dev the module is re-imported per connection; store shared state on `globalThis`. See `agent-docs/advanced.md`.
 
 ### Middleware (`middleware.{js,ts}`)
 
 - Optional top-level + per-segment files. Default export `async (req, next) => Response`.
 - Return a Response to short-circuit (redirect, 401). Call `next()` then post-process to add headers, log, etc.
-- Per-segment middleware applies to its subtree. Chain runs outermost → innermost.
+- Per-segment middleware applies to its subtree, outermost → innermost.
 
 ### Server actions (`**/*.server.{js,ts}` + `'use server'`)
 
-Two complementary markers describe server-side files. The combination
-determines behaviour:
+Two markers describe server-side files. The combination determines behaviour:
 
 | File | `'use server'`? | What it is |
 |---|---|---|
-| `*.server.ts` | yes | **Server action.** Source-protected by the file router AND RPC-callable: imports from client code are rewritten into RPC stubs that POST to `/__webjs/action/<hash>/<fn>`. |
-| `*.server.ts` | no | **Server-only utility.** Source-protected; browser imports get a throw-at-load stub that errors with a clear message. Use for the Prisma singleton, session helpers, password hashing, anything called only from `.server.ts` actions / `route.ts` handlers / `middleware.ts`. |
-| Plain `.ts` | yes | **Lint violation** (`use-server-needs-extension`). The directive alone is silently ignored: the file serves to the browser as plain source and exports are not RPC-callable. Rename the file to add the `.server.` infix. |
+| `*.server.ts` | yes | **Server action.** Source-protected AND RPC-callable: imports from client code are rewritten to RPC stubs that POST to `/__webjs/action/<hash>/<fn>`. |
+| `*.server.ts` | no | **Server-only utility.** Source-protected; browser imports get a throw-at-load stub. Use for the Prisma singleton, session helpers, password hashing. |
+| Plain `.ts` | yes | **Lint violation** (`use-server-needs-extension`). Directive alone is silently ignored; file serves to browser as plain source. Rename to add the `.server.` infix. |
 | Plain `.ts` | no | Browser-safe; standard behaviour. |
 
-- Server actions: export named async functions. Args + return values must round-trip through webjs's serializer.
-- **Importing from a client component IS the API.** The dev server rewrites the import into an RPC stub that POSTs to `/__webjs/action/<hash>/<fn>`.
-- **Expose as REST**: `expose('METHOD /path', fn, { validate?: parse })`. The same function powers both callers. `validate` runs only on HTTP path (direct RPC bypasses it).
+- Server actions export named async functions. Args + return values must round-trip through webjs's serializer.
+- **Importing from a client component IS the API.** The dev server rewrites the import to an RPC stub.
+- **Expose as REST:** `expose('METHOD /path', fn, { validate?: parse })`. Same function powers both callers. `validate` runs only on the HTTP path (direct RPC bypasses it).
 
 ### RPC security model
 
-- Client → action RPC: POST with `x-webjs-csrf` matching cookie issued on first SSR response. CSRF mismatch → 403.
-- Production error responses are sanitized: only `message`, never stack.
+- Client → action RPC: POST with `x-webjs-csrf` matching cookie issued on first SSR response. Mismatch → 403.
+- Production error responses are sanitized to only `message`, never stack.
 - `expose()`d REST endpoints are NOT CSRF-protected. Apply auth via middleware or per-route checks.
 
 ### `expose()` security checklist
 
 1. Authenticate every mutating endpoint (bearer/API key, explicit CSRF, or origin allow-list).
 2. Use `validate`. Never trust merged `{...query, ...params, ...body}`.
-3. Log responsibly. Never include user input or secrets in errors.
+3. Log responsibly. No user input or secrets in errors.
 4. Configure CORS narrowly.
-5. Rate-limit at the edge. webjs ships no built-in rate limiter for HTTP (use `rateLimit()` middleware, see `agent-docs/advanced.md`).
+5. Rate-limit at the edge (`rateLimit()` middleware, see `agent-docs/advanced.md`).
 
 ### Components (`components/*.{js,ts}`)
 
 - One custom element per file. Call `Class.register('tag')` at module top level.
 - Imported by pages (SSR) and/or other components.
-- **Styling convention: shadow-DOM CSS via `static styles`, not inline `style="…"` attributes.** Repeated visual chunks in pages → component whose styles live in its shadow root.
+- **Styling:** shadow-DOM CSS via `static styles` or Tailwind classes, not inline `style="…"`. Repeated visual chunks in pages → component whose styles live in its shadow root.
 
 ---
 
@@ -604,14 +431,14 @@ determines behaviour:
 
 ### Layout
 
-- **`modules/<feature>/actions/*.server.{js,ts}`** for mutations, one file per function.
-- **`modules/<feature>/queries/*.server.{js,ts}`** for reads, same shape. The split shows what mutates versus what doesn't.
-- **`modules/<feature>/components/*.{js,ts}`** for feature-owned web components. Shared UI lives in top-level `components/`.
-- **`modules/<feature>/utils/*.{js,ts}`** for pure helpers. No `'use server'`, no DB access. Use `*.server.ts` here for module-scoped server-only utilities (no RPC).
-- **`modules/<feature>/types.{js,ts}`** for JSDoc typedefs and TS types.
-- **`lib/`** for cross-cutting app-wide code:
-  - `lib/*.server.{js,ts}` for server-only infrastructure (Prisma singleton, session helpers, password hashing, external server clients). Extension marks source-protected; no `'use server'` keeps them out of the RPC registry.
-  - `lib/utils/*.{js,ts}` for browser-safe helpers grouped by concern (cn, ui helpers, formatters). Files at the root of `lib/` (like `lib/constants.ts`) carry app-wide browser-safe values.
+- **`modules/<feature>/actions/*.server.{js,ts}`** mutations, one file per function.
+- **`modules/<feature>/queries/*.server.{js,ts}`** reads, same shape.
+- **`modules/<feature>/components/*.{js,ts}`** feature-owned components. Shared UI lives in top-level `components/`.
+- **`modules/<feature>/utils/*.{js,ts}`** pure helpers. No `'use server'`, no DB access. Use `*.server.ts` for module-scoped server-only utilities (no RPC).
+- **`modules/<feature>/types.{js,ts}`** typedefs.
+- **`lib/`** cross-cutting:
+  - `lib/*.server.{js,ts}` server-only infra (Prisma singleton, session helpers, password hashing). Source-protected; no `'use server'` keeps it out of the RPC registry.
+  - `lib/utils/*.{js,ts}` browser-safe helpers by concern (cn, ui, format). Files at the root of `lib/` (like `lib/constants.ts`) carry app-wide browser-safe values.
 
 ### Return shape: the `ActionResult<T>` envelope
 
@@ -634,18 +461,15 @@ export async function POST(req: Request) {
 ### Rules
 
 - **Routes stay thin.** >~20 lines of business logic → extract into a module action.
-- **Client components import server modules via the normal import path.** webjs rewrites the import. Don't hand-write `fetch()`.
+- **Client components import server modules via the normal import path.** webjs rewrites it. Don't hand-write `fetch()`.
 - **Server-only imports stay out of components/ and page top-level graphs** except through `.server.{js,ts}` files.
-- **One module, one feature.** Modules can depend on `lib/*` and other modules' public actions/queries. Prefer their public surface over reaching into `utils/`.
+- **One module, one feature.** Prefer public actions/queries over reaching into another module's `utils/`.
 
 ---
 
-## Styling convention: Tailwind + `lib/utils/ui.ts` helpers (default)
+## Styling: Tailwind + `lib/utils/ui.ts` helpers (default)
 
-**Default stack:** Tailwind CSS browser runtime + `@theme` tokens declared
-in the root layout. Repeated class bundles → JS helpers in `lib/utils/ui.ts`
-returning `html\`...\`` fragments. They run at SSR time with no client runtime,
-no diff from inline classes.
+Tailwind CSS browser runtime + `@theme` tokens declared in the root layout. Repeated class bundles → JS helpers in `lib/utils/ui.ts` returning `` html`...` `` fragments (SSR-time, no client runtime).
 
 ```ts
 // lib/utils/ui.ts
@@ -655,60 +479,23 @@ export function rubric(label: string) {
 }
 ```
 
-When to extract: 1× inline. 2-3× identical → helper. 1-2 prop variation → parameterised helper. Radically different → keep inline.
+Extraction rule: 1× inline. 2-3× identical → helper. 1-2 prop variation → parameterised helper. Radically different → keep inline. (No `@apply`: hides utilities from the reader.)
 
-**Why not `@apply`?** Hides utilities from the reader, second source of truth. JS helpers keep the bundle visible at the definition site.
-
-Custom CSS is fully supported (no Tailwind hard dependency). Light-DOM
-components MUST follow the class-prefix rule. See `agent-docs/styling.md`
-for vanilla-CSS-only opt-out conventions (page/layout/component scope classes).
+Custom CSS is fully supported. Light-DOM components MUST follow the class-prefix rule. See `agent-docs/styling.md` for vanilla-CSS-only opt-out.
 
 ---
 
-## Client navigation: auto-magic, nothing to opt into
+## Client navigation: automatic, nothing to opt into
 
-Nested layouts auto-emit `<!--wj:children:<segment-path>-->` comment
-markers around each `${children}` interpolation. The client router
-walks both old + new DOMs for these markers and replaces only the
-inside of the deepest shared layout's children slot. **Outer-layout
-DOM identity is preserved across navigation.** Sidenav scroll, input
-values, `<details>` open state all survive without authors writing
-anything.
+Nested layouts auto-emit `<!--wj:children:<segment-path>-->` markers around each `${children}` interpolation. The client router walks both DOMs for these markers and replaces only the inside of the deepest shared layout's children slot. **Outer-layout DOM identity is preserved** (sidenav scroll, input values, `<details>` state survive).
 
-Form submissions (`<form action="..." method="...">`) ride the same
-pipeline. GET forms promote `FormData` to the query string. Non-GET
-forms send `FormData` as the request body and clear the snapshot cache
-on success (since other URLs may now reflect stale state). Forms that
-already `e.preventDefault()` in their `@submit` handler (e.g.
-server-action RPC) are untouched. `data-no-router` opts out per form
-or per submitter.
+Form submissions (`<form action method>`) ride the same pipeline. GET forms promote `FormData` to the query string. Non-GET forms send `FormData` as body and clear the snapshot cache on success. Forms that already `e.preventDefault()` in `@submit` are untouched. `data-no-router` opts out.
 
-Wire-byte optimization is also automatic: the router sends an
-`X-Webjs-Have` header listing the marker paths it has, and the server
-short-circuits at the deepest match and returns only the divergent
-fragment.
+Wire-byte optimization is automatic: the router sends `X-Webjs-Have` listing marker paths it has; the server short-circuits at the deepest match and returns only the divergent fragment. Rapid clicks are safe (prior fetches abort, nav-tokens prevent stale reverts). Scroll position is captured + restored on back/forward.
 
-Rapid clicks are safe: each navigation `abort()`s the previous fetch
-and bumps a monotonic nav-token, so a slow late response can never
-revert a newer settled page. Window scroll position is captured on
-snapshot and restored on back/forward cache hits. Inner scrollables
-keep their `scrollTop` natively via outer-layout DOM identity.
+**Production benefits from HTTP/2 at the edge.** Per-file ESM rides HTTP/2 multiplex to be competitive with bundling. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare, Netlify, Heroku) serve HTTP/2 automatically; bare-VM self-hosters put nginx / Caddy / Traefik in front. `webjs start` itself speaks plain HTTP/1.1.
 
-**Production benefits from HTTP/2 at the edge.** The per-file ESM
-model rides HTTP/2 multiplex to be competitive with bundling. PaaS
-edges (Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify,
-Heroku) serve HTTP/2 to clients automatically, no framework
-configuration. Bare-VM self-hosters should put nginx / Caddy /
-Traefik in front. `webjs start` itself only speaks plain HTTP/1.1;
-TLS termination is the proxy's job.
-
-For the 1% case where you want a partial-swap region NOT tied to a
-folder layout (an in-page widget that should swap on click), wrap it
-in `<webjs-frame id="...">`. The router's `closest('webjs-frame')`
-detection takes precedence over the layout markers when both are
-present.
-
-See `agent-docs/advanced.md` Client router section for the full mechanism.
+For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. See `agent-docs/advanced.md` for the full mechanism.
 
 ---
 
@@ -723,50 +510,15 @@ See `agent-docs/advanced.md` Client router section for the full mechanism.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.
 9. **No backtick characters inside `html\`...\`` template bodies**, even inside CSS / HTML comments. A nested backtick closes the literal at JS-parse time and 500s in prod.
-10. **TypeScript must be erasable.** Use `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json. No `enum`, no `namespace` with values, no constructor parameter properties, no legacy decorators with `emitDecoratorMetadata`, no `import = require`. Use the erasable equivalents:
+10. **TypeScript must be erasable.** Set `compilerOptions.erasableSyntaxOnly: true`. No `enum`, no `namespace` with values, no constructor parameter properties, no legacy decorators with `emitDecoratorMetadata`, no `import = require`. The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap). If you disable the flag and use non-erasable syntax, the dev server falls back to esbuild on those files (~3x wire bytes, inline sourcemap). The `erasable-typescript-only` check enforces the flag. See `agent-docs/typescript.md` for erasable equivalents.
 
-    ```ts
-    // Allowed erasable forms
-    type Color = 'red' | 'green' | 'blue';
-    const Color = { Red: 'red', Green: 'green', Blue: 'blue' } as const;
-    type ColorKey = keyof typeof Color;
-
-    class Foo {
-      x: number;
-      constructor(x: number) { this.x = x; }
-    }
-
-    interface User { name: string; }
-    type Status = 'ok' | 'error';
-    import type { Thing } from './thing.ts';
-    ```
-
-    The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position preservation, no sourcemap shipped to the browser). Implementation backing: Node ships the [`amaro`](https://github.com/nodejs/amaro) package internally for this transform. If the framework ever runs on a non-Node runtime (Bun, Deno), it will need `amaro` installed directly or an equivalent position-preserving stripper. If you disable `erasableSyntaxOnly` and use non-erasable syntax, the dev server falls back to esbuild on those specific files and emits an inline sourcemap, costing ~3x wire bytes per request and losing strict stack-trace position accuracy. The `erasable-typescript-only` convention check enforces the flag.
-
-11. **No em-dashes (U+2014) anywhere in the repo, no hyphen or semicolon used as a pause-punctuation substitute, and no colon attached to a code-shaped left-hand side.** Prose, comments, code, JSON descriptions, commit messages: rewrite the sentence so no pause-punctuation crutch is needed.
-
-    Banned glyphs as pause punctuation:
-    - The em-dash (U+2014).
-    - A plain hyphen used in place of one (literally `< space hyphen space >`).
-    - A semicolon used in place of one (literally `< space semicolon space >`).
-
-    Banned colon-attachment patterns (prefer verb-led rephrasings):
-    - `xyz(): description` (function call followed by colon). Rewrite as `xyz() does X` or `xyz() returns X` or `xyz() is the X`. The trailing `()` plus colon visually parses as a TypeScript return-type annotation and is ambiguous to AI agents.
-    - `<my-tag>: description` (custom-element tag followed by colon). Rewrite as `<my-tag> owns / manages / decorates / is the X`.
-    - `[expr]: description` (subscript followed by colon). Rewrite verb-led.
-    - `<code>foo()</code>: description` in markdown definition lists. Rewrite as `<code>foo()</code> is the X` or `<code>foo()</code> creates X`.
-
-    Prefer a period, comma, colon (on plain-noun LHS only), parentheses, or a restructured sentence. The colon stays fine when the LHS is a plain noun or label like `**Term**: description`, `Note: description`, `## Heading: subtitle`.
-
-    Plain hyphens stay fine in their natural roles (compound words like `AI-first`, CLI flags like `--http2`, filenames, ranges). Semicolons stay fine inside code. Colons stay fine in TypeScript / JSON / CSS syntax (`name: Type`, `"key": value`, `color: red`).
-
-    Enforced for Claude Code via `.claude/hooks/block-prose-punctuation.sh` (PreToolUse on Write / Edit / MultiEdit / NotebookEdit / Bash). The hook hard-blocks any new content containing U+2014, ` - ` between word characters, ` ; ` between word characters, or `<name-with-hyphen>:` / `name()` followed by lowercase prose. The hook scans only the NEW content of the tool call, so you can still edit a line that already contains a banned glyph to remove it.
+11. **No em-dashes (U+2014), no hyphen or semicolon used as pause-punctuation, and no colon attached to a code-shaped LHS.** Banned glyphs as pause punctuation: U+2014; a plain hyphen surrounded by spaces between word characters; a semicolon surrounded by spaces between word characters. Banned colon attachments (prefer verb-led rephrasings): `xyz()` followed by colon-then-prose; a custom-element tag like `<my-tag>` followed by colon-then-prose; `[expr]` subscript followed by colon-then-prose; markdown definition lists with `<code>foo()</code>` followed by colon-then-prose. Prefer a period, comma, colon on a plain-noun LHS only, parentheses, or a restructured sentence. Plain hyphens stay fine in natural roles (compound words, CLI flags, filenames, ranges). Semicolons stay fine inside code. Colons stay fine in TS / JSON / CSS syntax. Enforced for Claude Code via `.claude/hooks/block-prose-punctuation.sh` (PreToolUse on Write / Edit / MultiEdit / NotebookEdit / Bash). The hook scans only NEW content; you can still edit a line that already contains a banned glyph to remove it.
 
 ---
 
 ## Scaffolding
 
-**Exactly three scaffolds exist. Do not invent template names:**
+**Three scaffolds exist. Do not invent template names:**
 
 ```sh
 webjs create <name>                  # full-stack: layout, page, components, modules, Prisma+SQLite
@@ -776,29 +528,21 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
 ### How AI agents must scaffold
 
-1. **Always scaffold via `webjs create`.** Never hand-roll the directory structure.
+1. **Always scaffold via `webjs create`.** Never hand-roll the directory.
 2. **Pick the template from the user's request:**
 
    | The user asks for… | Use |
    |---|---|
-   | Todo, blog, recipe, dashboard, marketplace, social, e-commerce, any product with UI | **default** |
-   | HTTP/JSON API with no UI (microservice, webhook, integration backend) | **`--template api`** |
-   | Accounts, login, signup, "users can sign up", SaaS | **`--template saas`** |
+   | Todo, blog, dashboard, marketplace, social, e-commerce, any product with UI | **default** |
+   | HTTP/JSON API with no UI | **`--template api`** |
+   | Accounts, login, signup, SaaS | **`--template saas`** |
 
    Default to full-stack when ambiguous.
 
-3. **Default to a real database, Prisma + SQLite. NEVER use JSON files,
-   in-memory arrays, or localStorage as a substitute for persistence.**
-   Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` singleton,
-   and `npm run db:*` scripts. The convention check `no-json-data-files`
-   flags JSON-as-database.
-4. **Treat the scaffold as REFERENCE, not the final product.** Replace
-   the example `app/page.ts`, example `User` model, example components.
-   Don't ship "Hello from my-todo-app" as final UI.
-5. **Update `prisma/schema.prisma` to the app's real models FIRST.** Run
-   `webjs db migrate <name>`. Then build pages/actions/queries against
-   those models.
-6. **Need more detail?** Full docs at **https://docs.webjs.com**.
+3. **Default to a real database (Prisma + SQLite). NEVER use JSON files, in-memory arrays, or localStorage as a substitute for persistence.** Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts`, and `npm run db:*` scripts. The `no-json-data-files` check flags JSON-as-database.
+4. **Treat the scaffold as REFERENCE, not the final product.** Replace the example `app/page.ts`, `User` model, and components.
+5. **Update `prisma/schema.prisma` to real models FIRST.** Run `webjs db migrate <name>`, then build pages/actions/queries.
+6. Full docs at **https://docs.webjs.com**.
 
 ---
 
@@ -830,12 +574,7 @@ webjs ui list / view <name>                           # browse the registry
 
 ## Environment variables: server-only by default, `WEBJS_PUBLIC_*` reaches the browser
 
-Every `process.env.X` read on the server is server-only. Names without
-the `WEBJS_PUBLIC_` prefix never reach the browser. Names that DO start
-with `WEBJS_PUBLIC_` are exposed in the browser as `process.env.X` via
-an inline `<script>` injected in the SSR head before any module code
-runs. No build step, no transform, no static substitution. The shim
-is the no-build equivalent of Next.js's `NEXT_PUBLIC_` convention.
+`process.env.X` reads on the server are server-only. Names starting with `WEBJS_PUBLIC_` are exposed in the browser as `process.env.X` via an inline `<script>` injected in the SSR head before any module code runs. No build step, no transform.
 
 ```sh
 # .env
@@ -846,63 +585,36 @@ WEBJS_PUBLIC_STRIPE_KEY=pk_live_abc       # available in browser
 ```
 
 ```ts
-// components/checkout.ts (runs in the browser)
+// components/checkout.ts (browser)
 const url = process.env.WEBJS_PUBLIC_API_URL;  // works
 const dsn = process.env.DATABASE_URL;          // undefined (fail-closed)
 ```
 
-The shim also defines `process.env.NODE_ENV` (`'development'` in
-`webjs dev`, `'production'` in `webjs start`), so vendor bundles that
-probe it (lit, react, etc.) work without ReferenceError. Implementation
-in `packages/server/src/ssr.js` (`publicEnvShim()`); see
-[`/docs/configuration`](https://docs.webjs.com/docs/configuration) for
-the user-facing explanation.
+The shim also defines `process.env.NODE_ENV` (`'development'` in `webjs dev`, `'production'` in `webjs start`) so vendor bundles probing it work. See [`/docs/configuration`](https://docs.webjs.com/docs/configuration).
 
 ---
 
 ## CONVENTIONS.md and the lint config: complementary, not redundant
 
-Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read
-it before writing code. Sections marked `<!-- OVERRIDE -->` are the
-customization points. **`CONVENTIONS.md` is markdown prose for
-architectural conventions** (modules layout, styling, testing, git
-workflow) that the linter can't enforce programmatically.
+Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. Sections marked `<!-- OVERRIDE -->` are customization points. **`CONVENTIONS.md` is markdown prose for architectural conventions** (modules layout, styling, testing, git workflow) the linter can't enforce programmatically.
 
-**`webjs check` rules are a separate, narrower surface.** They are
-boolean checks defined in `@webjskit/server/src/check.js`'s `RULES`
-array. Their source of truth at the project level is the
-`"webjs": { "conventions": { … } }` key in `package.json`. That is
-the only supported config surface.
+**`webjs check` rules are a separate, narrower surface.** Source of truth at the project level is the `"webjs": { "conventions": { … } }` key in `package.json`. No override present → every default rule is enabled.
 
-**No override present → every default rule is enabled.** AI agents
-treat all rules as active unless the config explicitly sets one to
-`false`.
-
-**Do NOT maintain a list of rules in prose.** Run `webjs check --rules`
-to enumerate them. The command prints every rule's name, description,
-and current enabled state (taking project overrides into account). The
-`RULES` array in `check.js` is the only catalogue; everything else
-defers to it.
+**Do NOT maintain a list of rules in prose.** Run `webjs check --rules` to enumerate them.
 
 ### Disabling a rule
 
 ```jsonc
 // package.json
-{
-  "webjs": {
-    "conventions": { "tests-exist": false }
-  }
-}
+{ "webjs": { "conventions": { "tests-exist": false } } }
 ```
 
 ### What AI agents must do
 
 1. Read `CONVENTIONS.md` for architectural conventions.
-2. Run `webjs check --rules` to learn which lint rules are active for
-   this project.
-3. Treat every rule not explicitly disabled in the config as binding.
-4. When asked to change which rules are active, edit the
-   `webjs.conventions` block in `package.json` (never the prose).
+2. Run `webjs check --rules` to learn active lint rules.
+3. Treat every rule not explicitly disabled as binding.
+4. To change rules, edit the `webjs.conventions` block in `package.json` (never the prose).
 
 ---
 
@@ -963,9 +675,9 @@ HelloWorld.register('hello-world');
 
 Not in v1. Do not implement as part of other tasks:
 
-- **Bundling of any kind.** webjs is a **no-build framework**. `.js` / `.ts` files are served directly to the browser via importmap + per-file ESM. Same model as Rails 7+ (Hotwire + importmap-rails). Production performance comes from HTTP/2 multiplex + `<link rel="modulepreload">` hints emitted at SSR time, not from concatenation. **Do not propose a bundler. Do not add a `webjs build` command.** If a large-app perf problem materializes, it gets solved by tightening the modulepreload graph or by adopting per-route splitting natively in the browser (importmap scopes), not by reintroducing a build step.
-- **Per-route code splitting.** Downstream of the no-build invariant. The browser already fetches each module lazily as the import graph reaches it. Modulepreload hints are emitted per-route at SSR time.
-- **Vite-grade HMR with state preservation.** Web components can only be `customElements.define`d once, so we do a full-page reload instead. Data reloads are near-instant via chokidar → SSE.
-- **React Server Components Flight protocol.** Server actions cover "call a server function from the client". Flight duplicates years of React work. Use `Suspense` + streaming instead.
+- **Bundling.** webjs is a **no-build framework**. Same model as Rails 7+ (Hotwire + importmap-rails). Production perf comes from HTTP/2 multiplex + `<link rel="modulepreload">` hints at SSR time, not concatenation. **Do not propose a bundler or `webjs build` command.**
+- **Per-route code splitting.** Downstream of no-build. Browser fetches each module lazily; modulepreload hints emit per-route at SSR.
+- **Vite-grade HMR with state preservation.** Custom elements only `define` once, so full reload is necessary. Data reloads are near-instant via chokidar → SSE.
+- **React Server Components Flight.** Server actions cover "call a server function from the client". Use `Suspense` + streaming.
 - **Edge-runtime bundling / full portability.** See `agent-docs/deployment.md`.
 - **i18n, image optimization.** Layer libraries on top.
