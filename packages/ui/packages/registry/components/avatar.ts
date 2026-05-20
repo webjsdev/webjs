@@ -1,11 +1,15 @@
 /**
- * Avatar: circular user image with fallback. Class helpers; pair with native
- * `<img>` for the image and any element for fallback. Image-error fallback
- * needs a tiny runtime helper (see UiAvatar below).
+ * Avatar: circular user image with fallback. Tier-1 class helpers;
+ * compose with a native `<span>` or `<img>`. The fallback shows when the
+ * `<img>` is missing or fails to load (`onerror`).
  *
  * shadcn parity:
- *   Avatar (size: default | sm | lg), AvatarImage, AvatarFallback, AvatarBadge,
- *   AvatarGroup, AvatarGroupCount.
+ *   Avatar (size: default | sm | lg)  → avatarClass({ size }) with `data-size`
+ *   AvatarImage                       → avatarImageClass()
+ *   AvatarFallback                    → avatarFallbackClass()
+ *   AvatarBadge                       → avatarBadgeClass()
+ *   AvatarGroup                       → avatarGroupClass()
+ *   AvatarGroupCount                  → avatarGroupCountClass()
  *
  * Usage:
  *   <span class=${avatarClass()} data-size="default" data-slot="avatar">

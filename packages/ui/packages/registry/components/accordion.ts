@@ -1,45 +1,31 @@
 /**
- * Accordion, vertical collapsible list built on native <details>/<summary>.
+ * Accordion: vertical collapsible list built on native <details>/<summary>.
  *
- * Tier-1 component (no custom element). Exclusive open behavior, what
- * Radix calls `type="single"`, is provided natively by giving each
- * <details> the same `name=""` attribute. Independent open behavior
- * (`type="multiple"`) is the default when `name` is omitted.
- *
- * Both modes give the user `collapsible` behavior for free: clicking the
- * currently-open <summary> always closes it.
+ * Tier-1 (no custom element). Exclusive open behaviour (Radix's
+ * `type="single"`) comes from giving every <details> the same
+ * `name="..."` attribute. Independent open (`type="multiple"`) is the
+ * default when `name` is omitted. Both modes give `collapsible` for
+ * free: clicking the open <summary> closes it.
  *
  * shadcn parity:
- *   <Accordion type="single" collapsible>
- *     → <div class=${accordionClass()}>
- *         <details name="faq" class=${accordionItemClass()}>…</details>
- *         <details name="faq" class=${accordionItemClass()}>…</details>
- *       </div>
- *
- *   <Accordion type="multiple">
- *     → omit the `name="…"` attribute. Each <details> toggles
- *       independently.
- *
- *   <AccordionTrigger> → <summary class=${accordionTriggerClass()}>
- *   <AccordionContent> → <div class=${accordionContentClass()}>
+ *   <Accordion type="single" collapsible> → <div class=${accordionClass()}> wrapping
+ *                                            <details name="..."> items
+ *   <Accordion type="multiple">           → same, omit `name`
+ *   <AccordionItem>                       → <details class=${accordionItemClass()}>
+ *   <AccordionTrigger>                    → <summary class=${accordionTriggerClass()}>
+ *   <AccordionContent>                    → <div class=${accordionContentClass()}>
  *
  * Usage (single-open, exclusive):
  *   <div class=${accordionClass()}>
  *     <details name="faq" class=${accordionItemClass()}>
  *       <summary class=${accordionTriggerClass()}>
  *         <span>Is it accessible?</span>
- *         <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
+ *         <svg class="size-4 transition-transform group-open:rotate-180">…</svg>
  *       </summary>
- *       <div class=${accordionContentClass()}>
- *         Yes. Native &lt;details&gt; implements the WAI-ARIA disclosure
- *         widget pattern.
- *       </div>
+ *       <div class=${accordionContentClass()}>Yes, native disclosure widget.</div>
  *     </details>
  *     <details name="faq" class=${accordionItemClass()} open>
- *       <summary class=${accordionTriggerClass()}>
- *         <span>Is it styled?</span>
- *         <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
- *       </summary>
+ *       <summary class=${accordionTriggerClass()}>Is it styled?</summary>
  *       <div class=${accordionContentClass()}>Yes, shadcn design tokens.</div>
  *     </details>
  *   </div>
@@ -48,10 +34,10 @@
  * on first paint. Programmatic toggling: `el.open = true | false`.
  *
  * `<details name="X">` is the platform's exclusive-accordion primitive:
- * Chrome 120+, Safari 17.2+, Firefox 130+.
+ * Chrome 120+, Safari 17.2+, Firefox 130+. Migrated from the prior
+ * <ui-accordion> custom element set.
  *
- * Migrated from the prior <ui-accordion> / <ui-accordion-item> /
- * <ui-accordion-trigger> / <ui-accordion-content> custom elements.
+ * Design tokens used: --border, --ring, --foreground.
  */
 
 /** Root wrapper. Holds the column-of-items rhythm; no display: rules. */

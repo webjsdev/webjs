@@ -20,9 +20,9 @@ function calls, not for a layered React abstraction over every primitive:
   `<ui-sonner>`, …). Reserved for the behavior the browser still doesn't
   give you for free: hover-with-delay tooltips, roving-focus keyboard nav
   for menus and tabs, toast queue with stack and dismiss. Dialog and
-  alert-dialog use a thin custom element on top of the native
-  `<dialog>.showModal()`, focus trap, Escape, and backdrop overlay all
-  come from the platform. Decorate the host, no shadow DOM.
+  alert-dialog wrap the native `<dialog>.showModal()`, so focus trap,
+  Escape, and backdrop overlay all come from the platform. Light DOM
+  throughout (no shadow DOM); authored children project through `<slot>`.
 
 Works with any project that uses Tailwind CSS v4 and supports custom elements:
 webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML, as long as Tailwind
@@ -30,8 +30,13 @@ is configured, the components render correctly. Variant names, sizes, and
 data-attribute conventions mirror shadcn's so an AI agent's existing
 knowledge of shadcn maps directly.
 
-Tier-2 elements extend `Base` (a Node-safe `HTMLElement` shim) from a small
-shared `lib/utils.ts` the CLI writes into your project.
+Tier-2 elements extend `WebComponent` from `@webjskit/core`, a tiny
+Lit-shaped base class with `static properties` for reactive attributes,
+`render()` returning an `` html`...` `` template, and declarative
+bindings (`@click`, `?attr`, `attr=`). Light DOM throughout, so Tailwind
+utility classes on authored children apply directly. The `webjsui add`
+CLI installs `@webjskit/core` automatically when you add a Tier-2
+component.
 
 ## Install
 

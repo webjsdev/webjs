@@ -1,33 +1,33 @@
 /**
- * Collapsible, togglable content panel built on native <details>/<summary>.
+ * Collapsible: togglable content panel built on native <details>/<summary>.
  *
- * Tier-1 component (no custom element). The browser handles open/close
- * state, keyboard activation (Enter/Space on <summary>), focus management,
- * and disclosure-widget accessibility, nothing for us to ship in JS.
+ * Tier-1 (no custom element). The browser handles open/close state,
+ * keyboard activation (Enter / Space on <summary>), focus management,
+ * and disclosure-widget accessibility, nothing to ship in JS.
  *
  * shadcn parity:
  *   Collapsible         → <details class=${collapsibleClass()}>
  *   CollapsibleTrigger  → <summary class=${collapsibleTriggerClass()}>
- *   CollapsibleContent  → wrap content in <div class=${collapsibleContentClass()}>
+ *   CollapsibleContent  → <div class=${collapsibleContentClass()}>
  *
  * Usage:
  *   <details class=${collapsibleClass()}>
  *     <summary class=${collapsibleTriggerClass()}>
  *       Show details
- *       <svg class="size-4 transition-transform group-open:rotate-180" …></svg>
+ *       <svg class="size-4 transition-transform group-open:rotate-180">…</svg>
  *     </summary>
  *     <div class=${collapsibleContentClass()}>
- *       Hidden until <summary> is clicked, Enter/Space pressed, or the
+ *       Hidden until <summary> is clicked, Enter / Space pressed, or the
  *       <details> element's `open` property is set via JS.
  *     </div>
  *   </details>
  *
- * Initial state: add `open` attribute on <details> to render expanded on
- * first paint. Programmatic toggling: `el.open = true` / `el.open = false`.
+ * Initial state: add `open` on <details> to render expanded on first
+ * paint. Programmatic toggling: `el.open = true | false`. Migrated from
+ * the prior <ui-collapsible> custom element; the trigger class hides
+ * the native disclosure marker so callers can render their own chevron.
  *
- * Migrated from the prior <ui-collapsible> custom element. Class helpers
- * keep the same shadcn-style visuals; the trigger class hides the native
- * disclosure marker so callers can render their own chevron if desired.
+ * Design tokens used: --border, --ring, --foreground.
  */
 
 /**

@@ -1,11 +1,13 @@
 /**
- * RadioGroup: group of native radio inputs. Pure composition:
- * just use native `<input type="radio" name="...">` with a shared `name`.
- * The browser handles keyboard nav (Arrow keys), single-selection, and form
- * submission. No JS needed.
+ * RadioGroup: group of native radio inputs. Tier-1 class helpers;
+ * compose with native `<input type="radio" name="...">` sharing a name.
+ * The browser handles keyboard nav (Arrow keys), single-selection, and
+ * form submission. No JS.
  *
- * shadcn parity: matches shadcn RadioGroup visual (size-4 circle with a
- * filled dot indicator when checked).
+ * shadcn parity:
+ *   RadioGroup (orientation: horizontal | vertical)
+ *                          → radioGroupClass({ orientation }) on a <div role="radiogroup">
+ *   RadioGroupItem         → radioClass() on a native <input type="radio">
  *
  * Usage:
  *   <div role="radiogroup" class=${radioGroupClass()}>

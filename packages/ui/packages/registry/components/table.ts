@@ -1,10 +1,17 @@
 /**
- * Table: semantic table with shadcn styling. Pure class helpers; use with
- * native `<table>`, `<thead>`, `<tbody>`, `<tfoot>`, `<tr>`, `<th>`, `<td>`,
- * `<caption>`. Native semantics + accessibility tree work out of the box.
+ * Table: semantic data table with shadcn styling. Tier-1 class helpers;
+ * compose with native `<table>`, `<thead>`, `<tbody>`, `<tfoot>`, `<tr>`,
+ * `<th>`, `<td>`, `<caption>`. Native semantics + accessibility tree
+ * work out of the box.
  *
- * shadcn parity: Table, TableHeader, TableBody, TableFooter, TableRow,
- * TableHead, TableCell, TableCaption. Plus an outer scroll-container.
+ * shadcn parity:
+ *   Table container (scroll wrapper)  → tableContainerClass()
+ *   Table                             → tableClass()
+ *   TableHeader / TableBody / TableFooter
+ *                                     → tableHeaderClass() / tableBodyClass() / tableFooterClass()
+ *   TableRow                          → tableRowClass()
+ *   TableHead / TableCell / TableCaption
+ *                                     → tableHeadClass() / tableCellClass() / tableCaptionClass()
  *
  * Usage:
  *   <div class=${tableContainerClass()}>

@@ -35,6 +35,7 @@ export const TIER_2_NAMES: ReadonlySet<string> = new Set([
   'tabs',
   'dropdown-menu',
   'sonner',
+  'toggle',
   'toggle-group',
 ]);
 

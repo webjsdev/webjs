@@ -1,15 +1,18 @@
 /**
- * Badge: small visual label. Pure class helper.
+ * Badge: small visual label. Tier-1 class helper; compose with any
+ * inline element (commonly `<span>` or `<a>` for linked badges).
  *
  * shadcn parity:
- *   variants: default | secondary | destructive | outline | ghost | link
+ *   Badge (variant: default | secondary | destructive | outline | ghost | link)
+ *                                  → badgeClass({ variant })
  *
  * Usage:
  *   <span class=${badgeClass()}>New</span>
  *   <span class=${badgeClass({ variant: 'destructive' })}>Error</span>
  *   <a    class=${badgeClass({ variant: 'link' })} href="/profile">@vivek</a>
  *
- * The `[a&]:hover:...` hover styles only apply when the element is an `<a>`.
+ * The `[a&]:hover:...` hover styles only apply when the element is an `<a>`,
+ * so a static `<span>` doesn't pick up an unwanted hover.
  *
  * Design tokens used: --primary, --secondary, --destructive, --foreground,
  * --accent, --border, --ring.

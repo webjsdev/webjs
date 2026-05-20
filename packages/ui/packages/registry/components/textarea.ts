@@ -1,7 +1,10 @@
 /**
- * Textarea: styled native `<textarea>` via a class-helper function. Real
- * native multi-line input: form submission, autosize via `field-sizing`,
- * native validation all work.
+ * Textarea: styled native `<textarea>`. Tier-1 class helper. Real
+ * multi-line input: form submission, autosize via `field-sizing:
+ * content`, and native validation all work.
+ *
+ * shadcn parity:
+ *   Textarea  → textareaClass()
  *
  * Usage:
  *   <textarea class=${textareaClass()} name="message" rows="4" placeholder="Your message…">

@@ -192,7 +192,7 @@ const resp = await app.handle(new Request('http://x/api/hello'));
 The docs site is built on webjs itself:
 
 ```sh
-cd docs && webjs dev --port 4000
+cd docs && npm run dev    # runs webjs dev + tailwind --watch together (see AGENTS.md)
 ```
 
 37 pages covering: getting started, AI-first development, routing,

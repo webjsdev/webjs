@@ -818,6 +818,14 @@ webjs ui list / view <name>                           # browse the registry
 
 `PORT` env is honoured by `dev` and `start` when `--port` is absent.
 
+> **Running this repo's own apps locally** (`website/`, `docs/`,
+> `examples/blog/`, `packages/ui/packages/website/`): always `cd` into
+> the app and use **its** `npm run dev` / `npm start`, never `webjs dev`
+> / `webjs start` directly. Each app composes `webjs dev` with its own
+> watchers (Tailwind, Prisma, registry copy) via `concurrently` + `pre*`
+> hooks; skipping the npm wrapper renders pages unstyled or with stale
+> generated code. See each app's `AGENTS.md` for the specifics.
+
 ---
 
 ## Environment variables: server-only by default, `WEBJS_PUBLIC_*` reaches the browser

@@ -55,6 +55,13 @@ That's it. No separate manifest, no rebuild.
 cd docs && npm run dev          # http://localhost:4000
 ```
 
+**Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs
+the server; this app's `npm run dev` uses `concurrently` to also spawn
+`tailwindcss --watch`, which is what produces `public/tailwind.css`.
+Running `webjs dev` alone ships pages with no Tailwind utilities applied
+(code blocks, sidebar, headings all look broken). Same in prod: prefer
+`npm start` over `webjs start` so the `prestart: css:build` hook fires.
+
 ---
 
 Framework-wide rules and full API reference:

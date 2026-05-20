@@ -1,10 +1,13 @@
 /**
- * Checkbox: styled native `<input type="checkbox">`. Uses `appearance: none`
- * + an SVG background for the checkmark when `:checked`, so it's a real form
- * control (participates in `<form>` submission natively, no ElementInternals).
+ * Checkbox: styled native `<input type="checkbox">`. Tier-1 class
+ * helper. Uses `appearance: none` + an inline-SVG `background-image` for
+ * the checkmark when `:checked`, so it remains a real form control
+ * (participates in `<form>` submission, no ElementInternals required).
  *
- * shadcn parity: matches shadcn Checkbox visual (size-4, rounded, primary fill
- * when checked, inset shadow, focus ring). Bypasses Radix entirely.
+ * shadcn parity:
+ *   Checkbox  → checkboxClass()  (visual: size-4, rounded, primary fill
+ *                                 when checked, inset shadow, focus ring;
+ *                                 bypasses Radix)
  *
  * Usage:
  *   <input type="checkbox" name="terms" id="terms" class=${checkboxClass()}>
