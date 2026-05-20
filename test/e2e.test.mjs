@@ -109,18 +109,29 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(title.toLowerCase().includes('blog'), `Expected blog title, got: ${title}`);
   });
 
-  test('layout renders a data-layout wrapper around page content', async () => {
-    // Light-DOM shell: the router uses the data-layout wrapper to detect
-    // same-layout navigations (instead of a custom-element shell).
+  test('layout emits wj:children markers for the client router', async () => {
+    // Per-layout `<!--wj:children:<segment>-->` comment markers wrap
+    // each ${children} interpolation. The client router walks these
+    // markers across old + new DOMs to detect the deepest shared
+    // layout for partial-swap navigation. Replaced the older single
+    // `data-layout` attribute approach on 2026-05-16 (f216f0e).
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(1000);
     const markers = await page.evaluate(() => {
-      const wrapper = document.querySelector('[data-layout]');
+      const it = document.createNodeIterator(document, NodeFilter.SHOW_COMMENT);
+      const layoutMarkers = [];
+      let n;
+      while ((n = it.nextNode())) {
+        if (n.data && n.data.startsWith('wj:children:')) {
+          layoutMarkers.push(n.data);
+        }
+      }
       const hasNav = !!document.querySelector('header nav');
       const hasMain = !!document.querySelector('main');
-      return { hasWrapper: !!wrapper, layoutId: wrapper?.getAttribute('data-layout'), hasNav, hasMain };
+      return { layoutMarkers, hasNav, hasMain };
     });
-    assert.ok(markers.hasWrapper, 'data-layout wrapper should be present');
+    assert.ok(markers.layoutMarkers.length > 0,
+      `wj:children comment markers should be present; got ${JSON.stringify(markers.layoutMarkers)}`);
     assert.ok(markers.hasNav, '<header> <nav> should render in the layout');
     assert.ok(markers.hasMain, '<main> should render in the layout');
   });
