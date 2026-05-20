@@ -71,6 +71,12 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  *   scheduling an update. Return `true` to trigger a re-render, `false`
  *   to skip. Default: strict inequality `(a, b) => a !== b`.
  *
+ *   Note: this fires on the FIRST assignment too, with `oldValue` set
+ *   to `undefined`. Numeric comparators that subtract against undefined
+ *   produce `NaN`, which evaluates to `false`, silently rejecting the
+ *   constructor's initial assignment. Treat `oldValue === undefined` as
+ *   "always changed" in custom comparators so the initial value lands.
+ *
  * @property {{ fromAttribute: (value: string|null, type?: Function) => unknown, toAttribute: (value: unknown, type?: Function) => string|null }} [converter]
  *   Custom serialization/deserialization pair for the HTML attribute.
  *   `fromAttribute` is called in `attributeChangedCallback`;

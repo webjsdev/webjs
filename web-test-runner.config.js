@@ -28,6 +28,8 @@ export default {
     'test/browser/directives-guard_test.js',
     'test/browser/directives-template-content_test.js',
     'test/browser/directives-until_test.js',
+    'test/browser/controllers-port_test.js',
+    'test/browser/lifecycle-port_test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
