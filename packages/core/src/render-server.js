@@ -4,7 +4,7 @@ import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
 import { stringify, parse } from './serialize.js';
 
 /**
@@ -51,6 +51,53 @@ async function render(value, ctx) {
   // live() on the server just unwraps and renders the inner value.
   if (isLive(value)) {
     return render(/** @type any */ (value).value, ctx);
+  }
+  // keyed() on the server: render the wrapped template; key is client-only.
+  if (isKeyed(value)) {
+    return render(/** @type any */ (value).value, ctx);
+  }
+  // guard() on the server: always invoke the value function (no cache on SSR).
+  if (isGuard(value)) {
+    return render(/** @type any */ (value).fn(), ctx);
+  }
+  // templateContent() on the server: emit the template's innerHTML verbatim.
+  if (isTemplateContent(value)) {
+    const tpl = /** @type any */ (value).template;
+    return String(tpl?.innerHTML ?? '');
+  }
+  // ref() on the server: no-op (no DOM yet). Returns empty string.
+  if (isRef(value)) {
+    return '';
+  }
+  // cache() on the server: pass-through to the inner value.
+  if (isCache(value)) {
+    return render(/** @type any */ (value).value, ctx);
+  }
+  // until() on the server: render the first synchronous candidate, or
+  // await the first Promise to settle when all candidates are Promises.
+  // Rejections are swallowed (treated as "no value"); if every candidate
+  // rejects, render empty rather than crash the SSR pipeline.
+  if (isUntil(value)) {
+    const args = /** @type any */ (value).args;
+    for (const a of args) {
+      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+        return render(a, ctx);
+      }
+    }
+    if (args.length > 0) {
+      try {
+        const winner = await Promise.race(args.map((p) => Promise.resolve(p).catch(() => undefined)));
+        return render(winner, ctx);
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  }
+  // asyncAppend / asyncReplace on the server: render empty. Full
+  // streaming is a follow-up; pages should use Suspense for streaming.
+  if (isAsyncAppend(value) || isAsyncReplace(value)) {
+    return '';
   }
   if (Array.isArray(value)) {
     const parts = await Promise.all(value.map((v) => render(v, ctx)));
@@ -818,6 +865,43 @@ async function streamRender(value, ctx, controller) {
   }
   if (isLive(value)) {
     return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isKeyed(value)) {
+    return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isGuard(value)) {
+    return streamRender(/** @type any */ (value).fn(), ctx, controller);
+  }
+  if (isTemplateContent(value)) {
+    const tpl = /** @type any */ (value).template;
+    controller.enqueue(String(tpl?.innerHTML ?? ''));
+    return;
+  }
+  if (isRef(value)) {
+    return;
+  }
+  if (isCache(value)) {
+    return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isUntil(value)) {
+    const args = /** @type any */ (value).args;
+    for (const a of args) {
+      if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+        return streamRender(a, ctx, controller);
+      }
+    }
+    if (args.length > 0) {
+      try {
+        const winner = await Promise.race(args.map((p) => Promise.resolve(p).catch(() => undefined)));
+        return streamRender(winner, ctx, controller);
+      } catch {
+        return;
+      }
+    }
+    return;
+  }
+  if (isAsyncAppend(value) || isAsyncReplace(value)) {
+    return;
   }
   if (Array.isArray(value)) {
     for (const v of value) await streamRender(v, ctx, controller);

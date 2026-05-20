@@ -79,10 +79,10 @@ void decl; // silence "unused" for the fixture
 /* ------------- ReactiveController shape ------------- */
 
 const ctrl: ReactiveController = {
-  onMount() {},
-  onUnmount() {},
-  beforeRender() {},
-  afterRender() {},
+  hostConnected() {},
+  hostDisconnected() {},
+  hostUpdate() {},
+  hostUpdated() {},
 };
 void ctrl;
 

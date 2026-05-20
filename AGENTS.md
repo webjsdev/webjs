@@ -102,6 +102,8 @@ See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, refer
 
 An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rails.
 
+**Why lit-style web components specifically?** AI coding agents have substantial training data on lit. Aligning webjs's component runtime API (reactive properties via `static properties`, lifecycle hooks like `shouldUpdate` / `willUpdate` / `updated` / `firstUpdated` / `updateComplete`, ReactiveController hooks `hostConnected` / `hostDisconnected` / `hostUpdate` / `hostUpdated`, the full `lit-html` directive set, `html` / `css` tagged templates) lets agents emit idiomatic webjs code without framework-specific translation. Webjs ships its own implementation under `packages/core/src/` (clean JSDoc-typed JS, no-build), but the public API surface matches lit so the ecosystem's collective lit knowledge transfers directly. Decorators are the one exception (banned by invariant 10, non-erasable TS); the `declare` + `static properties` pattern replaces them.
+
 - **Sensible defaults, overridable.** Memory store in dev, Redis when configured. HTTP caching via standard `Cache-Control`.
 - **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
@@ -206,17 +208,22 @@ import { html, css, WebComponent, render, renderToString } from '@webjskit/core'
 
 ### Directives, from `import { … } from '@webjskit/core/directives'`
 
-**"Less is more":** only directives that solve problems with no native alternative.
+lit-html parity. AI agents writing lit-shaped directive code land on familiar names.
 
 | Directive | Purpose | Example |
 |---|---|---|
-| `repeat(items, keyFn, templateFn)` | Keyed reconciliation | `${repeat(items, i => i.id, i => html\`…\`)}` |
+| `repeat(items, keyFn, templateFn)` | Keyed list reconciliation | `${repeat(items, i => i.id, i => html\`…\`)}` |
 | `unsafeHTML(str)` | Render trusted raw HTML. **NEVER use with user input.** | `${unsafeHTML(markdownToHtml(md))}` |
 | `live(value)` | Input value sync against live DOM | `.value=${live(inputVal)}` |
+| `keyed(key, template)` | Force remount on key change | `${keyed(this.userId, html\`<form>…</form>\`)}` |
+| `guard(deps, fn)` | Memoize sub-template; client skips re-eval when deps unchanged | `${guard([this.title], () => html\`<h1>\${this.title}</h1>\`)}` |
+| `templateContent(tpl)` | Render content of a `<template>` element | `${templateContent(this.shadowRoot.getElementById('tpl'))}` |
+| `ref(refOrCallback)` + `createRef()` | Bind a Ref or callback to the element | `<input ${ref(this._inputRef)}>` |
+| `cache(value)` | Retain detached DOM when toggling sub-templates (preserves input state, scroll, focus) | `${cache(this.active ? viewA : viewB)}` |
+| `until(...args)` | Render highest-priority resolved candidate; higher-priority Promises that later resolve replace lower-priority output | `${until(this.dataPromise, html\`<p>Loading…</p>\`)}` |
+| `asyncAppend(iter, mapper?)`, `asyncReplace(iter, mapper?)` | Stream values from an AsyncIterable. Iteration aborts on teardown. | `${asyncAppend(stream, (v, i) => html\`<li>\${v}</li>\`)}` |
 
-Everything else uses native patterns: conditional classes via filter+join,
-conditional render via ternary, async data via `Task` (component) or async
-page functions (server).
+For component-scoped async data with full pending/error states, `Task` is usually a better fit than `until`. For page-level streaming, `Suspense` is the structural primitive. Everything else (`classMap`, `styleMap`, `ifDefined`, `when`, `choose`, `map`, `join`, `range`) uses native patterns: conditional classes via filter+join, conditional render via ternary, etc.
 
 ### Context & Task
 
@@ -296,16 +303,22 @@ class StudentCard extends WebComponent {
 | `hasChanged` | strict `!==` | Custom change detection |
 | `converter` | type-based | Custom attribute ↔ property serialization |
 
-### Lifecycle (less-is-more)
+### Lifecycle (lit-aligned)
 
-| Hook | When | Use for |
-|---|---|---|
-| controllers' `beforeRender()` | Before render | Pre-render logic |
-| `render()` | Render phase | Return `TemplateResult` |
-| controllers' `afterRender()` | After render | Post-render logic |
-| `firstUpdated()` | After first render only | One-time DOM setup |
+Every update cycle runs these hooks in order. All receive a `changedProperties` Map: keys are property names (or `'state'` for setState patches), values are the previous value before the change.
 
-No `shouldUpdate`/`willUpdate`/`updated`/`changedProperties`. Compute inputs at top of `render()`. Use `queueMicrotask()` after `setState()` for post-render side effects.
+| # | Hook | When | Use for |
+|---|---|---|---|
+| 1 | `shouldUpdate(changedProperties)` | Update queued | Return `false` to skip this update. Default `true`. |
+| 2 | `willUpdate(changedProperties)` | Pre-render | Compute derived values. Property assignments fold into THIS cycle without re-triggering. |
+| 3 | controllers' `hostUpdate()` | Pre-render | Controller pre-render logic |
+| 4 | `update(changedProperties)` | Render phase | Default calls `render()` + commits. Override to wrap or short-circuit (rare). |
+| 5 | controllers' `hostUpdated()` | Post-render | Controller post-render logic |
+| 6 | `firstUpdated(changedProperties)` | After first render only | One-time DOM setup |
+| 7 | `updated(changedProperties)` | After every render | Post-render DOM work conditional on what changed |
+| 8 | `updateComplete` Promise | Resolves last | `await el.updateComplete` after triggering an update |
+
+The `update()` body has an error boundary that calls `renderError(error)` if `render()` throws. All hooks are **client-only**; SSR doesn't call them (SSR walker calls `instance.render()` directly).
 
 **ReactiveControllers** are composable lifecycle logic via `host.addController(this)`. Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers. See `agent-docs/components.md`.
 

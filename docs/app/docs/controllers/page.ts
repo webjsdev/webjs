@@ -7,6 +7,8 @@ export default function Controllers() {
     <h1>Reactive Controllers</h1>
     <p>Reactive controllers are a composition pattern for sharing lifecycle-bound logic across components without using inheritance. Instead of building mixin chains or base class hierarchies, you create standalone controller objects that hook into any component's lifecycle.</p>
 
+    <p><strong>Why the lit-shaped hook names?</strong> webjs adopts lit's <code>hostConnected</code> / <code>hostDisconnected</code> / <code>hostUpdate</code> / <code>hostUpdated</code> protocol verbatim because AI coding agents have substantial training data on lit. Matching lit's API names means agents emit idiomatic webjs code without framework-specific translation, and any lit ReactiveController found in the wild is drop-in compatible here.</p>
+
     <h2>What Controllers Solve</h2>
     <p>Consider a scenario where three different components all need to fetch data on connect, poll on an interval, and clean up on disconnect. Without controllers, your options are:</p>
 
@@ -22,10 +24,10 @@ export default function Controllers() {
     <p>A controller is any object that implements some or all of these methods:</p>
 
     <ul>
-      <li><strong>onMount()</strong>: called when the host component's <code>connectedCallback</code> fires. Set up subscriptions, timers, and event listeners here.</li>
-      <li><strong>onUnmount()</strong>: called when the host component's <code>disconnectedCallback</code> fires. Clean up resources.</li>
-      <li><strong>beforeRender()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic.</li>
-      <li><strong>afterRender()</strong>: called after the host's <code>render()</code> method, before <code>firstUpdated()</code>. Post-render controller logic.</li>
+      <li><strong>hostConnected()</strong>: called when the host component's <code>connectedCallback</code> fires. Set up subscriptions, timers, and event listeners here.</li>
+      <li><strong>hostDisconnected()</strong>: called when the host component's <code>disconnectedCallback</code> fires. Clean up resources.</li>
+      <li><strong>hostUpdate()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic.</li>
+      <li><strong>hostUpdated()</strong>: called after the host's <code>render()</code> method, before <code>firstUpdated()</code>. Post-render controller logic.</li>
     </ul>
 
     <p>All methods are optional. Implement only the ones your controller needs.</p>
@@ -42,7 +44,7 @@ export default function Controllers() {
     host.addController(this);  // register with the host
   }
 
-  onMount() {
+  hostConnected() {
     this._observer = new IntersectionObserver(
       ([entry]) =&gt; {
         this.isVisible = entry.isIntersecting;
@@ -53,7 +55,7 @@ export default function Controllers() {
     this._observer.observe(this.host);
   }
 
-  onUnmount() {
+  hostDisconnected() {
     this._observer?.disconnect();
     this._observer = null;
   }
@@ -97,7 +99,7 @@ LazyImage.register('lazy-image');</pre>
     host.addController(this);
   }
 
-  async onMount() {
+  async hostConnected() {
     this.loading = true;
     this.host.requestUpdate();
 
@@ -115,7 +117,7 @@ LazyImage.register('lazy-image');</pre>
     }
   }
 
-  onUnmount() {
+  hostDisconnected() {
     // Could abort an in-flight request here if using AbortController
   }
 }</pre>
