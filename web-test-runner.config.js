@@ -21,6 +21,12 @@ export default {
     'test/browser/slot.test.js',
     'test/browser/component-lifecycle.test.js',
     'test/browser/directives.test.js',
+    'test/browser/directives-cache_test.js',
+    'test/browser/directives-async-stream_test.js',
+    'test/browser/directives-ref_test.js',
+    'test/browser/directives-keyed_test.js',
+    'test/browser/directives-guard_test.js',
+    'test/browser/directives-template-content_test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
