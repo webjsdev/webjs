@@ -264,8 +264,14 @@ UiAlertDialogContent.register('ui-alert-dialog-content');
 // wrap-a-button pattern), we don't restyle the host. Their button keeps
 // its own buttonClass call and the host stays a transparent wrapper.
 
-function applyAlertDialogButton(host: HTMLElement, defaultVariant: ButtonVariant, userClass: string): void {
-  if (host.querySelector(':scope > button')) return;
+function applyAlertDialogButton(host: HTMLElement & { _hasAuthoredButton?: boolean }, defaultVariant: ButtonVariant, userClass: string): void {
+  // Back-compat: skip self-styling when the user authored a <button>
+  // inside us. The "has authored button" flag is captured in
+  // connectedCallback BEFORE the framework's light-DOM slot machinery
+  // moves the children into an off-tree assignment table. By the time
+  // render() runs, host.querySelector('button') no longer sees the
+  // authored child, so the flag is the authoritative answer.
+  if (host._hasAuthoredButton) return;
   const variant = (host.getAttribute('variant') ?? defaultVariant) as ButtonVariant;
   const size = (host.getAttribute('size') ?? 'default') as ButtonSize;
   host.className = cn(buttonClass({ variant, size }), userClass);
@@ -282,9 +288,12 @@ function alertDialogButtonKeydown(this: HTMLElement, e: KeyboardEvent): void {
 
 export class UiAlertDialogCancel extends WebComponent {
   _userClass: string = '';
+  _hasAuthoredButton: boolean = false;
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    // Capture before the slot machinery hides authored children.
+    this._hasAuthoredButton = !!this.querySelector('button');
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
     super.connectedCallback?.();
@@ -311,9 +320,11 @@ UiAlertDialogCancel.register('ui-alert-dialog-cancel');
 
 export class UiAlertDialogAction extends WebComponent {
   _userClass: string = '';
+  _hasAuthoredButton: boolean = false;
 
   connectedCallback(): void {
     this._userClass = this.getAttribute('class') ?? '';
+    this._hasAuthoredButton = !!this.querySelector('button');
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
     super.connectedCallback?.();
