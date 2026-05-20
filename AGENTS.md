@@ -102,6 +102,8 @@ See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, refer
 
 An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rails.
 
+**Why lit-style web components specifically?** AI coding agents have substantial training data on lit. Aligning webjs's component runtime API (reactive properties via `static properties`, lifecycle hooks like `shouldUpdate` / `willUpdate` / `updated` / `firstUpdated` / `updateComplete`, ReactiveController hooks `hostConnected` / `hostDisconnected` / `hostUpdate` / `hostUpdated`, the full `lit-html` directive set, `html` / `css` tagged templates) lets agents emit idiomatic webjs code without framework-specific translation. Webjs ships its own implementation under `packages/core/src/` (clean JSDoc-typed JS, no-build), but the public API surface matches lit so the ecosystem's collective lit knowledge transfers directly. Decorators are the one exception (banned by invariant 10, non-erasable TS); the `declare` + `static properties` pattern replaces them.
+
 - **Sensible defaults, overridable.** Memory store in dev, Redis when configured. HTTP caching via standard `Cache-Control`.
 - **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
