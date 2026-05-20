@@ -65,8 +65,17 @@ function. Edit the inline `<h1>` / `<p>` text.
 cd website && npm run dev       # http://localhost:5000
 ```
 
-Set `DOCS_URL` / `BLOG_URL` env vars to point the header links at the
-right hosts when deploying.
+**Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs
+the server; this app's `npm run dev` uses `concurrently` to also spawn
+`tailwindcss --watch`, which is what produces `public/tailwind.css`.
+Running `webjs dev` alone ships the page with no Tailwind utilities
+applied (the navbar and most of the layout look broken). Same in prod:
+prefer `npm start` over `webjs start` so the `prestart: css:build` hook
+fires.
+
+Set `DOCS_URL` / `BLOG_URL` / `UI_URL` env vars to point the header links
+at the right hosts when deploying. Locally, `.env` in this directory
+sets them to the sibling apps' localhost ports.
 
 ---
 

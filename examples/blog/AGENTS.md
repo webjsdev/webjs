@@ -144,6 +144,32 @@ https://ui.webjs.dev). Tier-1 additions auto-export class helpers
 from their `components/ui/<name>.ts` file; Tier-2 additions register
 their custom element on import.
 
+## Running the app
+
+```sh
+cp .env.example .env          # AUTH_SECRET, SESSION_SECRET, DATABASE_URL
+npm run db:migrate            # creates prisma/dev.db + applies migrations
+npm run dev                   # http://localhost:3456
+```
+
+**Always `npm run dev` / `npm start`, never `webjs dev` / `webjs start`
+directly.** `webjs dev` and `webjs start` are framework primitives,
+they only run the webjs server. They do **not** run `prisma generate`,
+do **not** run `prisma migrate deploy`, do **not** spawn the Tailwind
+watcher. `npm run dev` and `npm start` are the app-level entrypoints,
+they run the server **plus** every other process the app needs, wired
+via `predev` / `prestart` hooks and `concurrently` for parallel
+watchers. Skipping the npm wrapper produces silent breakage: stale
+Prisma client, missing `public/tailwind.css`, unmigrated DB in prod.
+
+Same split Rails 7+ uses: `bin/rails server` is the framework
+primitive, `bin/dev` is the orchestrator. webjs uses npm scripts +
+hooks for the same role.
+
+In Docker / Railway, prefer `npm start` as the CMD over `node ...
+webjs.js start ...`. The npm form fires `prestart` (which runs
+`prisma migrate deploy`); the direct binary form skips it.
+
 ## Conventions
 
 - **One exported function per action/query file.** Name the file after the function.

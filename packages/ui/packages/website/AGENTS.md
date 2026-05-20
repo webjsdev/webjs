@@ -89,6 +89,15 @@ which composes JSON on demand from `../registry/` (no build step).
 npm run dev    # http://localhost:5001
 ```
 
+**Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs
+the server. This app's `npm run dev` does two more things via
+`concurrently` + `predev`: it spawns `tailwindcss --watch` (which
+produces `public/tailwind.css`) and runs `scripts/copy-registry.js`
+(which populates `components/ui/` + `lib/utils.ts`). Skip the npm
+wrapper and the page renders unstyled with broken imports. Same in
+prod: prefer `npm start` over `webjs start` so the `prestart: copy-
+registry + css:build` hook fires.
+
 The `predev` hook runs `scripts/copy-registry.js` to populate
 `components/ui/` and `lib/utils.ts` so the docs preview pages have
 something to import. Re-running `npm run dev` re-populates from the
