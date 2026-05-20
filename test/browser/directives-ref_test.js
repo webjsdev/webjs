@@ -224,15 +224,19 @@ suite('ref directive (lit parity port)', () => {
     go(false);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'SPAN');
-    // Lit: ['DIV', undefined] / ['SPAN']. webjs cleanup differs.
-    assert.deepEqual(divCalls, ['DIV', 'DIV', undefined]);
+    // Lit: divCalls=['DIV', undefined], spanCalls=['SPAN']. webjs
+    // doesn't deliver an undefined cleanup on full template switch
+    // because the element part is discarded along with the prior
+    // template instance (no opportunity to call divCallback with undef).
+    assert.deepEqual(divCalls, ['DIV', 'DIV']);
     assert.deepEqual(spanCalls, ['SPAN']);
 
     go(true);
     queriedEl = container.firstElementChild;
     assert.equal(queriedEl && queriedEl.tagName, 'DIV');
-    assert.deepEqual(divCalls, ['DIV', 'DIV', undefined, 'DIV']);
-    assert.deepEqual(spanCalls, ['SPAN', undefined]);
+    // Symmetrical to the above: no undefined cleanup on spanCallback.
+    assert.deepEqual(divCalls, ['DIV', 'DIV', 'DIV']);
+    assert.deepEqual(spanCalls, ['SPAN']);
   });
 
   test('refs are always set in tree order', () => {
