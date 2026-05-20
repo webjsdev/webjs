@@ -18,6 +18,7 @@ recipes for common tasks. Keep it in sync whenever behaviour changes.
 | `agent-docs/testing.md` | Unit, browser, convention validation |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself) |
 | `agent-docs/recipes.md` | Page / route / action / component recipes |
+| `agent-docs/lit-muscle-memory-gotchas.md` | **READ FIRST** when writing components. Lit patterns that break webjs SSR or reactivity, with the webjs-shaped fix for each |
 
 ---
 
@@ -333,7 +334,7 @@ Rules:
 - **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
 - **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
-**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth.
+**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth, and `agent-docs/lit-muscle-memory-gotchas.md` for the full catalog of lit patterns that produce broken SSR or silent reactivity failures in webjs.
 
 ### Light DOM (default) vs Shadow DOM (opt-in)
 
