@@ -19,6 +19,8 @@ export default {
     'test/browser/ui-stateful.test.js',
     'test/browser/ui-overlay.test.js',
     'test/browser/slot.test.js',
+    'test/browser/component-lifecycle.test.js',
+    'test/browser/directives.test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
