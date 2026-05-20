@@ -17,7 +17,7 @@
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The
 # blog runs `prisma generate` at build and `prisma migrate deploy` at
 # start.
-FROM node:24-alpine
+FROM node:26-alpine
 
 # openssl is required by Prisma's query engine at runtime.
 RUN apk add --no-cache openssl ca-certificates
