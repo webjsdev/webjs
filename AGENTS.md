@@ -208,17 +208,22 @@ import { html, css, WebComponent, render, renderToString } from '@webjskit/core'
 
 ### Directives, from `import { … } from '@webjskit/core/directives'`
 
-**"Less is more":** only directives that solve problems with no native alternative.
+lit-html parity. AI agents writing lit-shaped directive code land on familiar names.
 
 | Directive | Purpose | Example |
 |---|---|---|
-| `repeat(items, keyFn, templateFn)` | Keyed reconciliation | `${repeat(items, i => i.id, i => html\`…\`)}` |
+| `repeat(items, keyFn, templateFn)` | Keyed list reconciliation | `${repeat(items, i => i.id, i => html\`…\`)}` |
 | `unsafeHTML(str)` | Render trusted raw HTML. **NEVER use with user input.** | `${unsafeHTML(markdownToHtml(md))}` |
 | `live(value)` | Input value sync against live DOM | `.value=${live(inputVal)}` |
+| `keyed(key, template)` | Force remount on key change | `${keyed(this.userId, html\`<form>…</form>\`)}` |
+| `guard(deps, fn)` | Memoize sub-template; client skips re-eval when deps unchanged | `${guard([this.title], () => html\`<h1>\${this.title}</h1>\`)}` |
+| `templateContent(tpl)` | Render content of a `<template>` element | `${templateContent(this.shadowRoot.getElementById('tpl'))}` |
+| `ref(refOrCallback)` + `createRef()` | Bind a Ref or callback to the element | `<input ${ref(this._inputRef)}>` |
+| `cache(value)` | Pass-through marker; future versions retain detached DOM | `${cache(this.active ? viewA : viewB)}` |
+| `until(...args)` | Render first sync value; server awaits Promise.race if all are Promises | `${until(this.dataPromise, html\`<p>Loading…</p>\`)}` |
+| `asyncAppend(iter, mapper?)`, `asyncReplace(iter, mapper?)` | Stream values from an AsyncIterable. Full streaming support pending. | `${asyncAppend(stream)}` |
 
-Everything else uses native patterns: conditional classes via filter+join,
-conditional render via ternary, async data via `Task` (component) or async
-page functions (server).
+Notes on current scope: `cache` is currently an identity pass-through; `asyncAppend` / `asyncReplace` render empty on first paint pending the AsyncDirective infrastructure work. For full pending/error states in components, prefer the `Task` controller. For page-level streaming, use `Suspense`. Everything else (`classMap`, `styleMap`, `ifDefined`, `when`, `choose`, `map`, `join`, `range`) uses native patterns: conditional classes via filter+join, conditional render via ternary, etc.
 
 ### Context & Task
 

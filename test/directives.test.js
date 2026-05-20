@@ -131,3 +131,85 @@ test('createRef: returns a { value: undefined } object', () => {
   const r = createRef();
   assert.deepEqual(r, { value: undefined });
 });
+
+// --- cache (lit-html parity) ---
+
+test('cache: creates marker', () => {
+  const r = cache(html`<p>v</p>`);
+  assert.equal(r._$webjs, 'cache');
+});
+
+test('isCache: detects markers', () => {
+  assert.ok(isCache(cache(null)));
+  assert.ok(!isCache({ _$webjs: 'live' }));
+});
+
+test('cache: SSR passes through to the inner value', async () => {
+  const result = await renderToString(html`<div>${cache(html`<p>hello</p>`)}</div>`);
+  assert.ok(result.includes('<p>hello</p>'));
+});
+
+// --- until (lit-html parity) ---
+
+test('until: creates marker', () => {
+  const r = until('a', 'b');
+  assert.equal(r._$webjs, 'until');
+  assert.deepEqual(r.args, ['a', 'b']);
+});
+
+test('isUntil: detects markers', () => {
+  assert.ok(isUntil(until('x')));
+  assert.ok(!isUntil({ _$webjs: 'live' }));
+});
+
+test('until: SSR renders first synchronous candidate', async () => {
+  const promise = new Promise(() => {});  // never resolves
+  const result = await renderToString(html`<div>${until(promise, 'fallback')}</div>`);
+  assert.ok(result.includes('fallback'));
+});
+
+test('until: SSR awaits first Promise when all candidates are Promises', async () => {
+  const result = await renderToString(
+    html`<div>${until(Promise.resolve('won'), new Promise(() => {}))}</div>`,
+  );
+  assert.ok(result.includes('won'));
+});
+
+// --- asyncAppend / asyncReplace ---
+
+test('asyncAppend: creates marker', () => {
+  async function* gen() { yield 'a'; }
+  const r = asyncAppend(gen());
+  assert.equal(r._$webjs, 'async-append');
+  assert.equal(typeof r.iterable[Symbol.asyncIterator], 'function');
+});
+
+test('isAsyncAppend: detects markers', () => {
+  async function* gen() {}
+  assert.ok(isAsyncAppend(asyncAppend(gen())));
+  assert.ok(!isAsyncAppend({ _$webjs: 'live' }));
+});
+
+test('asyncReplace: creates marker', () => {
+  async function* gen() { yield 'a'; }
+  const r = asyncReplace(gen());
+  assert.equal(r._$webjs, 'async-replace');
+});
+
+test('isAsyncReplace: detects markers', () => {
+  async function* gen() {}
+  assert.ok(isAsyncReplace(asyncReplace(gen())));
+  assert.ok(!isAsyncReplace({ _$webjs: 'live' }));
+});
+
+test('asyncAppend: SSR renders empty (streaming is deferred)', async () => {
+  async function* gen() { yield 'one'; yield 'two'; }
+  const result = await renderToString(html`<div>${asyncAppend(gen())}</div>`);
+  assert.ok(result.includes('<div></div>') || /<div>\s*<\/div>/.test(result));
+});
+
+test('asyncReplace: SSR renders empty (streaming is deferred)', async () => {
+  async function* gen() { yield 'one'; }
+  const result = await renderToString(html`<div>${asyncReplace(gen())}</div>`);
+  assert.ok(result.includes('<div></div>') || /<div>\s*<\/div>/.test(result));
+});
