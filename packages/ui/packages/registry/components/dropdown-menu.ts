@@ -25,7 +25,6 @@
  *         <ui-dropdown-menu-sub-trigger>Invite users</ui-dropdown-menu-sub-trigger>
  *         <ui-dropdown-menu-sub-content>
  *           <ui-dropdown-menu-item>Email</ui-dropdown-menu-item>
- *           <ui-dropdown-menu-item>Message</ui-dropdown-menu-item>
  *         </ui-dropdown-menu-sub-content>
  *       </ui-dropdown-menu-sub>
  *       <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
@@ -34,15 +33,14 @@
  *   </ui-dropdown-menu>
  *
  * Keyboard: ArrowUp/Down to move, Enter to activate, Escape to close, Tab
- * cycles. ArrowRight on a sub-trigger opens its submenu and focuses its first
- * item; ArrowLeft inside a submenu closes it and returns focus to the
+ * cycles. ArrowRight on a sub-trigger opens its submenu and focuses its
+ * first item; ArrowLeft inside a submenu closes it and refocuses the
  * sub-trigger.
  *
  * Design tokens used: --popover, --popover-foreground, --accent,
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
-import { WebComponent, html } from '@webjskit/core';
-import { cn } from '../lib/utils.ts';
+import { WebComponent, html, unsafeHTML } from '@webjskit/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -75,21 +73,10 @@ export const dropdownMenuSubTriggerClass = (): string =>
 export const dropdownMenuSubContentClass = (): string =>
   'fixed z-50 min-w-[8rem] m-0 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
 
-const STYLES = `
-ui-dropdown-menu:not([open]) ui-dropdown-menu-content,
-ui-dropdown-menu-sub:not([open]) ui-dropdown-menu-sub-content {
-  display: none !important;
-}
-`;
+const CHEVRON_RIGHT_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
 
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-dropdown-menu-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-dropdown-menu-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
+const SUB_CLOSE_DELAY = 200;
 
 // --------------------------------------------------------------------------
 // <ui-dropdown-menu>
@@ -114,72 +101,72 @@ export class UiDropdownMenu extends WebComponent {
     this.open = false;
   }
 
-  connectedCallback(): void {
-    installStyles();
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu');
-  }
-
   disconnectedCallback(): void {
     if (this.open) this._teardown();
     super.disconnectedCallback?.();
-  }
-
-  render() {
-    this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    // <ui-dropdown-menu-content> is a descendant WebComponent; wait one
-    // frame so its slot projection settles before _afterRender walks it.
-    requestAnimationFrame(() => this._afterRender());
-    return html`<slot></slot>`;
-  }
-
-  _afterRender(): void {
-    const content = this.querySelector<HTMLElement>('ui-dropdown-menu-content');
-    if (content) {
-      content.setAttribute('data-state', this.open ? 'open' : 'closed');
-      if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
-        const isPopoverOpen = (content as HTMLElement & { matches: (s: string) => boolean }).matches(':popover-open');
-        if (this.open && !isPopoverOpen) {
-          (content as HTMLElement & { showPopover: () => void }).showPopover();
-        } else if (!this.open && isPopoverOpen) {
-          (content as HTMLElement & { hidePopover: () => void }).hidePopover();
-        }
-      }
-    }
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (this.open) this._setup();
-      else this._teardown();
-    }
   }
 
   toggle(): void { this.open = !this.open; }
   show(): void { this.open = true; }
   hide(): void { this.open = false; }
 
+  render() {
+    if (this._lastOpen !== this.open) {
+      this._lastOpen = this.open;
+      requestAnimationFrame(() => this._afterRender());
+    }
+    return html`<div data-slot="dropdown-menu" data-state=${this.open ? 'open' : 'closed'}>
+      <slot></slot>
+    </div>`;
+  }
+
+  _afterRender(): void {
+    const content = this._content();
+    if (content) {
+      this._syncContentPopover(content);
+    }
+    if (this.open) this._setup();
+    else this._teardown();
+  }
+
+  _content(): HTMLElement | null {
+    return this.querySelector('ui-dropdown-menu-content [popover]');
+  }
+
+  _syncContentPopover(content: HTMLElement): void {
+    const p = content as HTMLElement & {
+      showPopover?: () => void;
+      hidePopover?: () => void;
+      matches: (s: string) => boolean;
+    };
+    if (typeof p.showPopover !== 'function') return;
+    if (this.open && !p.matches(':popover-open')) p.showPopover();
+    else if (!this.open && p.matches(':popover-open')) p.hidePopover();
+  }
+
   _reposition(): void {
     const trigger = this.querySelector<HTMLElement>('ui-dropdown-menu-trigger');
-    const content = this.querySelector<HTMLElement>('ui-dropdown-menu-content');
-    if (!trigger || !content) return;
+    const content = this._content();
+    const host = this.querySelector<HTMLElement>('ui-dropdown-menu-content');
+    if (!trigger || !content || !host) return;
     positionFloating(trigger, content, {
-      side: (content.getAttribute('side') ?? 'bottom') as PopoverSide,
-      align: (content.getAttribute('align') ?? 'start') as PopoverAlign,
-      sideOffset: Number(content.getAttribute('side-offset') ?? 4),
-      alignOffset: Number(content.getAttribute('align-offset') ?? 0),
+      side: (host.getAttribute('side') ?? 'bottom') as PopoverSide,
+      align: (host.getAttribute('align') ?? 'start') as PopoverAlign,
+      sideOffset: Number(host.getAttribute('side-offset') ?? 4),
+      alignOffset: Number(host.getAttribute('align-offset') ?? 0),
     });
   }
 
   _setup(): void {
+    this._reposition();
+    document.addEventListener('click', this._docClickHandler);
+    document.addEventListener('keydown', this._keyHandler);
+    window.addEventListener('resize', this._resizeHandler);
+    window.addEventListener('scroll', this._resizeHandler, true);
     queueMicrotask(() => {
-      this._reposition();
-      document.addEventListener('click', this._docClickHandler);
-      document.addEventListener('keydown', this._keyHandler);
-      window.addEventListener('resize', this._resizeHandler);
-      window.addEventListener('scroll', this._resizeHandler, true);
-      const first = this.querySelector<HTMLElement>('ui-dropdown-menu-item:not([data-disabled])');
+      const first = this.querySelector<HTMLElement>(
+        'ui-dropdown-menu-item:not([data-disabled]) [role="menuitem"]',
+      );
       first?.focus();
     });
   }
@@ -208,24 +195,15 @@ export class UiDropdownMenu extends WebComponent {
       return;
     }
 
-    // Scope arrow nav to the "active context", the nearest content or
-    // sub-content panel owning the focused element. Without this, pressing
-    // ArrowDown while a sub-trigger is focused would walk into the
-    // submenu's items as if they were siblings of the parent items.
+    // Active context = nearest content / sub-content panel owning focus.
+    // Scoping arrow nav avoids walking into siblings of a different submenu.
     const active = document.activeElement as HTMLElement | null;
-    const context = active?.closest(
-      'ui-dropdown-menu-sub-content, ui-dropdown-menu-content',
-    ) as HTMLElement | null;
+    const context = active?.closest('[role="menu"]') as HTMLElement | null;
     if (!context) return;
 
     const items = Array.from(
-      context.querySelectorAll<HTMLElement>(
-        ':scope ui-dropdown-menu-item:not([data-disabled]), :scope ui-dropdown-menu-sub-trigger:not([data-disabled])',
-      ),
-    ).filter(
-      (it) =>
-        it.closest('ui-dropdown-menu-sub-content, ui-dropdown-menu-content') === context,
-    );
+      context.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])'),
+    ).filter((it) => it.closest('[role="menu"]') === context);
     if (items.length === 0) return;
     const idx = active ? items.indexOf(active) : -1;
 
@@ -242,25 +220,29 @@ export class UiDropdownMenu extends WebComponent {
       e.preventDefault();
       items[items.length - 1].focus();
     } else if (e.key === 'ArrowRight') {
-      if (active?.tagName === 'UI-DROPDOWN-MENU-SUB-TRIGGER') {
+      // Open submenu owned by the focused sub-trigger and move focus into it.
+      const subTrigger = active?.closest('ui-dropdown-menu-sub-trigger');
+      if (subTrigger) {
         e.preventDefault();
-        const sub = active.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+        const sub = subTrigger.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
         if (sub) {
           sub.show();
           queueMicrotask(() => {
-            const subContent = sub.querySelector<HTMLElement>('ui-dropdown-menu-sub-content');
-            const firstSubItem = subContent?.querySelector<HTMLElement>(
-              'ui-dropdown-menu-item:not([data-disabled]), ui-dropdown-menu-sub-trigger:not([data-disabled])',
+            const firstSubItem = sub.querySelector<HTMLElement>(
+              'ui-dropdown-menu-sub-content [role="menuitem"]:not([data-disabled])',
             );
             firstSubItem?.focus();
           });
         }
       }
     } else if (e.key === 'ArrowLeft') {
-      if (context.tagName === 'UI-DROPDOWN-MENU-SUB-CONTENT') {
+      // Inside a sub-content: close the submenu and refocus its trigger.
+      if (context.closest('ui-dropdown-menu-sub-content')) {
         e.preventDefault();
         const sub = context.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
-        const trigger = sub?.querySelector<HTMLElement>('ui-dropdown-menu-sub-trigger');
+        const trigger = sub?.querySelector<HTMLElement>(
+          'ui-dropdown-menu-sub-trigger [role="menuitem"]',
+        );
         sub?.hide();
         trigger?.focus();
       }
@@ -291,22 +273,11 @@ UiDropdownMenu.register('ui-dropdown-menu');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuTrigger extends WebComponent {
-  connectedCallback(): void {
-    this.addEventListener('click', this._onClick);
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-trigger');
-  }
-
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    super.disconnectedCallback?.();
-  }
-
   render() {
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="dropdown-menu-trigger"
+      @click=${this._onClick}
+    ><slot></slot></div>`;
   }
 
   _onClick = (): void => (this.closest('ui-dropdown-menu') as UiDropdownMenu | null)?.toggle();
@@ -318,22 +289,13 @@ UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuContent extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-content');
-    this.setAttribute('role', 'menu');
-    if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
-  }
-
   render() {
-    this.className = cn(dropdownMenuContentClass(), this._userClass);
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="dropdown-menu-content"
+      role="menu"
+      popover="manual"
+      class=${dropdownMenuContentClass()}
+    ><slot></slot></div>`;
   }
 }
 UiDropdownMenuContent.register('ui-dropdown-menu-content');
@@ -348,59 +310,45 @@ export class UiDropdownMenuItem extends WebComponent {
   };
   declare variant: 'default' | 'destructive';
 
-  _userClass: string = '';
-
   constructor() {
     super();
     this.variant = 'default';
   }
 
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('pointerenter', this._onPointerEnter);
-    this.addEventListener('focus', this._onFocus);
-    this.addEventListener('blur', this._onBlur);
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-item');
-    this.setAttribute('role', 'menuitem');
-    this.setAttribute('tabindex', '-1');
-  }
-
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('pointerenter', this._onPointerEnter);
-    this.removeEventListener('focus', this._onFocus);
-    this.removeEventListener('blur', this._onBlur);
-    super.disconnectedCallback?.();
-  }
-
   render() {
-    this.setAttribute('data-variant', this.variant);
-    if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
-    this.className = cn(dropdownMenuItemClass(), this._userClass);
-    return html`<slot></slot>`;
+    const inset = this.hasAttribute('inset');
+    return html`<div
+      data-slot="dropdown-menu-item"
+      role="menuitem"
+      tabindex="-1"
+      data-variant=${this.variant}
+      ?data-inset=${inset}
+      class=${dropdownMenuItemClass()}
+      @click=${this._onClick}
+      @pointerenter=${this._onPointerEnter}
+      @focus=${this._onFocus}
+      @blur=${this._onBlur}
+    ><slot></slot></div>`;
   }
 
-  _onClick = (): void => {
-    if (this.hasAttribute('data-disabled')) return;
+  _onClick = (e: Event): void => {
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasAttribute('data-disabled')) return;
     (this.closest('ui-dropdown-menu') as UiDropdownMenu | null)?.hide();
   };
 
-  _onPointerEnter = (): void => {
-    if (this.hasAttribute('data-disabled')) return;
-    this.focus();
+  _onPointerEnter = (e: Event): void => {
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasAttribute('data-disabled')) return;
+    el.focus();
   };
 
-  _onFocus = (): void => {
-    this.setAttribute('data-highlighted', '');
+  _onFocus = (e: Event): void => {
+    (e.currentTarget as HTMLElement).setAttribute('data-highlighted', '');
   };
 
-  _onBlur = (): void => {
-    this.removeAttribute('data-highlighted');
+  _onBlur = (e: Event): void => {
+    (e.currentTarget as HTMLElement).removeAttribute('data-highlighted');
   };
 }
 UiDropdownMenuItem.register('ui-dropdown-menu-item');
@@ -410,21 +358,13 @@ UiDropdownMenuItem.register('ui-dropdown-menu-item');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuLabel extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-label');
-  }
-
   render() {
-    if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
-    this.className = cn(dropdownMenuLabelClass(), this._userClass);
-    return html`<slot></slot>`;
+    const inset = this.hasAttribute('inset');
+    return html`<div
+      data-slot="dropdown-menu-label"
+      ?data-inset=${inset}
+      class=${dropdownMenuLabelClass()}
+    ><slot></slot></div>`;
   }
 }
 UiDropdownMenuLabel.register('ui-dropdown-menu-label');
@@ -434,21 +374,12 @@ UiDropdownMenuLabel.register('ui-dropdown-menu-label');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuSeparator extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-separator');
-    this.setAttribute('role', 'separator');
-  }
-
   render() {
-    this.className = cn(dropdownMenuSeparatorClass(), this._userClass);
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="dropdown-menu-separator"
+      role="separator"
+      class=${dropdownMenuSeparatorClass()}
+    ></div>`;
   }
 }
 UiDropdownMenuSeparator.register('ui-dropdown-menu-separator');
@@ -458,20 +389,11 @@ UiDropdownMenuSeparator.register('ui-dropdown-menu-separator');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuShortcut extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-shortcut');
-  }
-
   render() {
-    this.className = cn(dropdownMenuShortcutClass(), this._userClass);
-    return html`<slot></slot>`;
+    return html`<span
+      data-slot="dropdown-menu-shortcut"
+      class=${dropdownMenuShortcutClass()}
+    ><slot></slot></span>`;
   }
 }
 UiDropdownMenuShortcut.register('ui-dropdown-menu-shortcut');
@@ -481,25 +403,18 @@ UiDropdownMenuShortcut.register('ui-dropdown-menu-shortcut');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuGroup extends WebComponent {
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-group');
-    this.setAttribute('role', 'group');
-  }
-
   render() {
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="dropdown-menu-group"
+      role="group"
+    ><slot></slot></div>`;
   }
 }
 UiDropdownMenuGroup.register('ui-dropdown-menu-group');
 
 // --------------------------------------------------------------------------
-// Submenu, Sub / SubTrigger / SubContent (shadcn parity)
+// Submenu: Sub / SubTrigger / SubContent
 // --------------------------------------------------------------------------
-
-const CHEVRON_RIGHT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
-
-const SUB_CLOSE_DELAY = 200;
 
 export class UiDropdownMenuSub extends WebComponent {
   static properties = {
@@ -509,74 +424,52 @@ export class UiDropdownMenuSub extends WebComponent {
 
   _lastOpen: boolean = false;
   _closeTimer: number | undefined;
-  _pointerEnterHandler = (): void => this._cancelClose();
-  _pointerLeaveHandler = (): void => this._scheduleClose();
 
   constructor() {
     super();
     this.open = false;
   }
 
-  connectedCallback(): void {
-    this.addEventListener('pointerenter', this._pointerEnterHandler);
-    this.addEventListener('pointerleave', this._pointerLeaveHandler);
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-sub');
-  }
-
   disconnectedCallback(): void {
-    this.removeEventListener('pointerenter', this._pointerEnterHandler);
-    this.removeEventListener('pointerleave', this._pointerLeaveHandler);
     this._cancelClose();
     super.disconnectedCallback?.();
   }
 
+  show(): void { this._cancelClose(); this.open = true; }
+  hide(): void { this._cancelClose(); this.open = false; }
+  toggle(): void { if (this.open) this.hide(); else this.show(); }
+
   render() {
-    this.setAttribute('data-state', this.open ? 'open' : 'closed');
-    // Sub-trigger + sub-content are descendant WebComponents; wait one
-    // frame so their slot projections settle before we walk for them.
-    requestAnimationFrame(() => this._afterRender());
-    return html`<slot></slot>`;
+    if (this._lastOpen !== this.open) {
+      this._lastOpen = this.open;
+      requestAnimationFrame(() => this._afterRender());
+    }
+    return html`<div
+      data-slot="dropdown-menu-sub"
+      data-state=${this.open ? 'open' : 'closed'}
+      @pointerenter=${this._cancelCloseHandler}
+      @pointerleave=${this._scheduleCloseHandler}
+    ><slot></slot></div>`;
   }
 
   _afterRender(): void {
-    const trigger = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-trigger');
-    const content = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content');
-    trigger?.setAttribute('data-state', this.open ? 'open' : 'closed');
-    if (content) {
-      content.setAttribute('data-state', this.open ? 'open' : 'closed');
-      if (typeof (content as HTMLElement & { showPopover?: () => void }).showPopover === 'function') {
-        const isPopoverOpen = (content as HTMLElement & { matches: (s: string) => boolean }).matches(':popover-open');
-        if (this.open && !isPopoverOpen) {
-          (content as HTMLElement & { showPopover: () => void }).showPopover();
-        } else if (!this.open && isPopoverOpen) {
-          (content as HTMLElement & { hidePopover: () => void }).hidePopover();
-        }
+    const subContent = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content [popover]');
+    if (subContent) {
+      const p = subContent as HTMLElement & {
+        showPopover?: () => void;
+        hidePopover?: () => void;
+        matches: (s: string) => boolean;
+      };
+      if (typeof p.showPopover === 'function') {
+        if (this.open && !p.matches(':popover-open')) p.showPopover();
+        else if (!this.open && p.matches(':popover-open')) p.hidePopover();
       }
     }
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (this.open) this._position();
-    }
+    if (this.open) this._position();
   }
 
-  show(): void {
-    this._cancelClose();
-    this.open = true;
-  }
-
-  hide(): void {
-    this._cancelClose();
-    this.open = false;
-  }
-
-  toggle(): void {
-    if (this.open) this.hide();
-    else this.show();
-  }
+  _cancelCloseHandler = (): void => this._cancelClose();
+  _scheduleCloseHandler = (): void => this._scheduleClose();
 
   _scheduleClose(): void {
     this._cancelClose();
@@ -591,96 +484,69 @@ export class UiDropdownMenuSub extends WebComponent {
   }
 
   _position(): void {
-    queueMicrotask(() => {
-      const trigger = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-trigger');
-      const content = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content');
-      if (!trigger || !content) return;
-      positionFloating(trigger, content, {
-        side: (content.getAttribute('side') ?? 'right') as PopoverSide,
-        align: (content.getAttribute('align') ?? 'start') as PopoverAlign,
-        sideOffset: Number(content.getAttribute('side-offset') ?? -4),
-        alignOffset: Number(content.getAttribute('align-offset') ?? 0),
-      });
+    const trigger = this.querySelector<HTMLElement>(
+      'ui-dropdown-menu-sub-trigger [role="menuitem"]',
+    );
+    const content = this.querySelector<HTMLElement>(
+      'ui-dropdown-menu-sub-content [popover]',
+    );
+    const contentHost = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content');
+    if (!trigger || !content || !contentHost) return;
+    positionFloating(trigger, content, {
+      side: (contentHost.getAttribute('side') ?? 'right') as PopoverSide,
+      align: (contentHost.getAttribute('align') ?? 'start') as PopoverAlign,
+      sideOffset: Number(contentHost.getAttribute('side-offset') ?? -4),
+      alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
     });
   }
 }
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
-// --------------------------------------------------------------------------
-// <ui-dropdown-menu-sub-trigger>
-// --------------------------------------------------------------------------
-
 export class UiDropdownMenuSubTrigger extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('pointerenter', this._onPointerEnter);
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-sub-trigger');
-    this.setAttribute('role', 'menuitem');
-    this.setAttribute('tabindex', '-1');
-    this.setAttribute('aria-haspopup', 'menu');
-    if (!this.querySelector(':scope > svg:last-child')) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = CHEVRON_RIGHT_SVG;
-      const svg = tmp.firstChild;
-      if (svg) this.appendChild(svg);
-    }
-  }
-
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('pointerenter', this._onPointerEnter);
-    super.disconnectedCallback?.();
+  _sub(): UiDropdownMenuSub | null {
+    return this.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
   }
 
   render() {
-    if (this.hasAttribute('inset')) this.setAttribute('data-inset', '');
-    this.className = cn(dropdownMenuSubTriggerClass(), this._userClass);
-    return html`<slot></slot>`;
+    const inset = this.hasAttribute('inset');
+    const open = !!this._sub()?.open;
+    return html`<div
+      data-slot="dropdown-menu-sub-trigger"
+      role="menuitem"
+      tabindex="-1"
+      aria-haspopup="menu"
+      aria-expanded=${String(open)}
+      data-state=${open ? 'open' : 'closed'}
+      ?data-inset=${inset}
+      class=${dropdownMenuSubTriggerClass()}
+      @click=${this._onClick}
+      @pointerenter=${this._onPointerEnter}
+    ><slot></slot>${unsafeHTML(CHEVRON_RIGHT_SVG)}</div>`;
   }
 
-  _onClick = (): void => {
-    if (this.hasAttribute('data-disabled')) return;
-    const sub = this.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
-    sub?.toggle();
+  _onClick = (e: Event): void => {
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasAttribute('data-disabled')) return;
+    this._sub()?.toggle();
   };
 
-  _onPointerEnter = (): void => {
-    if (this.hasAttribute('data-disabled')) return;
-    this.focus();
-    const sub = this.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
-    sub?.show();
+  _onPointerEnter = (e: Event): void => {
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasAttribute('data-disabled')) return;
+    el.focus();
+    this._sub()?.show();
   };
 }
 UiDropdownMenuSubTrigger.register('ui-dropdown-menu-sub-trigger');
 
-// --------------------------------------------------------------------------
-// <ui-dropdown-menu-sub-content>
-// --------------------------------------------------------------------------
-
 export class UiDropdownMenuSubContent extends WebComponent {
-  _userClass: string = '';
-
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'dropdown-menu-sub-content');
-    this.setAttribute('role', 'menu');
-    if (!this.hasAttribute('popover')) this.setAttribute('popover', 'manual');
-  }
-
   render() {
-    this.className = cn(dropdownMenuSubContentClass(), this._userClass);
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="dropdown-menu-sub-content"
+      role="menu"
+      popover="manual"
+      class=${dropdownMenuSubContentClass()}
+    ><slot></slot></div>`;
   }
 }
 UiDropdownMenuSubContent.register('ui-dropdown-menu-sub-content');

@@ -36,6 +36,11 @@ suite('ui-tabs', () => {
     await import(`${COMPONENTS_DIR}/tabs.ts`);
   });
 
+  // The Lit-idiomatic refactor renders each compound subcomponent's
+  // ARIA role + interactive element inside its slot output. ARIA tooling
+  // finds role="tablist" / "tab" / "tabpanel" on the inner elements,
+  // not on the <ui-*> hosts. Tests query the inner elements accordingly.
+
   test('renders tablist + triggers + contents', async () => {
     const root = await mount(html`
       <ui-tabs value="a">
@@ -47,10 +52,10 @@ suite('ui-tabs', () => {
         <ui-tabs-content value="b">PANE B</ui-tabs-content>
       </ui-tabs>
     `);
-    // <ui-tabs-list> sets role="tablist" on the host itself, not a descendant.
-    const list = root.querySelector('ui-tabs-list[role="tablist"]');
-    assert.ok(list, 'tablist role on ui-tabs-list host');
-    const triggers = root.querySelectorAll('ui-tabs-trigger[role="tab"]');
+    await tick();
+    const list = root.querySelector('ui-tabs-list [role="tablist"]');
+    assert.ok(list, 'tablist role on inner element');
+    const triggers = root.querySelectorAll('ui-tabs-trigger [role="tab"]');
     assert.equal(triggers.length, 2);
     root.remove();
   });
@@ -67,8 +72,8 @@ suite('ui-tabs', () => {
       </ui-tabs>
     `);
     await tick();
-    const triggerA = root.querySelector('ui-tabs-trigger[value="a"]');
-    const triggerB = root.querySelector('ui-tabs-trigger[value="b"]');
+    const triggerA = root.querySelector('ui-tabs-trigger[value="a"] [role="tab"]');
+    const triggerB = root.querySelector('ui-tabs-trigger[value="b"] [role="tab"]');
     assert.equal(triggerA.getAttribute('data-state'), 'active');
     assert.equal(triggerB.getAttribute('data-state'), 'inactive');
     root.remove();
@@ -86,8 +91,9 @@ suite('ui-tabs', () => {
       </ui-tabs>
     `);
     await tick();
-    const triggerB = root.querySelector('ui-tabs-trigger[value="b"]');
-    triggerB.click();
+    // Click the inner button (the actual interactive element); the host
+    // is just a slot wrapper now.
+    root.querySelector('ui-tabs-trigger[value="b"] [role="tab"]').click();
     await tick();
     const root_ = root.querySelector('ui-tabs');
     assert.equal(root_.getAttribute('value'), 'b', 'tabs root updates value');
@@ -106,10 +112,9 @@ suite('ui-tabs', () => {
       </ui-tabs>
     `);
     await tick();
-    // role="tabpanel" is set on the host <ui-tabs-content> itself.
-    const contentB = root.querySelector('ui-tabs-content[value="b"]');
-    assert.equal(contentB.getAttribute('role'), 'tabpanel');
-    assert.ok(contentB.hasAttribute('hidden'), 'inactive pane has hidden attr');
+    const panelB = root.querySelector('ui-tabs-content[value="b"] [role="tabpanel"]');
+    assert.equal(panelB.getAttribute('role'), 'tabpanel');
+    assert.ok(panelB.hasAttribute('hidden'), 'inactive pane has hidden attr');
     root.remove();
   });
 
@@ -128,7 +133,7 @@ suite('ui-tabs', () => {
     const tabs = root.querySelector('ui-tabs');
     let detail = null;
     tabs.addEventListener('ui-value-change', (e) => { detail = e.detail; });
-    root.querySelector('ui-tabs-trigger[value="b"]').click();
+    root.querySelector('ui-tabs-trigger[value="b"] [role="tab"]').click();
     await tick();
     assert.equal(detail?.value, 'b');
     root.remove();
@@ -140,16 +145,19 @@ suite('ui-toggle-group', () => {
     await import(`${COMPONENTS_DIR}/toggle-group.ts`);
   });
 
-  test('host gets role="group" + data-slot="toggle-group"', async () => {
+  test('inner wrapper has role="group" + data-slot="toggle-group"', async () => {
     const root = await mount(html`
       <ui-toggle-group type="single">
         <ui-toggle-group-item value="a">A</ui-toggle-group-item>
         <ui-toggle-group-item value="b">B</ui-toggle-group-item>
       </ui-toggle-group>
     `);
-    const tg = root.querySelector('ui-toggle-group');
-    assert.equal(tg.getAttribute('role'), 'group');
-    assert.equal(tg.getAttribute('data-slot'), 'toggle-group');
+    // The Lit-idiomatic refactor renders a wrapping <div role="group">
+    // inside the host's slot output, so ARIA tooling finds the role on
+    // the inner element rather than the host. Same with data-slot.
+    const inner = root.querySelector('ui-toggle-group > div[data-slot="toggle-group"]');
+    assert.ok(inner, 'inner wrapper rendered');
+    assert.equal(inner.getAttribute('role'), 'group');
     root.remove();
   });
 
@@ -191,10 +199,14 @@ suite('ui-toggle-group', () => {
         <ui-toggle-group-item value="b">B</ui-toggle-group-item>
       </ui-toggle-group>
     `);
+    await tick();
     const tg = root.querySelector('ui-toggle-group');
     let detail = null;
     tg.addEventListener('ui-value-change', (e) => { detail = e.detail; });
-    root.querySelector('ui-toggle-group-item[value="b"]').click();
+    // Click the inner <button> the item renders, not the host wrapper.
+    // The host is now just a slot host; the inner button carries the
+    // @click handler that fires the bubbling ui-toggle-item-click event.
+    root.querySelector('ui-toggle-group-item[value="b"] button').click();
     await tick();
     assert.equal(tg.getAttribute('value'), 'b');
     assert.equal(detail?.value, 'b');
@@ -208,14 +220,18 @@ suite('ui-sonner', () => {
     toastModule = await import(`${COMPONENTS_DIR}/sonner.ts`);
   });
 
-  test('mounting <ui-sonner> sets data-slot + fixed positioning class', async () => {
+  test('mounting <ui-sonner> renders inner wrapper with data-slot + fixed positioning class', async () => {
     const root = await mount(html`<ui-sonner position="top-right"></ui-sonner>`);
-    const son = root.querySelector('ui-sonner');
-    assert.equal(son.getAttribute('data-slot'), 'sonner');
-    // position="top-right" → top-4 right-4
-    assert.match(son.className, /top-4/);
-    assert.match(son.className, /right-4/);
-    assert.match(son.className, /fixed/);
+    await tick();
+    // The Lit refactor renders an inner <div data-slot="sonner"> that
+    // carries the positioning classes; the host stays untouched so the
+    // user's own class attribute on <ui-sonner> is preserved.
+    const inner = root.querySelector('ui-sonner [data-slot="sonner"]');
+    assert.ok(inner, 'inner wrapper rendered');
+    assert.equal(inner.getAttribute('data-slot'), 'sonner');
+    assert.match(inner.className, /top-4/);
+    assert.match(inner.className, /right-4/);
+    assert.match(inner.className, /fixed/);
     root.remove();
   });
 
@@ -250,11 +266,13 @@ suite('ui-sonner', () => {
     const { toast } = toastModule;
     const id = toast('Will dismiss');
     await tick();
-    const before = root.querySelector('ui-sonner').children.length;
+    // Toasts now render into the inner [data-slot="sonner"] wrapper.
+    const inner = root.querySelector('ui-sonner [data-slot="sonner"]');
+    const before = inner.children.length;
     assert.ok(before >= 1);
     toast.dismiss(id);
     await tick();
-    const after = root.querySelector('ui-sonner').children.length;
+    const after = inner.children.length;
     assert.ok(after < before, 'child count must decrease after dismiss');
     root.remove();
   });

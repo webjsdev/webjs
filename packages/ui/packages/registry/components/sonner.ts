@@ -18,7 +18,6 @@
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
 import { WebComponent, html, repeat, unsafeHTML } from '@webjskit/core';
-import { cn } from '../lib/utils.ts';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
@@ -120,21 +119,17 @@ export class UiSonner extends WebComponent {
   declare position: SonnerPosition;
   declare state: SonnerState;
 
-  _userClass: string = '';
-
   constructor() {
     super();
     this.position = 'bottom-right';
     this.state = { items: [] };
   }
 
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
+  // Routing the global toast() function to this viewport. Runs in
+  // firstUpdated rather than the constructor because tests can mount
+  // multiple <ui-sonner> instances and the most recently mounted wins
+  // (matches the existing semantics).
   firstUpdated(): void {
-    this.setAttribute('data-slot', 'sonner');
     toaster.add = (t) => this._add(t);
     toaster.remove = (id) => this._remove(id);
   }
@@ -174,41 +169,38 @@ export class UiSonner extends WebComponent {
 
   render() {
     const pos = POSITIONS[this.position] ?? POSITIONS['bottom-right'];
-    this.className = cn(
-      'pointer-events-none fixed z-[100] flex flex-col gap-2',
-      pos,
-      this._userClass,
-    );
-    return html`
+    return html`<div
+      data-slot="sonner"
+      class=${`pointer-events-none fixed z-[100] flex flex-col gap-2 ${pos}`}
+    >
       ${repeat(
         this.state.items,
         (item) => item.id,
-        (item) => html`
-          <div
-            class=${TOAST_ITEM_BASE}
-            data-type=${item.type}
-            role=${item.type === 'error' ? 'alert' : 'status'}>
-            <div class=${`${TYPE_ICON_COLOR[item.type]} pt-0.5`}>${unsafeHTML(ICONS[item.type])}</div>
-            <div class="flex-1">
-              <div class="font-medium">${item.message}</div>
-              ${item.description
-                ? html`<div class="mt-1 text-xs text-muted-foreground">${item.description}</div>`
-                : ''}
-            </div>
-            ${item.action
-              ? html`<button
-                  class="rounded-md px-2 py-1 text-xs font-medium hover:bg-accent"
-                  @click=${() => {
-                    item.action!.onClick();
-                    this._remove(item.id);
-                  }}>
-                  ${item.action.label}
-                </button>`
+        (item) => html`<div
+          class=${TOAST_ITEM_BASE}
+          data-type=${item.type}
+          role=${item.type === 'error' ? 'alert' : 'status'}
+        >
+          <div class=${`${TYPE_ICON_COLOR[item.type]} pt-0.5`}>${unsafeHTML(ICONS[item.type])}</div>
+          <div class="flex-1">
+            <div class="font-medium">${item.message}</div>
+            ${item.description
+              ? html`<div class="mt-1 text-xs text-muted-foreground">${item.description}</div>`
               : ''}
           </div>
-        `,
+          ${item.action
+            ? html`<button
+                type="button"
+                class="rounded-md px-2 py-1 text-xs font-medium hover:bg-accent"
+                @click=${() => {
+                  item.action!.onClick();
+                  this._remove(item.id);
+                }}
+              >${item.action.label}</button>`
+            : ''}
+        </div>`,
       )}
-    `;
+    </div>`;
   }
 }
 UiSonner.register('ui-sonner');

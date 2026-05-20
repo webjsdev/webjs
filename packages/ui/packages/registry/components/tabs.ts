@@ -35,7 +35,6 @@
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
  */
-
 import { WebComponent, html } from '@webjskit/core';
 import { cn } from '../lib/utils.ts';
 
@@ -61,23 +60,15 @@ export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string 
   return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[variant]);
 }
 
+// The trigger is rendered as a native <button role="tab">, which gives
+// us cursor-pointer + Enter/Space activation + focus for free. The class
+// here is essentially shadcn's tabs.tsx trigger output.
 const TABS_TRIGGER_CLASS = [
-  // cursor-pointer + select-none are mandatory here because the trigger
-  // is a custom element (<ui-tabs-trigger>), not a <button>: the host
-  // is a generic block by default, so the browser would otherwise paint
-  // the I-beam text cursor over the label and let users drag-select
-  // tab text mid-click. shadcn's tabs use <button role="tab"> in React,
-  // where pointer cursor + select-none come for free; our custom-element
-  // wrapper has to ask for them explicitly.
   "relative inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer select-none items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=underline]/tabs-list:data-[state=active]:shadow-none dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  // These two rows mirror shadcn's tabs.tsx EXACTLY (modulo our
-  // `variant=line` → `variant=underline` rename). Critical: the
-  // border-input rule on active is `dark:` only: light-mode active
-  // tabs get bg-background + shadow-sm and NO border. Earlier we
-  // tried adding the border in light mode for visibility but it made
-  // the underline variant look like outline AND made the default
-  // variant feel like two separate buttons. Shadcn's design intent:
-  // shadow alone marks the active tab in light mode.
+  // These mirror shadcn's tabs.tsx (modulo variant=line → variant=underline).
+  // Light-mode active state uses bg-background + shadow only; dark mode
+  // additionally borders. Adding light-mode border made the underline
+  // variant look like outline and made default look like two buttons.
   'group-data-[variant=underline]/tabs-list:bg-transparent group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent',
   'data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 dark:data-[state=active]:text-foreground',
   'after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=underline]/tabs-list:data-[state=active]:after:opacity-100',
@@ -86,24 +77,11 @@ const TABS_TRIGGER_CLASS = [
 const TABS_CONTENT_CLASS = 'flex-1 outline-none';
 
 // --------------------------------------------------------------------------
-// Visibility CSS: inactive content is hidden via data-state.
-// --------------------------------------------------------------------------
-
-const STYLES = `
-ui-tabs-content[data-state="inactive"] { display: none !important; }
-`;
-
-function installStyles(): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-tabs-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'ui-tabs-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-}
-
-// --------------------------------------------------------------------------
-// <ui-tabs> owns active `value` and `orientation`, broadcasts to children.
+// <ui-tabs> owns active `value` + `orientation`. Children read its state
+// via closest('ui-tabs'); when value changes, the parent fires a
+// `tabs-value-change-internal` event that descendants listen for via
+// the bubbling event on their own host. Each descendant then calls
+// requestUpdate() to re-render against the new parent value.
 // --------------------------------------------------------------------------
 
 export class UiTabs extends WebComponent {
@@ -114,7 +92,6 @@ export class UiTabs extends WebComponent {
   declare value: string;
   declare orientation: 'horizontal' | 'vertical';
 
-  _userClass: string = '';
   _lastValue: string = '';
 
   constructor() {
@@ -123,27 +100,9 @@ export class UiTabs extends WebComponent {
     this.orientation = 'horizontal';
   }
 
-  connectedCallback(): void {
-    installStyles();
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'tabs');
-  }
-
   render() {
-    this.setAttribute('data-orientation', this.orientation);
-    this.className = cn(TABS_BASE, this._userClass);
-    // _syncChildren has to wait until the descendant <ui-tabs-list> and
-    // <ui-tabs-trigger> components have completed their own slot
-    // projections; otherwise this.querySelectorAll('ui-tabs-trigger')
-    // returns 0 nodes because the triggers are still in their captured-
-    // authored fragment. One animation frame is enough for the nested
-    // projection cascade to settle.
-    requestAnimationFrame(() => this._syncChildren());
-    // Fire value-change event when value mutates after first render.
+    // Dispatch ui-value-change after first render whenever value changes.
+    // Children re-render when they see the broadcast on the next RAF.
     if (this._lastValue !== this.value) {
       const prev = this._lastValue;
       this._lastValue = this.value;
@@ -154,31 +113,27 @@ export class UiTabs extends WebComponent {
           );
         });
       }
+      // Broadcast to descendants on the next frame (after their own first
+      // render has settled if this is the initial mount).
+      requestAnimationFrame(() => this._broadcast());
     }
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="tabs"
+      data-orientation=${this.orientation}
+      class=${TABS_BASE}
+    ><slot></slot></div>`;
   }
 
-  _syncChildren(): void {
-    const value = this.value;
-    const triggers = this.querySelectorAll<HTMLElement>('ui-tabs-trigger');
-    triggers.forEach((t) => {
-      const active = t.getAttribute('value') === value;
-      t.setAttribute('data-state', active ? 'active' : 'inactive');
-      t.setAttribute('aria-selected', String(active));
-      t.setAttribute('tabindex', active ? '0' : '-1');
-    });
-    const contents = this.querySelectorAll<HTMLElement>('ui-tabs-content');
-    contents.forEach((c) => {
-      const active = c.getAttribute('value') === value;
-      c.setAttribute('data-state', active ? 'active' : 'inactive');
-      c.toggleAttribute('hidden', !active);
-    });
+  _broadcast(): void {
+    this.querySelectorAll<WebComponent>(
+      'ui-tabs-trigger, ui-tabs-content',
+    ).forEach((el) => el.requestUpdate?.());
   }
 }
 UiTabs.register('ui-tabs');
 
 // --------------------------------------------------------------------------
-// <ui-tabs-list> is the container for triggers. Applies role="tablist".
+// <ui-tabs-list>
 // --------------------------------------------------------------------------
 
 export class UiTabsList extends WebComponent {
@@ -187,33 +142,24 @@ export class UiTabsList extends WebComponent {
   };
   declare variant: TabsListVariant;
 
-  _userClass: string = '';
-
   constructor() {
     super();
     this.variant = 'default';
   }
 
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'tabs-list');
-    this.setAttribute('role', 'tablist');
-  }
-
   render() {
-    this.setAttribute('data-variant', this.variant);
-    this.className = cn(tabsListClass({ variant: this.variant }), this._userClass);
-    return html`<slot></slot>`;
+    return html`<div
+      data-slot="tabs-list"
+      role="tablist"
+      data-variant=${this.variant}
+      class=${tabsListClass({ variant: this.variant })}
+    ><slot></slot></div>`;
   }
 }
 UiTabsList.register('ui-tabs-list');
 
 // --------------------------------------------------------------------------
-// <ui-tabs-trigger value="..."> is the tab button. Click + keyboard nav.
+// <ui-tabs-trigger value="...">
 // --------------------------------------------------------------------------
 
 export class UiTabsTrigger extends WebComponent {
@@ -222,44 +168,29 @@ export class UiTabsTrigger extends WebComponent {
   };
   declare value: string;
 
-  _userClass: string = '';
-
   constructor() {
     super();
     this.value = '';
   }
 
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    // Attach listeners every time the host reconnects. The light-DOM slot
-    // dance (parent's captureAuthoredChildren disconnects us, projection
-    // reconnects us) causes a disconnect/reconnect cycle on first mount;
-    // firstUpdated only runs once and would leave the listeners orphaned
-    // after the intermediate disconnectedCallback removes them.
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', this._onKeyDown);
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'tabs-trigger');
-    this.setAttribute('role', 'tab');
-    this.setAttribute('tabindex', '-1');
-  }
-
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('keydown', this._onKeyDown);
-    super.disconnectedCallback?.();
+  get _tabs(): UiTabs | null {
+    return this.closest('ui-tabs') as UiTabs | null;
   }
 
   render() {
-    this.className = cn(TABS_TRIGGER_CLASS, this._userClass);
-    return html`<slot></slot>`;
-  }
-
-  get _tabs(): UiTabs | null {
-    return this.closest('ui-tabs') as UiTabs | null;
+    const tabs = this._tabs;
+    const active = !!tabs && tabs.value === this.value && this.value !== '';
+    return html`<button
+      type="button"
+      role="tab"
+      data-slot="tabs-trigger"
+      data-state=${active ? 'active' : 'inactive'}
+      aria-selected=${String(active)}
+      tabindex=${active ? '0' : '-1'}
+      class=${TABS_TRIGGER_CLASS}
+      @click=${this._onClick}
+      @keydown=${this._onKeyDown}
+    ><slot></slot></button>`;
   }
 
   _onClick = (): void => {
@@ -269,27 +200,23 @@ export class UiTabsTrigger extends WebComponent {
   _onKeyDown = (e: KeyboardEvent): void => {
     const tabs = this._tabs;
     if (!tabs) return;
-    const orientation = tabs.getAttribute('orientation') ?? 'horizontal';
+    const orientation = tabs.orientation;
     const triggers = Array.from(tabs.querySelectorAll<UiTabsTrigger>('ui-tabs-trigger'));
     const idx = triggers.indexOf(this);
     const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
     const prevKey = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp';
 
     let target: UiTabsTrigger | null = null;
-    if (e.key === nextKey) target = triggers[(idx + 1) % triggers.length];
-    else if (e.key === prevKey) target = triggers[(idx - 1 + triggers.length) % triggers.length];
-    else if (e.key === 'Home') target = triggers[0];
-    else if (e.key === 'End') target = triggers[triggers.length - 1];
-    else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      this._onClick();
-      return;
-    }
+    if (e.key === nextKey) target = triggers[(idx + 1) % triggers.length] ?? null;
+    else if (e.key === prevKey) target = triggers[(idx - 1 + triggers.length) % triggers.length] ?? null;
+    else if (e.key === 'Home') target = triggers[0] ?? null;
+    else if (e.key === 'End') target = triggers[triggers.length - 1] ?? null;
+    // Enter/Space already handled natively by <button>; no preventDefault needed.
 
     if (target) {
       e.preventDefault();
-      const v = target.getAttribute('value');
-      if (v != null) tabs.setAttribute('value', v);
+      const v = target.value;
+      if (v) tabs.setAttribute('value', v);
       target.focus();
     }
   };
@@ -297,7 +224,7 @@ export class UiTabsTrigger extends WebComponent {
 UiTabsTrigger.register('ui-tabs-trigger');
 
 // --------------------------------------------------------------------------
-// <ui-tabs-content value="..."> is the panel content. Shown when value matches.
+// <ui-tabs-content value="...">
 // --------------------------------------------------------------------------
 
 export class UiTabsContent extends WebComponent {
@@ -306,27 +233,26 @@ export class UiTabsContent extends WebComponent {
   };
   declare value: string;
 
-  _userClass: string = '';
-
   constructor() {
     super();
     this.value = '';
   }
 
-  connectedCallback(): void {
-    this._userClass = this.getAttribute('class') ?? '';
-    super.connectedCallback?.();
-  }
-
-  firstUpdated(): void {
-    this.setAttribute('data-slot', 'tabs-content');
-    this.setAttribute('role', 'tabpanel');
-    this.setAttribute('tabindex', '0');
+  get _tabs(): UiTabs | null {
+    return this.closest('ui-tabs') as UiTabs | null;
   }
 
   render() {
-    this.className = cn(TABS_CONTENT_CLASS, this._userClass);
-    return html`<slot></slot>`;
+    const tabs = this._tabs;
+    const active = !!tabs && tabs.value === this.value && this.value !== '';
+    return html`<section
+      data-slot="tabs-content"
+      role="tabpanel"
+      tabindex="0"
+      data-state=${active ? 'active' : 'inactive'}
+      ?hidden=${!active}
+      class=${TABS_CONTENT_CLASS}
+    ><slot></slot></section>`;
   }
 }
 UiTabsContent.register('ui-tabs-content');
