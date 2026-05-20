@@ -15,9 +15,9 @@
     "preview:build": "node scripts/copy-registry.js"
   },
   "dependencies": {
-    "@webjskit/cli": "^0.5.2",
-    "@webjskit/core": "^0.4.1",
-    "@webjskit/server": "^0.5.2",
+    "@webjskit/cli": "^0.6.0",
+    "@webjskit/core": "^0.5.0",
+    "@webjskit/server": "^0.6.0",
     "@webjskit/ui-registry": "*"
   },
   "devDependencies": {
