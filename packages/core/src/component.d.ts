@@ -43,10 +43,10 @@ export interface PropertyDeclaration<T = unknown> {
 
 /** Reactive controller protocol (Lit-compatible). */
 export interface ReactiveController {
-  onMount?(): void;
-  onUnmount?(): void;
-  beforeRender?(): void;
-  afterRender?(): void;
+  hostConnected?(): void;
+  hostDisconnected?(): void;
+  hostUpdate?(): void;
+  hostUpdated?(): void;
 }
 
 /**
@@ -84,16 +84,31 @@ export abstract class WebComponent extends HTMLElement {
   state: Record<string, unknown>;
   /** Schedule a re-render with a state patch. Batches via microtask. */
   setState(patch: Record<string, unknown>): void;
-  /** Schedule a re-render without mutating state. */
-  requestUpdate(): void;
+  /**
+   * Schedule a re-render. Optionally record a property change so lifecycle
+   * hooks can branch on what changed via `changedProperties`.
+   */
+  requestUpdate(name?: string, oldValue?: unknown): void;
+  /** A Promise that resolves after the next render commit. */
+  readonly updateComplete: Promise<boolean>;
+  /** Override point for `updateComplete`. Default returns the internal promise. */
+  getUpdateComplete(): Promise<boolean>;
   /** Attach a reactive controller. */
   addController(controller: ReactiveController): void;
   /** Detach a reactive controller. */
   removeController(controller: ReactiveController): void;
   /** Returns the template for this render. May be async. */
   render(): TemplateResult | Promise<TemplateResult> | void;
+  /** Decide whether to update. Default returns `true`. */
+  shouldUpdate(changedProperties: Map<string, unknown>): boolean;
+  /** Pre-render hook. Safe to set properties; folds into current cycle. */
+  willUpdate(changedProperties: Map<string, unknown>): void;
+  /** Render-and-commit step. Default calls `render()` and commits. */
+  update(changedProperties: Map<string, unknown>): void;
+  /** Post-render hook. Runs after every commit. */
+  updated(changedProperties: Map<string, unknown>): void;
   /** One-shot hook after the first render lands in the DOM. */
-  firstUpdated?(): void;
+  firstUpdated?(changedProperties: Map<string, unknown>): void;
   /** Optional render-error boundary inside the component. */
   renderError?(error: Error): TemplateResult | void;
 

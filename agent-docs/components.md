@@ -27,6 +27,29 @@ The `.d.ts` overlay shipped with the framework makes every other class
 member fully typed, so only the reactive properties need the `declare`
 line, and only in TypeScript files.
 
+## Lifecycle hooks (lit-aligned)
+
+`WebComponent` ships lit's full reactive lifecycle. Every update cycle runs these hooks in order; each receives a `changedProperties` Map (`Map<string, oldValue>`, where keys are property names or `'state'` for setState patches).
+
+| # | Hook | When |
+|---|---|---|
+| 1 | `shouldUpdate(changedProperties)` | Return `false` to skip the update. Default `true`. |
+| 2 | `willUpdate(changedProperties)` | Pre-render. Property assignments here fold into THIS cycle. |
+| 3 | controllers' `hostUpdate()` | Pre-render controller hook |
+| 4 | `update(changedProperties)` | Default calls `render()` + commits. Override to wrap or short-circuit (rare). |
+| 5 | controllers' `hostUpdated()` | Post-render controller hook |
+| 6 | `firstUpdated(changedProperties)` | Once, on the first render only |
+| 7 | `updated(changedProperties)` | Every render commit. Right place for ad-hoc post-render DOM work. |
+| 8 | `updateComplete` Promise resolves | `await el.updateComplete` to read post-render DOM in tests |
+
+Assignments during `willUpdate` fold into the current cycle (no new render scheduled); assignments during `updated` or `firstUpdated` queue a fresh cycle. The framework gates this via an internal flag, so authors don't manage it.
+
+All hooks are **client-only**. The SSR pipeline calls `instance.render()` directly and does not invoke `shouldUpdate` / `willUpdate` / `update` / `updated` / `firstUpdated` / `connectedCallback` / `disconnectedCallback`. Set SSR-meaningful defaults in the constructor; use lifecycle hooks for browser-only work.
+
+`setState(patch)` still works and routes through the same machinery: the `changedProperties` Map gets a `'state'` entry whose old value is the previous state bag.
+
+See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
+
 ## ReactiveControllers: composable lifecycle
 
 ```js
@@ -37,11 +60,11 @@ class FetchController {
     this.data = null;
     host.addController(this);     // ← register
   }
-  async onMount() {
+  async hostConnected() {
     this.data = await (await fetch(this.url)).json();
     this.host.requestUpdate();
   }
-  onUnmount() { /* cleanup */ }
+  hostDisconnected() { /* cleanup */ }
 }
 
 class MyEl extends WebComponent {

@@ -1,7 +1,7 @@
 import { isTemplate, MARKER } from './html.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
-import { isUnsafeHTML, isLive } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
 import {
   LIGHT_SLOT_ATTR,
   PROJECTION_ATTR,
@@ -45,7 +45,7 @@ const INSTANCE = Symbol.for('webjs.instance');
 
 /**
  * @typedef {{
- *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'slot' | 'noop',
+ *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'element' | 'slot' | 'noop',
  *   path: number[],
  *   name?: string,
  *   statics?: string[],
@@ -67,6 +67,7 @@ const INSTANCE = Symbol.for('webjs.instance');
  *   | { kind: 'event', el: Element, name: string, handler: ((e: Event) => void) | null, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
+ *   | { kind: 'element', el: Element, lastTarget?: any }
  *   | { kind: 'slot', slotEl: HTMLSlotElement, applied: boolean }
  *   | { kind: 'noop' }
  * } BoundPart
@@ -289,6 +290,14 @@ function compile(tr) {
         // later walk all comments and find ours without ambiguity.
         html += `<!--${MARKER}${partIdx}-->`;
         parts.push({ kind: 'child', path: [] });
+      } else if (state === 'in-tag') {
+        // Element-position hole: `<tag ${expr}>`. Used by the `ref` directive
+        // (and any future element-bound directive). Emit a sentinel attribute
+        // on the current open tag; at bind time the attribute is stripped
+        // and the element is captured into the part.
+        const sentinel = `data-${MARKER}${partIdx}`;
+        html += `${sentinel}=""`;
+        parts.push({ kind: 'element', path: [] });
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
@@ -496,6 +505,7 @@ function bindPart(p, root) {
   if (p.kind === 'attr-mixed') return { kind: 'attr-mixed', el, name: p.name || '', statics: p.statics || [], group: p.group || [] };
   if (p.kind === 'prop') return { kind: 'prop', el, name: p.name || '' };
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
+  if (p.kind === 'element') return { kind: 'element', el };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
     // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
@@ -526,11 +536,24 @@ function updateInstance(inst, values) {
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
 function clearInstance(inst, container) {
-  // Dispose event listeners on event parts and rescue any projected
-  // children sitting inside slot parts so they survive teardown of a
-  // collapsing conditional fragment.
+  // Dispose event listeners on event parts, unbind active refs on
+  // element parts, and rescue any projected children sitting inside
+  // slot parts so they survive teardown of a collapsing conditional
+  // fragment.
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'element') {
+      const prev = /** @type any */ (p).lastTarget;
+      if (prev) {
+        if (typeof prev === 'function') {
+          try { prev(undefined); } catch { /* swallow */ }
+        } else if (typeof prev === 'object') {
+          prev.value = undefined;
+        }
+        /** @type any */ (p).lastTarget = undefined;
+        /** @type any */ (p).__lastEl = undefined;
+      }
+    }
     if (p.kind === 'slot') {
       const host = findSlotHost(p.slotEl);
       if (host) moveSlotChildrenToPending(host, p.slotEl);
@@ -577,6 +600,9 @@ function applyPart(part, value, _prev, allValues) {
       break;
     case 'event':
       part.handler = typeof value === 'function' ? /** @type any */ (value) : null;
+      break;
+    case 'element':
+      applyElement(part, value);
       break;
     case 'attr-mixed': {
       // Reconstruct the attribute from static pieces + all dynamic values.
@@ -680,7 +706,79 @@ function isInShadowRootEl(el) {
  * @param {Extract<BoundPart, {kind:'child'}>} part
  * @param {unknown} value
  */
+/**
+ * Apply a value at an element-position part (`<tag ${expr}>`). The
+ * sole supported directive here is `ref(refOrCallback)` and
+ * `createRef()`. Other values are ignored so a stray non-ref hole
+ * doesn't crash. Tracks the prior target so a change from one ref to
+ * another correctly unsets the old target before binding the new one.
+ *
+ * @param {Extract<BoundPart, {kind:'element'}>} part
+ * @param {unknown} value
+ */
+function applyElement(part, value) {
+  // Matches lit-html's RefDirective.update():
+  // 1. If the ref target changed since last render, unbind the prior one.
+  // 2. If the ref target OR the element identity changed, bind the new
+  //    (ref, element) pair. If both are stable, skip entirely.
+  // For callback refs, an unset-before-bind cycle runs whenever the
+  // same callback is now pointing at a different element.
+  const partAny = /** @type any */ (part);
+  const nextTarget = isRef(value) ? /** @type any */ (value).target : undefined;
+  const prevTarget = partAny.__refTarget;
+  const refChanged = nextTarget !== prevTarget;
+
+  if (refChanged && prevTarget) {
+    if (typeof prevTarget === 'function') {
+      try { prevTarget(undefined); } catch { /* swallow */ }
+    } else if (typeof prevTarget === 'object') {
+      prevTarget.value = undefined;
+    }
+  }
+
+  if (refChanged || partAny.__refElement !== part.el) {
+    partAny.__refTarget = nextTarget;
+    if (nextTarget) {
+      if (typeof nextTarget === 'function') {
+        // Same callback now pointing at a different element: deliver
+        // an `undefined` cleanup for the prior element first.
+        if (!refChanged && partAny.__refElement !== undefined) {
+          try { nextTarget(undefined); } catch { /* swallow */ }
+        }
+        try { nextTarget(part.el); } catch { /* swallow */ }
+      } else if (typeof nextTarget === 'object') {
+        nextTarget.value = part.el;
+      }
+    }
+    partAny.__refElement = part.el;
+    // Keep the legacy `lastTarget` field in sync for clearInstance /
+    // disposeInstance which read it for template-disposal cleanup.
+    part.lastTarget = nextTarget;
+  }
+}
+
 function applyChild(part, value) {
+  // Drop directive state from prior renders when the new value is for a
+  // different directive (or no directive at all). Keeps __untilState
+  // from leaking across replacements, __guardDeps from causing a stale
+  // short-circuit, etc. Done once per outermost applyChild call; the
+  // directive handlers recurse via applyChildInner (no re-clear) so
+  // their own state survives the recursion.
+  clearStaleDirectiveState(part, value);
+  return applyChildInner(part, value);
+}
+
+/**
+ * Internal dispatch. Used both by `applyChild` (which first clears
+ * stale per-part directive state) and by directive handlers that
+ * recurse with a different value at the same part. Recursing via
+ * `applyChild` would clear the directive state that was just set,
+ * because the inner value almost always isn't itself a directive.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function applyChildInner(part, value) {
   const marker = part.marker;
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
@@ -695,6 +793,96 @@ function applyChild(part, value) {
     marker.parentNode?.insertBefore(frag, marker);
     part.child = nodes;
     return;
+  }
+
+  // keyed directive: when key changes, tear down and remount fresh DOM.
+  // When the key matches, recurse so the standard template-reconciliation
+  // path can update the existing DOM in place.
+  if (isKeyed(value)) {
+    const v = /** @type any */ (value);
+    const prevKey = /** @type any */ (part).__keyedKey;
+    if (prevKey !== undefined && !Object.is(prevKey, v.key)) {
+      teardownChild(part);
+    }
+    /** @type any */ (part).__keyedKey = v.key;
+    applyChildInner(part, v.value);
+    return;
+  }
+
+  // guard directive: skip re-evaluation when the deps array is shallow-
+  // equal to the prior call. Stored deps live on the part so they
+  // persist across renders that reuse the same template (and thus the
+  // same part).
+  if (isGuard(value)) {
+    const v = /** @type any */ (value);
+    const prevDeps = /** @type any */ (part).__guardDeps;
+    const nextDeps = v.deps;
+    // Accept any value for deps. When deps is an array, compare shallowly.
+    // When it's a primitive (number, string, undefined), compare with
+    // Object.is. Mirrors lit-html's tolerance for non-array deps so user
+    // code like `guard(this.id, () => ...)` works without crashing.
+    if (prevDeps !== undefined) {
+      const equal = Array.isArray(prevDeps) && Array.isArray(nextDeps)
+        ? shallowEqualArray(prevDeps, nextDeps)
+        : Object.is(prevDeps, nextDeps);
+      if (equal) return;
+    }
+    /** @type any */ (part).__guardDeps = Array.isArray(nextDeps)
+      ? nextDeps.slice()
+      : nextDeps;
+    applyChildInner(part, v.fn());
+    return;
+  }
+
+  // templateContent directive: clone the content of a <template> element.
+  if (isTemplateContent(value)) {
+    teardownChild(part);
+    const tpl = /** @type any */ (value).template;
+    if (tpl && tpl.content) {
+      const frag = tpl.content.cloneNode(true);
+      const nodes = [...frag.childNodes];
+      marker.parentNode?.insertBefore(frag, marker);
+      part.child = nodes;
+    }
+    return;
+  }
+
+  // ref directive in a child position: no DOM produced. Element-position
+  // refs are bound via element parts; a stray ref() in a child position
+  // is a no-op for compatibility.
+  if (isRef(value)) {
+    return;
+  }
+
+  // cache directive: real DOM retention. When the inner value changes
+  // to a different template shape, detach (rather than destroy) the
+  // current DOM and stash it keyed by its template strings. When a
+  // previously-cached shape returns, re-attach it before the marker
+  // and reconcile values. Preserves input state, scroll, focus across
+  // toggles between sub-templates (e.g. tab interfaces).
+  if (isCache(value)) {
+    return applyCache(part, /** @type any */ (value).value);
+  }
+
+  // until directive: render the highest-priority resolved value among
+  // the candidates. Synchronous values are rendered immediately; Promises
+  // are awaited in the background and applied if no higher-priority
+  // candidate has resolved yet. When the marker is torn down, in-flight
+  // priorities are cleared so late resolves cannot overwrite later DOM.
+  if (isUntil(value)) {
+    return applyUntil(part, /** @type any */ (value).args);
+  }
+
+  // asyncAppend / asyncReplace: subscribe to the AsyncIterable. Each
+  // yielded value is mapped (optional) and appended (asyncAppend) or
+  // replaces (asyncReplace) the prior content. Teardown aborts the
+  // iteration so leaked iterators do not keep references to detached
+  // DOM.
+  if (isAsyncAppend(value)) {
+    return applyAsyncAppend(part, /** @type any */ (value));
+  }
+  if (isAsyncReplace(value)) {
+    return applyAsyncReplace(part, /** @type any */ (value));
   }
 
   // Repeat directive: keyed reconciliation. Keep previous state when both
@@ -713,8 +901,12 @@ function applyChild(part, value) {
 
   // Remove previously rendered nodes between marker and its next sibling we own.
   if (part.child) {
-    if (/** @type any */ (part.child).kind === 'repeat') {
-      teardownRepeat(/** @type any */ (part.child));
+    const c = /** @type any */ (part.child);
+    if (c.kind === 'repeat') {
+      teardownRepeat(c);
+      part.child = undefined;
+    } else if (c.kind === 'async-stream') {
+      teardownAsyncStream(c);
       part.child = undefined;
     } else if ('strings' in /** @type any */ (part.child)) {
       // Previous was a TemplateInstance.
@@ -844,6 +1036,21 @@ function buildDetached(tr) {
 function disposeInstance(inst) {
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'element') {
+      // Unbind any active ref so the user observes the element being
+      // removed (callback receives undefined / Ref.value cleared).
+      // Mirrors lit-html's cleanup-on-disconnect for element parts.
+      const prev = /** @type any */ (p).lastTarget;
+      if (prev) {
+        if (typeof prev === 'function') {
+          try { prev(undefined); } catch { /* swallow */ }
+        } else if (typeof prev === 'object') {
+          prev.value = undefined;
+        }
+        /** @type any */ (p).lastTarget = undefined;
+        /** @type any */ (p).__lastEl = undefined;
+      }
+    }
   }
 }
 
@@ -955,12 +1162,40 @@ function moveRange(start, end, parent, anchor) {
   parent.insertBefore(frag, anchor);
 }
 
+/**
+ * Shallow array equality (Object.is on each element). Used by the
+ * `guard` directive to skip re-evaluation when deps are unchanged.
+ * @param {readonly unknown[]} a
+ * @param {readonly unknown[]} b
+ */
+function shallowEqualArray(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!Object.is(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 /** @param {Extract<BoundPart, {kind:'child'}>} part */
 function teardownChild(part) {
+  // Always abort any in-flight directive state on the part, even if
+  // `part.child` itself is something else (e.g. an `until` directive
+  // installed __untilState but applyChild's recursion overwrote
+  // part.child to the rendered fallback shape).
+  const partAny = /** @type any */ (part);
+  if (partAny.__untilState) {
+    partAny.__untilState.aborted = true;
+    partAny.__untilState = undefined;
+  }
+
   if (!part.child) return;
-  if (/** @type any */ (part.child).kind === 'repeat') {
-    teardownRepeat(/** @type any */ (part.child));
-  } else if ('strings' in /** @type any */ (part.child)) {
+  const c = /** @type any */ (part.child);
+  if (c.kind === 'repeat') {
+    teardownRepeat(c);
+  } else if (c.kind === 'async-stream') {
+    teardownAsyncStream(c);
+  } else if ('strings' in c) {
     const inst = /** @type TemplateInstance */ (part.child);
     disposeInstance(inst);
     removeBetween(inst.startNode, inst.endNode);
@@ -970,4 +1205,428 @@ function teardownChild(part) {
     }
   }
   part.child = undefined;
+}
+
+/**
+ * Clear per-part directive state slots that don't apply to the value
+ * currently being rendered. Prevents stale `__guardDeps` from short-
+ * circuiting a render when the directive at this position is no longer
+ * a guard, stale `__cacheMap` from accumulating across non-cache
+ * renders, and stale `__untilState` from letting a prior Promise
+ * resolution overwrite newer DOM.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function clearStaleDirectiveState(part, value) {
+  const partAny = /** @type any */ (part);
+  if (partAny.__untilState && !isUntil(value)) {
+    partAny.__untilState.aborted = true;
+    partAny.__untilState = undefined;
+  }
+  if (partAny.__guardDeps !== undefined && !isGuard(value)) {
+    partAny.__guardDeps = undefined;
+  }
+  if (partAny.__cacheMap && !isCache(value)) {
+    partAny.__cacheMap = undefined;
+  }
+  if (partAny.__keyedKey !== undefined && !isKeyed(value)) {
+    partAny.__keyedKey = undefined;
+  }
+}
+
+/* ================================================================
+ * Cache directive: detach + retain prior template instances so that
+ * toggling between sub-templates preserves their DOM state.
+ * ================================================================ */
+
+/**
+ * Apply the `cache` directive at a child position. The cache is stored
+ * on the part as `__cacheMap: Map<strings, { inst, holderFrag }>`.
+ *
+ * When the new inner value is a template whose `strings` already lives
+ * in the cache map, re-attach the stashed nodes before the marker and
+ * reconcile values against the new template. When the new inner is a
+ * template whose strings aren't cached, stash the currently-attached
+ * instance (if any) into the cache map before rendering the new one.
+ *
+ * Non-template inner values fall through to the generic applyChild path
+ * (after first stashing any currently-attached cached instance).
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} inner
+ */
+function applyCache(part, inner) {
+  const marker = part.marker;
+  const partAny = /** @type any */ (part);
+  /** @type {Map<TemplateStringsArray, { inst: TemplateInstance, holder: DocumentFragment }>} */
+  let cacheMap = partAny.__cacheMap;
+  if (!cacheMap) {
+    cacheMap = new Map();
+    partAny.__cacheMap = cacheMap;
+  }
+
+  const currentChild = /** @type any */ (part.child);
+  const currentIsInstance = currentChild && 'strings' in currentChild;
+
+  // If the currently-attached child IS a template instance, decide
+  // whether to update-in-place, stash for later, or destroy.
+  if (currentIsInstance) {
+    const currentInst = /** @type TemplateInstance */ (currentChild);
+
+    // Same template structure: reconcile values, no detach/re-attach.
+    if (isTemplate(inner) && currentInst.strings === /** @type any */ (inner).strings) {
+      updateInstance(currentInst, /** @type any */ (inner).values);
+      return;
+    }
+
+    // Different shape: detach the current instance into a holder fragment
+    // and store it in the cache map. We keep the existing instance, slot
+    // markers, and rendered nodes; only the parent changes. moveRange's
+    // null anchor means "append to parent".
+    const holder = document.createDocumentFragment();
+    moveRange(currentInst.startNode, currentInst.endNode, holder, null);
+    cacheMap.set(currentInst.strings, { inst: currentInst, holder });
+    part.child = undefined;
+  }
+
+  // Now part.child is either undefined or some non-instance shape (rare;
+  // happens when prior render had a string / array / etc.). For non-
+  // instance shapes, fall through to the generic teardown via applyChild.
+
+  // If the new inner is a template AND we've cached an instance for its
+  // strings, re-attach it.
+  if (isTemplate(inner)) {
+    const tr = /** @type any */ (inner);
+    const cached = cacheMap.get(tr.strings);
+    if (cached) {
+      cacheMap.delete(tr.strings);
+      // Tear down any non-instance child currently attached (a string /
+      // array of text nodes from a prior cache(non-template) render).
+      // Without this the prior nodes remain in the DOM alongside the
+      // re-attached cached template.
+      if (part.child) {
+        teardownChild(part);
+      }
+      // Move the cached nodes back before the marker.
+      moveRange(cached.inst.startNode, cached.inst.endNode, /** @type Node */ (marker.parentNode), marker);
+      // Reconcile values so any state changes since detachment apply.
+      updateInstance(cached.inst, tr.values);
+      part.child = cached.inst;
+      return;
+    }
+  }
+
+  // No cached instance available. Render the new inner value via the
+  // standard applyChild path. The currentIsInstance branch already
+  // handled detaching the prior instance; if part.child still holds a
+  // non-instance shape, applyChild will tear it down generically.
+  applyChildInner(part, inner);
+}
+
+/* ================================================================
+ * Until directive: render highest-priority resolved candidate.
+ * ================================================================ */
+
+/**
+ * Apply the `until` directive at a child position.
+ *
+ * Priority is left-to-right: args[0] has the highest priority. The
+ * highest-priority synchronous candidate (if any) renders immediately.
+ * Strictly-higher-priority Promises are awaited in the background; when
+ * one resolves AND no higher-priority Promise has already resolved, its
+ * result becomes the rendered value.
+ *
+ * The directive's state lives on `part.__untilState` (a stable slot
+ * that survives `applyChild`'s overwrites of `part.child`). When a new
+ * render replaces the directive, the prior state's `aborted` flag flips
+ * to `true` so any in-flight Promise resolutions short-circuit instead
+ * of overwriting newer DOM.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {readonly unknown[]} args
+ */
+function applyUntil(part, args) {
+  // Carry forward the prior render's `highestResolved` ONLY when the
+  // args list is unchanged. When any argument identity changes, prior
+  // priorities no longer apply (a Promise that won at index 0 may now
+  // sit at a different index, or have been replaced entirely); the
+  // state must reset to Infinity so the new args' Promises can compete.
+  //
+  // For TemplateResult args, compare by `strings` array identity rather
+  // than the wrapper object identity. `html\`loading...\`` evaluates to
+  // a fresh TemplateResult on every call but the strings array is
+  // interned per call site, so the conceptual value is unchanged.
+  const partAny = /** @type any */ (part);
+  const prevState = partAny.__untilState;
+  const prevArgs = partAny.__untilArgs;
+  const argEq = (a, b) => {
+    if (Object.is(a, b)) return true;
+    if (isTemplate(a) && isTemplate(b)
+        && /** @type any */ (a).strings === /** @type any */ (b).strings) return true;
+    return false;
+  };
+  const argsEqual = prevArgs && prevArgs.length === args.length
+    && prevArgs.every((a, i) => argEq(a, args[i]));
+  const carriedHighest = argsEqual && prevState ? prevState.highestResolved : Infinity;
+  if (prevState) prevState.aborted = true;
+  partAny.__untilArgs = args.slice();
+
+  /** @type {{aborted:boolean, highestResolved:number}} */
+  const state = { aborted: false, highestResolved: carriedHighest };
+  partAny.__untilState = state;
+
+  // Highest-priority synchronous candidate. If found, render it now
+  // and cap further Promise subscription to strictly-higher priorities.
+  let firstSyncIdx = -1;
+  let firstSyncVal = undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a || typeof (/** @type any */ (a).then) !== 'function') {
+      firstSyncIdx = i;
+      firstSyncVal = a;
+      break;
+    }
+  }
+
+  if (firstSyncIdx !== -1 && firstSyncIdx <= state.highestResolved) {
+    // The sync candidate beats any previously-rendered Promise value
+    // (when firstSyncIdx < state.highestResolved) OR re-renders the
+    // sync fallback at the same priority slot (when ===), in case its
+    // value changed between renders.
+    applyChildInner(part, firstSyncVal);
+    state.highestResolved = firstSyncIdx;
+  } else if (firstSyncIdx === -1 && !partAny.__untilEverRendered) {
+    // First-ever render of this part with all-Promise args: render
+    // empty as the initial fallback while Promises settle.
+    applyChildInner(part, '');
+  }
+  // Else: either there is no sync candidate but the part has rendered
+  // before (preserve existing DOM until a Promise resolves), OR the
+  // sync candidate is lower-priority than what's already rendered.
+  // Either way: leave the existing DOM in place. This prevents the
+  // "all-Promises wipes prior content" flash on re-renders.
+  partAny.__untilEverRendered = true;
+
+  // Subscribe to Promises with priority strictly less than what's
+  // currently rendered. (Lower index = higher priority in lit's model.)
+  // Each subscription wraps in Promise.resolve() so synchronous
+  // thenables get a microtask boundary, matching lit's contract that
+  // all Promise/thenable resolutions are deferred.
+  const cap = firstSyncIdx === -1
+    ? Math.min(args.length, state.highestResolved)
+    : Math.min(firstSyncIdx, state.highestResolved);
+  for (let i = 0; i < cap; i++) {
+    const a = args[i];
+    if (!a || typeof (/** @type any */ (a).then) !== 'function') continue;
+
+    Promise.resolve(/** @type Promise<unknown> */ (a)).then(
+      (resolved) => {
+        if (state.aborted) return;
+        if (i >= state.highestResolved) return;
+        state.highestResolved = i;
+        applyChildInner(part, resolved);
+      },
+      () => {
+        // Swallow rejection. A rejected Promise is treated as "no value";
+        // the existing render stays in place.
+      },
+    );
+  }
+}
+
+/**
+ * Abort an `until` directive's in-flight Promise tracking. Called from
+ * `teardownChild` when the part is being reset.
+ * @param {{aborted:boolean}} state
+ */
+function teardownUntil(state) {
+  state.aborted = true;
+}
+
+/* ================================================================
+ * asyncAppend / asyncReplace: stream from AsyncIterable.
+ * ================================================================ */
+
+/**
+ * Apply `asyncAppend(iterable, mapper?)` at a child position.
+ *
+ * Iterates the AsyncIterable in the background. Each yielded value is
+ * mapped (optional) and rendered as a node group, appended before the
+ * marker. The state is stored on `part.child` so `teardownChild` can
+ * abort the iteration when the part is reset.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+function applyAsyncAppend(part, dir) {
+  // Same-iterable short-circuit: if the prior render's iterable identity
+  // matches, the existing iterator is still consuming it. Re-subscribing
+  // would start a fresh iterator that misses already-yielded values.
+  // Matches lit-html's behavior.
+  const currentChild = /** @type any */ (part.child);
+  if (currentChild && currentChild.kind === 'async-stream'
+      && currentChild.mode === 'append'
+      && currentChild.iterable === dir.iterable) {
+    return;
+  }
+
+  teardownChild(part);
+
+  const iterator = /** @type AsyncIterator<unknown> */ (
+    dir.iterable[Symbol.asyncIterator]()
+  );
+  /** @type {AsyncStreamState} */
+  const state = {
+    kind: 'async-stream',
+    mode: 'append',
+    aborted: false,
+    iterable: dir.iterable,
+    iterator,
+    /** @type {ChildNode[]} */ nodes: [],
+  };
+  part.child = state;
+
+  consumeAsyncStream(state, part, dir);
+}
+
+/**
+ * Apply `asyncReplace(iterable, mapper?)` at a child position. Same as
+ * `applyAsyncAppend` but each new value replaces the previous content.
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+function applyAsyncReplace(part, dir) {
+  // Same-iterable short-circuit: see comment in applyAsyncAppend.
+  const currentChild = /** @type any */ (part.child);
+  if (currentChild && currentChild.kind === 'async-stream'
+      && currentChild.mode === 'replace'
+      && currentChild.iterable === dir.iterable) {
+    return;
+  }
+
+  teardownChild(part);
+
+  const iterator = /** @type AsyncIterator<unknown> */ (
+    dir.iterable[Symbol.asyncIterator]()
+  );
+  /** @type {AsyncStreamState} */
+  const state = {
+    kind: 'async-stream',
+    mode: 'replace',
+    aborted: false,
+    iterable: dir.iterable,
+    iterator,
+    /** @type {ChildNode[]} */ nodes: [],
+  };
+  part.child = state;
+
+  consumeAsyncStream(state, part, dir);
+}
+
+/**
+ * @typedef {{
+ *   kind: 'async-stream',
+ *   mode: 'append' | 'replace',
+ *   aborted: boolean,
+ *   iterable: AsyncIterable<unknown>,
+ *   iterator: AsyncIterator<unknown>,
+ *   nodes: ChildNode[],
+ * }} AsyncStreamState
+ */
+
+/**
+ * Consume an AsyncIterable for `asyncAppend` / `asyncReplace`. Drives
+ * the iterator with an explicit `.next()` loop (rather than `for await`)
+ * so that `teardownAsyncStream` can call `iterator.return()` to break
+ * a generator parked on an `await`. The `aborted` flag is also checked
+ * after every `next()` resolve to short-circuit if abortion happened
+ * while the iterator was suspended.
+ *
+ * @param {AsyncStreamState} state
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
+ */
+async function consumeAsyncStream(state, part, dir) {
+  const marker = part.marker;
+  let i = 0;
+  try {
+    while (!state.aborted) {
+      const result = await state.iterator.next();
+      if (state.aborted) break;
+      if (result.done) break;
+      const mapped = dir.mapper ? dir.mapper(result.value, i) : result.value;
+      const newNodes = renderToNodes(mapped);
+
+      if (state.mode === 'replace') {
+        for (const n of state.nodes) {
+          if (n.parentNode) n.parentNode.removeChild(n);
+        }
+        state.nodes = [];
+      }
+
+      const frag = document.createDocumentFragment();
+      for (const n of newNodes) frag.appendChild(n);
+      marker.parentNode?.insertBefore(frag, marker);
+      state.nodes.push(...newNodes);
+
+      i++;
+    }
+  } catch (err) {
+    // Swallow iteration errors. A leaked iterator throwing should not
+    // crash the host's render cycle. Authors who care about errors
+    // should handle them in their iterable / generator.
+    if (typeof console !== 'undefined') console.error('[webjs] asyncStream error:', err);
+  }
+}
+
+/**
+ * Render a single value into a flat list of DOM nodes for insertion via
+ * insertBefore. Handles strings, numbers, TemplateResult, and arrays.
+ * @param {unknown} value
+ * @returns {ChildNode[]}
+ */
+function renderToNodes(value) {
+  if (value == null || value === false || value === true) return [];
+  if (isTemplate(value)) {
+    const tr = /** @type any */ (value);
+    const { templateEl, parts } = compile(tr);
+    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const bound = parts.map((p) => bindPart(p, frag));
+    for (let i = 0; i < tr.values.length; i++) {
+      applyPart(bound[i], tr.values[i], undefined, tr.values);
+    }
+    return [...frag.childNodes];
+  }
+  if (Array.isArray(value)) {
+    const nodes = [];
+    for (const v of value) nodes.push(...renderToNodes(v));
+    return nodes;
+  }
+  return [document.createTextNode(String(value))];
+}
+
+/**
+ * Abort an async-stream directive. Sets `aborted = true` (so the next
+ * `await iterator.next()` resolution short-circuits), removes all nodes
+ * rendered so far, and explicitly calls `iterator.return()` so a
+ * generator parked on `await` can unwind via its `finally` blocks
+ * instead of leaking.
+ * @param {AsyncStreamState} state
+ */
+function teardownAsyncStream(state) {
+  state.aborted = true;
+  for (const n of state.nodes) {
+    if (n.parentNode) n.parentNode.removeChild(n);
+  }
+  state.nodes = [];
+  // Best-effort iterator cleanup. `.return()` is optional on AsyncIterators;
+  // generators built via `async function*` provide it and run their
+  // `finally` blocks. Swallow any rejection so teardown can't throw.
+  try {
+    state.iterator.return?.()?.catch?.(() => {});
+  } catch {
+    // ignore
+  }
 }

@@ -28,18 +28,18 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  * **Why it exists:** mirrors Lit's `ReactiveController` protocol so
  * ecosystem controllers are interoperable.
  *
- * @property {() => void} [onMount]
+ * @property {() => void} [hostConnected]
  *   Called when the host element is inserted into the DOM
  *   (`connectedCallback`). Use for subscriptions, observers, timers.
- * @property {() => void} [onUnmount]
+ * @property {() => void} [hostDisconnected]
  *   Called when the host element is removed from the DOM
  *   (`disconnectedCallback`). Use for cleanup: unsubscribe, disconnect
  *   observers, clear timers.
- * @property {() => void} [beforeRender]
+ * @property {() => void} [hostUpdate]
  *   Called just before the host renders (inside `_performRender`, after
  *   `willUpdate` but before `render()`). Use for reading layout or
  *   preparing data that the render depends on.
- * @property {() => void} [afterRender]
+ * @property {() => void} [hostUpdated]
  *   Called after the host has rendered and the DOM is up to date. Use for
  *   post-render side effects that depend on the new DOM (measuring,
  *   focusing, scrolling).
@@ -70,6 +70,12 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  *   Custom dirty-check function. Called by the generated setter before
  *   scheduling an update. Return `true` to trigger a re-render, `false`
  *   to skip. Default: strict inequality `(a, b) => a !== b`.
+ *
+ *   Note: this fires on the FIRST assignment too, with `oldValue` set
+ *   to `undefined`. Numeric comparators that subtract against undefined
+ *   produce `NaN`, which evaluates to `false`, silently rejecting the
+ *   constructor's initial assignment. Treat `oldValue === undefined` as
+ *   "always changed" in custom comparators so the initial value lands.
  *
  * @property {{ fromAttribute: (value: string|null, type?: Function) => unknown, toAttribute: (value: unknown, type?: Function) => string|null }} [converter]
  *   Custom serialization/deserialization pair for the HTML attribute.
@@ -104,15 +110,18 @@ function defaultHasChanged(a, b) {
  * The tag name is not a static field: pass it to `.register('tag-name')`
  * at the bottom of the file. Tag must contain a hyphen (HTML spec).
  *
- * Lifecycle (called in order during each update cycle):
- *  1. controllers' `beforeRender()`
- *  2. `render()` + DOM commit (with error boundary)
- *  3. controllers' `afterRender()`
- *  4. `firstUpdated()`: once, after the very first render
+ * Lifecycle (lit-aligned, called in order during each update cycle):
+ *  1. `shouldUpdate(changedProperties)`. Skip update if false.
+ *  2. `willUpdate(changedProperties)`. Safe to set properties; folds into this cycle.
+ *  3. controllers' `hostUpdate()`
+ *  4. `update(changedProperties)`. Default impl calls `render()` + commits.
+ *  5. controllers' `hostUpdated()`
+ *  6. `firstUpdated(changedProperties)`: once, on the first render only
+ *  7. `updated(changedProperties)`: every render commit
+ *  8. `updateComplete` promise resolves
  *
- * "Less is more": only hooks with no native workaround are included.
- * Use `render()` for derived state. Use `firstUpdated()` for one-time
- * DOM setup. Use `this.shadowRoot.querySelector()` for element refs.
+ * `changedProperties` is a `Map<string, unknown>` where each entry maps a
+ * property name (or `'state'` for setState patches) to its previous value.
  *
  * Usage:
  * ```js
@@ -224,6 +233,43 @@ export class WebComponent extends Base {
      */
     this.__firstRendered = false;
 
+    /**
+     * Map of changed properties accumulated since the last render. Keys are
+     * property names (or `'state'` for setState patches); values are the
+     * previous value before the change. Passed to `shouldUpdate`, `willUpdate`,
+     * `update`, `firstUpdated`, and `updated`. Cleared at the start of each
+     * render cycle so accumulations during hooks queue for the next cycle.
+     * @type {Map<string, unknown>}
+     */
+    this._changedProperties = new Map();
+
+    /**
+     * Resolver for the currently-pending updateComplete promise. `null` when
+     * no update is pending.
+     * @type {((value: boolean) => void) | null}
+     * @private
+     */
+    this._updateResolve = null;
+
+    /**
+     * Promise that resolves after the next render commit. Resolves to `true`
+     * when there are no further pending updates, `false` otherwise.
+     * @type {Promise<boolean>}
+     * @private
+     */
+    this._updatePromise = Promise.resolve(true);
+
+    /**
+     * Set while the component is inside the update phase (between
+     * `shouldUpdate` and `updated`). Property assignments during this window
+     * fold into the CURRENT `changedProperties` Map without scheduling a
+     * new microtask render. Assignments during `updated()` (after the flag
+     * clears) queue a fresh cycle.
+     * @type {boolean}
+     * @private
+     */
+    this._isUpdating = false;
+
     // Install reactive property accessors for `static properties` declarations.
     this._initializeProperties();
   }
@@ -267,7 +313,11 @@ export class WebComponent extends Base {
             this._reflectAttribute(propName, newVal, d);
           }
 
-          if (this._connected) this.requestUpdate();
+          // requestUpdate records the (name, oldValue) entry AND schedules
+          // a render. When called during the update phase (willUpdate /
+          // hostUpdate / update / hostUpdated), the scheduler short-circuits
+          // and the entry folds into the current cycle's changedProperties.
+          this.requestUpdate(propName, oldVal);
         },
       });
 
@@ -469,25 +519,45 @@ export class WebComponent extends Base {
 
     // Notify all controllers that the host is connected.
     for (const c of this.__controllers) {
-      if (c.onMount) c.onMount();
+      if (c.hostConnected) c.hostConnected();
     }
 
-    // For both shadow and light DOM: proceed with _performRender().
-    // The client renderer detects SSR content (<!--webjs-hydrate--> for
-    // light DOM, existing shadow root for shadow DOM) and hydrates
-    // instead of replacing: binding events without touching the DOM.
-    this._performRender();
-
-    // Light-DOM slot lifecycle phase two. With the rendered template
-    // (and therefore the live <slot> elements) now in the DOM, attach
-    // mutation observers so future authored-child mutations and
-    // slot-name changes drive incremental projection. Adoption of
-    // SSR-placed assignments has already happened in phase one (before
-    // _performRender) so the renderer's replaceChildren cannot destroy
-    // those nodes; projection moves them into the freshly-cloned slots.
-    if (this._renderRoot === this) {
-      attachSlotObservers(this);
+    // First render is deferred to a microtask, matching lit's
+    // performUpdate scheduling. The user's connectedCallback override
+    // body runs synchronously to completion BEFORE the first render,
+    // so subclass setup that needs to inspect attributes / state / etc.
+    // observes consistent timing whether SSR-hydrating or first mount.
+    // Render-root setup (shadow attachment, light-DOM SSR adoption,
+    // controller hostConnected, _connected=true) all stay synchronous
+    // above; only the template commit + post-commit slot observers
+    // defer. Authoring contract: post-render DOM setup goes in
+    // firstUpdated(), NOT connectedCallback().
+    //
+    // The scheduling matches `_scheduleUpdate`'s wrapper so lifecycle
+    // throws are surfaced as console errors instead of bricking the
+    // element.
+    if (this._updateResolve === null) {
+      this._updatePromise = new Promise((resolve) => {
+        this._updateResolve = resolve;
+      });
     }
+    this._scheduled = true;
+    queueMicrotask(() => {
+      this._scheduled = false;
+      try {
+        this._performRender();
+      } catch (err) {
+        console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+      }
+      // Light-DOM slot lifecycle phase two: after the first render
+      // commits, the live <slot> elements exist. Attach mutation
+      // observers so authored-child + slot-name changes drive
+      // incremental projection. (Shadow DOM uses native slot
+      // projection; nothing to attach.)
+      if (this._renderRoot === this) {
+        attachSlotObservers(this);
+      }
+    });
   }
 
   /**
@@ -532,7 +602,7 @@ export class WebComponent extends Base {
     // reconnection picks up where it left off.
     if (this._renderRoot === this) detachSlotObservers(this);
     for (const c of this.__controllers) {
-      if (c.onUnmount) c.onUnmount();
+      if (c.hostDisconnected) c.hostDisconnected();
     }
   }
 
@@ -573,64 +643,174 @@ export class WebComponent extends Base {
   /**
    * Shallow-merge new state and schedule a re-render.
    *
+   * Adds a `'state'` entry to `changedProperties` with the previous state
+   * bag as the old value, so lifecycle hooks (`shouldUpdate`, `willUpdate`,
+   * `updated`) can detect that setState was invoked this cycle.
+   *
    * @param {Record<string, unknown>} patch
    */
   setState(patch) {
+    const oldState = this.state;
     this.state = { ...this.state, ...patch };
+    if (!this._changedProperties.has('state')) {
+      this._changedProperties.set('state', oldState);
+    }
+    this._scheduleUpdate();
+  }
+
+  /**
+   * Schedule a re-render. Optionally record a property change in
+   * `changedProperties` so hooks can branch on what changed.
+   *
+   * @param {string} [name]      Property name that changed
+   * @param {unknown} [oldValue] Previous value of the property
+   */
+  requestUpdate(name, oldValue) {
+    if (name !== undefined && !this._changedProperties.has(name)) {
+      this._changedProperties.set(name, oldValue);
+    }
+    this._scheduleUpdate();
+  }
+
+  /**
+   * Internal scheduler shared by `setState` and `requestUpdate`. Coalesces
+   * multiple changes in the same tick into a single microtask render.
+   * Manages the `updateComplete` promise lifecycle. Short-circuits when
+   * the component is mid-update (assignments during `willUpdate` / `update`
+   * fold into the current cycle's `changedProperties` Map).
+   * @private
+   */
+  _scheduleUpdate() {
+    if (this._updateResolve === null) {
+      this._updatePromise = new Promise((resolve) => {
+        this._updateResolve = resolve;
+      });
+    }
+    if (this._isUpdating) return;
     if (this._scheduled || !this._connected) return;
     this._scheduled = true;
     queueMicrotask(() => {
       this._scheduled = false;
-      this._performRender();
+      try {
+        this._performRender();
+      } catch (err) {
+        // _performRender wraps the update phase in try/finally so this
+        // catches throws from shouldUpdate / willUpdate / hostUpdate /
+        // hostUpdated / firstUpdated / updated. The component is not
+        // left in a bad state (the finally blocks reset _isUpdating and
+        // resolve updateComplete). Surface the error for visibility.
+        console.error(`[webjs] lifecycle hook threw during update cycle:`, err);
+      }
     });
   }
 
   /**
-   * Manually schedule a re-render. Used by controllers to trigger
-   * host updates from external events.
-   */
-  requestUpdate() {
-    this.setState({});
-  }
-
-  /**
-   * Core update cycle:
-   *   1. Controllers' beforeRender()
-   *   2. render() + DOM commit (with error boundary)
-   *   3. Controllers' afterRender()
-   *   4. firstUpdated() runs once, on the first render only
+   * Core update cycle, lit-aligned:
+   *   1. Snapshot + clear `changedProperties`
+   *   2. `shouldUpdate(changedProperties)`. If false, resolve updateComplete and return.
+   *   3. `willUpdate(changedProperties)`. Safe to set properties without re-triggering.
+   *   4. Controllers' `hostUpdate()`
+   *   5. `update(changedProperties)`. Default impl calls `render()` + commits.
+   *      Wrapped in error boundary that falls back to `renderError(error)`.
+   *   6. Controllers' `hostUpdated()`
+   *   7. `firstUpdated(changedProperties)` runs once, on the first render only
+   *   8. `updated(changedProperties)` runs after every commit
+   *   9. Resolve `updateComplete` promise
+   * @private
    */
   _performRender() {
     if (!this._renderRoot) return;
 
-    // --- 1. beforeRender ---
-    for (const c of this.__controllers) {
-      if (c.beforeRender) c.beforeRender();
-    }
+    // Hold a stable reference to the current Map so all hooks see the same
+    // snapshot. During the update phase (steps 3-6) the Map is mutated in
+    // place when property setters fire, folding those changes into THIS
+    // cycle. The Map is replaced with a fresh empty one only after a
+    // successful commit so post-commit assignments queue the NEXT cycle.
+    // On `shouldUpdate=false` or hook errors, the Map is preserved so the
+    // accumulated changes survive into the next render.
+    const changedProperties = this._changedProperties;
 
-    // --- 2. render + DOM commit (with error boundary) ---
+    // --- 1. Mark we're inside an update cycle ---
+    this._isUpdating = true;
+    let didCommit = false;
+
+    // --- 2-6. Update phase. Lifecycle-hook throws are logged and
+    // swallowed so the component is not left in a deadlocked state
+    // (`_isUpdating` stuck true, `updateComplete` never resolves).
     try {
-      const tpl = this.render();
-      clientRender(tpl, this._renderRoot);
-    } catch (error) {
-      console.error(`[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`, error);
-      try {
-        const fallback = this.renderError(/** @type {Error} */ (error));
-        if (fallback !== undefined) clientRender(fallback, this._renderRoot);
-      } catch (fallbackError) {
-        console.error(`[webjs] renderError() also threw:`, fallbackError);
+      if (this.shouldUpdate(changedProperties)) {
+        // --- 3. willUpdate (may mutate properties; folds into this cycle) ---
+        this.willUpdate(changedProperties);
+
+        // --- 4. controllers' hostUpdate ---
+        for (const c of this.__controllers) {
+          if (c.hostUpdate) c.hostUpdate();
+        }
+
+        // --- 5. update + DOM commit (with render-error boundary) ---
+        try {
+          this.update(changedProperties);
+        } catch (error) {
+          console.error(`[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`, error);
+          try {
+            const fallback = this.renderError(/** @type {Error} */ (error));
+            if (fallback !== undefined) clientRender(fallback, this._renderRoot);
+          } catch (fallbackError) {
+            console.error(`[webjs] renderError() also threw:`, fallbackError);
+          }
+        }
+
+        // --- 6. controllers' hostUpdated ---
+        for (const c of this.__controllers) {
+          if (c.hostUpdated) c.hostUpdated();
+        }
+
+        didCommit = true;
+      }
+      // shouldUpdate=false: preserve _changedProperties so the next
+      // requestUpdate keeps accumulating on top of the entries that
+      // didn't render this cycle.
+    } catch (preCommitError) {
+      console.error(`[webjs] lifecycle hook threw during update phase:`, preCommitError);
+    } finally {
+      this._isUpdating = false;
+      if (didCommit) {
+        this._changedProperties = new Map();
       }
     }
 
-    // --- 3. afterRender ---
-    for (const c of this.__controllers) {
-      if (c.afterRender) c.afterRender();
+    // --- 7-8. Post-commit hooks. Errors here are also caught so the
+    // updateComplete promise always resolves.
+    if (didCommit) {
+      try {
+        // --- 7. firstUpdated (once) ---
+        if (!this.__firstRendered) {
+          this.__firstRendered = true;
+          this.firstUpdated(changedProperties);
+        }
+        // --- 8. updated (every render) ---
+        this.updated(changedProperties);
+      } catch (postCommitError) {
+        console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
+      } finally {
+        this._resolveUpdate();
+      }
+    } else {
+      this._resolveUpdate();
     }
+  }
 
-    // --- 4. firstUpdated (once) ---
-    if (!this.__firstRendered) {
-      this.__firstRendered = true;
-      this.firstUpdated();
+  /**
+   * Resolve the pending updateComplete promise. Value reflects whether any
+   * further updates were queued during the current cycle: `true` means the
+   * component has settled, `false` means another render will run.
+   * @private
+   */
+  _resolveUpdate() {
+    if (this._updateResolve) {
+      const settled = this._changedProperties.size === 0;
+      this._updateResolve(settled);
+      this._updateResolve = null;
     }
   }
 
@@ -639,21 +819,145 @@ export class WebComponent extends Base {
   // ---------------------------------------------------------------------------
 
   /**
-   * Called exactly once, after the component's very first render completes
-   * and the DOM is live.
+   * Decide whether the component should render in response to a queued
+   * update. Default implementation returns `true` (always render).
    *
-   * **When to use:** one-time post-render setup that requires DOM access -
-   * auto-focusing an input, measuring layout, initializing a third-party
+   * **When to use:** override to skip an update when the relevant inputs
+   * haven't changed, e.g. an expensive component that only depends on a
+   * subset of its reactive properties.
+   *
+   * ```js
+   * shouldUpdate(changedProperties) {
+   *   return changedProperties.has('itemCount') || changedProperties.has('mode');
+   * }
+   * ```
+   *
+   * @param {Map<string, unknown>} _changedProperties
+   * @returns {boolean}
+   */
+  shouldUpdate(_changedProperties) {
+    return true;
+  }
+
+  /**
+   * Run immediately before `update()`. Safe to set reactive properties
+   * here without triggering another update cycle: assignments made inside
+   * `willUpdate` are folded into the current `changedProperties` snapshot
+   * and rendered in the same pass.
+   *
+   * **When to use:** computing derived values from changed inputs before
+   * `render()` reads them. Lit users typically migrate `shouldUpdate`
+   * heuristics that mutate state into `willUpdate`.
+   *
+   * ```js
+   * willUpdate(changedProperties) {
+   *   if (changedProperties.has('items')) {
+   *     this.totalCount = this.items.length;
+   *   }
+   * }
+   * ```
+   *
+   * @param {Map<string, unknown>} _changedProperties
+   */
+  willUpdate(_changedProperties) {}
+
+  /**
+   * The render-and-commit step. Default impl calls `render()` and commits
+   * the returned `TemplateResult` to the render root.
+   *
+   * **When to use:** rarely. Override only when you need to wrap or
+   * short-circuit the commit. Most users override `render()` instead.
+   * If you do override, you MUST commit something to `this._renderRoot`
+   * (or call `super.update(changedProperties)`).
+   *
+   * @param {Map<string, unknown>} _changedProperties
+   */
+  update(_changedProperties) {
+    const tpl = this.render();
+    clientRender(tpl, this._renderRoot);
+  }
+
+  /**
+   * Called after every render commit (both the first and all subsequent
+   * renders). Receives the `changedProperties` Map so you can branch on
+   * what changed this cycle.
+   *
+   * **When to use:** post-render DOM work that depends on the new DOM,
+   * triggered by specific property changes. This is the lit-aligned
+   * replacement for ad-hoc `requestAnimationFrame` shims that components
+   * historically used to defer DOM work after `render()`.
+   *
+   * ```js
+   * updated(changedProperties) {
+   *   if (changedProperties.has('open') && this.open) {
+   *     this.querySelector('input')?.focus();
+   *   }
+   * }
+   * ```
+   *
+   * @param {Map<string, unknown>} _changedProperties
+   */
+  updated(_changedProperties) {}
+
+  /**
+   * Called exactly once, after the component's very first render completes
+   * and the DOM is live. Receives the same `changedProperties` Map that
+   * `updated()` does for the first render; entries reflect the initial
+   * values of reactive properties (old values are `undefined`).
+   *
+   * **When to use:** one-time post-render setup that requires DOM access.
+   * Auto-focusing an input, measuring layout, initializing a third-party
    * library on a DOM node. `connectedCallback` fires before the first
    * render, so querying shadow children there yields nothing.
    *
    * ```js
-   * firstUpdated() {
+   * firstUpdated(changedProperties) {
    *   this.shadowRoot.querySelector('input')?.focus();
    * }
    * ```
+   *
+   * @param {Map<string, unknown>} _changedProperties
    */
-  firstUpdated() {}
+  firstUpdated(_changedProperties) {}
+
+  /**
+   * A Promise that resolves after the next render commit. Resolves to
+   * `true` when the component has settled (no further updates queued),
+   * `false` if another render is already scheduled.
+   *
+   * **When to use:** awaiting a re-render in tests, or in user code that
+   * needs to read the post-render DOM after triggering an update.
+   *
+   * ```js
+   * el.count = 5;
+   * await el.updateComplete;
+   * // DOM now reflects count = 5
+   * ```
+   *
+   * @returns {Promise<boolean>}
+   */
+  get updateComplete() {
+    return this.getUpdateComplete();
+  }
+
+  /**
+   * Override point for `updateComplete`. Default returns the internal
+   * update promise. Override to await additional async work that should
+   * be considered part of the update cycle (e.g. lazy-loaded subcomponents).
+   *
+   * ```js
+   * async getUpdateComplete() {
+   *   const result = await super.getUpdateComplete();
+   *   await this._chart?.updateComplete;
+   *   return result;
+   * }
+   * ```
+   *
+   * @returns {Promise<boolean>}
+   */
+  getUpdateComplete() {
+    return this._updatePromise;
+  }
 
   // ---------------------------------------------------------------------------
   // Reactive controllers
@@ -676,20 +980,20 @@ export class WebComponent extends Base {
    *     this.host = host;
    *     host.addController(this);
    *   }
-   *   onMount() { window.addEventListener('mousemove', this._onMove); }
-   *   onUnmount() { window.removeEventListener('mousemove', this._onMove); }
+   *   hostConnected() { window.addEventListener('mousemove', this._onMove); }
+   *   hostDisconnected() { window.removeEventListener('mousemove', this._onMove); }
    * }
    * ```
    *
    * If the host is already connected when the controller is added, the
-   * controller's `onMount()` is called immediately.
+   * controller's `hostConnected()` is called immediately.
    *
    * @param {ReactiveController} controller
    */
   addController(controller) {
     this.__controllers.add(controller);
-    if (this._connected && controller.onMount) {
-      controller.onMount();
+    if (this._connected && controller.hostConnected) {
+      controller.hostConnected();
     }
   }
 
@@ -700,7 +1004,7 @@ export class WebComponent extends Base {
    * than the component's: e.g. a controller that tracks a specific
    * resource and should be swapped out when the resource changes.
    *
-   * The controller's `onUnmount()` is NOT called by `removeController`;
+   * The controller's `hostDisconnected()` is NOT called by `removeController`;
    * if cleanup is needed, call it yourself before removing.
    *
    * @param {ReactiveController} controller

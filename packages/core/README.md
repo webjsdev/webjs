@@ -30,8 +30,14 @@ class Counter extends WebComponent {
     return html`<button @click=${() => this.count++}>${this.count}</button>`;
   }
 }
-customElements.define('x-counter', Counter);
+Counter.register('x-counter');
 ```
+
+`Class.register('tag-name')` is the webjs idiom. It calls
+`customElements.define()` under the hood and adds tag validation,
+registry bookkeeping (needed for lazy-loading), and a dev-time
+double-register warning. Plain `customElements.define('x-counter',
+Counter)` works identically.
 
 Side-channel imports for optional features:
 
