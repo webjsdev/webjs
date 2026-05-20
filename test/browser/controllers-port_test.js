@@ -178,22 +178,19 @@ suite('Reactive controllers (port from lit)', () => {
 
   test('controllers callback order', async () => {
     const el = await mountStandardEl();
-    // NOTE: webjs differs from lit here. Lit defers the first render to a
-    // microtask after connectedCallback returns, so its sequence is
-    //   hostConnected, connectedCallback, hostUpdate, update, hostUpdated,
-    //   firstUpdated, updated.
-    // webjs runs _performRender SYNCHRONOUSLY inside connectedCallback (after
-    // notifying hostConnected) so the render-phase callbacks fire BEFORE the
-    // subclass connectedCallback returns. The 'connectedCallback' marker is
-    // pushed after super returns, so it lands at the tail.
+    // webjs defers the first render to a microtask after connectedCallback
+    // returns, matching lit's reactive-element schedule. The subclass's
+    // connectedCallback body pushes 'connectedCallback' before any render
+    // hooks fire; the microtask then runs hostUpdate / update / hostUpdated
+    // / firstUpdated / updated.
     assert.deepEqual(el.controller.callbackOrder, [
       'hostConnected',
+      'connectedCallback',
       'hostUpdate',
       'update',
       'hostUpdated',
       'firstUpdated',
       'updated',
-      'connectedCallback',
     ]);
     el.controller.callbackOrder = [];
     el.foo = 'new';

@@ -522,29 +522,42 @@ export class WebComponent extends Base {
       if (c.hostConnected) c.hostConnected();
     }
 
-    // For both shadow and light DOM: proceed with _performRender().
-    // The client renderer detects SSR content (<!--webjs-hydrate--> for
-    // light DOM, existing shadow root for shadow DOM) and hydrates
-    // instead of replacing: binding events without touching the DOM.
-    // The same try/catch wrapper as `_scheduleUpdate` uses: lifecycle
-    // hooks throwing must not bubble out of connectedCallback (which
-    // would mark the element as bricked at the browser level).
-    try {
-      this._performRender();
-    } catch (err) {
-      console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+    // First render is deferred to a microtask, matching lit's
+    // performUpdate scheduling. The user's connectedCallback override
+    // body runs synchronously to completion BEFORE the first render,
+    // so subclass setup that needs to inspect attributes / state / etc.
+    // observes consistent timing whether SSR-hydrating or first mount.
+    // Render-root setup (shadow attachment, light-DOM SSR adoption,
+    // controller hostConnected, _connected=true) all stay synchronous
+    // above; only the template commit + post-commit slot observers
+    // defer. Authoring contract: post-render DOM setup goes in
+    // firstUpdated(), NOT connectedCallback().
+    //
+    // The scheduling matches `_scheduleUpdate`'s wrapper so lifecycle
+    // throws are surfaced as console errors instead of bricking the
+    // element.
+    if (this._updateResolve === null) {
+      this._updatePromise = new Promise((resolve) => {
+        this._updateResolve = resolve;
+      });
     }
-
-    // Light-DOM slot lifecycle phase two. With the rendered template
-    // (and therefore the live <slot> elements) now in the DOM, attach
-    // mutation observers so future authored-child mutations and
-    // slot-name changes drive incremental projection. Adoption of
-    // SSR-placed assignments has already happened in phase one (before
-    // _performRender) so the renderer's replaceChildren cannot destroy
-    // those nodes; projection moves them into the freshly-cloned slots.
-    if (this._renderRoot === this) {
-      attachSlotObservers(this);
-    }
+    this._scheduled = true;
+    queueMicrotask(() => {
+      this._scheduled = false;
+      try {
+        this._performRender();
+      } catch (err) {
+        console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+      }
+      // Light-DOM slot lifecycle phase two: after the first render
+      // commits, the live <slot> elements exist. Attach mutation
+      // observers so authored-child + slot-name changes drive
+      // incremental projection. (Shadow DOM uses native slot
+      // projection; nothing to attach.)
+      if (this._renderRoot === this) {
+        attachSlotObservers(this);
+      }
+    });
   }
 
   /**

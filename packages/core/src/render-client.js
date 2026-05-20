@@ -717,40 +717,43 @@ function isInShadowRootEl(el) {
  * @param {unknown} value
  */
 function applyElement(part, value) {
+  // Matches lit-html's RefDirective.update():
+  // 1. If the ref target changed since last render, unbind the prior one.
+  // 2. If the ref target OR the element identity changed, bind the new
+  //    (ref, element) pair. If both are stable, skip entirely.
+  // For callback refs, an unset-before-bind cycle runs whenever the
+  // same callback is now pointing at a different element.
   const partAny = /** @type any */ (part);
-  const prev = part.lastTarget;
-  let nextTarget;
-  if (isRef(value)) {
-    nextTarget = /** @type any */ (value).target;
-  }
+  const nextTarget = isRef(value) ? /** @type any */ (value).target : undefined;
+  const prevTarget = partAny.__refTarget;
+  const refChanged = nextTarget !== prevTarget;
 
-  // Identity gate: when the ref target and the element both match the
-  // prior render, skip the rebind. Mirrors lit-html's "set once per
-  // element-identity change" semantics so a stable Ref + stable element
-  // observes only one value assignment / one callback invocation.
-  if (prev && prev === nextTarget && partAny.__lastEl === part.el) {
-    return;
-  }
-
-  if (prev && prev !== nextTarget) {
-    // Unbind the previous ref before binding a new one.
-    if (typeof prev === 'function') {
-      try { prev(undefined); } catch { /* swallow */ }
-    } else if (prev && typeof prev === 'object') {
-      prev.value = undefined;
+  if (refChanged && prevTarget) {
+    if (typeof prevTarget === 'function') {
+      try { prevTarget(undefined); } catch { /* swallow */ }
+    } else if (typeof prevTarget === 'object') {
+      prevTarget.value = undefined;
     }
   }
-  if (nextTarget) {
-    if (typeof nextTarget === 'function') {
-      try { nextTarget(part.el); } catch { /* swallow */ }
-    } else if (typeof nextTarget === 'object') {
-      nextTarget.value = part.el;
+
+  if (refChanged || partAny.__refElement !== part.el) {
+    partAny.__refTarget = nextTarget;
+    if (nextTarget) {
+      if (typeof nextTarget === 'function') {
+        // Same callback now pointing at a different element: deliver
+        // an `undefined` cleanup for the prior element first.
+        if (!refChanged && partAny.__refElement !== undefined) {
+          try { nextTarget(undefined); } catch { /* swallow */ }
+        }
+        try { nextTarget(part.el); } catch { /* swallow */ }
+      } else if (typeof nextTarget === 'object') {
+        nextTarget.value = part.el;
+      }
     }
+    partAny.__refElement = part.el;
+    // Keep the legacy `lastTarget` field in sync for clearInstance /
+    // disposeInstance which read it for template-disposal cleanup.
     part.lastTarget = nextTarget;
-    partAny.__lastEl = part.el;
-  } else {
-    part.lastTarget = undefined;
-    partAny.__lastEl = undefined;
   }
 }
 
@@ -1407,6 +1410,9 @@ function applyUntil(part, args) {
 
   // Subscribe to Promises with priority strictly less than what's
   // currently rendered. (Lower index = higher priority in lit's model.)
+  // Each subscription wraps in Promise.resolve() so synchronous
+  // thenables get a microtask boundary, matching lit's contract that
+  // all Promise/thenable resolutions are deferred.
   const cap = firstSyncIdx === -1
     ? Math.min(args.length, state.highestResolved)
     : Math.min(firstSyncIdx, state.highestResolved);
@@ -1414,7 +1420,7 @@ function applyUntil(part, args) {
     const a = args[i];
     if (!a || typeof (/** @type any */ (a).then) !== 'function') continue;
 
-    /** @type Promise<unknown> */ (a).then(
+    Promise.resolve(/** @type Promise<unknown> */ (a)).then(
       (resolved) => {
         if (state.aborted) return;
         if (i >= state.highestResolved) return;
