@@ -184,6 +184,81 @@ suite('Lifecycle hooks in a real browser', () => {
     el.remove();
   });
 
+  test('throwing willUpdate does NOT deadlock the component', async () => {
+    let willThrows = true;
+    class LcThrowEl extends WebComponent {
+      static properties = { v: { type: Number } };
+      constructor() { super(); this.v = 0; }
+      willUpdate() {
+        if (willThrows) {
+          willThrows = false;
+          throw new Error('willUpdate boom');
+        }
+      }
+      render() { return html`<p>v=${this.v}</p>`; }
+    }
+    customElements.define('lc-throw-1', LcThrowEl);
+    const el = document.createElement('lc-throw-1');
+    document.body.appendChild(el);
+
+    // First update: willUpdate throws. The component should NOT deadlock.
+    let firstCompleted = false;
+    try {
+      await Promise.race([
+        el.updateComplete.then(() => { firstCompleted = true; }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('deadlock')), 200)),
+      ]);
+    } catch (e) {
+      if (e.message === 'deadlock') throw e;
+    }
+    assert.ok(firstCompleted, 'updateComplete resolved even after willUpdate throw');
+
+    // Second update: willUpdate no longer throws. Component must render.
+    el.v = 42;
+    await el.updateComplete;
+    assert.equal(el.querySelector('p').textContent, 'v=42');
+    el.remove();
+  });
+
+  test('shouldUpdate=false preserves changedProperties for the next cycle', async () => {
+    let allow = false;
+    const seen = [];
+    class LcGateEl extends WebComponent {
+      static properties = {
+        a: { type: Number },
+        b: { type: Number },
+      };
+      constructor() { super(); this.a = 0; this.b = 0; }
+      shouldUpdate() { return allow; }
+      updated(cp) { seen.push([...cp.keys()].sort()); }
+      render() { return html`<p>a=${this.a},b=${this.b}</p>`; }
+    }
+    customElements.define('lc-gate-1', LcGateEl);
+    const el = document.createElement('lc-gate-1');
+    document.body.appendChild(el);
+    // Initial render is gated.
+    await el.updateComplete;
+    assert.deepEqual(seen, []);  // shouldUpdate=false from the start
+
+    // Make changes while gated.
+    el.a = 1;
+    await el.updateComplete;
+    el.b = 2;
+    await el.updateComplete;
+    assert.deepEqual(seen, []);  // still gated
+
+    // Open the gate. The next cycle should see BOTH 'a' and 'b' (plus any
+    // initial entries) in changedProperties, because they were preserved
+    // across the gated cycles.
+    allow = true;
+    el.a = 3;
+    await el.updateComplete;
+    const lastKeys = seen[seen.length - 1];
+    assert.ok(lastKeys.includes('a'), 'a was preserved');
+    assert.ok(lastKeys.includes('b'), 'b was preserved');
+    el.remove();
+  });
+
   test('ReactiveController with lit hostConnected/hostUpdate/hostUpdated/hostDisconnected', async () => {
     const order = [];
     const controller = {

@@ -148,13 +148,52 @@ suite('Directives in a real browser', () => {
   // --- ref / createRef ---
 
   test('ref/createRef: ref in child position is a no-op (DOM still renders correctly)', () => {
-    // ref() is currently a no-op in child position. This test verifies it
-    // doesn't disrupt sibling rendering.
+    // ref() is a no-op in child position; the bound binding happens at
+    // element position. This test verifies child-position ref doesn't
+    // disrupt sibling rendering.
     const r = createRef();
     const el = document.createElement('div');
     document.body.appendChild(el);
     render(html`<div>${ref(r)}<span>after</span></div>`, el);
     assert.equal(el.querySelector('span').textContent, 'after');
+    el.remove();
+  });
+
+  test('ref at element position populates ref.value with the element', () => {
+    const r = createRef();
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    render(html`<input ${ref(r)}>`, el);
+    const input = el.querySelector('input');
+    assert.ok(input, 'input rendered');
+    assert.strictEqual(r.value, input, 'ref.value points at the input');
+    el.remove();
+  });
+
+  test('ref callback form receives the element', () => {
+    let captured = null;
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    render(html`<button ${ref((node) => { captured = node; })}>x</button>`, el);
+    const btn = el.querySelector('button');
+    assert.strictEqual(captured, btn);
+    el.remove();
+  });
+
+  test('ref swap: prior ref is unbound (gets undefined) before new ref is bound', () => {
+    const r1 = createRef();
+    const r2 = createRef();
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const make = (r) => html`<input ${ref(r)}>`;
+    render(make(r1), el);
+    assert.strictEqual(r1.value, el.querySelector('input'));
+    assert.equal(r2.value, undefined);
+
+    render(make(r2), el);
+    // r1 should be unbound; r2 should be bound.
+    assert.equal(r1.value, undefined, 'prior ref got undefined');
+    assert.strictEqual(r2.value, el.querySelector('input'), 'new ref got the element');
     el.remove();
   });
 
@@ -240,14 +279,21 @@ suite('Directives in a real browser', () => {
 
   // --- async stream teardown: re-render with a different value aborts iteration ---
 
-  test('async stream: re-rendering with a non-stream value tears down', async () => {
+  test('async stream: re-rendering with a non-stream value tears down + iterator.return() unwinds finally blocks', async () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     let canceled = false;
+    // The generator awaits a settling Promise so iterator.return() can
+    // unwind through its finally block. A non-settling await (e.g.
+    // `await new Promise(() => {})`) is a spec-level dead end:
+    // iterator.return() queues the Return completion but the await
+    // never resolves, so the finally never runs. That's a generator
+    // authoring caveat, not a bug in this implementation.
     async function* gen() {
       try {
         yield 'a';
-        await new Promise(() => {});  // hang forever
+        await new Promise(r => setTimeout(r, 50));
+        yield 'b';
       } finally {
         canceled = true;
       }
@@ -257,11 +303,44 @@ suite('Directives in a real browser', () => {
     await new Promise(r => setTimeout(r, 10));
     assert.ok(el.querySelector('i'));
 
-    // Replace the stream with a plain string. The prior iteration's nodes
-    // get torn down, and state.aborted flips to true so the iterator's
-    // finally block runs on the next pump.
+    // Replace the stream with a plain string. Teardown:
+    //  1. removes the stream-rendered nodes
+    //  2. calls iterator.return(), which puts a Return completion in
+    //     the queue. When the awaited setTimeout settles (50ms), the
+    //     generator unwinds via its finally block.
     render(make('plain'), el);
     assert.equal(el.querySelector('i'), null, 'Stream-rendered nodes were removed');
+    // Wait long enough for the awaited setTimeout to settle and the
+    // generator to unwind.
+    await new Promise(r => setTimeout(r, 100));
+    assert.ok(canceled, 'Generator finally block ran (iterator.return() unwound it)');
+    el.remove();
+  });
+
+  // --- until: late-resolving promise should NOT overwrite newer DOM ---
+
+  test('until: late Promise resolution after re-render does NOT overwrite new DOM', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    let resolveP;
+    const p = new Promise((r) => { resolveP = r; });
+    const make = (val) => html`<div>${val}</div>`;
+
+    // First render: until() with a never-yet-resolved Promise + fallback.
+    render(make(until(p, 'fallback')), el);
+    await new Promise(r => setTimeout(r, 5));
+    assert.ok(el.textContent.includes('fallback'));
+
+    // Re-render with a plain string. The until directive is replaced.
+    render(make('replaced'), el);
+    assert.ok(el.textContent.includes('replaced'));
+
+    // NOW resolve the prior Promise. Without the abort fix, this would
+    // call applyChild and overwrite 'replaced' with the Promise value.
+    resolveP('SHOULD-NOT-APPEAR');
+    await new Promise(r => setTimeout(r, 10));
+    assert.ok(el.textContent.includes('replaced'), 'newer DOM survives');
+    assert.ok(!el.textContent.includes('SHOULD-NOT-APPEAR'), 'late resolve did NOT overwrite');
     el.remove();
   });
 });

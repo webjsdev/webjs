@@ -45,7 +45,7 @@ const INSTANCE = Symbol.for('webjs.instance');
 
 /**
  * @typedef {{
- *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'slot' | 'noop',
+ *   kind: 'child' | 'attr' | 'attr-mixed' | 'event' | 'prop' | 'bool' | 'element' | 'slot' | 'noop',
  *   path: number[],
  *   name?: string,
  *   statics?: string[],
@@ -67,6 +67,7 @@ const INSTANCE = Symbol.for('webjs.instance');
  *   | { kind: 'event', el: Element, name: string, handler: ((e: Event) => void) | null, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
+ *   | { kind: 'element', el: Element, lastTarget?: any }
  *   | { kind: 'slot', slotEl: HTMLSlotElement, applied: boolean }
  *   | { kind: 'noop' }
  * } BoundPart
@@ -289,6 +290,14 @@ function compile(tr) {
         // later walk all comments and find ours without ambiguity.
         html += `<!--${MARKER}${partIdx}-->`;
         parts.push({ kind: 'child', path: [] });
+      } else if (state === 'in-tag') {
+        // Element-position hole: `<tag ${expr}>`. Used by the `ref` directive
+        // (and any future element-bound directive). Emit a sentinel attribute
+        // on the current open tag; at bind time the attribute is stripped
+        // and the element is captured into the part.
+        const sentinel = `data-${MARKER}${partIdx}`;
+        html += `${sentinel}=""`;
+        parts.push({ kind: 'element', path: [] });
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
@@ -496,6 +505,7 @@ function bindPart(p, root) {
   if (p.kind === 'attr-mixed') return { kind: 'attr-mixed', el, name: p.name || '', statics: p.statics || [], group: p.group || [] };
   if (p.kind === 'prop') return { kind: 'prop', el, name: p.name || '' };
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
+  if (p.kind === 'element') return { kind: 'element', el };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
     // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
@@ -577,6 +587,9 @@ function applyPart(part, value, _prev, allValues) {
       break;
     case 'event':
       part.handler = typeof value === 'function' ? /** @type any */ (value) : null;
+      break;
+    case 'element':
+      applyElement(part, value);
       break;
     case 'attr-mixed': {
       // Reconstruct the attribute from static pieces + all dynamic values.
@@ -680,6 +693,42 @@ function isInShadowRootEl(el) {
  * @param {Extract<BoundPart, {kind:'child'}>} part
  * @param {unknown} value
  */
+/**
+ * Apply a value at an element-position part (`<tag ${expr}>`). The
+ * sole supported directive here is `ref(refOrCallback)` and
+ * `createRef()`. Other values are ignored so a stray non-ref hole
+ * doesn't crash. Tracks the prior target so a change from one ref to
+ * another correctly unsets the old target before binding the new one.
+ *
+ * @param {Extract<BoundPart, {kind:'element'}>} part
+ * @param {unknown} value
+ */
+function applyElement(part, value) {
+  const prev = part.lastTarget;
+  let nextTarget;
+  if (isRef(value)) {
+    nextTarget = /** @type any */ (value).target;
+  }
+  if (prev && prev !== nextTarget) {
+    // Unbind the previous ref before binding a new one.
+    if (typeof prev === 'function') {
+      try { prev(undefined); } catch { /* swallow */ }
+    } else if (prev && typeof prev === 'object') {
+      prev.value = undefined;
+    }
+  }
+  if (nextTarget) {
+    if (typeof nextTarget === 'function') {
+      try { nextTarget(part.el); } catch { /* swallow */ }
+    } else if (typeof nextTarget === 'object') {
+      nextTarget.value = part.el;
+    }
+    part.lastTarget = nextTarget;
+  } else {
+    part.lastTarget = undefined;
+  }
+}
+
 function applyChild(part, value) {
   // Drop directive state from prior renders when the new value is for a
   // different directive (or no directive at all). Keeps __untilState

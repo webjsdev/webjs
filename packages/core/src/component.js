@@ -520,7 +520,14 @@ export class WebComponent extends Base {
     // The client renderer detects SSR content (<!--webjs-hydrate--> for
     // light DOM, existing shadow root for shadow DOM) and hydrates
     // instead of replacing: binding events without touching the DOM.
-    this._performRender();
+    // The same try/catch wrapper as `_scheduleUpdate` uses: lifecycle
+    // hooks throwing must not bubble out of connectedCallback (which
+    // would mark the element as bricked at the browser level).
+    try {
+      this._performRender();
+    } catch (err) {
+      console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+    }
 
     // Light-DOM slot lifecycle phase two. With the rendered template
     // (and therefore the live <slot> elements) now in the DOM, attach
@@ -665,7 +672,16 @@ export class WebComponent extends Base {
     this._scheduled = true;
     queueMicrotask(() => {
       this._scheduled = false;
-      this._performRender();
+      try {
+        this._performRender();
+      } catch (err) {
+        // _performRender wraps the update phase in try/finally so this
+        // catches throws from shouldUpdate / willUpdate / hostUpdate /
+        // hostUpdated / firstUpdated / updated. The component is not
+        // left in a bad state (the finally blocks reset _isUpdating and
+        // resolve updateComplete). Surface the error for visibility.
+        console.error(`[webjs] lifecycle hook threw during update cycle:`, err);
+      }
     });
   }
 
@@ -698,15 +714,12 @@ export class WebComponent extends Base {
     // --- 1. Mark we're inside an update cycle ---
     this._isUpdating = true;
     let didCommit = false;
-    let gated = false;
 
+    // --- 2-6. Update phase. Lifecycle-hook throws are logged and
+    // swallowed so the component is not left in a deadlocked state
+    // (`_isUpdating` stuck true, `updateComplete` never resolves).
     try {
-      // --- 2. shouldUpdate gate ---
-      if (!this.shouldUpdate(changedProperties)) {
-        // Preserve _changedProperties so the next requestUpdate keeps
-        // accumulating on top of the entries that didn't render this cycle.
-        gated = true;
-      } else {
+      if (this.shouldUpdate(changedProperties)) {
         // --- 3. willUpdate (may mutate properties; folds into this cycle) ---
         this.willUpdate(changedProperties);
 
@@ -735,20 +748,20 @@ export class WebComponent extends Base {
 
         didCommit = true;
       }
+      // shouldUpdate=false: preserve _changedProperties so the next
+      // requestUpdate keeps accumulating on top of the entries that
+      // didn't render this cycle.
+    } catch (preCommitError) {
+      console.error(`[webjs] lifecycle hook threw during update phase:`, preCommitError);
     } finally {
-      // Whatever happened above, `_isUpdating` MUST come back to false so
-      // future updates can schedule. The map is cleared only on a
-      // committed cycle so shouldUpdate=false / hook-throws preserve the
-      // accumulated changedProperties for the next requestUpdate.
       this._isUpdating = false;
       if (didCommit) {
         this._changedProperties = new Map();
       }
     }
 
-    // --- 7-8. Post-commit hooks. Run only when the cycle actually
-    // committed. Wrapped in its own try/finally so a throwing
-    // firstUpdated/updated still resolves updateComplete.
+    // --- 7-8. Post-commit hooks. Errors here are also caught so the
+    // updateComplete promise always resolves.
     if (didCommit) {
       try {
         // --- 7. firstUpdated (once) ---
@@ -758,13 +771,12 @@ export class WebComponent extends Base {
         }
         // --- 8. updated (every render) ---
         this.updated(changedProperties);
+      } catch (postCommitError) {
+        console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
       } finally {
         this._resolveUpdate();
       }
     } else {
-      // shouldUpdate=false (gated) or a pre-commit hook threw: still
-      // resolve updateComplete so awaiters don't hang.
-      void gated;  // captured for clarity; not needed at runtime
       this._resolveUpdate();
     }
   }
