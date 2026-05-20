@@ -40,8 +40,13 @@ suite('keyed directive (lit parity port)', () => {
   });
 
   test('re-renders when the key changes', () => {
+    // Note: lit calls `render(keyed(...), container)` directly. webjs's
+    // top-level `render()` only handles TemplateResult; raw directive
+    // objects at the root are no-ops. Wrap in an outer template so the
+    // directive is applied to a child part (the lit-html-internal path
+    // they actually want to exercise).
     const go = (k) =>
-      render(keyed(k, html`<div .foo=${k}></div>`), container);
+      render(html`${keyed(k, html`<div .foo=${k}></div>`)}`, container);
 
     // Initial render.
     go(1);

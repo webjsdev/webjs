@@ -54,7 +54,7 @@ suite('templateContent directive (lit parity port)', () => {
     );
   });
 
-  test('clones a template (lit caches; webjs re-clones per render)', () => {
+  test('clones a template only once', () => {
     const go = () =>
       render(html`<div>${templateContent(template)}</div>`, container);
     go();
@@ -66,17 +66,9 @@ suite('templateContent directive (lit parity port)', () => {
 
     go();
     const templateDiv2 = container.querySelector('div > div');
-    // Lit's identical assertion: strictEqual(templateDiv, templateDiv2).
-    // webjs's applyChild's templateContent branch tears down + clones
-    // anew on every render, so a different node is expected. The HTML
-    // shape is identical either way.
-    assert.notStrictEqual(
-      templateDiv,
-      templateDiv2,
-      'webjs re-clones; lit caches. Both render the same HTML.',
-    );
-    assert.equal(templateDiv2.tagName, 'DIV');
-    assert.equal(templateDiv2.textContent, 'aaa');
+    // Same identity expectation as lit: the cloned content is preserved
+    // across re-renders that pass the same source template element.
+    assert.strictEqual(templateDiv, templateDiv2);
   });
 
   test('renders a new template over a previous one', () => {
