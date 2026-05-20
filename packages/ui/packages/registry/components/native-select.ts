@@ -1,10 +1,17 @@
 /**
- * NativeSelect: styled native `<select>`. Uses `appearance: none` to hide
- * the platform-native dropdown chevron and overlays an SVG chevron on top.
- * Best mobile UX (native picker), full keyboard support, form submission
- * works natively. No JS.
+ * NativeSelect: styled native `<select>`. Tier-1 class helpers. Uses
+ * `appearance: none` to hide the platform chevron and overlays an SVG
+ * chevron on top. Best mobile UX (native picker), full keyboard support,
+ * form submission works natively. No JS.
  *
- * shadcn parity: matches shadcn NativeSelect visual + sizes.
+ * shadcn parity:
+ *   NativeSelect             → nativeSelectClass()
+ *   NativeSelect wrapper     → nativeSelectWrapperClass()
+ *   NativeSelect chevron     → nativeSelectIconClass()
+ *   NativeSelect option      → bare <option> (or nativeSelectOptionClass()
+ *                              for explicit overrides; the installed
+ *                              stylesheet sets Canvas / CanvasText on
+ *                              every <option> automatically)
  *
  * Usage:
  *   <div class=${nativeSelectWrapperClass()}>
@@ -16,12 +23,10 @@
  *     <svg class="${nativeSelectIconClass()}" aria-hidden="true">…</svg>
  *   </div>
  *
- * Bare <option> elements paint correctly out of the box: importing
- * this module installs a stylesheet that forces Canvas/CanvasText on
- * every <option> inside the wrapper, so the dropdown reads in both
- * light and dark themes regardless of OS preference. The class-helper
- * nativeSelectOptionClass() is still exported for advanced overrides
- * that need to inline-set the same colours.
+ * Importing this module installs a stylesheet that forces Canvas /
+ * CanvasText on every <option> inside the wrapper so the dropdown reads
+ * in both light and dark themes regardless of OS preference; advanced
+ * overrides use `nativeSelectOptionClass()` / `nativeSelectOptGroupClass()`.
  *
  * Design tokens used: --input, --background, --primary, --primary-foreground,
  * --muted-foreground, --ring, --destructive.

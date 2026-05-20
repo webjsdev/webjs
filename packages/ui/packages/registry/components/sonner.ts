@@ -1,23 +1,49 @@
 /**
- * Sonner: toast notification queue. Hand-rolled (no `sonner` npm package).
+ * Sonner: toast notification queue. Tier-2. Hand-rolled (no `sonner`
+ * npm dependency); ships as a single `<ui-sonner>` viewport you mount
+ * once + an imperative `toast()` API published as a module export. A
+ * singleton bus routes new toasts to the most recently connected
+ * viewport; multiple `<ui-sonner>` instances are supported with
+ * explicit per-instance dispatch.
  *
- * shadcn parity: `<Toaster />` component + `toast()` function with success,
- * error, info, warning, loading, promise methods.
+ * shadcn parity:
+ *   <Toaster />     → <ui-sonner position>
+ *   toast(msg, opts)
+ *                   → toast()  (plus toast.success / .error / .info / .warning /
+ *                     .loading / .promise / .dismiss)
  *
  * Usage:
- *   Place once at the root of your app (typically in layout.ts):
- *     <ui-sonner position="bottom-right"></ui-sonner>
+ *   <!-- Mount once at the root of your app (typically in layout.ts): -->
+ *   <ui-sonner position="bottom-right"></ui-sonner>
  *
- *   Then anywhere:
- *     import { toast } from '@/components/ui/sonner.ts';
- *     toast('Saved!');
- *     toast.success('Account created');
- *     toast.error('Failed to save', { description: 'Try again' });
- *     toast.promise(savePost(), { loading: 'Saving…', success: 'Saved', error: 'Failed' });
+ *   // Then from anywhere (server or client component):
+ *   import { toast } from '@/components/ui/sonner.ts';
+ *   toast('Saved!');
+ *   toast.success('Account created');
+ *   toast.error('Failed to save', { description: 'Try again' });
+ *   toast.promise(savePost(), { loading: 'Saving…', success: 'Saved', error: 'Failed' });
+ *   toast.dismiss(id);
+ *
+ * Attributes on <ui-sonner>:
+ *   `position`: "top-left" | "top-center" | "top-right" |
+ *               "bottom-left" | "bottom-center" | "bottom-right" (default).
+ *
+ * Per-toast options (passed as the second arg to `toast(msg, opts)`):
+ *   `id`:          string | number. Stable id so repeated calls update in place.
+ *   `description`: string. Secondary line under the title.
+ *   `duration`:    ms, default 4000 (loading toasts default to 0, no auto-dismiss).
+ *   `action`:      { label, onClick } | undefined. Renders an action button.
+ *   `cancel`:      { label, onClick } | undefined. Renders a cancel button.
+ *
+ * Events: none dispatched (consumers act on the id returned by `toast()`).
+ *
+ * Programmatic API on <ui-sonner>: `.addToast(message, opts, type)` for
+ * per-instance dispatch (bypasses the singleton router that `toast()`
+ * uses); typically only needed when mounting multiple viewports.
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html, repeat, unsafeHTML } from '@webjskit/core';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
@@ -81,7 +107,8 @@ toast.promise = <T,>(p: Promise<T>, opts: { loading: string; success: string; er
 };
 
 // --------------------------------------------------------------------------
-// <ui-sonner> is the toaster element. Renders pending toasts as children.
+// <ui-sonner> renders pending toasts. No user-projected children, so no
+// <slot>: the toaster owns its content entirely via render().
 // --------------------------------------------------------------------------
 
 const POSITIONS = {
@@ -107,16 +134,28 @@ const TYPE_ICON_COLOR: Record<ToastType, string> = {
   loading: 'text-muted-foreground',
 };
 
-export class UiSonner extends Base {
-  private _items: ToastItem[] = [];
+interface SonnerState {
+  items: ToastItem[];
+}
 
-  connectedCallback(): void {
-    const position = (this.getAttribute('position') as SonnerPosition) ?? 'bottom-right';
-    this.setAttribute('data-slot', 'sonner');
-    this.className = cn(
-      'pointer-events-none fixed z-[100] flex flex-col gap-2',
-      POSITIONS[position] ?? POSITIONS['bottom-right'],
-    );
+export class UiSonner extends WebComponent {
+  static properties = {
+    position: { type: String, reflect: true },
+  };
+  declare position: SonnerPosition;
+  declare state: SonnerState;
+
+  constructor() {
+    super();
+    this.position = 'bottom-right';
+    this.state = { items: [] };
+  }
+
+  // Routing the global toast() function to this viewport. Runs in
+  // firstUpdated rather than the constructor because tests can mount
+  // multiple <ui-sonner> instances and the most recently mounted wins
+  // (matches the existing semantics).
+  firstUpdated(): void {
     toaster.add = (t) => this._add(t);
     toaster.remove = (id) => this._remove(id);
   }
@@ -128,7 +167,7 @@ export class UiSonner extends Base {
    * viewport). Primary use case: docs demos that mount one viewport
    * per position and want each demo button to fire into its own
    * viewport. App code should normally call the global `toast()` /
-   * `toast.success()` / etc.: they route via the singleton.
+   * `toast.success()` / etc., which route via the singleton.
    */
   addToast(message: string, opts: ToastOptions = {}, type: ToastType = 'default'): string | number {
     const id = opts.id ?? nextId++;
@@ -143,49 +182,54 @@ export class UiSonner extends Base {
     return id;
   }
 
-  private _add(item: ToastItem): void {
-    this._items.push(item);
-    this._render();
+  _add(item: ToastItem): void {
+    this.setState({ items: [...this.state.items, item] });
     if (item.duration && item.duration > 0) {
       setTimeout(() => this._remove(item.id), item.duration);
     }
   }
 
-  private _remove(id: string | number): void {
-    this._items = this._items.filter((i) => i.id !== id);
-    this._render();
+  _remove(id: string | number): void {
+    this.setState({ items: this.state.items.filter((i) => i.id !== id) });
   }
 
-  private _render(): void {
-    this.replaceChildren(
-      ...this._items.map((item) => {
-        const el = document.createElement('div');
-        el.className = TOAST_ITEM_BASE;
-        el.setAttribute('data-type', item.type);
-        el.setAttribute('role', item.type === 'error' ? 'alert' : 'status');
-        el.innerHTML = `
-          <div class="${TYPE_ICON_COLOR[item.type]} pt-0.5">${ICONS[item.type]}</div>
+  render() {
+    const pos = POSITIONS[this.position] ?? POSITIONS['bottom-right'];
+    return html`<div
+      data-slot="sonner"
+      class=${`pointer-events-none fixed z-[100] flex flex-col gap-2 ${pos}`}
+    >
+      ${repeat(
+        this.state.items,
+        (item) => item.id,
+        (item) => html`<div
+          class=${TOAST_ITEM_BASE}
+          data-type=${item.type}
+          role=${item.type === 'error' ? 'alert' : 'status'}
+        >
+          <div class=${`${TYPE_ICON_COLOR[item.type]} pt-0.5`}>${unsafeHTML(ICONS[item.type])}</div>
           <div class="flex-1">
-            <div class="font-medium">${escapeHTML(item.message)}</div>
-            ${item.description ? `<div class="mt-1 text-xs text-muted-foreground">${escapeHTML(item.description)}</div>` : ''}
+            <div class="font-medium">${item.message}</div>
+            ${item.description
+              ? html`<div class="mt-1 text-xs text-muted-foreground">${item.description}</div>`
+              : ''}
           </div>
-        `;
-        if (item.action) {
-          const btn = document.createElement('button');
-          btn.className = 'rounded-md px-2 py-1 text-xs font-medium hover:bg-accent';
-          btn.textContent = item.action.label;
-          btn.onclick = () => {
-            item.action!.onClick();
-            this._remove(item.id);
-          };
-          el.appendChild(btn);
-        }
-        return el;
-      }),
-    );
+          ${item.action
+            ? html`<button
+                type="button"
+                class="rounded-md px-2 py-1 text-xs font-medium hover:bg-accent"
+                @click=${() => {
+                  item.action!.onClick();
+                  this._remove(item.id);
+                }}
+              >${item.action.label}</button>`
+            : ''}
+        </div>`,
+      )}
+    </div>`;
   }
 }
-defineElement('ui-sonner', UiSonner);
+UiSonner.register('ui-sonner');
 
 const ICONS: Record<ToastType, string> = {
   default: '',
@@ -199,9 +243,3 @@ const ICONS: Record<ToastType, string> = {
   loading:
     '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>',
 };
-
-function escapeHTML(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;',
-  );
-}

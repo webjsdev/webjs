@@ -275,6 +275,29 @@ npm run db:migrate            # creates prisma/dev.db + migration
 npm run dev                   # webjs dev + prisma generate via predev
 ```
 
+### Always `npm run dev` / `npm start`, never `webjs dev` / `webjs start` directly
+
+`webjs dev` and `webjs start` are framework primitives, they only run
+the webjs server. They do **not** run `prisma generate`, do **not** run
+`prisma migrate deploy`, do **not** spawn the Tailwind watcher, do
+**not** run any other per-app process this `package.json` composes.
+
+`npm run dev` and `npm start` are the app-level entrypoints. They run
+the webjs server **plus** every other process the app needs, wired
+together via `predev` / `prestart` hooks and (where present)
+`concurrently` for parallel watchers. Skipping the npm wrapper produces
+silent breakage: a stale Prisma client, missing `public/tailwind.css`,
+an unmigrated database in production, etc.
+
+Same split Rails 7+ uses: `bin/rails server` is the framework
+primitive, `bin/dev` is the orchestrator. webjs uses npm scripts +
+hooks for the same role, because as a no-build framework Tailwind /
+Prisma / etc. cannot be bundler plugins.
+
+In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
+start`) as the CMD over `node ... webjs.js start ...`. The npm form
+fires `prestart`; the direct binary form skips it.
+
 Scripts:
 
 - `npm run db:migrate`: `prisma migrate dev` (dev-time schema changes + migration + generate)

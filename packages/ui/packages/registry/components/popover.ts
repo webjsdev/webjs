@@ -1,24 +1,22 @@
 /**
- * Popover, floating panel anchored to a trigger button, built on the
+ * Popover: floating panel anchored to a trigger button, built on the
  * native HTML Popover API (`popover` attribute + `popovertarget`).
  *
- * Tier-1 component (no custom element). The browser handles:
- *   - Open/close state via the `popover` attribute + showPopover()/hidePopover()
- *   - Top-layer rendering (no z-index wars)
- *   - Light-dismiss on outside click (with popover="auto")
- *   - Escape-to-close
- *   - Focus restoration to the invoking <button popovertarget="...">
- *   - **Implicit anchor**: a popover invoked via `popovertarget` is
- *     automatically anchored to its invoker (CSS Anchor Positioning's
- *     default `position-anchor: auto` for popovers). No `anchor-name`
- *     or `position-anchor` inline style is required for the common case.
+ * Tier-1 (no custom element). The browser handles open / close state,
+ * top-layer rendering, light-dismiss on outside click (with
+ * `popover="auto"`), Escape-to-close, focus restoration to the invoker,
+ * and CSS Anchor Positioning's implicit anchor (a popover invoked via
+ * `popovertarget` is automatically anchored to its invoker, no
+ * `anchor-name` / `position-anchor` inline style needed for the common
+ * case). CSS Anchor Positioning ships in Chrome 125+, Safari 26+,
+ * Firefox 134+.
  *
  * shadcn parity:
- *   <PopoverContent side="..." align="..." sideOffset={...}>
- *     → popoverContentClass({ side, align, sideOffset })
- *   PopoverHeader      → popoverHeaderClass()
- *   PopoverTitle       → popoverTitleClass()
- *   PopoverDescription → popoverDescriptionClass()
+ *   Popover               → <button popovertarget="id"> + <div id="id" popover>
+ *   PopoverContent        → popoverContentClass({ side, align, sideOffset, alignOffset })
+ *   PopoverHeader         → popoverHeaderClass()
+ *   PopoverTitle          → popoverTitleClass()
+ *   PopoverDescription    → popoverDescriptionClass()
  *
  * Usage (single invoker, implicit anchor, zero inline style):
  *   <button popovertarget="filter" class=${buttonClass({ variant: 'outline' })}>Filter</button>
@@ -30,23 +28,18 @@
  *     </div>
  *   </div>
  *
- * When you DO need explicit anchor binding (multiple invokers for the
- * same popover, or anchoring to a different element than the invoker),
- * add the `anchor-name` / `position-anchor` pair via inline style:
- *
+ *   <!-- Explicit anchor (multiple invokers / anchoring to a different element): -->
  *   <span style="anchor-name: --picker">@vivek</span>
  *   <button popovertarget="profile">Show</button>
  *   <div id="profile" popover style="position-anchor: --picker"
  *        class=${popoverContentClass({ side: 'bottom' })}>…</div>
  *
- * CSS Anchor Positioning ships in Chrome 125+, Safari 26+, Firefox 134+.
+ * The `positionFloating` helper is also exported (used by the Tier-2
+ * tooltip / hover-card / dropdown-menu components for imperative
+ * positioning where CSS Anchor Positioning isn't enough). Migrated from
+ * the prior <ui-popover> custom element set.
  *
- * For consumers that need imperative positioning right now, the
- * `positionFloating` helper is still exported and is what the tier-2
- * tooltip / hover-card / dropdown-menu components use internally.
- *
- * Migrated from the prior <ui-popover> / <ui-popover-trigger> /
- * <ui-popover-content> custom elements.
+ * Design tokens used: --popover, --popover-foreground, --border.
  */
 
 // --------------------------------------------------------------------------

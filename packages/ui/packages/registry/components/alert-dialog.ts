@@ -1,23 +1,29 @@
 /**
- * AlertDialog, modal requiring explicit Cancel / Action confirmation.
- * Variant of Dialog: role="alertdialog", no Escape-to-close, no
- * overlay-click-to-close. Built on the native <dialog> element.
+ * AlertDialog: modal requiring explicit Cancel / Action confirmation.
+ * Tier-2. Variant of Dialog with `role="alertdialog"`, no
+ * Escape-to-close, no overlay-click-to-close. Built on the native
+ * `<dialog>` element.
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/alertdialog/
  *
- * The custom element wraps <ui-alert-dialog-content> inside a native
- * <dialog> on connection and calls showModal() to open. Native Escape
- * behavior is cancelled via the dialog's `cancel` event, the user
- * MUST choose Cancel or Action. No click-to-close on the backdrop
- * (matches shadcn).
- *
- * The previous version's hand-rolled focus management is gone, the
- * native <dialog>'s focus trap and focus-restore behavior cover it.
+ * Composition follows dialog.ts: `<ui-alert-dialog-content>` owns the
+ * native `<dialog>` (its render() emits the `<dialog>` wrapper around
+ * its slotted content); the parent tracks open state and drives
+ * showModal() / close() on the content child. Every <slot> is a default
+ * slot, so SSR doesn't need to route children by name (which wouldn't
+ * work because slot="..." set in connectedCallback never runs
+ * server-side).
  *
  * shadcn parity:
- *   AlertDialog, AlertDialogTrigger, AlertDialogContent (size: default | sm),
- *   AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
- *   AlertDialogFooter, AlertDialogAction, AlertDialogCancel.
+ *   AlertDialog              → <ui-alert-dialog open>
+ *   AlertDialogTrigger       → <ui-alert-dialog-trigger>
+ *   AlertDialogContent       → <ui-alert-dialog-content size>
+ *   AlertDialogHeader        → <div class=${alertDialogHeaderClass()}>
+ *   AlertDialogTitle         → <h2 class=${alertDialogTitleClass()}>
+ *   AlertDialogDescription   → <p class=${alertDialogDescriptionClass()}>
+ *   AlertDialogFooter        → <div class=${alertDialogFooterClass()}>
+ *   AlertDialogAction        → <ui-alert-dialog-action variant size>
+ *   AlertDialogCancel        → <ui-alert-dialog-cancel variant size>
  *
  * Usage:
  *   <ui-alert-dialog>
@@ -36,9 +42,28 @@
  *     </ui-alert-dialog-content>
  *   </ui-alert-dialog>
  *
+ * Attributes on <ui-alert-dialog>:
+ *   `open`:  boolean (reflected). Presence shows the dialog.
+ *
+ * Attributes on <ui-alert-dialog-content>:
+ *   `size`:  "default" (default) | "sm". The sm size flips the footer to
+ *           a 2-column grid with full-width buttons.
+ *
+ * Attributes on <ui-alert-dialog-action> / <ui-alert-dialog-cancel>:
+ *   `variant`: ButtonVariant. Action defaults to "default", cancel to "outline".
+ *   `size`:    ButtonSize. Defaults to "default".
+ *
+ * Events: none dispatched at present (no `ui-open-change`); observe the
+ * reflected `open` attribute on `<ui-alert-dialog>`.
+ *
+ * Programmatic API on <ui-alert-dialog>: `.show()` · `.hide()`.
+ *
+ * Keyboard: Escape is blocked (alert dialogs require explicit choice);
+ * Tab cycles trapped within the dialog (native focus trap).
+ *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
@@ -54,23 +79,12 @@ export const alertDialogTitleClass = (): string => 'text-lg font-semibold';
 
 export const alertDialogDescriptionClass = (): string => 'text-sm text-muted-foreground';
 
-// Pre-hydration paint fallback. Hides the content panel until JS marks
-// the host as `[open]` (Tailwind cannot author classes on the user's
-// <ui-alert-dialog> at SSR time, so this stays as a selector-based
-// injection). Everything specific to the native <dialog> wrapper goes
-// through Tailwind classes on the element, see NATIVE_DIALOG_CLASS below.
+// Pre-hydration paint fallback (see dialog.ts for the long version).
 const STYLES = `
 ui-alert-dialog:not([open]) ui-alert-dialog-content { display: none !important; }
 ui-alert-dialog-content { display: grid; }
 `;
 
-// Tailwind class string applied to the programmatic <dialog> wrapper.
-// `border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none
-// overflow-visible text-inherit` clears the UA defaults so the <dialog>
-// is an invisible top-layer host; the visible panel is rendered by
-// <ui-alert-dialog-content> with alertDialogContentClass.
-// `backdrop:bg-black/50` paints the overlay via the Tailwind 4
-// `backdrop:` variant.
 const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
@@ -82,17 +96,15 @@ function installStyles(): void {
   document.head.appendChild(style);
 }
 
+// Body scroll lock. Refcounted so nested dialogs unlock in order. Kept in
+// lockstep with dialog.ts (not imported) so `webjs ui add alert-dialog`
+// doesn't pull in the full dialog component.
 let scrollLockCount = 0;
 let savedOverflow = '';
 let savedPaddingRight = '';
+
 function lockScroll(): void {
   if (scrollLockCount === 0) {
-    // Reserve the gutter the OS scrollbar was occupying so the body doesn't
-    // visibly widen when `overflow: hidden` removes it. See dialog.ts for
-    // the full rationale. Kept in lockstep here because alert-dialog
-    // intentionally re-implements the lock (rather than importing from
-    // dialog.ts) so users can `webjs ui add alert-dialog` without pulling
-    // in the full dialog component.
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     savedOverflow = document.body.style.overflow;
     savedPaddingRight = document.body.style.paddingRight;
@@ -101,6 +113,7 @@ function lockScroll(): void {
   }
   scrollLockCount++;
 }
+
 function unlockScroll(): void {
   scrollLockCount = Math.max(0, scrollLockCount - 1);
   if (scrollLockCount === 0) {
@@ -111,183 +124,232 @@ function unlockScroll(): void {
 
 // --------------------------------------------------------------------------
 // <ui-alert-dialog>
+// Owns the open state. Defers the actual <dialog> element to the child
+// <ui-alert-dialog-content>, so no named slot is needed (which avoids
+// the SSR slot-routing problem). Drives showModal() / close() on the
+// content child via prop transitions.
 // --------------------------------------------------------------------------
 
-export class UiAlertDialog extends Base {
-  static get observedAttributes(): string[] {
-    return ['open'];
-  }
-
-  private _native: HTMLDialogElement | null = null;
-
-  // Cancel the native Escape-to-close. The browser fires a `cancel` event
-  // when the user presses Escape on an open dialog; preventDefault stops
-  // the subsequent close. No click-to-close on the backdrop either (intentional
-  // omission, alert dialogs require an explicit Cancel/Action choice).
-  private _onNativeCancel = (e: Event): void => e.preventDefault();
-  private _onNativeClose = (): void => {
-    if (this.isOpen) this.removeAttribute('open');
+export class UiAlertDialog extends WebComponent {
+  static properties = {
+    open: { type: Boolean, reflect: true },
   };
+  declare open: boolean;
+
+  _lastOpen: boolean = false;
+
+  constructor() {
+    super();
+    this.open = false;
+  }
 
   connectedCallback(): void {
     installStyles();
-    this.setAttribute('data-slot', 'alert-dialog');
-    this._wrap();
-    this._reflect();
-    if (this.isOpen) this._setup();
-  }
-
-  disconnectedCallback(): void {
-    if (this.isOpen) this._teardown();
-    if (this._native) {
-      this._native.removeEventListener('cancel', this._onNativeCancel);
-      this._native.removeEventListener('close', this._onNativeClose);
-    }
-  }
-
-  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
-    if (name === 'open' && oldVal !== newVal) {
-      this._reflect();
-      if (newVal !== null) this._setup();
-      else this._teardown();
-    }
-  }
-
-  show(): void {
-    this.setAttribute('open', '');
-  }
-
-  hide(): void {
-    this.removeAttribute('open');
-  }
-
-  private get isOpen(): boolean {
-    return this.hasAttribute('open');
-  }
-
-  private _wrap(): void {
-    const content = this.querySelector<HTMLElement>(':scope > ui-alert-dialog-content');
-    if (!content) return;
-    if (content.parentElement?.tagName === 'DIALOG') {
-      this._native = content.parentElement as HTMLDialogElement;
-    } else {
-      const dlg = document.createElement('dialog');
-      dlg.setAttribute('data-slot', 'alert-dialog-native');
-      dlg.className = NATIVE_DIALOG_CLASS;
-      content.replaceWith(dlg);
-      dlg.appendChild(content);
-      this._native = dlg;
-    }
-    // The legacy <ui-alert-dialog-overlay> is no longer needed; ::backdrop covers it.
+    // Legacy <ui-alert-dialog-overlay> isn't supported anymore; the native
+    // ::backdrop pseudo replaces it. Strip it if a stale doc uses it.
     this.querySelector<HTMLElement>(':scope > ui-alert-dialog-overlay')?.remove();
-    this._native.addEventListener('cancel', this._onNativeCancel);
-    this._native.addEventListener('close', this._onNativeClose);
-    // No click-to-close on backdrop. Alert dialogs require explicit choice.
+    super.connectedCallback?.();
   }
 
-  private _reflect(): void {
-    const open = this.isOpen;
-    this.setAttribute('data-state', open ? 'open' : 'closed');
-    const content = this.querySelector<HTMLElement>('ui-alert-dialog-content');
-    if (content) {
-      content.setAttribute('data-state', open ? 'open' : 'closed');
-      content.setAttribute('role', 'alertdialog');
-      content.setAttribute('aria-modal', 'true');
+  disconnectedCallback(): void {
+    if (this.open) this._teardown();
+    super.disconnectedCallback?.();
+  }
+
+  show(): void { this.open = true; }
+  hide(): void { this.open = false; }
+
+  // Back-compat getter alongside the reactive `open` prop.
+  get isOpen(): boolean { return this.open; }
+
+  render() {
+    if (this._lastOpen !== this.open) {
+      this._lastOpen = this.open;
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
+        if (this.open) this._setup();
+        else this._teardown();
+      });
     }
+    return html`<div data-slot="alert-dialog" data-state=${this.open ? 'open' : 'closed'}>
+      <slot></slot>
+    </div>`;
   }
 
-  private _setup(): void {
-    if (!this._native) return;
+  get _content(): UiAlertDialogContent | null {
+    return this.querySelector('ui-alert-dialog-content') as UiAlertDialogContent | null;
+  }
+
+  _setup(): void {
+    const content = this._content;
+    if (!content) return;
     lockScroll();
-    if (!this._native.open) this._native.showModal();
+    content.showModal();
   }
 
-  private _teardown(): void {
+  _teardown(): void {
     unlockScroll();
-    if (this._native?.open) this._native.close();
+    this._content?.close();
   }
 }
-defineElement('ui-alert-dialog', UiAlertDialog);
+UiAlertDialog.register('ui-alert-dialog');
 
-export class UiAlertDialogTrigger extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'alert-dialog-trigger');
-    this.addEventListener('click', this._onClick);
+// --------------------------------------------------------------------------
+// <ui-alert-dialog-trigger>
+// --------------------------------------------------------------------------
+
+export class UiAlertDialogTrigger extends WebComponent {
+  render() {
+    return html`<div
+      data-slot="alert-dialog-trigger"
+      @click=${this._onClick}
+    ><slot></slot></div>`;
   }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-  }
-  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.show();
+
+  _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.show();
 }
-defineElement('ui-alert-dialog-trigger', UiAlertDialogTrigger);
+UiAlertDialogTrigger.register('ui-alert-dialog-trigger');
 
-export class UiAlertDialogContent extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'alert-dialog-content');
-    if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
-    this.setAttribute('data-size', this.getAttribute('size') ?? 'default');
-    this.setAttribute('tabindex', '-1');
-    const userClass = this.getAttribute('class') ?? '';
-    this.className = cn(alertDialogContentClass(), userClass);
+// --------------------------------------------------------------------------
+// <ui-alert-dialog-content>
+// Owns the native <dialog> element. Renders a <dialog> wrapper around its
+// slotted children. Exposes showModal() / close() so the parent
+// <ui-alert-dialog> can drive the open state imperatively without a
+// named slot. Escape-to-close is blocked here (alert dialogs require an
+// explicit choice via Cancel / Action).
+// --------------------------------------------------------------------------
+
+export class UiAlertDialogContent extends WebComponent {
+  static properties = {
+    size: { type: String, reflect: true },
+  };
+  declare size: 'default' | 'sm';
+
+  constructor() {
+    super();
+    this.size = 'default';
+  }
+
+  showModal(): void {
+    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="alert-dialog-native"]');
+    if (native && !native.open) native.showModal();
+  }
+
+  close(): void {
+    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="alert-dialog-native"]');
+    if (native?.open) native.close();
+  }
+
+  render() {
+    const parentOpen = !!this._parent()?.open;
+    return html`<dialog
+      data-slot="alert-dialog-native"
+      class=${NATIVE_DIALOG_CLASS}
+      @cancel=${this._onNativeCancel}
+      @close=${this._onNativeClose}
+    ><div
+      data-slot="alert-dialog-content"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      data-size=${this.size}
+      data-state=${parentOpen ? 'open' : 'closed'}
+      class=${alertDialogContentClass()}
+    ><slot></slot></div></dialog>`;
+  }
+
+  // Block native Escape-to-close. Alert dialogs require an explicit
+  // Cancel / Action choice.
+  _onNativeCancel = (e: Event): void => e.preventDefault();
+  _onNativeClose = (): void => {
+    const p = this._parent();
+    if (p?.open) p.open = false;
+  };
+
+  // SSR-safe: linkedom doesn't implement closest() on custom elements.
+  _parent(): UiAlertDialog | null {
+    if (typeof this.closest !== 'function') return null;
+    return this.closest('ui-alert-dialog') as UiAlertDialog | null;
   }
 }
-defineElement('ui-alert-dialog-content', UiAlertDialogContent);
+UiAlertDialogContent.register('ui-alert-dialog-content');
 
+// --------------------------------------------------------------------------
+// <ui-alert-dialog-cancel> + <ui-alert-dialog-action>
 // shadcn's <AlertDialogAction> and <AlertDialogCancel> ARE button-styled
-// elements with forwarded `variant` and `size` props from the Button
-// component. We mirror that: the host element itself receives
-// buttonClass({variant, size}) so users can write
-//   <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
-// and get the right visuals without wrapping a <button>. Cancel defaults
-// to variant="outline" (matches shadcn); Action defaults to "default".
+// elements with forwarded `variant` and `size` props. Each renders its
+// own native <button> with @click handler; the user's label text or
+// inline icon SVG projects through a slot inside that button.
 //
-// Back-compat: if the consumer provided a child <button> (the legacy
-// wrap-a-button pattern), we don't restyle the host. Their button keeps
-// its own buttonClass call and the host stays a transparent wrapper.
+// Authoring is bare text / icons, not a wrapped <button>:
+//
+//   <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
+//   <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
+//
+// (A legacy wrap-a-button form used to be supported by sniffing for an
+// authored <button> in connectedCallback. SSR rendered the wrong branch
+// because connectedCallback never fires server-side, producing invalid
+// nested-<button> HTML that the parser flattened into siblings -- the
+// "buttons have no text" symptom. Removed in favour of one canonical
+// authoring shape that works in both SSR and CSR.)
+//
+// The extra `group-data-[size=sm]/alert-dialog-content:w-full` class
+// makes the inner button stretch when the parent's footer flips to
+// `grid grid-cols-2` (size=sm); otherwise the inline-flex button is
+// content-width and sits at the start of its grid cell.
+// --------------------------------------------------------------------------
 
-function applyAlertDialogButton(host: HTMLElement, defaultVariant: ButtonVariant): void {
-  if (host.querySelector(':scope > button')) return;
-  const variant = (host.getAttribute('variant') ?? defaultVariant) as ButtonVariant;
-  const size = (host.getAttribute('size') ?? 'default') as ButtonSize;
-  const userClass = host.getAttribute('class') ?? '';
-  host.className = cn(buttonClass({ variant, size }), userClass);
-  host.setAttribute('role', 'button');
-  if (!host.hasAttribute('tabindex')) host.setAttribute('tabindex', '0');
-}
+const ALERT_DIALOG_ACTION_GRID_STRETCH = 'group-data-[size=sm]/alert-dialog-content:w-full';
 
-function alertDialogButtonKeydown(this: HTMLElement, e: KeyboardEvent): void {
-  if (e.key === ' ' || e.key === 'Enter') {
-    e.preventDefault();
-    this.click();
-  }
-}
+export class UiAlertDialogCancel extends WebComponent {
+  static properties = {
+    variant: { type: String, reflect: true },
+    size: { type: String, reflect: true },
+  };
+  declare variant: ButtonVariant;
+  declare size: ButtonSize;
 
-export class UiAlertDialogCancel extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'alert-dialog-cancel');
-    applyAlertDialogButton(this, 'outline');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
+  constructor() {
+    super();
+    this.variant = 'outline';
+    this.size = 'default';
   }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('keydown', alertDialogButtonKeydown as EventListener);
-  }
-  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
-}
-defineElement('ui-alert-dialog-cancel', UiAlertDialogCancel);
 
-export class UiAlertDialogAction extends Base {
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'alert-dialog-action');
-    applyAlertDialogButton(this, 'default');
-    this.addEventListener('click', this._onClick);
-    this.addEventListener('keydown', alertDialogButtonKeydown as EventListener);
+  render() {
+    return html`<button
+      type="button"
+      data-slot="alert-dialog-cancel"
+      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      @click=${this._onClick}
+    ><slot></slot></button>`;
   }
-  disconnectedCallback(): void {
-    this.removeEventListener('click', this._onClick);
-    this.removeEventListener('keydown', alertDialogButtonKeydown as EventListener);
-  }
-  private _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
+
+  _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
 }
-defineElement('ui-alert-dialog-action', UiAlertDialogAction);
+UiAlertDialogCancel.register('ui-alert-dialog-cancel');
+
+export class UiAlertDialogAction extends WebComponent {
+  static properties = {
+    variant: { type: String, reflect: true },
+    size: { type: String, reflect: true },
+  };
+  declare variant: ButtonVariant;
+  declare size: ButtonSize;
+
+  constructor() {
+    super();
+    this.variant = 'default';
+    this.size = 'default';
+  }
+
+  render() {
+    return html`<button
+      type="button"
+      data-slot="alert-dialog-action"
+      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      @click=${this._onClick}
+    ><slot></slot></button>`;
+  }
+
+  _onClick = (): void => (this.closest('ui-alert-dialog') as UiAlertDialog | null)?.hide();
+}
+UiAlertDialogAction.register('ui-alert-dialog-action');

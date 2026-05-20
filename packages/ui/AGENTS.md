@@ -44,10 +44,18 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 
 ### Tier 2 : stateful custom elements
 
-For things the browser doesn't provide natively: dialogs, popovers, tabs,
-accordions, dropdowns. Plain `HTMLElement` subclasses (not `WebComponent`)
-so they DECORATE their host (set classes, listen for events) without
-replacing children. Children flow naturally.
+For things the browser doesn't provide natively: dialogs, alert-dialogs,
+tabs, dropdowns, tooltips, hover-cards, toggle / toggle-group, sonner.
+Tier-2 components extend `WebComponent` from `@webjskit/core` and are
+Lit-shaped: `static properties` for reactive attributes, `render()`
+returning an `` html`...` `` template, declarative bindings (`@click`,
+`?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
+children. Light DOM throughout, full shadow-DOM slot parity.
+
+popover, accordion, and collapsible used to live here but migrated to
+Tier 1 once their behaviour could be expressed by native primitives
+(the HTML Popover API + `<details>` / `<summary>` + CSS Anchor
+Positioning).
 
 ```ts
 html`
@@ -99,7 +107,7 @@ packages/ui/
 
   packages/registry/              the registry (internal, not published)
     components/                   .ts files, one per component
-    lib/utils.ts                  cn() + Base + defineElement + layout/typography helpers
+    lib/utils.ts                  cn() helper + layout/typography helpers (Tier-2 components extend WebComponent from @webjskit/core directly)
     themes/
       index.css                   @theme block + CSS variables (light + dark, neutral defaults)
       base-colors.js              per-base-colour overrides (stone/zinc/mauve/olive/mist/taupe) + mergeThemeCss
@@ -209,10 +217,12 @@ full per-directory breakdown.
    Same shape, so a shadcn-compatible client could in principle consume
    our registry (modulo TS vs TSX extensions).
 
-4. **Light DOM + Tailwind everywhere.** Custom elements extend `HTMLElement`
-   (NOT `WebComponent`), they decorate the host element rather than
-   render replacement children. Light DOM means Tailwind utility classes
-   apply directly.
+4. **Light DOM + Tailwind everywhere.** Tier-2 custom elements extend
+   `WebComponent` from `@webjskit/core` and use Lit-shaped `render()` +
+   `html` `` templates with declarative bindings. Light DOM means
+   Tailwind utility classes apply directly to authored children that
+   project through `<slot>`. No shadow root anywhere; full shadow-DOM
+   slot parity in light DOM.
 
 5. **API parity with shadcn.** Variant names, size names, subcomponent
    breakdown, `data-state` / `data-orientation` / `data-side` /

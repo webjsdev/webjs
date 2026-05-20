@@ -9,7 +9,7 @@ export default function UiDocs() {
       An <strong>AI-first component library</strong> with two-tier composition: pure class-helper
       functions (<code>buttonClass</code>, <code>cardClass</code>, <code>inputClass</code>) for
       visual primitives, plus a small set of stateful custom elements
-      (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-popover&gt;</code>)
+      (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-dropdown-menu&gt;</code>, etc.)
       where state matters. Source-copied into your project so you own the code and edit it freely.
       Variant names, sizes, and data attributes mirror shadcn so existing shadcn knowledge maps
       directly. Works in any project with Tailwind v4 and the small <code>@webjskit/core</code>

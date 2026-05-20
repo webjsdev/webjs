@@ -50,9 +50,14 @@ RUN cd examples/blog && npx prisma generate
 # (see packages/ui/packages/website/app/_lib/registry.server.ts).
 
 # Tailwind: compile per-app CSS (all four use the CLI, no browser runtime).
-RUN npx tailwindcss -i website/public/input.css       -o website/public/tailwind.css       --minify \
- && npx tailwindcss -i docs/public/input.css          -o docs/public/tailwind.css          --minify \
- && npx tailwindcss -i examples/blog/public/input.css -o examples/blog/public/tailwind.css --minify
+# Each compose service's command invokes `webjs.js start` directly, which
+# bypasses the per-package `prestart: css:build` hook in npm; the CSS has
+# to be ready in the image. Keep this list in sync with the apps that
+# have a public/input.css and a `css:build` script in their package.json.
+RUN npx tailwindcss -i website/public/input.css                       -o website/public/tailwind.css                       --minify \
+ && npx tailwindcss -i docs/public/input.css                          -o docs/public/tailwind.css                          --minify \
+ && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
+ && npx tailwindcss -i packages/ui/packages/website/public/input.css  -o packages/ui/packages/website/public/tailwind.css  --minify
 
 # Defaults - Railway / compose override per service.
 ENV NODE_ENV=production

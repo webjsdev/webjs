@@ -6,8 +6,11 @@ export const metadata = {
 };
 
 // URLs for the sibling apps. Read at SSR time so they reflect whatever
-// environment the website is running in: `webjs dev` uses the default
-// ports; deployments override DOCS_URL / BLOG_URL with real URLs.
+// environment the website is running in. The canonical localhost ports
+// (matching each sibling app's dev script + compose.yaml) are the
+// fallbacks; the .env file in this directory sets the same defaults
+// explicitly so they are visible in one place. Deployments override
+// DOCS_URL / BLOG_URL / UI_URL with real URLs.
 // Guarded against `process` being undefined because this file also
 // loads on the client during hydration: an unguarded access crashes
 // the module and prevents custom elements (e.g. <theme-toggle>) from
@@ -15,7 +18,7 @@ export const metadata = {
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
 const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
-const UI_URL   = env.UI_URL   || 'https://ui.webjs.dev';
+const UI_URL   = env.UI_URL   || 'http://localhost:5001';
 const STORY_URL = 'https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full-stack-framework-for-the-ai-era-i-call-it-webjs';
 
 const FEATURES = [

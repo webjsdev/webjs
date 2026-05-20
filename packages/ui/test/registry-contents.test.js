@@ -80,26 +80,30 @@ test('every v1 component is declared in registry.json', { skip }, () => {
   }
 });
 
-test('every Tier-2 component imports Base + defineElement from ../lib/utils.ts', { skip }, () => {
+test('every Tier-2 component imports WebComponent + html from @webjskit/core', { skip }, () => {
   for (const name of TIER_2) {
     const src = readSource(name);
+    // Refactor: components moved from the local Base + defineElement
+    // helpers (in lib/utils.ts) to the Lit-shaped WebComponent base
+    // from @webjskit/core (with html`…` templates and declarative
+    // bindings like @click, ?attr, .prop).
     assert.match(
       src,
-      /from\s+['"]\.\.\/lib\/utils\.ts['"]/,
-      `${name}: missing import from '../lib/utils.ts'`,
+      /from\s+['"]@webjskit\/core['"]/,
+      `${name}: missing import from '@webjskit/core'`,
     );
-    assert.match(src, /\bBase\b/, `${name}: not using Base from utils.ts`);
-    assert.match(src, /\bdefineElement\b/, `${name}: not using defineElement`);
+    assert.match(src, /\bWebComponent\b/, `${name}: not extending WebComponent`);
+    assert.match(src, /\bhtml`/, `${name}: not using the html\`\` template tag`);
   }
 });
 
-test('Tier-2 components register at least one ui-* element via defineElement', { skip }, () => {
+test('Tier-2 components register at least one ui-* element via WebComponent.register', { skip }, () => {
   for (const name of TIER_2) {
     const src = readSource(name);
     assert.match(
       src,
-      /defineElement\(['"]ui-[a-z-]+['"]/,
-      `${name}: no defineElement('ui-…') call found`,
+      /\.register\(['"]ui-[a-z-]+['"]\)/,
+      `${name}: no .register('ui-…') call found`,
     );
   }
 });
@@ -145,15 +149,16 @@ test('dialog : delegates to native <dialog> for modal behavior', { skip }, () =>
   // Native dialog is what owns Escape, Tab cycling, and focus restoration.
   assert.match(src, /showModal/);
   assert.match(src, /HTMLDialogElement/);
-  assert.match(src, /defineElement\(['"]ui-dialog['"]/);
+  // Refactor: registration is via WebComponent.register('ui-dialog')
+  // instead of the older defineElement('ui-dialog', ...) helper.
+  assert.match(src, /\.register\(['"]ui-dialog['"]\)/);
 });
 
-test('alert-dialog : uses alertdialog role, no overlay-click-to-close', { skip }, () => {
+test('alert-dialog : uses alertdialog role, blocks Escape via cancel event', { skip }, () => {
   const src = readSource('alert-dialog');
   assert.match(src, /alertdialog/);
-  assert.match(src, /No click-to-close/);
   // Native Escape close is cancelled via the dialog's `cancel` event.
-  assert.match(src, /cancel/);
+  assert.match(src, /@cancel|cancel.*preventDefault|onNativeCancel/);
   assert.match(src, /showModal/);
 });
 
@@ -250,7 +255,9 @@ test('tabs : exposes Arrow-key navigation + roles', { skip }, () => {
   const src = readSource('tabs');
   assert.match(src, /ArrowLeft|ArrowRight|ArrowDown|ArrowUp/);
   assert.match(src, /tablist/);
-  assert.match(src, /'role',\s*'tab'|"role",\s*"tab"/);
+  // Refactor: role is bound declaratively in the html`...` template
+  // (role="tab") rather than via setAttribute('role', 'tab').
+  assert.match(src, /role=["']tab["']/);
 });
 
 test('accordion : supports single/multiple + collapsible', { skip }, () => {

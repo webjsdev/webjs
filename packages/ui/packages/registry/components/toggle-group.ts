@@ -1,12 +1,16 @@
 /**
- * ToggleGroup: group of toggles with single or multiple selection. Stateful
- * because items coordinate active state across the group.
+ * ToggleGroup: group of toggles with single- or multiple-selection.
+ * Tier-2; items coordinate active state across the group, so this is
+ * a custom element (not a class helper). Items are styled via
+ * `toggleClass()` from `./toggle.ts` so the visual matches a single
+ * toggle exactly.
  *
  * shadcn parity:
- *   type:     single | multiple
- *   variant:  default | outline
- *   size:     default | sm | lg
- *   spacing:  0 (joined) | number (gapped)
+ *   ToggleGroup (type: single | multiple)
+ *               (variant: default | outline)
+ *               (size:    default | sm | lg)
+ *                                 → <ui-toggle-group type variant size value>
+ *   ToggleGroupItem               → <ui-toggle-group-item value>
  *
  * Usage:
  *   <ui-toggle-group type="single" value="bold">
@@ -15,164 +19,215 @@
  *     <ui-toggle-group-item value="underline" aria-label="Underline"><u>U</u></ui-toggle-group-item>
  *   </ui-toggle-group>
  *
- *   <!-- Multiple selection: -->
+ *   <!-- Multiple selection (comma-separated value): -->
  *   <ui-toggle-group type="multiple" value="bold,italic">
  *     <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
  *     <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
  *   </ui-toggle-group>
  *
- * Attributes on `<ui-toggle-group>`:
- *   `type`:    "single" | "multiple"
- *   `value`:   current selected value(s). Single: string. Multiple: comma-separated.
- *   `variant`: "default" | "outline"
- *   `size`:    "default" | "sm" | "lg"
- *   `spacing`: 0 (joined) | number (gap multiplier)
+ * Attributes on <ui-toggle-group>:
+ *   `type`:        "single" (default) | "multiple".
+ *   `value`:       string. Selected value(s). Single: a single value;
+ *                  multiple: comma-separated values.
+ *   `variant`:     "default" (default) | "outline".
+ *   `size`:        "default" (default) | "sm" | "lg".
+ *   `spacing`:     "0" (default, joined corners) | "default" (gapped).
+ *   `orientation`: "horizontal" (default) | "vertical".
+ *
+ * Attributes on <ui-toggle-group-item>:
+ *   `value`:   string. Identifier this item contributes when selected.
+ *   `pressed`: boolean (reflected). Mirrors the group's selection for this item.
  *
  * Events:
- *   `ui-value-change`: { detail: { value } } when selection changes.
+ *   `ui-value-change` on <ui-toggle-group>: `{ detail: { value } }` after selection changes.
  *
- * Design tokens used: inherited from toggleClass.
+ * Keyboard: Enter / Space toggles the focused item (native button activation).
+ *
+ * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
+ * --input, --destructive).
  */
-import { cn, Base, defineElement } from '../lib/utils.ts';
+import { WebComponent, html } from '@webjskit/core';
+import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
 const ROOT_BASE =
   'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
 
-export class UiToggleGroup extends Base {
-  static get observedAttributes(): string[] {
-    return ['value', 'variant', 'size', 'spacing', 'type', 'orientation'];
-  }
-
-  connectedCallback(): void {
-    this.setAttribute('data-slot', 'toggle-group');
-    if (!this.hasAttribute('type')) this.setAttribute('type', 'single');
-    if (!this.hasAttribute('variant')) this.setAttribute('variant', 'default');
-    if (!this.hasAttribute('size')) this.setAttribute('size', 'default');
-    if (!this.hasAttribute('spacing')) this.setAttribute('spacing', '0');
-    // shadcn's radix-* and base-* styles all expose orientation;
-    // default "horizontal" matches Radix ToggleGroup.Root.
-    if (!this.hasAttribute('orientation')) this.setAttribute('orientation', 'horizontal');
-    this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
-    this.setAttribute('role', 'group');
-    this._applyClass();
-    this._reflect();
-    this.addEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
-  }
-  disconnectedCallback(): void {
-    this.removeEventListener('ui-toggle-item-click', this._onItemClick as EventListener);
-  }
-
-  attributeChangedCallback(name: string): void {
-    if (name === 'orientation') {
-      this.setAttribute('data-orientation', this.getAttribute('orientation') ?? 'horizontal');
-    }
-    this._applyClass();
-    this._reflect();
-  }
-
-  private get _type(): 'single' | 'multiple' {
-    return (this.getAttribute('type') as 'single' | 'multiple') ?? 'single';
-  }
-
-  private get _values(): Set<string> {
-    const raw = this.getAttribute('value') ?? '';
-    return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
-  }
-
-  private _setValues(values: Set<string>): void {
-    const next = Array.from(values).join(',');
-    if (this._type === 'single') {
-      this.setAttribute('value', next.split(',')[0] ?? '');
-    } else {
-      this.setAttribute('value', next);
-    }
-  }
-
-  private _applyClass(): void {
-    const userClass = this.getAttribute('class') ?? '';
-    const spacing = this.getAttribute('spacing') ?? '0';
-    this.setAttribute('data-variant', this.getAttribute('variant') ?? 'default');
-    this.setAttribute('data-size', this.getAttribute('size') ?? 'default');
-    this.setAttribute('data-spacing', spacing);
-    const gap = spacing === '0' ? '' : 'gap-1';
-    this.className = cn(ROOT_BASE, gap, userClass);
-  }
-
-  private _reflect(): void {
-    const values = this._values;
-    const items = this.querySelectorAll<HTMLElement>('ui-toggle-group-item');
-    items.forEach((item) => {
-      const v = item.getAttribute('value');
-      const on = !!v && values.has(v);
-      item.setAttribute('data-state', on ? 'on' : 'off');
-      item.setAttribute('aria-pressed', String(on));
-    });
-  }
-
-  private _onItemClick = (e: CustomEvent): void => {
-    const v = e.detail?.value as string | undefined;
-    if (!v) return;
-    const values = this._values;
-    if (this._type === 'single') {
-      values.clear();
-      values.add(v);
-    } else {
-      if (values.has(v)) values.delete(v);
-      else values.add(v);
-    }
-    this._setValues(values);
-    this.dispatchEvent(
-      new CustomEvent('ui-value-change', {
-        detail: { value: this.getAttribute('value') ?? '' },
-        bubbles: true,
-      }),
-    );
-  };
-}
-defineElement('ui-toggle-group', UiToggleGroup);
-
 const ITEM_EXTRA =
   'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l';
 
-export class UiToggleGroupItem extends Base {
+// --------------------------------------------------------------------------
+// <ui-toggle-group>
+// Renders a wrapping <div role="group"> with the @ui-toggle-item-click
+// listener bound declaratively. Children project through the slot. Item
+// state (data-state, aria-pressed) is reflected after each render via
+// a single requestAnimationFrame deferral to give the descendant
+// <ui-toggle-group-item> components time to settle their own renders.
+// --------------------------------------------------------------------------
+
+export class UiToggleGroup extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+    type: { type: String, reflect: true },
+    variant: { type: String, reflect: true },
+    size: { type: String, reflect: true },
+    spacing: { type: String, reflect: true },
+    orientation: { type: String, reflect: true },
+  };
+  declare value: string;
+  declare type: 'single' | 'multiple';
+  declare variant: ToggleVariant;
+  declare size: ToggleSize;
+  declare spacing: string;
+  declare orientation: 'horizontal' | 'vertical';
+
+  constructor() {
+    super();
+    this.value = '';
+    this.type = 'single';
+    this.variant = 'default';
+    this.size = 'default';
+    this.spacing = '0';
+    this.orientation = 'horizontal';
+  }
+
+  get _values(): Set<string> {
+    const raw = this.value ?? '';
+    return new Set(raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []);
+  }
+
+  render() {
+    const gap = this.spacing === '0' ? '' : 'gap-1';
+    // Items live under <slot>, but their state needs to be reflected
+    // after they have finished their own first render. One frame is
+    // enough; this is the same RAF-defer pattern used by tabs.
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._reflectItems());
+    return html`<div
+      data-slot="toggle-group"
+      role="group"
+      class=${cn(ROOT_BASE, gap)}
+      data-variant=${this.variant}
+      data-size=${this.size}
+      data-spacing=${this.spacing}
+      data-orientation=${this.orientation}
+      @ui-toggle-item-click=${this._onItemClick}
+    ><slot></slot></div>`;
+  }
+
+  _reflectItems(): void {
+    const values = this._values;
+    this.querySelectorAll<UiToggleGroupItem>('ui-toggle-group-item').forEach((item) => {
+      const on = !!item.value && values.has(item.value);
+      // Reflect both on the host (for CSS sibling selectors like
+      // data-[spacing=0]:first:rounded-l-md that need to target the host
+      // as a sibling of other items) and as a reactive prop so the
+      // item's render() refreshes its inner styling.
+      item.pressed = on;
+    });
+  }
+
+  _onItemClick = (e: Event): void => {
+    const v = (e as CustomEvent).detail?.value as string | undefined;
+    if (!v) return;
+    const values = this._values;
+    if (this.type === 'single') {
+      values.clear();
+      values.add(v);
+    } else if (values.has(v)) {
+      values.delete(v);
+    } else {
+      values.add(v);
+    }
+    const next = Array.from(values).join(',');
+    this.value = this.type === 'single' ? (next.split(',')[0] ?? '') : next;
+    this.dispatchEvent(
+      new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
+    );
+  };
+}
+UiToggleGroup.register('ui-toggle-group');
+
+// --------------------------------------------------------------------------
+// <ui-toggle-group-item>
+// Renders a native <button> styled via toggleClass; emits a bubbling
+// `ui-toggle-item-click` event with detail.value so the group can
+// coordinate selection. Variant / size / spacing read from the group
+// at render time (data-* attributes on the host carry them for
+// Tailwind variant selectors on the joined-spacing rounded corners).
+// --------------------------------------------------------------------------
+
+export class UiToggleGroupItem extends WebComponent {
+  static properties = {
+    value: { type: String, reflect: true },
+    pressed: { type: Boolean, reflect: true },
+  };
+  declare value: string;
+  declare pressed: boolean;
+
+  constructor() {
+    super();
+    this.value = '';
+    this.pressed = false;
+  }
+
+  // render() runs server-side too. linkedom doesn't implement closest()
+  // on custom elements, so guard it; the client re-renders with the
+  // real parent reference after hydration.
+  get _group(): UiToggleGroup | null {
+    if (typeof this.closest !== 'function') return null;
+    return this.closest('ui-toggle-group') as UiToggleGroup | null;
+  }
+
+  // Compound-component caveat: the host element carries the visual
+  // class + data-* attributes (not an inner <button>) so CSS sibling
+  // selectors like `data-[spacing=0]:first:rounded-l-md` match it as
+  // a sibling of other items in the group. Light DOM has no :host CSS
+  // and no way to bind host attributes from a render() template, so
+  // ARIA + static markup attributes go in connectedCallback (set once)
+  // and the parent-derived data-* + class string get refreshed in
+  // render(). Click + keyboard listeners live on the host because the
+  // click target IS the host (the styled element under the cursor).
   connectedCallback(): void {
-    this.setAttribute('data-slot', 'toggle-group-item');
-    this.setAttribute('role', 'button');
-    this.setAttribute('tabindex', '0');
-    this._applyClass();
+    this.dataset.slot = 'toggle-group-item';
+    this.role = 'button';
+    this.tabIndex = 0;
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
+    super.connectedCallback?.();
   }
+
   disconnectedCallback(): void {
     this.removeEventListener('click', this._onClick);
     this.removeEventListener('keydown', this._onKeyDown);
+    super.disconnectedCallback?.();
   }
-  private get _group(): UiToggleGroup | null {
-    return this.closest('ui-toggle-group') as UiToggleGroup | null;
-  }
-  private _applyClass(): void {
-    const userClass = this.getAttribute('class') ?? '';
+
+  render() {
     const group = this._group;
-    const variant = (group?.getAttribute('variant') ?? 'default') as ToggleVariant;
-    const size = (group?.getAttribute('size') ?? 'default') as ToggleSize;
-    this.setAttribute('data-variant', variant);
-    this.setAttribute('data-size', size);
-    this.setAttribute('data-spacing', group?.getAttribute('spacing') ?? '0');
-    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA, userClass);
+    const variant = (group?.variant ?? 'default') as ToggleVariant;
+    const size = (group?.size ?? 'default') as ToggleSize;
+    const spacing = group?.spacing ?? '0';
+    this.dataset.variant = variant;
+    this.dataset.size = size;
+    this.dataset.spacing = spacing;
+    this.dataset.state = this.pressed ? 'on' : 'off';
+    this.ariaPressed = String(this.pressed);
+    this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA);
+    return html`<slot></slot>`;
   }
-  private _onClick = (): void => {
-    const v = this.getAttribute('value');
-    if (!v) return;
+
+  _onClick = (): void => {
+    if (!this.value) return;
     this.dispatchEvent(
-      new CustomEvent('ui-toggle-item-click', { detail: { value: v }, bubbles: true }),
+      new CustomEvent('ui-toggle-item-click', { detail: { value: this.value }, bubbles: true }),
     );
   };
-  private _onKeyDown = (e: KeyboardEvent): void => {
+
+  _onKeyDown = (e: KeyboardEvent): void => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       this._onClick();
     }
   };
 }
-defineElement('ui-toggle-group-item', UiToggleGroupItem);
+UiToggleGroupItem.register('ui-toggle-group-item');

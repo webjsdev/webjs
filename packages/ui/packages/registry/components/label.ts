@@ -1,17 +1,18 @@
 /**
- * Label: styled native `<label>` via a class-helper function. Use with a real
- * `<label for="...">` so click-to-focus, `htmlFor`/`for` linking, and screen
- * reader association all work natively.
+ * Label: styled native `<label>`. Tier-1 class helper. Compose with a
+ * real `<label for="...">` so click-to-focus, `htmlFor` / `for` linking,
+ * and screen-reader association all work natively (no Radix Label needed).
  *
- * shadcn parity: matches shadcn's Label component (which wraps Radix Label).
+ * shadcn parity:
+ *   Label  → labelClass()
  *
  * Usage:
  *   <label class=${labelClass()} for="email">Email</label>
  *   <input class=${inputClass()} id="email" name="email" type="email">
  *
- * Disabled-state inheritance: when a label is inside a container with
- * `data-disabled="true"` (the "field" pattern), it dims automatically.
- * When a label sits next to a peer-disabled control, same effect.
+ * Disabled-state inheritance: when the label is inside a container with
+ * `data-disabled="true"` (the "field" pattern), or next to a peer-disabled
+ * control, it dims automatically.
  *
  * Design tokens used: none (typography only).
  */

@@ -1,20 +1,19 @@
 /**
- * Progress, Tier-1 class helpers over the native `<progress>` element.
- * AI agents compose `<progress>` directly. No custom elements, no JS,
- * no helper function. The native element provides the
- * `progressbar` role and `aria-valuenow` automatically from its
- * `value` and `max` attributes.
+ * Progress: progress bar. Tier-1 class helper over the native
+ * `<progress>` element. The native element supplies the `progressbar`
+ * role and `aria-valuenow` automatically from its `value` / `max`
+ * attributes, so no JS, no custom element.
  *
- * shadcn parity at the class helper level. Same visual as the prior
- * custom element: 2px track with an animated fill. The fill uses
- * `::-webkit-progress-value` and `::-moz-progress-bar` for the bar
- * pseudo-element, plus `::-webkit-progress-bar` for the track.
+ * shadcn parity:
+ *   Progress  → progressClass()  (visual: 2px track + animated fill,
+ *                                 styled via `::-webkit-progress-bar`,
+ *                                 `::-webkit-progress-value`, and
+ *                                 `::-moz-progress-bar`)
  *
  * Usage:
- *
  *   <progress value="42" max="100" class=${progressClass()}></progress>
  *
- *   <!-- Indeterminate (no value attribute): -->
+ *   <!-- Indeterminate (no `value` attribute): -->
  *   <progress class=${progressClass()}></progress>
  *
  * Design tokens used: --primary.
