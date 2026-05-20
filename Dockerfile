@@ -1,11 +1,23 @@
-# Single image for the whole monorepo - website, docs, blog. Each
-# Railway service runs the same image with a different start command.
-# Locally: `docker compose up --build` runs all three via compose.yaml.
+# Single image for the whole monorepo. Each Railway service runs the
+# same image with a different start command. Locally:
+# `docker compose up --build` runs all three via compose.yaml.
 #
-# No build step for JS - webjs serves .ts directly, Node 22+ strips types.
-# Tailwind CSS IS built at image time (CLI, no browser runtime). The blog
-# runs `prisma generate` at build and `prisma migrate deploy` at start.
-FROM node:22-alpine
+# No build step for JS. webjs serves .ts directly via Node's built-in
+# `module.stripTypeScriptTypes` (position-preserving whitespace
+# replacement, no sourcemap shipped to the browser).
+#
+# **Node 24+ is REQUIRED** for that path. On Node 22, the runtime falls
+# back to esbuild for every .ts file. esbuild's class-declaration
+# transformation has been observed to break webjs's SSR walker for
+# multi-class component files: Tier-2 components (dialog, tooltip,
+# dropdown-menu, etc.) all rendered with the wrong shell because the
+# first class's render() was being invoked for every sub-tag. Pinning
+# Node 24 here pairs with the AGENTS.md "Node 24+ required" invariant.
+#
+# Tailwind CSS IS built at image time (CLI, no browser runtime). The
+# blog runs `prisma generate` at build and `prisma migrate deploy` at
+# start.
+FROM node:26-alpine
 
 # openssl is required by Prisma's query engine at runtime.
 RUN apk add --no-cache openssl ca-certificates
