@@ -206,8 +206,6 @@ import { html, css, WebComponent, render, renderToString } from '@webjskit/core'
 
 ### Directives, from `import { … } from '@webjskit/core/directives'`
 
-**"Less is more":** only directives that solve problems with no native alternative.
-
 | Directive | Purpose | Example |
 |---|---|---|
 | `repeat(items, keyFn, templateFn)` | Keyed reconciliation | `${repeat(items, i => i.id, i => html\`…\`)}` |
@@ -296,7 +294,7 @@ class StudentCard extends WebComponent {
 | `hasChanged` | strict `!==` | Custom change detection |
 | `converter` | type-based | Custom attribute ↔ property serialization |
 
-### Lifecycle (less-is-more)
+### Lifecycle
 
 | Hook | When | Use for |
 |---|---|---|

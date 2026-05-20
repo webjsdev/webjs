@@ -1,28 +1,14 @@
 /**
  * Built-in directives for the webjs `html` tagged template system.
  *
- * webjs follows a "less is more" philosophy: only directives that solve
- * problems with NO native alternative are included. AI agents don't need
- * syntax sugar: they can write ternaries, string concatenation, and
- * lifecycle hooks just fine.
+ * Currently exported from this file:
+ * - `unsafeHTML(str)`. Render trusted raw HTML. Never use with user input.
+ * - `live(value)`. Force `.value` to sync with the live DOM property.
  *
- * **What's here:**
- * - `unsafeHTML(str)`: render trusted raw HTML (no alternative in templates)
+ * `repeat()` is in `./repeat.js` for keyed list reconciliation.
  *
- * **What's NOT here (and why):**
- * - classMap → use `class=${'btn ' + (active ? 'active' : '')}`
- * - styleMap → use `style=${'color:' + color}`
- * - ifDefined → use `attr=${val ?? null}` (null removes the attribute)
- * - when/choose → use ternary `${cond ? a : b}` or if/else before the template
- * - guard → memoize in `willUpdate()` lifecycle hook
- * - ref → use `this.query('#el')` in `firstUpdated()` or `updated()`
- * - cache → use CSS `display:none` to preserve DOM instead of removing
- * - until → use the `Task` controller for component-scoped async data
- * - live → set `.value` via property binding `.value=${val}` and handle
- *   input events with `@input=${e => this.setState({val: e.target.value})}`
- *
- * `repeat()` is in its own file (`./repeat.js`): it's essential for keyed
- * list reconciliation and has no native alternative.
+ * More directives (full lit-html parity) are being added as part of the
+ * lit-API parity initiative. See the project memo for the locked scope.
  *
  * @module directives
  */

@@ -110,9 +110,11 @@ function defaultHasChanged(a, b) {
  *  3. controllers' `afterRender()`
  *  4. `firstUpdated()`: once, after the very first render
  *
- * "Less is more": only hooks with no native workaround are included.
  * Use `render()` for derived state. Use `firstUpdated()` for one-time
  * DOM setup. Use `this.shadowRoot.querySelector()` for element refs.
+ * Additional lit-aligned hooks (shouldUpdate, willUpdate, updated,
+ * updateComplete, changedProperties) are being added per the lit-API
+ * parity initiative.
  *
  * Usage:
  * ```js

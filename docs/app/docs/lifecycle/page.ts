@@ -5,7 +5,7 @@ export const metadata = { title: 'Lifecycle Hooks | webjs' };
 export default function Lifecycle() {
   return html`
     <h1>Lifecycle Hooks</h1>
-    <p>webjs follows a <strong>"less is more"</strong> philosophy for lifecycle hooks. Only hooks with no native workaround are included. AI agents don't need abstractions for things that a few lines of code can handle.</p>
+    <p>webjs ships the lifecycle hooks listed below. The set is being expanded to full lit parity (see the ongoing API parity initiative).</p>
 
     <h2>The Update Cycle</h2>
     <p>When <code>setState()</code> or a property change triggers a re-render:</p>

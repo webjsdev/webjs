@@ -5,7 +5,7 @@ export const metadata = { title: 'Directives | webjs' };
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>webjs follows a <strong>"less is more"</strong> philosophy. Only three directives are built in, and each solves a problem that has <em>no native alternative</em>. Everything else uses native JavaScript and HTML patterns.</p>
+    <p>webjs currently ships three built-in directives, each solving a problem with <em>no native alternative</em>. Everything else uses native JavaScript and HTML patterns.</p>
 
     <pre>import { repeat } from '@webjskit/core';            // keyed lists
 import { unsafeHTML, live } from '@webjskit/core/directives'; // raw HTML, input sync</pre>
@@ -91,13 +91,5 @@ html\`
   &lt;div style=\${\`display:\${tab === 'b' ? 'block' : 'none'}\`}&gt;Tab B content&lt;/div&gt;
 \`;</pre>
 
-    <h2>Why "less is more"</h2>
-    <p>webjs is an AI-first framework. AI agents don't need syntax sugar, since they generate verbose code as easily as terse code. Fewer directives means:</p>
-    <ul>
-      <li><strong>Fewer concepts</strong> for agents to choose between (less chance of wrong choice)</li>
-      <li><strong>Smaller API surface</strong> to maintain and test</li>
-      <li><strong>More portable knowledge</strong>: native patterns work in any framework</li>
-      <li><strong>Fewer edge cases</strong> in the renderer</li>
-    </ul>
   `;
 }
