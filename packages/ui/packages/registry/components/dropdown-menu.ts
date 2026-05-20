@@ -1,16 +1,24 @@
 /**
- * DropdownMenu, popover-style menu of actions. Hand-rolled keyboard nav
- * and positioning.
+ * DropdownMenu: popover-style menu of actions. Tier-2. Hand-rolled
+ * keyboard nav, focus management, and positioning (no Radix).
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/menu/
  *
  * shadcn parity:
- *   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
- *   DropdownMenuItem (variant: default | destructive, inset: bool),
- *   DropdownMenuCheckboxItem (checked), DropdownMenuRadioGroup,
- *   DropdownMenuRadioItem (value), DropdownMenuLabel, DropdownMenuSeparator,
- *   DropdownMenuShortcut, DropdownMenuGroup,
- *   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent.
+ *   DropdownMenu              → <ui-dropdown-menu open>
+ *   DropdownMenuTrigger       → <ui-dropdown-menu-trigger>
+ *   DropdownMenuContent       → <ui-dropdown-menu-content side align side-offset align-offset>
+ *   DropdownMenuItem          → <ui-dropdown-menu-item variant inset>
+ *   DropdownMenuCheckboxItem  → <ui-dropdown-menu-item type="checkbox" checked>
+ *   DropdownMenuRadioGroup    → <ui-dropdown-menu-group> wrapping
+ *   DropdownMenuRadioItem     → <ui-dropdown-menu-item type="radio" value>
+ *   DropdownMenuLabel         → <ui-dropdown-menu-label inset>
+ *   DropdownMenuSeparator     → <ui-dropdown-menu-separator>
+ *   DropdownMenuShortcut      → <ui-dropdown-menu-shortcut>
+ *   DropdownMenuGroup         → <ui-dropdown-menu-group>
+ *   DropdownMenuSub           → <ui-dropdown-menu-sub>
+ *   DropdownMenuSubTrigger    → <ui-dropdown-menu-sub-trigger inset>
+ *   DropdownMenuSubContent    → <ui-dropdown-menu-sub-content>
  *
  * Usage:
  *   <ui-dropdown-menu>
@@ -32,10 +40,36 @@
  *     </ui-dropdown-menu-content>
  *   </ui-dropdown-menu>
  *
- * Keyboard: ArrowUp/Down to move, Enter to activate, Escape to close, Tab
- * cycles. ArrowRight on a sub-trigger opens its submenu and focuses its
- * first item; ArrowLeft inside a submenu closes it and refocuses the
- * sub-trigger.
+ * Attributes on <ui-dropdown-menu>:
+ *   `open`:  boolean (reflected). Open state.
+ *
+ * Attributes on <ui-dropdown-menu-content>:
+ *   `side`:         "top" | "right" | "bottom" (default) | "left".
+ *   `align`:        "start" (default) | "center" | "end".
+ *   `side-offset`:  number, default 4. Pixels between trigger and content.
+ *   `align-offset`: number, default 0. Pixels of cross-axis shift.
+ *
+ * Attributes on <ui-dropdown-menu-item>:
+ *   `variant`: "default" (default) | "destructive".
+ *   `inset`:   boolean. Adds left padding to align with checkbox / radio items.
+ *   `type`:    omit (default) | "checkbox" | "radio".
+ *   `checked`: boolean. Applies to checkbox / radio items.
+ *   `value`:   string. Identifier for radio items.
+ *
+ * Events:
+ *   `ui-open-change` on <ui-dropdown-menu>: `{ detail: { open } }` after a transition.
+ *   `ui-item-select` bubbled by an item: `{ detail: { value, item } }` on activation.
+ *
+ * Programmatic API on <ui-dropdown-menu>: `.show()` · `.hide()` · `.toggle()`.
+ *
+ * Keyboard:
+ *   ArrowUp / ArrowDown   move focus between items
+ *   ArrowRight            on a sub-trigger: open submenu, focus first item
+ *   ArrowLeft             inside a submenu: close it, refocus the sub-trigger
+ *   Home / End            first / last item
+ *   Enter / Space         activate focused item
+ *   Escape                close menu (or close current submenu first)
+ *   Tab                   close menu and proceed with normal tab order
  *
  * Design tokens used: --popover, --popover-foreground, --accent,
  * --accent-foreground, --destructive, --muted-foreground, --border.

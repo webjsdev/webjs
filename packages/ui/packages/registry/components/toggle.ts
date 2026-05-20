@@ -1,22 +1,39 @@
 /**
- * Toggle: pressable on/off button. Pure class helper; use with a native
- * `<button>` and toggle the `data-state="on|off"` and `aria-pressed`
- * attributes yourself, OR use the stateful `<ui-toggle>` element.
+ * Toggle: pressable on / off button. Ships both as a Tier-1 class helper
+ * (for callers that want to own pressed state on a native `<button>`)
+ * and as the Tier-2 `<ui-toggle>` custom element (for callers that want
+ * state managed for them).
  *
  * shadcn parity:
- *   variants: default | outline
- *   sizes:    default | sm | lg
+ *   Toggle (variant: default | outline)
+ *          (size:    default | sm | lg)
+ *                                 → toggleClass({ variant, size })  (class helper)
+ *                                 → <ui-toggle pressed variant size>  (custom element)
  *
- * Usage (controlled, declarative):
+ * Usage (Tier-1 class helper, caller owns state):
  *   <button class=${toggleClass()} data-state="off" aria-pressed="false"
  *           onclick="this.dataset.state = this.dataset.state==='on'?'off':'on'">
  *     <svg>…</svg>
  *   </button>
  *
- * Usage (custom element handles state for you):
+ * Usage (Tier-2 custom element, state managed):
  *   <ui-toggle aria-label="Toggle bold">
  *     <svg>…</svg>
  *   </ui-toggle>
+ *
+ *   <!-- Controlled / initial: -->
+ *   <ui-toggle variant="outline" size="sm" pressed>B</ui-toggle>
+ *
+ * Attributes on <ui-toggle>:
+ *   `pressed`:  boolean (reflected). Active state.
+ *   `variant`:  "default" (default) | "outline".
+ *   `size`:     "default" (default) | "sm" | "lg".
+ *   `disabled`: boolean (reflected). Disables click + focus.
+ *
+ * Events:
+ *   `ui-pressed-change` on <ui-toggle>: `{ detail: { pressed } }` after a click.
+ *
+ * Keyboard: native button — Enter / Space activates (via the inner <button>).
  *
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.

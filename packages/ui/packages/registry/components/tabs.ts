@@ -1,13 +1,15 @@
 /**
- * Tabs: sectioned content with keyboard navigation.
+ * Tabs: sectioned content with keyboard navigation. Tier-2. The parent
+ * <ui-tabs> owns `value` + `orientation`; triggers and panels read from
+ * it via `closest('ui-tabs')` and re-render when value changes.
  *
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
  *
  * shadcn parity:
- *   <Tabs>         → <ui-tabs value="..." orientation="horizontal|vertical">
- *   <TabsList>     → <ui-tabs-list variant="default|underline">
- *   <TabsTrigger>  → <ui-tabs-trigger value="...">
- *   <TabsContent>  → <ui-tabs-content value="...">
+ *   Tabs           → <ui-tabs value orientation>
+ *   TabsList       → <ui-tabs-list variant>
+ *   TabsTrigger    → <ui-tabs-trigger value>
+ *   TabsContent    → <ui-tabs-content value>
  *
  * Usage:
  *   <ui-tabs value="account">
@@ -20,17 +22,23 @@
  *   </ui-tabs>
  *
  * Attributes on <ui-tabs>:
- *   `value`:      string. Currently-active tab value (reflected, controlled).
+ *   `value`:       string (reflected, controlled). Active tab value.
  *   `orientation`: "horizontal" (default) | "vertical".
+ *
+ * Attributes on <ui-tabs-list>:
+ *   `variant`: "default" (default, pill-on-muted) | "underline".
+ *
+ * Attributes on <ui-tabs-trigger> / <ui-tabs-content>:
+ *   `value`: string. Identifier this trigger / panel pair shares.
  *
  * Events:
  *   `ui-value-change` on <ui-tabs>: `{ detail: { value } }` after a change.
  *
  * Keyboard (on focused trigger):
- *   ArrowRight/ArrowLeft  next/previous (horizontal)
- *   ArrowDown/ArrowUp     next/previous (vertical)
- *   Home/End              first/last
- *   Enter/Space           activate
+ *   ArrowRight / ArrowLeft   next / previous (horizontal)
+ *   ArrowDown / ArrowUp      next / previous (vertical)
+ *   Home / End               first / last
+ *   Enter / Space            activate (native button activation)
  *
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
@@ -252,11 +260,11 @@ export class UiTabsContent extends WebComponent {
   render() {
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
-    // Toggle `hidden` on the host so it (and its rendered content) is
-    // removed from layout when inactive. Setting hidden only on the
-    // inner <section> would leave the <ui-tabs-content> host taking
-    // visual space as an empty box (light DOM, no :host CSS).
-    this.toggleAttribute('hidden', !active);
+    // The host needs to be hidden when inactive so its rendered <section>
+    // is removed from layout (light DOM has no :host CSS to scope this).
+    // Use the native `hidden` IDL property rather than imperative
+    // setAttribute, so it reads as a property assignment.
+    this.hidden = !active;
     return html`<section
       data-slot="tabs-content"
       role="tabpanel"

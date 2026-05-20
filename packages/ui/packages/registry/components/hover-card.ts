@@ -1,11 +1,13 @@
 /**
- * HoverCard, popover-like panel triggered by hover with configurable
- * open/close delays. The content uses the native Popover API in
- * `popover="manual"` mode for top-layer rendering. The hover-with-linger
- * state machine remains JS.
+ * HoverCard: popover-like panel triggered by hover with configurable
+ * open / close delays. Tier-2. The content uses the native Popover API
+ * in `popover="manual"` mode for top-layer rendering; the custom
+ * element owns the hover-with-linger state machine and JS positioning.
  *
- * shadcn parity: HoverCard, HoverCardTrigger, HoverCardContent.
- *   open-delay, close-delay (ms).
+ * shadcn parity:
+ *   HoverCard          → <ui-hover-card open-delay close-delay>
+ *   HoverCardTrigger   → <ui-hover-card-trigger>
+ *   HoverCardContent   → <ui-hover-card-content side align side-offset align-offset>
  *
  * Usage:
  *   <ui-hover-card open-delay="700" close-delay="300">
@@ -16,6 +18,23 @@
  *       <div class="flex gap-3">…</div>
  *     </ui-hover-card-content>
  *   </ui-hover-card>
+ *
+ * Attributes on <ui-hover-card>:
+ *   `open`:        boolean (reflected). Open state.
+ *   `open-delay`:  ms, default 700. Hover delay before opening.
+ *   `close-delay`: ms, default 300. Linger delay before closing once
+ *                  cursor leaves trigger + content.
+ *
+ * Attributes on <ui-hover-card-content>:
+ *   `side`:         "top" | "right" | "bottom" (default) | "left".
+ *   `align`:        "center" (default) | "start" | "end".
+ *   `side-offset`:  number, default 4. Pixels between trigger and content.
+ *   `align-offset`: number, default 0. Pixels of cross-axis shift.
+ *
+ * Events: none dispatched at present; observe the reflected `open`
+ * attribute from CSS or JS.
+ *
+ * Programmatic API on <ui-hover-card>: `.show()` · `.hide()`.
  *
  * Design tokens used: --popover, --popover-foreground, --border.
  */

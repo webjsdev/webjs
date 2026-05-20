@@ -1,41 +1,65 @@
 /**
- * Dialog, modal dialog built on the native <dialog> element.
+ * Dialog: modal dialog built on the native `<dialog>` element. Tier-2.
+ * The custom element is a thin decorator over `HTMLDialogElement.showModal()`,
+ * which gives us top-layer rendering (no z-index wars), the `::backdrop`
+ * pseudo, focus trap with initial-focus + restore-on-close, Escape-to-close
+ * via the cancel event, and background-inert for free.
  *
- * The custom element is a thin decorator. All the heavy lifting comes
- * from HTMLDialogElement.showModal():
- *   - Top-layer rendering (no z-index wars)
- *   - ::backdrop pseudo-element for the overlay
- *   - Native focus management: initial focus on first tabbable, Tab
- *     trapped inside the dialog, focus restored on close
- *   - Escape-to-close via the cancel event
- *   - Background made inert (clicks pass through to nothing)
- *
- * Component composition uses named slots: the rendered template emits
- * a programmatic <dialog> with `<slot name="dialog-content">` inside.
- * The user authors `<ui-dialog-content>` as a normal child; the
- * component sets `slot="dialog-content"` on it during connection so
- * the slot machinery routes it inside the <dialog> automatically.
- * Triggers and other children stay in the default slot, outside the
- * <dialog>.
+ * Composition: `<ui-dialog-content>` owns the native `<dialog>` element
+ * (its render() emits the `<dialog>` wrapper around its slotted content),
+ * while `<ui-dialog>` just tracks open state and asks the content child
+ * to `showModal()` / `close()`. Every <slot> is a default slot, which
+ * avoids the SSR pitfall where slot="..." set in connectedCallback never
+ * runs server-side (linkedom has no upgrade lifecycle).
  *
  * shadcn parity:
- *   <Dialog>            → <ui-dialog open>
- *   <DialogTrigger>     → <ui-dialog-trigger>
- *   <DialogContent>     → <ui-dialog-content>
- *   <DialogClose>       → <ui-dialog-close>
- *   <DialogHeader>      → div with dialogHeaderClass()
- *   <DialogTitle>       → h2/div with dialogTitleClass()
- *   <DialogDescription> → p with dialogDescriptionClass()
- *   <DialogFooter>      → div with dialogFooterClass()
+ *   Dialog             → <ui-dialog open>
+ *   DialogTrigger      → <ui-dialog-trigger>
+ *   DialogContent      → <ui-dialog-content show-close-button>
+ *   DialogClose        → <ui-dialog-close>
+ *   DialogHeader       → <div class=${dialogHeaderClass()}>
+ *   DialogTitle        → <h2 class=${dialogTitleClass()}>
+ *   DialogDescription  → <p class=${dialogDescriptionClass()}>
+ *   DialogFooter       → <div class=${dialogFooterClass()}>
+ *
+ * Usage:
+ *   <ui-dialog>
+ *     <ui-dialog-trigger>
+ *       <button class=${buttonClass({ variant: 'outline' })}>Edit profile</button>
+ *     </ui-dialog-trigger>
+ *     <ui-dialog-content>
+ *       <div class=${dialogHeaderClass()}>
+ *         <h2 class=${dialogTitleClass()}>Edit profile</h2>
+ *         <p class=${dialogDescriptionClass()}>Make changes and click save.</p>
+ *       </div>
+ *       <div class="grid gap-3">
+ *         <label class=${labelClass()} for="dlg-name">Name</label>
+ *         <input class=${inputClass()} id="dlg-name" placeholder="Your name">
+ *       </div>
+ *       <div class=${dialogFooterClass()}>
+ *         <ui-dialog-close><button class=${buttonClass({ variant: 'outline' })}>Cancel</button></ui-dialog-close>
+ *         <button class=${buttonClass()}>Save</button>
+ *       </div>
+ *     </ui-dialog-content>
+ *   </ui-dialog>
+ *
+ *   <!-- Suppress the auto-injected top-right X close: -->
+ *   <ui-dialog-content show-close-button="false">…</ui-dialog-content>
  *
  * Attributes on <ui-dialog>:
- *   `open`, boolean (reflected). Presence shows the dialog.
+ *   `open`:  boolean (reflected). Presence shows the dialog.
  *
- * Events on <ui-dialog>:
- *   `ui-open-change`, { detail: { open: boolean } }, fires after the
- *     element transitions between open and closed.
+ * Attributes on <ui-dialog-content>:
+ *   `show-close-button`: "false" suppresses the auto-injected top-right X
+ *                        close button (default: shown).
  *
- * Programmatic API: .show()  .hide()  .toggle()
+ * Events:
+ *   `ui-open-change` on <ui-dialog>: `{ detail: { open } }` after a transition.
+ *
+ * Programmatic API on <ui-dialog>: `.show()` · `.hide()` · `.toggle()`.
+ *
+ * Keyboard: Escape closes (native `cancel` event); Tab cycles trapped
+ * within the dialog (native focus trap).
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
@@ -126,6 +150,10 @@ function unlockScroll(): void {
 
 // --------------------------------------------------------------------------
 // <ui-dialog>
+// Owns the open state. Defers the actual <dialog> element to the child
+// <ui-dialog-content> (so no named slot is needed, which avoids the
+// SSR routing problem). On open transitions, asks the content child
+// to showModal() / close() its inner <dialog>.
 // --------------------------------------------------------------------------
 
 export class UiDialog extends WebComponent {
@@ -141,17 +169,10 @@ export class UiDialog extends WebComponent {
     this.open = false;
   }
 
-  // Slot-routing has to run BEFORE the framework captures authored
-  // children: we set `slot="dialog-content"` on the user's
-  // <ui-dialog-content> so the slot machinery projects it into the
-  // named slot inside the <dialog>. Also strip the legacy
-  // <ui-dialog-overlay> (native ::backdrop replaces it).
   connectedCallback(): void {
     installStyles();
-    const content = this.querySelector<HTMLElement>(':scope > ui-dialog-content');
-    if (content && !content.hasAttribute('slot')) {
-      content.setAttribute('slot', 'dialog-content');
-    }
+    // Legacy <ui-dialog-overlay> isn't supported anymore; the native
+    // ::backdrop pseudo replaces it. Strip it if a stale doc uses it.
     this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
     super.connectedCallback?.();
   }
@@ -169,10 +190,9 @@ export class UiDialog extends WebComponent {
   get isOpen(): boolean { return this.open; }
 
   render() {
-    // Track open transitions to call showModal / close imperatively.
-    // RAF defers until the rendered <dialog> is in the DOM and the
-    // descendant <ui-dialog-content> has settled its own first render
-    // (the named slot projection cascade).
+    // Track open transitions and ask the content child to open/close
+    // its native <dialog>. RAF defers until the content has rendered
+    // its own template (where the <dialog> lives).
     if (this._lastOpen !== this.open) {
       this._lastOpen = this.open;
       if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
@@ -185,39 +205,24 @@ export class UiDialog extends WebComponent {
     }
     return html`<div data-slot="dialog" data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
-      <dialog
-        data-slot="dialog-native"
-        class=${NATIVE_DIALOG_CLASS}
-        @close=${this._onNativeClose}
-        @click=${this._onNativeClick}
-      ><slot name="dialog-content"></slot></dialog>
     </div>`;
   }
 
-  get _native(): HTMLDialogElement | null {
-    return this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+  get _content(): UiDialogContent | null {
+    return this.querySelector('ui-dialog-content') as UiDialogContent | null;
   }
 
   _setup(): void {
-    const native = this._native;
-    if (!native) return;
+    const content = this._content;
+    if (!content) return;
     lockScroll();
-    if (!native.open) native.showModal();
+    content.showModal();
   }
 
   _teardown(): void {
     unlockScroll();
-    const native = this._native;
-    if (native?.open) native.close();
+    this._content?.close();
   }
-
-  _onNativeClose = (): void => {
-    if (this.open) this.open = false;
-  };
-
-  _onNativeClick = (e: MouseEvent): void => {
-    if (e.target === this._native) this.hide();
-  };
 }
 UiDialog.register('ui-dialog');
 
@@ -244,6 +249,11 @@ UiDialogTrigger.register('ui-dialog-trigger');
 // Auto-injects an X close button (top-right) unless show-close-button="false".
 // --------------------------------------------------------------------------
 
+// <ui-dialog-content> owns the native <dialog> element. Renders a native
+// <dialog> wrapper around its slotted content, plus the auto-injected X
+// close button. Exposes showModal() / close() so the parent <ui-dialog>
+// can drive the open state imperatively without a named slot.
+
 export class UiDialogContent extends WebComponent {
   static properties = {
     showCloseButton: { type: String, reflect: true, attribute: 'show-close-button' },
@@ -255,14 +265,30 @@ export class UiDialogContent extends WebComponent {
     this.showCloseButton = 'true';
   }
 
+  showModal(): void {
+    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    if (native && !native.open) native.showModal();
+  }
+
+  close(): void {
+    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    if (native?.open) native.close();
+  }
+
   render() {
     const wantClose = this.showCloseButton !== 'false';
-    return html`<div
+    const parentOpen = !!this._parent()?.open;
+    return html`<dialog
+      data-slot="dialog-native"
+      class=${NATIVE_DIALOG_CLASS}
+      @close=${this._onNativeClose}
+      @click=${this._onNativeBackdropClick}
+    ><div
       data-slot="dialog-content"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
-      data-state=${this._parent()?.open ? 'open' : 'closed'}
+      data-state=${parentOpen ? 'open' : 'closed'}
       class=${dialogContentClass()}
     >
       <slot></slot>
@@ -275,11 +301,23 @@ export class UiDialogContent extends WebComponent {
             @click=${this._onAutoCloseClick}
           >${unsafeHTML(DIALOG_CLOSE_X_SVG)}</button>`
         : ''}
-    </div>`;
+    </div></dialog>`;
   }
 
   _onAutoCloseClick = (): void => {
-    (this.closest('ui-dialog') as UiDialog | null)?.hide();
+    this._parent()?.hide();
+  };
+
+  _onNativeClose = (): void => {
+    const p = this._parent();
+    if (p?.open) p.open = false;
+  };
+
+  // Backdrop-click closes the dialog: the click target on the backdrop is
+  // the <dialog> element itself (the inner content panel catches its own
+  // clicks).
+  _onNativeBackdropClick = (e: MouseEvent): void => {
+    if (e.target === e.currentTarget) this._parent()?.hide();
   };
 
   // SSR-safe: linkedom doesn't implement closest() on custom elements.

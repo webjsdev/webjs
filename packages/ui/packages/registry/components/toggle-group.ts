@@ -1,12 +1,16 @@
 /**
- * ToggleGroup: group of toggles with single or multiple selection. Stateful
- * because items coordinate active state across the group.
+ * ToggleGroup: group of toggles with single- or multiple-selection.
+ * Tier-2; items coordinate active state across the group, so this is
+ * a custom element (not a class helper). Items are styled via
+ * `toggleClass()` from `./toggle.ts` so the visual matches a single
+ * toggle exactly.
  *
  * shadcn parity:
- *   type:     single | multiple
- *   variant:  default | outline
- *   size:     default | sm | lg
- *   spacing:  0 (joined) | default (gapped)
+ *   ToggleGroup (type: single | multiple)
+ *               (variant: default | outline)
+ *               (size:    default | sm | lg)
+ *                                 → <ui-toggle-group type variant size value>
+ *   ToggleGroupItem               → <ui-toggle-group-item value>
  *
  * Usage:
  *   <ui-toggle-group type="single" value="bold">
@@ -15,23 +19,32 @@
  *     <ui-toggle-group-item value="underline" aria-label="Underline"><u>U</u></ui-toggle-group-item>
  *   </ui-toggle-group>
  *
- *   <!-- Multiple selection: -->
+ *   <!-- Multiple selection (comma-separated value): -->
  *   <ui-toggle-group type="multiple" value="bold,italic">
  *     <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
  *     <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
  *   </ui-toggle-group>
  *
- * Attributes on `<ui-toggle-group>`:
- *   `type`:    "single" | "multiple"
- *   `value`:   current selected value(s). Single: string. Multiple: comma-separated.
- *   `variant`: "default" | "outline"
- *   `size`:    "default" | "sm" | "lg"
- *   `spacing`: 0 (joined) | "default" (gapped)
+ * Attributes on <ui-toggle-group>:
+ *   `type`:        "single" (default) | "multiple".
+ *   `value`:       string. Selected value(s). Single: a single value;
+ *                  multiple: comma-separated values.
+ *   `variant`:     "default" (default) | "outline".
+ *   `size`:        "default" (default) | "sm" | "lg".
+ *   `spacing`:     "0" (default, joined corners) | "default" (gapped).
+ *   `orientation`: "horizontal" (default) | "vertical".
+ *
+ * Attributes on <ui-toggle-group-item>:
+ *   `value`:   string. Identifier this item contributes when selected.
+ *   `pressed`: boolean (reflected). Mirrors the group's selection for this item.
  *
  * Events:
- *   `ui-value-change`: { detail: { value } } when selection changes.
+ *   `ui-value-change` on <ui-toggle-group>: `{ detail: { value } }` after selection changes.
  *
- * Design tokens used: inherited from toggleClass.
+ * Keyboard: Enter / Space toggles the focused item (native button activation).
+ *
+ * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
+ * --input, --destructive).
  */
 import { WebComponent, html } from '@webjskit/core';
 import { cn } from '../lib/utils.ts';
@@ -168,10 +181,16 @@ export class UiToggleGroupItem extends WebComponent {
   // Compound-component caveat: the host element carries the visual
   // class + data-* attributes (not an inner <button>) so CSS sibling
   // selectors like `data-[spacing=0]:first:rounded-l-md` match it as
-  // a sibling of other items in the group. Click + keyboard listeners
-  // also live on the host (not on an inner element) because the
-  // click target IS the host: the styled element under the cursor.
+  // a sibling of other items in the group. Light DOM has no :host CSS
+  // and no way to bind host attributes from a render() template, so
+  // ARIA + static markup attributes go in connectedCallback (set once)
+  // and the parent-derived data-* + class string get refreshed in
+  // render(). Click + keyboard listeners live on the host because the
+  // click target IS the host (the styled element under the cursor).
   connectedCallback(): void {
+    this.dataset.slot = 'toggle-group-item';
+    this.role = 'button';
+    this.tabIndex = 0;
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
     super.connectedCallback?.();
@@ -188,14 +207,11 @@ export class UiToggleGroupItem extends WebComponent {
     const variant = (group?.variant ?? 'default') as ToggleVariant;
     const size = (group?.size ?? 'default') as ToggleSize;
     const spacing = group?.spacing ?? '0';
-    this.setAttribute('data-slot', 'toggle-group-item');
-    this.setAttribute('role', 'button');
-    this.setAttribute('tabindex', '0');
-    this.setAttribute('data-variant', variant);
-    this.setAttribute('data-size', size);
-    this.setAttribute('data-spacing', spacing);
-    this.setAttribute('data-state', this.pressed ? 'on' : 'off');
-    this.setAttribute('aria-pressed', String(this.pressed));
+    this.dataset.variant = variant;
+    this.dataset.size = size;
+    this.dataset.spacing = spacing;
+    this.dataset.state = this.pressed ? 'on' : 'off';
+    this.ariaPressed = String(this.pressed);
     this.className = cn(toggleClass({ variant, size }), ITEM_EXTRA);
     return html`<slot></slot>`;
   }

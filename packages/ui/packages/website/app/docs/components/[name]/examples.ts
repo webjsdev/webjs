@@ -388,8 +388,8 @@ const EXAMPLES: Record<string, string> = {
           <p class="${alertDialogDescriptionClass()}">This action cannot be undone.</p>
         </div>
         <div class="${alertDialogFooterClass()}">
-          <ui-alert-dialog-cancel><button class="${buttonClass({ variant: 'outline' })}">Cancel</button></ui-alert-dialog-cancel>
-          <ui-alert-dialog-action><button class="${buttonClass({ variant: 'destructive' })}">Yes, delete</button></ui-alert-dialog-action>
+          <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
+          <ui-alert-dialog-action variant="destructive">Yes, delete</ui-alert-dialog-action>
         </div>
       </ui-alert-dialog-content>
     </ui-alert-dialog>

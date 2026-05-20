@@ -1,17 +1,15 @@
 /**
- * Tooltip, hover/focus-triggered floating tip. The tooltip content uses
- * the native Popover API in `popover="manual"` mode so it renders in the
- * top layer (no z-index wars) while the custom element retains control of
- * the hover-with-delay state machine.
+ * Tooltip: hover- / focus-triggered floating tip. Tier-2. The content
+ * uses the native Popover API in `popover="manual"` mode for top-layer
+ * rendering (no z-index wars); the custom element owns the
+ * hover-with-delay state machine and JS positioning.
  *
  * shadcn parity:
- *   Tooltip, TooltipTrigger, TooltipContent, TooltipProvider.
- *   delay-duration       attribute (ms, default 700), initial hover delay
- *   skip-delay-duration  attribute (ms, default 300), window after a tooltip
- *                                                     closes during which the
- *                                                     next tooltip skips its
- *                                                     delay-duration
- *   side / align / side-offset / align-offset, placement (positionFloating)
+ *   Tooltip               → <ui-tooltip delay-duration skip-delay-duration>
+ *   TooltipTrigger        → <ui-tooltip-trigger>
+ *   TooltipContent        → <ui-tooltip-content side align side-offset align-offset>
+ *   TooltipProvider       → not needed; delay state is per-tooltip (and globally
+ *                           shared via `skip-delay-duration` cooldown).
  *
  * Usage:
  *   <ui-tooltip delay-duration="500" skip-delay-duration="300">
@@ -20,6 +18,25 @@
  *     </ui-tooltip-trigger>
  *     <ui-tooltip-content side="top">Helpful tip</ui-tooltip-content>
  *   </ui-tooltip>
+ *
+ * Attributes on <ui-tooltip>:
+ *   `open`:                boolean (reflected). Open state.
+ *   `delay-duration`:      ms, default 700. Initial hover delay before opening.
+ *   `skip-delay-duration`: ms, default 300. Window after a tooltip closes
+ *                          during which the next tooltip skips its
+ *                          `delay-duration` (so moving between adjacent
+ *                          triggers feels instant).
+ *
+ * Attributes on <ui-tooltip-content>:
+ *   `side`:         "top" (default) | "right" | "bottom" | "left".
+ *   `align`:        "center" (default) | "start" | "end".
+ *   `side-offset`:  number, default 4. Pixels between trigger and content.
+ *   `align-offset`: number, default 0. Pixels of cross-axis shift.
+ *
+ * Events: none dispatched at present (hover state changes are local;
+ * use the reflected `open` attribute to observe state from CSS).
+ *
+ * Programmatic API on <ui-tooltip>: `.show()` · `.hide()`.
  *
  * Design tokens used: --foreground, --background.
  */

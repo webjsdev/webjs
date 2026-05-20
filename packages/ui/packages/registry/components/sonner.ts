@@ -1,19 +1,45 @@
 /**
- * Sonner: toast notification queue. Hand-rolled (no `sonner` npm package).
+ * Sonner: toast notification queue. Tier-2. Hand-rolled (no `sonner`
+ * npm dependency); ships as a single `<ui-sonner>` viewport you mount
+ * once + an imperative `toast()` API published as a module export. A
+ * singleton bus routes new toasts to the most recently connected
+ * viewport; multiple `<ui-sonner>` instances are supported with
+ * explicit per-instance dispatch.
  *
- * shadcn parity: `<Toaster />` component + `toast()` function with success,
- * error, info, warning, loading, promise methods.
+ * shadcn parity:
+ *   <Toaster />     → <ui-sonner position>
+ *   toast(msg, opts)
+ *                   → toast()  (plus toast.success / .error / .info / .warning /
+ *                     .loading / .promise / .dismiss)
  *
  * Usage:
- *   Place once at the root of your app (typically in layout.ts):
- *     <ui-sonner position="bottom-right"></ui-sonner>
+ *   <!-- Mount once at the root of your app (typically in layout.ts): -->
+ *   <ui-sonner position="bottom-right"></ui-sonner>
  *
- *   Then anywhere:
- *     import { toast } from '@/components/ui/sonner.ts';
- *     toast('Saved!');
- *     toast.success('Account created');
- *     toast.error('Failed to save', { description: 'Try again' });
- *     toast.promise(savePost(), { loading: 'Saving…', success: 'Saved', error: 'Failed' });
+ *   // Then from anywhere (server or client component):
+ *   import { toast } from '@/components/ui/sonner.ts';
+ *   toast('Saved!');
+ *   toast.success('Account created');
+ *   toast.error('Failed to save', { description: 'Try again' });
+ *   toast.promise(savePost(), { loading: 'Saving…', success: 'Saved', error: 'Failed' });
+ *   toast.dismiss(id);
+ *
+ * Attributes on <ui-sonner>:
+ *   `position`: "top-left" | "top-center" | "top-right" |
+ *               "bottom-left" | "bottom-center" | "bottom-right" (default).
+ *
+ * Per-toast options (passed as the second arg to `toast(msg, opts)`):
+ *   `id`:          string | number. Stable id so repeated calls update in place.
+ *   `description`: string. Secondary line under the title.
+ *   `duration`:    ms, default 4000 (loading toasts default to 0, no auto-dismiss).
+ *   `action`:      { label, onClick } | undefined. Renders an action button.
+ *   `cancel`:      { label, onClick } | undefined. Renders a cancel button.
+ *
+ * Events: none dispatched (consumers act on the id returned by `toast()`).
+ *
+ * Programmatic API on <ui-sonner>: `.addToast(message, opts, type)` for
+ * per-instance dispatch (bypasses the singleton router that `toast()`
+ * uses); typically only needed when mounting multiple viewports.
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
