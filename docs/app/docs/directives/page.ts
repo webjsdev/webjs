@@ -60,19 +60,32 @@ html\`&lt;div&gt;\${templateContent(tpl)}&lt;/div&gt;\`;</pre>
     <p>Pass a callback instead of a Ref object to receive the element directly: <code>\${ref((el) =&gt; this._captureEl(el))}</code>.</p>
 
     <h2>cache(value)</h2>
-    <p>Currently an identity pass-through. Future versions will retain detached DOM for fast template switching (so swapping back to a previously-rendered template restores input state, scroll position, focus). For today, use CSS <code>display: none</code> if you need to preserve DOM across "tab" toggles:</p>
-    <pre>html\`
-  &lt;div style=\${\`display:\${tab === 'a' ? 'block' : 'none'}\`}&gt;Tab A&lt;/div&gt;
-  &lt;div style=\${\`display:\${tab === 'b' ? 'block' : 'none'}\`}&gt;Tab B&lt;/div&gt;
-\`;</pre>
+    <p>Retain detached DOM when toggling between sub-templates. When the inner value's template <code>strings</code> match a previously-rendered template at this position, the renderer re-attaches the stashed nodes and reconciles values instead of creating fresh DOM. Preserves input state, scroll position, and focus across "tab"-style toggles.</p>
+    <pre>render() {
+  return html\`
+    &lt;nav&gt;
+      &lt;button @click=\${() =&gt; this.tab = 'a'}&gt;A&lt;/button&gt;
+      &lt;button @click=\${() =&gt; this.tab = 'b'}&gt;B&lt;/button&gt;
+    &lt;/nav&gt;
+    \${cache(this.tab === 'a' ? html\`&lt;panel-a&gt;&lt;/panel-a&gt;\` : html\`&lt;panel-b&gt;&lt;/panel-b&gt;\`)}
+  \`;
+}</pre>
+    <p>On the server, <code>cache</code> is a pass-through (one-shot render, no DOM to cache).</p>
 
     <h2>until(...args)</h2>
-    <p>Render the first synchronous candidate from a list. On the server, awaits <code>Promise.race</code> when all candidates are Promises. On the client, renders the first sync value and does NOT re-render when promises later resolve.</p>
+    <p>Render the highest-priority resolved candidate. Priority is left-to-right: <code>args[0]</code> is highest. The highest-priority synchronous candidate renders immediately; higher-priority Promises that later resolve replace the rendered value. Lower-priority Promises are ignored once a higher-priority candidate is in place.</p>
     <pre>html\`&lt;div&gt;\${until(this.dataPromise, html\`&lt;p&gt;Loading…&lt;/p&gt;\`)}&lt;/div&gt;\`;</pre>
+    <p>When the marker is torn down (a re-render replaces the directive), in-flight Promise tracking is aborted so late resolves cannot overwrite newer DOM. On the server, <code>until</code> awaits <code>Promise.race</code> when all candidates are Promises, or renders the highest-priority synchronous candidate.</p>
     <p>For component-scoped async data with full pending/error states, prefer the <code>Task</code> controller from <code>@webjskit/core/task</code>.</p>
 
     <h2>asyncAppend(iterable, mapper?) / asyncReplace(iterable, mapper?)</h2>
-    <p>Stream values from an AsyncIterable. Current implementation renders empty on the first paint; full streaming (append every value, support disconnection cleanup) lands with the AsyncDirective infrastructure work. For page-level streaming today, use <code>Suspense({ fallback, children })</code>. For component-scoped streams, use <code>connectWS</code> + a controller that calls <code>setState</code> per chunk.</p>
+    <p>Stream values from an <code>AsyncIterable</code>. Each yielded value is mapped (optional) and rendered as a node group. <code>asyncAppend</code> accumulates the rendered groups before the marker; <code>asyncReplace</code> swaps out the previous output each yield. Iteration aborts when the directive is replaced (so leaked iterators don't hold references to detached DOM).</p>
+    <pre>async function* logTail() {
+  for await (const line of socket) yield line;
+}
+
+html\`&lt;ul&gt;\${asyncAppend(logTail(), (line, i) =&gt; html\`&lt;li&gt;\${i}: \${line}&lt;/li&gt;\`)}&lt;/ul&gt;\`;</pre>
+    <p>On the server, both directives render empty (no iteration on a one-shot render). For page-level streaming, prefer <code>Suspense({ fallback, children })</code>.</p>
 
     <h2>Native patterns (no directive needed)</h2>
     <p>For conditional classes, inline styles, optional attributes, conditional rendering, async data with full lifecycle, the lit-html directive set has classMap/styleMap/ifDefined/when/choose/until/etc. webjs ships these as runtime exports for parity, but the framework's preference for these specific cases is native JavaScript inside <code>render()</code>. AI agents emit either form correctly; the native form has no runtime overhead and shows up directly in the template.</p>
