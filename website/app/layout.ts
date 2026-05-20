@@ -6,16 +6,19 @@ import '../components/theme-toggle.ts';
  * Root layout: Tailwind CSS browser runtime + @theme design tokens,
  * matching the blog example's architecture. Light DOM everywhere.
  *
- * Docs / Blog URLs are read from env so the same code works across
- * `webjs dev` and any deployment target. Override via DOCS_URL /
- * BLOG_URL at deploy time (e.g. in Railway's service env vars).
+ * Sibling app URLs are read from env so the same code works across
+ * `webjs dev` and any deployment target. Fallbacks are the canonical
+ * localhost ports (matching each app's dev script + compose.yaml);
+ * the .env file in this directory sets the same defaults explicitly
+ * for visibility. Override DOCS_URL / BLOG_URL / UI_URL at deploy time
+ * (e.g. in Railway's service env vars).
  */
 // Guarded against `process` being undefined because this file also
 // loads on the client during hydration.
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
 const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
-const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
+const UI_URL = env.UI_URL || 'http://localhost:5001';
 
 // Site-wide Open Graph + Twitter card metadata. `generateMetadata`
 // receives the request context so we can derive an absolute og:image
