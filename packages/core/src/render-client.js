@@ -704,11 +704,21 @@ function isInShadowRootEl(el) {
  * @param {unknown} value
  */
 function applyElement(part, value) {
+  const partAny = /** @type any */ (part);
   const prev = part.lastTarget;
   let nextTarget;
   if (isRef(value)) {
     nextTarget = /** @type any */ (value).target;
   }
+
+  // Identity gate: when the ref target and the element both match the
+  // prior render, skip the rebind. Mirrors lit-html's "set once per
+  // element-identity change" semantics so a stable Ref + stable element
+  // observes only one value assignment / one callback invocation.
+  if (prev && prev === nextTarget && partAny.__lastEl === part.el) {
+    return;
+  }
+
   if (prev && prev !== nextTarget) {
     // Unbind the previous ref before binding a new one.
     if (typeof prev === 'function') {
@@ -724,8 +734,10 @@ function applyElement(part, value) {
       nextTarget.value = part.el;
     }
     part.lastTarget = nextTarget;
+    partAny.__lastEl = part.el;
   } else {
     part.lastTarget = undefined;
+    partAny.__lastEl = undefined;
   }
 }
 
@@ -788,10 +800,20 @@ function applyChildInner(part, value) {
   if (isGuard(value)) {
     const v = /** @type any */ (value);
     const prevDeps = /** @type any */ (part).__guardDeps;
-    if (prevDeps && shallowEqualArray(prevDeps, v.deps)) {
-      return;
+    const nextDeps = v.deps;
+    // Accept any value for deps. When deps is an array, compare shallowly.
+    // When it's a primitive (number, string, undefined), compare with
+    // Object.is. Mirrors lit-html's tolerance for non-array deps so user
+    // code like `guard(this.id, () => ...)` works without crashing.
+    if (prevDeps !== undefined) {
+      const equal = Array.isArray(prevDeps) && Array.isArray(nextDeps)
+        ? shallowEqualArray(prevDeps, nextDeps)
+        : Object.is(prevDeps, nextDeps);
+      if (equal) return;
     }
-    /** @type any */ (part).__guardDeps = v.deps.slice();
+    /** @type any */ (part).__guardDeps = Array.isArray(nextDeps)
+      ? nextDeps.slice()
+      : nextDeps;
     applyChildInner(part, v.fn());
     return;
   }
@@ -1248,6 +1270,13 @@ function applyCache(part, inner) {
     const cached = cacheMap.get(tr.strings);
     if (cached) {
       cacheMap.delete(tr.strings);
+      // Tear down any non-instance child currently attached (a string /
+      // array of text nodes from a prior cache(non-template) render).
+      // Without this the prior nodes remain in the DOM alongside the
+      // re-attached cached template.
+      if (part.child) {
+        teardownChild(part);
+      }
       // Move the cached nodes back before the marker.
       moveRange(cached.inst.startNode, cached.inst.endNode, /** @type Node */ (marker.parentNode), marker);
       // Reconcile values so any state changes since detachment apply.
@@ -1287,16 +1316,18 @@ function applyCache(part, inner) {
  * @param {readonly unknown[]} args
  */
 function applyUntil(part, args) {
-  // Abort the prior render's tracking, if any. The state lives on the
-  // part via a stable slot because `applyChild` recursion overwrites
-  // `part.child` to the rendered sync candidate's shape.
+  // Carry forward the prior render's `highestResolved` so a re-render
+  // with the same already-resolved Promise doesn't drop back to the
+  // synchronous fallback. The state itself stays on a stable slot so
+  // `applyChild`'s recursion (which overwrites `part.child`) can't
+  // clobber it.
   const partAny = /** @type any */ (part);
-  if (partAny.__untilState) {
-    partAny.__untilState.aborted = true;
-  }
+  const prevState = partAny.__untilState;
+  const carriedHighest = prevState ? prevState.highestResolved : Infinity;
+  if (prevState) prevState.aborted = true;
 
   /** @type {{aborted:boolean, highestResolved:number}} */
-  const state = { aborted: false, highestResolved: Infinity };
+  const state = { aborted: false, highestResolved: carriedHighest };
   partAny.__untilState = state;
 
   // Highest-priority synchronous candidate. If found, render it now
@@ -1312,17 +1343,27 @@ function applyUntil(part, args) {
     }
   }
 
-  if (firstSyncIdx === -1) {
-    applyChildInner(part, '');
-    state.highestResolved = Infinity;
-  } else {
+  if (firstSyncIdx !== -1 && firstSyncIdx < state.highestResolved) {
+    // The sync candidate beats any previously-rendered Promise value.
     applyChildInner(part, firstSyncVal);
     state.highestResolved = firstSyncIdx;
+  } else if (firstSyncIdx === -1 && carriedHighest === Infinity) {
+    // No sync candidate AND nothing has resolved yet across renders:
+    // render empty as the initial fallback (first-ever render of this
+    // part with an all-Promise args list).
+    applyChildInner(part, '');
   }
+  // Else: either there is no sync candidate but a higher-priority
+  // Promise from a prior render already won (carriedHighest !== Inf),
+  // OR the sync candidate is lower-priority than what's already
+  // rendered. Either way: leave the existing DOM in place. This
+  // prevents the "all-Promises wipes prior content" flash.
 
-  // Subscribe to higher-priority Promises. A resolved value wins only
-  // when its index is strictly less than `state.highestResolved`.
-  const cap = firstSyncIdx === -1 ? args.length : firstSyncIdx;
+  // Subscribe to Promises with priority strictly less than what's
+  // currently rendered. (Lower index = higher priority in lit's model.)
+  const cap = firstSyncIdx === -1
+    ? Math.min(args.length, state.highestResolved)
+    : Math.min(firstSyncIdx, state.highestResolved);
   for (let i = 0; i < cap; i++) {
     const a = args[i];
     if (!a || typeof (/** @type any */ (a).then) !== 'function') continue;
@@ -1367,6 +1408,17 @@ function teardownUntil(state) {
  * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
  */
 function applyAsyncAppend(part, dir) {
+  // Same-iterable short-circuit: if the prior render's iterable identity
+  // matches, the existing iterator is still consuming it. Re-subscribing
+  // would start a fresh iterator that misses already-yielded values.
+  // Matches lit-html's behavior.
+  const currentChild = /** @type any */ (part.child);
+  if (currentChild && currentChild.kind === 'async-stream'
+      && currentChild.mode === 'append'
+      && currentChild.iterable === dir.iterable) {
+    return;
+  }
+
   teardownChild(part);
 
   const iterator = /** @type AsyncIterator<unknown> */ (
@@ -1377,6 +1429,7 @@ function applyAsyncAppend(part, dir) {
     kind: 'async-stream',
     mode: 'append',
     aborted: false,
+    iterable: dir.iterable,
     iterator,
     /** @type {ChildNode[]} */ nodes: [],
   };
@@ -1393,6 +1446,14 @@ function applyAsyncAppend(part, dir) {
  * @param {{ iterable: AsyncIterable<unknown>, mapper?: (v: unknown, i: number) => unknown }} dir
  */
 function applyAsyncReplace(part, dir) {
+  // Same-iterable short-circuit: see comment in applyAsyncAppend.
+  const currentChild = /** @type any */ (part.child);
+  if (currentChild && currentChild.kind === 'async-stream'
+      && currentChild.mode === 'replace'
+      && currentChild.iterable === dir.iterable) {
+    return;
+  }
+
   teardownChild(part);
 
   const iterator = /** @type AsyncIterator<unknown> */ (
@@ -1403,6 +1464,7 @@ function applyAsyncReplace(part, dir) {
     kind: 'async-stream',
     mode: 'replace',
     aborted: false,
+    iterable: dir.iterable,
     iterator,
     /** @type {ChildNode[]} */ nodes: [],
   };
@@ -1416,6 +1478,7 @@ function applyAsyncReplace(part, dir) {
  *   kind: 'async-stream',
  *   mode: 'append' | 'replace',
  *   aborted: boolean,
+ *   iterable: AsyncIterable<unknown>,
  *   iterator: AsyncIterator<unknown>,
  *   nodes: ChildNode[],
  * }} AsyncStreamState
