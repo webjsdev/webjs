@@ -731,7 +731,7 @@ export default function Home() {
 
   // --- Theme toggle component ---
 
-  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html } from '@webjskit/core';
+  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjskit/core';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -746,25 +746,20 @@ type Theme = 'system' | 'light' | 'dark';
  * \`theme-toggle .btn\`).
  */
 export class ThemeToggle extends WebComponent {
-  static properties = { theme: { type: String, state: true } };
-  declare theme: Theme;
-
-  constructor() {
-    super();
-    this.theme = 'system';
-  }
+  theme = signal<Theme>('system');
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    this.theme = saved === 'light' || saved === 'dark' ? saved : 'system';
+    this.theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
   }
 
   cycle() {
-    const next: Theme = this.theme === 'system' ? 'light'
-      : this.theme === 'light' ? 'dark' : 'system';
-    this.theme = next;
+    const t = this.theme.get();
+    const next: Theme = t === 'system' ? 'light'
+      : t === 'light' ? 'dark' : 'system';
+    this.theme.set(next);
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
@@ -774,7 +769,7 @@ export class ThemeToggle extends WebComponent {
   }
 
   render() {
-    const t = this.theme;
+    const t = this.theme.get();
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
