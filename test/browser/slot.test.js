@@ -568,4 +568,128 @@ suite('Light-DOM slot projection (browser)', () => {
     assert.equal(secondSlot.children[0], firstChild, 'same Node ref after re-mount');
     host.remove();
   });
+
+  // ===========================================================================
+  // Slot projection timing vs lifecycle hooks (lit-parity integration)
+  //
+  // Pins down a subtle webjs-vs-lit divergence. In shadow DOM, slot projection
+  // is native and synchronous, so by the time `firstUpdated` runs the slot's
+  // assigned-nodes list is populated. In webjs light DOM, projection is
+  // microtask-deferred to AFTER the render commit, which means `firstUpdated`
+  // and `updated` see the <slot> element in the DOM but its `assignedNodes()`
+  // is still empty. Components that need projected children must read them on
+  // the next microtask, via `slotchange`, or in `updated()` after a subsequent
+  // re-render.
+  //
+  // Documented in agent-docs/lit-muscle-memory-gotchas.md gotcha #8.
+  // ===========================================================================
+
+  test('firstUpdated sees the <slot> element but light-DOM projection has NOT yet populated it', async () => {
+    const tag = tagName('first-updated-vs-projection');
+    const log = {};
+    class C extends WebComponent {
+      firstUpdated() {
+        const slot = this.querySelector('slot[data-webjs-light]');
+        log.slotExists = !!slot;
+        log.assignedAtFirstUpdated = slot ? slot.assignedNodes().length : -1;
+        log.slotChildrenAtFirstUpdated = slot ? slot.children.length : -1;
+      }
+      updated() {
+        // Same render cycle as firstUpdated; same timing.
+        const slot = this.querySelector('slot[data-webjs-light]');
+        log.assignedAtUpdated = slot ? slot.assignedNodes().length : -1;
+      }
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+
+    const host = document.createElement(tag);
+    host.innerHTML = '<h1>A</h1><p>B</p><span>C</span>';
+    document.body.appendChild(host);
+    await tick();
+
+    assert.equal(log.slotExists, true,
+      'slot element exists in firstUpdated (the render committed before the hook fired)');
+    assert.equal(log.assignedAtFirstUpdated, 0,
+      'light-DOM projection is deferred to a follow-up microtask, so assignedNodes is empty in firstUpdated');
+    assert.equal(log.slotChildrenAtFirstUpdated, 0,
+      'the slot has no DOM children yet either (projection populates them)');
+    assert.equal(log.assignedAtUpdated, 0,
+      'updated() runs in the same render cycle as firstUpdated, same empty-slot observation');
+
+    // After projection has run, the slot reflects the projected children.
+    // This is the supported way to read assignedNodes synchronously: wait
+    // past the projection microtask, OR use slotchange.
+    const slot = host.querySelector('slot[data-webjs-light]');
+    assert.equal(slot.assignedNodes().length, 3,
+      'after projection, slot reports the three projected nodes');
+    assert.equal(slot.children.length, 3,
+      'projection materialised the three children as actual DOM children of the slot');
+
+    host.remove();
+  });
+
+  test('updated() on a re-render AFTER projection sees the populated slot', async () => {
+    // Authoring pattern: if a component needs to read assignedNodes from a
+    // lifecycle hook, trigger a re-render after projection completes (e.g.
+    // by setState from a slotchange listener) and read in `updated()`. The
+    // second `updated()` call observes the populated slot.
+    const tag = tagName('updated-after-projection');
+    const seenAtUpdate = [];
+    class C extends WebComponent {
+      updated() {
+        const slot = this.querySelector('slot[data-webjs-light]');
+        seenAtUpdate.push(slot ? slot.assignedNodes().length : -1);
+      }
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+
+    const host = document.createElement(tag);
+    host.innerHTML = '<i>x</i><i>y</i>';
+    document.body.appendChild(host);
+    await tick();
+
+    // Force a second render. The renderer is idempotent on no-op patches,
+    // so seed a state field that the render() body doesn't reference; the
+    // second render still commits and fires updated() again.
+    host.setState({ tick: 1 });
+    await tick();
+
+    assert.equal(seenAtUpdate.length >= 2, true,
+      'updated() fired for the first and at least one subsequent render');
+    assert.equal(seenAtUpdate[0], 0,
+      'first updated() observed an empty slot (projection deferred)');
+    assert.equal(seenAtUpdate[seenAtUpdate.length - 1], 2,
+      'a later updated() (after projection) observes the populated slot');
+
+    host.remove();
+  });
+
+  test('shadow-DOM contrast: firstUpdated sees populated assignedNodes (native synchronous projection)', async () => {
+    // Counterpoint to the light-DOM tests above. In shadow DOM the browser
+    // does slot projection natively and synchronously, so firstUpdated
+    // observes the populated assigned-nodes list with no extra ticks.
+    const tag = tagName('shadow-first-updated');
+    const log = {};
+    class C extends WebComponent {
+      static shadow = true;
+      firstUpdated() {
+        const slot = this.shadowRoot.querySelector('slot');
+        log.assignedAtFirstUpdated = slot ? slot.assignedNodes().length : -1;
+      }
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+
+    const host = document.createElement(tag);
+    host.innerHTML = '<h1>A</h1><h2>B</h2>';
+    document.body.appendChild(host);
+    await tick();
+
+    assert.equal(log.assignedAtFirstUpdated, 2,
+      'shadow DOM: native projection means firstUpdated already sees assigned nodes');
+
+    host.remove();
+  });
 });
