@@ -135,7 +135,7 @@ keep working. Opt into rich types for your own UI code:
 
 ```ts
 // app/api/posts/route.ts: server
-import { json } from '@webjskit/server';
+import { json } from '@webjsdev/server';
 import { listPosts } from '../../../modules/posts/queries/list-posts.server.ts';
 
 export async function GET() {
@@ -145,7 +145,7 @@ export async function GET() {
 
 ```ts
 // caller: client
-import { richFetch } from '@webjskit/core';
+import { richFetch } from '@webjsdev/core';
 const posts = await richFetch<Post[]>('/api/posts');
 // posts[0].createdAt is a Date here.
 ```
@@ -154,7 +154,7 @@ The `json()` helper reads the in-flight Request via AsyncLocalStorage:
 - `Accept: application/vnd.webjs+json` → encoded with the webjs serializer, served with `Content-Type: application/vnd.webjs+json` and `Vary: Accept`.
 - Otherwise → plain JSON.
 
-Request bodies parse with `readBody(req)` from `@webjskit/server`.
+Request bodies parse with `readBody(req)` from `@webjsdev/server`.
 
 ### TypeScript is not required
 
@@ -162,17 +162,17 @@ JS + JSDoc gets the same call-site type safety. The TypeScript language
 server reads `@typedef` / `@param` / `@returns` identically to `.ts`
 syntax. Add `"checkJs": true` to enforce types in editor + CI.
 
-## Editor plugin: `@webjskit/ts-plugin`
+## Editor plugin: `@webjsdev/ts-plugin`
 
 **Editor-only. Not required for the framework to run.** The runtime
 has no dependency on it.
 
-A single plugin. As of `@webjskit/ts-plugin@0.4.0`, `ts-lit-plugin`
+A single plugin. As of `@webjsdev/ts-plugin@0.4.0`, `ts-lit-plugin`
 is bundled internally, so list one entry:
 
 ```jsonc
 "plugins": [
-  { "name": "@webjskit/ts-plugin" }
+  { "name": "@webjsdev/ts-plugin" }
 ]
 ```
 

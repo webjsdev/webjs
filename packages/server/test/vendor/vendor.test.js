@@ -78,7 +78,7 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   assert.ok(!found.has('pg'), 'server-only imports should be skipped');
   assert.ok(!found.has('./local.js'), 'relative imports should be excluded');
   // Built-ins should never appear
-  assert.ok(!found.has('@webjskit/core'));
+  assert.ok(!found.has('@webjsdev/core'));
 
   await rm(dir, { recursive: true, force: true });
 });
@@ -109,8 +109,8 @@ test('vendorImportMapEntries: generates correct URLs', () => {
 });
 
 test('vendorImportMapEntries: skips built-ins', () => {
-  const entries = vendorImportMapEntries(new Set(['@webjskit/core', 'dayjs']));
-  assert.ok(!('@webjskit/core' in entries));
+  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'dayjs']));
+  assert.ok(!('@webjsdev/core' in entries));
   assert.ok('dayjs' in entries);
 });
 

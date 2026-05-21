@@ -21,14 +21,14 @@ export function setVendorEntries(entries) {
 export function buildImportMap() {
   return {
     imports: {
-      '@webjskit/core':               '/__webjs/core/index.js',
-      '@webjskit/core/':              '/__webjs/core/src/',
-      '@webjskit/core/client-router': '/__webjs/core/src/router-client.js',
-      '@webjskit/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',
-      '@webjskit/core/directives':    '/__webjs/core/src/directives.js',
-      '@webjskit/core/context':       '/__webjs/core/src/context.js',
-      '@webjskit/core/testing':       '/__webjs/core/src/testing.js',
-      '@webjskit/core/task':          '/__webjs/core/src/task.js',
+      '@webjsdev/core':               '/__webjs/core/index.js',
+      '@webjsdev/core/':              '/__webjs/core/src/',
+      '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
+      '@webjsdev/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',
+      '@webjsdev/core/directives':    '/__webjs/core/src/directives.js',
+      '@webjsdev/core/context':       '/__webjs/core/src/context.js',
+      '@webjsdev/core/testing':       '/__webjs/core/src/testing.js',
+      '@webjsdev/core/task':          '/__webjs/core/src/task.js',
       ..._extraEntries,
     },
   };

@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 
 /**
  * `<slot-card>` is a light-DOM WebComponent demonstrating slot projection.

@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import '../../components/slot-card.ts';
 import '../../components/slot-card-shadow.ts';
 

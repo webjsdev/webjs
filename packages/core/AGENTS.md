@@ -1,4 +1,4 @@
-# AGENTS.md for @webjskit/core
+# AGENTS.md for @webjsdev/core
 
 The webjs **core runtime**: `html` / `css` tagged templates, the
 `WebComponent` base class, isomorphic renderers, directives, the
@@ -10,7 +10,7 @@ commit conventions, autonomous-mode behaviour, scaffold rules)
 live in the **framework root [`../../AGENTS.md`](../../AGENTS.md)**
 and apply here. Read that first.
 
-This file only covers what's specific to `@webjskit/core`.
+This file only covers what's specific to `@webjsdev/core`.
 
 ## Role
 
@@ -51,7 +51,7 @@ the same output in all three.
 ## Public exports (re-exported from `index.js`)
 
 See the [package.json `exports` field](./package.json) for subpaths:
-`@webjskit/core/client`, `/server`, `/component`, `/registry`,
+`@webjsdev/core/client`, `/server`, `/component`, `/registry`,
 `/client-router`. Everything else is exposed via the main `index.js`
 re-exports. Keep this list in sync if you add or remove a barrel
 export.
@@ -59,7 +59,7 @@ export.
 ## Package-specific invariants
 
 1. **No build step.** `.js` only, plain JSDoc types. The source you
-   read in `node_modules/@webjskit/core/src/` is what runs.
+   read in `node_modules/@webjsdev/core/src/` is what runs.
 2. **`html\`\`` returns an inert `TemplateResult`.** Templates don't
    touch the DOM until a renderer (server or client) consumes them.
 3. **The renderer is the boundary between server and client.** Server

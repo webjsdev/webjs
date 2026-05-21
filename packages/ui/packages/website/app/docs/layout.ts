@@ -1,4 +1,4 @@
-import { html, css } from '@webjskit/core';
+import { html, css } from '@webjsdev/core';
 import { loadRegistryIndex } from '../_lib/registry.server.ts';
 import { splitByTier } from '../_lib/tier.ts';
 

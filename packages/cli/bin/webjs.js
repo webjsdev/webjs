@@ -23,7 +23,7 @@ const USAGE = `webjs commands:
   webjs db studio                                 Run \`prisma studio\`
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
-                                                  Requires @webjskit/ui installed in the project
+                                                  Requires @webjsdev/ui installed in the project
   webjs help                                      Show this help`;
 
 /** @param {string[]} args */
@@ -38,7 +38,7 @@ async function main() {
     case 'dev': {
       // If we're already inside the --watch child, start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
-        const { startServer } = await import('@webjskit/server');
+        const { startServer } = await import('@webjsdev/server');
         const port = Number(flag(rest, '--port', process.env.PORT || 3000));
         await startServer({ appDir: process.cwd(), port, dev: true });
         break;
@@ -78,7 +78,7 @@ async function main() {
       break;
     }
     case 'start': {
-      const { startServer } = await import('@webjskit/server');
+      const { startServer } = await import('@webjsdev/server');
       const port = Number(flag(rest, '--port', process.env.PORT || 3000));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;
@@ -94,24 +94,24 @@ async function main() {
       break;
     }
     case 'ui': {
-      // Delegate to @webjskit/ui. Bundled as a hard dependency of
-      // @webjskit/cli, so `npm install -g @webjskit/cli` pulls it in
+      // Delegate to @webjsdev/ui. Bundled as a hard dependency of
+      // @webjsdev/cli, so `npm install -g @webjsdev/cli` pulls it in
       // automatically, and `webjs ui add button` works out of the box
       // without an extra install in user projects.
       const { createRequire } = await import('node:module');
       const req = createRequire(import.meta.url);
       let entry;
       try {
-        entry = req.resolve('@webjskit/ui/bin/webjsui.js');
+        entry = req.resolve('@webjsdev/ui/bin/webjsui.js');
       } catch {
         // Fallback: try resolving from the user's cwd in case of weird
         // workspace setups.
         try {
           const userReq = createRequire(join(process.cwd(), 'package.json'));
-          entry = userReq.resolve('@webjskit/ui/bin/webjsui.js');
+          entry = userReq.resolve('@webjsdev/ui/bin/webjsui.js');
         } catch {
-          console.error('@webjskit/ui could not be resolved.');
-          console.error('Reinstall the CLI:  npm install -g @webjskit/cli');
+          console.error('@webjsdev/ui could not be resolved.');
+          console.error('Reinstall the CLI:  npm install -g @webjsdev/cli');
           process.exit(1);
         }
       }
@@ -191,7 +191,7 @@ async function main() {
       break;
     }
     case 'check': {
-      const { checkConventions, RULES, loadConventionOverrides } = await import('@webjskit/server/check');
+      const { checkConventions, RULES, loadConventionOverrides } = await import('@webjsdev/server/check');
 
       if (rest.includes('--rules')) {
         const overrides = await loadConventionOverrides(process.cwd());

@@ -1,6 +1,6 @@
-# AGENTS.md: @webjskit/ui-website
+# AGENTS.md: @webjsdev/ui-website
 
-The HTTP host for `@webjskit/ui`'s registry + the per-component docs site.
+The HTTP host for `@webjsdev/ui`'s registry + the per-component docs site.
 
 Framework-wide rules live in the root [`../../../AGENTS.md`](../../../AGENTS.md).
 This file covers ONLY what's specific to this package.
@@ -10,7 +10,7 @@ This file covers ONLY what's specific to this package.
 ## ⚠️ Directory layout: does NOT match a normal scaffolded webjs app
 
 **Read this before adding ANY file.** This package has a unique layout
-because it's both the *publisher* of the `@webjskit/ui` component kit
+because it's both the *publisher* of the `@webjsdev/ui` component kit
 (it serves `/registry/<name>.json` to the CLI) and a *consumer* of the
 same kit (its docs pages import the components to render live previews).
 The footgun this creates has already broken a live deploy once, so don't
@@ -27,7 +27,7 @@ re-introduce it.
 
 ```ts
 // app/_components/my-widget.ts
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 class MyWidget extends WebComponent { /* … */ }
 MyWidget.register('my-widget');
 ```
@@ -61,7 +61,7 @@ The rule above (`app/_components/`) prevents this entirely.
 
 | Surface | `components/ui/` |
 |---|---|
-| **This package** (`@webjskit/ui-website`) | gitignored, mirror of `../registry/` |
+| **This package** (`@webjsdev/ui-website`) | gitignored, mirror of `../registry/` |
 | Scaffolded user apps (`webjs create`) | tracked source, `webjs ui add` writes more |
 | Example blog (`examples/blog`) | tracked source, hand-edited |
 | Any other webjs app | tracked source, shadcn-style "you own it" |

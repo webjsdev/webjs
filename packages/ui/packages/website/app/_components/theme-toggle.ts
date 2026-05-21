@@ -1,4 +1,4 @@
-import { WebComponent, html, signal } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 
 /**
  * `<theme-toggle>`: three-state theme switcher: system → light → dark → system.

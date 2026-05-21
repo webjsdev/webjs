@@ -1,5 +1,5 @@
 /**
- * Targeted tests to push @webjskit/ui coverage above 95%. Covers package-
+ * Targeted tests to push @webjsdev/ui coverage above 95%. Covers package-
  * manager detection in add.js, the interactive init prompt branch, and
  * the few remaining uncovered branches.
  */

@@ -1,4 +1,4 @@
-import { html, unsafeHTML, notFound } from '@webjskit/core';
+import { html, unsafeHTML, notFound } from '@webjsdev/core';
 import {
   getExample,
   getVariantExamples,
@@ -134,7 +134,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
   if (!item) throw notFound();
 
   const source = item.files?.[0]?.content || '';
-  const npmDeps = (item.dependencies || []).filter((d: string) => d !== '@webjskit/core');
+  const npmDeps = (item.dependencies || []).filter((d: string) => d !== '@webjsdev/core');
   const registryDeps = item.registryDependencies || [];
   const example = getExample(params.name);
   const api: ComponentApi | null = getComponentApi(params.name);

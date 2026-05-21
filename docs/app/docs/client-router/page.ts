@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Client Router | webjs' };
 
@@ -6,7 +6,7 @@ export default function ClientRouter() {
   return html`
     <h1>Client Router</h1>
     <p>webjs ships a nested-layout-aware client router that intercepts same-origin <code>&lt;a&gt;</code> clicks <strong>and</strong> <code>&lt;form&gt;</code> submissions, fetches the target HTML, and swaps only the deepest layout boundary the two pages don't share. Outer layout DOM is preserved: sidenav scroll, input values, <code>&lt;details&gt;</code> open state, mounted custom elements all survive navigation without authors writing anything.</p>
-    <p>The router auto-enables when <code>@webjskit/core/client-router</code> is imported (the scaffold's root layout does this for you). For 99% of apps the contract is "write standard HTML, navigation gets faster." The advanced primitives below (frames, revalidation, programmatic navigation) exist for the cases where you need to take over.</p>
+    <p>The router auto-enables when <code>@webjsdev/core/client-router</code> is imported (the scaffold's root layout does this for you). For 99% of apps the contract is "write standard HTML, navigation gets faster." The advanced primitives below (frames, revalidation, programmatic navigation) exist for the cases where you need to take over.</p>
 
     <h2>How it works (auto-magic, no opt-in)</h2>
     <ol>
@@ -65,7 +65,7 @@ export default async function PostPage({ params }) {
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
     <p>After a server action mutates data that a cached page depends on, call <code>revalidate()</code>:</p>
-    <pre>import { revalidate } from '@webjskit/core';
+    <pre>import { revalidate } from '@webjsdev/core';
 
 // Invalidate one cached URL, next visit refetches
 revalidate('/products/123');
@@ -82,7 +82,7 @@ revalidate();</pre>
     <p>Each click / submit <code>abort()</code>s any in-flight fetch from the prior one (Turbo Drive's <code>navigator.stop()</code> pattern). Rapid clicks won't produce N parallel requests competing to be applied last. A monotonic nav-token additionally short-circuits any response that arrives after a newer navigation has settled, so a slow first request that races past its abort cannot revert the newer page.</p>
 
     <h2>Programmatic navigation</h2>
-    <pre>import { navigate } from '@webjskit/core';
+    <pre>import { navigate } from '@webjsdev/core';
 
 // Push history entry
 await navigate('/about');
@@ -131,7 +131,7 @@ html[data-navigating]::after {
 });</pre>
 
     <h2>Disabling the router entirely</h2>
-    <pre>import { disableClientRouter } from '@webjskit/core/client-router';
+    <pre>import { disableClientRouter } from '@webjsdev/core/client-router';
 disableClientRouter();</pre>
 
     <h2>Next steps</h2>

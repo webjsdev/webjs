@@ -1,5 +1,5 @@
 /**
- * Tier classification for `@webjskit/ui` registry items.
+ * Tier classification for `@webjsdev/ui` registry items.
  *
  * The kit's core mental model: visual primitives are Tier-1 class-helper
  * functions applied to native HTML elements; stateful primitives that

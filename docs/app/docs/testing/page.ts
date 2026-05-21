@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Testing | webjs' };
 
@@ -26,7 +26,7 @@ test('listPosts returns an array', async () =&gt; {
 
     <h2>Renderer Tests</h2>
     <p>Test <code>renderToString</code> for SSR output:</p>
-    <pre>import { html, renderToString } from '@webjskit/core';
+    <pre>import { html, renderToString } from '@webjsdev/core';
 
 test('renders template with interpolation', async () =&gt; {
   const out = await renderToString(html\`&lt;p&gt;\${'hello'}&lt;/p&gt;\`);
@@ -40,7 +40,7 @@ test('escapes text content', async () =&gt; {
 
     <h2>Router Tests</h2>
     <p>Scaffold a temp directory, call <code>buildRouteTable</code>, and assert matches:</p>
-    <pre>import { buildRouteTable, matchPage, matchApi } from '@webjskit/server';
+    <pre>import { buildRouteTable, matchPage, matchApi } from '@webjsdev/server';
 
 test('matches dynamic routes', async () =&gt; {
   const dir = await scaffoldTempDir({
@@ -78,7 +78,7 @@ suite('Client renderer', () =&gt; {
 
     <h2>API Route Tests</h2>
     <p>Use <code>fetch</code> against a running dev/test server, or call route handlers directly:</p>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 
 test('GET /api/hello returns JSON', async () =&gt; {
   const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
@@ -92,8 +92,8 @@ test('GET /api/hello returns JSON', async () =&gt; {
     <h2>WebSocket Tests</h2>
     <pre>import { WebSocket } from 'ws';
 import { createServer } from 'node:http';
-import { buildRouteTable } from '@webjskit/server';
-import { attachWebSocket } from '@webjskit/server';
+import { buildRouteTable } from '@webjsdev/server';
+import { attachWebSocket } from '@webjsdev/server';
 
 test('WS echo works', async () =&gt; {
   const table = await buildRouteTable(dir);

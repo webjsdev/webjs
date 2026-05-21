@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Configuration | webjs' };
 
@@ -99,7 +99,7 @@ class Checkout extends WebComponent {
     <p><strong>The SSR-time gap, and the lint rule that closes it.</strong> A component's <code>render()</code> runs on the server during SSR. If a component reads <code>process.env.SECRET</code> there and interpolates it into the HTML output, the secret gets shipped to every browser even though the runtime shim does not expose it. To catch this at write time, <code>webjs check</code> ships a <code>no-server-env-in-components</code> rule that flags any <code>process.env.X</code> read in a component file when <code>X</code> is not <code>WEBJS_PUBLIC_*</code> and not <code>NODE_ENV</code>. The fix is always one of: rename to <code>WEBJS_PUBLIC_*</code> if the value is intended for the browser, or read it in a page function / server action / middleware and pass a derived value to the component as an attribute.</p>
 
     <h2>Programmatic API</h2>
-    <pre>import { startServer, createRequestHandler } from '@webjskit/server';
+    <pre>import { startServer, createRequestHandler } from '@webjsdev/server';
 
 // Option 1: Full server
 await startServer({
@@ -126,7 +126,7 @@ const resp = await app.handle(new Request('http://x/api/hello'));
       <li><strong>Routing conventions</strong>: <code>page.ts</code>, <code>layout.ts</code>, <code>route.ts</code>, <code>middleware.ts</code>, <code>error.ts</code>, <code>not-found.ts</code> are the file names. No aliases.</li>
       <li><strong>Light DOM by default</strong>: components render into light DOM so global CSS and Tailwind utilities apply directly. Opt into shadow DOM per component with <code>static shadow = true</code>. No global toggle.</li>
       <li><strong>CSRF on server actions</strong>: always on for <code>/__webjs/action/*</code> RPC. Can't disable.</li>
-      <li><strong>Import map</strong>: auto-generated. Maps <code>@webjskit/core</code> sub-paths to framework-served URLs and any bare npm imports your client code uses to vendor bundles.</li>
+      <li><strong>Import map</strong>: auto-generated. Maps <code>@webjsdev/core</code> sub-paths to framework-served URLs and any bare npm imports your client code uses to vendor bundles.</li>
     </ul>
   `;
 }

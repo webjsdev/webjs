@@ -1,5 +1,5 @@
 /**
- * Browser tests for overlay Tier-2 @webjskit/ui custom elements: dialog,
+ * Browser tests for overlay Tier-2 @webjsdev/ui custom elements: dialog,
  * popover, tooltip, dropdown-menu. Runs in real Chromium via WTR + Playwright.
  *
  * API conventions across all four (mirror what they actually implement, not

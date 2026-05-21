@@ -54,7 +54,7 @@ test('defaultsForProject: plain projects use styles/', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('detectProject: webjs via app/layout.ts (no @webjskit dep)', () => {
+test('detectProject: webjs via app/layout.ts (no @webjsdev dep)', () => {
   const d = tmp({});
   try {
     mkdirSync(join(d, 'app'), { recursive: true });
@@ -68,7 +68,7 @@ test('init: warns gracefully when lib-utils fetch fails', async () => {
   console.log = () => {};
   const out = [];
   console.warn = (...args) => out.push(args.join(' '));
-  const d = tmp({ '@webjskit/server': '*' });
+  const d = tmp({ '@webjsdev/server': '*' });
   try {
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     // components.json still gets written even if helper fetches fail

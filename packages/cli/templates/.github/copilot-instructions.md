@@ -72,8 +72,8 @@ Every code change must include:
 - Components: extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), call `Class.register('tag-name')` at the bottom of the file. The tag name is the argument to `.register()`, not a static field.
 - Server actions: *.server.ts files with one exported async function each
 - Directives: webjs ships only `unsafeHTML`, `live`, and `repeat`. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported - use plain template-literal expressions and lifecycle hooks instead.
-- Context: import { createContext, ContextProvider, ContextConsumer } from '@webjskit/core/context'
-- Task: import { Task, TaskStatus } from '@webjskit/core/task'
+- Context: import { createContext, ContextProvider, ContextConsumer } from '@webjsdev/core/context'
+- Task: import { Task, TaskStatus } from '@webjsdev/core/task'
 - Routing: file-based under app/ (page.ts, layout.ts, route.ts, middleware.ts)
 
 ## What NOT to do
@@ -81,5 +81,5 @@ Every code change must include:
 - Don't introduce build tools or bundlers in the critical path
 - Server-only code (@prisma/client, node:*, anything needing Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap in a .server.{js,ts} file; the framework rewrites that import to an RPC stub for the browser. lib/ holds both server-only infra (lib/prisma.server.ts) and browser-safe utilities (lib/utils/cn.ts with cn); apply the same rule per file.
 - Don't use inline style="..." on components (use static styles = css`...`)
-- Component state lives in signals from @webjskit/core. Module-scope signals share state across components; instance signals (created in the constructor) carry component-local state. Reactive properties (static properties + declare) are for HTML attributes and .prop=${...} hydration.
+- Component state lives in signals from @webjsdev/core. Module-scope signals share state across components; instance signals (created in the constructor) carry component-local state. Reactive properties (static properties + declare) are for HTML attributes and .prop=${...} hydration.
 - Don't skip tests or documentation updates

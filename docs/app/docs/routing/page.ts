@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Routing | webjs' };
 
@@ -66,7 +66,7 @@ export default function Routing() {
 
     <h3>Signature</h3>
     <pre>// app/blog/[slug]/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 type Ctx = {
   params: { slug: string };
@@ -108,7 +108,7 @@ export default async function BlogPost({ params, searchParams, url }: Ctx) {
 
     <h3>Root Layout</h3>
     <pre>// app/layout.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function RootLayout({ children }: { children: unknown }) {
   return html\`
@@ -120,7 +120,7 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <h3>Nested Layout</h3>
     <pre>// app/dashboard/layout.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function DashboardLayout({ children }: { children: unknown }) {
   return html\`
@@ -179,7 +179,7 @@ export default function DashboardLayout({ children }: { children: unknown }) {
         └── page.ts     # matches /users/42, /users/abc, etc.</pre>
 
     <pre>// app/users/[id]/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default async function UserPage({ params }: { params: { id: string } }) {
   const user = await db.users.find(params.id);
@@ -205,7 +205,7 @@ export default async function UserPage({ params }: { params: { id: string } }) {
         └── page.ts     # /files/a/b/c → { path: "a/b/c" }</pre>
 
     <pre>// app/files/[...path]/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function FilesPage({ params }: { params: { path: string } }) {
   const segments = params.path.split('/');
@@ -384,7 +384,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
     </p>
 
     <pre>// app/not-found.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function NotFound() {
   return html\`
@@ -410,7 +410,7 @@ export default function NotFound() {
     </p>
 
     <pre>// app/error.ts: root error boundary
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function ErrorBoundary({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : String(error);
@@ -448,7 +448,7 @@ export default function ErrorBoundary({ error }: { error: unknown }) {
     <h3>Static Metadata</h3>
     <p>Export a <code>metadata</code> object from any page or layout:</p>
     <pre>// app/about/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = {
   title: 'About | My App',
@@ -469,7 +469,7 @@ export default function About() {
       route params or data fetching:
     </p>
     <pre>// app/blog/[slug]/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await db.posts.findBySlug(params.slug);
@@ -500,7 +500,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
     <!-- ===== NAVIGATION HELPERS ===== -->
     <h2>Navigation Helpers</h2>
     <p>
-      webjs exports four navigation primitives from <code>'@webjskit/core'</code> -
+      webjs exports four navigation primitives from <code>'@webjsdev/core'</code> -
       two for the server (sentinel-throw helpers) and two for the client (programmatic
       nav + cache invalidation).
     </p>
@@ -510,7 +510,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
       Aborts rendering and returns a <code>404</code> response. If a
       <code>not-found.ts</code> exists at the app root, it is rendered.
     </p>
-    <pre>import { html, notFound } from '@webjskit/core';
+    <pre>import { html, notFound } from '@webjsdev/core';
 
 export default async function PostPage({ params }: { params: { slug: string } }) {
   const post = await db.posts.findBySlug(params.slug);
@@ -525,7 +525,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
       <code>307</code> (temporary redirect). Pass <code>308</code> for a permanent
       redirect.
     </p>
-    <pre>import { redirect } from '@webjskit/core';
+    <pre>import { redirect } from '@webjsdev/core';
 
 export default async function ProtectedPage() {
   const user = await getSession();
@@ -547,7 +547,7 @@ export default async function ProtectedPage() {
       <code>location.href = ...</code> to keep the partial-swap behavior. Pushes a
       history entry by default; pass <code>{ replace: true }</code> to replace.
     </p>
-    <pre>import { navigate } from '@webjskit/core';
+    <pre>import { navigate } from '@webjsdev/core';
 await navigate('/about');
 await navigate('/login', { replace: true });</pre>
 
@@ -560,7 +560,7 @@ await navigate('/login', { replace: true });</pre>
       methods. You only need <code>revalidate()</code> for mutations that bypass the
       form pipeline.
     </p>
-    <pre>import { revalidate } from '@webjskit/core';
+    <pre>import { revalidate } from '@webjsdev/core';
 revalidate('/products/123');  // evict one URL
 revalidate();                 // clear the whole cache</pre>
 
@@ -573,7 +573,7 @@ revalidate();                 // clear the whole cache</pre>
     </p>
 
     <pre>// app/dashboard/loading.ts  (reserved for future Suspense integration)
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function Loading() {
   return html\`

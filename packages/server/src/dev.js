@@ -392,7 +392,7 @@ async function handleCore(req, ctx) {
   //
   // ETag + ~1h max-age, NOT immutable. The URL path is un-versioned
   // (`/__webjs/core/src/render-client.js` etc.), so bumping
-  // `@webjskit/core` ships different bytes at the same URL. An
+  // `@webjsdev/core` ships different bytes at the same URL. An
   // `immutable` cache-control directive at an edge CDN (Cloudflare,
   // Vercel, Fly) keeps the prior bytes pinned for up to a year, which
   // silently bricks the next deploy: browsers load the old client
@@ -400,7 +400,7 @@ async function handleCore(req, ctx) {
   // exports added in the bump (e.g., the slot.js entry points landed
   // for 0.6.0) resolve to undefined in the cached file.
   // Regression: 2026-05-20, ui.webjs.dev tier-2 components after
-  // @webjskit/core 0.5.0 -> 0.6.0 republish.
+  // @webjsdev/core 0.5.0 -> 0.6.0 republish.
   if (path.startsWith('/__webjs/core/')) {
     const rel = path.slice('/__webjs/core/'.length);
     const abs = resolve(coreDir, rel);
@@ -895,14 +895,14 @@ function debounce(fn, ms) {
 }
 
 /**
- * Find the absolute directory of the `@webjskit/core` package, regardless of
+ * Find the absolute directory of the `@webjsdev/core` package, regardless of
  * whether we're running from the monorepo or an installed copy.
  * @param {string} appDir
  */
 function locateCoreDir(appDir) {
   try {
     const require = createRequire(join(appDir, 'package.json'));
-    const pkgPath = require.resolve('@webjskit/core/package.json');
+    const pkgPath = require.resolve('@webjsdev/core/package.json');
     return dirname(pkgPath);
   } catch {}
   const here = fileURLToPath(import.meta.url);
@@ -933,7 +933,7 @@ function locatePackageDir(appDir, pkgName) {
 }
 
 /**
- * Load esbuild. Resolved as a real dependency of `@webjskit/server`,
+ * Load esbuild. Resolved as a real dependency of `@webjsdev/server`,
  * so the bare specifier always resolves regardless of where the cli is
  * installed (global, local, workspace-linked).
  *

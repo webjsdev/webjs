@@ -10,13 +10,13 @@ const origFetch = globalThis.fetch;
 const REG = {
   button: {
     name: 'button', type: 'registry:ui',
-    dependencies: ['@webjskit/core'],
+    dependencies: ['@webjsdev/core'],
     registryDependencies: ['lib-utils'],
     files: [{ path: 'components/button.ts', type: 'registry:ui', content: 'export const Button = "btn";' }],
   },
   card: {
     name: 'card', type: 'registry:ui',
-    dependencies: ['@webjskit/core'],
+    dependencies: ['@webjsdev/core'],
     registryDependencies: ['button'],
     files: [{ path: 'components/card.ts', type: 'registry:ui', content: 'export const Card = "card";' }],
   },
@@ -26,7 +26,7 @@ const REG = {
   },
   dialog: {
     name: 'dialog', type: 'registry:ui',
-    dependencies: ['@webjskit/core', '@floating-ui/dom'],
+    dependencies: ['@webjsdev/core', '@floating-ui/dom'],
     files: [{ path: 'components/dialog.ts', type: 'registry:ui', content: 'export const Dialog = "dlg";' }],
   },
 };

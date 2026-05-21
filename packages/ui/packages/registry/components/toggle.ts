@@ -38,7 +38,7 @@
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 // cursor-pointer + select-none on BASE for both call sites: the

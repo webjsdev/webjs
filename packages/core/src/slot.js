@@ -1,5 +1,5 @@
 /**
- * Light-DOM <slot> runtime for @webjskit/core.
+ * Light-DOM <slot> runtime for @webjsdev/core.
  *
  * Provides functional parity with shadow-DOM <slot> projection inside
  * light-DOM WebComponents (those with static shadow = false). The framework

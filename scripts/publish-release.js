@@ -9,7 +9,7 @@
  * are safe.
  *
  * Tag convention: `<short_pkg>@<version>`, e.g. `core@0.6.0`. Matches
- * the npm dist-tag flavour. Title: `@webjskit/<short_pkg> <version>`.
+ * the npm dist-tag flavour. Title: `@webjsdev/<short_pkg> <version>`.
  * Body: the markdown body of the file (frontmatter stripped).
  *
  * The script shells out to `gh`. The workflow injects GH_TOKEN via
@@ -48,7 +48,7 @@ for (const line of m[1].split('\n')) {
   fm[k] = v;
 }
 // Two body transforms before publishing.
-// 1. Strip a leading h1 (e.g. `# @webjskit/core 0.6.0`) if present.
+// 1. Strip a leading h1 (e.g. `# @webjsdev/core 0.6.0`) if present.
 //    The release page renders --title above the body already, so an
 //    h1 in the body produced a duplicate header on the public page.
 //    The current backfill generator no longer emits it; this stays
@@ -57,7 +57,7 @@ for (const line of m[1].split('\n')) {
 //    release body into a user mention, rendered as a contributor
 //    avatar if the name happens to resolve and a dead profile link
 //    otherwise. Our commit bodies are full of legitimate `@theme`,
-//    `@click`, `@webjs/core`, `@webjskit/server` etc., which is how
+//    `@click`, `@webjs/core`, `@webjsdev/server` etc., which is how
 //    we landed phantom contributors named "webjs" and "theme" on
 //    every release page. Inserting a zero-width space between `@`
 //    and the trailing word char breaks the autolink regex without
@@ -67,7 +67,12 @@ const body = m[2]
   .replace(/@(?=\w)/g, '@​')
   .trim();
 
-const pkg = (fm.package || '').replace(/^@webjskit\//, '');
+// Strip either scope prefix. Pre-rescope changelog files (the
+// historical 29 published as @webjskit/*) carry the old prefix in
+// their `package:` frontmatter; new files use @webjsdev/*. The tag
+// derived below ignores the scope, so re-running --update against
+// older files keeps producing the same tag as before.
+const pkg = (fm.package || '').replace(/^@(?:webjskit|webjsdev)\//, '');
 const version = fm.version;
 if (!pkg || !version) {
   console.error(`[publish-release] ${file}: missing package or version in frontmatter`);
@@ -75,7 +80,7 @@ if (!pkg || !version) {
 }
 
 const tag = `${pkg}@${version}`;
-const title = `@webjskit/${pkg} ${version}`;
+const title = `@webjsdev/${pkg} ${version}`;
 
 function gh(args, opts = {}) {
   return spawnSync('gh', args, {

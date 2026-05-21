@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Styling | webjs' };
 
@@ -11,7 +11,7 @@ export default function Styling() {
     <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>
 
     <pre>// app/layout.ts excerpt
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export default function RootLayout({ children }: { children: unknown }) {
   return html\`
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <h2>Light-DOM components</h2>
     <p>Light DOM is the default for any <code>WebComponent</code>. Tailwind classes apply as they would on plain HTML:</p>
-    <pre>import { WebComponent, html } from '@webjskit/core';
+    <pre>import { WebComponent, html } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
   // static shadow = false is the default, no need to declare it.
@@ -108,7 +108,7 @@ class MyCard extends WebComponent {
     <h2>Opting in to shadow DOM</h2>
     <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed-proof CSS isolation:</p>
 
-    <pre>import { WebComponent, html, css } from '@webjskit/core';
+    <pre>import { WebComponent, html, css } from '@webjsdev/core';
 
 export class Card extends WebComponent {
   static shadow = true;                  // opt in
@@ -135,7 +135,7 @@ Card.register('my-card');</pre>
     <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>lib/utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
 
     <pre>// lib/utils/ui.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 /** \`label\` kicker: small caps, accent colour, above headings. */
 export function rubric(label: string) {
@@ -204,11 +204,11 @@ export default function Post({ params }) {
       </tbody>
     </table>
 
-    <p>Every page wraps its output in <code>&lt;div class="page-&lt;route&gt;"&gt;</code>. Every layout wraps in <code>&lt;div class="layout-&lt;name&gt;"&gt;</code>. Components scope via their tag name. Styles colocate with the markup as <code>const STYLES = css\`…\`</code> and interpolate via <code>&lt;style&gt;\${STYLES.text}&lt;/style&gt;</code>. <code>@webjskit/ts-plugin</code> (which bundles <code>ts-lit-plugin</code> internally) highlights the CSS and resolves class go-to-definition inside those blocks.</p>
+    <p>Every page wraps its output in <code>&lt;div class="page-&lt;route&gt;"&gt;</code>. Every layout wraps in <code>&lt;div class="layout-&lt;name&gt;"&gt;</code>. Components scope via their tag name. Styles colocate with the markup as <code>const STYLES = css\`…\`</code> and interpolate via <code>&lt;style&gt;\${STYLES.text}&lt;/style&gt;</code>. <code>@webjsdev/ts-plugin</code> (which bundles <code>ts-lit-plugin</code> internally) highlights the CSS and resolves class go-to-definition inside those blocks.</p>
 
     <h3>Page scope</h3>
     <pre>// app/dashboard/page.ts
-import { html, css } from '@webjskit/core';
+import { html, css } from '@webjsdev/core';
 
 const STYLES = css\`
   .page-dashboard {
@@ -231,7 +231,7 @@ export default function Dashboard() {
 
     <h3>Layout scope</h3>
     <pre>// app/layout.ts
-import { html, css } from '@webjskit/core';
+import { html, css } from '@webjsdev/core';
 
 const STYLES = css\`
   .layout-root {
@@ -254,7 +254,7 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <h3>Component scope</h3>
     <pre>// components/my-card.ts
-import { WebComponent, html, css } from '@webjskit/core';
+import { WebComponent, html, css } from '@webjsdev/core';
 
 const STYLES = css\`
   my-card {

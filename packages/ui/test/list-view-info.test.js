@@ -76,7 +76,7 @@ test('view: prints component source', async () => {
 
 test('info: reports project type + missing config', async () => {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-info-'));
-  writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
+  writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '*' } }));
   try {
     const output = await captureLog(() =>
       info.parseAsync(['--cwd', d], { from: 'user' }),

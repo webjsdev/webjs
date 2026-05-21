@@ -1,4 +1,4 @@
-# @webjskit/ui
+# @webjsdev/ui
 
 An **AI-first component library** for the web. Source-copied into your project , 
 you own the code.
@@ -30,19 +30,19 @@ is configured, the components render correctly. Variant names, sizes, and
 data-attribute conventions mirror shadcn's so an AI agent's existing
 knowledge of shadcn maps directly.
 
-Tier-2 elements extend `WebComponent` from `@webjskit/core`, a tiny
+Tier-2 elements extend `WebComponent` from `@webjsdev/core`, a tiny
 Lit-shaped base class with `static properties` for reactive attributes,
 `render()` returning an `` html`...` `` template, and declarative
 bindings (`@click`, `?attr`, `attr=`). Light DOM throughout, so Tailwind
 utility classes on authored children apply directly. The `webjsui add`
-CLI installs `@webjskit/core` automatically when you add a Tier-2
+CLI installs `@webjsdev/core` automatically when you add a Tier-2
 component.
 
 ## Install
 
-### Option A : Webjs users (already have `@webjskit/cli`)
+### Option A : Webjs users (already have `@webjsdev/cli`)
 
-Nothing to install. `@webjskit/ui` is a hard dependency of `@webjskit/cli`,
+Nothing to install. `@webjsdev/ui` is a hard dependency of `@webjsdev/cli`,
 so a global webjs install already includes it. Apps scaffolded with
 `webjs create` also have it pre-listed in `devDependencies`.
 
@@ -56,13 +56,13 @@ webjs ui add button card dialog
 Two npm installs, the CLI and the runtime base class, then run the CLI:
 
 ```sh
-npm install -D @webjskit/ui
-npm install @webjskit/core
+npm install -D @webjsdev/ui
+npm install @webjsdev/core
 npx webjsui init
 npx webjsui add button card dialog
 ```
 
-The `webjsui` binary is standalone, it doesn't require `@webjskit/cli`.
+The `webjsui` binary is standalone, it doesn't require `@webjsdev/cli`.
 `init` auto-detects your project type (Next / Astro / Vite / Lit / plain)
 and picks sensible defaults.
 

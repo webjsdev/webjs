@@ -1,4 +1,4 @@
-import { WebComponent, html, signal } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 
 type Result = { path: string; title: string; score: number; snippet: string };
 

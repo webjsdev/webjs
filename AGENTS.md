@@ -114,8 +114,8 @@ The whole flow is tool-agnostic: the universal pre-commit hook fires for every `
 
 **npm publishes AND GitHub Releases are auto-created from the same files.** The `.github/workflows/release.yml` workflow watches for new `changelog/**.md` files added in a push to `main`. For each new file:
 
-1. `scripts/publish-npm.js` parses the frontmatter, checks `npm view @webjskit/<pkg>@<version>`; if the version is not yet on the registry, it runs `npm publish --workspace=@webjskit/<pkg> --access=public`. Idempotent: already-published versions are skipped.
-2. `scripts/publish-release.js` composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjskit/<pkg> <version>`, body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped.
+1. `scripts/publish-npm.js` parses the frontmatter, checks `npm view @webjsdev/<pkg>@<version>`; if the version is not yet on the registry, it runs `npm publish --workspace=@webjsdev/<pkg> --access=public`. Idempotent: already-published versions are skipped.
+2. `scripts/publish-release.js` composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjsdev/<pkg> <version>`, body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped.
 
 npm runs first; if it fails (auth, network, transient registry error), the GitHub Release step is skipped and the workflow fails. After fixing, a re-run picks up where it left off: the npm-side check makes the completed package a no-op and only the missing release lands.
 
@@ -144,10 +144,10 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 
 ## Framework source: where to find it
 
-Plain JS with JSDoc lives in `node_modules/@webjskit/`. What you read is what runs.
+Plain JS with JSDoc lives in `node_modules/@webjsdev/`. What you read is what runs.
 
 ```
-node_modules/@webjskit/
+node_modules/@webjsdev/
   core/        renderer, WebComponent, directives, Task, Context, router, testing
   server/      dev + prod server, SSR, router, actions, auth, sessions, cache
   cli/         webjs binary
@@ -155,7 +155,7 @@ node_modules/@webjskit/
   ui/          component library + `webjs ui` CLI
 ```
 
-Starting points: SSR pipeline → `@webjskit/server/src/ssr.js`. Client hydration → `@webjskit/core/src/render-client.js`. Client router → `@webjskit/core/src/router-client.js`. Convention rules → `@webjskit/server/src/check.js`.
+Starting points: SSR pipeline → `@webjsdev/server/src/ssr.js`. Client hydration → `@webjsdev/core/src/render-client.js`. Client router → `@webjsdev/core/src/router-client.js`. Convention rules → `@webjsdev/server/src/check.js`.
 
 For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts.
 
@@ -206,10 +206,10 @@ Every file is a plain ES module.
 
 ---
 
-## Public API of `@webjskit/core`
+## Public API of `@webjsdev/core`
 
 ```js
-import { html, css, WebComponent, render, renderToString } from '@webjskit/core';
+import { html, css, WebComponent, render, renderToString } from '@webjsdev/core';
 ```
 
 | Export | Purpose |
@@ -231,7 +231,7 @@ import { html, css, WebComponent, render, renderToString } from '@webjskit/core'
 | `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
 | `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
 
-### Directives, from `import { … } from '@webjskit/core/directives'`
+### Directives, from `import { … } from '@webjsdev/core/directives'`
 
 lit-html parity. AI agents writing lit-shaped directive code land on familiar names.
 
@@ -253,8 +253,8 @@ For component-scoped async data with full pending/error states, `Task` is usuall
 ### Context & Task
 
 - `createContext`, `ContextProvider`, `ContextConsumer` from
-  `@webjskit/core/context` share data across deeply nested components.
-- `Task`, `TaskStatus` from `@webjskit/core/task` handle async ops inside
+  `@webjsdev/core/context` share data across deeply nested components.
+- `Task`, `TaskStatus` from `@webjsdev/core/task` handle async ops inside
   components with `pending`/`complete`/`error` states + AbortController.
   Page-level data uses async page functions instead.
 
@@ -297,7 +297,7 @@ MyThing.register('my-thing');
 ```
 
 Signals are the default state primitive. Import `signal` / `computed`
-from `@webjskit/core`, read with `signal.get()` inside `render()`, and
+from `@webjsdev/core`, read with `signal.get()` inside `render()`, and
 every WebComponent's built-in `SignalWatcher` will re-render on change.
 Module-scope signals share state across components and survive
 navigations; instance signals (created in the constructor) carry
@@ -305,7 +305,7 @@ component-local state. Updates are batched via microtask. The
 `static properties` declaration is reserved for values that ride an
 HTML attribute (declared attributes auto-trigger re-render too). For
 fine-grained DOM swap without a full re-render, use the
-`watch(signal)` directive from `@webjskit/core/directives`.
+`watch(signal)` directive from `@webjsdev/core/directives`.
 
 ### Typed props in TypeScript via the `declare` pattern
 
@@ -384,7 +384,7 @@ See `agent-docs/components.md` for prefix patterns and `agent-docs/styling.md` f
 
 ### Editor intelligence
 
-Add `@webjskit/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugin`: attribute autocomplete, type-checked attribute values, go-to-definition from `<my-counter>` to the class, no "Unknown tag" noise.
+Add `@webjsdev/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugin`: attribute autocomplete, type-checked attribute values, go-to-definition from `<my-counter>` to the class, no "Unknown tag" noise.
 
 ---
 
@@ -518,7 +518,7 @@ Tailwind CSS browser runtime + `@theme` tokens declared in the root layout. Repe
 
 ```ts
 // lib/utils/ui.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 export function rubric(label: string) {
   return html`<span class="block font-mono text-xs uppercase text-accent">● ${label}</span>`;
 }
@@ -550,7 +550,7 @@ For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. 
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field.
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
-5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjskit/core` and read via `signal.get()` inside `render()`; every WebComponent's built-in SignalWatcher tracks the reads and re-renders when any of them change. Use a module-scope signal for state shared across components (or pages); create an instance-scope signal in the constructor for state local to one component. Reactive properties (`static properties = { foo: { type: ... } }` with a sibling `declare foo: T`) are reserved for values that ride an HTML attribute, get reflected back to one, or arrive through `.prop=${value}` SSR hydration. For fine-grained DOM swap without a full re-render, use `${watch(signal)}` from `@webjskit/core/directives`.
+5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core` and read via `signal.get()` inside `render()`; every WebComponent's built-in SignalWatcher tracks the reads and re-renders when any of them change. Use a module-scope signal for state shared across components (or pages); create an instance-scope signal in the constructor for state local to one component. Reactive properties (`static properties = { foo: { type: ... } }` with a sibling `declare foo: T`) are reserved for values that ride an HTML attribute, get reflected back to one, or arrive through `.prop=${value}` SSR hydration. For fine-grained DOM swap without a full re-render, use `${watch(signal)}` from `@webjsdev/core/directives`.
 6. **Page and layout default exports must be functions.** They return a value (usually `TemplateResult`). They do not call `render()` themselves.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.
@@ -600,7 +600,7 @@ webjs test   [--server] [--browser] [--watch]         # unit + browser tests
 webjs check  [--fix]                                  # convention validator
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to prisma
-webjs ui init                                         # @webjskit/ui CLI
+webjs ui init                                         # @webjsdev/ui CLI
 webjs ui add <names...>                               # copy components into your project
 webjs ui list / view <name>                           # browse the registry
 ```
@@ -671,7 +671,7 @@ The full set lives in `agent-docs/recipes.md`. The most common patterns:
 
 ```ts
 // app/about/page.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 export default function About() {
   return html`<h1>About</h1>`;
 }
@@ -707,7 +707,7 @@ Call from a client component via normal import. The dev server rewrites to an RP
 
 ```ts
 // components/hello-world.ts
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 export class HelloWorld extends WebComponent {
   render() { return html`<p>Hello!</p>`; }
 }

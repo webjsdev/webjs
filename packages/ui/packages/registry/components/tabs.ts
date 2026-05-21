@@ -43,7 +43,7 @@
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 // --------------------------------------------------------------------------

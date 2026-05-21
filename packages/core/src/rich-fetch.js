@@ -19,7 +19,7 @@ const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
  *   set to our vendor type.
  *
  * ```js
- * import { richFetch } from '@webjskit/core';
+ * import { richFetch } from '@webjsdev/core';
  * const posts = await richFetch('/api/posts');       // Post[]; createdAt is Date
  * await richFetch('/api/posts', {                    // rich body
  *   method: 'POST',

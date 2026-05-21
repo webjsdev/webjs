@@ -80,17 +80,17 @@ test('every v1 component is declared in registry.json', { skip }, () => {
   }
 });
 
-test('every Tier-2 component imports WebComponent + html from @webjskit/core', { skip }, () => {
+test('every Tier-2 component imports WebComponent + html from @webjsdev/core', { skip }, () => {
   for (const name of TIER_2) {
     const src = readSource(name);
     // Refactor: components moved from the local Base + defineElement
     // helpers (in lib/utils.ts) to the Lit-shaped WebComponent base
-    // from @webjskit/core (with html`…` templates and declarative
+    // from @webjsdev/core (with html`…` templates and declarative
     // bindings like @click, ?attr, .prop).
     assert.match(
       src,
-      /from\s+['"]@webjskit\/core['"]/,
-      `${name}: missing import from '@webjskit/core'`,
+      /from\s+['"]@webjsdev\/core['"]/,
+      `${name}: missing import from '@webjsdev/core'`,
     );
     assert.match(src, /\bWebComponent\b/, `${name}: not extending WebComponent`);
     assert.match(src, /\bhtml`/, `${name}: not using the html\`\` template tag`);

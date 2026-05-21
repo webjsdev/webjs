@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import '../../components/theme-toggle.ts';
 import '../../components/doc-search.ts';
 
@@ -61,7 +61,7 @@ const NAV_SECTIONS = [
   {
     title: 'Component Library',
     items: [
-      { href: '/docs/ui', label: '@webjskit/ui (AI-first)' },
+      { href: '/docs/ui', label: '@webjsdev/ui (AI-first)' },
     ],
   },
   {

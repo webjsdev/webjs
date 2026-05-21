@@ -1,4 +1,4 @@
-import { WebComponent, html, css } from '@webjskit/core';
+import { WebComponent, html, css } from '@webjsdev/core';
 
 /**
  * `<slot-card-shadow>` is the shadow-DOM twin of <slot-card>. Same

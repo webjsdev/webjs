@@ -1,5 +1,5 @@
 {
-  "name": "@webjskit/ts-plugin",
+  "name": "@webjsdev/ts-plugin",
   "version": "0.4.0",
   "type": "commonjs",
   "description": "TypeScript language-service plugin for webjs - bundles ts-lit-plugin internally so users install one plugin instead of two. Adds webjs-aware go-to-definition, ts-lit-plugin diagnostic suppression for Class.register('tag') elements, attribute auto-complete from `static properties`, and attribute-value type-check against `declare` annotations.",

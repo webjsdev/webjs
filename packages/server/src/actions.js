@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { getExposed } from '@webjskit/core';
+import { getExposed } from '@webjsdev/core';
 import { walk } from './fs-walk.js';
 import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
@@ -228,7 +228,7 @@ export async function serveActionStub(idx, absFile) {
     fnNames.push('default');
   }
   const body = `// webjs: generated server-action stub for ${relative(idx.appDir, absFile)}\n` +
-    `import { stringify as __wjStringify, parse as __wjParse } from '@webjskit/core';\n` +
+    `import { stringify as __wjStringify, parse as __wjParse } from '@webjsdev/core';\n` +
     `function __csrf() {\n` +
     `  const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/);\n` +
     `  return m ? decodeURIComponent(m[1]) : '';\n` +

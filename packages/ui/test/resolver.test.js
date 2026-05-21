@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { resolveTree, collectNpmDeps } from '../src/registry/resolver.js';
 
 const FIXTURE = {
-  button: { name: 'button', type: 'registry:ui', dependencies: ['@webjskit/core'], registryDependencies: ['lib-utils'], files: [{ path: 'b.ts', type: 'registry:ui' }] },
+  button: { name: 'button', type: 'registry:ui', dependencies: ['@webjsdev/core'], registryDependencies: ['lib-utils'], files: [{ path: 'b.ts', type: 'registry:ui' }] },
   'lib-utils': { name: 'lib-utils', type: 'registry:lib', files: [{ path: 'utils.ts', type: 'registry:lib' }] },
-  dialog: { name: 'dialog', type: 'registry:ui', dependencies: ['@webjskit/core'], registryDependencies: ['button'], files: [{ path: 'd.ts', type: 'registry:ui' }] },
-  popover: { name: 'popover', type: 'registry:ui', dependencies: ['@webjskit/core', '@floating-ui/dom'], files: [{ path: 'p.ts', type: 'registry:ui' }] },
+  dialog: { name: 'dialog', type: 'registry:ui', dependencies: ['@webjsdev/core'], registryDependencies: ['button'], files: [{ path: 'd.ts', type: 'registry:ui' }] },
+  popover: { name: 'popover', type: 'registry:ui', dependencies: ['@webjsdev/core', '@floating-ui/dom'], files: [{ path: 'p.ts', type: 'registry:ui' }] },
 };
 
 const origFetch = globalThis.fetch;
@@ -42,9 +42,9 @@ test('collectNpmDeps: flattens and dedupes', async () => {
   try {
     const tree = await resolveTree(['dialog', 'popover'], 'http://test/r');
     const { dependencies, devDependencies } = collectNpmDeps(tree);
-    assert.ok(dependencies.includes('@webjskit/core'));
+    assert.ok(dependencies.includes('@webjsdev/core'));
     assert.ok(dependencies.includes('@floating-ui/dom'));
-    assert.equal(dependencies.filter((d) => d === '@webjskit/core').length, 1);
+    assert.equal(dependencies.filter((d) => d === '@webjsdev/core').length, 1);
     assert.deepEqual(devDependencies, []);
   } finally { restoreFetch(); }
 });

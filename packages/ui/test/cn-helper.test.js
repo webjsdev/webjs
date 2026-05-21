@@ -7,7 +7,7 @@
  *
  * The helper is shipped to user projects verbatim. To run it in the plain
  * Node test runner we transform the .ts source via esbuild (already a
- * transitive dep through @webjskit/server) and import the JS module.
+ * transitive dep through @webjsdev/server) and import the JS module.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

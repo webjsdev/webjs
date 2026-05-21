@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'No-Build Model | webjs' };
 
@@ -25,7 +25,7 @@ export default function NoBuild() {
         <tr><td>Is there a build step I run?</td><td>No. <code>webjs dev</code> and <code>webjs start</code> serve source directly.</td></tr>
         <tr><td>Is there a build step the framework runs?</td><td>Per-file type stripping for <code>.ts</code>, on first request, cached by mtime. That is the only transform.</td></tr>
         <tr><td>What about npm packages?</td><td>Auto-bundled per-package on first reference. See <strong>Bare specifiers</strong> below.</td></tr>
-        <tr><td>How does the browser resolve <code>import '@webjskit/core'</code>?</td><td>An <code>&lt;script type="importmap"&gt;</code> emitted in <code>&lt;head&gt;</code> maps the specifier to a URL.</td></tr>
+        <tr><td>How does the browser resolve <code>import '@webjsdev/core'</code>?</td><td>An <code>&lt;script type="importmap"&gt;</code> emitted in <code>&lt;head&gt;</code> maps the specifier to a URL.</td></tr>
         <tr><td>Won't N small files be slow?</td><td>HTTP/2 multiplex makes per-file serving competitive with bundling. SSR-time modulepreload hints make it parallel.</td></tr>
         <tr><td>What does this gain me?</td><td>What you read is what runs. Granular cache invalidation. Zero build-config files. Edit-and-refresh dev loop.</td></tr>
       </tbody>
@@ -46,14 +46,14 @@ export default function NoBuild() {
     <pre>&lt;script type="importmap"&gt;
 {
   "imports": {
-    "@webjskit/core":               "/__webjs/core/index.js",
-    "@webjskit/core/":              "/__webjs/core/src/",
-    "@webjskit/core/client-router": "/__webjs/core/src/router-client.js",
-    "@webjskit/core/directives":    "/__webjs/core/src/directives.js",
-    "@webjskit/core/context":       "/__webjs/core/src/context.js",
-    "@webjskit/core/task":          "/__webjs/core/src/task.js",
-    "@webjskit/core/testing":       "/__webjs/core/src/testing.js",
-    "@webjskit/core/lazy-loader":   "/__webjs/core/src/lazy-loader.js",
+    "@webjsdev/core":               "/__webjs/core/index.js",
+    "@webjsdev/core/":              "/__webjs/core/src/",
+    "@webjsdev/core/client-router": "/__webjs/core/src/router-client.js",
+    "@webjsdev/core/directives":    "/__webjs/core/src/directives.js",
+    "@webjsdev/core/context":       "/__webjs/core/src/context.js",
+    "@webjsdev/core/task":          "/__webjs/core/src/task.js",
+    "@webjsdev/core/testing":       "/__webjs/core/src/testing.js",
+    "@webjsdev/core/lazy-loader":   "/__webjs/core/src/lazy-loader.js",
     "dayjs":                        "/__webjs/vendor/dayjs.js",
     "zod":                          "/__webjs/vendor/zod.js"
   }
@@ -96,7 +96,7 @@ Content-Type: text/html
     <h2>Why auto-bundle vendor deps in a no-build framework?</h2>
     <p>This is an architectural decision worth calling out. A stricter "browser-native ESM only" interpretation of no-build would refuse to run any bundler ever, including for npm packages, and would push importmap management onto the user. Rails 7+ with <code>importmap-rails</code> is the canonical example. Every time you install a dependency, you run <code>bin/importmap pin &lt;pkg&gt;</code>, pick a CDN provider, and hope the package's published artifact resolves cleanly in the browser. In practice you also debug mixed CJS/ESM bundles, <code>require()</code> calls in code that claims to be ESM, missing file extensions, and transitive deps that aren't ESM at all. That manual loop is a real DX tax, and it shows up the moment any team tries to scale the model.</p>
     <p>webjs makes the deliberate trade of running esbuild internally on the user's behalf. The bundler is a private implementation detail. You never invoke it, never see its config, never run it as a deploy-time step. Each vendor bundle is produced lazily on first request and cached for the process lifetime, then served with <code>immutable</code> cache headers so the browser never re-downloads it. <code>import dayjs from 'dayjs'</code> works the moment you <code>npm install dayjs</code>, with no other action required.</p>
-    <p>The framework itself stays no-build in the sense that matters most. Source equals runtime for <code>@webjskit/*</code> packages and for your own app code, no compile step before deploy, no output directory, no bundle hashes to invalidate. We use a known-good bundler at one well-defined boundary (third-party npm) so the no-build promise extends to the parts of the ecosystem that aren't ready to be served as-is.</p>
+    <p>The framework itself stays no-build in the sense that matters most. Source equals runtime for <code>@webjsdev/*</code> packages and for your own app code, no compile step before deploy, no output directory, no bundle hashes to invalidate. We use a known-good bundler at one well-defined boundary (third-party npm) so the no-build promise extends to the parts of the ecosystem that aren't ready to be served as-is.</p>
 
     <h2>Browser-side env vars without a build step</h2>
     <p>Next.js exposes <code>NEXT_PUBLIC_*</code> to the browser via build-time static substitution. webjs has no build step, so it can't substitute literals into source. Instead, the SSR pipeline emits an inline <code>&lt;script&gt;</code> in the document head, before the importmap and any module code:</p>

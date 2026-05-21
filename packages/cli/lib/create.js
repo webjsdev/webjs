@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = resolve(__dirname, '..', 'templates');
 
-// Root of the @webjskit/ui registry workspace. We read component sources
+// Root of the @webjsdev/ui registry workspace. We read component sources
 // directly from disk at create time so the scaffolded app boots ready for
 // `webjs ui add` without an HTTP round-trip during scaffolding.
 //
@@ -33,7 +33,7 @@ const UI_REGISTRY_ROOT = resolve(
 );
 
 /**
- * Read a single @webjskit/ui registry component, rewrite its relative import
+ * Read a single @webjsdev/ui registry component, rewrite its relative import
  * of `../lib/utils.ts` so it resolves correctly when written to
  * `components/ui/<name>.ts` in the scaffolded app. The scaffold puts cn()
  * at `lib/utils/cn.ts` (folder-grouped with other browser-safe helpers).
@@ -53,7 +53,7 @@ async function readUiComponent(name) {
 }
 
 /**
- * Copy a list of @webjskit/ui registry components into the scaffolded app
+ * Copy a list of @webjsdev/ui registry components into the scaffolded app
  * under `components/ui/`. Silently skips any name that isn't in the registry.
  *
  * @param {string} appDir  destination app root
@@ -195,9 +195,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     dependencies: {
       '@prisma/client': '^6.0.0',
-      '@webjskit/cli': 'latest',
-      '@webjskit/core': 'latest',
-      '@webjskit/server': 'latest',
+      '@webjsdev/cli': 'latest',
+      '@webjsdev/core': 'latest',
+      '@webjsdev/server': 'latest',
     },
     devDependencies: {
       prisma: '^6.0.0',
@@ -205,13 +205,13 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
       // tsserver plugin for editor intelligence inside html`` templates.
-      // @webjskit/ts-plugin bundles ts-lit-plugin internally, so just one
+      // @webjsdev/ts-plugin bundles ts-lit-plugin internally, so just one
       // plugin entry is needed in tsconfig (see below).
-      '@webjskit/ts-plugin': 'latest',
+      '@webjsdev/ts-plugin': 'latest',
       // AI-first component library CLI, preinstalled so `webjs ui add button`
       // works immediately after scaffold. Users can remove if they prefer
       // to add it later.
-      '@webjskit/ui': 'latest',
+      '@webjsdev/ui': 'latest',
     },
   }, null, 2) + '\n');
 
@@ -236,7 +236,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // SYNTAX errors. Use a `const` object + union for enum-shaped
       // values; write fields + constructor assignments explicitly.
       erasableSyntaxOnly: true,
-      // @webjskit/ts-plugin gives the editor:
+      // @webjsdev/ts-plugin gives the editor:
       //   • type-check + diagnostics inside html`` templates (via the
       //     ts-lit-plugin it bundles internally)
       //   • webjs-aware go-to-definition on custom-element tags
@@ -246,7 +246,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       //   • attribute-value type-check against `declare` annotations
       // Editor-only. The framework runs without it.
       plugins: [
-        { name: '@webjskit/ts-plugin' },
+        { name: '@webjsdev/ts-plugin' },
       ],
     },
   }, null, 2) + '\n');
@@ -477,7 +477,7 @@ export type ActionResult<T> =
       await cp(uiSrc, join(utilsDir, 'ui.ts'));
     }
 
-    // Pre-initialise @webjskit/ui so the scaffold boots ready for
+    // Pre-initialise @webjsdev/ui so the scaffold boots ready for
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
     // app/globals.css (the shadcn theme).
     await writeUiBootstrap(appDir);
@@ -502,8 +502,8 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html } from '@webjskit/core';
-import '@webjskit/core/client-router';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html } from '@webjsdev/core';
+import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
@@ -659,7 +659,7 @@ ${SHADCN_THEME}
 }
 `);
 
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjskit/core';
+  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
@@ -737,7 +737,7 @@ export default function Home() {
 
   // --- Theme toggle component ---
 
-  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjskit/core';
+  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -830,7 +830,7 @@ ThemeToggle.register('theme-toggle');
     app/layout.ts, page.ts, login/, signup/
     app/dashboard/{page,settings,middleware}.ts  ← protected
     app/api/auth/[...path]/route.ts      ← auth API
-    app/globals.css                      ← @webjskit/ui theme tokens
+    app/globals.css                      ← @webjsdev/ui theme tokens
     components.json                      ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input,
                     dialog,form,field,switch,checkbox}.ts
@@ -844,7 +844,7 @@ ThemeToggle.register('theme-toggle');
   } else {
     console.log(`  ${name}/
     app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
-    app/globals.css              ← @webjskit/ui theme tokens
+    app/globals.css              ← @webjsdev/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
@@ -856,7 +856,7 @@ ThemeToggle.register('theme-toggle');
 `);
   }
   // Post-scaffold guidance. The full-stack and saas templates ship with
-  // @webjskit/ui already initialised (components.json, lib/utils/cn.ts, the
+  // @webjsdev/ui already initialised (components.json, lib/utils/cn.ts, the
   // standard kit under components/ui/), so the user only runs `webjs dev`.
   // The api template has no UI; we only mention `webjs ui` in case the
   // user later adds one.

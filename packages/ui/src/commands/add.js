@@ -43,8 +43,8 @@ export const add = new Command()
 
     if (opts.deps !== false) {
       const { dependencies, devDependencies } = collectNpmDeps(tree);
-      // @webjskit/core is always a runtime dep
-      if (!dependencies.includes('@webjskit/core')) dependencies.push('@webjskit/core');
+      // @webjsdev/core is always a runtime dep
+      if (!dependencies.includes('@webjsdev/core')) dependencies.push('@webjsdev/core');
 
       if (dependencies.length) await installDeps(cwd, dependencies, false);
       if (devDependencies.length) await installDeps(cwd, devDependencies, true);
