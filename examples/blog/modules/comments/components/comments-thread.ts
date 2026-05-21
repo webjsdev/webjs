@@ -1,4 +1,4 @@
-import { WebComponent, html, repeat, connectWS } from '@webjskit/core';
+import { WebComponent, html, repeat, connectWS, signal } from '@webjskit/core';
 import '../../../components/muted-text.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';
@@ -13,16 +13,13 @@ export class CommentsThread extends WebComponent {
     postId:   { type: String },
     initial:  { type: Object },
     signedIn: { type: Boolean },
-    comments: { type: Object, state: true },
-    busy:     { type: Boolean, state: true },
-    error:    { type: String, state: true },
   };
   declare postId: string;
   declare initial: CommentFormatted[];
   declare signedIn: boolean;
-  declare comments: CommentFormatted[];
-  declare busy: boolean;
-  declare error: string | null;
+  comments = signal<CommentFormatted[]>([]);
+  busy = signal(false);
+  error = signal<string | null>(null);
   _conn: ReturnType<typeof connectWS> | null = null;
 
   constructor() {
@@ -30,18 +27,16 @@ export class CommentsThread extends WebComponent {
     this.postId = '';
     this.initial = [];
     this.signedIn = false;
-    this.comments = [];
-    this.busy = false;
-    this.error = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    this.comments = Array.isArray(this.initial) ? this.initial : [];
+    this.comments.set(Array.isArray(this.initial) ? this.initial : []);
     this._conn = connectWS(`/api/comments/${this.postId}`, {
       onMessage: (msg: CommentFormatted) => {
-        if (this.comments.some((c) => c.id === msg.id)) return;
-        this.comments = [...this.comments, msg];
+        const cur = this.comments.get();
+        if (cur.some((c) => c.id === msg.id)) return;
+        this.comments.set([...cur, msg]);
       },
     });
   }
@@ -53,8 +48,8 @@ export class CommentsThread extends WebComponent {
     const input = form.querySelector('input') as HTMLInputElement;
     const body = input.value.trim();
     if (!body) return;
-    this.busy = true;
-    this.error = null;
+    this.busy.set(true);
+    this.error.set(null);
     try {
       const r = await fetch(`/api/comments/${this.postId}`, {
         method: 'POST',
@@ -66,20 +61,23 @@ export class CommentsThread extends WebComponent {
         throw new Error(j.error || `${r.status}`);
       }
       const created: CommentFormatted = await r.json();
-      if (!this.comments.some((c) => c.id === created.id)) {
-        this.comments = [...this.comments, created];
+      const cur = this.comments.get();
+      if (!cur.some((c) => c.id === created.id)) {
+        this.comments.set([...cur, created]);
       }
-      this.busy = false;
+      this.busy.set(false);
       input.value = '';
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.busy = false;
-      this.error = msg;
+      this.busy.set(false);
+      this.error.set(msg);
     }
   }
 
   render() {
-    const { comments, busy, error } = this;
+    const comments = this.comments.get();
+    const busy = this.busy.get();
+    const error = this.error.get();
     return html`
       ${comments.length === 0
         ? html`<div class="p-6 text-center text-fg-subtle font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`

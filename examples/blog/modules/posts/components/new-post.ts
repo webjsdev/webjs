@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjskit/core';
 import { buttonClass } from '../../../components/ui/button.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { labelClass } from '../../../components/ui/label.ts';
@@ -10,18 +10,8 @@ import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.
 import { createPost } from '../actions/create-post.server.ts';
 
 export class NewPost extends WebComponent {
-  static properties = {
-    busy: { type: Boolean, state: true },
-    error: { type: String, state: true },
-  };
-  declare busy: boolean;
-  declare error: string | null;
-
-  constructor() {
-    super();
-    this.busy = false;
-    this.error = null;
-  }
+  busy = signal(false);
+  error = signal<string | null>(null);
 
   firstUpdated() {
     this.querySelector<HTMLInputElement>('input[name="title"]')?.focus();
@@ -37,29 +27,30 @@ export class NewPost extends WebComponent {
     const title = String(data.get('title') || '');
     const body = String(data.get('body') || '');
     if (!title || !body) {
-      this.error = 'Title and body are required';
+      this.error.set('Title and body are required');
       return;
     }
-    this.busy = true;
-    this.error = null;
+    this.busy.set(true);
+    this.error.set(null);
     try {
       const result = await createPost({ title, body });
       if (!result.success) {
-        this.busy = false;
-        this.error = result.error;
+        this.busy.set(false);
+        this.error.set(result.error);
         return;
       }
       // TS knows result.data is PostFormatted here.
       location.href = `/blog/${result.data.slug}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.busy = false;
-      this.error = msg;
+      this.busy.set(false);
+      this.error.set(msg);
     }
   }
 
   render() {
-    const { busy, error } = this;
+    const busy = this.busy.get();
+    const error = this.error.get();
     return html`
       <div class=${cardClass()}>
         <div class=${cardContentClass()}>
