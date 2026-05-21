@@ -37,7 +37,7 @@ fi
 
 STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- 'packages/*/package.json' 2>/dev/null \
   | awk '
-      /^diff --git/ { match($0, /packages\/[^\/]+\/package.json/); pkg = substr($0, RSTART+9, RLENGTH-21); next }
+      /^diff --git/ { match($0, /packages\/[^\/]+\/package.json/); pkg = substr($0, RSTART+9, RLENGTH-22); next }
       pkg && /^\+\s*"version":\s*"[^"]+"/ {
         match($0, /"[0-9]+\.[0-9]+\.[0-9]+[^"]*"/); v = substr($0, RSTART+1, RLENGTH-2);
         print pkg "@" v
