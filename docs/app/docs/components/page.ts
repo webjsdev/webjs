@@ -163,6 +163,28 @@ this.count.set(1);
 this.label = 'hello';
 // render() is called once with the new count and label.</pre>
 
+    <h3>Fine-grained binding with <code>watch()</code></h3>
+    <p>Reading <code>signal.get()</code> inside <code>render()</code> subscribes the WHOLE component to that signal: any change re-runs <code>render()</code>. When a single template hole depends on a single signal value and the rest of the template doesn't, the <code>watch(signal)</code> directive from <code>@webjskit/core/directives</code> is a cheaper alternative: the directive sets up its own per-hole subscription, and <em>only</em> the bound text node (or attribute value) updates when the signal fires. The host's <code>render()</code> does not re-run, which also means <code>shouldUpdate</code> / <code>willUpdate</code> / <code>updated</code> are bypassed for that change.</p>
+
+    <pre>import { html, signal } from '@webjskit/core';
+import { watch } from '@webjskit/core/directives';
+
+const count = signal(0);
+
+class Counter extends WebComponent {
+  render() {
+    // The host subscribes to nothing; only this hole updates.
+    return html\`
+      &lt;button @click=\${() =&gt; count.set(count.get() + 1)}&gt;
+        \${watch(count)}
+      &lt;/button&gt;
+    \`;
+  }
+}
+Counter.register('my-counter');</pre>
+
+    <p>SSR inlines the current value once; subscription is a client-only concern. Pick <code>watch()</code> when the binding is a scalar (text node, attribute value) tied to one signal and the surrounding template is expensive or static. Pick <code>signal.get()</code> when the render branches on the value, derives several things from it, or reads multiple signals together.</p>
+
     <h2>Styles</h2>
     <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
 
