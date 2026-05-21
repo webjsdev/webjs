@@ -24,6 +24,11 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..');
 
 const REGISTRY = 'https://npm.pkg.github.com';
 
@@ -69,12 +74,34 @@ if (!pkgName.startsWith('@webjsdev/')) {
   process.exit(0);
 }
 
-// Make sure the .npmrc routes @webjsdev to GitHub Packages. The
-// workflow's setup-node step targets registry.npmjs.org by default
-// for the unscoped lookup, so we install our own scope override.
-const npmrcPath = `${homedir()}/.npmrc`;
+// `npm publish --workspace=<name>` always publishes whatever
+// version is in that workspace's package.json HEAD, not the
+// version named in the changelog file. So if we're asked to
+// publish a historical version that does not match the current
+// workspace, skip; we cannot recreate historical workspace state
+// from the current source tree. The bootstrap pass over the whole
+// changelog tree relies on this skip to publish only the 5 current
+// versions (one per package).
+const shortPkg = pkgName.replace(/^@webjsdev\//, '');
+const workspacePkgJson = resolve(REPO_ROOT, 'packages', shortPkg, 'package.json');
+if (!existsSync(workspacePkgJson)) {
+  console.error(`[publish-github-packages] cannot find ${workspacePkgJson} for ${pkgName}`);
+  process.exit(2);
+}
+const workspaceVersion = JSON.parse(readFileSync(workspacePkgJson, 'utf8')).version;
+if (workspaceVersion !== version) {
+  console.log(`[publish-github-packages] skip ${pkgName}@${version}: workspace HEAD is ${workspaceVersion}; cannot recreate historical version from current source`);
+  process.exit(0);
+}
+
+// Configure npm to route @webjsdev to GitHub Packages. The
+// workflow's setup-node step sets NPM_CONFIG_USERCONFIG to a temp
+// .npmrc with the npmjs.org auth; we write our scope+auth lines to
+// the SAME file so `npm publish` picks them up. Falling back to
+// ~/.npmrc lets the script also work locally when run by hand.
+const npmrcPath = process.env.NPM_CONFIG_USERCONFIG || `${homedir()}/.npmrc`;
 const existing = existsSync(npmrcPath) ? readFileSync(npmrcPath, 'utf8') : '';
-const scopeLine = '@webjsdev:registry=https://npm.pkg.github.com';
+const scopeLine = '@webjsdev:registry=https://npm.pkg.github.com/';
 const authLine = '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}';
 const lines = existing.split('\n').filter(Boolean);
 if (!lines.includes(scopeLine)) lines.push(scopeLine);
