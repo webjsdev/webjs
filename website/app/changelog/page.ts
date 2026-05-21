@@ -72,8 +72,14 @@ async function loadEntries(): Promise<Entry[]> {
       });
     }
   }
-  // Sort: most recent first; tie-break by package name.
-  entries.sort((a, b) => (b.date.localeCompare(a.date)) || a.shortPkg.localeCompare(b.shortPkg));
+  // Sort by full commit timestamp DESC. No alphabetical or version
+  // tiebreaker: entries that share an exact timestamp (e.g. multiple
+  // packages bumped in the same commit) keep their stable readdir
+  // order, which is typically alphabetical on every common
+  // filesystem. Matching policy on the GitHub Releases page (the
+  // workflow publishes oldest-first so GH's created_at DESC sort
+  // ends up with the same order).
+  entries.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   return entries;
 }
 
@@ -184,7 +190,7 @@ export default async function Changelog() {
               <header class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
                 ${pkgBadge(e.shortPkg)}
                 <h2 class="font-mono text-[18px] font-semibold text-fg tracking-tight m-0">v${e.version}</h2>
-                <time class="font-mono text-[11.5px] text-fg-subtle tracking-tight">${e.date}</time>
+                <time class="font-mono text-[11.5px] text-fg-subtle tracking-tight">${e.date.slice(0, 10)}</time>
                 <span class="text-[11.5px] text-fg-subtle">${e.commitCount} change${e.commitCount === 1 ? '' : 's'}</span>
               </header>
               <div>${unsafeHTML(renderBody(e.body))}</div>

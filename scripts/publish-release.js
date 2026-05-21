@@ -100,9 +100,19 @@ if (exists.status === 0) {
 // Create the release. Body is piped via stdin so we don't need a
 // temp file and we don't run into shell-quoting issues with
 // multi-line markdown.
+//
+// Optional --target <sha>: anchors the release tag to a specific
+// commit (e.g. the version-bump commit recovered from git history).
+// Without it, gh tags HEAD-of-default-branch, which puts every tag
+// at the same commit and makes GitHub's web UI fall back to
+// alphabetical sort when releases are otherwise indistinguishable.
+const targetIdx = process.argv.indexOf('--target');
+const target = targetIdx > 0 ? process.argv[targetIdx + 1] : null;
+const args = ['release', 'create', tag, '--title', title, '--notes-file', '-'];
+if (target) args.push('--target', target);
 const create = spawnSync(
   'gh',
-  ['release', 'create', tag, '--title', title, '--notes-file', '-'],
+  args,
   { input: body, encoding: 'utf8', stdio: ['pipe', 'inherit', 'inherit'] },
 );
 if (create.status !== 0) {
