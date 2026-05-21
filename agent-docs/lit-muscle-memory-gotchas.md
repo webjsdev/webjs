@@ -29,13 +29,13 @@ therefore needs JS shipped and run) at the component boundary.
 In webjs, the granularity is different. Every component is server
 rendered. JavaScript is requested **by the specific interactive holes
 you write in the template**. A `@click=${...}` binding requests JS for
-click handling. A `setState({ ... })` call requests JS for reactive
-updates. A property binding `.data=${richObject}` requests JS for
-property hydration. A controller like `Task` requests JS for that
-async behavior. A plain `<a href>` does not request JS. A
-`<form action="...">` does not request JS. A purely display-time
-component (no event listeners, no `setState`, no property bindings to
-hydrate) does not request JS.
+click handling. A `signal.set(...)` call (instance or module-scope)
+requests JS for reactive updates. A property binding
+`.data=${richObject}` requests JS for property hydration. A controller
+like `Task` requests JS for that async behavior. A plain `<a href>`
+does not request JS. A `<form action="...">` does not request JS. A
+purely display-time component (no event listeners, no signal
+mutations, no property bindings to hydrate) does not request JS.
 
 A single component can mix both. A product card that shows
 server-rendered title, price, image, and a "View" link
@@ -84,8 +84,8 @@ The gotchas below are all violations of that rule.
 
 ### 1. Fetching data in `connectedCallback` or `firstUpdated`
 
-The lit pattern is to subscribe or fetch on connect, then `setState`
-when the data arrives. In webjs the first paint is empty because
+The lit pattern is to subscribe or fetch on connect, then update
+state when the data arrives. In webjs the first paint is empty because
 neither hook runs server-side. Content pops in after hydration, often
 with a layout shift.
 

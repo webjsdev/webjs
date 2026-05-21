@@ -29,7 +29,7 @@ line, and only in TypeScript files.
 
 ## Lifecycle hooks (lit-aligned)
 
-`WebComponent` ships lit's full reactive lifecycle. Every update cycle runs these hooks in order; each receives a `changedProperties` Map (`Map<string, oldValue>`, where keys are property names or `'state'` for setState patches).
+`WebComponent` ships lit's full reactive lifecycle. Every update cycle runs these hooks in order; each receives a `changedProperties` Map (`Map<string, oldValue>`, where keys are reactive-property names).
 
 | # | Hook | When |
 |---|---|---|
@@ -46,7 +46,7 @@ Assignments during `willUpdate` fold into the current cycle (no new render sched
 
 All hooks are **client-only**. The SSR pipeline calls `instance.render()` directly and does not invoke `shouldUpdate` / `willUpdate` / `update` / `updated` / `firstUpdated` / `connectedCallback` / `disconnectedCallback`. Set SSR-meaningful defaults in the constructor; use lifecycle hooks for browser-only work.
 
-`setState(patch)` still works and routes through the same machinery: the `changedProperties` Map gets a `'state'` entry whose old value is the previous state bag.
+For component-local state, create an instance signal in the constructor and call `signal.set(...)` to mutate. The built-in `SignalWatcher` re-runs `render()` on the next microtask; the same lifecycle hooks fire as for reactive-property changes.
 
 See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
 
@@ -326,6 +326,6 @@ slot's content in place.
 
 | Method | Purpose |
 |---|---|
-| `this.setState({...})` | Batched state update via microtask |
+| `signal.set(v)` (instance signal) | Component-local reactive state; auto-tracked by SignalWatcher |
 | `this.requestUpdate()` | Manually schedule a re-render (controllers) |
 | `this.shadowRoot.querySelector(sel)` | Query shadow DOM (native API) |
