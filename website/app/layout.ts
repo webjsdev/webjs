@@ -74,6 +74,26 @@ export default function RootLayout({ children }: { children: unknown }) {
           }
         } catch (_) {}
       })();
+      // Mobile menu auto-close: close on link click (inside the panel)
+      // AND on any click outside the menu. <details> stays open by
+      // default until you click summary again, which feels wrong on
+      // a phone, where a tap anywhere else should dismiss it.
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        // 1) Click on a link inside the menu, close the menu.
+        var a = t.closest('.mobile-menu a');
+        if (a) {
+          var d = a.closest('details');
+          if (d) d.removeAttribute('open');
+          return;
+        }
+        // 2) Click anywhere OUTSIDE any open .mobile-menu, close it.
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) {
+          if (!open[i].contains(t)) open[i].removeAttribute('open');
+        }
+      });
     </script>
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
@@ -201,6 +221,15 @@ export default function RootLayout({ children }: { children: unknown }) {
         margin-right: 8px;
         vertical-align: middle;
       }
+
+      /* Mobile menu: native <details> + <summary> for progressive
+         enhancement. Strip the default disclosure triangle and swap
+         the hamburger / close icons on toggle. */
+      .mobile-menu > summary { list-style: none; }
+      .mobile-menu > summary::-webkit-details-marker { display: none; }
+      .mobile-menu > summary .close-icon { display: none; }
+      .mobile-menu[open] > summary .open-icon { display: none; }
+      .mobile-menu[open] > summary .close-icon { display: inline-block; }
     </style>
 
     <div class="announce">
@@ -213,18 +242,45 @@ export default function RootLayout({ children }: { children: unknown }) {
       </a>
     </div>
 
-    <header class="flex items-center justify-between max-w-[960px] mx-auto px-6 py-4">
+    <header class="flex items-center justify-between gap-4 max-w-[960px] mx-auto px-4 sm:px-6 py-4">
       <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
         <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
         webjs
       </a>
-      <nav class="flex items-center gap-4">
+
+      <!-- Inline nav, md and up -->
+      <nav class="hidden md:flex items-center gap-4">
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${UI_URL} target="_blank">UI</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/changelog">Changelog</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${BLOG_URL} target="_blank">Blog Demo</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
         <theme-toggle></theme-toggle>
       </nav>
+
+      <!-- Mobile cluster: hamburger first (LEFT), theme-toggle second
+           (RIGHT), matching the convention across docs, blog, and ui.
+           Native <details>/<summary> for progressive enhancement. -->
+      <div class="flex items-center gap-2 md:hidden">
+        <details class="mobile-menu relative">
+          <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
+            <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
+            </svg>
+            <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+          </summary>
+          <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${UI_URL} target="_blank">UI</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/changelog">Changelog</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${BLOG_URL} target="_blank">Blog Demo</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+          </nav>
+        </details>
+        <theme-toggle></theme-toggle>
+      </div>
     </header>
 
     ${children}

@@ -97,6 +97,19 @@ When editing the framework monorepo (this repo, not a scaffolded app): **`packag
 
 See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, reference codebases, and per-feature update checklists.
 
+### Changelog: per-package, per-version, auto-generated
+
+webjs ships per-package per-version changelogs under `changelog/<pkg>/<version>.md`. The model: **a version bump is the trigger**. When any commit on `main` changes the `version` field in `packages/<pkg>/package.json`, the scripts/backfill-changelog.js generator emits a new `changelog/<pkg>/<version>.md` summarising every conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that landed in that package since the prior bump. The website renders the union of all packages' files at `/changelog`.
+
+**Mandatory rule for AI agents working in this monorepo:**
+
+1. When you bump a `packages/<pkg>/package.json` `version`, you MUST run `node scripts/backfill-changelog.js` in the same commit (or the immediately following one), so the new `changelog/<pkg>/<version>.md` lands together with the bump.
+2. Review the generated file. The script's body excerpts are the first lines of each commit message; if any are unclear, **edit the file in place** to add migration notes (especially for `breaking` entries) before committing.
+3. Subsequent re-runs are safe: the script never overwrites an existing entry, so your hand-edits survive.
+4. Never edit `changelog/<pkg>/<version>.md` for a version that has already been published. Edit `changelog/<pkg>/<next>.md` instead.
+
+The `.hooks/pre-commit` git hook (and the Claude Code `PreToolUse` hook `.claude/hooks/changelog-nudge.sh`) catches version bumps that lack a matching changelog file and refuses the commit until both land together.
+
 ---
 
 ## What webjs is
