@@ -7,15 +7,35 @@ export default function Docs() {
     <article class="prose max-w-3xl">
       <h1>Getting started</h1>
       <p>
-        Webjs UI is an <strong>AI-first component library</strong>. Two tiers: pure class-helper
-        functions (<code>buttonClass()</code>, <code>cardClass()</code>, <code>inputClass()</code>)
-        you spread onto raw native elements (including <code>&lt;dialog&gt;</code>,
-        <code>&lt;details&gt;</code>, and the <code>popover</code> attribute), plus a small set of
-        stateful custom elements (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>,
-        <code>&lt;ui-dropdown-menu&gt;</code>) that own the behavior native HTML still lacks. You install the CLI once and add components
-        to your project as you need them, the source is copied into your repo, so you own it and
-        can edit it freely. Variant names and data-attribute conventions mirror shadcn so existing
-        shadcn knowledge maps directly.
+        Webjs UI is an <strong>AI-first component library</strong> with two tiers:
+      </p>
+      <p>
+        <strong>Tier 1</strong> is pure class-helper functions (<code>buttonClass()</code>,
+        <code>cardClass()</code>, <code>inputClass()</code>) that you apply to native HTML.
+        Most tier-1 helpers target a plain element (<code>&lt;button&gt;</code>,
+        <code>&lt;input&gt;</code>, <code>&lt;label&gt;</code>, <code>&lt;table&gt;</code>);
+        a few wrap a platform primitive: <code>accordion</code> and <code>collapsible</code>
+        on <code>&lt;details&gt;</code>, <code>progress</code> on
+        <code>&lt;progress value max&gt;</code>, <code>popover</code> on the
+        <code>popover</code> attribute.
+      </p>
+      <p>
+        <strong>Tier 2</strong> is a small set of stateful custom elements for behavior native
+        HTML still lacks. Today: <code>&lt;ui-dialog&gt;</code>,
+        <code>&lt;ui-alert-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>,
+        <code>&lt;ui-dropdown-menu&gt;</code>, <code>&lt;ui-tooltip&gt;</code>,
+        <code>&lt;ui-hover-card&gt;</code>, <code>&lt;ui-toggle-group&gt;</code>,
+        <code>&lt;ui-sonner&gt;</code>. Each wraps the closest platform primitive it can
+        (<code>&lt;ui-dialog&gt;</code> drives a native <code>&lt;dialog&gt;</code>;
+        <code>&lt;ui-tooltip&gt;</code> and <code>&lt;ui-hover-card&gt;</code> use
+        <code>popover="manual"</code>) and adds the open-state tracking, focus trap, or
+        toast queue on top.
+      </p>
+      <p>
+        You install the CLI once and add components to your project as you need them.
+        Component source is copied into your repo, so you own it and can edit it freely.
+        Variant names and <code>data-state</code> / <code>data-orientation</code> conventions
+        mirror shadcn so existing shadcn knowledge maps directly.
       </p>
       <h2>For webjs users</h2>
       <p>
@@ -48,20 +68,36 @@ npx webjsui add button card dialog</code></pre>
         Components are dependency-free, positioning, focus trap, toast queue are all hand-rolled.
       </p>
       <h2>Usage</h2>
-      <pre><code class="block bg-muted p-4 rounded">&lt;ui-card&gt;
-  &lt;ui-card-header&gt;
-    &lt;ui-card-title&gt;Hello&lt;/ui-card-title&gt;
-    &lt;ui-card-description&gt;A web component card.&lt;/ui-card-description&gt;
-  &lt;/ui-card-header&gt;
-  &lt;ui-card-content&gt;
-    &lt;ui-button variant="default"&gt;Click me&lt;/ui-button&gt;
-  &lt;/ui-card-content&gt;
-&lt;/ui-card&gt;</code></pre>
+      <p>Tier 1, apply helpers to native elements:</p>
+      <pre><code class="block bg-muted p-4 rounded">import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, buttonClass }
+  from './components/ui';
+
+&lt;div class={cardClass()}&gt;
+  &lt;div class={cardHeaderClass()}&gt;
+    &lt;h3 class={cardTitleClass()}&gt;Hello&lt;/h3&gt;
+    &lt;p class={cardDescriptionClass()}&gt;A card from a class helper.&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class={cardContentClass()}&gt;
+    &lt;button class={buttonClass({ variant: 'default' })}&gt;Click me&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+      <p>Tier 2, use the custom element where state matters:</p>
+      <pre><code class="block bg-muted p-4 rounded">&lt;ui-dialog&gt;
+  &lt;ui-dialog-trigger&gt;
+    &lt;button class={buttonClass({ variant: 'outline' })}&gt;Edit profile&lt;/button&gt;
+  &lt;/ui-dialog-trigger&gt;
+  &lt;ui-dialog-content&gt;
+    &lt;h2 class={dialogTitleClass()}&gt;Edit profile&lt;/h2&gt;
+    &lt;form action="/profile" method="post"&gt;&hellip;&lt;/form&gt;
+  &lt;/ui-dialog-content&gt;
+&lt;/ui-dialog&gt;</code></pre>
       <h2>Framework support</h2>
       <p>
-        Every component is a standards-compliant custom element. They work in webjs, Next.js, Astro,
-        Vite, Remix, SvelteKit, Nuxt, SolidStart, Lit projects, and plain HTML. The only runtime
-        dependency is <code>@webjskit/core</code> (the lightweight reactive base class).
+        Tier-1 helpers are pure functions, no runtime dependency. Tier-2 custom elements
+        extend <code>WebComponent</code> from <code>@webjskit/core</code> (the lightweight
+        reactive base class). Both work in webjs, Next.js, Astro, Vite, Remix, SvelteKit,
+        Nuxt, SolidStart, Lit projects, and plain HTML. Tailwind v4 is the only required
+        styling dependency.
       </p>
     </article>
   `;
