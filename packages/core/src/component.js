@@ -121,15 +121,19 @@ function defaultHasChanged(a, b) {
  *  7. `updated(changedProperties)`: every render commit
  *  8. `updateComplete` promise resolves
  *
- * `changedProperties` is a `Map<string, unknown>` where each entry maps a
- * property name (or `'state'` for setState patches) to its previous value.
+ * `changedProperties` is a `Map<string, unknown>` where each entry maps
+ * a property name to its previous value.
  *
  * Usage:
  * ```js
+ * import { signal } from '@webjskit/core';
+ *
+ * const count = signal(0);
+ *
  * class MyCounter extends WebComponent {
- *   static properties = { count: { type: Number, reflect: true } };
- *   state = { count: 0 };
- *   render() { return html`<button @click=${() => this.setState({ count: this.state.count + 1 })}>${this.state.count}</button>`; }
+ *   render() {
+ *     return html`<button @click=${() => count.set(count.get() + 1)}>${count.get()}</button>`;
+ *   }
  * }
  * MyCounter.register('my-counter');
  * ```
@@ -215,8 +219,6 @@ export class WebComponent extends Base {
 
   constructor() {
     super();
-    /** @type {Record<string, unknown>} */
-    this.state = {};
     this._renderRoot = null;
     this._scheduled = false;
     this._connected = false;
@@ -236,8 +238,8 @@ export class WebComponent extends Base {
 
     /**
      * Map of changed properties accumulated since the last render. Keys are
-     * property names (or `'state'` for setState patches); values are the
-     * previous value before the change. Passed to `shouldUpdate`, `willUpdate`,
+     * property names; values are the previous value before the change. Passed
+     * to `shouldUpdate`, `willUpdate`,
      * `update`, `firstUpdated`, and `updated`. Cleared at the start of each
      * render cycle so accumulations during hooks queue for the next cycle.
      * @type {Map<string, unknown>}
@@ -649,24 +651,6 @@ export class WebComponent extends Base {
   }
 
   /**
-   * Shallow-merge new state and schedule a re-render.
-   *
-   * Adds a `'state'` entry to `changedProperties` with the previous state
-   * bag as the old value, so lifecycle hooks (`shouldUpdate`, `willUpdate`,
-   * `updated`) can detect that setState was invoked this cycle.
-   *
-   * @param {Record<string, unknown>} patch
-   */
-  setState(patch) {
-    const oldState = this.state;
-    this.state = { ...this.state, ...patch };
-    if (!this._changedProperties.has('state')) {
-      this._changedProperties.set('state', oldState);
-    }
-    this._scheduleUpdate();
-  }
-
-  /**
    * Schedule a re-render. Optionally record a property change in
    * `changedProperties` so hooks can branch on what changed.
    *
@@ -681,8 +665,9 @@ export class WebComponent extends Base {
   }
 
   /**
-   * Internal scheduler shared by `setState` and `requestUpdate`. Coalesces
-   * multiple changes in the same tick into a single microtask render.
+   * Internal scheduler driven by reactive-property setters, the signal
+   * watcher, and explicit `requestUpdate()` calls. Coalesces multiple
+   * changes in the same tick into a single microtask render.
    * Manages the `updateComplete` promise lifecycle. Short-circuits when
    * the component is mid-update (assignments during `willUpdate` / `update`
    * fold into the current cycle's `changedProperties` Map).

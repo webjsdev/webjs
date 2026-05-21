@@ -4,9 +4,9 @@
  * The runtime is JSDoc-authored JavaScript; this file exists so editors
  * (tsserver: used by VS Code, Neovim, Zed, WebStorm) resolve imports
  * with full type information. Without this overlay, `declare foo: Foo`
- * would type the field but the surrounding class (`this.setState`,
- * `this.state`, `this.requestUpdate`, lifecycle hooks) would be weakly
- * typed. Zero runtime cost: nothing in this file ships to the browser.
+ * would type the field but the surrounding class (`this.requestUpdate`,
+ * lifecycle hooks, controllers) would be weakly typed. Zero runtime
+ * cost: nothing in this file ships to the browser.
  */
 
 import type { CSSResult } from './css.js';
@@ -80,13 +80,15 @@ export abstract class WebComponent extends HTMLElement {
   static register(tag: string): void;
   static readonly observedAttributes: string[];
 
-  /** Instance-level reactive state. Prefer `setState()` to mutate. */
-  state: Record<string, unknown>;
-  /** Schedule a re-render with a state patch. Batches via microtask. */
-  setState(patch: Record<string, unknown>): void;
   /**
    * Schedule a re-render. Optionally record a property change so lifecycle
    * hooks can branch on what changed via `changedProperties`.
+   *
+   * For instance-local state, prefer a reactive property (`static
+   * properties = { foo: { state: true } }`) or a signal from
+   * `@webjskit/core`'s `signal()`. The framework's built-in
+   * SignalWatcher wires every signal read in `render()` to a re-render
+   * automatically; explicit `requestUpdate()` is rarely needed.
    */
   requestUpdate(name?: string, oldValue?: unknown): void;
   /** A Promise that resolves after the next render commit. */

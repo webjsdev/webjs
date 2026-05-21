@@ -204,7 +204,7 @@ suite('Light-DOM slot projection (browser)', () => {
     const slot = host.querySelector('slot[data-webjs-light]');
     let fireCount = 0;
     slot.addEventListener('slotchange', () => { fireCount++; });
-    // Trigger a re-render via setState. The slot assignment is unchanged.
+    // Trigger a re-render via property change. Slot assignment unchanged.
     host.x = 1;
     await tick();
     await tick();
@@ -632,8 +632,8 @@ suite('Light-DOM slot projection (browser)', () => {
   test('updated() on a re-render AFTER projection sees the populated slot', async () => {
     // Authoring pattern: if a component needs to read assignedNodes from a
     // lifecycle hook, trigger a re-render after projection completes (e.g.
-    // by setState from a slotchange listener) and read in `updated()`. The
-    // second `updated()` call observes the populated slot.
+    // by calling requestUpdate() from a slotchange listener) and read in
+    // `updated()`. The second `updated()` call observes the populated slot.
     const tag = tagName('updated-after-projection');
     const seenAtUpdate = [];
     class C extends WebComponent {
@@ -653,7 +653,7 @@ suite('Light-DOM slot projection (browser)', () => {
     // Force a second render. The renderer is idempotent on no-op patches,
     // so seed a state field that the render() body doesn't reference; the
     // second render still commits and fires updated() again.
-    host.setState({ tick: 1 });
+    host.requestUpdate();
     await tick();
 
     assert.equal(seenAtUpdate.length >= 2, true,
