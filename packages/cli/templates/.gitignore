@@ -1,0 +1,36 @@
+# deps
+node_modules/
+
+# webjs / framework caches
+.webjs/
+
+# generated Tailwind CSS, built from public/input.css via npm run dev / start
+public/tailwind.css
+
+# env (.env.example stays tracked; the real .env never is)
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+
+# test artifacts
+coverage/
+
+# AI assistants: local session state, scheduled-task locks, etc.
+# Repo-shared config (settings.json + hooks scripts) stays tracked so
+# every contributor and agent gets the same PreToolUse rules.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**

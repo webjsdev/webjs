@@ -257,11 +257,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'AGENTS.md',
     'CONVENTIONS.md',
     'CLAUDE.md',
-    'test/unit/example.test.ts',
-    'test/browser/example.test.js',
+    // Starter tests under the new feature-folder layout.
+    'test/hello/hello.test.ts',
+    'test/hello/browser/hello.test.js',
+    'test/hello/e2e/hello.test.ts',
     'web-test-runner.config.js',
     // Environment variables
     '.env.example',
+    // Project-level gitignore (node_modules, .webjs, .env, OS junk).
+    // The Prisma dev.db rule is appended programmatically below so it
+    // only appears in templates that actually use SQLite.
+    '.gitignore',
     // Git hooks (blocks commits on main)
     '.hooks/pre-commit',
     // Claude Code config + hooks
