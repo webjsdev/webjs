@@ -2,7 +2,7 @@
 /**
  * Driver for the blog browser e2e suite.
  *
- *   test/blog/browser/blog.test.js
+ *   test/examples/blog/browser/blog.test.js
  *
  * That suite drives the running blog example through real Chromium
  * via web-test-runner. It is intentionally excluded from the default
@@ -16,8 +16,8 @@
  *      experience.
  *   2. polls http://localhost:3456 until it answers OK or until the
  *      readiness budget expires.
- *   3. runs `wtr --config scripts/run-blog-browser-e2e.wtr.config.js`,
- *      which globs only `test/blog/browser/**`.
+ *   3. runs `wtr --config scripts/run-example-blog-browser-e2e.wtr.config.js`,
+ *      which globs only `test/examples/blog/browser/**`.
  *   4. tears the dev server down (and its `concurrently`-spawned
  *      children) on success or failure.
  *
@@ -77,7 +77,7 @@ if (!ready) {
   process.exit(2);
 }
 
-const cfg = resolve(__dirname, 'run-blog-browser-e2e.wtr.config.js');
+const cfg = resolve(__dirname, 'run-example-blog-browser-e2e.wtr.config.js');
 const wtr = spawn('npx', ['wtr', '--config', cfg], {
   cwd: ROOT,
   stdio: 'inherit',

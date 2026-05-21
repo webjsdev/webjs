@@ -97,7 +97,7 @@ organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 
 Cross-package tests that exercise the SSR pipeline, scaffolds,
 or full app boots live at the repo root in `test/ssr/`,
-`test/scaffolds/`, `test/blog/`, etc. See
+`test/scaffolds/`, `test/examples/blog/`, etc. See
 [`../../agent-docs/testing.md`](../../agent-docs/testing.md).
 
 Run `npm test` from the repo root.

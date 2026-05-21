@@ -47,7 +47,7 @@ function pickHeaders(h) {
 }
 
 export default {
-  files: ['test/blog/browser/**/*.test.js'],
+  files: ['test/examples/blog/browser/**/*.test.js'],
   nodeResolve: true,
   plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
   middleware: [proxyBlog],
