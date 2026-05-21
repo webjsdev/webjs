@@ -1,9 +1,20 @@
 import { html } from '@webjskit/core';
 import './_components/theme-toggle.ts';
 
+/**
+ * Sibling-app URLs are read from env so the same code works in
+ * `webjs dev` (localhost) and in deployment (real hosts). Fallbacks
+ * are the canonical localhost dev ports (matching the matching apps'
+ * `webjs:dev --port` flags). Deploy by overriding WEBSITE_URL /
+ * DOCS_URL in the service env (Railway, etc.); `.env.example` in
+ * this directory documents the same defaults for visibility.
+ *
+ * Guarded against `process` being undefined: this file also loads
+ * on the client during hydration.
+ */
 const env = (globalThis as any).process?.env ?? {};
-const WEBSITE_URL = env.WEBSITE_URL || 'https://webjs.dev';
-const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.dev';
+const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5000';
+const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
 
 const TITLE = 'Webjs UI: AI-first component library';
 const DESCRIPTION =
@@ -310,7 +321,7 @@ export default function Layout({ children }: { children: any }) {
 
     <footer class="border-t mt-20 py-8 text-center" style="color: var(--fg-subtle); font-size: 13px">
       <div class="max-w-5xl mx-auto px-6">
-        <a class="text-brand no-underline hover:underline" href="https://webjs.dev" target="_blank">Webjs</a> ·
+        <a class="text-brand no-underline hover:underline" href=${WEBSITE_URL} target="_blank">Webjs</a> ·
         <a class="text-brand no-underline hover:underline" href=${DOCS_URL} target="_blank">Docs</a> ·
         <a class="text-brand no-underline hover:underline" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
       </div>

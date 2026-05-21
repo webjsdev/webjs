@@ -103,6 +103,21 @@ The `predev` hook runs `scripts/copy-registry.js` to populate
 something to import. Re-running `npm run dev` re-populates from the
 current registry state.
 
+### Sibling-app URLs (header, footer)
+
+Sibling-app links in the header + footer (Webjs site, Docs) read from
+`WEBSITE_URL` / `DOCS_URL` env vars. Fallbacks are the canonical
+localhost dev ports so local `npm run dev` works with zero setup. Deploy
+by overriding via the service env (e.g. Railway's variables):
+
+| Env var | Local fallback | Production value |
+|---|---|---|
+| `WEBSITE_URL` | `http://localhost:5000` | `https://webjs.dev` |
+| `DOCS_URL` | `http://localhost:4000` | `https://docs.webjs.dev` |
+
+`.env.example` in this directory documents the same defaults. Copy it to
+`.env` only if you need to override locally; the fallbacks already match.
+
 ---
 
 Framework-wide rules and the framework API reference:
