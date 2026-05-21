@@ -84,6 +84,56 @@ suite('signal + light-DOM slot integration', () => {
     shell.remove();
   });
 
+  test('signal-driven conditional toggles whether a child is slotted at all', async () => {
+    // Parent re-renders so its inner shell custom element appears
+    // with or without an authored child between its tags. Before the
+    // slot-projection cycle fix, the parent's replaceChildren was
+    // captured by the shell's MutationObserver as authored content,
+    // and projection then tried to nest the shell inside its own
+    // <slot>. The fix filters framework-driven records, so this case
+    // now reads cleanly.
+    const showChild = signal(false);
+
+    class IntShellEl extends WebComponent {
+      render() { return html`<section class="int-shell"><slot></slot></section>`; }
+    }
+    customElements.define('intg-shell', IntShellEl);
+
+    class IntChildEl extends WebComponent {
+      render() { return html`<i class="int-child">child rendered</i>`; }
+    }
+    customElements.define('intg-child', IntChildEl);
+
+    class IntParentEl extends WebComponent {
+      render() {
+        return showChild.get()
+          ? html`<intg-shell><intg-child></intg-child></intg-shell>`
+          : html`<intg-shell></intg-shell>`;
+      }
+    }
+    customElements.define('intg-parent', IntParentEl);
+
+    const root = document.createElement('intg-parent');
+    document.body.appendChild(root);
+    await root.updateComplete;
+    assert.equal(root.querySelectorAll('intg-child').length, 0, 'child not authored initially');
+
+    showChild.set(true);
+    await Promise.resolve(); await Promise.resolve();
+    await root.updateComplete;
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(root.querySelectorAll('intg-child').length, 1, 'child appears');
+    assert.equal(root.querySelectorAll('i.int-child').length, 1, 'child renders through projection');
+
+    showChild.set(false);
+    await Promise.resolve(); await Promise.resolve();
+    await root.updateComplete;
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(root.querySelectorAll('intg-child').length, 0, 'child gone when signal flips back');
+
+    root.remove();
+  });
+
   test('signal-driven content swap inside a slot host re-renders, projection preserves identity', async () => {
     // A slot host whose own render reads a signal but keeps the slot
     // shape stable. Signal change re-renders the host; authored

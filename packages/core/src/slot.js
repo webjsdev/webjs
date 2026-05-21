@@ -32,9 +32,52 @@
  *      to be re-projected on the next render.
  */
 
+import { MARKER } from './html.js';
+
 // ---------------------------------------------------------------------------
 // Module-scope constants
 // ---------------------------------------------------------------------------
+
+// Comment-node values used by render-client.js to bookend every
+// rendered template instance. Used to distinguish framework-driven
+// childList mutations from user-driven appendChild / removeChild in
+// the host's MutationObserver below.
+const FRAMEWORK_MARKER_START = `${MARKER}s`;
+const FRAMEWORK_MARKER_END = `${MARKER}e`;
+
+/**
+ * True when the node is one of the framework's render-instance bookend
+ * comment markers. The render-client.js paths that insert into or
+ * remove from a slot host always include such a marker in the same
+ * MutationRecord (either by `replaceChildren(start, ...content, end)`
+ * at the top level or by `insertBefore(frag, marker)` where `frag`
+ * itself is built from a `nodesToFrag([start, ...content, end])`).
+ * Mutation records that touch one of these markers therefore belong
+ * to the framework's render commit, not user authoring.
+ *
+ * @param {Node} node
+ * @returns {boolean}
+ */
+function isFrameworkMarker(node) {
+  if (!node || node.nodeType !== 8 /* COMMENT_NODE */) return false;
+  const v = node.nodeValue;
+  return v === FRAMEWORK_MARKER_START || v === FRAMEWORK_MARKER_END;
+}
+
+/**
+ * True when a MutationRecord's added or removed nodes include a
+ * framework bookend marker. Used by the host's childList observer
+ * to drop renderer-driven records that would otherwise be
+ * misinterpreted as authored-child changes.
+ *
+ * @param {MutationRecord} record
+ * @returns {boolean}
+ */
+function isFrameworkRecord(record) {
+  for (const n of record.addedNodes) if (isFrameworkMarker(n)) return true;
+  for (const n of record.removedNodes) if (isFrameworkMarker(n)) return true;
+  return false;
+}
 
 function detectBrowser() {
   return typeof HTMLElement !== 'undefined' && typeof HTMLSlotElement !== 'undefined';
@@ -390,6 +433,20 @@ export function attachSlotObservers(host) {
   state.childObserver = new MutationObserver((records) => {
     let dirty = false;
     for (const r of records) {
+      // Skip records produced by the framework's own renderer. Each
+      // top-level TemplateInstance commit (`createInstance`) and each
+      // child-part template swap (`applyChildPart`) inserts and removes
+      // its content as a unit bounded by `w$s`/`w$e` comment markers
+      // (see render-client.js). When such a record reaches the host's
+      // childList observer, treating its addedNodes as authored
+      // children pollutes assignedByName with the renderer's own
+      // wrapper elements; projectChildren then tries to append those
+      // wrappers into a <slot> they contain, raising a
+      // HierarchyRequestError ("new child element contains the
+      // parent"). Filtering on marker presence isolates renderer
+      // commits from real authoring (which never inserts framework
+      // markers).
+      if (isFrameworkRecord(r)) continue;
       if (r.type === 'childList') {
         for (const node of r.addedNodes) {
           // A new child appeared directly under host (not via slot.append
