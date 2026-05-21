@@ -32,6 +32,7 @@ export default {
     'test/browser/lifecycle-port_test.js',
     'test/browser/watch-directive.test.js',
     'test/browser/signal-component.test.js',
+    'test/browser/signal-hydration.test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
