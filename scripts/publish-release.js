@@ -47,12 +47,25 @@ for (const line of m[1].split('\n')) {
   if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
   fm[k] = v;
 }
-// Strip the leading h1 (e.g. `# @webjskit/core 0.6.0`) if present.
-// The release page already shows the title (from --title), so the h1
-// in the body was a duplicate header on every release page. Older
-// changelog files include this line; the current backfill generator
-// no longer emits it.
-const body = m[2].replace(/^#\s+[^\n]*\n+/, '').trim();
+// Two body transforms before publishing.
+// 1. Strip a leading h1 (e.g. `# @webjskit/core 0.6.0`) if present.
+//    The release page renders --title above the body already, so an
+//    h1 in the body produced a duplicate header on the public page.
+//    The current backfill generator no longer emits it; this stays
+//    for the older files that do.
+// 2. Defuse @-autolinks. GitHub markdown turns any @<word> in a
+//    release body into a user mention, rendered as a contributor
+//    avatar if the name happens to resolve and a dead profile link
+//    otherwise. Our commit bodies are full of legitimate `@theme`,
+//    `@click`, `@webjs/core`, `@webjskit/server` etc., which is how
+//    we landed phantom contributors named "webjs" and "theme" on
+//    every release page. Inserting a zero-width space between `@`
+//    and the trailing word char breaks the autolink regex without
+//    changing the visible rendering, in code spans and in prose.
+const body = m[2]
+  .replace(/^#\s+[^\n]*\n+/, '')
+  .replace(/@(?=\w)/g, '@​')
+  .trim();
 
 const pkg = (fm.package || '').replace(/^@webjskit\//, '');
 const version = fm.version;
