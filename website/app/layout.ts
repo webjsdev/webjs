@@ -213,14 +213,15 @@ export default function RootLayout({ children }: { children: unknown }) {
       </a>
     </div>
 
-    <header class="flex items-center justify-between max-w-[960px] mx-auto px-6 py-4">
+    <header class="flex flex-wrap items-center justify-between gap-y-3 max-w-[960px] mx-auto px-4 sm:px-6 py-4">
       <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
         <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
         webjs
       </a>
-      <nav class="flex items-center gap-4">
+      <nav class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${UI_URL} target="_blank">UI</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/changelog">Changelog</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${BLOG_URL} target="_blank">Blog Demo</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
         <theme-toggle></theme-toggle>
