@@ -74,6 +74,16 @@ export default function RootLayout({ children }: { children: unknown }) {
           }
         } catch (_) {}
       })();
+      // Mobile-menu close on link click. <details> stays open by
+      // default when a child <a> is activated, including the
+      // client-router-intercepted same-origin links: close the
+      // parent <details> on any anchor click inside .mobile-menu.
+      document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('.mobile-menu a');
+        if (!a) return;
+        var d = a.closest('details');
+        if (d) d.removeAttribute('open');
+      });
     </script>
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
