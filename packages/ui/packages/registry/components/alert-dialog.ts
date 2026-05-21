@@ -136,8 +136,6 @@ export class UiAlertDialog extends WebComponent {
   };
   declare open: boolean;
 
-  _lastOpen: boolean = false;
-
   constructor() {
     super();
     this.open = false;
@@ -163,16 +161,22 @@ export class UiAlertDialog extends WebComponent {
   get isOpen(): boolean { return this.open; }
 
   render() {
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
-        if (this.open) this._setup();
-        else this._teardown();
-      });
-    }
     return html`<div data-slot="alert-dialog" data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
+  }
+
+  updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has('open')) return;
+    // Skip the constructor's initial open=false set so we don't fire
+    // teardown for the closed-on-mount state.
+    if (changedProperties.get('open') === undefined) return;
+    // Defer one microtask so the content child has rendered its inner
+    // native <dialog>; that's where showModal() / close() act.
+    queueMicrotask(() => {
+      if (this.open) this._setup();
+      else this._teardown();
+    });
   }
 
   get _content(): UiAlertDialogContent | null {
