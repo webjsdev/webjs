@@ -43,7 +43,7 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
-import { WebComponent, html, repeat, unsafeHTML } from '@webjskit/core';
+import { WebComponent, html, repeat, unsafeHTML, signal } from '@webjskit/core';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
@@ -137,15 +137,13 @@ const TYPE_ICON_COLOR: Record<ToastType, string> = {
 export class UiSonner extends WebComponent {
   static properties = {
     position: { type: String, reflect: true },
-    items: { type: Object, state: true },
   };
   declare position: SonnerPosition;
-  declare items: ToastItem[];
+  items = signal<ToastItem[]>([]);
 
   constructor() {
     super();
     this.position = 'bottom-right';
-    this.items = [];
   }
 
   // Routing the global toast() function to this viewport. Runs in
@@ -180,14 +178,14 @@ export class UiSonner extends WebComponent {
   }
 
   _add(item: ToastItem): void {
-    this.items = [...this.items, item];
+    this.items.set([...this.items.get(), item]);
     if (item.duration && item.duration > 0) {
       setTimeout(() => this._remove(item.id), item.duration);
     }
   }
 
   _remove(id: string | number): void {
-    this.items = this.items.filter((i) => i.id !== id);
+    this.items.set(this.items.get().filter((i) => i.id !== id));
   }
 
   render() {
@@ -197,7 +195,7 @@ export class UiSonner extends WebComponent {
       class=${`pointer-events-none fixed z-[100] flex flex-col gap-2 ${pos}`}
     >
       ${repeat(
-        this.items,
+        this.items.get(),
         (item) => item.id,
         (item) => html`<div
           class=${TOAST_ITEM_BASE}

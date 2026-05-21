@@ -1,4 +1,4 @@
-import { WebComponent, html, connectWS } from '@webjskit/core';
+import { WebComponent, html, connectWS, signal } from '@webjskit/core';
 import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';
 
@@ -11,45 +11,34 @@ type ChatMessage =
  * `<chat-box>`: terminal-leaning live chat panel against /api/chat.
  */
 export class ChatBox extends WebComponent {
-  static properties = {
-    lines: { type: Object, state: true },
-    connected: { type: Boolean, state: true },
-    count: { type: Number, state: true },
-  };
-  declare lines: Line[];
-  declare connected: boolean;
-  declare count: number;
+  lines = signal<Line[]>([]);
+  connected = signal(false);
+  count = signal(0);
 
   _conn: ReturnType<typeof connectWS> | null = null;
   _nextId = 0;
 
-  constructor() {
-    super();
-    this.lines = [];
-    this.connected = false;
-    this.count = 0;
-  }
-
   connectedCallback() {
     super.connectedCallback();
     this._conn = connectWS('/api/chat', {
-      onOpen:  () => { this.connected = true; },
-      onClose: () => { this.connected = false; },
+      onOpen:  () => { this.connected.set(true); },
+      onClose: () => { this.connected.set(false); },
       onMessage: (msg: ChatMessage) => {
-        const lines = this.lines.slice();
+        const lines = this.lines.get().slice();
         if (msg.kind === 'say') {
           lines.push({ id: ++this._nextId, text: msg.text, kind: 'say' });
         } else if (msg.kind === 'join') {
           lines.push({ id: ++this._nextId, text: 'someone joined', kind: 'meta' });
-          this.count = msg.count;
+          this.count.set(msg.count);
+          this.lines.set(lines.slice(-50));
           return;
         } else if (msg.kind === 'leave') {
           lines.push({ id: ++this._nextId, text: 'someone left', kind: 'meta' });
-          this.count = msg.count;
-          this.lines = lines.slice(-50);
+          this.count.set(msg.count);
+          this.lines.set(lines.slice(-50));
           return;
         }
-        this.lines = lines.slice(-50);
+        this.lines.set(lines.slice(-50));
       },
     });
   }
@@ -66,7 +55,9 @@ export class ChatBox extends WebComponent {
   }
 
   render() {
-    const { lines, connected, count } = this;
+    const lines = this.lines.get();
+    const connected = this.connected.get();
+    const count = this.count.get();
     return html`
       <div class="block border border-border rounded-xl bg-bg-elev shadow overflow-hidden font-sans">
         <div class="flex items-center gap-2 px-4 py-3 border-b border-border bg-bg-subtle font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">
