@@ -13,14 +13,20 @@ This file only covers what's specific to the landing site.
 ```
 website/
   app/
-    layout.ts        root layout (head, OG/Twitter metadata,
-                     header/footer chrome, Tailwind tokens)
-    page.ts          /  → the entire one-page landing site.
-                         Hero, features grid, code samples, agent
-                         badges, and footer all live here.
+    layout.ts          root layout (head, OG/Twitter metadata,
+                       header/footer chrome, Tailwind tokens)
+    page.ts            /  → the entire one-page landing site.
+                           Hero, features grid, code samples, agent
+                           badges, and footer all live here.
+    changelog/page.ts  /changelog. Reads ../../../changelog/<pkg>/*.md
+                       at SSR time and renders the unified release
+                       feed. The deployment image must include the
+                       changelog/ tree at the repo root, the
+                       Dockerfile's `COPY changelog ./changelog` line
+                       is what ships it on Railway.
   components/
-    theme-toggle.ts  light/dark cycle
-  public/            favicon, og image, static assets
+    theme-toggle.ts    light/dark cycle
+  public/              favicon, og image, static assets
 ```
 
 The site is intentionally one page in long-form scroll. When you edit
