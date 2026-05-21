@@ -101,14 +101,16 @@ See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, refer
 
 webjs ships per-package per-version changelogs under `changelog/<pkg>/<version>.md`. The model: **a version bump is the trigger**. When any commit on `main` changes the `version` field in `packages/<pkg>/package.json`, the scripts/backfill-changelog.js generator emits a new `changelog/<pkg>/<version>.md` summarising every conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that landed in that package since the prior bump. The website renders the union of all packages' files at `/changelog`.
 
-**Mandatory rule for AI agents working in this monorepo:**
+**How it works for AI agents and humans:**
 
-1. When you bump a `packages/<pkg>/package.json` `version`, you MUST run `node scripts/backfill-changelog.js` in the same commit (or the immediately following one), so the new `changelog/<pkg>/<version>.md` lands together with the bump.
-2. Review the generated file. The script's body excerpts are the first lines of each commit message; if any are unclear, **edit the file in place** to add migration notes (especially for `breaking` entries) before committing.
-3. Subsequent re-runs are safe: the script never overwrites an existing entry, so your hand-edits survive.
-4. Never edit `changelog/<pkg>/<version>.md` for a version that has already been published. Edit `changelog/<pkg>/<next>.md` instead.
+1. Bump the `version` field in a `packages/<pkg>/package.json` and stage the change.
+2. Run `git commit` as usual. The `.hooks/pre-commit` hook detects the staged bump, runs `node scripts/backfill-changelog.js` automatically, stages the resulting `changelog/<pkg>/<version>.md`, and lets the commit proceed. The bump and its release notes land in the same commit.
+3. Optionally review and edit the generated file before pushing. The script's body excerpts are the first lines of each commit message; for `breaking` entries especially, add migration notes by hand. Re-runs are idempotent (existing files are never overwritten), so hand-edits survive.
+4. Never edit `changelog/<pkg>/<version>.md` for a version that has already been published. Bump the version and edit `changelog/<pkg>/<next>.md` instead.
 
-The `.hooks/pre-commit` git hook (and the Claude Code `PreToolUse` hook `.claude/hooks/changelog-nudge.sh`) catches version bumps that lack a matching changelog file and refuses the commit until both land together.
+If the package has zero `feat:` / `fix:` / `breaking:` / `perf:` commits in the range (a release-only bump with no user-facing changes), the script writes nothing and the hook fails the commit. Either add a hand-written entry, downgrade the bump if it was unintentional, or `git commit --no-verify` to bypass.
+
+The whole flow is tool-agnostic: the universal pre-commit hook fires for every `git commit`, regardless of who or what is running it. AI agents using Claude Code, Cursor, Copilot, Aider, etc. all get the same behavior, as do human contributors.
 
 ---
 

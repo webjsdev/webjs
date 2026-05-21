@@ -43,6 +43,10 @@ function git(args, opts = {}) {
 /**
  * For one package, list every (version, commit, date) triple where
  * its package.json version field changed, in chronological order.
+ * If the working tree has a STAGED version bump for the package
+ * that isn't yet committed, append it as a virtual entry with
+ * sha="HEAD" and today's date so the pre-commit hook can generate
+ * the changelog file in the same commit as the bump.
  */
 function versionTimeline(pkg) {
   // Format the log output as: <sha>\t<iso-date>\n<diff lines starting with +/->
@@ -67,6 +71,30 @@ function versionTimeline(pkg) {
     if (m) {
       out.push({ sha: cur.sha, date: cur.date, version: m[1] });
       cur = null; // one version per commit; ignore further +/- lines
+    }
+  }
+
+  // Detect a staged version bump that hasn't been committed yet.
+  // `git diff --cached` shows the staged changes; we look for a
+  // `+  "version":` line in this package's package.json.
+  const staged = spawnSync(
+    'git',
+    ['diff', '--cached', '--unified=0', '--', `packages/${pkg}/package.json`],
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 },
+  ).stdout || '';
+  const stagedMatch = staged.match(/^\+\s*"version":\s*"([^"]+)"/m);
+  if (stagedMatch) {
+    const stagedVersion = stagedMatch[1];
+    // Skip if the last committed version is already this one (no
+    // actual bump in the staged diff, just whitespace).
+    const lastCommittedVersion = out.length ? out[out.length - 1].version : null;
+    if (stagedVersion !== lastCommittedVersion) {
+      out.push({
+        sha: 'HEAD',
+        date: new Date().toISOString().slice(0, 10),
+        version: stagedVersion,
+        staged: true,
+      });
     }
   }
   return out;

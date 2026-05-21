@@ -9,15 +9,6 @@
             "command": ".claude/hooks/block-prose-punctuation.sh"
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/changelog-nudge.sh"
-          }
-        ]
       }
     ],
     "PostToolUse": [

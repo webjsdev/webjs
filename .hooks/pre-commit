@@ -32,12 +32,11 @@ if ! npm test --silent; then
   exit 1
 fi
 
-# Gate 3: when a packages/<pkg>/package.json version bumped, require
-# a matching changelog/<pkg>/<version>.md to land in the same commit.
-# The "diff --cached" check pulls the new version line from the
-# staged package.json; the directory existence test catches the
-# matching changelog entry. Re-runs `scripts/backfill-changelog.js`
-# so an author who forgets only loses time, not the commit.
+# Gate 3: when a packages/<pkg>/package.json version bumped, auto-
+# generate the matching changelog/<pkg>/<version>.md and stage it so
+# the version-bump commit ships with its release notes in one shot.
+# Bumps are detected by scanning the staged diff for a `+ "version":`
+# line in any packages/*/package.json.
 STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- 'packages/*/package.json' 2>/dev/null \
   | awk '
       /^diff --git/ { match($0, /packages\/[^\/]+\/package.json/); pkg = substr($0, RSTART+9, RLENGTH-22); next }
@@ -47,25 +46,53 @@ STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- 'packages/*/package.json' 2>
       }')
 
 if [ -n "$STAGED_PKG_BUMPS" ]; then
-  MISSING=""
+  # Find which files need to exist and which are missing BEFORE we
+  # run the generator, so we can stage exactly what the generator
+  # produces (and fail loudly if it didn't produce them).
+  TO_GENERATE=""
   for bump in $STAGED_PKG_BUMPS; do
     pkg="${bump%@*}"; ver="${bump#*@}"
     if [ ! -f "changelog/$pkg/$ver.md" ]; then
-      MISSING="$MISSING\n  - changelog/$pkg/$ver.md (for @webjskit/$pkg $ver)"
+      TO_GENERATE="$TO_GENERATE changelog/$pkg/$ver.md"
     fi
   done
-  if [ -n "$MISSING" ]; then
+
+  if [ -n "$TO_GENERATE" ]; then
     echo ""
-    echo "ERROR: detected version bumps in staged changes but matching changelog files are missing:"
-    echo -e "$MISSING"
+    echo "Detected staged version bump(s) without a matching changelog file."
+    echo "Running scripts/backfill-changelog.js to auto-generate:"
+    for f in $TO_GENERATE; do echo "  + $f"; done
     echo ""
-    echo "Run:"
-    echo "  node scripts/backfill-changelog.js"
-    echo "  git add changelog/"
+    if ! node scripts/backfill-changelog.js; then
+      echo ""
+      echo "ERROR: scripts/backfill-changelog.js failed. Fix the script error, or bypass with git commit --no-verify."
+      echo ""
+      exit 1
+    fi
+
+    # Stage the newly-generated files and verify each one now exists.
+    STILL_MISSING=""
+    for f in $TO_GENERATE; do
+      if [ -f "$f" ]; then
+        git add -- "$f"
+      else
+        STILL_MISSING="$STILL_MISSING\n  - $f"
+      fi
+    done
+    if [ -n "$STILL_MISSING" ]; then
+      echo ""
+      echo "ERROR: the generator ran but did not produce the expected files:"
+      echo -e "$STILL_MISSING"
+      echo ""
+      echo "This usually means the package's commit range contained zero"
+      echo "feat / fix / breaking / perf commits, so the version bump has"
+      echo "no user-facing changes to record. Either add an entry by hand,"
+      echo "or bypass with: git commit --no-verify"
+      echo ""
+      exit 1
+    fi
+    echo "Staged the new changelog file(s); the commit will include them."
     echo ""
-    echo "Then re-commit. To bypass (emergencies only): git commit --no-verify"
-    echo ""
-    exit 1
   fi
 fi
 
