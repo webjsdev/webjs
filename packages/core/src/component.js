@@ -2,6 +2,7 @@ import { render as clientRender } from './render-client.js';
 import { isCSS, adoptStyles } from './css.js';
 import { register, tagOf } from './registry.js';
 import { parse as deserializeProp } from './serialize.js';
+import { Signal } from './signal.js';
 import {
   captureAuthoredChildren,
   adoptSSRAssignments,
@@ -601,6 +602,13 @@ export class WebComponent extends Base {
     // pending fragments, last snapshots) is preserved so a subsequent
     // reconnection picks up where it left off.
     if (this._renderRoot === this) detachSlotObservers(this);
+    // Dispose the signal watcher so dependency edges drop. Without
+    // this the element holds references to module-scope signals
+    // (and vice versa) forever.
+    if (this.__signalWatcher) {
+      this.__signalWatcher.dispose();
+      this.__signalWatcher = undefined;
+    }
     for (const c of this.__controllers) {
       if (c.hostDisconnected) c.hostDisconnected();
     }
@@ -873,7 +881,18 @@ export class WebComponent extends Base {
    * @param {Map<string, unknown>} _changedProperties
    */
   update(_changedProperties) {
-    const tpl = this.render();
+    // Track signal reads during render so the component re-renders when
+    // any of them change. The watcher is lazy-allocated on first
+    // render and disposed in disconnectedCallback. observe() clears
+    // prior dep edges before fn(), so each render re-records its own
+    // (possibly different) read set.
+    if (!this.__signalWatcher) {
+      this.__signalWatcher = new Signal.subtle.Watcher(() => {
+        if (this._connected) this.requestUpdate();
+      });
+    }
+    let tpl;
+    this.__signalWatcher.observe(() => { tpl = this.render(); });
     clientRender(tpl, this._renderRoot);
   }
 
