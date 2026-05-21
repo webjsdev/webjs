@@ -32,4 +32,41 @@ if ! npm test --silent; then
   exit 1
 fi
 
+# Gate 3: when a packages/<pkg>/package.json version bumped, require
+# a matching changelog/<pkg>/<version>.md to land in the same commit.
+# The "diff --cached" check pulls the new version line from the
+# staged package.json; the directory existence test catches the
+# matching changelog entry. Re-runs `scripts/backfill-changelog.js`
+# so an author who forgets only loses time, not the commit.
+STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- 'packages/*/package.json' 2>/dev/null \
+  | awk '
+      /^diff --git/ { match($0, /packages\/[^\/]+\/package.json/); pkg = substr($0, RSTART+9, RLENGTH-21); next }
+      pkg && /^\+\s*"version":\s*"[^"]+"/ {
+        match($0, /"[0-9]+\.[0-9]+\.[0-9]+[^"]*"/); v = substr($0, RSTART+1, RLENGTH-2);
+        print pkg "@" v
+      }')
+
+if [ -n "$STAGED_PKG_BUMPS" ]; then
+  MISSING=""
+  for bump in $STAGED_PKG_BUMPS; do
+    pkg="${bump%@*}"; ver="${bump#*@}"
+    if [ ! -f "changelog/$pkg/$ver.md" ]; then
+      MISSING="$MISSING\n  - changelog/$pkg/$ver.md (for @webjskit/$pkg $ver)"
+    fi
+  done
+  if [ -n "$MISSING" ]; then
+    echo ""
+    echo "ERROR: detected version bumps in staged changes but matching changelog files are missing:"
+    echo -e "$MISSING"
+    echo ""
+    echo "Run:"
+    echo "  node scripts/backfill-changelog.js"
+    echo "  git add changelog/"
+    echo ""
+    echo "Then re-commit. To bypass (emergencies only): git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
 exit 0
