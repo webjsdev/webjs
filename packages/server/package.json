@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/server",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
   "description": "webjs dev/prod server: SSR, router, API, server actions, live reload",
   "main": "index.js",
@@ -14,7 +14,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/core": "^0.7.0",
+    "@webjsdev/core": "^0.7.1",
     "chokidar": "^3.6.0",
     "esbuild": "^0.28.0",
     "ws": "^8.20.0"
