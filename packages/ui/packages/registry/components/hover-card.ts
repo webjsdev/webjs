@@ -60,7 +60,6 @@ export class UiHoverCard extends WebComponent {
 
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
-  _lastOpen: boolean = false;
 
   constructor() {
     super();
@@ -83,14 +82,18 @@ export class UiHoverCard extends WebComponent {
   }
 
   render() {
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._syncContent());
-    }
     return html`<div
       data-slot="hover-card"
       data-state=${this.open ? 'open' : 'closed'}
     ><slot></slot></div>`;
+  }
+
+  updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has('open')) return;
+    if (changedProperties.get('open') === undefined) return;
+    // Wait one microtask for <ui-hover-card-content>'s inner [popover]
+    // element to commit; we drive its showPopover() / hidePopover().
+    queueMicrotask(() => this._syncContent());
   }
 
   _syncContent(): void {

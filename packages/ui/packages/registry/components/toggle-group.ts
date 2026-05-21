@@ -60,9 +60,10 @@ const ITEM_EXTRA =
 // <ui-toggle-group>
 // Renders a wrapping <div role="group"> with the @ui-toggle-item-click
 // listener bound declaratively. Children project through the slot. Item
-// state (data-state, aria-pressed) is reflected after each render via
-// a single requestAnimationFrame deferral to give the descendant
-// <ui-toggle-group-item> components time to settle their own renders.
+// state (data-state, aria-pressed) is reflected from updated() so the
+// effect runs after the host's commit. A queueMicrotask defer inside
+// gives the descendant <ui-toggle-group-item> components time to commit
+// their own renders before we read / write their state.
 // --------------------------------------------------------------------------
 
 export class UiToggleGroup extends WebComponent {
@@ -98,10 +99,6 @@ export class UiToggleGroup extends WebComponent {
 
   render() {
     const gap = this.spacing === '0' ? '' : 'gap-1';
-    // Items live under <slot>, but their state needs to be reflected
-    // after they have finished their own first render. One frame is
-    // enough; this is the same RAF-defer pattern used by tabs.
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._reflectItems());
     return html`<div
       data-slot="toggle-group"
       role="group"
@@ -112,6 +109,12 @@ export class UiToggleGroup extends WebComponent {
       data-orientation=${this.orientation}
       @ui-toggle-item-click=${this._onItemClick}
     ><slot></slot></div>`;
+  }
+
+  updated(): void {
+    // Reflect group state onto each <ui-toggle-group-item>. One microtask
+    // gives the items time to commit their own renders first.
+    queueMicrotask(() => this._reflectItems());
   }
 
   _reflectItems(): void {

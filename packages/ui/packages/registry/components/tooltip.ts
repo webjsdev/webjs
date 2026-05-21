@@ -69,7 +69,6 @@ export class UiTooltip extends WebComponent {
 
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
-  _lastOpen: boolean = false;
 
   constructor() {
     super();
@@ -102,17 +101,19 @@ export class UiTooltip extends WebComponent {
   }
 
   render() {
-    // Toggle popover open/closed on the descendant <ui-tooltip-content>
-    // after slot projection has settled (one frame). Side-effect; do not
-    // call from render() body itself.
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this._syncContent());
-    }
     return html`<div
       data-slot="tooltip"
       data-state=${this.open ? 'open' : 'closed'}
     ><slot></slot></div>`;
+  }
+
+  updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has('open')) return;
+    // Skip the constructor's initial open=false set.
+    if (changedProperties.get('open') === undefined) return;
+    // Defer one microtask so the content child's [popover] inner element
+    // has committed; we drive its showPopover() / hidePopover() from here.
+    queueMicrotask(() => this._syncContent());
   }
 
   _syncContent(): void {
