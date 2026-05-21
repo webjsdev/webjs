@@ -72,29 +72,15 @@ async function loadEntries(): Promise<Entry[]> {
       });
     }
   }
-  // Sort by full commit timestamp DESC. The `date` field in
-  // frontmatter is now an ISO 8601 string (e.g.
-  // 2026-05-21T22:21:06+05:30), so packages bumped together in one
-  // commit naturally cluster, with alphabetical package name as the
-  // tiebreak inside a cluster. Within same timestamp + same package
-  // (extremely rare), prefer the higher version.
-  entries.sort((a, b) =>
-    Date.parse(b.date) - Date.parse(a.date)
-    || a.shortPkg.localeCompare(b.shortPkg)
-    || compareVersionsDesc(a.version, b.version)
-  );
+  // Sort by full commit timestamp DESC. No alphabetical or version
+  // tiebreaker: entries that share an exact timestamp (e.g. multiple
+  // packages bumped in the same commit) keep their stable readdir
+  // order, which is typically alphabetical on every common
+  // filesystem. Matching policy on the GitHub Releases page (the
+  // workflow publishes oldest-first so GH's created_at DESC sort
+  // ends up with the same order).
+  entries.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   return entries;
-}
-
-/** Compare two semver-shaped strings ("0.7.0", "0.8.0") with newer first. */
-function compareVersionsDesc(a: string, b: string): number {
-  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
-  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pb[i] ?? 0) - (pa[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
 }
 
 /** Tiny inline-markdown renderer: links, bold, italic, inline code. */

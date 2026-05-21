@@ -59,7 +59,21 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          mapfile -t NEW < <(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md')
+          # Sort by the `date:` timestamp inside each file's
+          # frontmatter, ASCending. GitHub Releases lists releases by
+          # created_at DESC, so publishing oldest-first means newest
+          # entries end up at the top of the Releases page. Files
+          # with the same timestamp (e.g. multiple packages bumped in
+          # one PR) keep their stable input order.
+          mapfile -t NEW < <(
+            git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md' \
+              | while read -r f; do
+                  ts=$(awk '/^date:/ { print $2; exit }' "$f")
+                  printf '%s\t%s\n' "$ts" "$f"
+                done \
+              | sort \
+              | cut -f2-
+          )
           if [ ${#NEW[@]} -eq 0 ]; then
             echo "No new changelog files in this push; skipping."
             echo "count=0" >> "$GITHUB_OUTPUT"
