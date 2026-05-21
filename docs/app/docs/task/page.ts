@@ -105,7 +105,7 @@ UserProfile.register('user-profile');</pre>
     const res = await fetch(\`/api/search?q=\${encodeURIComponent(query)}\`, { signal });
     return res.json();
   },
-  args: () =&gt; [this.state.query],
+  args: () =&gt; [this.query.get()],
 });</pre>
 
     <p>This prevents race conditions where an older, slower request resolves after a newer one, a common bug in naive async patterns.</p>
@@ -124,7 +124,7 @@ UserProfile.register('user-profile');</pre>
     });
     return res.json();
   },
-  args: () =&gt; [this.state.formData],
+  args: () =&gt; [this.formData.get()],
   autoRun: false,  // only runs when you call .run()
 });
 
@@ -201,11 +201,9 @@ class LiveSearch extends WebComponent {
     .empty { color: var(--fg-muted, #888); }
   \`;
 
-  constructor() {
-    super();
-    this.state = { query: '', debounced: '' };
-    this._timer = null;
-  }
+  query = signal('');
+  debounced = signal('');
+  _timer = null;
 
   #results = new Task(this, {
     task: async ([q], { signal }) =&gt; {
@@ -214,15 +212,15 @@ class LiveSearch extends WebComponent {
       if (!res.ok) throw new Error('Search failed');
       return res.json();
     },
-    args: () =&gt; [this.state.debounced],
+    args: () =&gt; [this.debounced.get()],
   });
 
   onInput(e) {
-    const query = e.target.value;
-    this.setState({ query });
+    const q = e.target.value;
+    this.query.set(q);
     clearTimeout(this._timer);
     this._timer = setTimeout(() =&gt; {
-      this.setState({ debounced: query });
+      this.debounced.set(q);
     }, 300);
   }
 
@@ -233,7 +231,7 @@ class LiveSearch extends WebComponent {
   render() {
     return html\`
       &lt;input placeholder="Search..."
-             .value=\${this.state.query}
+             .value=\${this.query.get()}
              @input=\${(e) =&gt; this.onInput(e)} /&gt;
       &lt;div class="results"&gt;
         \${this.#results.render({
