@@ -30,7 +30,7 @@ export default {
     // Blog E2E needs `examples/blog`'s dev server running on :3456 first.
     // It runs via `npm run test:browser:blog` (separate orchestrator),
     // not the default `wtr` run.
-    '!test/blog/browser/**/*.test.js',
+    '!test/examples/blog/browser/**/*.test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
