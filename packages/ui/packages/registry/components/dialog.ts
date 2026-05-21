@@ -162,8 +162,6 @@ export class UiDialog extends WebComponent {
   };
   declare open: boolean;
 
-  _lastOpen: boolean = false;
-
   constructor() {
     super();
     this.open = false;
@@ -190,22 +188,26 @@ export class UiDialog extends WebComponent {
   get isOpen(): boolean { return this.open; }
 
   render() {
-    // Track open transitions and ask the content child to open/close
-    // its native <dialog>. RAF defers until the content has rendered
-    // its own template (where the <dialog> lives).
-    if (this._lastOpen !== this.open) {
-      this._lastOpen = this.open;
-      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => {
-        if (this.open) this._setup();
-        else this._teardown();
-        this.dispatchEvent(
-          new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }),
-        );
-      });
-    }
     return html`<div data-slot="dialog" data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
+  }
+
+  updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has('open')) return;
+    // Constructor sets open=false, which records a (undefined -> false)
+    // transition in the first update. Skip it so the dialog doesn't
+    // emit a teardown + ui-open-change for the initial state.
+    if (changedProperties.get('open') === undefined) return;
+    // Defer one microtask so the content child has committed its own
+    // render (the native <dialog> element lives in the content's template).
+    queueMicrotask(() => {
+      if (this.open) this._setup();
+      else this._teardown();
+      this.dispatchEvent(
+        new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }),
+      );
+    });
   }
 
   get _content(): UiDialogContent | null {

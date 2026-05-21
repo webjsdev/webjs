@@ -100,8 +100,6 @@ export class UiTabs extends WebComponent {
   declare value: string;
   declare orientation: 'horizontal' | 'vertical';
 
-  _lastValue: string = '';
-
   constructor() {
     super();
     this.value = '';
@@ -109,29 +107,25 @@ export class UiTabs extends WebComponent {
   }
 
   render() {
-    // Side effects: dispatch ui-value-change + broadcast to children
-    // when value transitions. Both require a real DOM (CustomEvent,
-    // dispatchEvent, requestAnimationFrame) so guard against SSR where
-    // linkedom doesn't implement them.
-    if (this._lastValue !== this.value) {
-      const prev = this._lastValue;
-      this._lastValue = this.value;
-      if (typeof window !== 'undefined') {
-        if (prev !== '' || this.value !== '') {
-          queueMicrotask(() => {
-            this.dispatchEvent(
-              new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
-            );
-          });
-        }
-        requestAnimationFrame(() => this._broadcast());
-      }
-    }
     return html`<div
       data-slot="tabs"
       data-orientation=${this.orientation}
       class=${TABS_BASE}
     ><slot></slot></div>`;
+  }
+
+  updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has('value')) return;
+    const prev = (changedProperties.get('value') ?? '') as string;
+    // Skip the initial undefined -> '' (or '' -> '') no-op set; only
+    // dispatch + broadcast on real value transitions.
+    if (prev === '' && this.value === '') return;
+    queueMicrotask(() => {
+      this.dispatchEvent(
+        new CustomEvent('ui-value-change', { detail: { value: this.value }, bubbles: true }),
+      );
+      this._broadcast();
+    });
   }
 
   _broadcast(): void {
