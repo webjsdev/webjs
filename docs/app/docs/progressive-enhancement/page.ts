@@ -3,7 +3,7 @@ import { html } from '@webjskit/core';
 export const metadata = {
   title: 'Progressive Enhancement | webjs',
   description:
-    'webjs pages and components are SSR\'d to real HTML. Read-paths, navigation, and form submissions work without JavaScript. JS is opt-in per interactive behavior: only the click / setState / focus handlers require scripts, not the component\'s first paint.',
+    'webjs pages and components are SSR\'d to real HTML. Read-paths, navigation, and form submissions work without JavaScript. JS is opt-in per interactive behavior: only the click / signal / focus handlers require scripts, not the component\'s first paint.',
 };
 
 export default function ProgressiveEnhancement() {
@@ -15,7 +15,7 @@ export default function ProgressiveEnhancement() {
     </p>
 
     <p>
-      JavaScript is opt-in <em>per interactive behavior</em>, not per component. A counter custom element renders as "0" on the server, and only the +/- click handling needs JS. A dropdown renders its trigger and closed state on the server, and only the open/close toggle needs JS. The HTML is the floor, and <code>@click</code>, <code>setState()</code>, and the client router are layered on top.
+      JavaScript is opt-in <em>per interactive behavior</em>, not per component. A counter custom element renders as "0" on the server, and only the +/- click handling needs JS. A dropdown renders its trigger and closed state on the server, and only the open/close toggle needs JS. The HTML is the floor, and <code>@click</code>, signal mutations, and the client router are layered on top.
     </p>
 
     <h2>What works without JavaScript</h2>
@@ -45,7 +45,7 @@ export default function ProgressiveEnhancement() {
 
     <ul>
       <li><strong><code>@click</code> / <code>@input</code> / <code>@change</code> handlers on custom elements.</strong> The button is in the HTML, the handler isn't.</li>
-      <li><strong><code>setState()</code> updates and re-renders.</strong> A counter starts at its server-rendered value; counting up requires JS.</li>
+      <li><strong>Signal updates and reactive re-renders.</strong> A counter starts at its server-rendered value; counting up calls <code>signal.set()</code>, which the component's built-in SignalWatcher picks up and re-renders.</li>
       <li><strong>Client-router partial-swap navigation.</strong> With JS off, links still navigate, they just trigger a full-page load instead of a swap. UX degrades to the standard browser experience.</li>
       <li><strong>Suspense streaming.</strong> The fallback paints without JS, but streamed-in updates need scripts to be applied.</li>
       <li><strong>WebSockets.</strong> No fallback; if you need realtime, you need JS.</li>
@@ -134,7 +134,7 @@ export default async function Posts() {
     <h3>4. Don't gate read-paths on hydration</h3>
 
     <p>
-      Static content (text, images, links, lists, marketing sections, layouts) should be plain HTML or a function returning an <code>html\`\`</code> template, not a custom element. Custom elements are for when you need <em>state</em> or <em>lifecycle</em>. If your component has no <code>@click</code>, no <code>setState()</code>, and no <code>firstUpdated()</code> doing anything, it should probably be a plain function.
+      Static content (text, images, links, lists, marketing sections, layouts) should be plain HTML or a function returning an <code>html\`\`</code> template, not a custom element. Custom elements are for when you need <em>state</em> or <em>lifecycle</em>. If your component has no <code>@click</code>, no signal mutation, and no <code>firstUpdated()</code> doing anything, it should probably be a plain function.
     </p>
 
     <h3>5. Use <code>&lt;form&gt;</code>'s built-in validation before reaching for JS</h3>
@@ -165,20 +165,15 @@ class Cart extends WebComponent {
     <pre>// ✅ SSR-safe: sensible default in the constructor, browser hook
 //    refines it after hydration
 class Cart extends WebComponent {
-  declare items: Item[];
-
-  constructor() {
-    super();
-    this.items = [];                          // ← SSR uses this
-  }
+  items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
 
   connectedCallback() {
     super.connectedCallback();
     const stored = readFromLocalStorage();
-    if (stored) this.setState({ items: stored }); // browser-only refinement
+    if (stored) this.items.set(stored);         // browser-only refinement
   }
 
-  render() { return html\`&lt;ul&gt;${'${this.items.map(...)}'}&lt;/ul&gt;\`; }
+  render() { return html\`&lt;ul&gt;${'${this.items.get().map(...)}'}&lt;/ul&gt;\`; }
 }</pre>
 
     <p>
@@ -186,7 +181,7 @@ class Cart extends WebComponent {
     </p>
 
     <ul>
-      <li><strong>Sensible default + browser refinement.</strong> Constructor sets a safe value (<code>[]</code>, <code>'system'</code>, empty). <code>connectedCallback</code> reads the browser-only source and calls <code>setState</code>. Accept that the first paint may flash from the default to the real value once JS arrives. Often fine.</li>
+      <li><strong>Sensible default + browser refinement.</strong> The instance signal's initial value (<code>[]</code>, <code>'system'</code>, empty) is what SSR renders. <code>connectedCallback</code> reads the browser-only source and writes the signal. Accept that the first paint may flash from the default to the real value once JS arrives. Often fine.</li>
       <li><strong>Synchronous bootstrap script.</strong> If the flash is unacceptable (theme color, RTL direction), emit a tiny inline <code>&lt;script&gt;</code> in the layout's <code>&lt;head&gt;</code> that reads <code>localStorage</code> and writes the value to <code>document.documentElement</code> (e.g. <code>data-theme</code> attribute). CSS reads from that attribute, so the page renders with the correct value before the component upgrades. This is how <code>&lt;theme-toggle&gt;</code> works in this docs site.</li>
       <li><strong>Send it from the server.</strong> If the data is available via a cookie or the request (session, accept-language), read it in the page function and pass it as an attribute or property on the component. The SSR pipeline applies attributes before <code>render()</code>, so the first paint has the right value.</li>
     </ul>
