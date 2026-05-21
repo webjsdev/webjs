@@ -47,7 +47,12 @@ for (const line of m[1].split('\n')) {
   if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
   fm[k] = v;
 }
-const body = m[2].trim();
+// Strip the leading h1 (e.g. `# @webjskit/core 0.6.0`) if present.
+// The release page already shows the title (from --title), so the h1
+// in the body was a duplicate header on every release page. Older
+// changelog files include this line; the current backfill generator
+// no longer emits it.
+const body = m[2].replace(/^#\s+[^\n]*\n+/, '').trim();
 
 const pkg = (fm.package || '').replace(/^@webjskit\//, '');
 const version = fm.version;
@@ -67,10 +72,28 @@ function gh(args, opts = {}) {
   });
 }
 
-// Idempotency check: if a release with this tag already exists, skip.
+// Idempotency check: if a release with this tag already exists, skip,
+// unless --update is passed (in which case we overwrite its notes via
+// `gh release edit`). --update is for back-out scenarios like the
+// duplicate-header fix; default behaviour stays no-op so workflow
+// retries don't churn.
+const wantUpdate = process.argv.includes('--update');
 const exists = gh(['release', 'view', tag, '--json', 'tagName']);
 if (exists.status === 0) {
-  console.log(`[publish-release] skip ${tag}: release already exists`);
+  if (!wantUpdate) {
+    console.log(`[publish-release] skip ${tag}: release already exists (pass --update to overwrite notes)`);
+    process.exit(0);
+  }
+  const edit = spawnSync(
+    'gh',
+    ['release', 'edit', tag, '--title', title, '--notes-file', '-'],
+    { input: body, encoding: 'utf8', stdio: ['pipe', 'inherit', 'inherit'] },
+  );
+  if (edit.status !== 0) {
+    console.error(`[publish-release] gh release edit failed for ${tag}`);
+    process.exit(edit.status || 1);
+  }
+  console.log(`[publish-release] updated release ${tag} (${basename(file)})`);
   process.exit(0);
 }
 

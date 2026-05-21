@@ -161,6 +161,10 @@ function renderEntry(pkg, version, date, commits) {
   }
   const order = [...grouped.keys()].sort((a, b) => TYPE_ORDER[a] - TYPE_ORDER[b]);
 
+  // No h1 in the body. The website's /changelog page emits its own
+  // card header (package badge + version + date), and GitHub Releases
+  // uses the release title for the heading on each entry. An h1 here
+  // duplicates one or the other on every surface.
   const fm = [
     '---',
     `package: "@webjskit/${pkg}"`,
@@ -168,8 +172,6 @@ function renderEntry(pkg, version, date, commits) {
     `date: ${date}`,
     `commit_count: ${commits.length}`,
     '---',
-    '',
-    `# @webjskit/${pkg} ${version}`,
     '',
   ].join('\n');
 
