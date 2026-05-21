@@ -36,7 +36,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to v6: both actions ship a Node 24 runtime, which is
+      # what GitHub Actions will default to from June 2nd, 2026. v4
+      # / v5 ran on Node 20 and triggered the deprecation banner.
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 2
 
@@ -44,7 +47,7 @@ jobs:
       # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN} line, so
       # subsequent `npm publish` invocations pick up the token from
       # the env var.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
