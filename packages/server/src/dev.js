@@ -389,11 +389,23 @@ async function handleCore(req, ctx) {
   }
 
   // Core module: /__webjs/core/*
+  //
+  // ETag + ~1h max-age, NOT immutable. The URL path is un-versioned
+  // (`/__webjs/core/src/render-client.js` etc.), so bumping
+  // `@webjskit/core` ships different bytes at the same URL. An
+  // `immutable` cache-control directive at an edge CDN (Cloudflare,
+  // Vercel, Fly) keeps the prior bytes pinned for up to a year, which
+  // silently bricks the next deploy: browsers load the old client
+  // renderer against a server emitting the new SSR shape, and any
+  // exports added in the bump (e.g., the slot.js entry points landed
+  // for 0.6.0) resolve to undefined in the cached file.
+  // Regression: 2026-05-20, ui.webjs.dev tier-2 components after
+  // @webjskit/core 0.5.0 -> 0.6.0 republish.
   if (path.startsWith('/__webjs/core/')) {
     const rel = path.slice('/__webjs/core/'.length);
     const abs = resolve(coreDir, rel);
     if (!abs.startsWith(coreDir)) return new Response('forbidden', { status: 403 });
-    return fileResponse(abs, { dev, immutable: !dev });
+    return fileResponse(abs, { dev, immutable: false });
   }
 
   // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
