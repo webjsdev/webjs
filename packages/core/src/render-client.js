@@ -1484,8 +1484,8 @@ function teardownUntil(state) {
  */
 function applyWatch(part, sig) {
   const partAny = /** @type any */ (part);
-  // Same signal as last render: just refresh the bound value through
-  // the existing watcher's observe so the dep tracking is re-armed.
+  // Same signal as last render: refresh dep tracking via observe (the
+  // spec-aligned Watcher fires once per arm, so re-observing re-arms).
   if (partAny.__watchSig === sig && partAny.__watchSub) {
     let value;
     partAny.__watchSub.observe(() => { value = sig.get(); });
@@ -1498,13 +1498,16 @@ function applyWatch(part, sig) {
     partAny.__watchSub = undefined;
   }
   partAny.__watchSig = sig;
-  // The notify callback re-reads the signal inside observe() so the
-  // watcher stays subscribed, then re-applies the value to this part.
+  // Notify defers to a microtask because the spec forbids signal reads
+  // inside the notify itself. The microtask re-observes (re-arms + re-
+  // records the dep) and applies the new value to the part.
   const watcher = new Signal.subtle.Watcher(() => {
-    if (partAny.__watchSub !== watcher) return; // disposed mid-flight
-    let v;
-    watcher.observe(() => { v = sig.get(); });
-    applyChildInner(part, v);
+    queueMicrotask(() => {
+      if (partAny.__watchSub !== watcher) return; // disposed mid-flight
+      let v;
+      watcher.observe(() => { v = sig.get(); });
+      applyChildInner(part, v);
+    });
   });
   partAny.__watchSub = watcher;
   let initial;

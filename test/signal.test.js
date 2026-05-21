@@ -65,12 +65,11 @@ test('computed: drops stale deps on re-eval (dynamic dependency list)', () => {
   assert.equal(evals, 0, 'former-dep change after re-eval does not invalidate');
 });
 
-test('Signal.subtle.Watcher: fires on every signal change while observing, dispose releases', () => {
-  // Note: webjs's internal Watcher fires every time, not the TC39
-  // fires-once-then-re-watch semantics. The WebComponent integration
-  // re-observes inside its render cycle, so a continuous-fire watcher
-  // composes more cleanly. The TC39 Signal.subtle.Watcher API is not
-  // re-exported as a stable surface for that reason.
+test('Signal.subtle.Watcher: fires once per watch() call, dispose releases', () => {
+  // Matches the TC39 fire-once-then-rewatch contract. observe(fn) is
+  // a webjs convenience that runs fn with the watcher as the active
+  // consumer, then re-arms. Subsequent set() fires notify once;
+  // observe() (or watch()) must be called again to re-arm.
   const s = signal('a');
   let fires = 0;
   const w = new Signal.subtle.Watcher(() => fires++);
@@ -79,9 +78,12 @@ test('Signal.subtle.Watcher: fires on every signal change while observing, dispo
   s.set('b');
   assert.equal(fires, 1);
   s.set('c');
-  assert.equal(fires, 2);
-  w.dispose();
+  assert.equal(fires, 1, 'second change before re-arm does not refire');
+  w.watch();
   s.set('d');
+  assert.equal(fires, 2, 're-arm via watch() lets the next change fire');
+  w.dispose();
+  s.set('e');
   assert.equal(fires, 2, 'disposed watcher does not fire');
 });
 
@@ -113,17 +115,22 @@ test('batch: nested batches drain at outermost close', () => {
   assert.equal(fires, 1, 'flush at outermost close');
 });
 
-test('effect: runs once, re-runs on dep change, dispose stops it', () => {
+test('effect: runs once, re-runs on dep change (microtask), dispose stops it', async () => {
   const a = signal(0);
   const calls = [];
   const dispose = effect(() => { calls.push(a.get()); });
   assert.deepEqual(calls, [0], 'effect runs once eagerly');
   a.set(1);
+  // Effect re-runs are deferred to a microtask (spec forbids reads
+  // inside Watcher notify).
+  await Promise.resolve();
   assert.deepEqual(calls, [0, 1]);
   a.set(2);
+  await Promise.resolve();
   assert.deepEqual(calls, [0, 1, 2]);
   dispose();
   a.set(3);
+  await Promise.resolve();
   assert.deepEqual(calls, [0, 1, 2], 'disposed effect does not run');
 });
 

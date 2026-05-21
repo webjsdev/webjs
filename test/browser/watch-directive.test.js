@@ -32,12 +32,14 @@ suite('watch() directive', () => {
     assert.equal(el.querySelector('p').textContent, 'Count: 0');
 
     count.set(1);
-    // No render() call expected; watch applies the value synchronously
-    // inside the signal's notify (no microtask wait needed).
+    // The directive defers the DOM update to a microtask because the
+    // spec forbids signal reads inside Watcher notify. Yield once.
+    await Promise.resolve();
     assert.equal(renders, 1, 'watch update bypasses host re-render');
     assert.equal(el.querySelector('p').textContent, 'Count: 1');
 
     count.set(5);
+    await Promise.resolve();
     assert.equal(renders, 1);
     assert.equal(el.querySelector('p').textContent, 'Count: 5');
 
@@ -91,10 +93,12 @@ suite('watch() directive', () => {
 
     // Changing the OLD signal should NOT update the DOM.
     a.set('alpha-2');
+    await Promise.resolve();
     assert.equal(el.querySelector('i').textContent, 'beta');
 
-    // Changing the NEW signal updates.
+    // Changing the NEW signal updates (defer one microtask).
     b.set('beta-2');
+    await Promise.resolve();
     assert.equal(el.querySelector('i').textContent, 'beta-2');
 
     document.body.removeChild(el);
