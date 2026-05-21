@@ -16,7 +16,8 @@
       "default": "./src/component.js"
     },
     "./registry": "./src/registry.js",
-    "./client-router": "./src/router-client.js"
+    "./client-router": "./src/router-client.js",
+    "./signals": "./src/signal.js"
   },
   "files": [
     "index.js",
