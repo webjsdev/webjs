@@ -62,16 +62,21 @@ jobs:
           # Sort by the `date:` timestamp inside each file's
           # frontmatter, ASCending. GitHub Releases lists releases by
           # created_at DESC, so publishing oldest-first means newest
-          # entries end up at the top of the Releases page. Files
-          # with the same timestamp (e.g. multiple packages bumped in
-          # one PR) keep their stable input order.
+          # entries end up at the top of the Releases page.
+          #
+          # Within tied timestamps (multiple packages bumped in one
+          # PR), sort the filename DESC so the alphabetically-first
+          # package publishes LAST, gets the latest created_at, and
+          # ends up at the top of the GH list. The website's
+          # /changelog page iterates package dirs alphabetically
+          # too, so this produces matching order on both surfaces.
           mapfile -t NEW < <(
             git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md' \
               | while read -r f; do
                   ts=$(awk '/^date:/ { print $2; exit }' "$f")
                   printf '%s\t%s\n' "$ts" "$f"
                 done \
-              | sort \
+              | sort -k1,1 -k2,2r \
               | cut -f2-
           )
           if [ ${#NEW[@]} -eq 0 ]; then
