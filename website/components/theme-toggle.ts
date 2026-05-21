@@ -10,26 +10,26 @@ import { WebComponent, html } from '@webjskit/core';
 type Theme = 'system' | 'light' | 'dark';
 
 export class ThemeToggle extends WebComponent {
-  declare state: { theme: Theme };
+  static properties = { theme: { type: String, state: true } };
+  declare theme: Theme;
 
   constructor() {
     super();
-    this.state = { theme: 'system' };
+    this.theme = 'system';
   }
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    const theme: Theme = saved === 'light' || saved === 'dark' ? saved : 'system';
-    this.setState({ theme });
+    this.theme = saved === 'light' || saved === 'dark' ? saved : 'system';
   }
 
   cycle() {
     const next: Theme =
-      this.state.theme === 'system' ? 'light'
-      : this.state.theme === 'light' ? 'dark' : 'system';
-    this.setState({ theme: next });
+      this.theme === 'system' ? 'light'
+      : this.theme === 'light' ? 'dark' : 'system';
+    this.theme = next;
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
@@ -39,7 +39,7 @@ export class ThemeToggle extends WebComponent {
   }
 
   render() {
-    const t = this.state.theme;
+    const t = this.theme;
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html`
