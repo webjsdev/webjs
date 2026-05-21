@@ -6,23 +6,37 @@ type Result = { path: string; title: string; score: number; snippet: string };
  * `<doc-search>`: search input + dropdown results. Light DOM + Tailwind.
  */
 export class DocSearch extends WebComponent {
-  declare state: { query: string; results: Result[]; loading: boolean; open: boolean };
+  static properties = {
+    query:   { type: String, state: true },
+    results: { type: Object, state: true },
+    loading: { type: Boolean, state: true },
+    open:    { type: Boolean, state: true },
+  };
+  declare query: string;
+  declare results: Result[];
+  declare loading: boolean;
+  declare open: boolean;
   _timer: any = null;
 
   constructor() {
     super();
-    this.state = { query: '', results: [], loading: false, open: false };
+    this.query = '';
+    this.results = [];
+    this.loading = false;
+    this.open = false;
   }
 
   onInput(e: InputEvent) {
     const val = (e.target as HTMLInputElement).value;
-    this.setState({ query: val, open: true });
+    this.query = val;
+    this.open = true;
     clearTimeout(this._timer);
     if (val.trim().length < 2) {
-      this.setState({ results: [], loading: false });
+      this.results = [];
+      this.loading = false;
       return;
     }
-    this.setState({ loading: true });
+    this.loading = true;
     this._timer = setTimeout(() => this.search(val), 200);
   }
 
@@ -30,24 +44,26 @@ export class DocSearch extends WebComponent {
     try {
       const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const results: Result[] = await r.json();
-      if (this.state.query === q) {
-        this.setState({ results, loading: false });
+      if (this.query === q) {
+        this.results = results;
+        this.loading = false;
       }
     } catch {
-      this.setState({ loading: false });
+      this.loading = false;
     }
   }
 
   onBlur() {
-    setTimeout(() => this.setState({ open: false }), 150);
+    setTimeout(() => { this.open = false; }, 150);
   }
 
   onFocus() {
-    if (this.state.query.length >= 2) this.setState({ open: true });
+    if (this.query.length >= 2) this.open = true;
   }
 
   navigate(path: string) {
-    this.setState({ open: false, query: '' });
+    this.open = false;
+    this.query = '';
     if (typeof (window as any).navigate === 'function') {
       (window as any).navigate(path);
     } else {
@@ -56,7 +72,7 @@ export class DocSearch extends WebComponent {
   }
 
   render() {
-    const { query, results, loading, open } = this.state;
+    const { query, results, loading, open } = this;
     return html`
       <div class="block relative mb-4">
         <svg class="absolute left-[10px] top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-fg-subtle pointer-events-none"

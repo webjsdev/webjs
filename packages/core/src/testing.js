@@ -60,16 +60,17 @@ export async function fixture(template) {
 /**
  * Wait for a component's next render cycle to complete.
  *
- * **When to use (AI hint):** Call after `setAttribute()`, `setState()`,
- * or any change that triggers a re-render. The re-render is async
- * (microtask-batched), so you need to await before asserting.
+ * **When to use (AI hint):** Call after `setAttribute()`, a property
+ * assignment, `requestUpdate()`, or a signal `set()` the component
+ * subscribes to, any change that triggers a re-render. The re-render
+ * is async (microtask-batched), so you need to await before asserting.
  *
  * @param {Element} el  The component element.
  * @returns {Promise<void>}
  */
 export async function waitForUpdate(el) {
   // WebComponent batches via queueMicrotask, so two microtask yields
-  // is sufficient: one for the setState queueMicrotask, one for any
+  // is sufficient: one for the scheduling microtask, one for any
   // cascading updates.
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));

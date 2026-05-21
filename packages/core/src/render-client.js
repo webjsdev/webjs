@@ -32,7 +32,8 @@ import {
  *
  * Consequences worth knowing:
  *   - Input focus, cursor position, selection, and scroll inside components
- *     survive `setState`.
+ *     survive re-renders triggered by property assignments, signal changes,
+ *     or `requestUpdate()`.
  *   - Event listeners are attached once and retargeted when the handler
  *     reference changes (swap-in-place via a dispatch closure, so `addEventListener`
  *     isn't churned every render).

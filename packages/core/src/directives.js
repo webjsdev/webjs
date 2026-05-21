@@ -76,8 +76,8 @@ export function isUnsafeHTML(x) {
  * import { html } from '@webjskit/core';
  * import { live } from '@webjskit/core/directives';
  *
- * html`<input .value=${live(this.state.query)}
- *             @input=${e => this.setState({ query: e.target.value })}>`;
+ * html`<input .value=${live(this.query)}
+ *             @input=${e => { this.query = e.target.value; }}>`;
  * ```
  *
  * On the server, `live()` is a no-op: it unwraps to the inner value.
