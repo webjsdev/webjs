@@ -168,6 +168,6 @@ Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</pre>
 ## Advanced features (Suspense, bundling, rate limiting, WebSockets...)
 ## Runtime targets (Node, embedded, edge)
 ## Deliberately deferred (what NOT to implement)</pre>
-    <p>You can read the full <a href="https://github.com/vivek7405/webjs/blob/main/AGENTS.md">AGENTS.md on GitHub</a>.</p>
+    <p>You can read the full <a href="https://github.com/webjsdev/webjs/blob/main/AGENTS.md">AGENTS.md on GitHub</a>.</p>
   `;
 }

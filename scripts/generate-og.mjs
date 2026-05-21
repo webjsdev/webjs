@@ -136,7 +136,7 @@ const html = (a) => `<!DOCTYPE html>
   </div>
   <div class="footer">
     <span><span class="dot">●</span>&nbsp;&nbsp;ai-first · web-components-first · no build</span>
-    <span>github.com/vivek7405/webjs</span>
+    <span>github.com/webjsdev/webjs</span>
   </div>
 </body>
 </html>`;

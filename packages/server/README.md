@@ -1,6 +1,6 @@
 # @webjsdev/server
 
-Dev + production server for [webjs](https://github.com/vivek7405/webjs):
+Dev + production server for [webjs](https://github.com/webjsdev/webjs):
 file-based routing, streaming SSR, server actions, WebSocket upgrades, and
 live reload.
 
@@ -44,7 +44,7 @@ import { startServer } from '@webjsdev/server';
 await startServer({ port: 3000, appDir: process.cwd(), dev: true });
 ```
 
-See the full framework docs at https://github.com/vivek7405/webjs.
+See the full framework docs at https://github.com/webjsdev/webjs.
 
 ## License
 

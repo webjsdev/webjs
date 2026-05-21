@@ -1,6 +1,6 @@
 # @webjsdev/cli
 
-CLI for [webjs](https://github.com/vivek7405/webjs): scaffold, develop,
+CLI for [webjs](https://github.com/webjsdev/webjs): scaffold, develop,
 build, and run webjs apps.
 
 Installing this package gives you the `webjs` command.
@@ -64,7 +64,7 @@ The scaffold seeds opinionated defaults so AI agents produce consistent code:
 - Tailwind CSS via CLI (no browser runtime at build time)
 - TypeScript, `.editorconfig`, `.gitignore`
 
-See the full framework docs at https://github.com/vivek7405/webjs.
+See the full framework docs at https://github.com/webjsdev/webjs.
 
 ## License
 

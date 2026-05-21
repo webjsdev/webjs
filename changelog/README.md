@@ -61,7 +61,7 @@ commit_count: 4
 
 ## Breaking
 
-- **Title of the change** ([#NN](https://github.com/vivek7405/webjs/pull/NN)) [`abcd123`](https://github.com/vivek7405/webjs/commit/abcd123)
+- **Title of the change** ([#NN](https://github.com/webjsdev/webjs/pull/NN)) [`abcd123`](https://github.com/webjsdev/webjs/commit/abcd123)
   First four lines of the commit body, indented two spaces.
 
 ## Features

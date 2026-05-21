@@ -64,7 +64,7 @@ webjs create my-api --template api
 webjs create my-app --template saas
 
 # or run everything in the monorepo (website + docs + blog together)
-git clone https://github.com/vivek7405/webjs
+git clone https://github.com/webjsdev/webjs
 cd webjs && npm install
 cd examples/blog && npx prisma migrate dev --name init && cd ..
 npm run dev

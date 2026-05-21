@@ -30,11 +30,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vivek7405/webjs.git",
+    "url": "git+https://github.com/webjsdev/webjs.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/vivek7405/webjs#readme",
-  "bugs": "https://github.com/vivek7405/webjs/issues",
+  "homepage": "https://github.com/webjsdev/webjs#readme",
+  "bugs": "https://github.com/webjsdev/webjs/issues",
   "license": "MIT",
   "keywords": [
     "webjs",
