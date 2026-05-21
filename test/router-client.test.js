@@ -31,7 +31,8 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
   _currentPageUrl, _setCurrentPageUrl,
-  enableClientRouter, disableClientRouter, revalidate;
+  enableClientRouter, disableClientRouter, revalidate,
+  WebComponent, html;
 
 before(async () => {
   const { window } = parseHTML('<!doctype html><html><head></head><body></body></html>');
@@ -85,6 +86,8 @@ before(async () => {
     enableClientRouter,
     disableClientRouter,
   } = await import('../packages/core/src/router-client.js'));
+
+  ({ WebComponent, html } = await import('../packages/core/index.js'));
 });
 
 /* ====================================================================
@@ -1555,5 +1558,223 @@ test('popstate: page being LEFT is snapshotted under its own URL (so forward-nav
     _setCurrentPageUrl(prevPageUrl);
     globalThis.location = origLoc;
     globalThis.fetch = origFetch;
+  }
+});
+
+/* ====================================================================
+ * Partial-swap nav + component lifecycle (lit-parity integration)
+ *
+ * The critical client-router invariant. When navigation lands inside a
+ * nested layout, the OUTER layout's component instances (and their
+ * controllers' hostConnected) are NOT re-fired, because their DOM is
+ * preserved verbatim. Only components inside the deepest swapped
+ * marker pair go through disconnect / connect.
+ *
+ * These tests pin that down for components with ReactiveControllers
+ * attached. Task / ContextProvider / ContextConsumer share the same
+ * dispatch path, so the controller-level assertion is the right level
+ * to verify the invariant once.
+ * ==================================================================== */
+
+let __nextTrackerN = 0;
+function makeTracker(records) {
+  const tag = `nav-tracker-${++__nextTrackerN}`;
+  class Tracker extends WebComponent {
+    constructor() {
+      super();
+      this.addController({
+        hostConnected: () => records.push(`connect:${this.id || '?'}`),
+        hostDisconnected: () => records.push(`disconnect:${this.id || '?'}`),
+      });
+    }
+    render() { return html`<span>${this.id || '?'}</span>`; }
+  }
+  Tracker.register(tag);
+  return tag;
+}
+
+test('partial-swap: outer-layout component instance survives when inner segment changes', async () => {
+  const records = [];
+  const tag = makeTracker(records);
+
+  document.body.innerHTML = '';
+
+  // Build the OLD body. Outer tracker sits BEFORE the / marker so it's
+  // entirely outside any layout slot. Middle tracker sits inside / but
+  // outside /docs. Inner tracker sits inside /docs.
+  const outer = document.createElement(tag);
+  outer.id = 'outer-tracker';
+  document.body.appendChild(outer);
+
+  document.body.appendChild(document.createComment('wj:children:/'));
+
+  const middle = document.createElement(tag);
+  middle.id = 'middle-tracker';
+  document.body.appendChild(middle);
+
+  document.body.appendChild(document.createComment('wj:children:/docs'));
+
+  const innerOld = document.createElement(tag);
+  innerOld.id = 'inner-old';
+  document.body.appendChild(innerOld);
+
+  document.body.appendChild(document.createComment('/wj:children'));
+  document.body.appendChild(document.createComment('/wj:children'));
+
+  await Promise.resolve();
+  await Promise.resolve();
+
+  // Sanity. All three trackers connected once, none disconnected.
+  assert.deepEqual(
+    records.filter((r) => r.startsWith('connect:')).sort(),
+    ['connect:inner-old', 'connect:middle-tracker', 'connect:outer-tracker'],
+    'all three trackers connected on initial mount'
+  );
+  assert.equal(
+    records.filter((r) => r.startsWith('disconnect:')).length,
+    0,
+    'no disconnects before nav'
+  );
+
+  records.length = 0;
+
+  // Incoming HTML keeps outer + middle (same id) and swaps inner for a
+  // fresh element with a different id.
+  const newBody =
+    `<${tag} id="outer-tracker"></${tag}>` +
+    '<!--wj:children:/-->' +
+      `<${tag} id="middle-tracker"></${tag}>` +
+      '<!--wj:children:/docs-->' +
+        `<${tag} id="inner-new"></${tag}>` +
+      '<!--/wj:children-->' +
+    '<!--/wj:children-->';
+
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html; charset=utf-8',
+    body: `<!doctype html><html><head></head><body>${newBody}</body></html>`,
+  });
+
+  try {
+    await navigate('http://localhost/docs/new');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(redirect.href, null,
+      'partial-swap should not trigger location.href fallback');
+
+    // Outer tracker. Untouched. Lives outside every layout slot, so
+    // never enters reconcileSiblings.
+    assert.equal(
+      records.filter((r) => r === 'connect:outer-tracker').length, 0,
+      'outer tracker must NOT re-connect (it was outside the swap range)'
+    );
+    assert.equal(
+      records.filter((r) => r === 'disconnect:outer-tracker').length, 0,
+      'outer tracker must NOT disconnect'
+    );
+
+    // Middle tracker. Inside / but outside /docs. Deepest shared path
+    // is /docs, so the swap range is bounded by the /docs markers and
+    // middle is never reconciled.
+    assert.equal(
+      records.filter((r) => r === 'connect:middle-tracker').length, 0,
+      'middle tracker must NOT re-connect (outside the /docs swap range)'
+    );
+    assert.equal(
+      records.filter((r) => r === 'disconnect:middle-tracker').length, 0,
+      'middle tracker must NOT disconnect'
+    );
+
+    // Inner. Different ids means no key match in reconcileSiblings, so
+    // this is a real swap.
+    assert.equal(
+      records.filter((r) => r === 'disconnect:inner-old').length, 1,
+      'inner-old must disconnect (no key match against inner-new)'
+    );
+    assert.equal(
+      records.filter((r) => r === 'connect:inner-new').length, 1,
+      'inner-new must connect after the swap inserts + upgrades it'
+    );
+
+    // Node identity assertions catch any future regression where the
+    // router wholesale-replaces preserved-range nodes.
+    assert.equal(
+      document.getElementById('outer-tracker'), outer,
+      'outer tracker DOM identity preserved'
+    );
+    assert.equal(
+      document.getElementById('middle-tracker'), middle,
+      'middle tracker DOM identity preserved'
+    );
+  } finally {
+    restore();
+    document.body.innerHTML = '';
+  }
+});
+
+test('partial-swap: keyed inner element preserves DOM identity inside the swap range', async () => {
+  const records = [];
+  const tag = makeTracker(records);
+
+  document.body.innerHTML = '';
+
+  // Single-layout setup. The "kept" element shares its id with the
+  // incoming element, the "removed" element does not.
+  document.body.appendChild(document.createComment('wj:children:/'));
+
+  const kept = document.createElement(tag);
+  kept.id = 'kept';
+  document.body.appendChild(kept);
+
+  const removed = document.createElement(tag);
+  removed.id = 'removed-old';
+  document.body.appendChild(removed);
+
+  document.body.appendChild(document.createComment('/wj:children'));
+
+  await Promise.resolve();
+  await Promise.resolve();
+
+  records.length = 0;
+
+  const newBody =
+    '<!--wj:children:/-->' +
+      `<${tag} id="kept"></${tag}>` +
+      `<${tag} id="added"></${tag}>` +
+    '<!--/wj:children-->';
+
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html; charset=utf-8',
+    body: `<!doctype html><html><head></head><body>${newBody}</body></html>`,
+  });
+
+  try {
+    await navigate('http://localhost/swap');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // id-keyed reuse means the same DOM Node ref must survive. This is
+    // the load-bearing assertion. (Lifecycle counts for in-parent
+    // re-insertion are implementation-defined across DOM hosts; per
+    // the DOM spec, real browsers do not fire disconnect/connect when
+    // a connected node is re-inserted under the same parent. Test
+    // identity here, leave lifecycle assertions to test/browser/.)
+    assert.equal(document.getElementById('kept'), kept,
+      'kept DOM identity preserved across partial-swap');
+
+    // Removed: gone, fires disconnect.
+    assert.equal(
+      records.filter((r) => r === 'disconnect:removed-old').length, 1,
+      'removed-old must disconnect'
+    );
+
+    // Added: brand-new id, fires connect.
+    assert.equal(
+      records.filter((r) => r === 'connect:added').length, 1,
+      'added must connect'
+    );
+  } finally {
+    restore();
+    document.body.innerHTML = '';
   }
 });
