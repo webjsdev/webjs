@@ -52,6 +52,10 @@ COPY packages  ./packages
 COPY examples  ./examples
 COPY website   ./website
 COPY docs      ./docs
+# website/app/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
+# SSR time. Without copying the changelog tree into the image, the
+# deployed page renders "No entries yet."
+COPY changelog ./changelog
 
 # --- 3. Build-time work --------------------------------------------------
 # Blog: generate Prisma client (needs schema.prisma in context).
