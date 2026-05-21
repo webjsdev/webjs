@@ -12,8 +12,8 @@
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
   },
   "dependencies": {
-    "@webjskit/cli": "^0.7.0",
-    "@webjskit/core": "^0.6.0",
+    "@webjskit/cli": "^0.8.0",
+    "@webjskit/core": "^0.7.0",
     "@webjskit/server": "^0.7.0"
   },
   "engines": {
