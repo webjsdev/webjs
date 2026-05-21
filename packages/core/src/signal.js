@@ -264,17 +264,34 @@ class SignalWatcher {
 }
 
 /**
+ * Run `fn` without tracking the signals it reads. Reads inside `fn`
+ * see the current values but no dependency edge is recorded against
+ * the currently-active subscriber. Used by the `watch` directive so
+ * its signal read does not also subscribe the host component to a
+ * full re-render.
+ *
+ * @template T
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function untrack(fn) {
+  activeStack.push(/** @type any */ (null));
+  try { return fn(); } finally { activeStack.pop(); }
+}
+
+/**
  * TC39-shaped public surface, `Signal.State`, `Signal.Computed`,
- * `Signal.subtle.Watcher`. The proposal puts the watcher under `subtle`
- * because most consumers should use higher-level wrappers (the
- * component integration, `effect`, the `watch` directive) rather than
- * driving a Watcher directly.
+ * `Signal.subtle.Watcher`, `Signal.subtle.untrack`. The proposal puts
+ * the watcher and untrack under `subtle` because most consumers should
+ * use higher-level wrappers (the component integration, `effect`, the
+ * `watch` directive) rather than driving them directly.
  */
 export const Signal = {
   State: SignalState,
   Computed: SignalComputed,
   subtle: {
     Watcher: SignalWatcher,
+    untrack,
   },
 };
 

@@ -405,3 +405,50 @@ export function asyncReplace(iterable, mapper) {
 export function isAsyncReplace(x) {
   return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'async-replace';
 }
+
+/* ================================================================
+ * watch (signal binding)
+ * ================================================================ */
+
+/**
+ * Fine-grained reactive binding for a signal. Reads the signal at
+ * render time and subscribes the rendered template hole to subsequent
+ * changes. When the signal's value changes, only THIS hole updates,
+ * the surrounding component does not re-render.
+ *
+ * ```js
+ * import { html } from '@webjskit/core';
+ * import { signal } from '@webjskit/core';
+ * import { watch } from '@webjskit/core/directives';
+ *
+ * const count = signal(0);
+ *
+ * class Counter extends WebComponent {
+ *   render() {
+ *     return html`
+ *       <p>Count: ${watch(count)}</p>
+ *       <button @click=${() => count.set(count.get() + 1)}>+</button>
+ *     `;
+ *   }
+ * }
+ * ```
+ *
+ * Without `watch()`, a plain `${count.get()}` works too (the host
+ * component subscribes automatically through its built-in
+ * SignalWatcher), but the whole component re-renders on each change.
+ * Use `watch()` when the surrounding template is expensive to re-run
+ * or when you want signal changes to bypass `shouldUpdate` / `willUpdate`.
+ *
+ * On SSR, `watch()` reads the signal once and inlines the value.
+ *
+ * @param {{ get: () => unknown, __isSignal: true }} sig
+ * @returns {{ _$webjs: 'watch', signal: { get: () => unknown, __isSignal: true } }}
+ */
+export function watch(sig) {
+  return { _$webjs: 'watch', signal: sig };
+}
+
+/** @param {unknown} x */
+export function isWatch(x) {
+  return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'watch';
+}
