@@ -1,6 +1,6 @@
-# @webjskit/ui-website
+# @webjsdev/ui-website
 
-The HTTP host for the `@webjskit/ui` component registry, plus a docs site with one
+The HTTP host for the `@webjsdev/ui` component registry, plus a docs site with one
 page per component.
 
 A webjs app that dogfoods the framework.
@@ -48,7 +48,7 @@ The ui-website is **both** the publisher and a consumer of the
 component kit:
 
 1. **Publisher:** serves the registry JSON at
-   `/registry/<name>.json` (the `@webjskit/ui` CLI fetches these).
+   `/registry/<name>.json` (the `@webjsdev/ui` CLI fetches these).
    The canonical sources live in `../registry/components/*.ts`.
 2. **Consumer:** docs pages (`app/docs/components/[name]/page.ts`)
    import the actual components to render live previews. They import

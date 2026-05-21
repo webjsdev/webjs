@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = {
   title: 'webjs: AI-first, web-components-first, no-build web framework',
@@ -27,7 +27,7 @@ const FEATURES = [
   { icon: '🧱', title: 'Web Components · Light DOM by Default', desc: 'Standard HTML custom elements with a thin reactive base class: html`` / css`` tagged templates, static properties, ReactiveController, Task and Context controllers. Light DOM is the default so Tailwind and global CSS apply directly; flip static shadow = true for scoped styles or embed isolation. Both modes SSR fully (light DOM as direct HTML, shadow DOM via DSD) and hydrate with zero flash.' },
   { icon: '🪟', title: '<slot> in Light DOM, Full Shadow-DOM Parity', desc: 'The complete <slot> surface in light DOM: named slots, fallback content, assignedNodes() / assignedElements() / assignedSlot, slotchange events, first-wins resolution, and {flatten: true} forwarding. The same render() template works whether static shadow is true or false, no rewrite when you switch modes. SSR projects authored children directly into the rendered HTML so progressive enhancement works with JS disabled.' },
   { icon: '🪜', title: 'Progressive Enhancement by Default', desc: 'Pages and every web component are SSR’d to real HTML: each component’s render() runs on the server, so its initial markup is in the response before any script loads. With JS disabled: content reads, <a> links navigate, <form> server actions submit, and display-only custom elements look right. JavaScript is opt-in per interactive behavior, not per component: a counter renders as "0" without JS: only the +/- click handling needs scripts. The HTML is the floor; @click handlers, reactive properties, and signals are layered on top.' },
-  { icon: '💡', title: 'Editor Intelligence', desc: '@webjskit/ts-plugin gives VS Code and Neovim type-checked html`` templates, custom-element go-to-definition, attribute auto-complete from static properties, and silenced "Unknown tag" diagnostics for Class.register("tag") elements.' },
+  { icon: '💡', title: 'Editor Intelligence', desc: '@webjsdev/ts-plugin gives VS Code and Neovim type-checked html`` templates, custom-element go-to-definition, attribute auto-complete from static properties, and silenced "Unknown tag" diagnostics for Class.register("tag") elements.' },
   { icon: '🎨', title: 'Tailwind CSS by Default', desc: 'The scaffold ships with the Tailwind browser runtime and @theme design tokens: color palette, font families, fluid type scale, and motion durations wired into Tailwind classes. Dedup repeated class bundles with small JS helpers in lib/utils/ui.ts that run at SSR time. Custom CSS still supported: no hard Tailwind dependency.' },
   { icon: '🧩', title: 'AI-First Component Library', desc: 'Webjs UI ships 32 primitives written for AI agents, not for human dev ergonomics. Two-tier composition: pure class-helper functions (buttonClass, cardClass, inputClass) compose with raw native elements, plus a small set of stateful custom elements (ui-dialog, ui-tabs, ui-popover, ui-dropdown-menu) only where the browser needs state. Source-copied into your project: you own it. Zero third-party runtime deps. Visit ui.webjs.dev.' },
   { icon: '📁', title: 'File-Based Routing', desc: 'Pages, layouts, route handlers, error boundaries, and loading states from the file system: page.ts, layout.ts, route.ts, error.ts, loading.ts (auto-Suspense), not-found.ts (nested), middleware.ts, [param], [...slug], [[...optional]], (groups), and metadata routes (sitemap.ts, robots.ts). Familiar if you have used the NextJs App Router.' },
@@ -258,7 +258,7 @@ export default function LandingPage() {
 
     <div class="install">
       <span class="comment"># install once</span><br>
-      <span class="cmd">npm i -g @webjskit/cli</span><br>
+      <span class="cmd">npm i -g @webjsdev/cli</span><br>
       <br>
       <span class="comment"># scaffold a new app</span><br>
       <span class="cmd">webjs create my-app</span><br>

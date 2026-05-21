@@ -1,5 +1,5 @@
-import { html } from '@webjskit/core';
-import '@webjskit/core/client-router';
+import { html } from '@webjsdev/core';
+import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 
 const navLink = (href: string, label: string) => html`

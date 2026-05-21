@@ -46,7 +46,7 @@
  * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
  * --input, --destructive).
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 

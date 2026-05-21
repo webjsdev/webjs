@@ -60,7 +60,7 @@ No build step, no bundler, no minification. What you read is what
 runs. When in doubt, grep the framework:
 
 ```
-node_modules/@webjskit/
+node_modules/@webjsdev/
   core/            renderer, WebComponent, directives, client router,
                     Task, context, testing helpers
     src/component.js          ← lifecycle, properties, light vs shadow DOM
@@ -84,7 +84,7 @@ node_modules/@webjskit/
 Reaching straight for the source is the fastest way to resolve "why
 doesn't X work?" with no documentation guesswork and no stale blog posts.
 
-## Editor TS plugin: `@webjskit/ts-plugin`
+## Editor TS plugin: `@webjsdev/ts-plugin`
 
 This scaffold's `tsconfig.json` lists a single tsserver plugin. It is
 editor-only, not required for the framework to run.
@@ -92,11 +92,11 @@ editor-only, not required for the framework to run.
 ```jsonc
 // tsconfig.json (already wired by the scaffold)
 "plugins": [
-  { "name": "@webjskit/ts-plugin" }
+  { "name": "@webjsdev/ts-plugin" }
 ]
 ```
 
-`@webjskit/ts-plugin` bundles `ts-lit-plugin` internally (it's a runtime
+`@webjsdev/ts-plugin` bundles `ts-lit-plugin` internally (it's a runtime
 dependency of the plugin) and loads it programmatically, so users
 list one entry, not two. You get the full stack of template-literal
 intelligence (type-checking, diagnostics, go-to-def inside
@@ -323,14 +323,14 @@ and the `DATABASE_URL` in `.env`.
 ## Imports
 
 ```ts
-import { html, css, WebComponent } from '@webjskit/core';
-import '@webjskit/core/client-router';              // enable SPA nav
-import { unsafeHTML, live } from '@webjskit/core/directives';
-import { createContext } from '@webjskit/core/context';
-import { Task } from '@webjskit/core/task';
-import { fixture, waitForUpdate } from '@webjskit/core/testing';
+import { html, css, WebComponent } from '@webjsdev/core';
+import '@webjsdev/core/client-router';              // enable SPA nav
+import { unsafeHTML, live } from '@webjsdev/core/directives';
+import { createContext } from '@webjsdev/core/context';
+import { Task } from '@webjsdev/core/task';
+import { fixture, waitForUpdate } from '@webjsdev/core/testing';
 
-import { rateLimit, cache, createAuth, Credentials, Session } from '@webjskit/server';
+import { rateLimit, cache, createAuth, Credentials, Session } from '@webjsdev/server';
 ```
 
 ## Environment variables (server vs browser)
@@ -358,7 +358,7 @@ const secret = process.env.AUTH_SECRET;             // undefined (fail-closed)
 ## Component pattern
 
 ```ts
-import { WebComponent, html, css } from '@webjskit/core';
+import { WebComponent, html, css } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
   static properties = { count: { type: Number } };
@@ -505,7 +505,7 @@ type-safe RPC stub automatically.
 ## Client navigation patterns (auto-magic)
 
 The client router enables itself when the scaffolded root layout imports
-`@webjskit/core/client-router`. After that, **every `<a href>` and
+`@webjsdev/core/client-router`. After that, **every `<a href>` and
 `<form action>` on the page is enhanced into a partial-swap navigation
 or submission automatically**. You don't call a router API. Write
 standard HTML; the swap happens.
@@ -540,7 +540,7 @@ with a `route.ts` POST handler:
 
 ```ts
 // app/posts/route.ts
-import { redirect, html } from '@webjskit/core';
+import { redirect, html } from '@webjsdev/core';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 
 export async function POST(req: Request) {
@@ -729,7 +729,7 @@ composition, so a nested shell ends up dropped by the HTML parser.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
 4. Component state lives in signals. Import `signal` from
-   `@webjskit/core`, read with `signal.get()` inside `render()`, and
+   `@webjsdev/core`, read with `signal.get()` inside `render()`, and
    write with `signal.set(value)`. Module-scope signals share state
    across components; instance signals (created in the constructor)
    carry component-local state. Reactive properties (`static
@@ -810,7 +810,7 @@ composition, so a nested shell ends up dropped by the HTML parser.
    on every commit, regardless of which agent (or human) made it. No AI
    attribution trailers in commit messages.
 4. When unsure how a framework feature works, `grep` or `cat` the
-   relevant `node_modules/@webjskit/*/src/` file before asking the user.
+   relevant `node_modules/@webjsdev/*/src/` file before asking the user.
 
 Project-specific conventions and overrides live in
 [CONVENTIONS.md](./CONVENTIONS.md).

@@ -1,4 +1,4 @@
-import { rateLimit } from '@webjskit/server';
+import { rateLimit } from '@webjsdev/server';
 
 /**
  * Tight rate limit on any auth endpoint: demonstrates per-segment

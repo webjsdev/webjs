@@ -33,10 +33,10 @@ export default {
     '!test/examples/blog/browser/**/*.test.js',
   ],
   nodeResolve: true,
-  // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
+  // Transform .ts → JS on the fly so browsers can `import()` the @webjsdev/ui
   // component sources directly. Mirrors `webjs dev` (which registers an esbuild
   // ESM loader hook for the same purpose): esbuild is already a hard dep of
-  // @webjskit/server, so this isn't adding a new toolchain.
+  // @webjsdev/server, so this isn't adding a new toolchain.
   plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
   browsers: [
     playwrightLauncher({ product: 'chromium' }),

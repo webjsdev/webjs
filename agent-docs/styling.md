@@ -15,7 +15,7 @@ classes repeats across 2+ places, extract it into a helper in
 `lib/utils/ui.ts`:
 
 ```ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 /** `● label` kicker: small caps, accent colour, above headings. */
 export function rubric(label: string, mb: 'sm' | 'md' = 'md') {
@@ -92,12 +92,12 @@ Naming convention: derive the scope class from the file path. Slashes
 
 Styles colocate with the markup as `const STYLES = css\`…\`` and
 interpolate via `<style>${STYLES.text}</style>`. `ts-lit-plugin` /
-`@webjskit/ts-plugin` highlights the CSS and resolves class go-to-definition.
+`@webjsdev/ts-plugin` highlights the CSS and resolves class go-to-definition.
 
 ### Example: a page
 
 ```ts
-import { html, css } from '@webjskit/core';
+import { html, css } from '@webjsdev/core';
 
 const STYLES = css`
   .page-dashboard {

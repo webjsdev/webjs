@@ -5,15 +5,15 @@
 #     website    → http://localhost:15000
 #     docs       → http://localhost:14000
 #     blog       → http://localhost:13000
-#     ui-website → http://localhost:15001  (registry host + @webjskit/ui docs)
+#     ui-website → http://localhost:15001  (registry host + @webjsdev/ui docs)
 services:
   website:
     image: webjs
     build: .
     working_dir: /app/website
-    # @webjskit/cli installed in the root node_modules/.bin by npm workspaces;
+    # @webjsdev/cli installed in the root node_modules/.bin by npm workspaces;
     # invoke its binary directly rather than via `webjs`.
-    command: ["node", "/app/node_modules/@webjskit/cli/bin/webjs.js", "start", "--port", "5000"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5000"]
     ports:
       - "15000:5000"
     environment:
@@ -25,7 +25,7 @@ services:
     image: webjs
     build: .
     working_dir: /app/docs
-    command: ["node", "/app/node_modules/@webjskit/cli/bin/webjs.js", "start", "--port", "4000"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "4000"]
     ports:
       - "14000:4000"
 
@@ -40,7 +40,7 @@ services:
       - -c
       - |
         node /app/node_modules/prisma/build/index.js migrate deploy && \
-        node /app/node_modules/@webjskit/cli/bin/webjs.js start --port 3000
+        node /app/node_modules/@webjsdev/cli/bin/webjs.js start --port 3000
     ports:
       - "13000:3000"
     environment:
@@ -54,12 +54,12 @@ services:
     image: webjs
     build: .
     working_dir: /app/packages/ui/packages/website
-    # Registry host for @webjskit/ui:
+    # Registry host for @webjsdev/ui:
     #   GET /r/<name>.json   - single registry item (CLI fetches from here)
     #   GET /r/index.json    - flat list of all items
     #   GET /docs/components/<name> - per-component docs page
     # The registry JSON is built at image time (see Dockerfile RUN step).
-    command: ["node", "/app/node_modules/@webjskit/cli/bin/webjs.js", "start", "--port", "5001"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5001"]
     ports:
       - "15001:5001"
 

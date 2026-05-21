@@ -1,4 +1,4 @@
-# AGENTS.md for @webjskit/server
+# AGENTS.md for @webjsdev/server
 
 The webjs **server runtime**: dev + prod request handling, SSR,
 file-based router, server actions (RPC scanner + endpoint), auth,
@@ -10,7 +10,7 @@ commit conventions, autonomous-mode behaviour, scaffold rules) live
 in the **framework root [`../../AGENTS.md`](../../AGENTS.md)** and
 apply here. Read that first.
 
-This file only covers what's specific to `@webjskit/server`.
+This file only covers what's specific to `@webjsdev/server`.
 
 ## Role
 
@@ -84,7 +84,7 @@ can load it without booting the full server.
 4. **`webjs check` is part of this package** (`src/check.js`). New
    rules go there; tests in `test/check.test.js`.
 5. **No `node:*` imports in code reachable from the browser.** The
-   browser bundle is built from `@webjskit/core` only.
+   browser bundle is built from `@webjsdev/core` only.
 
 ## Tests
 

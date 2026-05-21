@@ -63,7 +63,7 @@
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>

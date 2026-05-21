@@ -3,7 +3,7 @@
 ## Streaming SSR / Suspense
 
 ```js
-import { html, Suspense } from '@webjskit/core';
+import { html, Suspense } from '@webjsdev/core';
 
 export default function Page() {
   return html`
@@ -81,7 +81,7 @@ whatever level you want to protect:
 
 ```js
 // app/api/auth/middleware.ts: protect login/signup from brute force
-import { rateLimit } from '@webjskit/server';
+import { rateLimit } from '@webjsdev/server';
 export default rateLimit({ window: '10s', max: 5 });
 
 // Custom key: rate limit per authenticated user instead of IP
@@ -104,7 +104,7 @@ export default rateLimit({
 
 ## Client router: nested-layout-aware partial swap
 
-`import '@webjskit/core/client-router'` enables SPA-style navigation that
+`import '@webjsdev/core/client-router'` enables SPA-style navigation that
 preserves outer-layout DOM identity at any depth. Intercepts same-origin
 `<a>` clicks (incl. inside shadow DOM via `composedPath()`), fetches the
 target HTML, and replaces only the inside of the deepest shared layout.
@@ -150,7 +150,7 @@ popstate restores from cache instantly, then refetches in the
 background.
 
 ```js
-import { revalidate } from '@webjskit/core';
+import { revalidate } from '@webjsdev/core';
 revalidate('/products/123');  // evict one URL
 revalidate();                 // clear the entire cache
 ```
@@ -168,7 +168,7 @@ an instant per-segment skeleton during the fetch.
 ### Programmatic navigation
 
 ```js
-import { navigate } from '@webjskit/core';
+import { navigate } from '@webjsdev/core';
 await navigate('/about');                    // push history
 await navigate('/login', { replace: true }); // replace
 ```
@@ -308,12 +308,12 @@ const clients = globalThis.__my_clients ?? (globalThis.__my_clients = new Set())
 
 ### Client: `connectWS`
 
-`connectWS(url, { onOpen, onMessage, onClose, onError, reconnect })` from `@webjskit/core`. Auto-reconnects with exponential backoff, JSON parse/stringify, queues sends while disconnected.
+`connectWS(url, { onOpen, onMessage, onClose, onError, reconnect })` from `@webjsdev/core`. Auto-reconnects with exponential backoff, JSON parse/stringify, queues sends while disconnected.
 
 ### Broadcast (single-instance)
 
 ```js
-import { broadcast } from '@webjskit/server';
+import { broadcast } from '@webjsdev/server';
 
 export function WS(ws, req) {
   ws.on('message', (data) => {

@@ -1,10 +1,10 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
-export const metadata = { title: '@webjskit/ui: AI-first component library' };
+export const metadata = { title: '@webjsdev/ui: AI-first component library' };
 
 export default function UiDocs() {
   return html`
-    <h1>@webjskit/ui</h1>
+    <h1>@webjsdev/ui</h1>
     <p>
       An <strong>AI-first component library</strong> with two-tier composition: pure class-helper
       functions (<code>buttonClass</code>, <code>cardClass</code>, <code>inputClass</code>) for
@@ -12,13 +12,13 @@ export default function UiDocs() {
       (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-tabs&gt;</code>, <code>&lt;ui-dropdown-menu&gt;</code>, etc.)
       where state matters. Source-copied into your project so you own the code and edit it freely.
       Variant names, sizes, and data attributes mirror shadcn so existing shadcn knowledge maps
-      directly. Works in any project with Tailwind v4 and the small <code>@webjskit/core</code>
+      directly. Works in any project with Tailwind v4 and the small <code>@webjsdev/core</code>
       runtime: webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML.
     </p>
 
     <h2>For webjs users</h2>
     <p>
-      Nothing to install. <code>@webjskit/ui</code> is a hard dependency of <code>@webjskit/cli</code>, so a global
+      Nothing to install. <code>@webjsdev/ui</code> is a hard dependency of <code>@webjsdev/cli</code>, so a global
       webjs install already includes it. Apps scaffolded with <code>webjs create</code> list it in
       <code>devDependencies</code> too.
     </p>
@@ -27,12 +27,12 @@ webjs ui add button card dialog input label</pre>
 
     <h2>For everyone else (Next, Astro, Vite, SvelteKit, Lit, vanilla, …)</h2>
     <p>Two npm installs (the CLI and the runtime base class), then run the CLI:</p>
-    <pre>npm install -D @webjskit/ui
-npm install @webjskit/core
+    <pre>npm install -D @webjsdev/ui
+npm install @webjsdev/core
 npx webjsui init
 npx webjsui add button card dialog</pre>
     <p>
-      The <code>webjsui</code> binary is standalone. It does NOT require <code>@webjskit/cli</code>.
+      The <code>webjsui</code> binary is standalone. It does NOT require <code>@webjsdev/cli</code>.
       It auto-detects your project type (Next / Astro / Vite / Lit / plain) and picks sensible defaults.
     </p>
 

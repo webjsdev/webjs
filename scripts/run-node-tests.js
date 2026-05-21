@@ -41,7 +41,7 @@ for (const pkg of readdirSync(packagesDir, { withFileTypes: true })) {
   walk(join(packagesDir, pkg.name, 'test'), all);
 }
 
-// Run the @webjskit/ui workspace's own tests separately via its
+// Run the @webjsdev/ui workspace's own tests separately via its
 // existing npm script (so we keep one source of truth for its test
 // config), but pick them up here for the unified `npm test` UX.
 // Walk handles them via packages/ui/test/ above.

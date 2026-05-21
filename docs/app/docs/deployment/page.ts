@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Deployment | webjs' };
 
@@ -82,7 +82,7 @@ readinessProbe:
 # Prod output (one JSON line per event):
 {"level":"info","msg":"webjs prod server ready on http://localhost:3000","time":"2026-01-15T10:30:00.000Z"}</pre>
     <p>Replace it with your own logger by passing any object with <code>info</code>, <code>warn</code>, and <code>error</code> methods to <code>createRequestHandler</code>:</p>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 import pino from 'pino';
 
 const logger = pino({ level: 'info' });
@@ -99,7 +99,7 @@ const app = await createRequestHandler({
 
     <h2>createRequestHandler for Embedding</h2>
     <p>If you need to embed webjs inside an existing server (Express, Fastify, Bun, Deno, serverless), use <code>createRequestHandler</code> directly. It returns a <code>handle(req: Request) =&gt; Promise&lt;Response&gt;</code> function that takes a standard Web API Request and returns a standard Response:</p>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({
   appDir: '/path/to/your/app',
@@ -108,7 +108,7 @@ const app = await createRequestHandler({
 
     <h3>Express</h3>
     <pre>import express from 'express';
-import { createRequestHandler } from '@webjskit/server';
+import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });
 const server = express();
@@ -142,7 +142,7 @@ server.all('*', async (req, res) =&gt; {
 server.listen(3000);</pre>
 
     <h3>Bun</h3>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });
 
@@ -152,7 +152,7 @@ Bun.serve({
 });</pre>
 
     <h3>Deno</h3>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: Deno.cwd(), dev: false });
 
@@ -191,7 +191,7 @@ CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
       <li><code>node:slim</code> works fine. The primary TypeScript stripper is Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed for the common case.</li>
-      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjskit/server</code> is a runtime dependency, which keeps the esbuild fallback available for the rare third-party file that uses non-erasable TypeScript syntax. See <a href="/docs/no-build">No-Build Model</a> for when the fallback kicks in.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency, which keeps the esbuild fallback available for the rare third-party file that uses non-erasable TypeScript syntax. See <a href="/docs/no-build">No-Build Model</a> for when the fallback kicks in.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>

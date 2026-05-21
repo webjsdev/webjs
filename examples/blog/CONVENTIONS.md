@@ -218,7 +218,7 @@ variables control infrastructure (no config files needed):
 **Production:** set `AUTH_SECRET` + `SESSION_SECRET`. For horizontal scaling, also set `REDIS_URL` and add one line at app startup:
 
 ```js
-import { setStore, redisStore } from '@webjskit/server';
+import { setStore, redisStore } from '@webjsdev/server';
 setStore(redisStore({ url: process.env.REDIS_URL }));
 ```
 
@@ -418,7 +418,7 @@ Any stateful behavior with a Tier-2 element uses the element.
 <!-- OVERRIDE -->
 
 ```ts
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 
 export class MyWidget extends WebComponent {
   static properties = { label: { type: String }, count: { type: Number } };
@@ -451,7 +451,7 @@ TypeScript without emitting a class-field initializer that would
 clobber the reactive accessor at construction time. The two
 declarations together give you full intelligence in any tsserver-backed
 editor. See the Editor Setup docs for the `ts-lit-plugin` +
-`@webjskit/ts-plugin` setup that extends this to tag / attribute
+`@webjsdev/ts-plugin` setup that extends this to tag / attribute
 intelligence inside `html\`…\`` templates (go-to-definition, attribute
 auto-complete from `static properties`, no "Unknown tag" red-squiggle on
 registered webjs elements).
@@ -467,7 +467,7 @@ registered webjs elements).
 - Always call `Class.register('tag')`. That's the standard DOM API.
 - **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
 - Component state lives in signals. Import `signal` from
-  `@webjskit/core`, read via `signal.get()` inside `render()`, write
+  `@webjsdev/core`, read via `signal.get()` inside `render()`, write
   via `signal.set(value)`. Module-scope signals share state across
   components; instance signals (created in the constructor) carry
   component-local state. Reactive properties (`static properties =
@@ -521,7 +521,7 @@ small function in `lib/utils/ui.ts`:
 
 ```ts
 // lib/utils/ui.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export function rubric(label: string) {
   return html`
@@ -581,7 +581,7 @@ their tag. Styles colocate as `const STYLES = css\`…\`` + `<style>${'$'}{STYLE
 
 ```ts
 // app/dashboard/page.ts
-import { html, css } from '@webjskit/core';
+import { html, css } from '@webjsdev/core';
 
 const STYLES = css\`
   .page-dashboard {
@@ -630,7 +630,7 @@ Use `rateLimit()` as per-segment middleware to protect routes:
 
 ```ts
 // app/api/auth/middleware.ts: protect auth endpoints
-import { rateLimit } from '@webjskit/server';
+import { rateLimit } from '@webjsdev/server';
 export default rateLimit({ window: '10s', max: 5 });
 ```
 
@@ -662,7 +662,7 @@ SSR content is visible immediately. Only the JS download is deferred.
 Tag a server action to also be reachable over HTTP:
 
 ```ts
-import { expose } from '@webjskit/core';
+import { expose } from '@webjsdev/core';
 export const createPost = expose('POST /api/posts', async ({ title, body }) => {
   return prisma.post.create({ data: { title, body } });
 });
@@ -725,7 +725,7 @@ set in the constructor (after `super()`) or be derivable from
 `static properties` + attributes on the rendered tag.
 
 ```ts
-import { WebComponent, html, signal } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 
 class Cart extends WebComponent {
   items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint

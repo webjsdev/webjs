@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import '../../components/test/shadow-parent.ts';
 import '../../components/test/light-parent.ts';
 

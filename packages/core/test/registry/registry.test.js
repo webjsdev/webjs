@@ -101,7 +101,7 @@ test('primeModuleUrl: creates an entry with no cls when called before register()
 });
 
 test('registry is shared across module instances via globalThis (dual-instance bug)', async () => {
-  // Two different file URLs for the same registry source. When `@webjskit/core`
+  // Two different file URLs for the same registry source. When `@webjsdev/core`
   // is installed twice (e.g. globally + locally), Node loads it as two distinct
   // module instances. Each instance must still see the same registry, otherwise
   // a component registered in one instance is invisible to lookups in the other

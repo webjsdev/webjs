@@ -60,7 +60,7 @@ Adopt a Turbo-style frame primitive: `<webjs-frame id="...">`. Layouts that want
 
 ```ts
 // app/docs/layout.ts
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import { sidenav } from './sidenav.ts';
 
 export default function DocsLayout({ children }) {
@@ -186,7 +186,7 @@ Re-execute `<script>` elements that match the existing one-level-shell path's `r
 ## Implementation plan
 
 1. **`packages/core/src/webjs-frame.js`**: new file, the custom element.
-2. **`packages/core/index.js`**: export `WebjsFrame`. Re-export `<webjs-frame>` via auto-registration import (so any app that imports `@webjskit/core` gets it).
+2. **`packages/core/index.js`**: export `WebjsFrame`. Re-export `<webjs-frame>` via auto-registration import (so any app that imports `@webjsdev/core` gets it).
 3. **`packages/core/src/router-client.js`**: add `findActiveFrame()`, frame-swap branch in `navigate()`. Preserve existing `findLayoutShell` and full-body fallback.
 4. **`packages/core/src/router-client.js` (form path)**: apply the same frame-extract to form submit responses.
 5. **`packages/server/src/dev.js`**: accept `X-Webjs-Frame` header in dev mode (no-op for v1 but adds the request signal for telemetry).

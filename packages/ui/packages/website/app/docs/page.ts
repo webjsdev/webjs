@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Docs, Webjs UI' };
 
@@ -39,7 +39,7 @@ export default function Docs() {
       </p>
       <h2>For webjs users</h2>
       <p>
-        Nothing to install. <code>@webjskit/ui</code> is a hard dependency of <code>@webjskit/cli</code>,
+        Nothing to install. <code>@webjsdev/ui</code> is a hard dependency of <code>@webjsdev/cli</code>,
         so a global webjs install already includes it. Apps scaffolded with <code>webjs create</code>
         also list it in <code>devDependencies</code>.
       </p>
@@ -48,12 +48,12 @@ webjs ui add button card dialog</code></pre>
 
       <h2>For everyone else (Next, Astro, Vite, SvelteKit, Lit, vanilla, …)</h2>
       <p>Two npm installs, the CLI and the runtime base class, then run the CLI:</p>
-      <pre><code class="block bg-muted p-4 rounded">npm install -D @webjskit/ui
-npm install @webjskit/core
+      <pre><code class="block bg-muted p-4 rounded">npm install -D @webjsdev/ui
+npm install @webjsdev/core
 npx webjsui init
 npx webjsui add button card dialog</code></pre>
       <p>
-        The <code>webjsui</code> binary is standalone, it does NOT require <code>@webjskit/cli</code>.
+        The <code>webjsui</code> binary is standalone, it does NOT require <code>@webjsdev/cli</code>.
         It auto-detects your project type (Next / Astro / Vite / Lit / plain) and picks sensible defaults.
       </p>
 
@@ -94,7 +94,7 @@ npx webjsui add button card dialog</code></pre>
       <h2>Framework support</h2>
       <p>
         Tier-1 helpers are pure functions, no runtime dependency. Tier-2 custom elements
-        extend <code>WebComponent</code> from <code>@webjskit/core</code> (the lightweight
+        extend <code>WebComponent</code> from <code>@webjsdev/core</code> (the lightweight
         reactive base class). Both work in webjs, Next.js, Astro, Vite, Remix, SvelteKit,
         Nuxt, SolidStart, Lit projects, and plain HTML. Tailwind v4 is the only required
         styling dependency.

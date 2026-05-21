@@ -1,5 +1,5 @@
 /**
- * Browser tests for stateful Tier-2 @webjskit/ui custom elements: those
+ * Browser tests for stateful Tier-2 @webjsdev/ui custom elements: those
  * with internal state that mutates on interaction. Runs in real Chromium
  * via WTR + Playwright.
  *

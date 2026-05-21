@@ -4,7 +4,7 @@
  * rewriting.
  *
  * ```js
- * import { connectWS } from '@webjskit/core';
+ * import { connectWS } from '@webjsdev/core';
  *
  * const conn = connectWS('/api/chat', {
  *   onMessage: (msg) => { this.lines = [...this.lines, msg]; },

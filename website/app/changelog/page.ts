@@ -1,4 +1,4 @@
-import { html, unsafeHTML } from '@webjskit/core';
+import { html, unsafeHTML } from '@webjsdev/core';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,11 +21,11 @@ const CHANGELOG_DIR = resolve(REPO_ROOT, 'changelog');
 
 export const metadata = {
   title: 'Changelog · webjs',
-  description: 'Per-package, per-version release notes for the webjs framework: @webjskit/core, server, cli, ts-plugin, ui.',
+  description: 'Per-package, per-version release notes for the webjs framework: @webjsdev/core, server, cli, ts-plugin, ui.',
 };
 
 type Entry = {
-  package: string;          // "@webjskit/core"
+  package: string;          // "@webjsdev/core"
   shortPkg: string;         // "core"
   version: string;          // "0.6.0"
   date: string;             // "2026-05-21"
@@ -63,7 +63,7 @@ async function loadEntries(): Promise<Entry[]> {
       const { fm, body } = parseFrontmatter(raw);
       if (!fm.version || !fm.date) continue;
       entries.push({
-        package: fm.package || `@webjskit/${pkg}`,
+        package: fm.package || `@webjsdev/${pkg}`,
         shortPkg: pkg,
         version: fm.version,
         date: fm.date,
@@ -174,7 +174,7 @@ export default async function Changelog() {
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Changelog</p>
         <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">What shipped</h1>
         <p class="text-fg-muted text-[15px] leading-relaxed max-w-[640px]">
-          Per-package, per-version release notes for <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">@webjskit/core</code>,
+          Per-package, per-version release notes for <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">@webjsdev/core</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/server</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/cli</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ts-plugin</code>, and

@@ -63,7 +63,7 @@
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { WebComponent, html, unsafeHTML } from '@webjskit/core';
+import { WebComponent, html, unsafeHTML } from '@webjsdev/core';
 import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------

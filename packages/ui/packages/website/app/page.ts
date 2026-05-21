@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import { loadRegistryIndex } from './_lib/registry.server.ts';
 import { splitByTier } from './_lib/tier.ts';
 
@@ -99,14 +99,14 @@ export default async function Home() {
       <div class="grid md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Webjs users</div>
-          <pre class="text-sm font-mono"><code><span class="text-fg-subtle"># shipped with @webjskit/cli</span>
+          <pre class="text-sm font-mono"><code><span class="text-fg-subtle"># shipped with @webjsdev/cli</span>
 webjs ui init
 webjs ui add button card dialog</code></pre>
         </div>
         <div class="rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Next · Astro · Vite · Lit · vanilla</div>
-          <pre class="text-sm font-mono"><code>npm install -D @webjskit/ui
-npm install @webjskit/core
+          <pre class="text-sm font-mono"><code>npm install -D @webjsdev/ui
+npm install @webjsdev/core
 npx webjsui init
 npx webjsui add button card dialog</code></pre>
         </div>

@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Authentication | webjs' };
 
@@ -71,18 +71,18 @@ export function sessionCookieHeader(token: string, opts = {}) {
     <h2>Reading the Current User</h2>
     <pre>// modules/auth/queries/current-user.server.ts
 'use server';
-import { cookies } from '@webjskit/server';
+import { cookies } from '@webjsdev/server';
 import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.server.ts';
 
 export async function currentUser() {
   const token = cookies().get(SESSION_COOKIE);
   return getUserByToken(token);
 }</pre>
-    <p>The <code>cookies()</code> helper from <code>@webjskit/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed.</p>
+    <p>The <code>cookies()</code> helper from <code>@webjsdev/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed.</p>
 
     <h2>Route Protection via Middleware</h2>
     <pre>// app/dashboard/middleware.ts
-import { cookies } from '@webjskit/server';
+import { cookies } from '@webjsdev/server';
 import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
 
 export default async function requireAuth(
@@ -103,7 +103,7 @@ export default async function requireAuth(
 
     <h2>Rate Limiting Auth Endpoints</h2>
     <pre>// app/api/auth/middleware.ts
-import { rateLimit } from '@webjskit/server';
+import { rateLimit } from '@webjsdev/server';
 
 export default rateLimit({ window: '10s', max: 5 });</pre>
     <p>Any request to <code>/api/auth/**</code> is rate-limited to 5 per 10 seconds per IP. This applies to signup, login, and logout equally.</p>

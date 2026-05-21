@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Architecture | webjs' };
 
@@ -11,8 +11,8 @@ export default function Architecture() {
     <pre>webjs/
 ├── packages/
 │   ├── core/     # webjs       : browser + server runtime
-│   ├── server/   # @webjskit/server : dev/prod server, router, SSR, actions
-│   └── cli/      # @webjskit/cli   : webjs dev/start/build/db commands
+│   ├── server/   # @webjsdev/server : dev/prod server, router, SSR, actions
+│   └── cli/      # @webjsdev/cli   : webjs dev/start/build/db commands
 ├── examples/
 │   └── blog/     # reference app exercising every feature
 └── docs/         # this documentation site (built on webjs)</pre>
@@ -33,7 +33,7 @@ export default function Architecture() {
       <li><code>stringify()</code> / <code>parse()</code> are webjs's built-in serializer (Date, Map, Set, BigInt, TypedArray, Blob, File, FormData, cycles)</li>
     </ul>
 
-    <h3>@webjskit/server</h3>
+    <h3>@webjsdev/server</h3>
     <p>Server-only. Contains:</p>
     <ul>
       <li><code>startServer()</code> creates an HTTP(S) server with all features wired</li>
@@ -45,7 +45,7 @@ export default function Architecture() {
       <li>CSRF, compression, graceful shutdown, health probes, logger</li>
     </ul>
 
-    <h3>@webjskit/cli</h3>
+    <h3>@webjsdev/cli</h3>
     <p>The <code>webjs</code> command-line tool:</p>
     <ul>
       <li><code>webjs dev</code>: dev server with file watching + live reload via SSE</li>
@@ -114,7 +114,7 @@ export default function Architecture() {
 
     <h2>Embedding</h2>
     <p>webjs can be embedded in any Node-compatible runtime via <code>createRequestHandler</code>:</p>
-    <pre>import { createRequestHandler } from '@webjskit/server';
+    <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({
   appDir: process.cwd(),

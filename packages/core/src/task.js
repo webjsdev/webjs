@@ -26,8 +26,8 @@
  * ## Quick example
  *
  * ```js
- * import { WebComponent, html } from '@webjskit/core';
- * import { Task } from '@webjskit/core/task';
+ * import { WebComponent, html } from '@webjsdev/core';
+ * import { Task } from '@webjsdev/core/task';
  *
  * class UserSearch extends WebComponent {
  *   static properties = { query: { type: String } };

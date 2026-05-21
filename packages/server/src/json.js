@@ -1,4 +1,4 @@
-import { stringify as wjStringify, parse as wjParse } from '@webjskit/core';
+import { stringify as wjStringify, parse as wjParse } from '@webjsdev/core';
 import { getRequest } from './context.js';
 import { RPC_CONTENT_TYPE } from './actions.js';
 
@@ -6,7 +6,7 @@ import { RPC_CONTENT_TYPE } from './actions.js';
  * Content-negotiated JSON helper for API routes (`route.js` handlers).
  *
  *   // GET /api/posts
- *   import { json } from '@webjskit/server';
+ *   import { json } from '@webjsdev/server';
  *   export async function GET() {
  *     return json(await listPosts());   // plain Prisma rows with Date columns
  *   }

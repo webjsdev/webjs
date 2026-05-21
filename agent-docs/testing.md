@@ -29,7 +29,7 @@ app work.
 | **smoke** | `test/<feature>/smoke/<name>.test.{js,ts}` | Fast deploy-time sanity check. A subset of e2e in spirit, kept separate so it runs on every deploy. | `node --test` |
 
 Some packages will only have one or two of these kinds (e.g.
-`@webjskit/core` is a library, no `e2e/` or `smoke/`). Only create
+`@webjsdev/core` is a library, no `e2e/` or `smoke/`). Only create
 a kind subfolder when there's at least one test of that kind.
 Empty `e2e/` folders are anti-patterns.
 
@@ -86,7 +86,7 @@ test/                              cross-package only
 ```
 
 Rule of thumb for **package vs root**: if the test imports from
-`@webjskit/server` (or any other package) at all, it's
+`@webjsdev/server` (or any other package) at all, it's
 cross-package and stays at root. If it only imports from one
 package, it goes in that package's `test/`.
 
@@ -112,7 +112,7 @@ package, it goes in that package's `test/`.
 3. Drop the test in directly when it's a node test; nest it
    inside `browser/` / `e2e/` / `smoke/` when it's that kind.
 4. Use `.test.js` for ESM packages, `.test.mjs` when the
-   surrounding package is CJS (e.g. `@webjskit/ts-plugin`).
+   surrounding package is CJS (e.g. `@webjsdev/ts-plugin`).
 
 ---
 

@@ -20,11 +20,11 @@
 /* ------------------------------------------------------------------
  * Shared registry on globalThis.
  *
- * In a typical install, the dev server (`@webjskit/server`) and the
- * user's app modules each import `@webjskit/core`. When the cli is
+ * In a typical install, the dev server (`@webjsdev/server`) and the
+ * user's app modules each import `@webjsdev/core`. When the cli is
  * installed globally (or hoisted at a different level than the user's
  * app), Node resolves the bare specifier from each importer's location
- * and may end up loading TWO instances of `@webjskit/core`: one for
+ * and may end up loading TWO instances of `@webjsdev/core`: one for
  * the server, one for the user's app. Each instance would otherwise
  * have its own private `registry` Map, so:
  *
@@ -38,7 +38,7 @@
  *
  * We side-step this by keying both maps off `globalThis` with a stable
  * `Symbol.for(...)`. Every loaded instance of this module finds the
- * same maps regardless of which copy of `@webjskit/core` it lives in.
+ * same maps regardless of which copy of `@webjsdev/core` it lives in.
  * @ts-ignore */
 const REGISTRY_KEY = Symbol.for('webjs:registry');
 /** @ts-ignore */

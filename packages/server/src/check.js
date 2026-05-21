@@ -453,7 +453,7 @@ function findFieldInitializers(classBody, props) {
  *
  * @example
  * ```js
- * import { checkConventions } from '@webjskit/server';
+ * import { checkConventions } from '@webjsdev/server';
  * const violations = await checkConventions('/path/to/myapp');
  * for (const v of violations) {
  *   console.warn(`[${v.rule}] ${v.file}: ${v.message}`);

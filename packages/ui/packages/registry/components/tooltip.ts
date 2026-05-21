@@ -40,7 +40,7 @@
  *
  * Design tokens used: --foreground, --background.
  */
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with

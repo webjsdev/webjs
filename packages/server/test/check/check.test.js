@@ -17,7 +17,7 @@ test('tag-name-has-hyphen: flags component without hyphen in tag', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class BadComp extends WebComponent {}
 BadComp.register('badcomp');
 `,
@@ -38,7 +38,7 @@ test('tag-name-has-hyphen: passes for valid hyphenated tag', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'good.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class GoodComp extends WebComponent {}
 GoodComp.register('good-comp');
 `,
@@ -58,7 +58,7 @@ test('components-have-register: flags component with no register() call', async 
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'no-reg.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class NoReg extends WebComponent {}
 `,
     );
@@ -78,7 +78,7 @@ test('components-have-register: passes with Class.register("tag")', async () => 
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'good.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class GoodComp extends WebComponent {}
 GoodComp.register('good-comp');
 `,
@@ -98,7 +98,7 @@ test('components-have-register: passes with customElements.define fallback', asy
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'native.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class NativeComp extends WebComponent {}
 customElements.define('native-comp', NativeComp);
 `,
@@ -118,7 +118,7 @@ test('reactive-props-use-declare: flags class-field initializer on reactive prop
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.ts'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class BadProp extends WebComponent {
   static properties = { count: { type: Number } };
   count: number = 0;
@@ -142,7 +142,7 @@ test('reactive-props-use-declare: also flags untyped initializer', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.ts'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class BadProp extends WebComponent {
   static properties = { name: { type: String } };
   name = 'Anonymous';
@@ -165,7 +165,7 @@ test('reactive-props-use-declare: passes when declare + constructor are used', a
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'good.ts'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class GoodProp extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
@@ -194,7 +194,7 @@ test('reactive-props-use-declare: ignores non-reactive plain fields', async () =
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'mixed.ts'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class Mixed extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
@@ -220,7 +220,7 @@ test('reactive-props-use-declare: does not trip on `this.x = …` inside methods
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'methods.ts'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class Methods extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
@@ -258,7 +258,7 @@ test('rule override disables a rule', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.js'),
-      `import { WebComponent } from '@webjskit/core';
+      `import { WebComponent } from '@webjsdev/core';
 class BadComp extends WebComponent {}
 BadComp.register('badcomp');
 `,
@@ -418,7 +418,7 @@ test('no-server-env-in-components: flags non-public process.env reads in compone
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'header.ts'),
-      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
       `class Header extends WebComponent {\n` +
       `  render() { return html\`<div data-key=\${process.env.STRIPE_SECRET}></div>\`; }\n` +
       `}\nHeader.register('app-header');\n`,
@@ -438,7 +438,7 @@ test('no-server-env-in-components: allows WEBJS_PUBLIC_* reads', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'api-link.ts'),
-      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
       `class ApiLink extends WebComponent {\n` +
       `  render() { return html\`<a href=\${process.env.WEBJS_PUBLIC_API_URL}>x</a>\`; }\n` +
       `}\nApiLink.register('api-link');\n`,
@@ -456,7 +456,7 @@ test('no-server-env-in-components: allows NODE_ENV reads', async () => {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'debug-banner.ts'),
-      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
       `class Debug extends WebComponent {\n` +
       `  render() { return process.env.NODE_ENV === 'development' ? html\`<p>dev</p>\` : html\`\`; }\n` +
       `}\nDebug.register('debug-banner');\n`,
@@ -489,7 +489,7 @@ test('no-server-env-in-components: only flags each env var name once per file', 
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'multi.ts'),
-      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
       `class Multi extends WebComponent {\n` +
       `  render() {\n` +
       `    const a = process.env.SECRET_KEY;\n` +
@@ -568,7 +568,7 @@ test('override via package.json "webjs.conventions" disables a rule', async () =
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.js'),
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `class BadComp extends WebComponent {}\nBadComp.register('badcomp');\n`,
     );
     await writeFile(
@@ -591,7 +591,7 @@ test('top-level "conventions" key in package.json is ignored (no legacy fallback
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.js'),
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `class BadComp extends WebComponent {}\nBadComp.register('badcomp');\n`,
     );
     await writeFile(
@@ -617,7 +617,7 @@ test('a webjs.conventions.js file is ignored (no legacy fallback)', async () => 
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'bad.js'),
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `class BadComp extends WebComponent {}\nBadComp.register('badcomp');\n`,
     );
     await writeFile(
@@ -817,7 +817,7 @@ test('shell-in-non-root-layout: passes when root layout owns the shell', async (
     await mkdir(join(appDir, 'app'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'layout.ts'),
-      `import { html } from '@webjskit/core';
+      `import { html } from '@webjsdev/core';
 export default function RootLayout({ children }) {
   return html\`
     <!doctype html>
@@ -844,7 +844,7 @@ test('shell-in-non-root-layout: flags nested layout with <html>', async () => {
     await mkdir(join(appDir, 'app', 'admin'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'admin', 'layout.ts'),
-      `import { html } from '@webjskit/core';
+      `import { html } from '@webjsdev/core';
 export default function AdminLayout({ children }) {
   return html\`
     <!doctype html>
@@ -870,7 +870,7 @@ test('shell-in-non-root-layout: flags page.ts that writes <body>', async () => {
     await mkdir(join(appDir, 'app', 'blog'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'blog', 'page.ts'),
-      `import { html } from '@webjskit/core';
+      `import { html } from '@webjsdev/core';
 export default function BlogPage() {
   return html\`<body class="bg-white"><main>hello</main></body>\`;
 }
@@ -892,7 +892,7 @@ test('shell-in-non-root-layout: ignores shell tokens inside line/block comments'
     await mkdir(join(appDir, 'app', 'foo'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'foo', 'layout.ts'),
-      `import { html } from '@webjskit/core';
+      `import { html } from '@webjsdev/core';
 // Note: do NOT write <!doctype> here: only the root layout owns the shell.
 /* Reminder: the framework auto-emits <html>/<head>/<body>. */
 export default function FooLayout({ children }) {

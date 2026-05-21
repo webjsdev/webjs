@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 /**
  * Root 404 boundary. Renders when a page or server action throws
@@ -6,7 +6,7 @@ import { html } from '@webjskit/core';
  *
  * Keep this file's import graph minimal: same reason as error.ts:
  * if this file fails to load, the framework falls through to its
- * generic 404 page. Only @webjskit/core, nothing else.
+ * generic 404 page. Only @webjsdev/core, nothing else.
  *
  * (Do not put U+0060 GRAVE ACCENT characters in comments inside the
  * html template body below. See [[feedback-html-template-no-backticks]].)

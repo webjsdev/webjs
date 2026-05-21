@@ -1,4 +1,4 @@
-# AGENTS.md for @webjskit/cli
+# AGENTS.md for @webjsdev/cli
 
 The webjs **command-line interface** (`webjs dev` / `start` / `test`
 / `check` / `create` / `db`) plus the scaffold templates shipped
@@ -9,7 +9,7 @@ commit conventions, autonomous-mode behaviour, scaffold rules) live
 in the **framework root [`../../AGENTS.md`](../../AGENTS.md)** and
 apply here. Read that first.
 
-This file only covers what's specific to `@webjskit/cli`.
+This file only covers what's specific to `@webjsdev/cli`.
 
 ## Module map
 
@@ -45,27 +45,27 @@ README.md                npm-facing package readme.
 | `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })` |
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
-| `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjskit/server/check` |
+| `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjsdev/server/check` |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
 | `webjs db <generate\|migrate\|studio>` | Passthrough to `prisma` |
-| `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjskit/ui` (see "UI subcommand" below) |
+| `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 
-## UI subcommand: proxies to `@webjskit/ui`
+## UI subcommand: proxies to `@webjsdev/ui`
 
-`@webjskit/ui` is a **hard dependency** of `@webjskit/cli` (listed in
+`@webjsdev/ui` is a **hard dependency** of `@webjsdev/cli` (listed in
 `package.json` `dependencies`), so a global `webjs` install always ships
 with the AI-first component CLI out of the box, no separate install.
 
-`webjs ui <subcmd> [args...]` is a thin dispatch into `@webjskit/ui`'s
+`webjs ui <subcmd> [args...]` is a thin dispatch into `@webjsdev/ui`'s
 `run({ argv })` entry. The implementation lives in
 [`bin/webjs.js`](./bin/webjs.js) under `case 'ui':`. It resolves
-`@webjskit/ui` via `createRequire` rooted at the CLI's own location first
+`@webjsdev/ui` via `createRequire` rooted at the CLI's own location first
 (the hard-dep path), with a fallback to the user's `cwd` for the rare case
-where the user installed `@webjskit/ui` directly without going through
-`@webjskit/cli`.
+where the user installed `@webjsdev/ui` directly without going through
+`@webjsdev/cli`.
 
 The subcommands (`init`, `add`, `list`, `view`, `diff`, `info`) are owned
-and documented by `@webjskit/ui`. See
+and documented by `@webjsdev/ui`. See
 [`../ui/AGENTS.md`](../ui/AGENTS.md) for the surface. The CLI does not
 wrap or transform args; everything after `webjs ui` is forwarded
 verbatim.
@@ -105,7 +105,7 @@ folders under the repo root (they need to boot scaffolded apps):
 
 Convention-rule tests live in
 `packages/server/test/check/check.test.js` (the rules themselves
-ship from `@webjskit/server`).
+ship from `@webjsdev/server`).
 
 End-to-end testing of the actual scaffold output is currently
 manual (`webjs create demo && cd demo && npm i && webjs dev`).

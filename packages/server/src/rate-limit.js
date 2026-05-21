@@ -7,7 +7,7 @@
  * different store than the default.
  *
  * ```js
- * import { rateLimit } from '@webjskit/server';
+ * import { rateLimit } from '@webjsdev/server';
  * export default rateLimit({ window: '1m', max: 60 });
  * ```
  *
@@ -15,7 +15,7 @@
  * store to Redis once at app startup:
  *
  * ```js
- * import { setStore, redisStore } from '@webjskit/server';
+ * import { setStore, redisStore } from '@webjsdev/server';
  * setStore(redisStore({ url: process.env.REDIS_URL }));
  * ```
  *

@@ -1,4 +1,4 @@
-# AGENTS.md : @webjskit/ui
+# AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
 `list` / `view` / `diff` / `info` / `build`. Ships 32 primitives across two
@@ -8,11 +8,11 @@ mirror shadcn so existing shadcn knowledge transfers directly.
 
 Framework-wide rules live in the root [`../../AGENTS.md`](../../AGENTS.md) and
 apply here. Read that first. This file only covers what's specific to
-`@webjskit/ui`.
+`@webjsdev/ui`.
 
 ## Architecture : composition-first, two tiers
 
-`@webjskit/ui` ships **class-helper functions** (returning Tailwind class
+`@webjsdev/ui` ships **class-helper functions** (returning Tailwind class
 strings) and **a small set of stateful custom elements**, never bundled
 wrappers around native form controls.
 
@@ -46,7 +46,7 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 
 For things the browser doesn't provide natively: dialogs, alert-dialogs,
 tabs, dropdowns, tooltips, hover-cards, toggle / toggle-group, sonner.
-Tier-2 components extend `WebComponent` from `@webjskit/core` and are
+Tier-2 components extend `WebComponent` from `@webjsdev/core` and are
 Lit-shaped: `static properties` for reactive attributes, `render()`
 returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
@@ -107,7 +107,7 @@ packages/ui/
 
   packages/registry/              the registry (internal, not published)
     components/                   .ts files, one per component
-    lib/utils.ts                  cn() helper + layout/typography helpers (Tier-2 components extend WebComponent from @webjskit/core directly)
+    lib/utils.ts                  cn() helper + layout/typography helpers (Tier-2 components extend WebComponent from @webjsdev/core directly)
     themes/
       index.css                   @theme block + CSS variables (light + dark, neutral defaults)
       base-colors.js              per-base-colour overrides (stone/zinc/mauve/olive/mist/taupe) + mergeThemeCss
@@ -198,12 +198,12 @@ full per-directory breakdown.
 
 ## Webjs‑CLI subcommand
 
-`webjs ui <subcmd>` proxies to `@webjskit/ui`. Implementation lives in
+`webjs ui <subcmd>` proxies to `@webjsdev/ui`. Implementation lives in
 [`../cli/bin/webjs.js`](../cli/bin/webjs.js) under `case 'ui':`.
 
 ## Package-specific invariants
 
-1. **`@webjskit/ui` is a hard dependency of `@webjskit/cli`.** Global
+1. **`@webjsdev/ui` is a hard dependency of `@webjsdev/cli`.** Global
    `webjs` install ships with the UI CLI out of the box.
 
 2. **No third-party runtime deps.** No clsx, no tailwind-merge, no
@@ -218,7 +218,7 @@ full per-directory breakdown.
    our registry (modulo TS vs TSX extensions).
 
 4. **Light DOM + Tailwind everywhere.** Tier-2 custom elements extend
-   `WebComponent` from `@webjskit/core` and use Lit-shaped `render()` +
+   `WebComponent` from `@webjsdev/core` and use Lit-shaped `render()` +
    `html` `` templates with declarative bindings. Light DOM means
    Tailwind utility classes apply directly to authored children that
    project through `<slot>`. No shadow root anywhere; full shadow-DOM
@@ -280,7 +280,7 @@ Change one helper to retune the entire app, every form field that uses
 ## Tests
 
 ```sh
-npm test --workspace=@webjskit/ui    # schema + resolver + project-detect + config
+npm test --workspace=@webjsdev/ui    # schema + resolver + project-detect + config
 ```
 
 Tests live in **`packages/ui/test/`** as flat files for the CLI

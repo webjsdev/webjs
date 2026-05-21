@@ -5,7 +5,7 @@ name: Auto-release
 # that (package, version) tuple.
 #
 # Flow per new changelog file:
-#   1. scripts/publish-npm.js     → npm publish @webjskit/<pkg>@<version>
+#   1. scripts/publish-npm.js     → npm publish @webjsdev/<pkg>@<version>
 #   2. scripts/publish-release.js → gh release create <pkg>@<version>
 #
 # Both scripts are idempotent: they skip when the version is

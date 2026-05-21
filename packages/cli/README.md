@@ -1,4 +1,4 @@
-# @webjskit/cli
+# @webjsdev/cli
 
 CLI for [webjs](https://github.com/vivek7405/webjs): scaffold, develop,
 build, and run webjs apps.
@@ -10,7 +10,7 @@ Installing this package gives you the `webjs` command.
 Install once, globally:
 
 ```sh
-npm i -g @webjskit/cli
+npm i -g @webjsdev/cli
 ```
 
 Then scaffold a new app anywhere:
@@ -24,7 +24,7 @@ cd my-app && npm install && npm run dev
 One-shot without global install:
 
 ```sh
-npx @webjskit/cli create my-app
+npx @webjsdev/cli create my-app
 cd my-app && npm install && npm run dev
 ```
 
@@ -41,16 +41,16 @@ webjs check                    # validate project conventions
 webjs test                     # run server + browser tests
 webjs db <prisma-subcommand>   # prisma passthrough (saas template)
 
-webjs ui init                  # initialise @webjskit/ui in this project
+webjs ui init                  # initialise @webjsdev/ui in this project
 webjs ui add <names...>        # copy components from the registry (https://ui.webjs.dev/registry/<name>.json)
 webjs ui list                  # list every component available in the registry
 ```
 
-`webjs ui` proxies to [`@webjskit/ui`](https://www.npmjs.com/package/@webjskit/ui),
+`webjs ui` proxies to [`@webjsdev/ui`](https://www.npmjs.com/package/@webjsdev/ui),
 an AI-first component library + CLI that copies sources into your project: class
 helpers (`buttonClass`, `cardClass`, …) for the visual primitives and a small set
 of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where
-state matters. The package is a hard dependency of `@webjskit/cli`, so installing
+state matters. The package is a hard dependency of `@webjsdev/cli`, so installing
 the CLI gives you `webjs ui` automatically. See
 [https://ui.webjs.dev](https://ui.webjs.dev) for the catalogue.
 

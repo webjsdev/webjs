@@ -18,8 +18,8 @@ async function scaffold(files) {
     await mkdir(join(p, '..'), { recursive: true });
     await writeFile(p, body);
   }
-  // Link to @webjskit/core so route files can import it if needed.
-  const scopeDir = join(dir, 'node_modules', '@webjskit');
+  // Link to @webjsdev/core so route files can import it if needed.
+  const scopeDir = join(dir, 'node_modules', '@webjsdev');
   await mkdir(scopeDir, { recursive: true });
   const realWebjs = new URL('../packages/core', import.meta.url).pathname;
   await symlink(realWebjs, join(scopeDir, 'core'), 'dir').catch(() => {});

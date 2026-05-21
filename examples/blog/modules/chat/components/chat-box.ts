@@ -1,4 +1,4 @@
-import { WebComponent, html, connectWS, signal } from '@webjskit/core';
+import { WebComponent, html, connectWS, signal } from '@webjsdev/core';
 import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';
 

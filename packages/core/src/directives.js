@@ -4,12 +4,12 @@
  * lit-html parity. Imports look like:
  *
  * ```js
- * import { html } from '@webjskit/core';
+ * import { html } from '@webjsdev/core';
  * import {
  *   unsafeHTML, live,
  *   keyed, guard, templateContent, ref, createRef,
  *   cache, until, asyncAppend, asyncReplace,
- * } from '@webjskit/core/directives';
+ * } from '@webjsdev/core/directives';
  * ```
  *
  * `repeat()` lives in `./repeat.js` (re-exported from the package root).
@@ -30,8 +30,8 @@
  * user-supplied input: this is an XSS vector.
  *
  * ```js
- * import { html } from '@webjskit/core';
- * import { unsafeHTML } from '@webjskit/core/directives';
+ * import { html } from '@webjsdev/core';
+ * import { unsafeHTML } from '@webjsdev/core/directives';
  *
  * // Good: trusted markdown output
  * html`<article>${unsafeHTML(markdownToHtml(post.body))}</article>`;
@@ -73,8 +73,8 @@ export function isUnsafeHTML(x) {
  * DOM value has changed.
  *
  * ```js
- * import { html } from '@webjskit/core';
- * import { live } from '@webjskit/core/directives';
+ * import { html } from '@webjsdev/core';
+ * import { live } from '@webjsdev/core/directives';
  *
  * html`<input .value=${live(this.query)}
  *             @input=${e => { this.query = e.target.value; }}>`;
@@ -109,7 +109,7 @@ export function isLive(x) {
  * even though the template literal structure is the same.
  *
  * ```js
- * import { keyed } from '@webjskit/core/directives';
+ * import { keyed } from '@webjsdev/core/directives';
  *
  * // Form fully resets (input values, focus, etc.) when userId changes.
  * html`${keyed(this.userId, html`<edit-form .user=${this.user}></edit-form>`)}`;
@@ -143,7 +143,7 @@ export function isKeyed(x) {
  * the value-producing function.
  *
  * ```js
- * import { guard } from '@webjskit/core/directives';
+ * import { guard } from '@webjsdev/core/directives';
  *
  * render() {
  *   return html`
@@ -180,7 +180,7 @@ export function isGuard(x) {
  * is cloned on the client; on the server, its `innerHTML` is emitted.
  *
  * ```js
- * import { templateContent } from '@webjskit/core/directives';
+ * import { templateContent } from '@webjsdev/core/directives';
  *
  * const tpl = document.querySelector('#my-tpl');
  * html`<div>${templateContent(tpl)}</div>`;
@@ -209,7 +209,7 @@ export function isTemplateContent(x) {
  * Bind a Ref object or callback to the element produced at this position.
  *
  * ```js
- * import { createRef, ref } from '@webjskit/core/directives';
+ * import { createRef, ref } from '@webjsdev/core/directives';
  *
  * class MyForm extends WebComponent {
  *   _input = createRef();
@@ -268,7 +268,7 @@ export function createRef() {
  * template instead of creating fresh DOM.
  *
  * ```js
- * import { cache } from '@webjskit/core/directives';
+ * import { cache } from '@webjsdev/core/directives';
  *
  * render() {
  *   return html`
@@ -305,7 +305,7 @@ export function isCache(x) {
  * resolve wins).
  *
  * ```js
- * import { until } from '@webjskit/core/directives';
+ * import { until } from '@webjsdev/core/directives';
  *
  * html`<div>${until(this.dataPromise, html`<p>Loading…</p>`)}</div>`;
  * ```
@@ -321,7 +321,7 @@ export function isCache(x) {
  * SSR awaits `Promise.race` when all candidates are Promises;
  * otherwise SSR renders the highest-priority synchronous candidate.
  * For component-scoped async data with full pending/error states,
- * prefer the `Task` controller (`@webjskit/core/task`).
+ * prefer the `Task` controller (`@webjsdev/core/task`).
  *
  * @param  {...unknown} args
  * @returns {{ _$webjs: 'until', args: unknown[] }}
@@ -346,7 +346,7 @@ export function isUntil(x) {
  * aborts the loop.
  *
  * ```js
- * import { asyncAppend } from '@webjskit/core/directives';
+ * import { asyncAppend } from '@webjsdev/core/directives';
  *
  * async function* logTail() {
  *   for await (const line of stream) yield line;
@@ -378,7 +378,7 @@ export function isAsyncAppend(x) {
  * one that remains in the DOM.
  *
  * ```js
- * import { asyncReplace } from '@webjskit/core/directives';
+ * import { asyncReplace } from '@webjsdev/core/directives';
  *
  * async function* ticker() {
  *   for (let i = 0; ; i++) {
@@ -417,9 +417,9 @@ export function isAsyncReplace(x) {
  * the surrounding component does not re-render.
  *
  * ```js
- * import { html } from '@webjskit/core';
- * import { signal } from '@webjskit/core';
- * import { watch } from '@webjskit/core/directives';
+ * import { html } from '@webjsdev/core';
+ * import { signal } from '@webjsdev/core';
+ * import { watch } from '@webjsdev/core/directives';
  *
  * const count = signal(0);
  *
