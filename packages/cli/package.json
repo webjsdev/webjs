@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/cli",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "module",
   "description": "webjs CLI - dev, start, create, db",
   "bin": {
@@ -13,8 +13,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/server": "^0.7.0",
-    "@webjsdev/ui": "^0.3.0"
+    "@webjsdev/server": "^0.7.2",
+    "@webjsdev/ui": "^0.3.1"
   },
   "publishConfig": {
     "access": "public"
