@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..', '..', '..');
+const ROOT = resolve(__dirname, '..', '..', '..', '..');
 const BLOG_DIR = resolve(ROOT, 'examples', 'blog');
 
 /** Bind to port 0, capture the assigned port, release. Race-free enough for a serial test. */
