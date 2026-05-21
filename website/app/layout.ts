@@ -248,10 +248,10 @@ export default function RootLayout({ children }: { children: unknown }) {
         <theme-toggle></theme-toggle>
       </nav>
 
-      <!-- Mobile: theme toggle stays inline, hamburger pops the nav. Native
-           <details>/<summary> for progressive enhancement: works without JS. -->
+      <!-- Mobile cluster: hamburger first (LEFT), theme-toggle second
+           (RIGHT), matching the convention across docs, blog, and ui.
+           Native <details>/<summary> for progressive enhancement. -->
       <div class="flex items-center gap-2 md:hidden">
-        <theme-toggle></theme-toggle>
         <details class="mobile-menu relative">
           <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
             <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -269,6 +269,7 @@ export default function RootLayout({ children }: { children: unknown }) {
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
           </nav>
         </details>
+        <theme-toggle></theme-toggle>
       </div>
     </header>
 
