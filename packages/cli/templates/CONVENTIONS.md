@@ -285,38 +285,62 @@ Routes live under `app/` and follow NextJs App Router conventions:
 ## Testing
 
 <!-- OVERRIDE -->
-Every feature module should have corresponding tests:
-
-### Unit tests in `test/unit/`
-
-```
-test/
-  unit/
-    <feature>.test.ts     One test file per module feature
-```
-
-- Run with: `webjs test` or `node --test test/unit/*.test.ts`
-- Use `node:test` and `node:assert/strict`
-- Test server actions by importing and calling them directly
-- Test component rendering with `renderToString` from webjs
-- Test utility functions with simple assertions
-
-**Naming:** `test/unit/<module-name>.test.ts` (e.g., `test/unit/auth.test.ts`)
-
-### Browser tests in `test/browser/`
+Tests are organised by **feature**, mirroring `modules/<feature>/`.
+Each feature gets its own folder under `test/`, even when it starts
+with a single file. Test KIND (browser / e2e / smoke) lives in a
+subfolder inside the feature, and only appears when there is a real
+test of that kind.
 
 ```
 test/
-  browser/
-    <feature>.test.js     Real-browser tests per feature
+  <feature>/
+    <name>.test.ts             ← node test: unit + integration
+    browser/<name>.test.js     ← real-browser test (web-test-runner)
+    e2e/<name>.test.ts         ← full-app end-to-end (opt in: WEBJS_E2E=1)
+    smoke/<name>.test.ts       ← fast post-deploy sanity check
 ```
 
-- Run with: `webjs test --browser` or `npx wtr`
-- Uses **Web Test Runner (WTR) + Playwright** (tests run in real Chromium)
-- Full Shadow DOM, events, adoptedStyleSheets, IntersectionObserver
-- Test components, user interactions, navigation, form submission
+Concrete example:
 
-**Naming:** `test/browser/<feature>.test.js` (e.g., `test/browser/auth.test.js`)
+```
+test/
+  auth/
+    auth.test.ts                 # signup / login / currentUser, node
+    password.test.ts             # hashing / verify, node
+    browser/login-form.test.js   # real-browser, only if exercising DOM
+  posts/
+    posts.test.ts                # CRUD via actions
+    browser/post-editor.test.js
+  hello/
+    hello.test.ts                # the scaffold's starter test
+    browser/hello.test.js
+    e2e/hello.test.ts
+```
+
+### Test kinds
+
+| Kind | Where | What it does |
+|------|-------|--------------|
+| node (unit + integration) | `test/<feature>/*.test.ts` | Fast, no spawned process. Import server actions/queries/utilities and call them directly. Use `renderToString` for SSR HTML assertions. |
+| browser | `test/<feature>/browser/*.test.js` | Real Chromium via web-test-runner + Playwright. Shadow DOM, events, `adoptedStyleSheets`, `IntersectionObserver`. |
+| e2e | `test/<feature>/e2e/*.test.ts` | Boots the app and drives it through HTTP / a real browser. Gated behind `WEBJS_E2E=1` so it doesn't run on every `webjs test`. |
+| smoke | `test/<feature>/smoke/*.test.ts` | Fast deploy-time sanity check (single critical path; "does this surface still return 200"). |
+
+### Running
+
+- `webjs test` (or `node --test`) runs the node tests (unit + integration + smoke).
+- `webjs test --browser` (or `npx wtr`) runs the browser tests.
+- `WEBJS_E2E=1 webjs test` adds the e2e tests.
+
+### Choosing a feature folder
+
+Use the same name as the matching module folder when one exists:
+`modules/posts/` ↔ `test/posts/`. If the test spans more than one
+module (a full-stack flow), pick the most prominent one or create a
+new feature folder (`test/checkout/`, `test/onboarding/`).
+
+If you find yourself reaching for `test/utils/` or `test/misc/`,
+the feature folder is missing. Name it after the user-facing concern.
 
 ### Debugging with Playwright MCP
 

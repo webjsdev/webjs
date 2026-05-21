@@ -49,8 +49,8 @@ Every code change must include:
    spanning different concerns, commit before continuing. The Claude Code
    hook at `.claude/hooks/nudge-uncommitted.sh` enforces threshold 4 for
    Claude users; Copilot users should self-enforce the same rule. Automatic.
-2. Server tests in test/unit/*.test.ts (node:test for actions, queries, utilities)
-3. Browser tests in test/browser/*.test.js (WTR + Playwright, real Chromium)
+2. Server tests in test/<feature>/*.test.ts (node:test for actions, queries, utilities)
+3. Browser tests in test/<feature>/browser/*.test.js (WTR + Playwright, real Chromium)
 4. Documentation updates (AGENTS.md for API, docs/ for user guides)
 5. Convention validation: `webjs check` must pass
 

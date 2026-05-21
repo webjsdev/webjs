@@ -283,9 +283,19 @@ Change one helper to retune the entire app, every form field that uses
 npm test --workspace=@webjskit/ui    # schema + resolver + project-detect + config
 ```
 
-Component sources are smoke-validated by `test/registry-contents.test.js`
-(reads `components/*.ts` directly + verifies Tier-1/Tier-2 shape + hallmark
+Tests live in **`packages/ui/test/`** as flat files for the CLI
+helpers (`schema.test.js`, `resolver.test.js`,
+`detect-project.test.js`, etc.) plus `test/registry-contents.test.js`
+which smoke-validates the component sources (reads
+`components/*.ts` and verifies Tier-1/Tier-2 shape + hallmark
 class strings).
+
+Real-browser tests for the kit live under
+`packages/ui/test/components/browser/`
+(`ui-overlay.test.js`, `ui-stateful.test.js`) and run via the
+top-level `npm run test:browser`. See
+[`../../agent-docs/testing.md`](../../agent-docs/testing.md) for
+the overall layout.
 
 ## Building / running
 

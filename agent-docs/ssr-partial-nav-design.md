@@ -191,8 +191,8 @@ Re-execute `<script>` elements that match the existing one-level-shell path's `r
 4. **`packages/core/src/router-client.js` (form path)**: apply the same frame-extract to form submit responses.
 5. **`packages/server/src/dev.js`**: accept `X-Webjs-Frame` header in dev mode (no-op for v1 but adds the request signal for telemetry).
 6. **Tests:**
-   - `test/unit/router-client.test.js`: frame detection, querySelector with various ids, fallback when source frame missing.
-   - `test/e2e/nested-layout-frame.test.js`: load `/docs/components/a`, scroll sidenav, click `/docs/components/b`, assert scroll preserved AND only frame children swapped.
+   - `packages/core/test/routing/router-client.test.js`: frame detection, querySelector with various ids, fallback when source frame missing.
+   - `test/e2e/nested-layout-partial-swap.test.mjs`: load `/docs/components/a`, scroll sidenav, click `/docs/components/b`, assert scroll preserved AND only frame children swapped.
 7. **Docs:**
    - `AGENTS.md`: add `<webjs-frame>` to the public API table.
    - `agent-docs/advanced.md`: new "Frames" section under the client-router doc.

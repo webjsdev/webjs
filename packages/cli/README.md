@@ -60,7 +60,7 @@ The scaffold seeds opinionated defaults so AI agents produce consistent code:
 
 - `AGENTS.md` + `CONVENTIONS.md` (the machine-readable contract)
 - `.claude/`, `.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`
-- `test/unit/` and `test/browser/` with example tests
+- `test/<feature>/` (with optional `browser/` / `e2e/` subfolders per kind) with example tests
 - Tailwind CSS via CLI (no browser runtime at build time)
 - TypeScript, `.editorconfig`, `.gitignore`
 

@@ -1,12 +1,23 @@
 /**
  * Web Test Runner configuration for webjs.
  *
- * Runs client-side tests (renderer, directives, components) in real browsers
- * via Playwright. Server-side tests (router, SSR, actions) stay on node:test.
+ * Runs client-side tests (renderer, directives, components, signals,
+ * slots, UI components) in real browsers via Playwright. Server-side
+ * tests (router, SSR pipeline, actions, auth) stay on node:test.
+ *
+ * Browser tests live next to the package they cover, inside a
+ * `browser/` subfolder of a feature folder:
+ *
+ *   packages/core/test/<feature>/browser/*.test.js
+ *   packages/ui/test/<feature>/browser/*.test.js
+ *
+ * Cross-package browser tests live at the root:
+ *
+ *   test/<feature>/browser/*.test.js
  *
  * Run:
- *   npx wtr                           # client + component tests
- *   npm test                          # server tests (node:test)
+ *   npx wtr                           # all browser tests
+ *   npm test                          # all node tests
  *   npm run test:all                  # everything
  */
 import { playwrightLauncher } from '@web/test-runner-playwright';
@@ -14,27 +25,12 @@ import { esbuildPlugin } from '@web/dev-server-esbuild';
 
 export default {
   files: [
-    'test/browser/render-client.test.js',
-    'test/browser/light-dom-hydration.test.js',
-    'test/browser/ui-stateful.test.js',
-    'test/browser/ui-overlay.test.js',
-    'test/browser/slot.test.js',
-    'test/browser/component-lifecycle.test.js',
-    'test/browser/directives.test.js',
-    'test/browser/directives-cache_test.js',
-    'test/browser/directives-async-stream_test.js',
-    'test/browser/directives-ref_test.js',
-    'test/browser/directives-keyed_test.js',
-    'test/browser/directives-guard_test.js',
-    'test/browser/directives-template-content_test.js',
-    'test/browser/directives-until_test.js',
-    'test/browser/controllers-port_test.js',
-    'test/browser/lifecycle-port_test.js',
-    'test/browser/watch-directive.test.js',
-    'test/browser/signal-component.test.js',
-    'test/browser/signal-hydration.test.js',
-    'test/browser/signal-slot-integration.test.js',
-    'test/browser/slot-projection-cycle.test.js',
+    'packages/*/test/**/browser/**/*.test.js',
+    'test/**/browser/**/*.test.js',
+    // Blog E2E needs `examples/blog`'s dev server running on :3456 first.
+    // It runs via `npm run test:browser:blog` (separate orchestrator),
+    // not the default `wtr` run.
+    '!test/blog/browser/**/*.test.js',
   ],
   nodeResolve: true,
   // Transform .ts → JS on the fly so browsers can `import()` the @webjskit/ui
