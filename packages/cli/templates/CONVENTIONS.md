@@ -453,11 +453,14 @@ registered webjs elements).
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
 - **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
-- For per-component state, declare a property with `state: true`
-  (`static properties = { foo: { type: ..., state: true } }`) and
-  mutate via `this.foo = ...`. For cross-component shared state, use
-  `signal()` from `@webjskit/core` and read via `signal.get()` inside
-  `render()`. There is no `setState()` / `this.state` API.
+- Component state lives in signals. Import `signal` from
+  `@webjskit/core`, read via `signal.get()` inside `render()`, write
+  via `signal.set(value)`. Module-scope signals share state across
+  components; instance signals (created in the constructor) carry
+  component-local state. Reactive properties (`static properties =
+  { foo: { type: ... } }` with a sibling `declare foo: T`) wrap HTML
+  attributes, attribute reflection, and `.prop=${value}` SSR
+  hydration.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
 
 ---
@@ -709,25 +712,21 @@ set in the constructor (after `super()`) or be derivable from
 `static properties` + attributes on the rendered tag.
 
 ```ts
-class Cart extends WebComponent {
-  static properties = { items: { type: Array } };
-  declare items: Item[];
+import { WebComponent, html, signal } from '@webjskit/core';
 
-  constructor() {
-    super();
-    this.items = [];                 // ← SSR uses this for first paint
-  }
+class Cart extends WebComponent {
+  items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint
 
   connectedCallback() {
     super.connectedCallback();
-    // Browser-only refinement, read localStorage and assign the
-    // reactive property; the component re-renders automatically.
+    // Browser-only refinement, read localStorage and write the
+    // signal. The component re-renders automatically.
     const stored = readFromLocalStorage();
-    if (stored) this.items = stored;
+    if (stored) this.items.set(stored);
   }
 
   render() {
-    return html`<ul>${this.items.map(/* … */)}</ul>`;
+    return html`<ul>${this.items.get().map(/* … */)}</ul>`;
   }
 }
 ```
@@ -738,7 +737,7 @@ Where the data lives, where to read it:
 |---|---|
 | Database, session, cookies, request headers | Page function (server). Pass to component as attribute / property. |
 | Component's own initial defaults | Component `constructor()` after `super()`. |
-| Browser-only: `localStorage`, viewport, `matchMedia`, `navigator.*` | Component `connectedCallback()`, then assign a reactive property (`this.foo = stored`) or a signal to refine. |
+| Browser-only: `localStorage`, viewport, `matchMedia`, `navigator.*` | Component `connectedCallback()`, then write a signal (instance-scoped in the constructor, or module-scope if shared) to refine. |
 | Theme color, RTL direction (flash-sensitive) | Synchronous inline `<script>` in root layout that sets `document.documentElement` attributes before custom elements upgrade. |
 
 ---

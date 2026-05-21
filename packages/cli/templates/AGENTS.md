@@ -725,9 +725,13 @@ composition, so a nested shell ends up dropped by the HTML parser.
    files (like `lib/utils/cn.ts`) can be imported anywhere.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
-4. Mutate state via reactive-property assignment (`this.count = 1`) or
-   a signal `set()` from `@webjskit/core`. There is no `setState()` /
-   `this.state` API.
+4. Component state lives in signals. Import `signal` from
+   `@webjskit/core`, read with `signal.get()` inside `render()`, and
+   write with `signal.set(value)`. Module-scope signals share state
+   across components; instance signals (created in the constructor)
+   carry component-local state. Reactive properties (`static
+   properties = { ... }` with a sibling `declare`) are for values
+   that ride an HTML attribute or `.prop=${...}` SSR hydration.
 5. Pages / layouts / metadata routes default-export a server-only function.
 6. One exported function per action / query file. Name the file after it.
 7. **Components must render meaningful HTML on first paint** (SSR

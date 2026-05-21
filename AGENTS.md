@@ -272,15 +272,16 @@ class MyThing extends WebComponent {
 MyThing.register('my-thing');
 ```
 
-Mutate state by assigning a reactive property (`this.count = 1`), by
-calling `requestUpdate()`, or by writing to a signal the render reads.
-Updates are batched via microtask. Declared attribute changes
-auto-trigger re-render. For cross-component shared state, import
-`signal`/`computed` from `@webjskit/core`; every WebComponent ships a
-built-in `SignalWatcher` that tracks signal reads inside `render()`
-and re-renders on change. For fine-grained binding without a full
-re-render, use the `watch(signal)` directive from
-`@webjskit/core/directives`.
+Signals are the default state primitive. Import `signal` / `computed`
+from `@webjskit/core`, read with `signal.get()` inside `render()`, and
+every WebComponent's built-in `SignalWatcher` will re-render on change.
+Module-scope signals share state across components and survive
+navigations; instance signals (created in the constructor) carry
+component-local state. Updates are batched via microtask. The
+`static properties` declaration is reserved for values that ride an
+HTML attribute (declared attributes auto-trigger re-render too). For
+fine-grained DOM swap without a full re-render, use the
+`watch(signal)` directive from `@webjskit/core/directives`.
 
 ### Typed props in TypeScript via the `declare` pattern
 
@@ -336,7 +337,7 @@ The SSR pipeline runs the constructor, applies attributes, calls `instance.rende
 Rules:
 
 - **Defaults for first paint go in the constructor** (after `super()`).
-- **Browser-only data** (localStorage, viewport, `navigator.*`, `matchMedia`) goes in `connectedCallback`. Assign the value to a reactive property (or a signal) to refine the first paint.
+- **Browser-only data** (localStorage, viewport, `navigator.*`, `matchMedia`) goes in `connectedCallback`. Write the value to a signal (instance-scoped in the constructor, or module-scope if shared) to refine the first paint.
 - **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
 - **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
@@ -525,7 +526,7 @@ For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. 
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field.
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
-5. **State mutation uses reactive properties or signals, never `this.state` / `setState`.** Those APIs are removed. For per-component scalars, declare a property with `static properties = { foo: { type: ..., state: true } }` and assign via `this.foo = ...`. For cross-component shared state, import `signal` from `@webjskit/core` at module scope and read via `signal.get()` inside `render()` (auto-tracked by every WebComponent's built-in SignalWatcher). For fine-grained DOM swap without a full re-render, use `${watch(signal)}` from `@webjskit/core/directives`.
+5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjskit/core` and read via `signal.get()` inside `render()`; every WebComponent's built-in SignalWatcher tracks the reads and re-renders when any of them change. Use a module-scope signal for state shared across components (or pages); create an instance-scope signal in the constructor for state local to one component. Reactive properties (`static properties = { foo: { type: ... } }` with a sibling `declare foo: T`) are reserved for values that ride an HTML attribute, get reflected back to one, or arrive through `.prop=${value}` SSR hydration. For fine-grained DOM swap without a full re-render, use `${watch(signal)}` from `@webjskit/core/directives`.
 6. **Page and layout default exports must be functions.** They return a value (usually `TemplateResult`). They do not call `render()` themselves.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.
