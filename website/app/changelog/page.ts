@@ -72,9 +72,27 @@ async function loadEntries(): Promise<Entry[]> {
       });
     }
   }
-  // Sort: most recent first; tie-break by package name.
-  entries.sort((a, b) => (b.date.localeCompare(a.date)) || a.shortPkg.localeCompare(b.shortPkg));
+  // Sort: most recent first; tie-break by package name, then by
+  // version DESC so two same-day entries of the same package (e.g.
+  // cli 0.8.0 and cli 0.7.0 both bumped on the same day) render
+  // newest-on-top.
+  entries.sort((a, b) =>
+    b.date.localeCompare(a.date)
+    || a.shortPkg.localeCompare(b.shortPkg)
+    || compareVersionsDesc(a.version, b.version)
+  );
   return entries;
+}
+
+/** Compare two semver-shaped strings ("0.7.0", "0.8.0") with newer first. */
+function compareVersionsDesc(a: string, b: string): number {
+  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pb[i] ?? 0) - (pa[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 /** Tiny inline-markdown renderer: links, bold, italic, inline code. */
