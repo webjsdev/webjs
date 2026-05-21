@@ -88,12 +88,17 @@ can load it without booting the full server.
 
 ## Tests
 
-Unit tests live in the **repo root `test/`**. Server-flavoured ones:
-`router.test.js`, `ssr.test.js`, `actions.test.js`, `auth.test.js`,
-`session.test.js`, `cache.test.js`, `rate-limit.test.js`,
-`csrf.test.js`, `websocket.test.js`, `check.test.js`,
-`server-file-guardrail.test.js`, `serializer.test.js`, `vendor.test.js`,
-etc.
+Tests for this package live in **`packages/server/test/`**,
+organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
+`session/`, `cache/`, `rate-limit/`, `csrf/`, `cors/`,
+`broadcast/`, `websocket/`, `check/`, `guardrails/`,
+`module-graph/`, `scanner/`, `vendor/`, `env/`, `dev/`,
+`forwarded/`.
+
+Cross-package tests that exercise the SSR pipeline, scaffolds,
+or full app boots live at the repo root in `test/ssr/`,
+`test/scaffolds/`, `test/blog/`, etc. See
+[`../../agent-docs/testing.md`](../../agent-docs/testing.md).
 
 Run `npm test` from the repo root.
 

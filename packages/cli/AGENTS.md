@@ -97,11 +97,20 @@ verbatim.
 
 ## Tests
 
-- `test/scaffold-template-validation.test.js`: rejects unknown templates.
-- `test/check.test.js`: convention checker (server package owns the
-  implementation, with tests at the repo root).
-- Integration testing of the actual scaffold output is currently
-  manual (`webjs create demo && cd demo && npm i && webjs dev`).
+Scaffold-template tests for this package live in cross-package
+folders under the repo root (they need to boot scaffolded apps):
+`test/scaffolds/scaffold-template-validation.test.js`,
+`test/scaffolds/scaffold-integration.test.js`,
+`test/scaffolds/scaffold-ui-integration.test.js`.
+
+Convention-rule tests live in
+`packages/server/test/check/check.test.js` (the rules themselves
+ship from `@webjskit/server`).
+
+End-to-end testing of the actual scaffold output is currently
+manual (`webjs create demo && cd demo && npm i && webjs dev`).
+See [`../../agent-docs/testing.md`](../../agent-docs/testing.md)
+for the overall layout.
 
 Run `npm test` from the repo root.
 

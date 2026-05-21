@@ -259,8 +259,11 @@ prisma/
   dev.db                 SQLite file (gitignored); run `npm run db:migrate` to create
   migrations/            generated migration SQL
 public/                  static assets, served at /public/*
-test/unit/*.test.ts      unit tests (node --test)
-test/browser/*.test.ts   browser tests (web-test-runner)
+test/<feature>/                feature-scoped tests, one folder per concern
+  <name>.test.ts                node unit / integration test (node --test)
+  browser/<name>.test.js        real-browser test (web-test-runner)
+  e2e/<name>.test.ts            end-to-end test (full app boot, opt in via WEBJS_E2E=1)
+  smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
 ```
 

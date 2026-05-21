@@ -84,15 +84,19 @@ export.
 
 ## Tests
 
-Unit tests for this package live in the **repo root `test/`**
-(workspace-linked, single Node test runner). Filenames:
-`html.test.js`, `css.test.js`, `component.test.js`, `render-server.test.js`,
-`render-client.test.js`, `router-client.test.js`, `task.test.js`,
-`context.test.js`, `directives.test.js`, `repeat.test.js`,
-`suspense.test.js`, `testing.test.js`, `lazy-loader.test.js`,
-`websocket-client.test.js`, etc.
+Tests for this package live in **`packages/core/test/`**,
+organised by feature: `signals/`, `rendering/`, `directives/`,
+`slots/`, `lifecycle/`, `context/`, `task/`, `suspense/`,
+`routing/`, `serializer/`, `styling/`, `registry/`, `nav/`,
+`websocket-client/`, `rich-fetch/`. Each feature folder has a
+`browser/` subfolder when there are real-Chromium tests for it.
 
-Run `npm test` from the repo root.
+Cross-package tests that exercise core through the SSR pipeline
+or scaffolds live at the repo root in `test/ssr/`,
+`test/scaffolds/`, etc. See [`../../agent-docs/testing.md`](../../agent-docs/testing.md).
+
+Run `npm test` from the repo root for node tests, `npm run test:browser`
+for the browser tests.
 
 ---
 
