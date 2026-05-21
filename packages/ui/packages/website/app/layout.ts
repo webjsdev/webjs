@@ -70,14 +70,22 @@ export default function Layout({ children }: { children: any }) {
           }
         } catch (_) {}
       })();
-      // Mobile menu: close the parent <details> when a link inside
-      // .mobile-menu is activated, so the panel auto-dismisses on
-      // navigation. Same handler as webjs.dev.
+      // Mobile menu auto-close: close on link click (inside the panel)
+      // AND on any click outside the menu. Same handler as webjs.dev
+      // and the example blog.
       document.addEventListener('click', function (e) {
-        var a = e.target.closest && e.target.closest('.mobile-menu a');
-        if (!a) return;
-        var d = a.closest('details');
-        if (d) d.removeAttribute('open');
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var a = t.closest('.mobile-menu a');
+        if (a) {
+          var d = a.closest('details');
+          if (d) d.removeAttribute('open');
+          return;
+        }
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) {
+          if (!open[i].contains(t)) open[i].removeAttribute('open');
+        }
       });
     </script>
     <style>

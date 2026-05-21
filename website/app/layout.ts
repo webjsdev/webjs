@@ -74,15 +74,25 @@ export default function RootLayout({ children }: { children: unknown }) {
           }
         } catch (_) {}
       })();
-      // Mobile-menu close on link click. <details> stays open by
-      // default when a child <a> is activated, including the
-      // client-router-intercepted same-origin links: close the
-      // parent <details> on any anchor click inside .mobile-menu.
+      // Mobile menu auto-close: close on link click (inside the panel)
+      // AND on any click outside the menu. <details> stays open by
+      // default until you click summary again, which feels wrong on
+      // a phone, where a tap anywhere else should dismiss it.
       document.addEventListener('click', function (e) {
-        var a = e.target.closest && e.target.closest('.mobile-menu a');
-        if (!a) return;
-        var d = a.closest('details');
-        if (d) d.removeAttribute('open');
+        var t = e.target;
+        if (!t || !t.closest) return;
+        // 1) Click on a link inside the menu, close the menu.
+        var a = t.closest('.mobile-menu a');
+        if (a) {
+          var d = a.closest('details');
+          if (d) d.removeAttribute('open');
+          return;
+        }
+        // 2) Click anywhere OUTSIDE any open .mobile-menu, close it.
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) {
+          if (!open[i].contains(t)) open[i].removeAttribute('open');
+        }
       });
     </script>
     <link rel="stylesheet" href="/public/tailwind.css">

@@ -80,14 +80,22 @@ export default function RootLayout({ children }: { children: unknown }) {
           }
         } catch (_) {}
       })();
-      // Mobile menu: close the parent <details> when any link inside
-      // .mobile-menu is activated. Delegated on document so it
-      // survives client-router navigations without rebinding.
+      // Mobile menu auto-close: close on link click (inside the panel)
+      // AND on any click outside the menu. Delegated on document so
+      // it survives client-router navigations without rebinding.
       document.addEventListener('click', function (e) {
-        var a = e.target.closest && e.target.closest('.mobile-menu a');
-        if (!a) return;
-        var d = a.closest('details');
-        if (d) d.removeAttribute('open');
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var a = t.closest('.mobile-menu a');
+        if (a) {
+          var d = a.closest('details');
+          if (d) d.removeAttribute('open');
+          return;
+        }
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) {
+          if (!open[i].contains(t)) open[i].removeAttribute('open');
+        }
       });
     </script>
     <link rel="stylesheet" href="/public/tailwind.css">
