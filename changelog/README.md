@@ -110,6 +110,22 @@ The AGENTS.md rule that AI agents follow on every code-commit:
 > for `breaking` entries that need migration notes. Then commit the
 > changelog file alongside the version bump.
 
+## GitHub Releases are auto-published from the same files
+
+The `.github/workflows/release.yml` workflow watches for new
+`changelog/**.md` files added in any push to `main`. For each new
+file it runs `scripts/publish-release.js`, which parses the
+frontmatter, composes a release tag of the shape `<pkg>@<version>`
+(e.g. `core@0.6.0`) with title `@webjskit/<pkg> <version>` and the
+markdown body as release notes, and calls `gh release create`.
+
+The publish step is idempotent: it skips any tag that already
+exists, so workflow retries and force-pushes are safe. Hand-editing
+a `changelog/<pkg>/<version>.md` after the release was published
+does NOT update the release on GitHub. If you need to amend a
+published release, edit it on the GitHub Releases UI directly (or
+delete the release tag and let a fresh workflow run recreate it).
+
 ## What if the same change ships across packages
 
 A commit that touches more than one package (e.g. a refactor that

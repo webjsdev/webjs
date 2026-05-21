@@ -1,0 +1,60 @@
+name: Auto-release
+
+# Every push to main that lands a new `changelog/<pkg>/<version>.md`
+# file becomes a GitHub Release for that (package, version) tuple.
+# The matching workflow:
+#
+#   1. Checks out main with two-commit depth so we can diff the new
+#      head against its parent.
+#   2. Finds files added under `changelog/**.md` in that diff.
+#   3. Invokes `scripts/publish-release.js` once per file. The script
+#      is idempotent (skips when the tag already exists), so retries
+#      / force-pushes do not error.
+#
+# Triggered only on changelog changes so unrelated pushes do not run
+# the job. Cost on public repos: $0 (GitHub Actions has unlimited
+# free minutes for public repos on ubuntu-latest).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'changelog/**'
+
+permissions:
+  contents: write   # gh release create needs write access to the repo
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Find new changelog files
+        id: diff
+        run: |
+          set -euo pipefail
+          # All changelog md files added in this push.
+          mapfile -t NEW < <(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md')
+          if [ ${#NEW[@]} -eq 0 ]; then
+            echo "No new changelog files in this push; skipping."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '  + %s\n' "${NEW[@]}"
+          # Persist the list across steps via a workspace file. GITHUB_OUTPUT
+          # has a per-line size cap that we'd hit on big bulk-backfill PRs.
+          printf '%s\n' "${NEW[@]}" > .new-changelog-files.txt
+          echo "count=${#NEW[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish releases
+        if: steps.diff.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            node scripts/publish-release.js "$f"
+          done < .new-changelog-files.txt
