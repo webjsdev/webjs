@@ -1,36 +1,45 @@
 name: Auto-release
 
 # Every push to main that lands a new `changelog/<pkg>/<version>.md`
-# file becomes a published npm package AND a GitHub Release for
-# that (package, version) tuple.
+# file becomes:
+#   1. A published npm.com package via scripts/publish-npm.js.
+#   2. A published GitHub Packages copy via scripts/publish-github-packages.js
+#      (so the repo's Packages sidebar lists each version).
+#   3. A GitHub Release via scripts/publish-release.js.
 #
-# Flow per new changelog file:
-#   1. scripts/publish-npm.js     → npm publish @webjsdev/<pkg>@<version>
-#   2. scripts/publish-release.js → gh release create <pkg>@<version>
+# All three scripts are idempotent: they skip when the version is
+# already on the destination registry / a release with the tag
+# already exists. So workflow retries and force-pushes never
+# duplicate or error on previously-published versions.
 #
-# Both scripts are idempotent: they skip when the version is
-# already on the registry / a release with the tag already exists.
-# So workflow retries and force-pushes never duplicate or error on
-# previously-published versions.
-#
-# Order matters: npm runs first. If npm publish fails (auth,
-# network, transient registry error), the GH release step is
-# skipped and the workflow fails. After fixing, re-running picks
-# up where it left off; the npm-side idempotency check makes the
-# completed package a no-op.
+# Order matters: npm.com runs first, then GitHub Packages, then GH
+# Releases. If any step fails (auth, network, transient registry
+# error), later steps are skipped and the workflow fails. A
+# re-run picks up where it left off thanks to the idempotency
+# checks.
 #
 # Triggered only on changelog/** changes so unrelated pushes do
-# not run the job. Cost on public repos: $0 (Actions has unlimited
-# free minutes for public repos on ubuntu-latest).
+# not run the job. workflow_dispatch is also wired so a one-time
+# bootstrap can republish every existing changelog file to GitHub
+# Packages without needing a fresh changelog file. Cost on public
+# repos: $0 (Actions has unlimited free minutes for public repos
+# on ubuntu-latest).
 
 on:
   push:
     branches: [main]
     paths:
       - 'changelog/**'
+  workflow_dispatch:
+    inputs:
+      bootstrap_github_packages:
+        description: 'Republish every existing changelog file to GitHub Packages (one-time bootstrap; npm.com + GH Releases steps are skipped)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # gh release create needs write access to the repo
+  packages: write   # npm publish to GitHub Packages
 
 jobs:
   release:
@@ -59,26 +68,45 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          # Sort by the `date:` timestamp inside each file's
-          # frontmatter, ASCending. GitHub Releases lists releases by
-          # created_at DESC, so publishing oldest-first means newest
-          # entries end up at the top of the Releases page.
-          #
-          # Within tied timestamps (multiple packages bumped in one
-          # PR), sort the filename DESC so the alphabetically-first
-          # package publishes LAST, gets the latest created_at, and
-          # ends up at the top of the GH list. The website's
-          # /changelog page iterates package dirs alphabetically
-          # too, so this produces matching order on both surfaces.
-          mapfile -t NEW < <(
-            git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md' \
-              | while read -r f; do
-                  ts=$(awk '/^date:/ { print $2; exit }' "$f")
-                  printf '%s\t%s\n' "$ts" "$f"
-                done \
-              | sort -k1,1 -k2,2r \
-              | cut -f2-
-          )
+          # Two modes:
+          #   1. push event: diff HEAD~1..HEAD for newly added changelog files.
+          #   2. workflow_dispatch with bootstrap_github_packages=true: list
+          #      every changelog/**.md file currently in the tree. The
+          #      publish-github-packages.js step is idempotent (skips
+          #      already-published versions) so a re-run is safe.
+          BOOTSTRAP='${{ inputs.bootstrap_github_packages }}'
+          if [ "$BOOTSTRAP" = 'true' ]; then
+            mapfile -t NEW < <(
+              find changelog -name '*.md' -not -name 'README.md' \
+                | while read -r f; do
+                    ts=$(awk '/^date:/ { print $2; exit }' "$f")
+                    printf '%s\t%s\n' "$ts" "$f"
+                  done \
+                | sort -k1,1 -k2,2r \
+                | cut -f2-
+            )
+          else
+            # Sort by the `date:` timestamp inside each file's
+            # frontmatter, ASCending. GitHub Releases lists releases by
+            # created_at DESC, so publishing oldest-first means newest
+            # entries end up at the top of the Releases page.
+            #
+            # Within tied timestamps (multiple packages bumped in one
+            # PR), sort the filename DESC so the alphabetically-first
+            # package publishes LAST, gets the latest created_at, and
+            # ends up at the top of the GH list. The website's
+            # /changelog page iterates package dirs alphabetically
+            # too, so this produces matching order on both surfaces.
+            mapfile -t NEW < <(
+              git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md' \
+                | while read -r f; do
+                    ts=$(awk '/^date:/ { print $2; exit }' "$f")
+                    printf '%s\t%s\n' "$ts" "$f"
+                  done \
+                | sort -k1,1 -k2,2r \
+                | cut -f2-
+            )
+          fi
           if [ ${#NEW[@]} -eq 0 ]; then
             echo "No new changelog files in this push; skipping."
             echo "count=0" >> "$GITHUB_OUTPUT"
@@ -87,9 +115,10 @@ jobs:
           printf '  + %s\n' "${NEW[@]}"
           printf '%s\n' "${NEW[@]}" > .new-changelog-files.txt
           echo "count=${#NEW[@]}" >> "$GITHUB_OUTPUT"
+          echo "bootstrap=$BOOTSTRAP" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
-        if: steps.diff.outputs.count != '0'
+        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -99,8 +128,19 @@ jobs:
             node scripts/publish-npm.js "$f"
           done < .new-changelog-files.txt
 
-      - name: Create GitHub Releases
+      - name: Publish to GitHub Packages
         if: steps.diff.outputs.count != '0'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            node scripts/publish-github-packages.js "$f"
+          done < .new-changelog-files.txt
+
+      - name: Create GitHub Releases
+        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
