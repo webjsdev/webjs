@@ -142,10 +142,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       return s ? JSON.parse(s.textContent) : null;
     });
     assert.ok(map, 'Import map should exist');
-    assert.ok(map.imports['@webjskit/core'], 'Should have @webjskit/core entry');
-    assert.ok(map.imports['@webjskit/core/directives'], 'Should have @webjskit/core/directives entry');
-    assert.ok(map.imports['@webjskit/core/context'], 'Should have @webjskit/core/context entry');
-    assert.ok(map.imports['@webjskit/core/task'], 'Should have @webjskit/core/task entry');
+    assert.ok(map.imports['@webjsdev/core'], 'Should have @webjsdev/core entry');
+    assert.ok(map.imports['@webjsdev/core/directives'], 'Should have @webjsdev/core/directives entry');
+    assert.ok(map.imports['@webjsdev/core/context'], 'Should have @webjsdev/core/context entry');
+    assert.ok(map.imports['@webjsdev/core/task'], 'Should have @webjsdev/core/task entry');
   });
 
   test('modulepreload links are deduplicated', async () => {

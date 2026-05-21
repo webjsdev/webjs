@@ -74,7 +74,7 @@
  * Design tokens used: --popover, --popover-foreground, --accent,
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
-import { WebComponent, html, unsafeHTML } from '@webjskit/core';
+import { WebComponent, html, unsafeHTML } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------

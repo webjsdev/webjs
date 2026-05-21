@@ -43,7 +43,7 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
-import { WebComponent, html, repeat, unsafeHTML, signal } from '@webjskit/core';
+import { WebComponent, html, repeat, unsafeHTML, signal } from '@webjsdev/core';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 

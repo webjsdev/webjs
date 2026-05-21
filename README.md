@@ -28,7 +28,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 - **Metadata routes.** `sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts`: dynamic SEO/PWA metadata from functions, not static files.
 - **`expose()` for REST.** Tag a server action with `expose('POST /api/posts', fn)` to make it reachable over HTTP and via RPC. Optional input validation.
 - **Production ready.** CSRF, gzip/brotli, HTTP/2, 103 Early Hints, CSP nonces, modulepreload, rate limiting, health probes, graceful shutdown, streaming Suspense.
-- **AI-first component library: Webjs UI.** 32 primitives at [ui.webjs.dev](https://ui.webjs.dev), written for AI agents. Two-tier composition: pure class-helper functions (`buttonClass`, `cardClass`, `inputClass`) for visual primitives, plus a small set of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where state matters. `webjs ui add button card dialog` copies source into your project, and you own it and edit it. Auto-installed with `@webjskit/cli`. Non-webjs users: `npx webjsui add button card dialog`.
+- **AI-first component library: Webjs UI.** 32 primitives at [ui.webjs.dev](https://ui.webjs.dev), written for AI agents. Two-tier composition: pure class-helper functions (`buttonClass`, `cardClass`, `inputClass`) for visual primitives, plus a small set of stateful custom elements (`<ui-dialog>`, `<ui-tabs>`, `<ui-popover>`) where state matters. `webjs ui add button card dialog` copies source into your project, and you own it and edit it. Auto-installed with `@webjsdev/cli`. Non-webjs users: `npx webjsui add button card dialog`.
 
 ## Quickstart
 
@@ -50,7 +50,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ```sh
 # install once
-npm i -g @webjskit/cli
+npm i -g @webjsdev/cli
 
 # scaffold a new app
 webjs create my-app                  # full-stack (pages + API + components + Prisma/SQLite)
@@ -83,8 +83,8 @@ cd website        && npm run dev     # just the website
 ```
 packages/
   core/       # webjs: html, css, WebComponent, renderers, client router
-  server/     # @webjskit/server: dev/prod server, router, SSR, actions, WS
-  cli/        # @webjskit/cli: webjs dev/start/build/db
+  server/     # @webjsdev/server: dev/prod server, router, SSR, actions, WS
+  cli/        # @webjsdev/cli: webjs dev/start/build/db
 examples/
   blog/       # full-featured reference app (auth, posts, comments, chat)
 docs/         # documentation site (built on webjs itself)
@@ -96,7 +96,7 @@ CLAUDE.md     # Claude Code quick-reference
 
 ```ts
 // app/page.ts: server-rendered, async data fetching
-import { html, repeat } from '@webjskit/core';
+import { html, repeat } from '@webjsdev/core';
 import '../components/counter.ts';
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
 
@@ -116,7 +116,7 @@ export default async function Home() {
 
 ```ts
 // components/counter.ts: interactive web component, light DOM + Tailwind
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
   // Light DOM is the default, so Tailwind utility classes apply directly.
@@ -182,7 +182,7 @@ Health: `GET /__webjs/health`. Graceful shutdown on `SIGTERM`.
 Embed in Express/Fastify/Bun/Deno:
 
 ```ts
-import { createRequestHandler } from '@webjskit/server';
+import { createRequestHandler } from '@webjsdev/server';
 const app = await createRequestHandler({ appDir: process.cwd() });
 const resp = await app.handle(new Request('http://x/api/hello'));
 ```
@@ -211,7 +211,7 @@ Pre-1.0. 632 unit tests (96.6% line coverage, 87.5% branch, 93.6% function),
 - **Core:** SSR with DSD (opt-in) + light-DOM hydration (default), fine-grained client renderer, `repeat()`, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net
 - **Data:** server actions with webjs's built-in serializer (Date/Map/Set/BigInt/TypedArray/Blob/File/FormData/cycles survive the wire), `expose()` for REST, `json()` + `richFetch()` for content-negotiated APIs, `cache()` for server-side query caching with TTL + `invalidate()`
 - **Server:** file router, per-segment middleware, `rateLimit()`, WebSockets + `broadcast()`, CSRF, compression, HTTP/2, 103 Early Hints, health probes, graceful shutdown, `Session` class with `SessionStorage` (cookie or store-backed), NextAuth-style `createAuth()` (Credentials, Google, GitHub)
-- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, plus `@webjskit/ts-plugin` for tsserver. The plugin is a single editor-only piece that bundles `ts-lit-plugin` internally and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. The scaffold lists exactly one plugin in `tsconfig.json`. Not required for the framework to run.
+- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, plus `@webjsdev/ts-plugin` for tsserver. The plugin is a single editor-only piece that bundles `ts-lit-plugin` internally and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. The scaffold lists exactly one plugin in `tsconfig.json`. Not required for the framework to run.
 
 ## License
 

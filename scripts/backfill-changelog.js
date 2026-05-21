@@ -174,7 +174,7 @@ function renderEntry(pkg, version, date, commits) {
   // duplicates one or the other on every surface.
   const fm = [
     '---',
-    `package: "@webjskit/${pkg}"`,
+    `package: "@webjsdev/${pkg}"`,
     `version: ${version}`,
     `date: ${date}`,
     `commit_count: ${commits.length}`,
@@ -208,7 +208,7 @@ let skippedEmpty = 0;
 for (const pkg of PACKAGES) {
   const versions = versionTimeline(pkg);
   if (!versions.length) {
-    console.log(`[backfill-changelog] @webjskit/${pkg}: no version bumps in history; skipping`);
+    console.log(`[backfill-changelog] @webjsdev/${pkg}: no version bumps in history; skipping`);
     continue;
   }
   const dir = resolve(OUT, pkg);
@@ -232,6 +232,6 @@ for (const pkg of PACKAGES) {
     total++;
     prevSha = v.sha;
   }
-  console.log(`[backfill-changelog] @webjskit/${pkg}: ${versions.length} versions`);
+  console.log(`[backfill-changelog] @webjsdev/${pkg}: ${versions.length} versions`);
 }
 console.log(`[backfill-changelog] new files: ${total}, skipped (empty): ${skippedEmpty}`);

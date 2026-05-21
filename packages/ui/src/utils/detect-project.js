@@ -14,7 +14,7 @@ export function detectProject(cwd = process.cwd()) {
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
-  if (deps['@webjskit/server'] || deps['@webjskit/cli'] || existsSync(join(cwd, 'app', 'layout.ts')) || existsSync(join(cwd, 'app', 'layout.js'))) {
+  if (deps['@webjsdev/server'] || deps['@webjsdev/cli'] || existsSync(join(cwd, 'app', 'layout.ts')) || existsSync(join(cwd, 'app', 'layout.js'))) {
     return { type: 'webjs', meta: { pkg } };
   }
   if (deps['next']) return { type: 'next', meta: { pkg } };

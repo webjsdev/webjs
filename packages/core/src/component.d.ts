@@ -86,7 +86,7 @@ export abstract class WebComponent extends HTMLElement {
    *
    * For instance-local state, prefer a reactive property (`static
    * properties = { foo: { state: true } }`) or a signal from
-   * `@webjskit/core`'s `signal()`. The framework's built-in
+   * `@webjsdev/core`'s `signal()`. The framework's built-in
    * SignalWatcher wires every signal read in `render()` to a re-render
    * automatically; explicit `requestUpdate()` is rarely needed.
    */

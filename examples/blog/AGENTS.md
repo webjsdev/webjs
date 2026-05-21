@@ -6,25 +6,25 @@ feature the framework ships. Read this before editing any file.
 ## Framework source is in `node_modules/`
 
 You can and should read framework code directly when debugging. No
-build step, no minification: the JavaScript in `node_modules/@webjskit/*`
+build step, no minification: the JavaScript in `node_modules/@webjsdev/*`
 is what runs. Quick map:
 
-- `node_modules/@webjskit/core/`: renderer, `WebComponent`, directives,
+- `node_modules/@webjsdev/core/`: renderer, `WebComponent`, directives,
   client router, `Task`, context, testing helpers. See
-  `node_modules/@webjskit/core/src/component.js` for lifecycle
+  `node_modules/@webjsdev/core/src/component.js` for lifecycle
   behaviour, `render-client.js` for DOM patching, `router-client.js`
   for navigation / View Transitions.
-- `node_modules/@webjskit/server/`: dev server, SSR, file router,
+- `node_modules/@webjsdev/server/`: dev server, SSR, file router,
   server actions, WebSocket upgrade, `auth.js`, `session.js`,
   `cache.js`, `rate-limit.js`, `csrf.js`. `ssr.js` shows exactly how
   the metadata object becomes `<head>` tags.
-- `node_modules/@webjskit/cli/`: CLI commands + scaffold templates.
-- `node_modules/@webjskit/ts-plugin/`: tsserver plugin (go-to-definition
+- `node_modules/@webjsdev/cli/`: CLI commands + scaffold templates.
+- `node_modules/@webjsdev/ts-plugin/`: tsserver plugin (go-to-definition
   on tag names, `<webjs-tag>` "Unknown tag/attribute" diagnostic
   suppression, attribute auto-complete sourced from `static properties`,
   gated on the current file's import graph). Inside `` html`` `` templates.
 
-When in doubt, `grep -rn '<symbol>' node_modules/@webjskit/`. The
+When in doubt, `grep -rn '<symbol>' node_modules/@webjsdev/`. The
 framework is plain JS with JSDoc types, small, and readable end-to-end.
 
 ## App layout
@@ -43,7 +43,7 @@ app/                         thin route adapters
     page.ts                  /dashboard
     posts/new/page.ts        /dashboard/posts/new
   (marketing)/about/page.ts  /about (route group, parens not in URL)
-  ui-demo/page.ts            /ui-demo (showcases the @webjskit/ui kit)
+  ui-demo/page.ts            /ui-demo (showcases the @webjsdev/ui kit)
   api/
     hello/route.ts           GET /api/hello
     posts/route.ts           GET/POST /api/posts
@@ -86,7 +86,7 @@ modules/
     types.ts                 ChatMessage
 components/                  shared UI primitives
   counter.ts, error-card.ts, theme-toggle.ts, blog-shell.ts, muted-text.ts
-  ui/                        @webjskit/ui standard kit (button, card, input, dialog, …)
+  ui/                        @webjsdev/ui standard kit (button, card, input, dialog, …)
                               installed via `webjs ui add …` from https://ui.webjs.dev
 prisma/schema.prisma         User, Session, Post, Comment
 ```
@@ -100,7 +100,7 @@ prisma/schema.prisma         User, Session, Post, Comment
 `app/error.ts` catches any unhandled error during page rendering. Receives `{ error }` and renders a user-friendly error card. Nested error boundaries are supported. Place `error.ts` deeper in the route tree to isolate failures.
 
 ### Client router
-The layout (`app/layout.ts`) imports `@webjskit/core/client-router`. All `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
+The layout (`app/layout.ts`) imports `@webjsdev/core/client-router`. All `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
 
 ### Metadata
 Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `og:image` URL from `ctx.url.origin`. Sets `openGraph` + `twitter: { card: 'summary_large_image' }` so social shares render the 1200×630 `public/og.png` card.
@@ -185,7 +185,7 @@ webjs.js start ...`. The npm form fires `prestart` (which runs
 1. Never import `@prisma/client` or `node:*` from components or pages.
 2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
-4. Component state lives in signals from `@webjskit/core`. Read with
+4. Component state lives in signals from `@webjsdev/core`. Read with
    `signal.get()` inside `render()`, write with `signal.set(value)`.
    Module-scope signals share state across components; instance
    signals (created in the constructor) carry component-local state.

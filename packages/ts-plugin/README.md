@@ -1,4 +1,4 @@
-# @webjskit/ts-plugin
+# @webjsdev/ts-plugin
 
 A TypeScript language-service plugin for webjs. Gives editors that speak
 `tsserver` (VS Code, Neovim via `nvim-lspconfig` / `typescript-tools.nvim`,
@@ -55,7 +55,7 @@ its completions, and (c) provide its own go-to-definition.
 In your webjs app:
 
 ```sh
-npm i -D @webjskit/ts-plugin
+npm i -D @webjsdev/ts-plugin
 ```
 
 Add to `tsconfig.json`:
@@ -65,7 +65,7 @@ Add to `tsconfig.json`:
   "compilerOptions": {
     "plugins": [
       { "name": "ts-lit-plugin", "strict": true },
-      { "name": "@webjskit/ts-plugin" }
+      { "name": "@webjsdev/ts-plugin" }
     ]
   }
 }

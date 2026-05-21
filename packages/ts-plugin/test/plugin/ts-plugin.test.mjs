@@ -1,5 +1,5 @@
 /**
- * Unit tests for @webjskit/ts-plugin: verifies the language-service decorator
+ * Unit tests for @webjsdev/ts-plugin: verifies the language-service decorator
  * returns a correct `getDefinitionAndBoundSpan` result for a cursor
  * positioned on a custom-element tag inside an html`` template.
  *
@@ -72,7 +72,7 @@ function offsetOf(file, needle) {
 }
 
 test('loadLitEnhanced: ts-lit-plugin is bundled: single-plugin tsconfig works', () => {
-  // Sanity check: @webjskit/ts-plugin pulls ts-lit-plugin in transitively
+  // Sanity check: @webjsdev/ts-plugin pulls ts-lit-plugin in transitively
   // and loads it inside create(info). This test verifies the package is
   // resolvable from the plugin's perspective so we never accidentally
   // ship without the runtime dep.
@@ -99,13 +99,13 @@ test('loadLitEnhanced: falls back gracefully when create(info) is given a minima
 test('resolves <my-counter> inside html`` to the Counter class', () => {
   const svc = makeService({
     '/counter.ts':
-      `import { WebComponent, html } from '@webjskit/core';\n` +
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
       `export class Counter extends WebComponent {\n` +
       `  render() { return html\`<output></output>\`; }\n` +
       `}\n` +
       `Counter.register('my-counter');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './counter.ts';\n` +
       `export default function Page() {\n` +
       `  return html\`<my-counter count=\${3}></my-counter>\`;\n` +
@@ -132,7 +132,7 @@ test('resolves closing tag </my-counter> just like the opening tag', () => {
       `}\n` +
       `Counter.register('my-counter');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<my-counter></my-counter>\`;\n` +
       `}\n`,
@@ -153,7 +153,7 @@ test('returns nothing for unknown tag names', () => {
       `}\n` +
       `Counter.register('my-counter');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<other-tag></other-tag>\`;\n` +
       `}\n`,
@@ -171,7 +171,7 @@ test('ignores plain HTML tags (no hyphen → not a custom element)', () => {
       `}\n` +
       `Counter.register('my-counter');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<div></div>\`;\n` +
       `}\n`,
@@ -188,7 +188,7 @@ test('ignores plain HTML tags (no hyphen → not a custom element)', () => {
 test('resolves a class name inside html`class="…"` to the css`` rule', () => {
   const svc = makeService({
     '/page.ts':
-      `import { html, css } from '@webjskit/core';\n` +
+      `import { html, css } from '@webjsdev/core';\n` +
       `const STYLES = css\`\n` +
       `  .page-home {\n` +
       `    .hero-title { font-size: 2rem; }\n` +
@@ -217,7 +217,7 @@ test('resolves a class name inside html`class="…"` to the css`` rule', () => {
 test('resolves a class name defined in ANOTHER file via program-wide index', () => {
   const svc = makeService({
     '/layout.ts':
-      `import { html, css } from '@webjskit/core';\n` +
+      `import { html, css } from '@webjsdev/core';\n` +
       `const STYLES = css\`\n` +
       `  .banner { padding: 8px; background: lightyellow; }\n` +
       `\`;\n` +
@@ -225,7 +225,7 @@ test('resolves a class name defined in ANOTHER file via program-wide index', () 
       `  return html\`<style>\${STYLES.text}</style><main>\${children}</main>\`;\n` +
       `}\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<p class="banner">hi</p>\`;\n` +
       `}\n`,
@@ -241,7 +241,7 @@ test('resolves a class name defined in ANOTHER file via program-wide index', () 
 test('picks the correct class when class="a b c" has multiple tokens', () => {
   const svc = makeService({
     '/page.ts':
-      `import { html, css } from '@webjskit/core';\n` +
+      `import { html, css } from '@webjsdev/core';\n` +
       `const STYLES = css\`\n` +
       `  .btn         { padding: 8px; }\n` +
       `  .btn-primary { background: orange; }\n` +
@@ -269,7 +269,7 @@ test('picks the correct class when class="a b c" has multiple tokens', () => {
 test('does not crash on unknown class names (returns no definition)', () => {
   const svc = makeService({
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<p class="nowhere-defined">x</p>\`;\n` +
       `}\n`,
@@ -283,7 +283,7 @@ test('does not crash on unknown class names (returns no definition)', () => {
 test('numeric decimals inside css`` are not mistaken for class names', () => {
   const svc = makeService({
     '/page.ts':
-      `import { html, css } from '@webjskit/core';\n` +
+      `import { html, css } from '@webjsdev/core';\n` +
       `const STYLES = css\`\n` +
       `  .hero {\n` +
       `    padding: 1.5rem;\n` +
@@ -294,7 +294,7 @@ test('numeric decimals inside css`` are not mistaken for class names', () => {
       `  return html\`<style>\${STYLES.text}</style><div class="hero">hi</div>\`;\n` +
       `}\n`,
     '/other.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function O() {\n` +
       `  return html\`<div class="5rem">x</div>\`;\n` +
       `}\n`,
@@ -320,7 +320,7 @@ test('ignores code inside ${...} holes (not part of the template markup)', () =>
       `}\n` +
       `Counter.register('my-counter');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `const label = 'my-counter';\n` +
       `export default function P() {\n` +
       `  return html\`<span>\${label}</span>\`;\n` +
@@ -411,7 +411,7 @@ test('suppresses lit-plugin "unknown tag" diagnostic for an imported webjs compo
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms mode="login"></auth-forms>\`;\n` +
@@ -448,7 +448,7 @@ test('keeps lit-plugin "unknown tag" diagnostic when the component is NOT import
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
       // No `import './auth.ts'`: auth-forms unreachable from page.ts.
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms></auth-forms>\`;\n` +
       `}\n`,
@@ -483,7 +483,7 @@ test('suppresses lit-plugin "unknown attribute" inside an imported webjs tag', (
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms mode="login"></auth-forms>\`;\n` +
@@ -507,7 +507,7 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms ></auth-forms>\`;\n` +
@@ -530,14 +530,14 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
 test('flags number passed where string is declared', () => {
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `const x: number = 42;\n` +
       `export default function P() {\n` +
@@ -555,14 +555,14 @@ test('flags number passed where string is declared', () => {
 test('passes when interpolated value is assignable to declared string type', () => {
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `const m: string = 'login';\n` +
       `export default function P() {\n` +
@@ -577,7 +577,7 @@ test('passes when interpolated value is assignable to declared string type', () 
 test('flags string-or-number against a string-literal-union type', () => {
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `type Mode = 'login' | 'signup';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
@@ -585,7 +585,7 @@ test('flags string-or-number against a string-literal-union type', () => {
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `declare const x: string | number;\n` +
       `export default function P() {\n` +
@@ -602,14 +602,14 @@ test('does not type-check static (non-interpolated) attribute values', () => {
   // the string "123", not a number. We deliberately don't flag it.
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms mode=123></auth-forms>\`;\n` +
@@ -625,13 +625,13 @@ test('skips check when component is reachable but the prop has no `declare` anno
   // silence rather than noise.
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
       `}\n` + // no `declare mode: …`
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `import './auth.ts';\n` +
       `declare const x: number;\n` +
       `export default function P() {\n` +
@@ -650,7 +650,7 @@ test('does not check tags that are not reachable through imports', () => {
   // "unknown tag" warning from ts-lit-plugin.
   const svc = makeService({
     '/auth.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String } };\n` +
       `  declare mode: string;\n` +
@@ -658,7 +658,7 @@ test('does not check tags that are not reachable through imports', () => {
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
       // No import './auth.ts'.
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `declare const x: number;\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms mode=\${x}></auth-forms>\`;\n` +
@@ -678,7 +678,7 @@ test('attribute completions are NOT offered when the component is not imported',
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
       // No `import './auth.ts'` here.
-      `import { html } from '@webjskit/core';\n` +
+      `import { html } from '@webjsdev/core';\n` +
       `export default function P() {\n` +
       `  return html\`<auth-forms ></auth-forms>\`;\n` +
       `}\n`,

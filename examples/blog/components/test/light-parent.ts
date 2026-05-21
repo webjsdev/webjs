@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html } from '@webjsdev/core';
 import './shadow-inner.ts';
 import './light-inner.ts';
 

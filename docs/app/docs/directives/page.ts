@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Directives | webjs' };
 
@@ -7,12 +7,12 @@ export default function Directives() {
     <h1>Directives</h1>
     <p>webjs ships the full lit-html directive set. AI agents writing lit-shaped directive code land on familiar names; the implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
 
-    <pre>import { html, repeat } from '@webjskit/core';
+    <pre>import { html, repeat } from '@webjsdev/core';
 import {
   unsafeHTML, live,
   keyed, guard, templateContent, ref, createRef,
   cache, until, asyncAppend, asyncReplace,
-} from '@webjskit/core/directives';</pre>
+} from '@webjsdev/core/directives';</pre>
 
     <h2>repeat(items, keyFn, templateFn)</h2>
     <p>Keyed list reconciliation. Without it, re-rendering an array destroys and recreates all DOM nodes, losing focus, scroll position, and component state.</p>
@@ -76,7 +76,7 @@ html\`&lt;div&gt;\${templateContent(tpl)}&lt;/div&gt;\`;</pre>
     <p>Render the highest-priority resolved candidate. Priority is left-to-right: <code>args[0]</code> is highest. The highest-priority synchronous candidate renders immediately; higher-priority Promises that later resolve replace the rendered value. Lower-priority Promises are ignored once a higher-priority candidate is in place.</p>
     <pre>html\`&lt;div&gt;\${until(this.dataPromise, html\`&lt;p&gt;Loading…&lt;/p&gt;\`)}&lt;/div&gt;\`;</pre>
     <p>When the marker is torn down (a re-render replaces the directive), in-flight Promise tracking is aborted so late resolves cannot overwrite newer DOM. On the server, <code>until</code> awaits <code>Promise.race</code> when all candidates are Promises, or renders the highest-priority synchronous candidate.</p>
-    <p>For component-scoped async data with full pending/error states, prefer the <code>Task</code> controller from <code>@webjskit/core/task</code>.</p>
+    <p>For component-scoped async data with full pending/error states, prefer the <code>Task</code> controller from <code>@webjsdev/core/task</code>.</p>
 
     <h2>asyncAppend(iterable, mapper?) / asyncReplace(iterable, mapper?)</h2>
     <p>Stream values from an <code>AsyncIterable</code>. Each yielded value is mapped (optional) and rendered as a node group. <code>asyncAppend</code> accumulates the rendered groups before the marker; <code>asyncReplace</code> swaps out the previous output each yield. Iteration aborts when the directive is replaced (so leaked iterators don't hold references to detached DOM).</p>

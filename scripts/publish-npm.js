@@ -13,7 +13,7 @@
  * (NODE_AUTH_TOKEN env var via setup-node's .npmrc on CI, or
  * `npm login` locally). The script does not write any .npmrc.
  *
- * The workspace flag (`--workspace=@webjskit/<pkg>`) tells npm to
+ * The workspace flag (`--workspace=@webjsdev/<pkg>`) tells npm to
  * publish that specific package out of the monorepo. `--access public`
  * is a belt-and-braces alongside the per-package
  * `publishConfig: { access: "public" }`, in case a package forgot
@@ -49,7 +49,7 @@ for (const line of m[1].split('\n')) {
   fm[k] = v;
 }
 
-const pkgName = fm.package; // "@webjskit/core"
+const pkgName = fm.package; // "@webjsdev/core"
 const version = fm.version;
 if (!pkgName || !version) {
   console.error(`[publish-npm] ${file}: missing package or version in frontmatter`);

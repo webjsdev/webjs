@@ -1,5 +1,5 @@
 /**
- * The 7 base colours `@webjskit/ui` ships, mirroring shadcn's palette set.
+ * The 7 base colours `@webjsdev/ui` ships, mirroring shadcn's palette set.
  * Each entry is a partial override on the canonical neutral palette defined
  * in `themes/index.css`. Lightness stays identical so contrast ratios are
  * preserved; only hue / chroma shift.

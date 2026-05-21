@@ -417,7 +417,7 @@ test('handle: orphan component warning fires in dev', async () => {
       `export default function P() { return html\`<p>x</p>\`; }\n`,
     // A class extending WebComponent with no customElements.define()
     'components/orphan.ts':
-      `import { WebComponent } from '@webjskit/core';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class Orphan extends WebComponent {}\n`,
   });
   await createRequestHandler({ appDir, dev: true, logger });
@@ -906,7 +906,7 @@ test('rebuild: orphan warning fires when rebuilding after a new orphan is added'
   const before = warns.length;
   mkdirSync(join(appDir, 'components'), { recursive: true });
   writeFileSync(join(appDir, 'components/late-orphan.ts'),
-    `import { WebComponent } from '@webjskit/core';\n` +
+    `import { WebComponent } from '@webjsdev/core';\n` +
     `export class LateOrphan extends WebComponent {}\n`);
   await app.rebuild();
   assert.ok(warns.slice(before).some(m => /LateOrphan/.test(m)),

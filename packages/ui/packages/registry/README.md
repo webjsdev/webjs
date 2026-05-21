@@ -1,12 +1,12 @@
-# @webjskit/ui-registry
+# @webjsdev/ui-registry
 
-Internal: sources for the `@webjskit/ui` component registry.
+Internal: sources for the `@webjsdev/ui` component registry.
 
 Not published. `registry.json` is the manifest, and the files it points at
 are the source of truth. The website
-([`@webjskit/ui-website`](../ui-website)) composes shadcn-compatible JSON on
+([`@webjsdev/ui-website`](../ui-website)) composes shadcn-compatible JSON on
 demand and serves it at `https://ui.webjs.dev/registry/<name>.json`, which the
-`@webjskit/ui` CLI fetches. There is no build step, no generated output, no
+`@webjsdev/ui` CLI fetches. There is no build step, no generated output, no
 `prestart` hook.
 
 ## Layout
@@ -26,7 +26,7 @@ overrides → merged CSS, same `files[]` shape.
 
 ## Wire endpoints
 
-Served by `@webjskit/ui-website` (`app/_lib/registry.server.ts` +
+Served by `@webjsdev/ui-website` (`app/_lib/registry.server.ts` +
 `app/registry/**`):
 
 - `GET /registry/<name>.json`: single registry item (`type: registry:ui` /

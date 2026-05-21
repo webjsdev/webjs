@@ -1,4 +1,4 @@
-import { stringify, parse } from '@webjskit/core';
+import { stringify, parse } from '@webjsdev/core';
 
 /**
  * @typedef {Object} Serializer
@@ -6,7 +6,7 @@ import { stringify, parse } from '@webjskit/core';
  * decode values on the RPC wire.
  *
  * **AI hint:** The default serializer uses webjs's built-in
- * (`@webjskit/core` `stringify` / `parse`) so rich types: Date, Map, Set,
+ * (`@webjsdev/core` `stringify` / `parse`) so rich types: Date, Map, Set,
  * BigInt, TypedArrays, Blob/File/FormData, cycles: survive the
  * client/server round-trip. To swap in a different wire format (e.g.
  * plain JSON, msgpack), call `setSerializer()` with an object that
@@ -67,7 +67,7 @@ export function getSerializer() {
  * `deserialize(str) => unknown`, and expose a `contentType` string.
  *
  * ```js
- * import { setSerializer } from '@webjskit/server';
+ * import { setSerializer } from '@webjsdev/server';
  *
  * setSerializer({
  *   serialize: async (v) => JSON.stringify(v),

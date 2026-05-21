@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Components | webjs' };
 
@@ -10,7 +10,7 @@ export default function Components() {
     <h2>The WebComponent Base Class</h2>
     <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
-    <pre>import { WebComponent, html, css } from '@webjskit/core';
+    <pre>import { WebComponent, html, css } from '@webjsdev/core';
 
 class MyCounter extends WebComponent {
 
@@ -115,9 +115,9 @@ UserCard.register('user-card');</pre>
     <blockquote>If you are coming from React: properties in webjs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
-    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjskit/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
+    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
 
-    <pre>import { WebComponent, html, signal } from '@webjskit/core';
+    <pre>import { WebComponent, html, signal } from '@webjsdev/core';
 
 class TodoList extends WebComponent {
   items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
@@ -164,10 +164,10 @@ this.label = 'hello';
 // render() is called once with the new count and label.</pre>
 
     <h3>Fine-grained binding with <code>watch()</code></h3>
-    <p>Reading <code>signal.get()</code> inside <code>render()</code> subscribes the WHOLE component to that signal: any change re-runs <code>render()</code>. When a single template hole depends on a single signal value and the rest of the template doesn't, the <code>watch(signal)</code> directive from <code>@webjskit/core/directives</code> is a cheaper alternative: the directive sets up its own per-hole subscription, and <em>only</em> the bound text node (or attribute value) updates when the signal fires. The host's <code>render()</code> does not re-run, which also means <code>shouldUpdate</code> / <code>willUpdate</code> / <code>updated</code> are bypassed for that change.</p>
+    <p>Reading <code>signal.get()</code> inside <code>render()</code> subscribes the WHOLE component to that signal: any change re-runs <code>render()</code>. When a single template hole depends on a single signal value and the rest of the template doesn't, the <code>watch(signal)</code> directive from <code>@webjsdev/core/directives</code> is a cheaper alternative: the directive sets up its own per-hole subscription, and <em>only</em> the bound text node (or attribute value) updates when the signal fires. The host's <code>render()</code> does not re-run, which also means <code>shouldUpdate</code> / <code>willUpdate</code> / <code>updated</code> are bypassed for that change.</p>
 
-    <pre>import { html, signal } from '@webjskit/core';
-import { watch } from '@webjskit/core/directives';
+    <pre>import { html, signal } from '@webjsdev/core';
+import { watch } from '@webjsdev/core/directives';
 
 const count = signal(0);
 
@@ -188,7 +188,7 @@ Counter.register('my-counter');</pre>
     <h2>Styles</h2>
     <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
 
-    <pre>import { WebComponent, html, css } from '@webjskit/core';
+    <pre>import { WebComponent, html, css } from '@webjsdev/core';
 
 class StyledCard extends WebComponent {
   static styles = css\`
@@ -668,7 +668,7 @@ UserProfile.register('user-profile');</pre>
     <h3>Keyed Lists with repeat()</h3>
     <p>By default, rendering an array of templates rebuilds all children when any item changes. For lists where items have stable identities, use <code>repeat()</code> to enable keyed reconciliation:</p>
 
-    <pre>import { WebComponent, html, css, repeat } from '@webjskit/core';
+    <pre>import { WebComponent, html, css, repeat } from '@webjsdev/core';
 
 class TaskList extends WebComponent {
   tasks = signal([
@@ -717,7 +717,7 @@ TaskList.register('task-list');</pre>
     <h2>Putting It All Together</h2>
     <p>Here is a complete example showing properties, state, events, lifecycle, slots, and scoped styles in a single component:</p>
 
-    <pre>import { WebComponent, html, css, repeat, connectWS } from '@webjskit/core';
+    <pre>import { WebComponent, html, css, repeat, connectWS } from '@webjsdev/core';
 
 class ChatBox extends WebComponent {
 

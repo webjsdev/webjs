@@ -1,4 +1,4 @@
-import { cookies } from '@webjskit/server';
+import { cookies } from '@webjsdev/server';
 import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
 
 /**

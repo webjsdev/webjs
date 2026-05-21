@@ -1,6 +1,6 @@
 # Built-in essentials
 
-`import { … } from '@webjskit/server'`
+`import { … } from '@webjsdev/server'`
 
 Opinionated defaults: **set `REDIS_URL` and everything scales.**
 
@@ -32,7 +32,7 @@ App-level caching (DB query results, expensive computations) uses the
 cache store directly:
 
 ```js
-import { getStore, setStore, redisStore } from '@webjskit/server';
+import { getStore, setStore, redisStore } from '@webjsdev/server';
 
 // Default: memory store
 const store = getStore();
@@ -45,11 +45,11 @@ setStore(redisStore({ url: process.env.REDIS_URL }));
 
 ```js
 // middleware.js: enable on all routes
-import { session } from '@webjskit/server';
+import { session } from '@webjsdev/server';
 export default session();   // auto: REDIS_URL → server-side, else → cookie
 
 // in a page or action
-import { getSession } from '@webjskit/server';
+import { getSession } from '@webjsdev/server';
 const s = getSession(req);
 s.userId = user.id;        // auto-saved after response
 ```
@@ -62,7 +62,7 @@ sessions (with Redis): session ID in cookie, data in Redis. Requires
 
 ```js
 // lib/auth.server.ts
-import { createAuth, Credentials, Google, GitHub } from '@webjskit/server';
+import { createAuth, Credentials, Google, GitHub } from '@webjsdev/server';
 
 export const { auth, signIn, signOut, handlers } = createAuth({
   providers: [
@@ -114,7 +114,7 @@ Defaults are single-instance (memory stores). For horizontal scaling
 configure Redis explicitly where needed:
 
 ```js
-import { setStore, redisStore } from '@webjskit/server';
+import { setStore, redisStore } from '@webjsdev/server';
 setStore(redisStore({ url: process.env.REDIS_URL }));
 ```
 

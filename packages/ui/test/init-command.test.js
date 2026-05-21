@@ -19,7 +19,7 @@ function stubFetch() {
     if (u.includes('/theme-')) {
       return new Response(JSON.stringify({
         name: 'theme-neutral', type: 'registry:theme',
-        files: [{ path: 'themes/index.css', type: 'registry:file', target: 'app/globals.css', content: '/* @webjskit/ui theme */\n:root { --primary: #000; }\n' }],
+        files: [{ path: 'themes/index.css', type: 'registry:file', target: 'app/globals.css', content: '/* @webjsdev/ui theme */\n:root { --primary: #000; }\n' }],
       }), { status: 200 });
     }
     return new Response('not found', { status: 404 });
@@ -29,7 +29,7 @@ function stubFetch() {
 function tmp() {
   const d = mkdtempSync(join(tmpdir(), 'webjsui-init-'));
   // Make it look like a webjs project so defaults pick the right paths.
-  writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
+  writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '*' } }));
   return d;
 }
 
@@ -79,7 +79,7 @@ test('init: appends theme CSS to globals.css', async () => {
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     const css = readFileSync(join(d, 'app', 'globals.css'), 'utf8');
     assert.match(css, /\/\* existing \*\//);
-    assert.match(css, /@webjskit\/ui theme/);
+    assert.match(css, /@webjsdev\/ui theme/);
     assert.match(css, /--primary: #000/);
   } finally {
     globalThis.fetch = origFetch;
@@ -97,7 +97,7 @@ test('init: theme is idempotent (doesn\'t append twice)', async () => {
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     const css = readFileSync(join(d, 'app', 'globals.css'), 'utf8');
-    const occurrences = (css.match(/@webjskit\/ui theme/g) || []).length;
+    const occurrences = (css.match(/@webjsdev\/ui theme/g) || []).length;
     assert.equal(occurrences, 1, 'theme block should only appear once');
   } finally {
     globalThis.fetch = origFetch;

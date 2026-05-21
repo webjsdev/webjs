@@ -1,4 +1,4 @@
-# @webjskit/core
+# @webjsdev/core
 
 Isomorphic core runtime for [webjs](https://github.com/vivek7405/webjs), the
 AI-first, web-components-first, no-build web framework.
@@ -9,18 +9,18 @@ Shadow DOM support), directives, context protocol, the `Task` controller, and
 the client-side navigation router.
 
 Not intended for direct install. You'll usually get it as a transitive dep
-when you scaffold an app with [`@webjskit/cli`](https://www.npmjs.com/package/@webjskit/cli).
+when you scaffold an app with [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli).
 
 ## Install
 
 ```sh
-npm install @webjskit/core
+npm install @webjsdev/core
 ```
 
 ## Use
 
 ```js
-import { html, css, WebComponent } from '@webjskit/core';
+import { html, css, WebComponent } from '@webjsdev/core';
 
 class Counter extends WebComponent {
   static properties = { count: { type: Number } };
@@ -42,10 +42,10 @@ Counter)` works identically.
 Side-channel imports for optional features:
 
 ```js
-import '@webjskit/core/client-router';            // SPA-style link interception
-import { unsafeHTML } from '@webjskit/core/directives';
-import { createContext } from '@webjskit/core/context';
-import { Task } from '@webjskit/core/task';
+import '@webjsdev/core/client-router';            // SPA-style link interception
+import { unsafeHTML } from '@webjsdev/core/directives';
+import { createContext } from '@webjsdev/core/context';
+import { Task } from '@webjsdev/core/task';
 ```
 
 See the full framework docs at https://github.com/vivek7405/webjs.

@@ -10,10 +10,10 @@ function tmp() {
   return d;
 }
 
-test('detectProject: webjs (has @webjskit/server in deps)', () => {
+test('detectProject: webjs (has @webjsdev/server in deps)', () => {
   const d = tmp();
   try {
-    writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
+    writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '*' } }));
     assert.equal(detectProject(d).type, 'webjs');
   } finally { rmSync(d, { recursive: true }); }
 });
@@ -44,7 +44,7 @@ test('detectProject: plain when no package.json', () => {
 test('defaultsForProject: webjs uses app/globals.css', () => {
   const d = tmp();
   try {
-    writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjskit/server': '*' } }));
+    writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '*' } }));
     const def = defaultsForProject(d);
     assert.equal(def.tailwindCss, 'app/globals.css');
     assert.equal(def.aliases.ui, 'components/ui');

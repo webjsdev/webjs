@@ -1,4 +1,4 @@
-import { WebComponent, html, repeat, connectWS, signal } from '@webjskit/core';
+import { WebComponent, html, repeat, connectWS, signal } from '@webjsdev/core';
 import '../../../components/muted-text.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';

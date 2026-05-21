@@ -1,4 +1,4 @@
-import { html, repeat } from '@webjskit/core';
+import { html, repeat } from '@webjsdev/core';
 import '../../components/muted-text.ts';
 import { buttonClass } from '../../components/ui/button.ts';
 import {

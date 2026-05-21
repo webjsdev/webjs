@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.webjs.dev/schema/registry.json",
-  "name": "@webjskit/ui",
+  "name": "@webjsdev/ui",
   "homepage": "https://ui.webjs.dev",
   "items": [
     {
@@ -32,7 +32,7 @@
       "name": "accordion",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -45,7 +45,7 @@
       "name": "alert",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -62,7 +62,7 @@
         "dialog"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -75,7 +75,7 @@
       "name": "aspect-ratio",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -88,7 +88,7 @@
       "name": "avatar",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -104,7 +104,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -117,7 +117,7 @@
       "name": "breadcrumb",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -133,7 +133,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -149,7 +149,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -162,7 +162,7 @@
       "name": "checkbox",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -175,7 +175,7 @@
       "name": "collapsible",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -191,7 +191,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -204,7 +204,7 @@
       "name": "dropdown-menu",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -217,7 +217,7 @@
       "name": "hover-card",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -233,7 +233,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -246,7 +246,7 @@
       "name": "kbd",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -262,7 +262,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -275,7 +275,7 @@
       "name": "native-select",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -291,7 +291,7 @@
         "button"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -304,7 +304,7 @@
       "name": "popover",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -317,7 +317,7 @@
       "name": "progress",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -330,7 +330,7 @@
       "name": "radio-group",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -346,7 +346,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -362,7 +362,7 @@
         "lib-utils"
       ],
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -375,7 +375,7 @@
       "name": "sonner",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -388,7 +388,7 @@
       "name": "switch",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -401,7 +401,7 @@
       "name": "table",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -414,7 +414,7 @@
       "name": "tabs",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -427,7 +427,7 @@
       "name": "textarea",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -440,7 +440,7 @@
       "name": "toggle",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -453,7 +453,7 @@
       "name": "toggle-group",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {
@@ -466,7 +466,7 @@
       "name": "tooltip",
       "type": "registry:ui",
       "dependencies": [
-        "@webjskit/core"
+        "@webjsdev/core"
       ],
       "files": [
         {

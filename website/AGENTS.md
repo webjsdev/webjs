@@ -48,7 +48,7 @@ the new components.
 
 The layout (`app/layout.ts`) renders a top-of-page announcement strip,
 a `<div class="announce">` block, typically pointing at the current
-release or shipping highlight (e.g. "v1: @webjskit/ui is live"). To
+release or shipping highlight (e.g. "v1: @webjsdev/ui is live"). To
 swap the announcement target, edit the layout's `<div class="announce">`
 block. The banner shows on every page. Remove the block entirely to
 hide it.

@@ -1,5 +1,5 @@
 /**
- * @webjskit/ts-plugin: a TypeScript language-service plugin that resolves
+ * @webjsdev/ts-plugin: a TypeScript language-service plugin that resolves
  *
  *   1. Custom-element tag names inside `html\`\`` tagged templates → the
  *      corresponding WebComponent class declaration.
@@ -34,7 +34,7 @@ function init(modules) {
    * Load `ts-lit-plugin` programmatically and let it enhance the
    * language service first, so our wrapping sits on top of its
    * template-literal intelligence. This is what lets users install
-   * `@webjskit/ts-plugin` as a single plugin (instead of needing to
+   * `@webjsdev/ts-plugin` as a single plugin (instead of needing to
    * list `ts-lit-plugin` separately in tsconfig).
    *
    * Failure modes:
@@ -58,7 +58,7 @@ function init(modules) {
       const litCreate = litMod && typeof litMod.create === 'function' ? litMod.create : null;
       if (!litCreate) {
         info.project.projectService.logger?.info?.(
-          '@webjskit/ts-plugin: ts-lit-plugin has unexpected factory shape: falling back to bare LS',
+          '@webjsdev/ts-plugin: ts-lit-plugin has unexpected factory shape: falling back to bare LS',
         );
         return info.languageService;
       }
@@ -66,7 +66,7 @@ function init(modules) {
       return enhanced || info.languageService;
     } catch (e) {
       info.project.projectService.logger?.info?.(
-        `@webjskit/ts-plugin: ts-lit-plugin failed to load: falling back to bare LS: ${String(e)}`,
+        `@webjsdev/ts-plugin: ts-lit-plugin failed to load: falling back to bare LS: ${String(e)}`,
       );
       return info.languageService;
     }
@@ -96,7 +96,7 @@ function init(modules) {
         );
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjskit/ts-plugin: getDefinitionAndBoundSpan threw: ${String(e)}`,
+          `@webjsdev/ts-plugin: getDefinitionAndBoundSpan threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -117,7 +117,7 @@ function init(modules) {
         return attrDiags.length ? [...filtered, ...attrDiags] : filtered;
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjskit/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
+          `@webjsdev/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
         );
         return diags;
       }
@@ -154,7 +154,7 @@ function init(modules) {
         };
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjskit/ts-plugin: getCompletionsAtPosition threw: ${String(e)}`,
+          `@webjsdev/ts-plugin: getCompletionsAtPosition threw: ${String(e)}`,
         );
         return upstream;
       }

@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 import { buttonClass } from '../../components/ui/button.ts';
 import { badgeClass } from '../../components/ui/badge.ts';
 import {

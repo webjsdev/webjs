@@ -34,7 +34,7 @@ const VENDOR_CACHE_MAX = 100;
  * Set of package names known to be built-in / already mapped.
  * These are never auto-bundled.
  */
-const BUILTIN = new Set(['@webjskit/core', '@webjskit/core/', '@webjskit/core/client-router']);
+const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
 
 /**
  * Scan source files under `dir` for bare import specifiers. Returns a Set of

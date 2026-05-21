@@ -20,7 +20,7 @@
     "jsx": "preserve",
     "plugins": [
       {
-        "name": "@webjskit/ts-plugin"
+        "name": "@webjsdev/ts-plugin"
       }
     ]
   },

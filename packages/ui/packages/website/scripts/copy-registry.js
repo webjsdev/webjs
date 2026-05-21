@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Copy the @webjskit/ui registry component sources into this website's
+ * Copy the @webjsdev/ui registry component sources into this website's
  * components/ui/ so the docs pages can import them and render live previews.
  *
  * We rewrite the relative path to `lib/utils.ts` from `../lib/utils.ts` (the

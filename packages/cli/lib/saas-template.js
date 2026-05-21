@@ -84,7 +84,7 @@ export async function writeSaasFiles(appDir) {
 
   // lib/auth.server.ts
   await writeFile(join(appDir, 'lib', 'auth.server.ts'), [
-    "import { createAuth, Credentials } from '@webjskit/server';",
+    "import { createAuth, Credentials } from '@webjsdev/server';",
     "import { prisma } from './prisma.server.ts';",
     "import { compare } from './password.server.ts';",
     "",
@@ -233,7 +233,7 @@ export async function writeSaasFiles(appDir) {
   // app/login/page.ts
   await mkdir(join(appDir, 'app', 'login'), { recursive: true });
   await writeFile(join(appDir, 'app', 'login', 'page.ts'), [
-    "import { html } from '@webjskit/core';",
+    "import { html } from '@webjsdev/core';",
     "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '../../components/ui/card.ts';",
     "import { buttonClass } from '../../components/ui/button.ts';",
     "import { inputClass } from '../../components/ui/input.ts';",
@@ -275,7 +275,7 @@ export async function writeSaasFiles(appDir) {
   // app/signup/page.ts
   await mkdir(join(appDir, 'app', 'signup'), { recursive: true });
   await writeFile(join(appDir, 'app', 'signup', 'page.ts'), [
-    "import { html } from '@webjskit/core';",
+    "import { html } from '@webjsdev/core';",
     "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '../../components/ui/card.ts';",
     "import { buttonClass } from '../../components/ui/button.ts';",
     "import { inputClass } from '../../components/ui/input.ts';",
@@ -335,7 +335,7 @@ export async function writeSaasFiles(appDir) {
 
   // app/dashboard/page.ts
   await writeFile(join(appDir, 'app', 'dashboard', 'page.ts'), [
-    "import { html } from '@webjskit/core';",
+    "import { html } from '@webjsdev/core';",
     "import { currentUser } from '../../modules/auth/queries/current-user.server.ts';",
     "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '../../components/ui/card.ts';",
     "import { buttonClass } from '../../components/ui/button.ts';",
@@ -366,7 +366,7 @@ export async function writeSaasFiles(appDir) {
 
   // app/dashboard/settings/page.ts
   await writeFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), [
-    "import { html } from '@webjskit/core';",
+    "import { html } from '@webjsdev/core';",
     "import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';",
     "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '../../../components/ui/card.ts';",
     "",

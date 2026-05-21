@@ -1,4 +1,4 @@
-# AGENTS.md for @webjskit/ts-plugin
+# AGENTS.md for @webjsdev/ts-plugin
 
 A **tsserver plugin** that gives editors (VS Code, Neovim, JetBrains)
 webjs-aware intelligence inside `` html`` `` tagged templates:
@@ -12,12 +12,12 @@ commit conventions, autonomous-mode behaviour, scaffold rules) live
 in the **framework root [`../../AGENTS.md`](../../AGENTS.md)** and
 apply here. Read that first.
 
-This file only covers what's specific to `@webjskit/ts-plugin`.
+This file only covers what's specific to `@webjsdev/ts-plugin`.
 
 ## Role
 
 The plugin **wraps** `ts-lit-plugin`. Order in `tsconfig.json` matters:
-list `ts-lit-plugin` first, `@webjskit/ts-plugin` second. The webjs
+list `ts-lit-plugin` first, `@webjsdev/ts-plugin` second. The webjs
 plugin sits on top and:
 
 1. Scans the program at boot for `Class.register('tag', …)` /
@@ -72,7 +72,7 @@ and completion behaviour. Covers tag resolution, attribute
 completion, attribute-value type-check, import-graph gating, and
 the "lit-plugin diagnostic suppression only when imported" path.
 
-The file is `.mjs` because `@webjskit/ts-plugin` itself is a
+The file is `.mjs` because `@webjsdev/ts-plugin` itself is a
 CommonJS package (`"type": "commonjs"`); the test uses ESM
 imports so the extension forces the right module type.
 

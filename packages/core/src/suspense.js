@@ -2,7 +2,7 @@
  * `Suspense({ fallback, children })`: deferred boundary for streaming SSR.
  *
  * ```js
- * import { html, Suspense } from '@webjskit/core';
+ * import { html, Suspense } from '@webjsdev/core';
  *
  * export default function Page() {
  *   return html`

@@ -1,5 +1,5 @@
 // Importing this side-effect-registers <webjs-frame> so apps that
-// `import '@webjskit/core/client-router'` get the escape-hatch element
+// `import '@webjsdev/core/client-router'` get the escape-hatch element
 // available without a second import.
 import './webjs-frame.js';
 
@@ -14,7 +14,7 @@ import './webjs-frame.js';
  *
  * To enable, import this module from a layout or boot script:
  *
- *   import '@webjskit/core/client-router';
+ *   import '@webjsdev/core/client-router';
  *
  * Or call `enableClientRouter()` for programmatic control.
  *

@@ -1,9 +1,9 @@
 {
-  "name": "@webjskit/ui-website",
+  "name": "@webjsdev/ui-website",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Registry host + docs site for @webjskit/ui. Serves /r/<name>.json and renders per-component docs.",
+  "description": "Registry host + docs site for @webjsdev/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {
     "predev": "node scripts/copy-registry.js",
     "prestart": "node scripts/copy-registry.js && npm run css:build",
@@ -15,10 +15,10 @@
     "preview:build": "node scripts/copy-registry.js"
   },
   "dependencies": {
-    "@webjskit/cli": "^0.8.0",
-    "@webjskit/core": "^0.7.0",
-    "@webjskit/server": "^0.7.0",
-    "@webjskit/ui-registry": "*"
+    "@webjsdev/cli": "^0.8.0",
+    "@webjsdev/core": "^0.7.0",
+    "@webjsdev/server": "^0.7.0",
+    "@webjsdev/ui-registry": "*"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.2",

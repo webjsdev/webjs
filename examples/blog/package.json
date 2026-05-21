@@ -1,5 +1,5 @@
 {
-  "name": "@webjskit-examples/blog",
+  "name": "@webjsdev-examples/blog",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -16,15 +16,15 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@webjskit/cli": "^0.8.0",
-    "@webjskit/core": "^0.7.0",
-    "@webjskit/server": "^0.7.0"
+    "@webjsdev/cli": "^0.8.0",
+    "@webjsdev/core": "^0.7.0",
+    "@webjsdev/server": "^0.7.0"
   },
   "devDependencies": {
     "prisma": "^5.22.0",
     "typescript": "^6.0.3",
-    "@webjskit/ts-plugin": "^0.4.0",
-    "@webjskit/ui": "^0.3.0"
+    "@webjsdev/ts-plugin": "^0.4.0",
+    "@webjsdev/ui": "^0.3.0"
   },
   "engines": {
     "node": ">=24.0.0"

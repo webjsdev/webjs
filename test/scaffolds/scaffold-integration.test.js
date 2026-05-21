@@ -73,15 +73,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.equal(pkg.type, 'module');
     assert.equal(pkg.scripts.dev, 'webjs dev');
     assert.equal(pkg.scripts.start, 'webjs start');
-    assert.ok(pkg.dependencies['@webjskit/core']);
-    assert.ok(pkg.dependencies['@webjskit/server']);
+    assert.ok(pkg.dependencies['@webjsdev/core']);
+    assert.ok(pkg.dependencies['@webjsdev/server']);
     assert.ok(pkg.dependencies['@prisma/client']);
-    assert.ok(pkg.devDependencies['@webjskit/ts-plugin']);
+    assert.ok(pkg.devDependencies['@webjsdev/ts-plugin']);
 
     // tsconfig.json has the editor plugin
     const tsconfig = JSON.parse(readFileSync(join(appDir, 'tsconfig.json'), 'utf8'));
     const pluginNames = (tsconfig.compilerOptions.plugins || []).map((p) => p.name);
-    assert.ok(pluginNames.includes('@webjskit/ts-plugin'), 'editor plugin listed');
+    assert.ok(pluginNames.includes('@webjsdev/ts-plugin'), 'editor plugin listed');
 
     // {{APP_NAME}} placeholder substituted in template files
     const agents = readFileSync(join(appDir, 'AGENTS.md'), 'utf8');

@@ -8,7 +8,7 @@
  *     `Accept: application/vnd.webjs+json` and gets back the rich
  *     wire format with real `Date` objects.
  */
-import { json } from '@webjskit/server';
+import { json } from '@webjsdev/server';
 import { listPosts } from '../../../modules/posts/queries/list-posts.server.ts';
 import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
 

@@ -5,7 +5,7 @@
  * Same function + same arguments = cached result until TTL expires.
  *
  * ```js
- * import { cache } from '@webjskit/server';
+ * import { cache } from '@webjsdev/server';
  *
  * export const listPosts = cache(
  *   async () => prisma.post.findMany({ orderBy: { createdAt: 'desc' } }),

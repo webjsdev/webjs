@@ -5,7 +5,7 @@
  * The shape mirrors the TC39 Signals proposal (Stage 1). When the
  * proposal lands in browsers this module becomes a one-line re-export.
  *
- *   import { signal, computed, effect } from '@webjskit/core';
+ *   import { signal, computed, effect } from '@webjsdev/core';
  *
  *   const count = signal(0);
  *   const doubled = computed(() => count.get() * 2);
@@ -14,14 +14,14 @@
  * Inside a WebComponent render(), any signal read is tracked
  * automatically. The component re-renders when any read signal changes.
  * For fine-grained reactivity (only one template hole updates), use the
- * `watch()` directive from `@webjskit/core/directives`.
+ * `watch()` directive from `@webjsdev/core/directives`.
  *
  * Cross-request safety note (SSR): a module-scope signal lives for the
  * lifetime of the Node process, so `let count = signal(0)` at the top
  * of a server module would leak state between requests. Keep
  * module-scope signals in browser-only modules. For request-scoped
  * server state, use per-instance signals or the request context
- * primitives in `@webjskit/server`.
+ * primitives in `@webjsdev/server`.
  *
  * Algorithm: push-pull hybrid (matches signal-polyfill).
  *

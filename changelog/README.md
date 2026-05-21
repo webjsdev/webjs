@@ -51,13 +51,13 @@ package's user-facing contract.
 
 ```markdown
 ---
-package: "@webjskit/core"
+package: "@webjsdev/core"
 version: 0.6.0
 date: 2026-05-21
 commit_count: 4
 ---
 
-# @webjskit/core 0.6.0
+# @webjsdev/core 0.6.0
 
 ## Breaking
 
@@ -75,7 +75,7 @@ Frontmatter fields:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `package` | yes | The fully-qualified npm name (`@webjskit/<pkg>`). |
+| `package` | yes | The fully-qualified npm name (`@webjsdev/<pkg>`). |
 | `version` | yes | Semver string of the new release. |
 | `date` | yes | Date of the version-bump commit, `YYYY-MM-DD`. |
 | `commit_count` | yes | How many qualifying commits this version shipped. |
@@ -116,7 +116,7 @@ The `.github/workflows/release.yml` workflow watches for new
 `changelog/**.md` files added in any push to `main`. For each new
 file it runs `scripts/publish-release.js`, which parses the
 frontmatter, composes a release tag of the shape `<pkg>@<version>`
-(e.g. `core@0.6.0`) with title `@webjskit/<pkg> <version>` and the
+(e.g. `core@0.6.0`) with title `@webjsdev/<pkg> <version>` and the
 markdown body as release notes, and calls `gh release create`.
 
 The publish step is idempotent: it skips any tag that already

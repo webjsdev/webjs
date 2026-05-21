@@ -1,4 +1,4 @@
-import { WebComponent, html, signal } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 import { buttonClass } from '../../../components/ui/button.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { labelClass } from '../../../components/ui/label.ts';

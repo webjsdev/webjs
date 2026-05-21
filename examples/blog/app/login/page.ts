@@ -1,4 +1,4 @@
-import { html, redirect } from '@webjskit/core';
+import { html, redirect } from '@webjsdev/core';
 import '../../modules/auth/components/auth-forms.ts';
 import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 import { rubric } from '../../lib/utils/ui.ts';

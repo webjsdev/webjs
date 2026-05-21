@@ -126,7 +126,7 @@ function defaultHasChanged(a, b) {
  *
  * Usage:
  * ```js
- * import { signal } from '@webjskit/core';
+ * import { signal } from '@webjsdev/core';
  *
  * const count = signal(0);
  *

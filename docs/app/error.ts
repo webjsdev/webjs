@@ -1,4 +1,4 @@
-import { html } from '@webjskit/core';
+import { html } from '@webjsdev/core';
 
 /**
  * Root error boundary. Any uncaught error thrown while rendering a page
@@ -8,7 +8,7 @@ import { html } from '@webjskit/core';
  * Keep this file's import graph minimal: it MUST stay importable when
  * the rest of the app is broken, otherwise the framework falls through
  * to its built-in generic 500 ("Server error / Something went wrong").
- * Only @webjskit/core; no helpers, no custom elements, no shared
+ * Only @webjsdev/core; no helpers, no custom elements, no shared
  * components.
  *
  * (Do not put U+0060 GRAVE ACCENT characters in comments inside the
