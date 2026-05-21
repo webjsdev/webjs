@@ -112,6 +112,8 @@ If the package has zero `feat:` / `fix:` / `breaking:` / `perf:` commits in the 
 
 The whole flow is tool-agnostic: the universal pre-commit hook fires for every `git commit`, regardless of who or what is running it. AI agents using Claude Code, Cursor, Copilot, Aider, etc. all get the same behavior, as do human contributors.
 
+**GitHub Releases are auto-created from the same files.** The `.github/workflows/release.yml` workflow watches for new `changelog/**.md` files added in a push to `main`. For each new file, it runs `scripts/publish-release.js`, which parses the frontmatter (`package`, `version`, `date`), composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjskit/<pkg> <version>`, and body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped, so retries and force-pushes are safe. Free for public repos.
+
 ---
 
 ## What webjs is
