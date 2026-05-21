@@ -1,19 +1,28 @@
 name: Auto-release
 
 # Every push to main that lands a new `changelog/<pkg>/<version>.md`
-# file becomes a GitHub Release for that (package, version) tuple.
-# The matching workflow:
+# file becomes a published npm package AND a GitHub Release for
+# that (package, version) tuple.
 #
-#   1. Checks out main with two-commit depth so we can diff the new
-#      head against its parent.
-#   2. Finds files added under `changelog/**.md` in that diff.
-#   3. Invokes `scripts/publish-release.js` once per file. The script
-#      is idempotent (skips when the tag already exists), so retries
-#      / force-pushes do not error.
+# Flow per new changelog file:
+#   1. scripts/publish-npm.js     → npm publish @webjskit/<pkg>@<version>
+#   2. scripts/publish-release.js → gh release create <pkg>@<version>
 #
-# Triggered only on changelog changes so unrelated pushes do not run
-# the job. Cost on public repos: $0 (GitHub Actions has unlimited
+# Both scripts are idempotent: they skip when the version is
+# already on the registry / a release with the tag already exists.
+# So workflow retries and force-pushes never duplicate or error on
+# previously-published versions.
+#
+# Order matters: npm runs first. If npm publish fails (auth,
+# network, transient registry error), the GH release step is
+# skipped and the workflow fails. After fixing, re-running picks
+# up where it left off; the npm-side idempotency check makes the
+# completed package a no-op.
+#
+# Triggered only on changelog/** changes so unrelated pushes do
+# not run the job. Cost on public repos: $0 (Actions has unlimited
 # free minutes for public repos on ubuntu-latest).
+
 on:
   push:
     branches: [main]
@@ -31,11 +40,22 @@ jobs:
         with:
           fetch-depth: 2
 
+      # setup-node writes an .npmrc with the standard
+      # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN} line, so
+      # subsequent `npm publish` invocations pick up the token from
+      # the env var.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
       - name: Find new changelog files
         id: diff
         run: |
           set -euo pipefail
-          # All changelog md files added in this push.
           mapfile -t NEW < <(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'changelog/**.md')
           if [ ${#NEW[@]} -eq 0 ]; then
             echo "No new changelog files in this push; skipping."
@@ -43,12 +63,21 @@ jobs:
             exit 0
           fi
           printf '  + %s\n' "${NEW[@]}"
-          # Persist the list across steps via a workspace file. GITHUB_OUTPUT
-          # has a per-line size cap that we'd hit on big bulk-backfill PRs.
           printf '%s\n' "${NEW[@]}" > .new-changelog-files.txt
           echo "count=${#NEW[@]}" >> "$GITHUB_OUTPUT"
 
-      - name: Publish releases
+      - name: Publish to npm
+        if: steps.diff.outputs.count != '0'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            node scripts/publish-npm.js "$f"
+          done < .new-changelog-files.txt
+
+      - name: Create GitHub Releases
         if: steps.diff.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
