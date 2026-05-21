@@ -149,4 +149,17 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
     const json = await r.json();
     assert.equal(typeof json.hello, 'string');
   });
+
+  test('/ chat-box SSR shows "Connecting…" (not the alarming "Reconnecting…") before JS runs', async () => {
+    // Before the chat-box fix the initial SSR copy was "Reconnecting…"
+    // with an accent warning dot. A user landing on a cold page saw
+    // that for the ~500ms it took the WS handshake to complete and
+    // mistakenly read the page as broken. The component now SSRs a
+    // neutral "Connecting…" state and only transitions to
+    // "Reconnecting…" after a real close event.
+    const html = await fetch(baseUrl + '/').then((r) => r.text());
+    assert.match(html, /<chat-box\b/, 'chat-box element should be present');
+    assert.match(html, /Connecting…/, 'SSR should render "Connecting…" before JS hydration');
+    assert.doesNotMatch(html, /Reconnecting…/, 'SSR must NOT render "Reconnecting…" on first paint');
+  });
 });
