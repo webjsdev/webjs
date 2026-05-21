@@ -2,7 +2,7 @@
 
 Read this before editing any file. This is a webjs app: AI-first, web-
 components-first, no build step. The framework's own full API reference
-lives at https://github.com/vivek7405/webjs/blob/main/AGENTS.md and the
+lives at https://github.com/webjsdev/webjs/blob/main/AGENTS.md and the
 full hosted documentation (every API, recipe, and example) lives at
 **https://docs.webjs.com**. Treat this file as the app-scoped
 companion and reach for docs.webjs.com whenever you need more detail.
@@ -483,7 +483,7 @@ Practical consequences for agents writing webjs code.
 
 The full annotated catalog with code examples lives in the framework
 repo at
-[`agent-docs/lit-muscle-memory-gotchas.md`](https://github.com/vivek7405/webjs/blob/main/agent-docs/lit-muscle-memory-gotchas.md).
+[`agent-docs/lit-muscle-memory-gotchas.md`](https://github.com/webjsdev/webjs/blob/main/agent-docs/lit-muscle-memory-gotchas.md).
 
 ## Server action pattern
 

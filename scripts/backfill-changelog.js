@@ -190,8 +190,8 @@ function renderEntry(pkg, version, date, commits) {
   for (const t of order) {
     sections.push(`## ${TYPE_LABEL[t]}\n`);
     for (const c of grouped.get(t)) {
-      const prRef = c.pr ? ` ([#${c.pr}](https://github.com/vivek7405/webjs/pull/${c.pr}))` : '';
-      const sha = `[\`${c.sha}\`](https://github.com/vivek7405/webjs/commit/${c.sha})`;
+      const prRef = c.pr ? ` ([#${c.pr}](https://github.com/webjsdev/webjs/pull/${c.pr}))` : '';
+      const sha = `[\`${c.sha}\`](https://github.com/webjsdev/webjs/commit/${c.sha})`;
       sections.push(`- **${c.title}**${prRef} ${sha}`);
       if (c.body) {
         const summary = c.body.split('\n').slice(0, 4).map((l) => `  ${l}`).join('\n').trimEnd();

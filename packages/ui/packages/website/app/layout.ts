@@ -340,7 +340,7 @@ export default function Layout({ children }: { children: any }) {
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs/components/accordion">Components</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
         <theme-toggle></theme-toggle>
       </nav>
 
@@ -360,7 +360,7 @@ export default function Layout({ children }: { children: any }) {
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs/components/accordion">Components</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs">Docs</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${WEBSITE_URL} target="_blank">Webjs</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
           </nav>
         </details>
         <theme-toggle></theme-toggle>
@@ -373,7 +373,7 @@ export default function Layout({ children }: { children: any }) {
       <div class="max-w-5xl mx-auto px-6">
         <a class="text-brand no-underline hover:underline" href=${WEBSITE_URL} target="_blank">Webjs</a> ·
         <a class="text-brand no-underline hover:underline" href=${DOCS_URL} target="_blank">Docs</a> ·
-        <a class="text-brand no-underline hover:underline" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+        <a class="text-brand no-underline hover:underline" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
       </div>
     </footer>
   `;

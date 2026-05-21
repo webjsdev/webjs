@@ -254,7 +254,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${UI_URL} target="_blank">UI</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/changelog">Changelog</a>
         <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${BLOG_URL} target="_blank">Blog Demo</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
         <theme-toggle></theme-toggle>
       </nav>
 
@@ -276,7 +276,7 @@ export default function RootLayout({ children }: { children: unknown }) {
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${UI_URL} target="_blank">UI</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/changelog">Changelog</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${BLOG_URL} target="_blank">Blog Demo</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/vivek7405/webjs" target="_blank">GitHub</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
           </nav>
         </details>
         <theme-toggle></theme-toggle>

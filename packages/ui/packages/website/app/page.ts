@@ -51,7 +51,7 @@ export default async function Home() {
           </svg>
         </a>
         <a
-          href="https://github.com/vivek7405/webjs"
+          href="https://github.com/webjsdev/webjs"
           class="inline-flex items-center rounded-full border border-border-strong bg-transparent px-5 py-3 text-sm font-semibold text-fg-muted transition-colors hover:text-fg hover:border-fg-muted"
         >
           View on GitHub
