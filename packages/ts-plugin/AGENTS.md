@@ -66,13 +66,18 @@ README.md          User-facing setup instructions.
 
 ## Tests
 
-`test/ts-plugin.test.js` at the repo root boots a real tsserver
-instance against fixture sources and asserts diagnostic / completion
-behaviour. Covers tag resolution, attribute completion, attribute-value
-type-check, import-graph gating, and the "lit-plugin diagnostic
-suppression only when imported" path.
+`packages/ts-plugin/test/plugin/ts-plugin.test.mjs` boots a real
+tsserver instance against fixture sources and asserts diagnostic
+and completion behaviour. Covers tag resolution, attribute
+completion, attribute-value type-check, import-graph gating, and
+the "lit-plugin diagnostic suppression only when imported" path.
 
-Run `npm test` from the repo root.
+The file is `.mjs` because `@webjskit/ts-plugin` itself is a
+CommonJS package (`"type": "commonjs"`); the test uses ESM
+imports so the extension forces the right module type.
+
+See [`../../agent-docs/testing.md`](../../agent-docs/testing.md)
+for the overall layout. Run `npm test` from the repo root.
 
 ---
 
