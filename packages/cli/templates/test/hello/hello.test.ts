@@ -2,7 +2,7 @@
  * Example unit test: replace with tests for your modules.
  *
  * Run:  webjs test
- * Or:   node --test test/unit/*.test.ts
+ * Or:   node --test test/**/*.test.ts
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
