@@ -63,7 +63,11 @@ function versionTimeline(pkg) {
       cur = { sha: '', date: '' };
       const [sha, date] = line.slice(3).split('\t');
       cur.sha = sha;
-      cur.date = date.slice(0, 10);
+      // Store the FULL ISO timestamp (not just YYYY-MM-DD) so the
+      // renderer can sort by commit time, not just calendar day.
+      // This is the difference between "the order they shipped" and
+      // "the day they shipped, then arbitrary tiebreak".
+      cur.date = date;
       continue;
     }
     if (!cur) continue;
@@ -91,7 +95,10 @@ function versionTimeline(pkg) {
     if (stagedVersion !== lastCommittedVersion) {
       out.push({
         sha: 'HEAD',
-        date: new Date().toISOString().slice(0, 10),
+        // Full ISO timestamp (not just YYYY-MM-DD) so the renderer
+        // can sort by commit time, matching how committed entries
+        // are recorded above.
+        date: new Date().toISOString(),
         version: stagedVersion,
         staged: true,
       });
