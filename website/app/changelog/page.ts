@@ -77,7 +77,7 @@ async function loadEntries(): Promise<Entry[]> {
   return entries;
 }
 
-/** Tiny inline-markdown renderer: links, bold, inline code, nothing else. */
+/** Tiny inline-markdown renderer: links, bold, italic, inline code. */
 function inline(s: string): string {
   let out = s
     .replace(/&/g, '&amp;')
@@ -88,8 +88,16 @@ function inline(s: string): string {
     `<a href="${u}" class="text-accent no-underline hover:underline" rel="noopener noreferrer">${t}</a>`);
   // `code`
   out = out.replace(/`([^`]+)`/g, '<code class="font-mono text-[12.5px] bg-bg-subtle text-fg px-1 py-0.5 rounded">$1</code>');
-  // **bold**
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-fg">$1</strong>');
+  // **bold** (non-greedy single-line match: must allow asterisks
+  // inside the span so titles like "**data-webjs-prop-* side-channel**"
+  // still parse. The previous [^*]+ rejected the embedded asterisk
+  // and silently left the literal ** in the rendered output.)
+  out = out.replace(/\*\*([^\n]+?)\*\*/g, '<strong class="font-semibold text-fg">$1</strong>');
+  // _italic_ and *italic* (the backfill generator does not emit these,
+  // but hand-curated entries can; the previous renderer left the
+  // underscores in the rendered HTML).
+  out = out.replace(/(^|[^\w])_([^_\s][^_]*[^_\s]|[^_\s])_(?=$|[^\w])/g, '$1<em>$2</em>');
+  out = out.replace(/(^|[^*\w])\*([^*\s][^*]*[^*\s]|[^*\s])\*(?=$|[^*\w])/g, '$1<em>$2</em>');
   return out;
 }
 

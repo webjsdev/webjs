@@ -167,6 +167,7 @@ function renderEntry(pkg, version, date, commits) {
 }
 
 let total = 0;
+let skippedEmpty = 0;
 for (const pkg of PACKAGES) {
   const versions = versionTimeline(pkg);
   if (!versions.length) {
@@ -180,10 +181,20 @@ for (const pkg of PACKAGES) {
     const file = resolve(dir, `${v.version}.md`);
     if (existsSync(file)) { prevSha = v.sha; continue; }
     const commits = commitsInRange(pkg, prevSha, v.sha);
+    // Skip release-only bumps. A version that shipped no
+    // feat / fix / breaking / perf commits has nothing to say to a
+    // reader of the changelog. Tracking it here would emit a
+    // single-line "no user-facing changes" placeholder for every
+    // dependency bump, which is just noise.
+    if (commits.length === 0) {
+      skippedEmpty++;
+      prevSha = v.sha;
+      continue;
+    }
     writeFileSync(file, renderEntry(pkg, v.version, v.date, commits));
     total++;
     prevSha = v.sha;
   }
   console.log(`[backfill-changelog] @webjskit/${pkg}: ${versions.length} versions`);
 }
-console.log(`[backfill-changelog] total new files: ${total}`);
+console.log(`[backfill-changelog] new files: ${total}, skipped (empty): ${skippedEmpty}`);
