@@ -32,8 +32,8 @@ import {
 
     <h2>live(value)</h2>
     <p>Dirty-checks against the live DOM value instead of the last rendered value. Solves the input desync problem where the user types between renders.</p>
-    <pre>html\`&lt;input .value=\${live(this.state.query)}
-       @input=\${(e) =&gt; this.setState({ query: e.target.value })}&gt;\`;</pre>
+    <pre>html\`&lt;input .value=\${live(this.query.get())}
+       @input=\${(e) =&gt; this.query.set(e.target.value)}&gt;\`;</pre>
 
     <h2>keyed(key, template)</h2>
     <p>Wrap a template with a key. When the key changes between renders, the renderer discards the prior DOM and creates fresh. Useful for forcing a remount when the logical identity of the rendered content changes.</p>

@@ -141,27 +141,6 @@ suite('Lifecycle hooks in a real browser', () => {
     el.remove();
   });
 
-  test('setState routes through changedProperties (key "state", oldValue is prior bag)', async () => {
-    let captured = null;
-    class LcSsEl extends WebComponent {
-      constructor() { super(); this.state = { count: 1 }; }
-      updated(cp) {
-        if (cp.has('state')) captured = cp.get('state');
-      }
-      render() { return html`<p>${this.state.count}</p>`; }
-    }
-    customElements.define('lc-ss-1', LcSsEl);
-    const el = document.createElement('lc-ss-1');
-    document.body.appendChild(el);
-    await el.updateComplete;
-    captured = null;
-
-    el.setState({ count: 2 });
-    await el.updateComplete;
-    assert.deepEqual(captured, { count: 1 });
-    assert.equal(el.querySelector('p').textContent, '2');
-    el.remove();
-  });
 
   test('getUpdateComplete override chains additional work', async () => {
     let extraDone = false;

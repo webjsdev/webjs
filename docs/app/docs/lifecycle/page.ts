@@ -8,7 +8,7 @@ export default function Lifecycle() {
     <p>webjs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic webjs code without framework-specific translation.</p>
 
     <h2>The Update Cycle</h2>
-    <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names (or <code>'state'</code> for <code>setState</code> patches) and values are the previous value before the change.</p>
+    <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names and values are the previous value before the change. Signal reads inside <code>render()</code> are tracked separately by the built-in SignalWatcher; signal changes schedule the next update but don't appear in this Map.</p>
     <ol>
       <li><code>shouldUpdate(changedProperties)</code> returns <code>false</code> to skip this update entirely.</li>
       <li><code>willUpdate(changedProperties)</code> is the pre-render hook. Safe to set reactive properties; assignments fold into this cycle.</li>
@@ -68,11 +68,13 @@ export default function Lifecycle() {
 await el.updateComplete;
 // DOM now reflects count = 5</pre>
 
-    <h2>setState(patch)</h2>
-    <p>Shallow-merges the patch into <code>this.state</code> and schedules a microtask-batched re-render. Multiple <code>setState</code> calls within the same microtask coalesce into one render. The <code>changedProperties</code> Map includes a <code>'state'</code> entry whose old value is the previous state bag, so lifecycle hooks can detect setState invocations.</p>
-    <pre>this.setState({ count: this.state.count + 1 });
-this.setState({ name: 'updated' });
-// One render. changedProperties.has('state') is true; .get('state') is the prior bag.</pre>
+    <h2>State mutation</h2>
+    <p>Signals are the default state primitive. Mutating a signal that the render() reads schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared in <code>static properties</code>) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
+    <pre>this.count.set(this.count.get() + 1);
+this.name = 'updated';                       // reactive property assignment
+// One render. changedProperties.has('name') is true; signal change drove the watcher.</pre>
+
+    <p>For a fine-grained binding that updates a single template hole without re-running the host's <code>render()</code> (and without going through the lifecycle hooks above), see the <code>watch(signal)</code> directive in the <a href="/docs/components#state">Components</a> doc. Lifecycle hooks fire only on a full re-render; <code>watch()</code>-driven updates bypass them.</p>
 
     <h2>requestUpdate(name, oldValue)</h2>
     <p>Manually schedule a re-render. Optionally record a property change so hooks see it in <code>changedProperties</code>. Used by controllers and code that mutates outside the reactive property system.</p>
@@ -114,7 +116,7 @@ this.setState({ name: 'updated' });
       </tbody>
     </table>
 
-    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and <code>setState</code> to refine the initial render after hydration.</p>
+    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>, or as the initial value of an instance signal (class-field initializer). Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and write the signal to refine the initial render after hydration.</p>
 
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full pattern, including how to push server-known data through the page function instead of fetching in browser-only hooks.</p>
   `;

@@ -111,7 +111,7 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 - **JSDoc or erasable TypeScript.** Plain `.js` with JSDoc is default. `.ts` / `.mts` is stripped via Node 24+'s built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap). See invariant 10 + `agent-docs/typescript.md`.
 - **Node 24+ required** for default strip-types behaviour.
 - **SSR + CSR by default.** Pages are server-rendered (real HTML). Components render as light DOM by default; shadow DOM is opt-in via `static shadow = true` with Declarative Shadow DOM SSR.
-- **Progressive enhancement is the default architecture.** Pages and every web component are SSR'd. With JS disabled: content reads, `<a>` links navigate, `<form>` server actions submit, display-only custom elements render. JS is opt-in *per interactive behaviour*: adding `@click=${…}` or `setState()` requests JS for that interactivity. Never write features whose first paint depends on hydration; never use `fetch` + JS handlers for write-paths where a `<form>` + server action would do.
+- **Progressive enhancement is the default architecture.** Pages and every web component are SSR'd. With JS disabled: content reads, `<a>` links navigate, `<form>` server actions submit, display-only custom elements render. JS is opt-in *per interactive behaviour*: adding `@click=${…}`, a reactive property assignment, or a signal mutation requests JS for that interactivity. Never write features whose first paint depends on hydration; never use `fetch` + JS handlers for write-paths where a `<form>` + server action would do.
 - **Tailwind CSS is the default styling convention.** Custom CSS works; light-DOM components authoring CSS MUST prefix selectors with the component tag.
 - **Server actions with rich types.** A `*.server.{js,ts}` file with `'use server'` exports functions importable from the client. The import is rewritten to a typed RPC stub. Wire round-trips `Date`, `Map`, `Set`, `BigInt`, `Error`, `TypedArray`, `Blob`, `File`, `FormData`, registered Symbols, reference cycles.
 - **Server-file source is unreachable from the browser (framework invariant).** Every `.server.{js,ts}` file is source-protected by the HTTP layer: the dev server returns either a generated RPC stub (when the file has `'use server'`) or a throw-at-load stub (server-only utility), never source.
@@ -265,16 +265,23 @@ class MyThing extends WebComponent {
   declare count: number;             // TS only, typed accessor (see below)
   declare mode: string;
   static styles = css`…`;
-  state = { /* any */ };
 
-  connectedCallback() { super.connectedCallback(); /* seed state from props */ }
+  connectedCallback() { super.connectedCallback(); /* seed properties from attrs */ }
   render() { return html`…`; }
 }
 MyThing.register('my-thing');
 ```
 
-Mutate state with `this.setState({...})`. Updates are batched via microtask.
-Declared attribute changes auto-trigger re-render.
+Signals are the default state primitive. Import `signal` / `computed`
+from `@webjskit/core`, read with `signal.get()` inside `render()`, and
+every WebComponent's built-in `SignalWatcher` will re-render on change.
+Module-scope signals share state across components and survive
+navigations; instance signals (created in the constructor) carry
+component-local state. Updates are batched via microtask. The
+`static properties` declaration is reserved for values that ride an
+HTML attribute (declared attributes auto-trigger re-render too). For
+fine-grained DOM swap without a full re-render, use the
+`watch(signal)` directive from `@webjskit/core/directives`.
 
 ### Typed props in TypeScript via the `declare` pattern
 
@@ -306,7 +313,7 @@ class StudentCard extends WebComponent {
 
 ### Lifecycle (lit-aligned)
 
-Every update cycle runs these hooks in order. All receive a `changedProperties` Map: keys are property names (or `'state'` for setState patches), values are the previous value before the change.
+Every update cycle runs these hooks in order. All receive a `changedProperties` Map: keys are property names, values are the previous value before the change.
 
 | # | Hook | When | Use for |
 |---|---|---|---|
@@ -330,7 +337,7 @@ The SSR pipeline runs the constructor, applies attributes, calls `instance.rende
 Rules:
 
 - **Defaults for first paint go in the constructor** (after `super()`).
-- **Browser-only data** (localStorage, viewport, `navigator.*`, `matchMedia`) goes in `connectedCallback`, then `setState` to refine.
+- **Browser-only data** (localStorage, viewport, `navigator.*`, `matchMedia`) goes in `connectedCallback`. Write the value to a signal (instance-scoped in the constructor, or module-scope if shared) to refine the first paint.
 - **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
 - **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
@@ -519,7 +526,7 @@ For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. 
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field.
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
-5. **Do not mutate `this.state` directly.** Use `setState`. State reads are fine.
+5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjskit/core` and read via `signal.get()` inside `render()`; every WebComponent's built-in SignalWatcher tracks the reads and re-renders when any of them change. Use a module-scope signal for state shared across components (or pages); create an instance-scope signal in the constructor for state local to one component. Reactive properties (`static properties = { foo: { type: ... } }` with a sibling `declare foo: T`) are reserved for values that ride an HTML attribute, get reflected back to one, or arrive through `.prop=${value}` SSR hydration. For fine-grained DOM swap without a full re-render, use `${watch(signal)}` from `@webjskit/core/directives`.
 6. **Page and layout default exports must be functions.** They return a value (usually `TemplateResult`). They do not call `render()` themselves.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.

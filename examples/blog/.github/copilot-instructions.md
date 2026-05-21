@@ -81,5 +81,5 @@ Every code change must include:
 - Don't introduce build tools or bundlers in the critical path
 - Don't import @prisma/client or node:* from client components
 - Don't use inline style="..." on components (use static styles = css`...`)
-- Don't mutate this.state directly (use this.setState())
+- Component state lives in signals from @webjskit/core. Module-scope signals share state across components; instance signals (created in the constructor) carry component-local state. Reactive properties (static properties + declare) are for HTML attributes and .prop=${...} hydration.
 - Don't skip tests or documentation updates

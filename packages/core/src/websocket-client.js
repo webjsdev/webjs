@@ -7,9 +7,9 @@
  * import { connectWS } from '@webjskit/core';
  *
  * const conn = connectWS('/api/chat', {
- *   onMessage: (msg) => this.setState({ lines: [...this.state.lines, msg] }),
- *   onOpen: () => this.setState({ connected: true }),
- *   onClose: () => this.setState({ connected: false }),
+ *   onMessage: (msg) => { this.lines = [...this.lines, msg]; },
+ *   onOpen:    () => { this.connected = true; },
+ *   onClose:   () => { this.connected = false; },
  * });
  *
  * conn.send({ type: 'say', text: 'hi' });

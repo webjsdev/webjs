@@ -16,8 +16,6 @@
  * `elementProperties`), and `noChange` / `nothing` sentinels are skipped.
  *
  * webjs-specific notes baked into the port:
- *   - `setState({...})` adds a `'state'` entry to `changedProperties` whose
- *     old value is the PRIOR state bag (matched by the dedicated test).
  *   - Lifecycle hook throws are caught + logged by webjs (component does
  *     not deadlock). Two tests assert recovery semantics.
  *   - All hooks are client-only. SSR doesn't invoke them. Not tested here
@@ -713,74 +711,6 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     await el.updateComplete;
     assert.equal(el.foo, 'b');
     assert.ok(lastCp.has('foo'));
-    el.remove();
-  });
-
-  // ───────────────────────────────────────────────────────────────────────
-  // setState integration
-  // ───────────────────────────────────────────────────────────────────────
-
-  test('setState patches shallow-merge into this.state and schedule a render', async () => {
-    class E extends WebComponent {
-      constructor() { super(); this.state = { count: 0, name: 'x' }; }
-      render() { return html`<p>${this.state.count}:${this.state.name}</p>`; }
-    }
-    const t = tag('lp-ss-merge');
-    customElements.define(t, E);
-    const el = document.createElement(t);
-    document.body.appendChild(el);
-    await el.updateComplete;
-    assert.equal(el.querySelector('p').textContent, '0:x');
-
-    el.setState({ count: 5 });
-    await el.updateComplete;
-    assert.equal(el.state.count, 5);
-    assert.equal(el.state.name, 'x', 'unspecified state key preserved');
-    assert.equal(el.querySelector('p').textContent, '5:x');
-    el.remove();
-  });
-
-  test("setState adds a 'state' entry to changedProperties with prior bag as old value", async () => {
-    let captured;
-    class E extends WebComponent {
-      constructor() { super(); this.state = { count: 1 }; }
-      updated(cp) { if (cp.has('state')) captured = cp.get('state'); }
-      render() { return html`<p>${this.state.count}</p>`; }
-    }
-    const t = tag('lp-ss-cp');
-    customElements.define(t, E);
-    const el = document.createElement(t);
-    document.body.appendChild(el);
-    await el.updateComplete;
-    captured = null;
-    el.setState({ count: 2 });
-    await el.updateComplete;
-    assert.deepEqual(captured, { count: 1 });
-    el.remove();
-  });
-
-  test('two setState calls within one tick collapse into one render with the FIRST prior bag', async () => {
-    let captured;
-    let renders = 0;
-    class E extends WebComponent {
-      constructor() { super(); this.state = { a: 1 }; }
-      updated(cp) { if (cp.has('state')) captured = cp.get('state'); }
-      render() { renders++; return html`<p>${JSON.stringify(this.state)}</p>`; }
-    }
-    const t = tag('lp-ss-batch');
-    customElements.define(t, E);
-    const el = document.createElement(t);
-    document.body.appendChild(el);
-    await el.updateComplete;
-    const baseline = renders;
-
-    el.setState({ a: 2 });
-    el.setState({ a: 3 });
-    await el.updateComplete;
-    assert.equal(renders - baseline, 1, 'two setState collapse into one render');
-    // The 'state' entry's old value should be the original state (before either patch).
-    assert.deepEqual(captured, { a: 1 });
-    assert.equal(el.state.a, 3);
     el.remove();
   });
 

@@ -26,6 +26,9 @@ export {
 export { enableClientRouter, disableClientRouter, navigate, revalidate } from './src/router-client.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 
+// Signals (TC39 Stage-1 shape), also available via '@webjskit/core/signals'
+export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+
 // Directives, also available via '@webjskit/core/directives'
 export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';
 
