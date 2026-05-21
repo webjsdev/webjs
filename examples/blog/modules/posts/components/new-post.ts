@@ -9,15 +9,18 @@ import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.
 // input + return types flow across the RPC boundary.
 import { createPost } from '../actions/create-post.server.ts';
 
-type State = { busy: boolean; error: string | null };
-
 export class NewPost extends WebComponent {
-
-  declare state: State;
+  static properties = {
+    busy: { type: Boolean, state: true },
+    error: { type: String, state: true },
+  };
+  declare busy: boolean;
+  declare error: string | null;
 
   constructor() {
     super();
-    this.state = { busy: false, error: null };
+    this.busy = false;
+    this.error = null;
   }
 
   firstUpdated() {
@@ -34,26 +37,29 @@ export class NewPost extends WebComponent {
     const title = String(data.get('title') || '');
     const body = String(data.get('body') || '');
     if (!title || !body) {
-      this.setState({ error: 'Title and body are required' });
+      this.error = 'Title and body are required';
       return;
     }
-    this.setState({ busy: true, error: null });
+    this.busy = true;
+    this.error = null;
     try {
       const result = await createPost({ title, body });
       if (!result.success) {
-        this.setState({ busy: false, error: result.error });
+        this.busy = false;
+        this.error = result.error;
         return;
       }
       // TS knows result.data is PostFormatted here.
       location.href = `/blog/${result.data.slug}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.setState({ busy: false, error: msg });
+      this.busy = false;
+      this.error = msg;
     }
   }
 
   render() {
-    const { busy, error } = this.state;
+    const { busy, error } = this;
     return html`
       <div class=${cardClass()}>
         <div class=${cardContentClass()}>

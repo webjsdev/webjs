@@ -4,8 +4,6 @@ import { inputClass } from '../../../components/ui/input.ts';
 import { buttonClass } from '../../../components/ui/button.ts';
 import type { CommentFormatted } from '../types.ts';
 
-type State = { comments: CommentFormatted[]; busy: boolean; error: string | null };
-
 /**
  * `<comments-thread>`: live thread. Editorial card list, mono meta,
  * warm accent CTA, empty-state hint.
@@ -15,11 +13,16 @@ export class CommentsThread extends WebComponent {
     postId:   { type: String },
     initial:  { type: Object },
     signedIn: { type: Boolean },
+    comments: { type: Object, state: true },
+    busy:     { type: Boolean, state: true },
+    error:    { type: String, state: true },
   };
   declare postId: string;
   declare initial: CommentFormatted[];
   declare signedIn: boolean;
-  declare state: State;
+  declare comments: CommentFormatted[];
+  declare busy: boolean;
+  declare error: string | null;
   _conn: ReturnType<typeof connectWS> | null = null;
 
   constructor() {
@@ -27,18 +30,18 @@ export class CommentsThread extends WebComponent {
     this.postId = '';
     this.initial = [];
     this.signedIn = false;
-    this.state = { comments: [], busy: false, error: null };
+    this.comments = [];
+    this.busy = false;
+    this.error = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    const seeded = Array.isArray(this.initial) ? this.initial : [];
-    this.setState({ comments: seeded });
+    this.comments = Array.isArray(this.initial) ? this.initial : [];
     this._conn = connectWS(`/api/comments/${this.postId}`, {
       onMessage: (msg: CommentFormatted) => {
-        const cur = this.state.comments;
-        if (cur.some((c) => c.id === msg.id)) return;
-        this.setState({ comments: [...cur, msg] });
+        if (this.comments.some((c) => c.id === msg.id)) return;
+        this.comments = [...this.comments, msg];
       },
     });
   }
@@ -50,7 +53,8 @@ export class CommentsThread extends WebComponent {
     const input = form.querySelector('input') as HTMLInputElement;
     const body = input.value.trim();
     if (!body) return;
-    this.setState({ busy: true, error: null });
+    this.busy = true;
+    this.error = null;
     try {
       const r = await fetch(`/api/comments/${this.postId}`, {
         method: 'POST',
@@ -62,21 +66,20 @@ export class CommentsThread extends WebComponent {
         throw new Error(j.error || `${r.status}`);
       }
       const created: CommentFormatted = await r.json();
-      const cur = this.state.comments;
-      if (!cur.some((c) => c.id === created.id)) {
-        this.setState({ comments: [...cur, created], busy: false, error: null });
-      } else {
-        this.setState({ busy: false });
+      if (!this.comments.some((c) => c.id === created.id)) {
+        this.comments = [...this.comments, created];
       }
+      this.busy = false;
       input.value = '';
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.setState({ busy: false, error: msg });
+      this.busy = false;
+      this.error = msg;
     }
   }
 
   render() {
-    const { comments, busy, error } = this.state;
+    const { comments, busy, error } = this;
     return html`
       ${comments.length === 0
         ? html`<div class="p-6 text-center text-fg-subtle font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`
