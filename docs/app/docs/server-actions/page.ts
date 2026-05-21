@@ -293,12 +293,12 @@ export class TodoApp extends WebComponent {
     .date { color: #999; font-size: 12px; }
   \`;
 
-  state = { todos: [] as { id: number; text: string; createdAt: Date }[] };
+  todos = signal&lt;{ id: number; text: string; createdAt: Date }[]&gt;([]);
 
   async connectedCallback() {
     super.connectedCallback();
     const todos = await listTodos();
-    this.setState({ todos });
+    this.todos.set(todos);
     // todos[0].createdAt is a real Date (the rich serializer preserved it)
   }
 
@@ -306,7 +306,7 @@ export class TodoApp extends WebComponent {
     e.preventDefault();
     const input = this.shadowRoot!.querySelector('input') as HTMLInputElement;
     const todo = await addTodo({ text: input.value });
-    this.setState({ todos: [...this.state.todos, todo] });
+    this.todos.set([...this.todos.get(), todo]);
     input.value = '';
   }
 
@@ -317,7 +317,7 @@ export class TodoApp extends WebComponent {
         &lt;button&gt;Add&lt;/button&gt;
       &lt;/form&gt;
       &lt;ul&gt;
-        \${this.state.todos.map(t =&gt; html\`
+        \${this.todos.get().map(t =&gt; html\`
           &lt;li&gt;
             \${t.text}
             &lt;span class="date"&gt;\${t.createdAt.toLocaleDateString()}&lt;/span&gt;

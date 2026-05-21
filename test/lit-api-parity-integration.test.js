@@ -105,30 +105,6 @@ test('integration: component with shouldUpdate=false skips render but SSR still 
   assert.ok(out.includes('v=5'), `Expected v=5 in SSR output: ${out}`);
 });
 
-test('integration: setState routes through changedProperties on client', async () => {
-  class StateEl extends WebComponent {
-    constructor() { super(); this.state = { count: 0 }; this._stateChanges = []; }
-    updated(cp) {
-      if (cp.has('state')) this._stateChanges.push(cp.get('state'));
-    }
-    render() { return html`<p>${this.state.count}</p>`; }
-  }
-  StateEl.register('state-el');
-  const el = document.createElement('state-el');
-  document.body.appendChild(el);
-  await el.updateComplete;
-  el._stateChanges.length = 0;
-
-  el.setState({ count: 1 });
-  await el.updateComplete;
-  el.setState({ count: 2 });
-  await el.updateComplete;
-
-  assert.equal(el._stateChanges.length, 2);
-  assert.deepEqual(el._stateChanges[0], { count: 0 });
-  assert.deepEqual(el._stateChanges[1], { count: 1 });
-});
-
 test('integration: hook order with controllers matches lit', async () => {
   const order = [];
   const controller = {

@@ -4,7 +4,7 @@ import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
 
 /**
@@ -51,6 +51,12 @@ async function render(value, ctx) {
   // live() on the server just unwraps and renders the inner value.
   if (isLive(value)) {
     return render(/** @type any */ (value).value, ctx);
+  }
+  // watch() on the server reads the signal once and inlines the
+  // result. Subscription is a client-only concern; the SSR HTML
+  // freezes a snapshot of the current value.
+  if (isWatch(value)) {
+    return render(/** @type any */ (value).signal.get(), ctx);
   }
   // keyed() on the server: render the wrapped template; key is client-only.
   if (isKeyed(value)) {
@@ -865,6 +871,9 @@ async function streamRender(value, ctx, controller) {
   }
   if (isLive(value)) {
     return streamRender(/** @type any */ (value).value, ctx, controller);
+  }
+  if (isWatch(value)) {
+    return streamRender(/** @type any */ (value).signal.get(), ctx, controller);
   }
   if (isKeyed(value)) {
     return streamRender(/** @type any */ (value).value, ctx, controller);

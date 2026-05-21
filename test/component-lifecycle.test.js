@@ -2,7 +2,7 @@
  * Unit tests for WebComponent lifecycle paths that aren't exercised by
  * the SSR-only tests: property accessor initialisation, attribute
  * coercion, reflection, connectedCallback upgrading, controller
- * dispatch, setState batching, firstUpdated, renderError.
+ * dispatch, requestUpdate batching, firstUpdated, renderError.
  *
  * Runs under linkedom to simulate a DOM without spinning up a browser.
  */
@@ -270,14 +270,14 @@ test('removeController detaches a controller', async () => {
   document.body.appendChild(el);
   await Promise.resolve();
   el.removeController(ctrl);
-  el.setState({ foo: 1 });
+  el.requestUpdate();
   await Promise.resolve();
   assert.equal(updates, 1, 'hostUpdate only fired once: once removed, no more');
 });
 
-/* -------------------- setState batching -------------------- */
+/* -------------------- requestUpdate batching -------------------- */
 
-test('multiple setState calls in one microtask coalesce into a single render', async () => {
+test('multiple requestUpdate calls in one microtask coalesce into a single render', async () => {
   let renders = 0;
   class C extends WebComponent {
     render() { renders++; return html``; }
@@ -287,13 +287,12 @@ test('multiple setState calls in one microtask coalesce into a single render', a
   document.body.appendChild(el);
   await Promise.resolve();
   renders = 0;
-  el.setState({ a: 1 });
-  el.setState({ b: 2 });
-  el.setState({ c: 3 });
+  el.requestUpdate();
+  el.requestUpdate();
+  el.requestUpdate();
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(renders, 1, 'three setStates batched into one render');
-  assert.deepEqual(el.state, { a: 1, b: 2, c: 3 });
+  assert.equal(renders, 1, 'three requestUpdates batched into one render');
 });
 
 test('requestUpdate schedules a re-render without state change', async () => {
@@ -324,7 +323,7 @@ test('firstUpdated fires exactly once after the first render', async () => {
   const el = document.createElement('first-el');
   document.body.appendChild(el);
   await Promise.resolve(); await Promise.resolve();
-  el.setState({ x: 1 });
+  el.requestUpdate();
   await Promise.resolve(); await Promise.resolve();
   assert.equal(firstCount, 1, 'firstUpdated fired exactly once across multiple renders');
 });
@@ -350,7 +349,8 @@ test('WebComponent without static properties still constructs cleanly', () => {
   }
   C.register('no-props');
   const el = document.createElement('no-props');
-  assert.deepEqual(el.state, {});
+  // No throw on construction is the only requirement.
+  assert.ok(el instanceof HTMLElement);
 });
 
 test('default hasChanged treats NaN !== NaN correctly (via strict inequality semantics)', () => {
@@ -389,25 +389,6 @@ test('changedProperties: property setter records (name, oldValue) entries', asyn
   await el.updateComplete;
   assert.equal(el._captured.has('count'), true);
   assert.equal(el._captured.get('count'), 0);
-});
-
-test('changedProperties: setState records a "state" entry with the prior bag', async () => {
-  class C extends WebComponent {
-    constructor() { super(); this.state = { n: 1 }; this._captured = null; }
-    updated(cp) { this._captured = new Map(cp); }
-    render() { return html``; }
-  }
-  C.register('cp-state');
-  const el = document.createElement('cp-state');
-  document.body.appendChild(el);
-  await el.updateComplete;
-  el._captured = null;
-
-  el.setState({ n: 2 });
-  await el.updateComplete;
-  assert.equal(el._captured.has('state'), true);
-  assert.deepEqual(el._captured.get('state'), { n: 1 });
-  assert.deepEqual(el.state, { n: 2 });
 });
 
 test('shouldUpdate returning false skips update and updated() hook', async () => {

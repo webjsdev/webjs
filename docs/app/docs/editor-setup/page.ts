@@ -65,7 +65,7 @@ export class StudentCard extends WebComponent {
 }
 StudentCard.register('student-card');</pre>
 
-    <p>Inside the class, <code>this.student</code> is a real <code>Student</code>. Hover, autocomplete, and type-checking all work. <code>this.setState</code>, <code>this.state</code>, <code>this.requestUpdate</code>, and all lifecycle hooks are typed by the framework's <code>.d.ts</code> overlay.</p>
+    <p>Inside the class, <code>this.student</code> is a real <code>Student</code>. Hover, autocomplete, and type-checking all work. <code>this.requestUpdate</code>, signal helpers (<code>signal</code>, <code>computed</code>) imported from <code>@webjskit/core</code>, and all lifecycle hooks are typed by the framework's <code>.d.ts</code> overlay.</p>
 
     <h3>Why <code>declare</code> is required</h3>
     <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code> inside the constructor. Without <code>declare</code>, TypeScript emits a <code>student = undefined</code> class-field initializer that runs <em>after</em> <code>super()</code> and overwrites that accessor. <code>declare</code> tells TS "type this field for me, but don't emit any runtime assignment."</p>
@@ -174,7 +174,7 @@ return {
     <h2>Verification walkthrough</h2>
     <p>After setup, open a component file and check each layer:</p>
     <ol>
-      <li><strong>Layer 1</strong>: hover <code>this.student</code> inside <code>render()</code> and expect <code>(property) student: Student</code>. Type <code>this.</code> inside the class and expect autocomplete for <code>student</code>, <code>setState</code>, <code>requestUpdate</code>, <code>state</code>, <code>render</code>, etc.</li>
+      <li><strong>Layer 1</strong>: hover <code>this.student</code> inside <code>render()</code> and expect <code>(property) student: Student</code>. Type <code>this.</code> inside the class and expect autocomplete for <code>student</code>, <code>requestUpdate</code>, <code>render</code>, lifecycle hooks, etc.</li>
       <li><strong>Layer 2</strong>: type <code>&lt;student-card student=\${42}&gt;</code> in an <code>html\`…\`</code> template, and ts-lit-plugin flags it because <code>42</code> isn't <code>Student</code>.</li>
       <li><strong>Layer 3</strong>: write <code>&lt;student-card&gt;</code> with the side-effect import in place and you'll see no "Unknown tag" squiggle. Position cursor inside <code>&lt;student-card |&gt;</code> and the completions list includes <code>student</code> (and any other key of <code>static properties</code>). Type <code>&lt;student-card student=\${42}&gt;</code> and a webjs diagnostic flags <code>'number' is not assignable to attribute 'student' of type 'Student'</code>. Then comment out the <code>import './student-card.ts'</code> at the top of the file. The squiggle returns, completions disappear, and the value-check goes silent (the missing import is now the surfaced problem). The plugin requires reachability so a missing import always surfaces.</li>
     </ol>

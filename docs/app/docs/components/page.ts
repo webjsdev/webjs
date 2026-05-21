@@ -115,36 +115,28 @@ UserCard.register('user-card');</pre>
     <blockquote>If you are coming from React: properties in webjs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
-    <p>For internal, non-attribute state, use <code>this.state</code> and <code>this.setState()</code>. This pattern will feel familiar if you have used React class components.</p>
+    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjskit/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
 
-    <pre>class TodoList extends WebComponent {
+    <pre>import { WebComponent, html, signal } from '@webjskit/core';
 
-  constructor() {
-    super();
-    this.state = {
-      items: [],
-      filter: 'all',
-    };
-  }
+class TodoList extends WebComponent {
+  items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
+  filter = signal&lt;'all' | 'active'&gt;('all');
 
   addItem(text) {
-    this.setState({
-      items: [...this.state.items, { id: Date.now(), text, done: false }],
-    });
+    this.items.set([...this.items.get(), { id: Date.now(), text, done: false }]);
   }
 
   toggleItem(id) {
-    this.setState({
-      items: this.state.items.map(it =&gt;
-        it.id === id ? { ...it, done: !it.done } : it
-      ),
-    });
+    this.items.set(this.items.get().map(it =&gt;
+      it.id === id ? { ...it, done: !it.done } : it
+    ));
   }
 
   render() {
-    const visible = this.state.filter === 'all'
-      ? this.state.items
-      : this.state.items.filter(it =&gt; !it.done);
+    const visible = this.filter.get() === 'all'
+      ? this.items.get()
+      : this.items.get().filter(it =&gt; !it.done);
 
     return html\`
       &lt;ul&gt;
@@ -160,16 +152,38 @@ UserCard.register('user-card');</pre>
 }
 TodoList.register('todo-list');</pre>
 
-    <h3>How setState Works</h3>
+    <h3>How signal updates render</h3>
     <ul>
-      <li><strong>Shallow merge</strong>: <code>this.setState({ filter: 'active' })</code> merges <code>{ filter: 'active' }</code> into <code>this.state</code> without touching other keys. This is the same semantics as React's <code>setState</code>.</li>
-      <li><strong>Batched re-render</strong>: calling <code>setState</code> (or <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
+      <li><strong>Dynamic tracking</strong>: every render re-records its dependency set. A signal read inside <code>render()</code> subscribes the component to that signal; signals that fall out of the current control flow stop driving re-renders.</li>
+      <li><strong>Batched re-render</strong>: calling <code>signal.set</code> (or assigning a reactive property, or calling <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
     </ul>
 
-    <pre>// These two calls result in a single re-render, not two:
-this.setState({ count: 1 });
-this.setState({ label: 'hello' });
-// render() is called once with { count: 1, label: 'hello' }</pre>
+    <pre>// These two writes result in a single re-render, not two:
+this.count.set(1);
+this.label = 'hello';
+// render() is called once with the new count and label.</pre>
+
+    <h3>Fine-grained binding with <code>watch()</code></h3>
+    <p>Reading <code>signal.get()</code> inside <code>render()</code> subscribes the WHOLE component to that signal: any change re-runs <code>render()</code>. When a single template hole depends on a single signal value and the rest of the template doesn't, the <code>watch(signal)</code> directive from <code>@webjskit/core/directives</code> is a cheaper alternative: the directive sets up its own per-hole subscription, and <em>only</em> the bound text node (or attribute value) updates when the signal fires. The host's <code>render()</code> does not re-run, which also means <code>shouldUpdate</code> / <code>willUpdate</code> / <code>updated</code> are bypassed for that change.</p>
+
+    <pre>import { html, signal } from '@webjskit/core';
+import { watch } from '@webjskit/core/directives';
+
+const count = signal(0);
+
+class Counter extends WebComponent {
+  render() {
+    // The host subscribes to nothing; only this hole updates.
+    return html\`
+      &lt;button @click=\${() =&gt; count.set(count.get() + 1)}&gt;
+        \${watch(count)}
+      &lt;/button&gt;
+    \`;
+  }
+}
+Counter.register('my-counter');</pre>
+
+    <p>SSR inlines the current value once; subscription is a client-only concern. Pick <code>watch()</code> when the binding is a scalar (text node, attribute value) tied to one signal and the surrounding template is expensive or static. Pick <code>signal.get()</code> when the render branches on the value, derives several things from it, or reads multiple signals together.</p>
 
     <h2>Styles</h2>
     <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
@@ -360,23 +374,18 @@ class Cart extends WebComponent {
   render() { return html\`&lt;ul&gt;\${this.items.map(/* … */)}&lt;/ul&gt;\`; }
 }</pre>
 
-    <pre>// ✅ SSR-safe: sensible default in the constructor,
+    <pre>// ✅ SSR-safe: instance signal carries the default,
 //    browser hook refines after hydration
 class Cart extends WebComponent {
-  declare items: Item[];
-
-  constructor() {
-    super();
-    this.items = [];                          // ← SSR uses this
-  }
+  items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
 
   connectedCallback() {
     super.connectedCallback();
     const stored = readFromLocalStorage();
-    if (stored) this.setState({ items: stored }); // browser-only refinement
+    if (stored) this.items.set(stored);         // browser-only refinement
   }
 
-  render() { return html\`&lt;ul&gt;\${this.items.map(/* … */)}&lt;/ul&gt;\`; }
+  render() { return html\`&lt;ul&gt;\${this.items.get().map(/* … */)}&lt;/ul&gt;\`; }
 }</pre>
 
     <h3>Where each kind of data belongs</h3>
@@ -387,8 +396,8 @@ class Cart extends WebComponent {
       </thead>
       <tbody>
         <tr><td>Database, session, cookies, request headers</td><td>Page function (server). Pass to the component as an attribute or property.</td></tr>
-        <tr><td>Initial state / defaults known at coding time</td><td>Component's <code>constructor()</code> after <code>super()</code>.</td></tr>
-        <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code>, then <code>setState</code> to refine.</td></tr>
+        <tr><td>Initial state / defaults known at coding time</td><td>Instance signal in a class-field initializer, or the component's <code>constructor()</code> after <code>super()</code>.</td></tr>
+        <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code>, then write the signal to refine.</td></tr>
         <tr><td>Flash-sensitive (theme, RTL direction)</td><td>Synchronous inline <code>&lt;script&gt;</code> in the root layout's <code>&lt;head&gt;</code> that writes attributes to <code>document.documentElement</code> before custom elements upgrade.</td></tr>
       </tbody>
     </table>
@@ -474,7 +483,7 @@ html\`
     <pre>connectedCallback() {
   super.connectedCallback();  // REQUIRED: sets up shadow root + first render
   this._ws = connectWS('/api/chat', {
-    onMessage: (msg) =&gt; this.setState({ messages: [...this.state.messages, msg] }),
+    onMessage: (msg) =&gt; this.messages.set([...this.messages.get(), msg]),
   });
 }</pre>
 
@@ -505,7 +514,8 @@ html\`
     <p>You never call <code>render()</code> directly. It is called automatically:</p>
     <ul>
       <li>Once during <code>connectedCallback()</code> (first paint).</li>
-      <li>After every <code>setState()</code> call (batched via microtask).</li>
+      <li>After every signal write the render reads (tracked by the built-in SignalWatcher).</li>
+      <li>After every reactive-property assignment.</li>
       <li>After every <code>requestUpdate()</code> call.</li>
       <li>After every observed attribute change.</li>
     </ul>
@@ -534,8 +544,8 @@ html\`
 // swaps the inner handler reference behind the scenes.
 render() {
   return html\`
-    &lt;button @click=\${() =&gt; this.setState({ count: this.state.count + 1 })}&gt;
-      \${this.state.count}
+    &lt;button @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;
+      \${this.count.get()}
     &lt;/button&gt;
   \`;
 }</pre>
@@ -563,9 +573,9 @@ render() {
     <p>Adds the attribute if the value is truthy, removes it if falsy. This is the correct way to handle boolean HTML attributes like <code>disabled</code>, <code>checked</code>, <code>hidden</code>, and <code>readonly</code>:</p>
 
     <pre>html\`
-  &lt;button ?disabled=\${!this.state.connected}&gt;Send&lt;/button&gt;
-  &lt;input ?checked=\${this.state.agreed} type="checkbox" /&gt;
-  &lt;div ?hidden=\${this.state.items.length === 0}&gt;No items&lt;/div&gt;
+  &lt;button ?disabled=\${!this.connected.get()}&gt;Send&lt;/button&gt;
+  &lt;input ?checked=\${this.agreed.get()} type="checkbox" /&gt;
+  &lt;div ?hidden=\${this.items.get().length === 0}&gt;No items&lt;/div&gt;
 \`</pre>
 
     <p>During SSR, <code>?disabled=\${true}</code> emits <code>disabled=""</code> and <code>?disabled=\${false}</code> emits nothing, matching how the browser interprets boolean attributes.</p>
@@ -632,14 +642,14 @@ render() {
 }
 UserProfile.register('user-profile');</pre>
 
-    <p>On the client, <code>render()</code> is called synchronously. If you need async data on the client, fetch it in <code>connectedCallback()</code> and call <code>setState()</code> when the data arrives.</p>
+    <p>On the client, <code>render()</code> is called synchronously. If you need async data on the client, fetch it in <code>connectedCallback()</code> and write a signal when the data arrives.</p>
 
     <h2>Fine-Grained Client Renderer</h2>
     <p>The client renderer does <strong>not</strong> rebuild the entire DOM on every state change. Instead, it tracks each dynamic "hole" in the template and only touches the parts that actually changed.</p>
 
     <h3>What Gets Preserved</h3>
     <ul>
-      <li><strong>Focus</strong>: if an <code>&lt;input&gt;</code> is focused when you call <code>setState()</code>, it stays focused after re-render.</li>
+      <li><strong>Focus</strong>: if an <code>&lt;input&gt;</code> is focused when a signal write triggers a re-render, it stays focused.</li>
       <li><strong>Cursor position</strong>: the text cursor inside an input or textarea does not jump.</li>
       <li><strong>Selection</strong>: text selections survive re-renders.</li>
       <li><strong>Scroll position</strong>: scroll state of overflow containers is not disturbed.</li>
@@ -661,31 +671,23 @@ UserProfile.register('user-profile');</pre>
     <pre>import { WebComponent, html, css, repeat } from '@webjskit/core';
 
 class TaskList extends WebComponent {
-
-  constructor() {
-    super();
-    this.state = {
-      tasks: [
-        { id: 1, text: 'Buy groceries', done: false },
-        { id: 2, text: 'Write docs', done: true },
-        { id: 3, text: 'Ship feature', done: false },
-      ],
-    };
-  }
+  tasks = signal([
+    { id: 1, text: 'Buy groceries', done: false },
+    { id: 2, text: 'Write docs', done: true },
+    { id: 3, text: 'Ship feature', done: false },
+  ]);
 
   toggle(id) {
-    this.setState({
-      tasks: this.state.tasks.map(t =&gt;
-        t.id === id ? { ...t, done: !t.done } : t
-      ),
-    });
+    this.tasks.set(this.tasks.get().map(t =&gt;
+      t.id === id ? { ...t, done: !t.done } : t
+    ));
   }
 
   render() {
     return html\`
       &lt;ul&gt;
         \${repeat(
-          this.state.tasks,
+          this.tasks.get(),
           (task) =&gt; task.id,           // key function: must be stable + unique
           (task) =&gt; html\`
             &lt;li @click=\${() =&gt; this.toggle(task.id)}
@@ -730,19 +732,16 @@ class ChatBox extends WebComponent {
   \`;
 
   _conn = null;
-
-  constructor() {
-    super();
-    this.state = { lines: [], connected: false };
-  }
+  lines = signal([]);
+  connected = signal(false);
 
   connectedCallback() {
     super.connectedCallback();   // always call super!
     this._conn = connectWS('/api/chat', {
-      onOpen:    () =&gt; this.setState({ connected: true }),
-      onClose:   () =&gt; this.setState({ connected: false }),
+      onOpen:    () =&gt; this.connected.set(true),
+      onClose:   () =&gt; this.connected.set(false),
       onMessage: (msg) =&gt; {
-        this.setState({ lines: [...this.state.lines, msg].slice(-50) });
+        this.lines.set([...this.lines.get(), msg].slice(-50));
       },
     });
   }
@@ -761,7 +760,8 @@ class ChatBox extends WebComponent {
   }
 
   render() {
-    const { lines, connected } = this.state;
+    const lines = this.lines.get();
+    const connected = this.connected.get();
     return html\`
       &lt;div class="log"&gt;
         \${lines.length === 0
@@ -783,7 +783,7 @@ ChatBox.register('chat-box');</pre>
       <li><strong>Extend</strong> <code>WebComponent</code> and set <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
       <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
-      <li><strong>State</strong>: use <code>this.setState({...})</code> for shallow merge + batched re-render.</li>
+      <li><strong>State</strong>: instance signals (<code>foo = signal(...)</code>) or reactive properties (<code>static properties + declare</code>). Both feed the same batched re-render scheduler.</li>
       <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>

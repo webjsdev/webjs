@@ -185,7 +185,10 @@ webjs.js start ...`. The npm form fires `prestart` (which runs
 1. Never import `@prisma/client` or `node:*` from components or pages.
 2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
-4. Use `setState()`, not direct `this.state` mutation.
+4. Component state lives in signals from `@webjskit/core`. Read with
+   `signal.get()` inside `render()`, write with `signal.set(value)`.
+   Module-scope signals share state across components; instance
+   signals (created in the constructor) carry component-local state.
 5. Pages/layouts are server-only functions returning TemplateResult.
 
 ## Recipes

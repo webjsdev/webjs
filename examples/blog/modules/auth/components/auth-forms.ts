@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjskit/core';
+import { WebComponent, html, signal } from '@webjskit/core';
 import { buttonClass } from '../../../components/ui/button.ts';
 import { inputClass } from '../../../components/ui/input.ts';
 import { labelClass } from '../../../components/ui/label.ts';
@@ -22,8 +22,6 @@ import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.
  *    is the better fit.
  */
 type Mode = 'login' | 'signup';
-type State = { busy: boolean; error: string | null };
-
 export class AuthForms extends WebComponent {
   static properties = {
     then: { type: String },
@@ -31,19 +29,20 @@ export class AuthForms extends WebComponent {
   };
   declare then: string;
   declare mode: Mode;
-  declare state: State;
+  busy = signal(false);
+  error = signal<string | null>(null);
 
   constructor() {
     super();
     this.then = '/dashboard';
     this.mode = 'login';
-    this.state = { busy: false, error: null };
   }
 
   async onSubmit(e: SubmitEvent) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget as HTMLFormElement));
-    this.setState({ busy: true, error: null });
+    this.busy.set(true);
+    this.error.set(null);
     try {
       const url = this.mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
       const r = await fetch(url, {
@@ -58,13 +57,15 @@ export class AuthForms extends WebComponent {
       location.href = this.then || '/dashboard';
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.setState({ busy: false, error: msg });
+      this.busy.set(false);
+      this.error.set(msg);
     }
   }
 
   render() {
     const mode = this.mode;
-    const { busy, error } = this.state;
+    const busy = this.busy.get();
+    const error = this.error.get();
     const submitLabel = busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account');
     const pillBase =
       'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150';
@@ -76,10 +77,10 @@ export class AuthForms extends WebComponent {
           <div class="grid grid-cols-2 p-1 rounded-full bg-bg-subtle border border-border" role="tablist">
             <button role="tab"
                     class=${mode === 'login' ? pillActive : pillInactive}
-                    @click=${() => { this.mode = 'login'; this.setState({ error: null }); }}>Sign in</button>
+                    @click=${() => { this.mode = 'login'; this.error.set(null); }}>Sign in</button>
             <button role="tab"
                     class=${mode === 'signup' ? pillActive : pillInactive}
-                    @click=${() => { this.mode = 'signup'; this.setState({ error: null }); }}>Create account</button>
+                    @click=${() => { this.mode = 'signup'; this.error.set(null); }}>Create account</button>
           </div>
         </div>
         <div class=${cardContentClass()}>
