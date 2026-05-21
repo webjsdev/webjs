@@ -453,7 +453,11 @@ registered webjs elements).
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
 - **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
-- Use `setState()` for state changes, never mutate `this.state` directly
+- For per-component state, declare a property with `state: true`
+  (`static properties = { foo: { type: ..., state: true } }`) and
+  mutate via `this.foo = ...`. For cross-component shared state, use
+  `signal()` from `@webjskit/core` and read via `signal.get()` inside
+  `render()`. There is no `setState()` / `this.state` API.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
 
 ---
@@ -716,9 +720,10 @@ class Cart extends WebComponent {
 
   connectedCallback() {
     super.connectedCallback();
-    // Browser-only refinement: read localStorage, then setState
+    // Browser-only refinement, read localStorage and assign the
+    // reactive property; the component re-renders automatically.
     const stored = readFromLocalStorage();
-    if (stored) this.setState({ items: stored });
+    if (stored) this.items = stored;
   }
 
   render() {
@@ -733,7 +738,7 @@ Where the data lives, where to read it:
 |---|---|
 | Database, session, cookies, request headers | Page function (server). Pass to component as attribute / property. |
 | Component's own initial defaults | Component `constructor()` after `super()`. |
-| Browser-only: `localStorage`, viewport, `matchMedia`, `navigator.*` | Component `connectedCallback()`, then `setState` to refine. |
+| Browser-only: `localStorage`, viewport, `matchMedia`, `navigator.*` | Component `connectedCallback()`, then assign a reactive property (`this.foo = stored`) or a signal to refine. |
 | Theme color, RTL direction (flash-sensitive) | Synchronous inline `<script>` in root layout that sets `document.documentElement` attributes before custom elements upgrade. |
 
 ---

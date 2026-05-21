@@ -371,7 +371,7 @@ export class Counter extends WebComponent {
 
   render() {
     return html`
-      <button @click=${() => this.setState({ count: this.count + 1 })}>
+      <button @click=${() => { this.count = this.count + 1; }}>
         ${this.count}
       </button>
     `;
@@ -394,9 +394,9 @@ the click handler is inert). Two consequences for how you write code:
 2. **`connectedCallback` is browser-only.** Use it for
    `localStorage`, viewport size, online status, or anything that
    genuinely can't be known on the server. Read the value, then
-   `setState({...})` to refine the render. The SSR'd first paint
-   shows the constructor default. The browser refines after
-   hydration.
+   assign it to a reactive property (`this.items = stored`) or write
+   to a signal to refine the render. The SSR'd first paint shows the
+   constructor default. The browser refines after hydration.
 3. **Server-known data goes through the page function**, not into
    `connectedCallback`. Fetch in the page (which runs on the server),
    pass the result down via `.prop=${value}` (custom elements) or
@@ -435,12 +435,14 @@ component is server-rendered. JavaScript is requested by the specific
 holes you write in the template.
 
 - `@click=${...}`, `@input=${...}`, any event binding requests JS.
-- `setState({...})` requests JS for reactive updates.
+- A reactive property assignment (`this.count = …`) or a signal
+  `set()` that the component reads requests JS for reactive updates.
 - `.prop=${richObject}` requests JS for property hydration.
 - A controller like `Task` requests JS for that async behavior.
 - A plain `<a href>`, a `<form action method>` submission, or a
-  purely display-time component (no event listeners, no `setState`,
-  no property bindings) does **not** request JS.
+  purely display-time component (no event listeners, no property
+  mutations, no signal subscriptions, no property bindings) does
+  **not** request JS.
 
 A single component can mix both. A product card with server-rendered
 title, price, image, plus a "View" link (no JS) and an "Add to cart"
@@ -723,7 +725,9 @@ composition, so a nested shell ends up dropped by the HTML parser.
    files (like `lib/utils/cn.ts`) can be imported anywhere.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
-4. Use `setState()`. Never mutate `this.state` directly.
+4. Mutate state via reactive-property assignment (`this.count = 1`) or
+   a signal `set()` from `@webjskit/core`. There is no `setState()` /
+   `this.state` API.
 5. Pages / layouts / metadata routes default-export a server-only function.
 6. One exported function per action / query file. Name the file after it.
 7. **Components must render meaningful HTML on first paint** (SSR
