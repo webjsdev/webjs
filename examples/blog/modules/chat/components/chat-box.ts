@@ -7,12 +7,19 @@ type ChatMessage =
   | { kind: 'say'; text: string; at: number }
   | { kind: 'join' | 'leave'; count: number };
 
+// 'initial' is the SSR-emitted state, "we haven't tried to connect
+// yet"; we show "Connecting…" with a neutral indicator so the first
+// paint doesn't look like a broken reconnect. 'live' is after the
+// first successful open. 'reconnecting' is after a real close, which
+// is the only state where the alarming warning indicator should show.
+type ChatStatus = 'initial' | 'live' | 'reconnecting';
+
 /**
  * `<chat-box>`: terminal-leaning live chat panel against /api/chat.
  */
 export class ChatBox extends WebComponent {
   lines = signal<Line[]>([]);
-  connected = signal(false);
+  status = signal<ChatStatus>('initial');
   count = signal(0);
 
   _conn: ReturnType<typeof connectWS> | null = null;
@@ -21,8 +28,8 @@ export class ChatBox extends WebComponent {
   connectedCallback() {
     super.connectedCallback();
     this._conn = connectWS('/api/chat', {
-      onOpen:  () => { this.connected.set(true); },
-      onClose: () => { this.connected.set(false); },
+      onOpen:  () => { this.status.set('live'); },
+      onClose: () => { this.status.set('reconnecting'); },
       onMessage: (msg: ChatMessage) => {
         const lines = this.lines.get().slice();
         if (msg.kind === 'say') {
@@ -56,15 +63,32 @@ export class ChatBox extends WebComponent {
 
   render() {
     const lines = this.lines.get();
-    const connected = this.connected.get();
+    const status = this.status.get();
+    const live = status === 'live';
     const count = this.count.get();
+    // SSR-emitted initial state shows a neutral "Connecting…" instead
+    // of the alarming "Reconnecting…" copy. The warning state only
+    // appears after a real close event, which is the only time the
+    // user has actually lost connectivity.
+    const dotClass =
+      status === 'live'
+        ? 'w-[7px] h-[7px] rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklch,var(--success)_30%,transparent)]'
+        : status === 'reconnecting'
+          ? 'w-[7px] h-[7px] rounded-full bg-accent'
+          : 'w-[7px] h-[7px] rounded-full bg-fg-subtle/40 animate-pulse';
+    const statusText =
+      status === 'live'
+        ? html`Live · ${Math.max(0, count - 1)} other${count - 1 !== 1 ? 's' : ''} online`
+        : status === 'reconnecting'
+          ? html`Reconnecting…`
+          : html`Connecting…`;
+    const placeholder =
+      status === 'live' ? 'Say hi…' : status === 'reconnecting' ? 'Disconnected' : 'Connecting…';
     return html`
       <div class="block border border-border rounded-xl bg-bg-elev shadow overflow-hidden font-sans">
         <div class="flex items-center gap-2 px-4 py-3 border-b border-border bg-bg-subtle font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">
-          <span class="${connected
-            ? 'w-[7px] h-[7px] rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklch,var(--success)_30%,transparent)]'
-            : 'w-[7px] h-[7px] rounded-full bg-accent'}"></span>
-          ${connected ? html`Live · ${Math.max(0, count - 1)} other${count - 1 !== 1 ? 's' : ''} online` : html`Reconnecting…`}
+          <span class=${dotClass}></span>
+          ${statusText}
         </div>
         <div class="h-[220px] overflow-y-auto p-4 text-sm leading-relaxed font-sans scroll-smooth bg-bg-sunken">
           ${lines.length === 0
@@ -76,9 +100,9 @@ export class ChatBox extends WebComponent {
         </div>
         <form class="flex gap-2 px-4 py-3 border-t border-border bg-bg-subtle" @submit=${(e) => this.onSubmit(e)}>
           <input class="${inputClass()} flex-1"
-                 placeholder=${connected ? 'Say hi…' : 'Disconnected'}
-                 ?disabled=${!connected} autocomplete="off">
-          <button class=${buttonClass({ size: 'sm' })} ?disabled=${!connected}>Send</button>
+                 placeholder=${placeholder}
+                 ?disabled=${!live} autocomplete="off">
+          <button class=${buttonClass({ size: 'sm' })} ?disabled=${!live}>Send</button>
         </form>
       </div>
     `;
