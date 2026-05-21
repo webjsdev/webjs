@@ -1,7 +1,8 @@
 import { isTemplate, MARKER } from './html.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace } from './directives.js';
+import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
+import { Signal } from './signal.js';
 import {
   LIGHT_SLOT_ATTR,
   PROJECTION_ATTR,
@@ -873,6 +874,16 @@ function applyChildInner(part, value) {
     return applyUntil(part, /** @type any */ (value).args);
   }
 
+  // watch directive: bind a part to a signal. Reads the signal at
+  // render time and subscribes the part to changes. When the signal
+  // fires, only this part updates; the host component's render() does
+  // not re-run. The signal read inside the watcher's observe is
+  // tracked against the part's private Watcher, NOT the host's render
+  // watcher (so the host doesn't subscribe to a full re-render too).
+  if (isWatch(value)) {
+    return applyWatch(part, /** @type any */ (value).signal);
+  }
+
   // asyncAppend / asyncReplace: subscribe to the AsyncIterable. Each
   // yielded value is mapped (optional) and appended (asyncAppend) or
   // replaces (asyncReplace) the prior content. Teardown aborts the
@@ -1188,6 +1199,9 @@ function teardownChild(part) {
     partAny.__untilState.aborted = true;
     partAny.__untilState = undefined;
   }
+  if (partAny.__watchSub) {
+    teardownWatch(partAny);
+  }
 
   if (!part.child) return;
   const c = /** @type any */ (part.child);
@@ -1232,6 +1246,9 @@ function clearStaleDirectiveState(part, value) {
   }
   if (partAny.__keyedKey !== undefined && !isKeyed(value)) {
     partAny.__keyedKey = undefined;
+  }
+  if (partAny.__watchSub && !isWatch(value)) {
+    teardownWatch(partAny);
   }
 }
 
@@ -1442,6 +1459,70 @@ function applyUntil(part, args) {
  */
 function teardownUntil(state) {
   state.aborted = true;
+}
+
+/* ================================================================
+ * watch (signal binding): fine-grained reactive part.
+ * ================================================================ */
+
+/**
+ * Bind a child part to a signal. Reads the signal once and writes its
+ * value into the part. Installs a per-part `Signal.subtle.Watcher`
+ * that, on signal change, re-reads and re-applies the value WITHOUT
+ * re-running the host component's render(). When the part is torn
+ * down (teardownChild) the watcher is disposed.
+ *
+ * The signal read happens inside the watcher's `observe()`, so the
+ * dependency edge connects the signal to THIS watcher. The host's
+ * own render watcher is outside the active stack here, so the host
+ * does not also subscribe to the signal (which would double-fire as
+ * both a full re-render and a watch update).
+ *
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {{ get: () => unknown, __isSignal: true }} sig
+ */
+function applyWatch(part, sig) {
+  const partAny = /** @type any */ (part);
+  // Same signal as last render: just refresh the bound value through
+  // the existing watcher's observe so the dep tracking is re-armed.
+  if (partAny.__watchSig === sig && partAny.__watchSub) {
+    let value;
+    partAny.__watchSub.observe(() => { value = sig.get(); });
+    applyChildInner(part, value);
+    return;
+  }
+  // Signal changed (or first render). Tear down any prior watcher.
+  if (partAny.__watchSub) {
+    partAny.__watchSub.dispose();
+    partAny.__watchSub = undefined;
+  }
+  partAny.__watchSig = sig;
+  // The notify callback re-reads the signal inside observe() so the
+  // watcher stays subscribed, then re-applies the value to this part.
+  const watcher = new Signal.subtle.Watcher(() => {
+    if (partAny.__watchSub !== watcher) return; // disposed mid-flight
+    let v;
+    watcher.observe(() => { v = sig.get(); });
+    applyChildInner(part, v);
+  });
+  partAny.__watchSub = watcher;
+  let initial;
+  watcher.observe(() => { initial = sig.get(); });
+  applyChildInner(part, initial);
+}
+
+/**
+ * Dispose a `watch` directive's per-part watcher. Called from
+ * `teardownChild` and from `clearStaleDirectiveState` when the value
+ * at the part is no longer a watch.
+ * @param {any} partAny
+ */
+function teardownWatch(partAny) {
+  if (partAny.__watchSub) {
+    partAny.__watchSub.dispose();
+    partAny.__watchSub = undefined;
+    partAny.__watchSig = undefined;
+  }
 }
 
 /* ================================================================
