@@ -26,7 +26,7 @@ Five stacked zero-build optimizations:
    The SSR pass knows every custom element in the final HTML. A startup
    module-graph scan adds their transitive import dependencies too. All
    preload hints are deduplicated and emitted in `<head>`.
-2. **HTTP/2 multiplex at the edge.** `webjs start` itself speaks plain
+2. **HTTP/2 multiplex at the edge.** The production server (`npm run start`) speaks plain
    HTTP/1.1. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare Pages,
    Heroku) and reverse proxies (nginx, Caddy, Traefik) speak
    HTTP/2 to the browser and proxy 1.1 to the container, fetching many module
@@ -64,8 +64,8 @@ production. The Rails 7+ / Hotwire pattern:
   imports. This is what eliminates the perceived gap vs a bundle.
 - **HTTP/2 multiplex** is what makes per-file serving competitive: one
   TCP+TLS handshake, many module fetches in parallel over the same
-  connection. `webjs start` itself speaks plain HTTP/1.1. TLS + HTTP/2
-  is the proxy's job. PaaS edges (Railway, Fly, Render, Vercel,
+  connection. The production server (`npm run start`) speaks plain HTTP/1.1.
+  TLS + HTTP/2 is the proxy's job. PaaS edges (Railway, Fly, Render, Vercel,
   Cloudflare Pages, Heroku) do this automatically. For bare-VM
   deploys, put nginx, Caddy, or Traefik in front.
 
