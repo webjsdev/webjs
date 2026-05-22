@@ -905,23 +905,25 @@ ThemeToggle.register('theme-toggle');
     }
   }
 
-  // Post-scaffold guidance. The full-stack and saas templates ship with
-  // @webjsdev/ui already initialised (components.json, lib/utils/cn.ts, the
-  // standard kit under components/ui/), so the user only runs `${pm} run dev`.
-  // The api template has no UI; we only mention `webjs ui` in case the
-  // user later adds one.
+  // Post-scaffold guidance. Lead with a single copy-paste line so the
+  // user can move from "scaffold done" to "dev server up" in one
+  // command. The full-stack and saas templates ship with @webjsdev/ui
+  // already initialised; the api template has no UI but may add one
+  // later. Saas needs a one-time prisma migrate before the first run
+  // (the example User model wants its table to exist).
+  const installSegment = installed ? '' : `${pm} install && `;
+  const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
+  const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
   const uiNote = isApi
     ? `# If you later add a UI to this API project:
   #   npx webjs ui init && npx webjs ui add button card dialog`
-    : `npx webjs ui add <name>  # optional: add more ui-* components later`;
-  // If we installed deps, skip the install line in the next-steps. If
-  // we didn't, surface it so the user knows.
-  const installLine = installed ? '' : `\n  ${pm} install`;
-  const prismaLine = isSaas ? `\n  npx prisma migrate dev --name init` : '';
+    : `npx webjs ui add <name>     # add more ui-* components later`;
   console.log(`Next steps:
-  cd ${name}${installLine}${prismaLine}
+  ${runCommand}
+  # → http://localhost:3000
+
+Optional:
   ${uiNote}
-  ${pm} run dev
 
 AI-driven development (enforced for all AI agents):
   ✓ Tests auto-generated with every feature
