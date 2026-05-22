@@ -13,6 +13,13 @@ import { fileURLToPath } from 'node:url';
  * post gets its own title / description / og:* tags for SEO. Each post
  * has a self-contained canonical URL at `/blog/<slug>`, matching what
  * search engines index.
+ *
+ * Spacing utilities use arbitrary values (e.g. `mt-[5rem]`) instead of
+ * Tailwind's named scale (`mt-20`) because the Tailwind watcher in the
+ * dev server is not always running while the blog/ directory is being
+ * edited, so the named-scale classes can be missing from the compiled
+ * output. Arbitrary-value classes are emitted from the literal token in
+ * source, so they get compiled regardless.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -59,14 +66,14 @@ function inline(s: string): string {
     .replace(/>/g, '&gt;');
   out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) =>
     `<a href="${u}" class="text-accent no-underline hover:underline" rel="noopener noreferrer">${t}</a>`);
-  out = out.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.9em] bg-bg-subtle text-fg px-1.5 py-0.5 rounded">$1</code>');
+  out = out.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.9em] bg-bg-subtle text-fg px-[6px] py-[2px] rounded">$1</code>');
   out = out.replace(/\*\*([^\n]+?)\*\*/g, '<strong class="font-semibold text-fg">$1</strong>');
   out = out.replace(/(^|[^\w])_([^_\s][^_]*[^_\s]|[^_\s])_(?=$|[^\w])/g, '$1<em>$2</em>');
   out = out.replace(/(^|[^*\w])\*([^*\s][^*]*[^*\s]|[^*\s])\*(?=$|[^*\w])/g, '$1<em>$2</em>');
   return out;
 }
 
-/** Render body: h1 / h2 / h3 / fenced code / bulleted lists / paragraphs. */
+/** Render body. */
 function renderBody(md: string): string {
   const lines = md.split('\n');
   const out: string[] = [];
@@ -78,7 +85,7 @@ function renderBody(md: string): string {
 
   function flushItem() {
     if (curItem.length) {
-      out.push(`<li class="text-fg-muted text-[17px] leading-[1.8] relative pl-6 my-3 before:content-['•'] before:absolute before:left-1 before:top-0 before:text-fg-subtle before:font-bold">${inline(curItem.join(' '))}</li>`);
+      out.push(`<li class="text-fg-muted text-[17px] leading-[1.8] relative pl-[28px] my-[12px] before:content-['•'] before:absolute before:left-[6px] before:top-0 before:text-fg-subtle before:font-bold">${inline(curItem.join(' '))}</li>`);
       curItem = [];
     }
   }
@@ -87,7 +94,7 @@ function renderBody(md: string): string {
     if (inList) { out.push('</ul>'); inList = false; }
   }
   function startList() {
-    if (!inList) { out.push('<ul class="my-7 space-y-2 list-none ml-2">'); inList = true; }
+    if (!inList) { out.push('<ul class="my-[32px] space-y-[8px] list-none ml-[8px]">'); inList = true; }
   }
 
   for (const raw of lines) {
@@ -95,7 +102,7 @@ function renderBody(md: string): string {
       if (raw.trim().startsWith('```')) {
         const escaped = codeBuf.join('\n')
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        out.push(`<pre class="bg-bg-subtle border border-border rounded-lg my-8 overflow-x-auto"><code class="font-mono text-[13px] leading-[1.65] text-fg whitespace-pre block px-6 py-5"${codeLang ? ` data-lang="${codeLang}"` : ''}>${escaped}</code></pre>`);
+        out.push(`<pre class="bg-bg-subtle border border-border rounded-lg my-[48px] overflow-x-auto"><code class="font-mono text-[13px] leading-[1.7] text-fg whitespace-pre block px-[24px] py-[20px]"${codeLang ? ` data-lang="${codeLang}"` : ''}>${escaped}</code></pre>`);
         codeBuf = [];
         codeLang = '';
         inCode = false;
@@ -113,16 +120,16 @@ function renderBody(md: string): string {
     const line = raw;
     if (/^# /.test(line)) {
       endList();
-      out.push(`<h2 class="font-serif text-[clamp(26px,3.5vw,34px)] leading-[1.18] tracking-tight text-fg mt-20 mb-6">${inline(line.slice(2).trim())}</h2>`);
+      out.push(`<h2 class="font-serif text-[clamp(26px,3.5vw,34px)] leading-[1.18] tracking-tight text-fg mt-[80px] mb-[24px]">${inline(line.slice(2).trim())}</h2>`);
     } else if (/^## /.test(line)) {
       endList();
-      out.push(`<h3 class="font-serif text-[clamp(21px,2.8vw,26px)] leading-[1.2] tracking-tight text-fg mt-14 mb-5">${inline(line.slice(3).trim())}</h3>`);
+      out.push(`<h3 class="font-serif text-[clamp(21px,2.8vw,26px)] leading-[1.2] tracking-tight text-fg mt-[56px] mb-[20px]">${inline(line.slice(3).trim())}</h3>`);
     } else if (/^### /.test(line)) {
       endList();
-      out.push(`<h4 class="font-mono text-[12px] uppercase tracking-[0.18em] font-semibold text-fg-subtle mt-10 mb-4">${inline(line.slice(4).trim())}</h4>`);
+      out.push(`<h4 class="font-mono text-[12px] uppercase tracking-[0.18em] font-semibold text-fg-subtle mt-[40px] mb-[16px]">${inline(line.slice(4).trim())}</h4>`);
     } else if (/^> /.test(line)) {
       endList();
-      out.push(`<blockquote class="border-l-2 border-accent pl-5 my-8 italic text-fg-muted text-[17px] leading-[1.7]">${inline(line.slice(2).trim())}</blockquote>`);
+      out.push(`<blockquote class="border-l-2 border-accent pl-[20px] my-[40px] italic text-fg-muted text-[17px] leading-[1.7]">${inline(line.slice(2).trim())}</blockquote>`);
     } else if (/^- /.test(line)) {
       flushItem();
       startList();
@@ -133,7 +140,7 @@ function renderBody(md: string): string {
       flushItem();
     } else {
       endList();
-      out.push(`<p class="text-fg-muted text-[17px] leading-[1.8] my-7">${inline(line.trim())}</p>`);
+      out.push(`<p class="text-fg-muted text-[17px] leading-[1.8] my-[28px]">${inline(line.trim())}</p>`);
     }
   }
   endList();
@@ -164,26 +171,26 @@ export default async function BlogPost({ params }: { params: { slug: string } })
   if (!post) notFound();
 
   return html`
-    <main class="max-w-[760px] mx-auto px-6 py-16">
-      <nav class="mb-12">
+    <main class="max-w-[840px] mx-auto px-[24px] py-[64px]">
+      <nav class="mb-[48px]">
         <a href="/blog" class="font-mono text-[12px] text-fg-subtle no-underline hover:text-fg tracking-wide">← All posts</a>
       </nav>
 
-      <header class="mb-16">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6">
+      <header class="mb-[64px]">
+        <div class="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] mb-[24px]">
           <time class="font-mono text-[12.5px] text-fg-subtle tracking-tight">${post.date.slice(0, 10)}</time>
           <span class="text-fg-subtle/40 text-[12px]">·</span>
           <span class="font-mono text-[12.5px] text-fg-subtle">By ${post.author}</span>
           ${post.tags.length > 0 ? html`<span class="text-fg-subtle/40 text-[12px]">·</span>` : ''}
-          ${post.tags.map((t) => html`<span class="bg-fg-subtle/10 text-fg-subtle font-mono text-[10.5px] uppercase tracking-[0.12em] px-2 py-0.5 rounded">${t}</span>`)}
+          ${post.tags.map((t) => html`<span class="bg-fg-subtle/10 text-fg-subtle font-mono text-[10.5px] uppercase tracking-[0.12em] px-[8px] py-[2px] rounded">${t}</span>`)}
         </div>
-        <h1 class="font-serif text-[clamp(36px,6vw,56px)] leading-[1.05] tracking-tight text-fg m-0 mb-6">${post.title}</h1>
+        <h1 class="font-serif text-[clamp(36px,6vw,56px)] leading-[1.05] tracking-tight text-fg m-0 mb-[24px]">${post.title}</h1>
         <p class="text-fg-muted text-[19px] leading-[1.55] m-0 font-serif italic">${post.description}</p>
       </header>
 
-      <article class="mt-4">${unsafeHTML(renderBody(post.body))}</article>
+      <article class="mt-[16px]">${unsafeHTML(renderBody(post.body))}</article>
 
-      <footer class="mt-28 pt-10 border-t border-border">
+      <footer class="mt-[128px] pt-[40px] border-t border-border">
         <a href="/blog" class="font-mono text-[12px] text-fg-subtle no-underline hover:text-fg tracking-wide">← All posts</a>
       </footer>
     </main>
