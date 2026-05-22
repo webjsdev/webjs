@@ -28,7 +28,7 @@ Five stacked zero-build optimizations:
    preload hints are deduplicated and emitted in `<head>`.
 2. **HTTP/2 multiplex at the edge.** `webjs start` itself speaks plain
    HTTP/1.1. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare Pages,
-   Netlify, Heroku) and reverse proxies (nginx, Caddy, Traefik) speak
+   Heroku) and reverse proxies (nginx, Caddy, Traefik) speak
    HTTP/2 to the browser and proxy 1.1 to the container, fetching many module
    fetches in parallel over one TCP+TLS connection.
 3. **103 Early Hints.** Before SSR starts computing the response, the
@@ -66,7 +66,7 @@ production. The Rails 7+ / Hotwire pattern:
   TCP+TLS handshake, many module fetches in parallel over the same
   connection. `webjs start` itself speaks plain HTTP/1.1. TLS + HTTP/2
   is the proxy's job. PaaS edges (Railway, Fly, Render, Vercel,
-  Cloudflare Pages, Netlify, Heroku) do this automatically. For bare-VM
+  Cloudflare Pages, Heroku) do this automatically. For bare-VM
   deploys, put nginx, Caddy, or Traefik in front.
 
 Content-hashed cache-busting and granular cache invalidation come from

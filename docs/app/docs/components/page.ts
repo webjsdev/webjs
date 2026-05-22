@@ -10,13 +10,13 @@ export default function Components() {
     <h2>The WebComponent Base Class</h2>
     <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
-    <pre>import { WebComponent, html, css } from '@webjsdev/core';
+    <pre>import { WebComponent, html, css, signal } from '@webjsdev/core';
 
 class MyCounter extends WebComponent {
 
-  static properties = {
-    count: { type: Number },
-  };
+  // Instance signal carries component-local state. SignalWatcher
+  // (built into WebComponent) auto-tracks .get() reads and re-renders.
+  count = signal(0);
 
   static styles = css\`
     :host { display: inline-flex; gap: 8px; align-items: center; }
@@ -24,18 +24,11 @@ class MyCounter extends WebComponent {
     output { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: center; }
   \`;
 
-  declare count: number;
-
-  constructor() {
-    super();
-    this.count = 0;
-  }
-
   render() {
     return html\`
-      &lt;button @click=\${() =&gt; { this.count--; this.requestUpdate(); }}&gt;-&lt;/button&gt;
-      &lt;output&gt;\${this.count}&lt;/output&gt;
-      &lt;button @click=\${() =&gt; { this.count++; this.requestUpdate(); }}&gt;+&lt;/button&gt;
+      &lt;button @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;-&lt;/button&gt;
+      &lt;output&gt;\${this.count.get()}&lt;/output&gt;
+      &lt;button @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
     \`;
   }
 }
@@ -47,7 +40,7 @@ MyCounter.register('my-counter');</pre>
     <pre>import '../components/my-counter.ts';
 
 export default function Home() {
-  return html\`&lt;my-counter count="5"&gt;&lt;/my-counter&gt;\`;
+  return html\`&lt;my-counter&gt;&lt;/my-counter&gt;\`;
 }</pre>
 
     <h2>Tag Names</h2>
