@@ -12,7 +12,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 ## Why webjs
 
 - **AI-first.** Predictable file conventions, one function per file, an explicit `.server.ts` boundary, and an `AGENTS.md` contract. The whole design lets LLMs modify code without loading the entire codebase into context.
-- **No build step you run.** `.ts` files served directly. The dev server transforms TypeScript via esbuild for both server-side imports (SSR) and browser-bound modules (hydration). One transformer handles both at roughly 1ms per file, cached by mtime. Full TS feature support: enums, decorators, parameter properties, anything esbuild handles. Edit, refresh, done.
+- **No build step you run.** `.ts` files served directly. Node 24+ is the minimum runtime, and the dev server strips types via Node's built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap, near-zero overhead). TypeScript must be erasable. Non-erasable constructs (enums, value-carrying namespaces, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`) trigger an esbuild fallback for those files (~3x wire bytes, inline sourcemap). Edit, refresh, done.
 - **Web components, light DOM by default.** Pages and components render as light DOM so global CSS and Tailwind utilities apply directly: no `::part`, no `:host`, no CSS-var plumbing. Shadow DOM is opt-in (`static shadow = true`) when you need scoped styles or real `<slot>` projection. Both modes SSR fully, no hydration runtime.
 - **Progressive enhancement, built in.** Pages *and* components are SSR'd to real HTML. Every web component's `render()` runs on the server, so its initial markup is in the response before any script loads. Content reads, links navigate, forms submit (server actions are plain HTML POSTs), and display-only custom elements look right, all without JavaScript. JS is opt-in *per interactive behavior*, not per component: a counter renders as "0" without JS, and only the +/- click handling needs scripts. The HTML is the floor, and the client router and `@click` / signal interactivity are layered on top.
 - **Tailwind CSS by default.** The scaffold ships with the Tailwind browser runtime + `@theme` design tokens. Prefer hand-written CSS? Opt out entirely, and the framework works just as well with vanilla CSS when you follow the wrapper-scoping convention (`.page-<route>`, `.layout-<name>`, component-tag scoped). Full recipe in the [Styling docs](./docs/app/docs/styling/page.ts).
@@ -116,24 +116,20 @@ export default async function Home() {
 
 ```ts
 // components/counter.ts: interactive web component, light DOM + Tailwind
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
   // Light DOM is the default, so Tailwind utility classes apply directly.
-  static properties = { count: { type: Number } };
-  declare count: number;
-
-  constructor() {
-    super();
-    this.count = 0;
-  }
+  // Instance signal carries component-local state; the built-in
+  // SignalWatcher re-renders when .get() reads change.
+  count = signal(0);
 
   render() {
     return html`
       <div class="inline-flex items-center gap-2 font-mono">
-        <button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=${() => { this.count--; this.requestUpdate(); }}>−</button>
-        <output class="min-w-[2ch] text-center">${this.count}</output>
-        <button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=${() => { this.count++; this.requestUpdate(); }}>+</button>
+        <button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=${() => this.count.set(this.count.get() - 1)}>−</button>
+        <output class="min-w-[2ch] text-center">${this.count.get()}</output>
+        <button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=${() => this.count.set(this.count.get() + 1)}>+</button>
       </div>
     `;
   }
@@ -141,9 +137,10 @@ export class Counter extends WebComponent {
 Counter.register('my-counter');
 ```
 
-Need scoped styles, `<slot>` projection, or embed-ready isolation? Opt
-in to shadow DOM with `static shadow = true` and author styles via
-`static styles = css\`…\``.
+Need scoped styles or embed-ready isolation? Opt in to shadow DOM with
+`static shadow = true` and author styles via `static styles = css\`…\``.
+`<slot>` projection works in both modes (light DOM uses framework
+projection, same API).
 
 ```ts
 // modules/posts/queries/list-posts.server.ts: one function per file
@@ -164,10 +161,10 @@ fetches the page's modules in parallel over a single HTTP/2 connection.
 Same model as Rails 7+ with `importmap-rails`.
 
 ```sh
-webjs start --port 8080                            # JSON logs, gzip/brotli, ETag, streaming
+npm run start --port 8080                          # JSON logs, gzip/brotli, ETag, streaming
 ```
 
-`webjs start` speaks plain HTTP/1.1. The expected production topology
+The production server speaks plain HTTP/1.1. The expected production topology
 is a reverse proxy in front that terminates TLS and speaks HTTP/2 to
 the browser. **PaaS edges already do this for free.** Railway, Fly,
 Render, Vercel, Cloudflare Pages, Netlify, and Heroku all serve HTTP/2
@@ -205,13 +202,13 @@ testing, conventions, configuration, editor setup.
 
 ## Status
 
-Pre-1.0. 632 unit tests (96.6% line coverage, 87.5% branch, 93.6% function),
-36 puppeteer e2e tests, 27 WTR browser tests. Key features:
+Pre-1.0. Current packages: `@webjsdev/core` 0.7.1, `@webjsdev/server` 0.7.2, `@webjsdev/cli` 0.8.1, `@webjsdev/ui` 0.3.1. 1151 unit tests, 271 browser tests (web-test-runner), 61 puppeteer e2e tests (56 framework + 5 example-blog smoke). Key features:
 
-- **Core:** SSR with DSD (opt-in) + light-DOM hydration (default), fine-grained client renderer, `repeat()`, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net
-- **Data:** server actions with webjs's built-in serializer (Date/Map/Set/BigInt/TypedArray/Blob/File/FormData/cycles survive the wire), `expose()` for REST, `json()` + `richFetch()` for content-negotiated APIs, `cache()` for server-side query caching with TTL + `invalidate()`
-- **Server:** file router, per-segment middleware, `rateLimit()`, WebSockets + `broadcast()`, CSRF, compression, HTTP/2, 103 Early Hints, health probes, graceful shutdown, `Session` class with `SessionStorage` (cookie or store-backed), NextAuth-style `createAuth()` (Credentials, Google, GitHub)
-- **DX:** TypeScript with zero build, `AGENTS.md` contract, `CLAUDE.md`, live reload in dev, optional esbuild bundle for prod, plus `@webjsdev/ts-plugin` for tsserver. The plugin is a single editor-only piece that bundles `ts-lit-plugin` internally and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. The scaffold lists exactly one plugin in `tsconfig.json`. Not required for the framework to run.
+- **Core:** Signals (`signal`, `computed`, `effect`, `batch`, TC39 Stage 1 shape) as the default state primitive, with WebComponent's built-in SignalWatcher auto-tracking `.get()` reads inside `render()`. Reactive properties via `static properties` reserved for HTML attribute round-trip (`declare`-pattern enforced via the `reactive-props-use-declare` rule). Full lit-API parity: ReactiveController hooks (`hostConnected`, `hostDisconnected`, `hostUpdate`, `hostUpdated`) and lifecycle (`shouldUpdate`, `willUpdate`, `update`, `updated`, `firstUpdated`, `updateComplete`), 12 directives (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref` + `createRef`, `cache`, `until`, `asyncAppend`, `asyncReplace`, `watch`). SSR with DSD (opt-in) + light-DOM hydration (default), light-DOM `<slot>` projection (framework-driven, same API as shadow DOM), fine-grained client renderer, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net.
+- **Data:** Server actions with webjs's built-in serializer (`Date`, `Map`, `Set`, `BigInt`, `TypedArray`, `Blob`, `File`, `FormData`, reference cycles all survive the wire). Two-marker server-file convention: `.server.{js,ts}` for path-level source-protection (browser imports get a throw-at-load stub), `'use server'` for RPC registration (file is also browser-callable). `expose()` for REST with optional `validate` hook. `json()` + `richFetch()` for content-negotiated APIs. `cache()` for server-side query caching with TTL + `invalidate()`. `WEBJS_PUBLIC_*` env vars injected into `window.process.env` at SSR (no build step, no transform).
+- **Server:** File router with `page.ts`, `layout.ts`, `route.ts`, `error.ts`, `loading.ts`, `not-found.ts`, `middleware.ts`, metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `opengraph-image`), per-segment middleware, `rateLimit()`, WebSockets (`WS` export + `connectWS()` + `broadcast()`), CSRF, gzip / brotli compression, HTTP/2, 103 Early Hints, modulepreload hints, health probes, graceful shutdown on `SIGTERM`, `Session` class with `SessionStorage` (cookie or store-backed), NextAuth-style `createAuth()` (Credentials, Google, GitHub), single pluggable cache store (in-memory by default, swap to Redis with one `setStore()` call shared by auth, sessions, caching, and rate limiting).
+- **DX:** Node 24+ minimum runtime, with the dev server stripping TypeScript via Node's built-in `module.stripTypeScriptTypes` (zero build, position-preserving, no sourcemap). esbuild stays as a per-file fallback for non-erasable TS (enums, value-carrying namespaces, constructor parameter properties, legacy decorators) and for transitive `node_modules` vendor bundling. `webjs check` lint covers `use-server-needs-extension`, `no-server-env-in-components`, `reactive-props-use-declare`, `erasable-typescript-only`, `shell-in-non-root-layout`, `no-json-data-files`, and more (run `webjs check --rules` to enumerate). `AGENTS.md` contract + `CLAUDE.md` + per-tool agent configs (`.cursorrules`, `.windsurfrules`, `.github/copilot-instructions.md`, `.claude/settings.json` PreToolUse hook guarding edits on `main`). Live reload in dev (chokidar + SSE). `@webjsdev/ts-plugin` editor-only piece bundles `ts-lit-plugin` and layers webjs-aware intelligence on top: type-checked `` html`…` `` templates, custom-element go-to-definition, attribute auto-complete from `static properties`, silenced "Unknown tag" diagnostics for `Class.register('tag-name')` elements, all gated by the file's import graph. Not required for the framework to run.
+- **Release:** Per-package per-version changelog under `changelog/<pkg>/<version>.md`, auto-generated on the same commit that bumps a `package.json` `version` field (universal pre-commit hook). The `.github/workflows/release.yml` workflow watches for new changelog files on `main` and dual-publishes to npm (`npm publish --workspace=@webjsdev/<pkg>`) and GitHub Releases (`gh release create <pkg>@<version>`), both idempotent so re-runs pick up where they left off. Free for public repos via `NPM_TOKEN` + the auto-provisioned `GITHUB_TOKEN`.
 
 ## License
 
