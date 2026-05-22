@@ -63,7 +63,7 @@ I had spent about an hour rolling and unrolling the previous two packages. I now
 
 `create-webjs-app` was easier. The name was available, the conventional `npx create-<framework>-app` pattern matched what `create-next-app` / `create-remix` / `create-react-app` users expect. Published `create-webjs-app@0.1.0` and called it done.
 
-Except the user pointed out that npm's `npm create <suffix>` shorthand turns `npm create webjs-app@latest` into `npx create-webjs-app@latest`, and the suffix `webjs-app` reads awkwardly when combined with the app name. `npm create webjs-app@latest my-app` says "webjs-app" and "my-app" in the same line, repeating the word "app."
+Except I realized npm's `npm create <suffix>` shorthand turns `npm create webjs-app@latest` into `npx create-webjs-app@latest`, and the suffix `webjs-app` reads awkwardly when combined with the app name. `npm create webjs-app@latest my-app` says "webjs-app" and "my-app" in the same line, repeating the word "app."
 
 The fix was to rename the package to just `create-webjs`. Then `npm create webjs@latest my-app` reads cleanly, matches Astro's `npm create astro@latest` exactly. The old name got published with `npm deprecate create-webjs-app@0.1.0 "Renamed to create-webjs. Use npm create webjs@latest <name> instead."`. The npm name stays in our control, with a redirect message.
 
