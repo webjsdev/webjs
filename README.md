@@ -61,8 +61,9 @@ npx create-webjs-app@latest my-api --template api
 npx create-webjs-app@latest my-saas --template saas
 
 # Or with the CLI installed globally for repeated use.
-# `npm i -g wjs` installs both `wjs` (short) and `webjs` (canonical, matches docs).
-npm i -g wjs && webjs create my-app
+# `npm i -g webjsdev` installs three commands: `webjs` (canonical, matches docs),
+# `wjs` (short), and `webjsdev` itself, all pointing at the same script.
+npm i -g webjsdev && webjs create my-app
 cd my-app && npm run dev
 
 # or run everything in the monorepo (website + docs + blog together)

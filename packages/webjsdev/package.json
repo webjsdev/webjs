@@ -1,18 +1,19 @@
 {
-  "name": "wjs",
+  "name": "webjsdev",
   "version": "0.1.0",
   "type": "module",
-  "description": "Short alias for the webjs CLI. `wjs <cmd>` = `webjs <cmd>`.",
+  "description": "The webjs CLI, published unscoped. Installs the `webjs`, `wjs`, and `webjsdev` commands.",
   "bin": {
-    "wjs": "bin/wjs.js",
-    "webjs": "bin/wjs.js"
+    "webjsdev": "bin/webjsdev.js",
+    "webjs": "bin/webjsdev.js",
+    "wjs": "bin/webjsdev.js"
   },
   "files": [
     "bin",
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/cli": "^0.8.1"
+    "@webjsdev/cli": "^0.8.2"
   },
   "publishConfig": {
     "access": "public"
@@ -20,7 +21,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/wjs"
+    "directory": "packages/webjsdev"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",
