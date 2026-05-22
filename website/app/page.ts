@@ -87,6 +87,12 @@ export default function LandingPage() {
       }
       .hero-actions {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--sp-3);
+      }
+      .hero-actions-row {
+        display: flex;
         gap: var(--sp-3);
         justify-content: center;
         flex-wrap: wrap;
@@ -251,9 +257,13 @@ export default function LandingPage() {
         Built on web standards. No bundler, no config, no magic.
       </p>
       <div class="hero-actions">
-        <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
-        <a class="secondary" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-        <a class="secondary" href=${BLOG_URL} target="_blank">Demo</a>
+        <div class="hero-actions-row">
+          <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
+        </div>
+        <div class="hero-actions-row">
+          <a class="secondary" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
+          <a class="secondary" href=${BLOG_URL} target="_blank">Demo</a>
+        </div>
       </div>
     </section>
 
