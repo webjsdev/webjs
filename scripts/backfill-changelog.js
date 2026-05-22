@@ -27,14 +27,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'changelog');
 
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'create-webjs', 'webjsdev'];
+// Only the framework packages get changelog entries. The unscoped
+// wrappers `create-webjs` and `webjsdev` exist as version-lockstep
+// mirrors of `@webjsdev/cli`, so their per-release notes would be
+// "bump to match cli@X.Y.Z" every single time, which is noise on
+// the rendered /changelog page. The release workflow auto-bumps and
+// auto-publishes them without writing changelog files.
+const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui'];
 
-// Some packages publish under an unscoped npm name (to match the
-// `create-<framework>` / `create-<framework>-app` convention, or to
-// enable `npx <shortname>` without typing the scope). For those, the
-// changelog frontmatter's `package` field is the bare name; for
-// everything else it's `@webjsdev/<short>`.
-const UNSCOPED = new Set(['create-webjs', 'webjsdev']);
+// Some packages publish under an unscoped npm name; for those the
+// frontmatter's `package` field is the bare name. (None of the
+// PACKAGES above are unscoped today; this set is reserved for any
+// future framework-side unscoped package the changelog would
+// render.)
+const UNSCOPED = new Set();
 
 /** @param {string} pkg short dir name */
 function npmName(pkg) {
