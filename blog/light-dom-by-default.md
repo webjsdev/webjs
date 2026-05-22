@@ -2,16 +2,18 @@
 title: "Light DOM by default, shadow DOM by choice"
 date: 2025-12-22T10:00:00+05:30
 slug: light-dom-by-default
-description: "Why webjs flips the usual web-components default: every component renders in light DOM unless you opt into shadow. Tailwind classes cascade in, CSS stays cache-friendly, DOM queries work, accessibility behaves, and tests do not need shadow-piercing helpers."
+description: "Why webjs keeps the platform's light-DOM default for web components: Tailwind classes cascade in, CSS stays cache-friendly, DOM queries work, accessibility behaves, and tests do not need shadow-piercing helpers. Shadow DOM stays available as an opt-in."
 tags: components, light-dom, shadow-dom, defaults, tailwind, ssr
 author: Vivek
 ---
 
-Almost every web-components framework defaults to shadow DOM. lit does. Stencil does. FAST does. When you write a component, you get an isolated subtree by default, and you opt out (or work around it) if you want global styles to apply.
+Native web components default to light DOM. If you write a custom element that does not call `this.attachShadow(...)`, there is no shadow root. The element's children are regular DOM. That is what the platform spec gives you out of the box.
 
-webjs flips this default. Every component renders in light DOM unless the class declares `static shadow = true`. The shadow path still works, and is the right choice for a few specific situations. But the framework leans on light DOM as the everyday case.
+The dominant library people learn from, lit, picked a different default. `LitElement` attaches a shadow root in its constructor unless you override `createRenderRoot()` to return `this`. Because lit is what most developers (and most AI training data) treat as "how you write web components," the perception has shifted: people assume shadow DOM is the web-components default. It is not.
 
-This post is about why.
+webjs aligns with the platform default and treats light DOM as the everyday case. Every component renders in light DOM unless the class declares `static shadow = true`. The shadow path still works and is the right choice for a few specific situations. But the framework leans on what the platform itself defaults to.
+
+This post is about why that choice is the right one, not just for spec-alignment, but for the practical things you do every day in an app.
 
 
 # What "light DOM" means here
