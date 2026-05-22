@@ -61,8 +61,7 @@ npx create-webjs-app@latest my-api --template api
 npx create-webjs-app@latest my-saas --template saas
 
 # Or with the CLI installed globally for repeated use.
-# `npm i -g webjsdev` installs three commands: `webjs` (canonical, matches docs),
-# `wjs` (short), and `webjsdev` itself, all pointing at the same script.
+# `webjsdev` is the unscoped npm name for @webjsdev/cli; both install the `webjs` command.
 npm i -g webjsdev && webjs create my-app
 cd my-app && npm run dev
 

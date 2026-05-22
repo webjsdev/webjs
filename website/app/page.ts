@@ -267,7 +267,7 @@ export default function LandingPage() {
       <div class="comment"># SaaS starter (auth + dashboard + Prisma)</div>
       <copy-cmd>npx create-webjs-app@latest my-saas --template saas</copy-cmd>
       <div class="h-3"></div>
-      <div class="comment"># or install the CLI globally for repeated use (gives you webjs, wjs, and webjsdev commands)</div>
+      <div class="comment"># or install the CLI globally for repeated use (unscoped alias for @webjsdev/cli)</div>
       <copy-cmd>npm i -g webjsdev && webjs create my-app</copy-cmd>
     </div>
 
