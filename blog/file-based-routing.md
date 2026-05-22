@@ -7,9 +7,9 @@ tags: routing, conventions, next-js, ai-first
 author: Vivek
 ---
 
-When I was sketching webjs's routing layer, I had three options. Invent something better. Copy Rails's controller-and-route-file approach. Or copy Next.js's app router.
+When I was sketching webjs's routing layer, I had two options. Invent something custom. Or copy Next.js's app router, which is the routing model I personally enjoy using.
 
-I went with Next.js. Same `page.ts`, `layout.ts`, `route.ts`, `[param]`, `(group)`, `_private`. The reason is the same as everywhere else in webjs: the agent has already read ten thousand Next.js apps. Reproduce the shape and the agent writes correct code immediately.
+I went with Next.js. Same `page.ts`, `layout.ts`, `route.ts`, `[param]`, `(group)`, `_private`. Two reasons: it is the shape I want to work in day to day, and it is the shape the agent has already read ten thousand examples of. Reproduce that shape and the agent writes correct code immediately.
 
 
 # The file types
