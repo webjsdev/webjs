@@ -3,11 +3,27 @@
 # Framework-repo pre-commit hook.
 #
 # Mirrors what scaffolded webjs apps get via webjs create, adapted
-# for the framework's own test runner. Two gates:
+# for the framework's own test runner. Three gates:
 #   1. Block direct commits to main/master. Use a feature branch.
 #   2. Run `npm test` to refuse commits that break the suite.
+#   3. Auto-generate matching changelog/<pkg>/<version>.md files
+#      when a packages/<pkg>/package.json version bumped in the
+#      staged diff.
 #
-# To bypass in emergencies: git commit --no-verify
+# Exception: the release workflow's `github-actions[bot]` commits
+# the lockstep wrapper bumps directly to main (.github/workflows/
+# release.yml step "Lockstep-bump wrappers"). That's intentional
+# automation, not a human bypass, so we detect $GITHUB_ACTIONS=true
+# and skip the entire hook for the bot. The bot's commit is a
+# mechanical version-field write; there's nothing to validate.
+# Human commits still hit every gate as designed.
+#
+# To bypass in emergencies (humans only): git commit --no-verify
+
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  echo "[pre-commit] github-actions runner detected; skipping all gates."
+  exit 0
+fi
 
 BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
 
