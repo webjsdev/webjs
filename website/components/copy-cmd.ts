@@ -14,10 +14,10 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * clipboard via navigator.clipboard.writeText and flips the icon to a
  * checkmark for ~1.5s.
  *
- * Lit-style: render() drives everything (host attrs, classes, event
- * bindings). No imperative setAttribute / addEventListener in
- * lifecycle hooks. Cleanup of the auto-reset timer happens in
- * disconnectedCallback.
+ * Implementation. render() drives all host attributes, classes, and
+ * event bindings, so there is no imperative setAttribute or
+ * addEventListener in lifecycle hooks. Cleanup of the auto-reset
+ * timer happens in disconnectedCallback.
  */
 export class CopyCmd extends WebComponent {
   copied = signal(false);
