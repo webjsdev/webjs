@@ -63,7 +63,7 @@ console.log(`
 ▲ webjs development servers:
   Website   → http://localhost:5000
   Docs      → http://localhost:4000
-  Blog Demo → http://localhost:3456
+  Demo      → http://localhost:3456
 
   Ctrl-C to stop all.
 `);

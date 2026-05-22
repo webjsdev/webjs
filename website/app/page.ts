@@ -253,7 +253,7 @@ export default function LandingPage() {
       <div class="hero-actions">
         <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
         <a class="secondary" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-        <a class="secondary" href=${BLOG_URL} target="_blank">Example Blog</a>
+        <a class="secondary" href=${BLOG_URL} target="_blank">Demo</a>
       </div>
     </section>
 
@@ -364,7 +364,7 @@ middleware.ts              → global auth</pre>
         <a href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a> ·
         <a href=${UI_URL} target="_blank">UI</a> ·
         <a href=${DOCS_URL + '/docs/ai-first'} target="_blank">AI-First</a> ·
-        <a href=${BLOG_URL} target="_blank">Example Blog</a> ·
+        <a href=${BLOG_URL} target="_blank">Demo</a> ·
         <a href=${STORY_URL} target="_blank" rel="noopener noreferrer">Webjs Story</a>
       </p>
     </footer>
