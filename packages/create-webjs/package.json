@@ -1,6 +1,6 @@
 {
   "name": "create-webjs",
-  "version": "0.1.0",
+  "version": "0.8.5",
   "type": "module",
   "description": "Scaffold a new webjs app. `npm create webjs@latest my-app`.",
   "bin": {
@@ -11,7 +11,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/cli": "^0.8.4"
+    "@webjsdev/cli": "^0.8.5"
   },
   "publishConfig": {
     "access": "public"
