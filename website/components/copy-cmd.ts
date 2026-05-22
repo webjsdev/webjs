@@ -1,11 +1,11 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
 
 /**
- * `<copy-cmd>`: wraps a shell-command line with a copy-to-clipboard
- * affordance. Light DOM so the parent's monospace + foreground styling
- * cascades through. The whole component is the click target (text or
- * icon both trigger copy); the icon itself is a hover-revealed visual
- * hint, not a separate focusable element.
+ * `<copy-cmd>` wraps a shell-command line with a copy-to-clipboard
+ * affordance. Light DOM, Tailwind utilities throughout. The whole
+ * inner wrapper is the click target (text or icon both trigger copy);
+ * the icon is a hover-revealed visual hint, not a separate focusable
+ * element.
  *
  * Usage:
  *   <copy-cmd>npx create-webjs-app@latest my-app</copy-cmd>
@@ -13,33 +13,23 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * On click (or Enter / Space), writes the trimmed text content to the
  * clipboard via navigator.clipboard.writeText and flips the icon to a
  * checkmark for ~1.5s.
+ *
+ * Lit-style: render() drives everything (host attrs, classes, event
+ * bindings). No imperative setAttribute / addEventListener in
+ * lifecycle hooks. Cleanup of the auto-reset timer happens in
+ * disconnectedCallback.
  */
 export class CopyCmd extends WebComponent {
   copied = signal(false);
   private _resetTimer: number | undefined;
 
-  connectedCallback() {
-    super.connectedCallback();
-    // Make the whole host element act like a button (one focusable
-    // target, Enter / Space activate, mouse click anywhere copies).
-    // The inner <button> is decorative; we hide it from the a11y tree
-    // with aria-hidden + tabindex=-1.
-    this.setAttribute('role', 'button');
-    this.setAttribute('tabindex', '0');
-    this.setAttribute('aria-label', 'Click to copy command');
-    this.addEventListener('click', this._handleCopy);
-    this.addEventListener('keydown', this._handleKey);
-  }
-
   disconnectedCallback() {
     if (this._resetTimer) clearTimeout(this._resetTimer);
-    this.removeEventListener('click', this._handleCopy);
-    this.removeEventListener('keydown', this._handleKey);
     super.disconnectedCallback?.();
   }
 
-  _handleCopy = async () => {
-    const textEl = this.querySelector('.copy-cmd-text');
+  _copy = async () => {
+    const textEl = this.querySelector('[data-copy-text]');
     const text = (textEl?.textContent || '').trim();
     if (!text) return;
     try {
@@ -53,20 +43,34 @@ export class CopyCmd extends WebComponent {
     }
   };
 
-  _handleKey = (e: KeyboardEvent) => {
+  _onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      this._handleCopy();
+      this._copy();
     }
   };
 
   render() {
     const isCopied = this.copied.get();
     return html`
-      <span class="copy-cmd-text"><slot></slot></span>
-      <button class="copy-cmd-btn" aria-hidden="true" tabindex="-1" type="button">
-        ${isCopied ? CHECK_ICON : COPY_ICON}
-      </button>
+      <span
+        role="button"
+        tabindex="0"
+        aria-label="Click to copy command"
+        class="group flex items-center gap-3 text-fg outline-none cursor-copy focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 rounded-sm"
+        @click=${this._copy}
+        @keydown=${this._onKey}
+      >
+        <span data-copy-text class="flex-1 min-w-0 overflow-x-auto whitespace-nowrap">
+          <slot></slot>
+        </span>
+        <button
+          class="flex-shrink-0 inline-flex items-center justify-center w-[26px] h-[26px] p-0 border border-border rounded text-fg-muted bg-transparent cursor-copy opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 hover:text-fg hover:border-fg-muted"
+          aria-hidden="true"
+          tabindex="-1"
+          type="button"
+        >${isCopied ? CHECK_ICON : COPY_ICON}</button>
+      </span>
     `;
   }
 }
