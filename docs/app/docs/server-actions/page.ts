@@ -7,14 +7,27 @@ export default function ServerActions() {
     <h1>Server Actions</h1>
     <p>Server actions are <strong>async functions that run exclusively on the server</strong> but can be imported and called from client-side web components as if they were local functions. webjs rewrites the import at serve time so the browser receives a thin RPC stub instead of the real implementation. The result is full-stack type safety with zero manual API layer.</p>
 
-    <h2>Defining a Server Action</h2>
-    <p>There are two ways to mark a file as containing server actions:</p>
+    <h2>Defining a Server Action: the Two-Marker Convention</h2>
+    <p>Server-side files use <strong>two complementary markers</strong>. The combination determines behaviour:</p>
 
-    <h3>1. The <code>.server.ts</code> Suffix</h3>
-    <p>Any file ending in <code>.server.ts</code> (or <code>.server.js</code>, <code>.server.mts</code>, <code>.server.mjs</code>) is automatically treated as a server module. Every exported function becomes a server action.</p>
+    <table>
+      <thead>
+        <tr><th>File</th><th><code>'use server'</code>?</th><th>What it is</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>*.server.{js,ts}</code></td><td>yes</td><td><strong>Server action.</strong> Source-protected AND RPC-callable: client imports are rewritten to RPC stubs that POST to <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code>.</td></tr>
+        <tr><td><code>*.server.{js,ts}</code></td><td>no</td><td><strong>Server-only utility.</strong> Source-protected; browser imports get a throw-at-load stub. Use for the Prisma singleton, session helpers, password hashing.</td></tr>
+        <tr><td>Plain <code>.ts</code></td><td>yes</td><td><strong>Lint violation</strong> (<code>use-server-needs-extension</code>). The directive alone is silently ignored, and the file serves to the browser as plain source. Rename to add the <code>.server.</code> infix.</td></tr>
+        <tr><td>Plain <code>.ts</code></td><td>no</td><td>Browser-safe; standard behaviour.</td></tr>
+      </tbody>
+    </table>
 
-    <pre>// actions/posts.server.ts
-import { prisma } from '../lib/prisma.server.ts';
+    <p>Bottom line: the <code>.server.{js,ts}</code> infix is the path-level boundary (the HTTP layer refuses to serve the source to the browser, full stop). The <code>'use server'</code> directive is what registers the exported functions as RPC endpoints. You need both for a server action.</p>
+
+    <h3>Server action (path boundary + RPC marker)</h3>
+    <pre>// modules/posts/actions/create-post.server.ts
+'use server';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   const post = await prisma.post.create({ data: input });
@@ -26,21 +39,15 @@ export async function deletePost(id: number) {
   return { ok: true };
 }</pre>
 
-    <h3>2. The <code>'use server'</code> Pragma</h3>
-    <p>Any <code>.ts</code> or <code>.js</code> file whose first non-empty, non-comment line is the string <code>'use server'</code> is treated identically. This is useful when you want server-only logic in a file that doesn't follow the <code>.server.ts</code> naming convention.</p>
+    <h3>Server-only utility (path boundary, no RPC)</h3>
+    <p>Drop the <code>'use server'</code> directive when the file should be unreachable from the browser but is NOT called as a server action (Prisma singleton, password hashing, helpers used by other server files). Browser imports throw at load time.</p>
 
-    <pre>// modules/auth/queries/current-user.ts
-'use server';
+    <pre>// lib/prisma.server.ts
+import { PrismaClient } from '@prisma/client';
 
-import { getRequest } from '@webjsdev/server';
-import { prisma } from '../../../lib/prisma.server.ts';
-
-export async function currentUser() {
-  const req = getRequest();
-  const session = parseCookie(req.headers.get('cookie'));
-  if (!session) return null;
-  return prisma.user.findUnique({ where: { id: session.userId } });
-}</pre>
+declare global { var __prisma: PrismaClient | undefined; }
+export const prisma = globalThis.__prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalThis.__prisma = prisma;</pre>
 
     <h2>How the Import Rewrite Works</h2>
     <p>When the browser requests a server module's URL (e.g. <code>/actions/posts.server.ts</code>), the dev server intercepts the request. Instead of serving the real file (which contains database calls, secrets, etc.), it generates and serves a <strong>client stub</strong>:</p>
