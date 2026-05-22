@@ -80,7 +80,12 @@ if (!pkg || !version) {
 }
 
 const tag = `${pkg}@${version}`;
-const title = `@webjsdev/${pkg} ${version}`;
+// Title uses the original (scoped or unscoped) npm name. Pre-rescope
+// changelog files have `@webjskit/` in `package:`; the regex above
+// strips either scope. For unscoped packages (create-webjs-app, wjs),
+// `pkg === fm.package` and the title is just the bare name + version.
+const isScoped = (fm.package || '').startsWith('@');
+const title = isScoped ? `@webjsdev/${pkg} ${version}` : `${pkg} ${version}`;
 
 function gh(args, opts = {}) {
   return spawnSync('gh', args, {

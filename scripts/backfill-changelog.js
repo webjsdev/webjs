@@ -27,7 +27,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'changelog');
 
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui'];
+const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'create-webjs-app', 'wjs'];
+
+// Some packages publish under an unscoped npm name to match the
+// `create-<framework>-app` convention (and so `npx wjs ...` works
+// without a scope). For those, the changelog frontmatter's `package`
+// field is the bare name; for everything else it's `@webjsdev/<short>`.
+const UNSCOPED = new Set(['create-webjs-app', 'wjs']);
+
+/** @param {string} pkg short dir name */
+function npmName(pkg) {
+  return UNSCOPED.has(pkg) ? pkg : `@webjsdev/${pkg}`;
+}
 
 function git(args, opts = {}) {
   const r = spawnSync('git', args, {
@@ -174,7 +185,7 @@ function renderEntry(pkg, version, date, commits) {
   // duplicates one or the other on every surface.
   const fm = [
     '---',
-    `package: "@webjsdev/${pkg}"`,
+    `package: "${npmName(pkg)}"`,
     `version: ${version}`,
     `date: ${date}`,
     `commit_count: ${commits.length}`,
@@ -208,7 +219,7 @@ let skippedEmpty = 0;
 for (const pkg of PACKAGES) {
   const versions = versionTimeline(pkg);
   if (!versions.length) {
-    console.log(`[backfill-changelog] @webjsdev/${pkg}: no version bumps in history; skipping`);
+    console.log(`[backfill-changelog] ${npmName(pkg)}: no version bumps in history; skipping`);
     continue;
   }
   const dir = resolve(OUT, pkg);
@@ -232,6 +243,6 @@ for (const pkg of PACKAGES) {
     total++;
     prevSha = v.sha;
   }
-  console.log(`[backfill-changelog] @webjsdev/${pkg}: ${versions.length} versions`);
+  console.log(`[backfill-changelog] ${npmName(pkg)}: ${versions.length} versions`);
 }
 console.log(`[backfill-changelog] new files: ${total}, skipped (empty): ${skippedEmpty}`);
