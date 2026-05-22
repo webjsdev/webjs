@@ -82,14 +82,22 @@ cd website        && npm run dev     # just the website
 
 ```
 packages/
-  core/       # webjs: html, css, WebComponent, renderers, client router
-  server/     # @webjsdev/server: dev/prod server, router, SSR, actions, WS
-  cli/        # @webjsdev/cli: webjs dev/start/build/db
+  # Framework (the things webjs ships at runtime)
+  core/             # @webjsdev/core: html, css, WebComponent, renderers, client router
+  server/           # @webjsdev/server: dev/prod server, router, SSR, actions, WS
+  cli/              # @webjsdev/cli: webjs dev/start/create/db/test/check/ui
+  ts-plugin/        # @webjsdev/ts-plugin: editor intelligence (ts-lit-plugin + webjs-aware bits)
+  ui/               # @webjsdev/ui: AI-first component library + CLI
+
+  # Scaffold entry points (peer wrappers around @webjsdev/cli)
+  create-webjs-app/ # `npx create-webjs-app@latest my-app` (mirrors create-next-app)
+  wjs/              # `wjs <cmd>` short alias for the @webjsdev/cli `webjs` binary
 examples/
-  blog/       # full-featured reference app (auth, posts, comments, chat)
-docs/         # documentation site (built on webjs itself)
-AGENTS.md     # AI-agent contract for the framework
-CLAUDE.md     # Claude Code quick-reference
+  blog/             # full-featured reference app (auth, posts, comments, chat)
+docs/               # documentation site (built on webjs itself)
+website/            # landing site (built on webjs itself)
+AGENTS.md           # AI-agent contract for the framework
+CLAUDE.md           # Claude Code quick-reference
 ```
 
 ## Example
