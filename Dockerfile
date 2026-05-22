@@ -56,6 +56,11 @@ COPY docs      ./docs
 # SSR time. Without copying the changelog tree into the image, the
 # deployed page renders "No entries yet."
 COPY changelog ./changelog
+# website/app/blog/[slug]/page.ts reads ../../../../blog/<slug>.md at
+# SSR time (via modules/blog/queries/list-posts.server.ts). Same
+# reason as changelog: without the tree in the image, /blog renders
+# "No posts yet."
+COPY blog ./blog
 
 # --- 3. Build-time work --------------------------------------------------
 # Blog: generate Prisma client (needs schema.prisma in context).
