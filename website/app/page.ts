@@ -85,18 +85,6 @@ export default function LandingPage() {
         max-width: 60ch;
         margin: 0 auto var(--sp-6);
       }
-      .hero-actions {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--sp-3);
-      }
-      .hero-actions-row {
-        display: flex;
-        gap: var(--sp-3);
-        justify-content: center;
-        flex-wrap: wrap;
-      }
       .hero-actions a {
         display: inline-block;
         padding: var(--sp-3) var(--sp-5);
@@ -256,11 +244,11 @@ export default function LandingPage() {
         You get native web components, server actions, streaming SSR.
         Built on web standards. No bundler, no config, no magic.
       </p>
-      <div class="hero-actions">
-        <div class="hero-actions-row">
+      <div class="hero-actions flex flex-col items-center gap-3">
+        <div class="flex gap-3 justify-center flex-wrap">
           <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
         </div>
-        <div class="hero-actions-row">
+        <div class="flex gap-3 justify-center flex-wrap">
           <a class="secondary" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
           <a class="secondary" href=${BLOG_URL} target="_blank">Demo</a>
         </div>
