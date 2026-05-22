@@ -22,7 +22,7 @@ export default async function Blog() {
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Blog</p>
         <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">Notes from building webjs</h1>
         <p class="text-fg-muted text-[15px] leading-relaxed max-w-[640px]">
-          Long-form posts on the design decisions, the trade-offs, the things that did not work, and what the framework looks like in production. Written as the project evolves, not after the fact.
+          Long-form posts on the design decisions, the trade-offs, the things that did not work, and what the framework looks like in production.
         </p>
       </header>
 
