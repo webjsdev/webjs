@@ -1,0 +1,36 @@
+{
+  "name": "wjs",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Short alias for the webjs CLI. `wjs <cmd>` = `webjs <cmd>`.",
+  "bin": {
+    "wjs": "bin/wjs.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "dependencies": {
+    "@webjsdev/cli": "^0.8.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webjsdev/webjs.git",
+    "directory": "packages/wjs"
+  },
+  "homepage": "https://github.com/webjsdev/webjs#readme",
+  "bugs": "https://github.com/webjsdev/webjs/issues",
+  "license": "MIT",
+  "keywords": [
+    "webjs",
+    "cli",
+    "alias",
+    "shorthand"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
