@@ -46,16 +46,18 @@ const card = new StudentCard();
 type _Student = Assert<Equal<typeof card.student, Student>>;
 
 /* ------------- Framework APIs are typed on `this` ------------- */
+// Signals are the default state primitive (since #43). setState / this.state
+// were removed from the public API; instance signals replace them.
+// requestUpdate() is still part of the public API for controllers and the
+// rare manual re-render trigger.
 
 class Counter extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
 
   bump() {
-    // All of these are typed via the .d.ts overlay.
-    this.setState({ foo: 'bar' });
+    // Typed via the .d.ts overlay.
     this.requestUpdate();
-    const _s: Record<string, unknown> = this.state;
     return html`<p>${this.count}</p>`;
   }
 }
