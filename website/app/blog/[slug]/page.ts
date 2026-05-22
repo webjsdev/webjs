@@ -56,7 +56,7 @@ export default async function BlogPost({ params }: { params: { slug: string } })
 
       <article class="mt-[16px]">${unsafeHTML(renderPostBody(post.body))}</article>
 
-      <footer class="mt-[72px] pt-[32px] border-t border-border">
+      <footer class="mt-[104px] pt-[36px] border-t border-border">
         <a href="/blog" class="font-mono text-[12px] text-fg-subtle no-underline hover:text-fg tracking-wide">← All posts</a>
       </footer>
     </main>
