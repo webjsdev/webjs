@@ -5,7 +5,7 @@ export const metadata = { title: 'Styling | webjs' };
 export default function Styling() {
   return html`
     <h1>Styling</h1>
-    <p>webjs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed isolation.</p>
+    <p>webjs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
 
     <h2>The default: light DOM + Tailwind</h2>
     <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>
@@ -48,24 +48,20 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <h2>Light-DOM components</h2>
     <p>Light DOM is the default for any <code>WebComponent</code>. Tailwind classes apply as they would on plain HTML:</p>
-    <pre>import { WebComponent, html } from '@webjsdev/core';
+    <pre>import { WebComponent, html, signal } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
   // static shadow = false is the default, no need to declare it.
-  static properties = { count: { type: Number } };
-  declare count: number;
-
-  constructor() {
-    super();
-    this.count = 0;
-  }
+  // Instance signal carries component-local state. SignalWatcher
+  // (built into WebComponent) auto-tracks .get() reads.
+  count = signal(0);
 
   render() {
     return html\`
       &lt;div class="inline-flex items-center gap-2 font-mono"&gt;
-        &lt;button class="px-3 py-1 rounded border border-border" @click=\${() =&gt; { this.count--; this.requestUpdate(); }}&gt;−&lt;/button&gt;
-        &lt;output class="min-w-[2ch] text-center"&gt;\${this.count}&lt;/output&gt;
-        &lt;button class="px-3 py-1 rounded border border-border" @click=\${() =&gt; { this.count++; this.requestUpdate(); }}&gt;+&lt;/button&gt;
+        &lt;button class="px-3 py-1 rounded border border-border" @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;−&lt;/button&gt;
+        &lt;output class="min-w-[2ch] text-center"&gt;\${this.count.get()}&lt;/output&gt;
+        &lt;button class="px-3 py-1 rounded border border-border" @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
       &lt;/div&gt;
     \`;
   }

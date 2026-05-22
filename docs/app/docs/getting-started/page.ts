@@ -93,24 +93,21 @@ export default function Home() {
 }</pre>
 
     <h3>components/counter.ts</h3>
-    <p>Components render into light DOM by default, so Tailwind utility classes apply directly. Set <code>static shadow = true</code> when you want scoped styles or <code>&lt;slot&gt;</code> projection.</p>
-    <pre>import { WebComponent, html } from '@webjsdev/core';
+    <p>Components render into light DOM by default, so Tailwind utility classes apply directly. Set <code>static shadow = true</code> when you want scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works in both modes.</p>
+    <pre>import { WebComponent, html, signal } from '@webjsdev/core';
 
 export class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
-  constructor() {
-    super();
-    this.count = 0;
-  }
+  // Instance signal carries component-local state. WebComponent's
+  // built-in SignalWatcher auto-tracks .get() reads in render()
+  // and re-renders on .set().
+  count = signal(0);
 
   render() {
     return html\`
       &lt;div class="inline-flex items-center gap-2 font-mono"&gt;
-        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; { this.count--; this.requestUpdate(); }}&gt;−&lt;/button&gt;
-        &lt;output class="min-w-[2ch] text-center"&gt;\${this.count}&lt;/output&gt;
-        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; { this.count++; this.requestUpdate(); }}&gt;+&lt;/button&gt;
+        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;−&lt;/button&gt;
+        &lt;output class="min-w-[2ch] text-center"&gt;\${this.count.get()}&lt;/output&gt;
+        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
       &lt;/div&gt;
     \`;
   }
@@ -118,7 +115,7 @@ export class Counter extends WebComponent {
 Counter.register('my-counter');</pre>
 
     <h3>Run it</h3>
-    <pre>webjs dev
+    <pre>npm run dev
 # → http://localhost:3000</pre>
 
     <p>That's it. No build step, no bundler config, no compilation. Edit any <code>.ts</code> file, refresh, and see it.</p>
