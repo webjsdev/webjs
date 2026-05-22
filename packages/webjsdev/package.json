@@ -1,12 +1,10 @@
 {
   "name": "webjsdev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
-  "description": "The webjs CLI, published unscoped. Installs the `webjs`, `wjs`, and `webjsdev` commands.",
+  "description": "The webjs CLI, published unscoped on npm. Unscoped alias for @webjsdev/cli. Installs the `webjs` command.",
   "bin": {
-    "webjsdev": "bin/webjsdev.js",
-    "webjs": "bin/webjsdev.js",
-    "wjs": "bin/webjsdev.js"
+    "webjs": "bin/webjsdev.js"
   },
   "files": [
     "bin",
@@ -30,7 +28,7 @@
     "webjs",
     "cli",
     "alias",
-    "shorthand"
+    "unscoped"
   ],
   "engines": {
     "node": ">=24.0.0"
