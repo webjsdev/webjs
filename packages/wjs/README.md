@@ -7,20 +7,16 @@ npx wjs create my-app
 cd my-app && npm run dev
 ```
 
-Or install globally to keep both `wjs` and `webjs` on PATH:
+Or install globally to keep both `wjs` and `webjs` always on PATH:
 
 ```sh
 npm i -g wjs
-# Both commands work, same script, same behavior:
-webjs dev       # canonical, matches docs / scaffold scripts / agent configs
-wjs dev         # short alias
-webjs check
+webjs dev                          # canonical, matches docs / scaffold scripts
+wjs dev                            # short alias, identical behavior
 wjs ui add button card dialog
 ```
 
-`npm i -g wjs` installs **two** symlinks: `wjs` (the short alias) and `webjs` (the canonical name the framework's docs and scaffold templates use). Both point at the same shim, which delegates to `@webjsdev/cli`'s entry script. So you can lean on the long-form `webjs <cmd>` to match the documentation, or `wjs <cmd>` to save three keystrokes, with no behavior difference.
-
-The full set of subcommands (`dev`, `start`, `create`, `test`, `check`, `db`, `ui`) is documented in [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli), which `wjs` depends on. The behaviour is identical, since `wjs` is a tiny re-export of the same entry script.
+The full set of subcommands (`dev`, `start`, `create`, `test`, `check`, `db`, `ui`) is documented in [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli), which `wjs` depends on. `wjs`'s entry script is a one-line re-export of `@webjsdev/cli/bin/webjs.js`, so the long-form `webjs <cmd>` and the short `wjs <cmd>` run the same script with no behavior drift.
 
 ## Why a separate package?
 
