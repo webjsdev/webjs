@@ -244,7 +244,7 @@ export default function LandingPage() {
         You get native web components, server actions, streaming SSR.
         Built on web standards. No bundler, no config, no magic.
       </p>
-      <div class="hero-actions flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:justify-center">
+      <div class="hero-actions flex flex-col-reverse items-center gap-3 md:flex-row md:flex-wrap md:justify-center">
         <div class="flex gap-3 justify-center flex-wrap md:contents">
           <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
         </div>
