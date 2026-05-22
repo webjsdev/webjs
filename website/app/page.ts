@@ -1,4 +1,5 @@
 import { html } from '@webjsdev/core';
+import '../components/copy-cmd.ts';
 
 export const metadata = {
   title: 'webjs: AI-first, web-components-first, no-build web framework',
@@ -124,6 +125,52 @@ export default function LandingPage() {
       }
       .install .comment { color: var(--fg-subtle); }
       .install .cmd { color: var(--fg); }
+      .install .install-gap { height: 0.6em; }
+      /* <copy-cmd> shows a hover-revealed copy button. The whole
+         component is the click target; the inner button is a visual
+         hint, hidden from the a11y tree. Class selectors are
+         tag-prefixed (invariant 7). cursor: copy gives the platform's
+         native "this click will copy" cursor (typically a small page
+         with a plus sign), which is semantically more accurate than
+         the generic pointer hand for a clickable. */
+      copy-cmd {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+        color: var(--fg);
+        cursor: copy;
+        outline: none;
+      }
+      copy-cmd .copy-cmd-text {
+        flex: 1;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      copy-cmd .copy-cmd-btn {
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--fg-muted);
+        cursor: copy;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+      }
+      copy-cmd:hover .copy-cmd-btn,
+      copy-cmd:focus-visible .copy-cmd-btn { opacity: 1; }
+      copy-cmd:hover .copy-cmd-btn { color: var(--fg); border-color: var(--fg-muted); }
+      copy-cmd:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 2px;
+      }
       /* On narrow viewports the box would stretch full-width and its
          left/right border + rounded corners would visibly clip the
          screen edges. Drop the side borders + radius so it reads as a
@@ -257,17 +304,17 @@ export default function LandingPage() {
     </section>
 
     <div class="install">
-      <span class="comment"># get started in one command, no global install</span><br>
-      <span class="cmd">npx create-webjs-app@latest my-app</span><br>
-      <br>
-      <span class="comment"># backend-only API</span><br>
-      <span class="cmd">npx create-webjs-app@latest my-api --template api</span><br>
-      <br>
-      <span class="comment"># SaaS starter (auth + dashboard + Prisma)</span><br>
-      <span class="cmd">npx create-webjs-app@latest my-saas --template saas</span><br>
-      <br>
-      <span class="comment"># or install the CLI globally for repeated use (gives you both wjs and webjs commands)</span><br>
-      <span class="cmd">npm i -g wjs && webjs create my-app</span>
+      <div class="comment"># get started in one command, no global install</div>
+      <copy-cmd>npx create-webjs-app@latest my-app</copy-cmd>
+      <div class="install-gap"></div>
+      <div class="comment"># backend-only API</div>
+      <copy-cmd>npx create-webjs-app@latest my-api --template api</copy-cmd>
+      <div class="install-gap"></div>
+      <div class="comment"># SaaS starter (auth + dashboard + Prisma)</div>
+      <copy-cmd>npx create-webjs-app@latest my-saas --template saas</copy-cmd>
+      <div class="install-gap"></div>
+      <div class="comment"># or install the CLI globally for repeated use (gives you both wjs and webjs commands)</div>
+      <copy-cmd>npm i -g wjs && webjs create my-app</copy-cmd>
     </div>
 
     <div class="features">
