@@ -53,12 +53,14 @@ If `Card` were a shadow-DOM component, every one of those classes would silently
 
 With light DOM as the default, the same components that get composed into pages share the same styling story as the rest of the app. There is no "the page uses Tailwind but the components do not" cognitive split.
 
+A note before going further: **webjs does not require Tailwind.** The scaffold defaults to Tailwind because it pairs well with the rest of the stack, but the framework itself is agnostic about how you write CSS. Vanilla stylesheets, CSS modules, BEM, plain hand-written CSS, a different utility framework, any of them work. The benefit in this section is general: any external CSS strategy you bring cascades into light-DOM components without escape hatches. Tailwind is the concrete example throughout this post because it is the scaffold default and the most-used styling story in webjs apps. The argument is about light DOM, not about Tailwind specifically.
+
 
 ## 2. CSS stays cache-friendly
 
 The shadow DOM cost that gets undercounted is the wire-bytes cost of `static styles = css\`...\``. Every shadow-DOM component carries its own stylesheet inline. If you have a `<my-button>` rendered fifty times on a page, the styles for it are still _one_ instance in memory (browsers dedupe identical adopted stylesheets), but the SERVER-RENDERED HTML for that page has the stylesheet serialized into the page's first response either inside the Declarative Shadow Root or as a hot path that needs the CSS to reach the client before the component upgrades.
 
-With light DOM, the styles live in one external `tailwind.css` that the browser caches once and reuses forever. New page navigations get the HTML, not the CSS. With shadow-DOM components, the inline styles ship per page.
+With light DOM, the styles live in one external stylesheet (the scaffold's `tailwind.css`, or your own `app.css`, or whatever you write) that the browser caches once and reuses forever. New page navigations get the HTML, not the CSS. With shadow-DOM components, the inline styles ship per page.
 
 For most apps this is a few KB. For component-heavy pages it adds up. The cache-friendly default is to put styles in one external stylesheet and let HTTP caching do its job.
 
@@ -108,9 +110,9 @@ The argument for shadow DOM is usually scoping: your component's styles will not
 
 For most application code, this is not the problem you have. You control the page. You control the components. Your CSS is intentional. The "leakage" risk is mostly a thought experiment.
 
-Tailwind sidesteps the scoping question entirely: utility classes are atomic, intentional, and unique by construction. There is nothing to leak. If you author components with Tailwind utilities, scoping is a non-issue.
+Tailwind sidesteps the scoping question entirely: utility classes are atomic, intentional, and unique by construction. There is nothing to leak. If you author components with Tailwind utilities, scoping is a non-issue. The same applies to other naming-discipline approaches like BEM or scoped class prefixes; the framework's `webjs check` ships a `light-dom-css-prefix` rule that flags unprefixed class selectors in vanilla CSS for light-DOM components, so the linter helps you keep selectors uniquely scoped if you choose that route.
 
-webjs's recommendation: use Tailwind utilities in light DOM by default. If a specific component needs strict isolation (third-party embed, design-system component meant to drop into hostile pages), opt into shadow DOM for that one component:
+webjs's recommendation: use Tailwind (or your chosen styling story) in light DOM by default. If a specific component needs strict isolation (third-party embed, design-system component meant to drop into hostile pages), opt into shadow DOM for that one component:
 
 ```ts
 class IsolatedWidget extends WebComponent {
@@ -163,15 +165,15 @@ For the rest, light DOM is the default and the recommendation.
 
 Light DOM as default trades style isolation for everything else:
 
-- Tailwind utility classes apply without escape hatches.
-- The Tailwind stylesheet is cached once by the browser, not inlined per-component.
+- External CSS applies without escape hatches: Tailwind utilities, vanilla stylesheets, CSS modules, BEM, whatever you bring.
+- That external stylesheet is cached once by the browser, not inlined per-component.
 - `document.querySelector`, `closest`, and friends work without shadow-piercing.
 - Accessibility (`aria-labelledby`, form association) works the way the spec assumes.
 - Playwright / Puppeteer / Web Test Runner selectors work without pierce-prefixes.
 - Search engines and crawlers see the content in the initial HTML response, with no DSD reassembly needed.
 
-The cost is style scoping, which is usually not a problem in app code and is fully addressable for the cases where it is (Tailwind utilities, shadow opt-in for isolated widgets).
+The cost is style scoping, which is usually not a problem in app code and is fully addressable for the cases where it is (Tailwind utilities by construction, BEM or class-prefix discipline for vanilla CSS, shadow opt-in for isolated widgets).
 
-The shape webjs settled on: light DOM with Tailwind by default, shadow DOM as an opt-in for the specific cases that need it. Same `<slot>` semantics in both. The agent writes one style of component and the framework picks the right rendering mode based on the `static shadow` flag.
+The shape webjs settled on: light DOM by default, with Tailwind as the scaffold default but no framework-level requirement to use it. Shadow DOM is an opt-in for the specific cases that need it. Same `<slot>` semantics in both. The agent writes one style of component and the framework picks the right rendering mode based on the `static shadow` flag.
 
 That is the everyday case for app code. The framework handles the rest.
