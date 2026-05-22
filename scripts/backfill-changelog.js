@@ -27,7 +27,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'changelog');
 
+// Only the framework packages get changelog entries. The unscoped
+// wrappers `create-webjs` and `webjsdev` exist as version-lockstep
+// mirrors of `@webjsdev/cli`, so their per-release notes would be
+// "bump to match cli@X.Y.Z" every single time, which is noise on
+// the rendered /changelog page. The release workflow auto-bumps and
+// auto-publishes them without writing changelog files.
 const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui'];
+
+// Some packages publish under an unscoped npm name; for those the
+// frontmatter's `package` field is the bare name. (None of the
+// PACKAGES above are unscoped today; this set is reserved for any
+// future framework-side unscoped package the changelog would
+// render.)
+const UNSCOPED = new Set();
+
+/** @param {string} pkg short dir name */
+function npmName(pkg) {
+  return UNSCOPED.has(pkg) ? pkg : `@webjsdev/${pkg}`;
+}
 
 function git(args, opts = {}) {
   const r = spawnSync('git', args, {
@@ -174,7 +192,7 @@ function renderEntry(pkg, version, date, commits) {
   // duplicates one or the other on every surface.
   const fm = [
     '---',
-    `package: "@webjsdev/${pkg}"`,
+    `package: "${npmName(pkg)}"`,
     `version: ${version}`,
     `date: ${date}`,
     `commit_count: ${commits.length}`,
@@ -208,7 +226,7 @@ let skippedEmpty = 0;
 for (const pkg of PACKAGES) {
   const versions = versionTimeline(pkg);
   if (!versions.length) {
-    console.log(`[backfill-changelog] @webjsdev/${pkg}: no version bumps in history; skipping`);
+    console.log(`[backfill-changelog] ${npmName(pkg)}: no version bumps in history; skipping`);
     continue;
   }
   const dir = resolve(OUT, pkg);
@@ -232,6 +250,6 @@ for (const pkg of PACKAGES) {
     total++;
     prevSha = v.sha;
   }
-  console.log(`[backfill-changelog] @webjsdev/${pkg}: ${versions.length} versions`);
+  console.log(`[backfill-changelog] ${npmName(pkg)}: ${versions.length} versions`);
 }
 console.log(`[backfill-changelog] new files: ${total}, skipped (empty): ${skippedEmpty}`);

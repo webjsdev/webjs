@@ -49,19 +49,21 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > Full framework docs (every API, every recipe): **https://docs.webjs.com**.
 
 ```sh
-# install once
-npm i -g @webjsdev/cli
-
-# scaffold a new app
-webjs create my-app                  # full-stack (pages + API + components + Prisma/SQLite)
-cd my-app && npm install && npm run dev
+# Get started in one command (no global install required)
+npm create webjs@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
+cd my-app && npm run dev
 # → http://localhost:3000
 
-# or backend-only API
-webjs create my-api --template api
+# Backend-only API
+npm create webjs@latest my-api  -- --template api
 
-# or SaaS starter (auth + dashboard + Prisma)
-webjs create my-app --template saas
+# SaaS starter (auth + dashboard + Prisma)
+npm create webjs@latest my-saas -- --template saas
+
+# Or with the CLI installed globally for repeated use.
+# `webjsdev` is the unscoped npm name for @webjsdev/cli; both install the `webjs` command.
+npm i -g webjsdev && webjs create my-app
+cd my-app && npm run dev
 
 # or run everything in the monorepo (website + docs + blog together)
 git clone https://github.com/webjsdev/webjs
@@ -82,14 +84,22 @@ cd website        && npm run dev     # just the website
 
 ```
 packages/
-  core/       # webjs: html, css, WebComponent, renderers, client router
-  server/     # @webjsdev/server: dev/prod server, router, SSR, actions, WS
-  cli/        # @webjsdev/cli: webjs dev/start/build/db
+  # Framework (the things webjs ships at runtime)
+  core/             # @webjsdev/core: html, css, WebComponent, renderers, client router
+  server/           # @webjsdev/server: dev/prod server, router, SSR, actions, WS
+  cli/              # @webjsdev/cli: webjs dev/start/create/db/test/check/ui
+  ts-plugin/        # @webjsdev/ts-plugin: editor intelligence (ts-lit-plugin + webjs-aware bits)
+  ui/               # @webjsdev/ui: AI-first component library + CLI
+
+  # Scaffold entry points (peer wrappers around @webjsdev/cli)
+  create-webjs/ # `npx create-webjs@latest my-app` (mirrors create-next-app)
+  webjsdev/         # unscoped npm name for @webjsdev/cli (so `npm i -g webjsdev` works without a scope)
 examples/
-  blog/       # full-featured reference app (auth, posts, comments, chat)
-docs/         # documentation site (built on webjs itself)
-AGENTS.md     # AI-agent contract for the framework
-CLAUDE.md     # Claude Code quick-reference
+  blog/             # full-featured reference app (auth, posts, comments, chat)
+docs/               # documentation site (built on webjs itself)
+website/            # landing site (built on webjs itself)
+AGENTS.md           # AI-agent contract for the framework
+CLAUDE.md           # Claude Code quick-reference
 ```
 
 ## Example

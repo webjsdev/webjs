@@ -1,20 +1,17 @@
 {
-  "name": "@webjsdev/cli",
-  "version": "0.8.5",
+  "name": "create-webjs",
+  "version": "0.1.0",
   "type": "module",
-  "description": "webjs CLI - dev, start, create, db",
+  "description": "Scaffold a new webjs app. `npm create webjs@latest my-app`.",
   "bin": {
-    "webjs": "bin/webjs.js"
+    "create-webjs": "bin/create-webjs.js"
   },
   "files": [
     "bin",
-    "lib",
-    "templates",
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/server": "^0.7.2",
-    "@webjsdev/ui": "^0.3.1"
+    "@webjsdev/cli": "^0.8.4"
   },
   "publishConfig": {
     "access": "public"
@@ -22,16 +19,17 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/cli"
+    "directory": "packages/create-webjs"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",
   "license": "MIT",
   "keywords": [
     "webjs",
-    "cli",
-    "dev",
-    "scaffold"
+    "create",
+    "scaffold",
+    "starter",
+    "framework"
   ],
   "engines": {
     "node": ">=24.0.0"

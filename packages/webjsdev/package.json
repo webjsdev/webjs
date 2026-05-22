@@ -1,20 +1,17 @@
 {
-  "name": "@webjsdev/cli",
-  "version": "0.8.5",
+  "name": "webjsdev",
+  "version": "0.1.1",
   "type": "module",
-  "description": "webjs CLI - dev, start, create, db",
+  "description": "The webjs CLI, published unscoped on npm. Unscoped alias for @webjsdev/cli. Installs the `webjs` command.",
   "bin": {
-    "webjs": "bin/webjs.js"
+    "webjs": "bin/webjsdev.js"
   },
   "files": [
     "bin",
-    "lib",
-    "templates",
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/server": "^0.7.2",
-    "@webjsdev/ui": "^0.3.1"
+    "@webjsdev/cli": "^0.8.2"
   },
   "publishConfig": {
     "access": "public"
@@ -22,7 +19,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/cli"
+    "directory": "packages/webjsdev"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",
@@ -30,8 +27,8 @@
   "keywords": [
     "webjs",
     "cli",
-    "dev",
-    "scaffold"
+    "alias",
+    "unscoped"
   ],
   "engines": {
     "node": ">=24.0.0"

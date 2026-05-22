@@ -108,7 +108,7 @@ Convention-rule tests live in
 ship from `@webjsdev/server`).
 
 End-to-end testing of the actual scaffold output is currently
-manual (`webjs create demo && cd demo && npm i && webjs dev`).
+manual (`webjs create demo && cd demo && webjs dev`, since `webjs create` auto-installs).
 See [`../../agent-docs/testing.md`](../../agent-docs/testing.md)
 for the overall layout.
 

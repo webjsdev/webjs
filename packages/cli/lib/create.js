@@ -15,6 +15,37 @@ import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+
+/**
+ * Detect which package manager invoked us. Reads `npm_config_user_agent`,
+ * which npm / pnpm / yarn / bun all set when running scripts or `npx`.
+ * Falls back to `npm` when nothing is detected (matches what most users
+ * actually have installed).
+ *
+ * @returns {'npm'|'pnpm'|'yarn'|'bun'}
+ */
+function detectPackageManager() {
+  const ua = process.env.npm_config_user_agent || '';
+  if (ua.startsWith('pnpm/')) return 'pnpm';
+  if (ua.startsWith('yarn/')) return 'yarn';
+  if (ua.startsWith('bun/')) return 'bun';
+  return 'npm';
+}
+
+/**
+ * Run `<pm> install` inside the scaffolded app. Returns true on success.
+ * Inherits stdio so the user sees the install progress live. Caller decides
+ * whether to call this (skipped when --no-install).
+ *
+ * @param {string} appDir absolute path to the new app
+ * @param {'npm'|'pnpm'|'yarn'|'bun'} pm
+ * @returns {boolean}
+ */
+function runInstall(appDir, pm) {
+  const r = spawnSync(pm, ['install'], { cwd: appDir, stdio: 'inherit' });
+  return r.status === 0;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = resolve(__dirname, '..', 'templates');
@@ -142,6 +173,11 @@ async function readThemeCss() {
  */
 export async function scaffoldApp(name, cwd, opts = {}) {
   const template = opts.template || 'full-stack';
+  // `install` is opt-in at the library level (so tests + programmatic
+  // callers get a side-effect-free scaffold by default). The CLI entry
+  // points (`webjs create` and `npx create-webjs-app`) explicitly set
+  // `install: true` unless the user passes `--no-install`.
+  const shouldInstall = opts.install === true;
   // Defence in depth. The CLI already validates this, but library
   // callers (tests, programmatic use) might pass anything.
   const VALID_TEMPLATES = ['full-stack', 'api', 'saas'];
@@ -855,22 +891,11 @@ ThemeToggle.register('theme-toggle');
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
-  // Post-scaffold guidance. The full-stack and saas templates ship with
-  // @webjsdev/ui already initialised (components.json, lib/utils/cn.ts, the
-  // standard kit under components/ui/), so the user only runs `webjs dev`.
-  // The api template has no UI; we only mention `webjs ui` in case the
-  // user later adds one.
-  const uiNote = isApi
-    ? `# If you later add a UI to this API project:
-  #   webjs ui init && webjs ui add button card dialog`
-    : `webjs ui add <name>     # optional: add more ui-* components later`;
-  console.log(`Next steps:
-  cd ${name}
-  npm install${isSaas ? '\n  npx prisma migrate dev --name init' : ''}
-  ${uiNote}
-  webjs dev
-
-AI-driven development (enforced for all AI agents):
+  // AI-agent guidance comes first so it scrolls past in the terminal
+  // (long reading material, not actionable). The actionable run
+  // command lands LAST in the output so it is the final thing on
+  // screen after the install completes.
+  console.log(`AI-driven development (enforced for all AI agents):
   ✓ Tests auto-generated with every feature
   ✓ Docs auto-updated with every change
   ✓ Git merges/pushes to main require approval
@@ -894,5 +919,50 @@ For AI agents, read this before editing scaffolded files:
     any code. They are the contract.
   • Need more detail? Full hosted docs are at https://docs.webjs.com
     (every API, directive, recipe, and deployment guide).
+`);
+
+  // Auto-install (default). Detect the package manager from the env so
+  // pnpm / yarn / bun users get their own. Pass `--no-install` (or
+  // `{ install: false }` to scaffoldApp) to opt out, e.g. for CI tests
+  // that exercise the scaffold without paying the install cost.
+  const pm = detectPackageManager();
+  let installed = false;
+  if (shouldInstall) {
+    console.log(`Running '${pm} install' in ${name}/ ...\n`);
+    installed = runInstall(appDir, pm);
+    if (!installed) {
+      console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
+    }
+  }
+
+  // Next-steps banner prints LAST so the actionable command is the
+  // final thing on screen, never buried above the AI-agent guidance.
+  // Single copy-paste line so the user can move from "scaffold done"
+  // to "dev server up" in one command. The full-stack and saas
+  // templates ship with @webjsdev/ui already initialised; the api
+  // template has no UI but may add one later. Saas needs a one-time
+  // prisma migrate before the first run (the example User model wants
+  // its table to exist).
+  const installSegment = installed ? '' : `${pm} install && `;
+  const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
+  const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
+  // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
+  // `webjs` npm name is owned by an unrelated package; `npx webjs
+  // <cmd>` would fetch THAT package instead of ours when run outside
+  // a project context. `webjsdev` is our unscoped CLI alias; npx's
+  // single-bin fallback resolves it to the `webjs` binary, so behaviour
+  // matches `@webjsdev/cli` exactly while keeping the command short
+  // and unambiguous.
+  const uiNote = isApi
+    ? `# If you later add a UI to this API project:
+  #   npx webjsdev ui init && npx webjsdev ui add button card dialog`
+    : `npx webjsdev ui add <name>     # add more ui-* components later`;
+  console.log(`
+Next steps:
+  ${runCommand}
+  # → http://localhost:3000
+
+Optional:
+  ${uiNote}
 `);
 }

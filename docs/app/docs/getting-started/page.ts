@@ -19,7 +19,7 @@ npm i -g @webjsdev/cli
 
 # scaffold a new app
 webjs create my-app
-cd my-app && npm install && npm run dev
+cd my-app && npm run dev
 # → http://localhost:3000</pre>
 
     <p>Every scaffold ships with Prisma + SQLite wired up (<code>prisma/schema.prisma</code> with an example <code>User</code> model and <code>lib/prisma.server.ts</code> singleton). Run <code>npm run db:migrate</code> the first time to create <code>prisma/dev.db</code>.</p>

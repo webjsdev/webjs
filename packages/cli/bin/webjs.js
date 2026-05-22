@@ -16,8 +16,10 @@ const USAGE = `webjs commands:
   webjs start [--port 3000]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
-  webjs create <name> [--template full-stack|api|saas]  Scaffold a new webjs app
+  webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
+                                                  Auto-runs the detected package manager's install in the new dir
+                                                  unless --no-install is passed.
   webjs db generate                               Run \`prisma generate\`
   webjs db migrate [name]                         Run \`prisma migrate dev\`
   webjs db studio                                 Run \`prisma studio\`
@@ -259,8 +261,9 @@ files.
 Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
+      const noInstall = rest.includes('--no-install');
       const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template });
+      await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
       break;
     }
     case 'help':

@@ -1,4 +1,5 @@
 import { html } from '@webjsdev/core';
+import '../components/copy-cmd.ts';
 
 export const metadata = {
   title: 'webjs: AI-first, web-components-first, no-build web framework',
@@ -257,19 +258,17 @@ export default function LandingPage() {
     </section>
 
     <div class="install">
-      <span class="comment"># install once</span><br>
-      <span class="cmd">npm i -g @webjsdev/cli</span><br>
-      <br>
-      <span class="comment"># scaffold a new app</span><br>
-      <span class="cmd">webjs create my-app</span><br>
-      <span class="cmd">cd my-app && npm install && npm run dev</span><br>
-      <span class="comment"># → http://localhost:3000</span><br>
-      <br>
-      <span class="comment"># or backend-only API</span><br>
-      <span class="cmd">webjs create my-api --template api</span><br>
-      <br>
-      <span class="comment"># or SaaS starter (auth + dashboard + Prisma)</span><br>
-      <span class="cmd">webjs create my-app --template saas</span>
+      <div class="comment"># get started in one command, no global install</div>
+      <copy-cmd>npm create webjs@latest my-app</copy-cmd>
+      <div class="h-3"></div>
+      <div class="comment"># backend-only API</div>
+      <copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd>
+      <div class="h-3"></div>
+      <div class="comment"># SaaS starter (auth + dashboard + Prisma)</div>
+      <copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd>
+      <div class="h-3"></div>
+      <div class="comment"># or install the CLI globally for repeated use</div>
+      <copy-cmd>npm i -g webjsdev && webjs create my-app</copy-cmd>
     </div>
 
     <div class="features">
