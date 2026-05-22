@@ -167,7 +167,7 @@ npm run start --port 8080                          # JSON logs, gzip/brotli, ETa
 The production server speaks plain HTTP/1.1. The expected production topology
 is a reverse proxy in front that terminates TLS and speaks HTTP/2 to
 the browser. **PaaS edges already do this for free.** Railway, Fly,
-Render, Vercel, Cloudflare Pages, Netlify, and Heroku all serve HTTP/2
+Render, Vercel, Cloudflare Pages, and Heroku all serve HTTP/2
 to clients while proxying HTTP/1.1 to your container. For bare-VM or
 self-hosted deploys, put nginx, Caddy, or Traefik in front. HTTP/2 at
 the edge matters because webjs's per-file ESM model benefits from
