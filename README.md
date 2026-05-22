@@ -61,7 +61,7 @@ npx create-webjs-app@latest my-api --template api
 npx create-webjs-app@latest my-saas --template saas
 
 # Or with the CLI installed globally for repeated use
-npm i -g @webjsdev/cli && webjs create my-app
+npm i -g wjs && wjs create my-app
 cd my-app && npm run dev
 
 # or run everything in the monorepo (website + docs + blog together)
