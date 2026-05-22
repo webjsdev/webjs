@@ -181,7 +181,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
 
     <pre>npm i -g @webjsdev/cli
 webjs create my-app
-cd my-app && npm install && npm run dev</pre>
+cd my-app && npm run dev</pre>
 
     <p>This generates:</p>
     <ul>

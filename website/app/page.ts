@@ -262,7 +262,7 @@ export default function LandingPage() {
       <br>
       <span class="comment"># scaffold a new app</span><br>
       <span class="cmd">webjs create my-app</span><br>
-      <span class="cmd">cd my-app && npm install && npm run dev</span><br>
+      <span class="cmd">cd my-app && npm run dev</span><br>
       <span class="comment"># → http://localhost:3000</span><br>
       <br>
       <span class="comment"># or backend-only API</span><br>

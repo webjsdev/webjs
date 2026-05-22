@@ -17,16 +17,23 @@ Then scaffold a new app anywhere:
 
 ```sh
 webjs create my-app
-cd my-app && npm install && npm run dev
+cd my-app && npm run dev
 # → http://localhost:3000
 ```
 
-One-shot without global install:
+One-shot without a global install, two ways:
 
 ```sh
+# Preferred: the npx-discoverable scaffolder
+npx create-webjs-app@latest my-app
+cd my-app && npm run dev
+
+# Or via the CLI's npx entry directly
 npx @webjsdev/cli create my-app
-cd my-app && npm install && npm run dev
+cd my-app && npm run dev
 ```
+
+Both `webjs create` and `create-webjs-app` auto-install dependencies in the new directory using your detected package manager (npm / pnpm / yarn / bun). Pass `--no-install` to opt out.
 
 ## Commands
 

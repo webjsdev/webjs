@@ -53,8 +53,8 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 npm i -g @webjsdev/cli
 
 # scaffold a new app
-webjs create my-app                  # full-stack (pages + API + components + Prisma/SQLite)
-cd my-app && npm install && npm run dev
+webjs create my-app                  # full-stack (pages + API + components + Prisma/SQLite). Auto-installs deps.
+cd my-app && npm run dev
 # → http://localhost:3000
 
 # or backend-only API
