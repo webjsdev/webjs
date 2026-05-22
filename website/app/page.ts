@@ -257,19 +257,19 @@ export default function LandingPage() {
     </section>
 
     <div class="install">
-      <span class="comment"># install once</span><br>
-      <span class="cmd">npm i -g @webjsdev/cli</span><br>
-      <br>
-      <span class="comment"># scaffold a new app</span><br>
-      <span class="cmd">webjs create my-app</span><br>
+      <span class="comment"># get started in one command, no global install</span><br>
+      <span class="cmd">npx create-webjs-app@latest my-app</span><br>
       <span class="cmd">cd my-app && npm run dev</span><br>
       <span class="comment"># → http://localhost:3000</span><br>
       <br>
-      <span class="comment"># or backend-only API</span><br>
-      <span class="cmd">webjs create my-api --template api</span><br>
+      <span class="comment"># backend-only API</span><br>
+      <span class="cmd">npx create-webjs-app@latest my-api --template api</span><br>
       <br>
-      <span class="comment"># or SaaS starter (auth + dashboard + Prisma)</span><br>
-      <span class="cmd">webjs create my-app --template saas</span>
+      <span class="comment"># SaaS starter (auth + dashboard + Prisma)</span><br>
+      <span class="cmd">npx create-webjs-app@latest my-saas --template saas</span><br>
+      <br>
+      <span class="comment"># or install the CLI globally for repeated use</span><br>
+      <span class="cmd">npm i -g @webjsdev/cli && webjs create my-app</span>
     </div>
 
     <div class="features">

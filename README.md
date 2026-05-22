@@ -49,19 +49,20 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > Full framework docs (every API, every recipe): **https://docs.webjs.com**.
 
 ```sh
-# install once
-npm i -g @webjsdev/cli
-
-# scaffold a new app
-webjs create my-app                  # full-stack (pages + API + components + Prisma/SQLite). Auto-installs deps.
+# Get started in one command (no global install required)
+npx create-webjs-app@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
 cd my-app && npm run dev
 # → http://localhost:3000
 
-# or backend-only API
-webjs create my-api --template api
+# Backend-only API
+npx create-webjs-app@latest my-api --template api
 
-# or SaaS starter (auth + dashboard + Prisma)
-webjs create my-app --template saas
+# SaaS starter (auth + dashboard + Prisma)
+npx create-webjs-app@latest my-saas --template saas
+
+# Or with the CLI installed globally for repeated use
+npm i -g @webjsdev/cli && webjs create my-app
+cd my-app && npm run dev
 
 # or run everything in the monorepo (website + docs + blog together)
 git clone https://github.com/webjsdev/webjs
