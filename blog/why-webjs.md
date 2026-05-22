@@ -1,5 +1,5 @@
 ---
-title: "Introducing webjs: a small full-stack framework for the AI era"
+title: "Introducing webjs: a full-stack framework for the AI era"
 date: 2025-12-15T10:00:00+05:30
 slug: why-webjs
 description: "Why I built webjs: an AI-first, web-components-first, no-build full-stack framework designed for AI agents to comprehend end-to-end. The case for staying close to web standards."
