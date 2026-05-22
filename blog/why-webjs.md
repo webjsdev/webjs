@@ -2,12 +2,12 @@
 title: "I built a tiny (in size, not in power) full-stack framework for the AI era. I call it webjs"
 date: 2025-12-15T10:00:00+05:30
 slug: why-webjs
-description: "Why I started webjs: an AI-first, web-components-first, no-build full-stack framework designed for AI agents to comprehend end-to-end. The case for staying close to web standards."
+description: "Why I built webjs: an AI-first, web-components-first, no-build full-stack framework designed for AI agents to comprehend end-to-end. The case for staying close to web standards."
 tags: webjs, origin, frameworks, ai-first, web-components
 author: Vivek
 ---
 
-I did not want to start another framework.
+I did not want to build another framework.
 
 I had Next.js running production work. Rails on the older stuff. SvelteKit on a side project that ended up needing one anyway. Each tool had matured into something I could ship with, and starting over felt like work for the sake of work.
 
