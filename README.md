@@ -93,7 +93,7 @@ packages/
 
   # Scaffold entry points (peer wrappers around @webjsdev/cli)
   create-webjs-app/ # `npx create-webjs-app@latest my-app` (mirrors create-next-app)
-  wjs/              # `wjs <cmd>` short alias for the @webjsdev/cli `webjs` binary
+  webjsdev/         # unscoped npm name for @webjsdev/cli (so `npm i -g webjsdev` works without a scope)
 examples/
   blog/             # full-featured reference app (auth, posts, comments, chat)
 docs/               # documentation site (built on webjs itself)
