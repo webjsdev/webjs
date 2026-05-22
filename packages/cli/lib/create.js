@@ -891,41 +891,11 @@ ThemeToggle.register('theme-toggle');
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
-  // Auto-install (default). Detect the package manager from the env so
-  // pnpm / yarn / bun users get their own. Pass `--no-install` (or
-  // `{ install: false }` to scaffoldApp) to opt out, e.g. for CI tests
-  // that exercise the scaffold without paying the install cost.
-  const pm = detectPackageManager();
-  let installed = false;
-  if (shouldInstall) {
-    console.log(`\nRunning '${pm} install' in ${name}/ ...\n`);
-    installed = runInstall(appDir, pm);
-    if (!installed) {
-      console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
-    }
-  }
-
-  // Post-scaffold guidance. Lead with a single copy-paste line so the
-  // user can move from "scaffold done" to "dev server up" in one
-  // command. The full-stack and saas templates ship with @webjsdev/ui
-  // already initialised; the api template has no UI but may add one
-  // later. Saas needs a one-time prisma migrate before the first run
-  // (the example User model wants its table to exist).
-  const installSegment = installed ? '' : `${pm} install && `;
-  const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
-  const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
-  const uiNote = isApi
-    ? `# If you later add a UI to this API project:
-  #   npx webjs ui init && npx webjs ui add button card dialog`
-    : `npx webjs ui add <name>     # add more ui-* components later`;
-  console.log(`Next steps:
-  ${runCommand}
-  # → http://localhost:3000
-
-Optional:
-  ${uiNote}
-
-AI-driven development (enforced for all AI agents):
+  // AI-agent guidance comes first so it scrolls past in the terminal
+  // (long reading material, not actionable). The actionable run
+  // command lands LAST in the output so it is the final thing on
+  // screen after the install completes.
+  console.log(`AI-driven development (enforced for all AI agents):
   ✓ Tests auto-generated with every feature
   ✓ Docs auto-updated with every change
   ✓ Git merges/pushes to main require approval
@@ -949,5 +919,43 @@ For AI agents, read this before editing scaffolded files:
     any code. They are the contract.
   • Need more detail? Full hosted docs are at https://docs.webjs.com
     (every API, directive, recipe, and deployment guide).
+`);
+
+  // Auto-install (default). Detect the package manager from the env so
+  // pnpm / yarn / bun users get their own. Pass `--no-install` (or
+  // `{ install: false }` to scaffoldApp) to opt out, e.g. for CI tests
+  // that exercise the scaffold without paying the install cost.
+  const pm = detectPackageManager();
+  let installed = false;
+  if (shouldInstall) {
+    console.log(`Running '${pm} install' in ${name}/ ...\n`);
+    installed = runInstall(appDir, pm);
+    if (!installed) {
+      console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
+    }
+  }
+
+  // Next-steps banner prints LAST so the actionable command is the
+  // final thing on screen, never buried above the AI-agent guidance.
+  // Single copy-paste line so the user can move from "scaffold done"
+  // to "dev server up" in one command. The full-stack and saas
+  // templates ship with @webjsdev/ui already initialised; the api
+  // template has no UI but may add one later. Saas needs a one-time
+  // prisma migrate before the first run (the example User model wants
+  // its table to exist).
+  const installSegment = installed ? '' : `${pm} install && `;
+  const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
+  const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
+  const uiNote = isApi
+    ? `# If you later add a UI to this API project:
+  #   npx webjs ui init && npx webjs ui add button card dialog`
+    : `npx webjs ui add <name>     # add more ui-* components later`;
+  console.log(`
+Next steps:
+  ${runCommand}
+  # → http://localhost:3000
+
+Optional:
+  ${uiNote}
 `);
 }
