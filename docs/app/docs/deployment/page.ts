@@ -8,12 +8,12 @@ export default function Deployment() {
     <p>webjs runs as a standard Node.js server. There is no static export, no serverless adapter, no edge runtime. Deploy it anywhere you can run Node 24+ (the minimum is set by Node's built-in TypeScript type-stripping): a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal.</p>
 
     <h2>Dev vs Prod</h2>
-    <p>webjs has two modes, controlled by the CLI command:</p>
+    <p>webjs has two modes, controlled by the npm script (which wraps the underlying <code>webjs dev</code> / <code>webjs start</code> CLI):</p>
     <pre># Development: live reload, no compression, no caching, verbose errors
-webjs dev [--port 3000]
+npm run dev -- --port 3000
 
 # Production: compression, ETags, cache headers, graceful shutdown
-webjs start [--port 3000]</pre>
+npm run start -- --port 3000</pre>
     <p>Key differences:</p>
     <ul>
       <li><strong>Dev:</strong> chokidar watches your source tree and triggers live reload via SSE. TypeScript files are served with <code>Cache-Control: no-cache</code>. Errors include full stack traces. No compression.</li>
@@ -23,9 +23,9 @@ webjs start [--port 3000]</pre>
     <h2>No build step</h2>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
       <p style="margin:0 0 .5rem;font-weight:600">Recommended for production: HTTP/2 at the edge</p>
-      <p style="margin:0">webjs's per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM deploys, put nginx, Caddy, or Traefik in front to do the same job. <code>webjs start</code> itself only speaks plain HTTP/1.1, so TLS termination is the proxy's responsibility, not the framework's.</p>
+      <p style="margin:0">webjs's per-file-ESM model rides HTTP/2 multiplex to be competitive with bundling. <strong>PaaS edges already serve HTTP/2 for free.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, and Heroku all terminate TLS + HTTP/2 at the edge and proxy plain HTTP/1.1 to your container. For bare-VM deploys, put nginx, Caddy, or Traefik in front to do the same job. The production server (<code>npm run start</code>) only speaks plain HTTP/1.1, so TLS termination is the proxy's responsibility, not the framework's.</p>
     </div>
-    <p>The same <code>.js</code> / <code>.ts</code> source files that ran in <code>webjs dev</code> run in <code>webjs start</code>. There is no compile, bundle, or "prepare for production" phase. Production performance comes from HTTP/2 multiplex plus SSR-time <code>modulepreload</code> hints, not concatenation.</p>
+    <p>The same <code>.js</code> / <code>.ts</code> source files that ran in <code>npm run dev</code> run in <code>npm run start</code>. There is no compile, bundle, or "prepare for production" phase. Production performance comes from HTTP/2 multiplex plus SSR-time <code>modulepreload</code> hints, not concatenation.</p>
     <p>The full mechanism (importmap, module graph, vendor bundling, 103 Early Hints, granular cache invalidation) lives in <a href="/docs/no-build">No-Build Model</a>. This page covers the deployment-side concerns.</p>
 
     <h2>Production Features</h2>
@@ -66,9 +66,9 @@ readinessProbe:
   periodSeconds: 5</pre>
 
     <h2>HTTP/2: at the edge, not in webjs</h2>
-    <p>webjs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>webjs start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
+    <p>webjs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>npm run start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
     <ul>
-      <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration: you get HTTP/2 to the browser the moment you deploy.</li>
+      <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration: you get HTTP/2 to the browser the moment you deploy.</li>
       <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination. They handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
     </ul>
     <p>Multiplexed streams and header compression (HPACK) are what make per-file ESM competitive with bundling. <a href="/docs/no-build">No-Build Model</a> explains why, and which transport features matter for the import graph.</p>
@@ -263,7 +263,7 @@ pm2 start "webjs start" --name my-app</pre>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
-      <li><strong>HTTP/2 at the edge is recommended.</strong> PaaS deploys (Railway, Fly, Render, Vercel, Cloudflare Pages, Netlify, Heroku) give you HTTP/2 to the browser automatically. For bare-VM deploys, front <code>webjs start</code> with nginx, Caddy, or Traefik.</li>
+      <li><strong>HTTP/2 at the edge is recommended.</strong> PaaS deploys (Railway, Fly, Render, Vercel, Cloudflare Pages, Heroku) give you HTTP/2 to the browser automatically. For bare-VM deploys, front <code>npm run start</code> with nginx, Caddy, or Traefik.</li>
       <li>Set up log aggregation (webjs outputs structured JSON in production).</li>
     </ul>
   `;
