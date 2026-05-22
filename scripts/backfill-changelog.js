@@ -27,14 +27,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'changelog');
 
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'create-webjs-app', 'webjsdev'];
+const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'create-webjs', 'webjsdev'];
 
 // Some packages publish under an unscoped npm name (to match the
-// `create-<framework>-app` convention, or to enable `npx <shortname>`
-// without typing the scope). For those, the changelog frontmatter's
-// `package` field is the bare name; for everything else it's
-// `@webjsdev/<short>`.
-const UNSCOPED = new Set(['create-webjs-app', 'webjsdev']);
+// `create-<framework>` / `create-<framework>-app` convention, or to
+// enable `npx <shortname>` without typing the scope). For those, the
+// changelog frontmatter's `package` field is the bare name; for
+// everything else it's `@webjsdev/<short>`.
+const UNSCOPED = new Set(['create-webjs', 'webjsdev']);
 
 /** @param {string} pkg short dir name */
 function npmName(pkg) {

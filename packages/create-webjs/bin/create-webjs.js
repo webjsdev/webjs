@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 /**
- * `create-webjs-app`: `npx`-style entry point for scaffolding a webjs app.
+ * `create-webjs` is the `npx` / `npm create` entry point for scaffolding a
+ * webjs app.
  *
- *   npx create-webjs-app@latest my-app
- *   npx create-webjs-app@latest my-api --template api
- *   npx create-webjs-app@latest my-saas --template saas --no-install
+ *   npm create webjs@latest my-app
+ *   npx create-webjs@latest my-app
+ *   npm create webjs@latest my-api  -- --template api
+ *   npm create webjs@latest my-saas -- --template saas --no-install
  *
  * This is a thin wrapper around `@webjsdev/cli`'s `scaffoldApp()`. Behaviour
  * matches `webjs create` exactly, including auto-install (npm / pnpm / yarn /
  * bun, detected from `npm_config_user_agent`). Pass `--no-install` to opt out.
  *
- * The package mirrors the create-next-app / create-react-app pattern so the
- * homepage hero is a single command and users don't need a global install
- * of `@webjsdev/cli` to start.
+ * The package mirrors the create-next-app / create-react-app / create-astro
+ * pattern so the homepage hero is a single command and users don't need a
+ * global install of `@webjsdev/cli` to start. The `npm create <suffix>` form
+ * is npm's documented shorthand for `npx create-<suffix>`; both routes
+ * resolve to this same package and bin.
  */
 import { scaffoldApp } from '@webjsdev/cli/lib/create.js';
 
@@ -27,7 +31,8 @@ function flagValue(name) {
 }
 
 const usage = `Usage:
-  npx create-webjs-app@latest <app-name> [--template full-stack|api|saas] [--no-install]
+  npm create webjs@latest <app-name> [-- --template full-stack|api|saas] [-- --no-install]
+  npx create-webjs@latest <app-name> [--template full-stack|api|saas] [--no-install]
 
 Templates:
   full-stack (default)  pages + components + API + Prisma/SQLite

@@ -50,15 +50,15 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ```sh
 # Get started in one command (no global install required)
-npx create-webjs-app@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
+npm create webjs@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
 cd my-app && npm run dev
 # → http://localhost:3000
 
 # Backend-only API
-npx create-webjs-app@latest my-api --template api
+npm create webjs@latest my-api  -- --template api
 
 # SaaS starter (auth + dashboard + Prisma)
-npx create-webjs-app@latest my-saas --template saas
+npm create webjs@latest my-saas -- --template saas
 
 # Or with the CLI installed globally for repeated use.
 # `webjsdev` is the unscoped npm name for @webjsdev/cli; both install the `webjs` command.
@@ -92,7 +92,7 @@ packages/
   ui/               # @webjsdev/ui: AI-first component library + CLI
 
   # Scaffold entry points (peer wrappers around @webjsdev/cli)
-  create-webjs-app/ # `npx create-webjs-app@latest my-app` (mirrors create-next-app)
+  create-webjs/ # `npx create-webjs@latest my-app` (mirrors create-next-app)
   webjsdev/         # unscoped npm name for @webjsdev/cli (so `npm i -g webjsdev` works without a scope)
 examples/
   blog/             # full-featured reference app (auth, posts, comments, chat)

@@ -1,17 +1,17 @@
 {
-  "name": "create-webjs-app",
+  "name": "create-webjs",
   "version": "0.1.0",
   "type": "module",
-  "description": "Scaffold a new webjs app. Mirrors npx create-next-app for the webjs framework.",
+  "description": "Scaffold a new webjs app. `npm create webjs@latest my-app`.",
   "bin": {
-    "create-webjs-app": "bin/create-webjs-app.js"
+    "create-webjs": "bin/create-webjs.js"
   },
   "files": [
     "bin",
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/cli": "^0.8.1"
+    "@webjsdev/cli": "^0.8.4"
   },
   "publishConfig": {
     "access": "public"
@@ -19,7 +19,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/create-webjs-app"
+    "directory": "packages/create-webjs"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",
