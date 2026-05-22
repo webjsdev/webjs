@@ -259,8 +259,6 @@ export default function LandingPage() {
     <div class="install">
       <span class="comment"># get started in one command, no global install</span><br>
       <span class="cmd">npx create-webjs-app@latest my-app</span><br>
-      <span class="cmd">cd my-app && npm run dev</span><br>
-      <span class="comment"># → http://localhost:3000</span><br>
       <br>
       <span class="comment"># backend-only API</span><br>
       <span class="cmd">npx create-webjs-app@latest my-api --template api</span><br>
