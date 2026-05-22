@@ -149,3 +149,84 @@ jobs:
             [ -z "$f" ] && continue
             node scripts/publish-release.js "$f"
           done < .new-changelog-files.txt
+
+      # Lockstep-bump the unscoped wrapper packages (`create-webjs`,
+      # `webjsdev`) to match the new @webjsdev/cli version whenever
+      # this push landed a new cli changelog. The wrappers exist
+      # purely as version mirrors of cli, so their npm versions
+      # MUST equal cli's version exactly; otherwise the npx cache
+      # serves an outdated cli through them (a wrapper cached at
+      # 0.8.4 keeps resolving cli@0.8.4 even after cli@0.8.5
+      # publishes, because the wrapper's pkg-version is what npx
+      # keys its cache on).
+      #
+      # Steps:
+      #   1. Detect a new @webjsdev/cli changelog file in this push.
+      #   2. Update each wrapper's package.json version + @webjsdev/cli
+      #      dep range to match.
+      #   3. Commit + push the bumps as github-actions[bot]. The
+      #      commit touches only `packages/*/package.json`, never
+      #      `changelog/**`, so it does NOT re-trigger this same
+      #      release workflow (the trigger filter is `paths:
+      #      ['changelog/**']`).
+      #   4. Publish each wrapper to npm. Idempotent: skip if the
+      #      target version is already on the registry, so workflow
+      #      re-runs after transient failures don't error.
+      #
+      # No changelog files are created for the wrappers (their
+      # bumps mirror cli's changelog 1:1) and no GitHub Releases
+      # are produced for them either. See scripts/backfill-changelog.js
+      # PACKAGES for the related "wrappers are not tracked in the
+      # repo's changelog system" decision.
+      - name: Lockstep-bump wrappers to match @webjsdev/cli
+        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if ! grep -q '^changelog/cli/' .new-changelog-files.txt; then
+            echo "No new @webjsdev/cli changelog in this push; skipping wrapper lockstep."
+            exit 0
+          fi
+
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "Lockstepping create-webjs + webjsdev to @webjsdev/cli@${CLI_VERSION}"
+
+          # 1. Update each wrapper's package.json (version + cli dep range).
+          for pkg in create-webjs webjsdev; do
+            node -e "
+              const fs = require('node:fs');
+              const path = './packages/${pkg}/package.json';
+              const j = JSON.parse(fs.readFileSync(path, 'utf8'));
+              j.version = '${CLI_VERSION}';
+              if (j.dependencies && j.dependencies['@webjsdev/cli']) {
+                j.dependencies['@webjsdev/cli'] = '^${CLI_VERSION}';
+              }
+              fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
+            "
+          done
+
+          # 2. Commit + push the bumps. If versions were already in sync
+          # (e.g. a developer landed the lockstep manually in the same
+          # commit), there's nothing to commit, so skip cleanly.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/create-webjs/package.json packages/webjsdev/package.json
+          if git diff --cached --quiet; then
+            echo "No package.json changes to commit (wrappers were already at ${CLI_VERSION})."
+          else
+            git commit -m "chore(release): lockstep bump create-webjs + webjsdev to match @webjsdev/cli@${CLI_VERSION}"
+            git push origin "HEAD:${GITHUB_REF#refs/heads/}"
+          fi
+
+          # 3. Publish each wrapper to npm, idempotently.
+          for pkg in create-webjs webjsdev; do
+            REMOTE=$(npm view "${pkg}@${CLI_VERSION}" version 2>/dev/null || echo "")
+            if [ "$REMOTE" = "${CLI_VERSION}" ]; then
+              echo "  skip ${pkg}@${CLI_VERSION}: already on registry"
+            else
+              echo "  publishing ${pkg}@${CLI_VERSION}..."
+              npm publish --workspace="${pkg}" --access=public --ignore-scripts=false
+            fi
+          done
