@@ -946,15 +946,17 @@ For AI agents, read this before editing scaffolded files:
   const installSegment = installed ? '' : `${pm} install && `;
   const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
   const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
-  // Use the explicit scoped form (`npx @webjsdev/cli ui ...`) here, not
-  // `npx webjs ui ...`. The bare `webjs` npm name is owned by an
-  // unrelated package; `npx webjs <cmd>` would fetch THAT package
-  // instead of ours when run outside a project context. The scoped
-  // form is unambiguous.
+  // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
+  // `webjs` npm name is owned by an unrelated package; `npx webjs
+  // <cmd>` would fetch THAT package instead of ours when run outside
+  // a project context. `webjsdev` is our unscoped CLI alias; npx's
+  // single-bin fallback resolves it to the `webjs` binary, so behaviour
+  // matches `@webjsdev/cli` exactly while keeping the command short
+  // and unambiguous.
   const uiNote = isApi
     ? `# If you later add a UI to this API project:
-  #   npx @webjsdev/cli ui init && npx @webjsdev/cli ui add button card dialog`
-    : `npx @webjsdev/cli ui add <name>     # add more ui-* components later`;
+  #   npx webjsdev ui init && npx webjsdev ui add button card dialog`
+    : `npx webjsdev ui add <name>     # add more ui-* components later`;
   console.log(`
 Next steps:
   ${runCommand}
