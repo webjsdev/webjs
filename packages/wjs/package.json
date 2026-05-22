@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Short alias for the webjs CLI. `wjs <cmd>` = `webjs <cmd>`.",
   "bin": {
-    "wjs": "bin/wjs.js"
+    "wjs": "bin/wjs.js",
+    "webjs": "bin/wjs.js"
   },
   "files": [
     "bin",

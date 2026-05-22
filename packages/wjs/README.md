@@ -7,17 +7,18 @@ npx wjs create my-app
 cd my-app && npm run dev
 ```
 
-Or install globally to keep `wjs` always on PATH:
+Or install globally to keep both `wjs` and `webjs` on PATH:
 
 ```sh
 npm i -g wjs
-wjs dev
-wjs start
-wjs test
-wjs check
-wjs db migrate init
+# Both commands work, same script, same behavior:
+webjs dev       # canonical, matches docs / scaffold scripts / agent configs
+wjs dev         # short alias
+webjs check
 wjs ui add button card dialog
 ```
+
+`npm i -g wjs` installs **two** symlinks: `wjs` (the short alias) and `webjs` (the canonical name the framework's docs and scaffold templates use). Both point at the same shim, which delegates to `@webjsdev/cli`'s entry script. So you can lean on the long-form `webjs <cmd>` to match the documentation, or `wjs <cmd>` to save three keystrokes, with no behavior difference.
 
 The full set of subcommands (`dev`, `start`, `create`, `test`, `check`, `db`, `ui`) is documented in [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli), which `wjs` depends on. The behaviour is identical, since `wjs` is a tiny re-export of the same entry script.
 
