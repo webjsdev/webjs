@@ -5,7 +5,7 @@ export const metadata = { title: 'No-Build Model | webjs' };
 export default function NoBuild() {
   return html`
     <h1>No-Build Model</h1>
-    <p>webjs has no bundler, no <code>webjs build</code> command, no output directory. The <code>.js</code> and <code>.ts</code> files you edit are the files the browser fetches. <code>webjs dev</code> and <code>webjs start</code> run the same source. This page is the canonical reference for how it works in practice and why per-file ESM at production scale is competitive with bundling.</p>
+    <p>webjs has no bundler, no <code>webjs build</code> command, no output directory. The <code>.js</code> and <code>.ts</code> files you edit are the files the browser fetches. <code>npm run dev</code> and <code>npm run start</code> run the same source. This page is the canonical reference for how it works in practice and why per-file ESM at production scale is competitive with bundling.</p>
 
     <p>Related reading:</p>
     <ul>
@@ -22,7 +22,7 @@ export default function NoBuild() {
         <tr><th>Question</th><th>Answer</th></tr>
       </thead>
       <tbody>
-        <tr><td>Is there a build step I run?</td><td>No. <code>webjs dev</code> and <code>webjs start</code> serve source directly.</td></tr>
+        <tr><td>Is there a build step I run?</td><td>No. <code>npm run dev</code> and <code>npm run start</code> serve source directly.</td></tr>
         <tr><td>Is there a build step the framework runs?</td><td>Per-file type stripping for <code>.ts</code>, on first request, cached by mtime. That is the only transform.</td></tr>
         <tr><td>What about npm packages?</td><td>Auto-bundled per-package on first reference. See <strong>Bare specifiers</strong> below.</td></tr>
         <tr><td>How does the browser resolve <code>import '@webjsdev/core'</code>?</td><td>An <code>&lt;script type="importmap"&gt;</code> emitted in <code>&lt;head&gt;</code> maps the specifier to a URL.</td></tr>
