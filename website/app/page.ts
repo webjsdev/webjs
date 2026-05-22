@@ -244,11 +244,11 @@ export default function LandingPage() {
         You get native web components, server actions, streaming SSR.
         Built on web standards. No bundler, no config, no magic.
       </p>
-      <div class="hero-actions flex flex-col items-center gap-3">
-        <div class="flex gap-3 justify-center flex-wrap">
+      <div class="hero-actions flex flex-col items-center gap-3 md:flex-row md:justify-center md:flex-wrap">
+        <div class="flex gap-3 justify-center flex-wrap md:contents">
           <a class="primary" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Get Started</a>
         </div>
-        <div class="flex gap-3 justify-center flex-wrap">
+        <div class="flex gap-3 justify-center flex-wrap md:contents">
           <a class="secondary" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
           <a class="secondary" href=${BLOG_URL} target="_blank">Demo</a>
         </div>
