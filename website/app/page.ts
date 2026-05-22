@@ -234,7 +234,7 @@ export default function LandingPage() {
       footer a:hover { text-decoration: underline; }
     </style>
 
-    <section class="hero flex flex-col justify-center min-h-dvh md:min-h-0">
+    <section class="hero flex flex-col justify-center min-h-[calc(100dvh-5.5rem)] md:min-h-0">
       <div class="rubric">
         <span class="name">webjs</span>
         <span class="sep">·</span>
