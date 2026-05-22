@@ -1,75 +1,21 @@
 import { html } from '@webjsdev/core';
-import { readdir, readFile } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { listPosts } from '../../modules/blog/queries/list-posts.server.ts';
 
 /**
  * /blog
  *
- * Reads every `blog/<slug>.md` at the repo root at SSR time, parses
- * frontmatter, and renders an index card per post sorted by date DESC.
- * Each card links to /blog/<slug> for the full post. The same renderer
- * shape as /changelog: zero markdown library, hand-rolled frontmatter
- * parse, server-rendered HTML for SEO.
+ * Thin route adapter. All the file-reading and frontmatter-parsing
+ * lives in `modules/blog/queries/list-posts.server.ts`. This page
+ * just renders the result.
  */
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(__dirname, '..', '..', '..');
-const BLOG_DIR = resolve(REPO_ROOT, 'blog');
 
 export const metadata = {
   title: 'Blog · webjs',
   description: 'Long-form notes from building webjs: the design decisions, the trade-offs, the things that did not work, and what the framework looks like in production.',
 };
 
-type Post = {
-  slug: string;
-  title: string;
-  date: string;
-  description: string;
-  tags: string[];
-  author: string;
-};
-
-function parseFrontmatter(raw: string): { fm: Record<string, string>; body: string } {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!m) return { fm: {}, body: raw };
-  const fm: Record<string, string> = {};
-  for (const line of m[1].split('\n')) {
-    const idx = line.indexOf(':');
-    if (idx < 0) continue;
-    const k = line.slice(0, idx).trim();
-    let v = line.slice(idx + 1).trim();
-    if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-    fm[k] = v;
-  }
-  return { fm, body: m[2] };
-}
-
-async function loadPosts(): Promise<Post[]> {
-  let files: string[];
-  try { files = await readdir(BLOG_DIR); } catch { return []; }
-  const posts: Post[] = [];
-  for (const f of files) {
-    if (!f.endsWith('.md')) continue;
-    const raw = await readFile(join(BLOG_DIR, f), 'utf8');
-    const { fm } = parseFrontmatter(raw);
-    if (!fm.title || !fm.date) continue;
-    posts.push({
-      slug: f.replace(/\.md$/, ''),
-      title: fm.title,
-      date: fm.date,
-      description: fm.description || '',
-      tags: (fm.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
-      author: fm.author || 'Vivek',
-    });
-  }
-  posts.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
-  return posts;
-}
-
 export default async function Blog() {
-  const posts = await loadPosts();
+  const posts = await listPosts();
   return html`
     <main class="max-w-[840px] mx-auto px-6 py-12">
       <header class="mb-10">
