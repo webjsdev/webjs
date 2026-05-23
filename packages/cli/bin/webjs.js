@@ -277,13 +277,19 @@ Full docs: https://docs.webjs.com`);
       const appDir = process.cwd();
 
       if (sub === 'pin') {
-        if (args.length === 0) {
+        // Pass-through: --no-prune disables the orphan-cleanup pass that
+        // pinAll runs by default. Off-by-default for niche workflows
+        // where the user wants additive-only pin behavior.
+        const prune = !args.includes('--no-prune');
+        const positional = args.filter(a => a !== '--no-prune');
+
+        if (positional.length === 0) {
           // Pin every bare import currently used in the app
           console.log(`Pinning vendor packages from ${appDir}...`);
-          const results = await pinAll(appDir);
+          const { pins, pruned } = await pinAll(appDir, { prune });
           let totalBytes = 0;
           let okCount = 0;
-          for (const r of results) {
+          for (const r of pins) {
             if (r.ok) {
               console.log(`  ${r.spec.padEnd(40)} ${(r.bytes / 1024).toFixed(1)} KB`);
               totalBytes += r.bytes;
@@ -292,10 +298,16 @@ Full docs: https://docs.webjs.com`);
               console.error(`  ${r.spec.padEnd(40)} FAILED: ${r.error}`);
             }
           }
-          console.log(`Pinned ${okCount} package${okCount === 1 ? '' : 's'}, ${(totalBytes / 1024).toFixed(1)} KB total.`);
+          for (const f of pruned) {
+            console.log(`  ${f.padEnd(40)} REMOVED (orphan)`);
+          }
+          const pinMsg = `Pinned ${okCount} package${okCount === 1 ? '' : 's'}, ${(totalBytes / 1024).toFixed(1)} KB total.`;
+          const pruneMsg = pruned.length ? ` Pruned ${pruned.length} orphan${pruned.length === 1 ? '' : 's'}.` : '';
+          console.log(pinMsg + pruneMsg);
         } else {
-          // Pin specific packages by name (and optional @version)
-          for (const target of args) {
+          // Pin specific packages by name (and optional @version).
+          // Targeted pin doesn't prune (it's additive by definition).
+          for (const target of positional) {
             const atIdx = target.lastIndexOf('@');
             const hasVersion = atIdx > 0; // > 0 to skip scoped @
             const spec = hasVersion ? target.slice(0, atIdx) : target;
@@ -348,8 +360,9 @@ Full docs: https://docs.webjs.com`);
 
       console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
         `Usage:\n` +
-        `  webjs vendor pin                       pin every bare import in this app\n` +
-        `  webjs vendor pin <pkg>[@version]       pin a specific package\n` +
+        `  webjs vendor pin [--no-prune]          pin every bare import in this app\n` +
+        `                                         (prunes orphan cache files by default)\n` +
+        `  webjs vendor pin <pkg>[@version]       pin a specific package (no prune)\n` +
         `  webjs vendor unpin <pkg>[@version]     remove a package from cache\n` +
         `  webjs vendor list                      show cache contents`);
       process.exit(1);

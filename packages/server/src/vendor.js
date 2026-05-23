@@ -49,7 +49,7 @@
 
 import { readFile, readdir, stat, mkdir, writeFile, unlink } from 'node:fs/promises';
 import { realpathSync, readFileSync, existsSync } from 'node:fs';
-import { join, dirname, sep } from 'node:path';
+import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
 /**
@@ -394,7 +394,7 @@ function cachePath(appDir, pkgName, version, subpath) {
   const safeName = pkgName.replace(/\//g, '--');
   const safeSubpath = subpath.replace(/\//g, '__');
   const fname = `${safeName}@${version}${safeSubpath}.js`;
-  return join(appDir, 'vendor', 'javascript', fname);
+  return join(appDir, '.webjs', 'vendor', fname);
 }
 
 /**
@@ -600,26 +600,63 @@ export async function pinPackage(appDir, pkgName, version, subpath = '') {
  * source. Used by `webjs vendor pin` (no args) to populate the cache
  * with everything the app currently uses.
  *
+ * After pinning, the cache is **pruned**: any `.js` file in `.webjs/
+ * vendor/` that doesn't correspond to a current bare import (different
+ * version of a still-used package, or a package no longer imported at
+ * all) is deleted. This keeps the committed cache directory mirroring
+ * the source tree as it evolves. Pass `prune: false` to disable.
+ *
  * @param {string} appDir
- * @returns {Promise<Array<{ spec: string, ok: boolean, bytes: number, error?: string }>>}
+ * @param {{ prune?: boolean }} [opts]
+ * @returns {Promise<{
+ *   pins: Array<{ spec: string, ok: boolean, bytes: number, error?: string }>,
+ *   pruned: string[]
+ * }>}
  */
-export async function pinAll(appDir) {
+export async function pinAll(appDir, opts = {}) {
+  const prune = opts.prune !== false;
   const bare = await scanBareImports(appDir);
-  const results = [];
+  /** @type {Array<{ spec: string, ok: boolean, bytes: number, error?: string }>} */
+  const pins = [];
+  // Track expected cache filenames (basenames) so prune can identify orphans.
+  /** @type {Set<string>} */
+  const expected = new Set();
+
   for (const spec of bare) {
     const pkgName = extractPackageName(spec);
     if (!pkgName || BUILTIN.has(pkgName)) continue;
     if (isWorkspaceDep(pkgName, appDir)) continue;
     const version = getPackageVersion(pkgName, appDir);
     if (!version) {
-      results.push({ spec, ok: false, bytes: 0, error: 'package not installed' });
+      pins.push({ spec, ok: false, bytes: 0, error: 'package not installed' });
       continue;
     }
     const subpath = extractSubpath(spec);
+    expected.add(basename(cachePath(appDir, pkgName, version, subpath)));
     const res = await pinPackage(appDir, pkgName, version, subpath);
-    results.push({ spec, ...res });
+    pins.push({ spec, ...res });
   }
-  return results;
+
+  /** @type {string[]} */
+  const pruned = [];
+  if (prune) {
+    const dir = join(appDir, '.webjs', 'vendor');
+    let files;
+    try { files = await readdir(dir); } catch { files = []; }
+    for (const f of files) {
+      if (!f.endsWith('.js')) continue;
+      if (expected.has(f)) continue;
+      try {
+        await unlink(join(dir, f));
+        pruned.push(f);
+      } catch { /* file race or permission issue: ignore */ }
+    }
+    // Also drop the in-memory cache entries for the pruned files so
+    // serveVendorBundle re-fetches if the package comes back.
+    if (pruned.length) memoryCache.clear();
+  }
+
+  return { pins, pruned };
 }
 
 /**
@@ -628,7 +665,7 @@ export async function pinAll(appDir) {
  * @returns {Promise<Array<{ pkg: string, version: string, subpath: string, bytes: number }>>}
  */
 export async function listCache(appDir) {
-  const dir = join(appDir, 'vendor', 'javascript');
+  const dir = join(appDir, '.webjs', 'vendor');
   let files;
   try { files = await readdir(dir); } catch { return []; }
   const entries = [];

@@ -11,6 +11,7 @@ import {
   vendorImportMapEntries,
   serveVendorBundle,
   pinPackage,
+  pinAll,
   removeFromCache,
   listCache,
   isWorkspaceDep,
@@ -292,4 +293,73 @@ test('listCache + removeFromCache: round-trip', { skip: !NETWORK_OK }, async () 
   const afterRemove = await listCache(process.cwd());
   const stillThere = afterRemove.find((e) => e.pkg === 'picocolors' && e.version === version && e.subpath === '');
   assert.equal(stillThere, undefined, 'picocolors should be gone after removeFromCache');
+});
+
+// --- pinAll: auto-prune behavior ---
+//
+// pinAll removes cache files that don't correspond to a current bare
+// import after pinning the current set. Tests use the filesystem
+// directly (writing fake cache files into a temp appDir) so they don't
+// require network access.
+
+test('pinAll: prunes orphaned cache files for packages no longer imported', async () => {
+  const appDir = join(tmpdir(), `webjs-test-pinAll-prune-${Date.now()}`);
+  const cacheDir = join(appDir, '.webjs', 'vendor');
+  await mkdir(cacheDir, { recursive: true });
+
+  // Plant two orphan cache files for packages NOT in the source.
+  await writeFile(join(cacheDir, 'dayjs@1.11.13.js'), 'export default {}');
+  await writeFile(join(cacheDir, 'oldpkg@0.5.0.js'), 'export default {}');
+
+  // Source has zero bare imports (no .ts files at all). pinAll should
+  // not pin anything new, and should prune both orphans.
+  const { pins, pruned } = await pinAll(appDir);
+
+  assert.equal(pins.length, 0, 'no bare imports → no pins');
+  assert.equal(pruned.length, 2, 'both orphans should be pruned');
+  assert.ok(pruned.includes('dayjs@1.11.13.js'));
+  assert.ok(pruned.includes('oldpkg@0.5.0.js'));
+
+  await rm(appDir, { recursive: true, force: true });
+});
+
+test('pinAll: prune: false disables orphan cleanup', async () => {
+  const appDir = join(tmpdir(), `webjs-test-pinAll-noprune-${Date.now()}`);
+  const cacheDir = join(appDir, '.webjs', 'vendor');
+  await mkdir(cacheDir, { recursive: true });
+  await writeFile(join(cacheDir, 'orphan@1.0.0.js'), 'export default {}');
+
+  const { pruned } = await pinAll(appDir, { prune: false });
+  assert.equal(pruned.length, 0, 'prune: false keeps orphans intact');
+
+  // File should still exist on disk
+  const { readdir } = await import('node:fs/promises');
+  const files = await readdir(cacheDir);
+  assert.ok(files.includes('orphan@1.0.0.js'));
+
+  await rm(appDir, { recursive: true, force: true });
+});
+
+test('pinAll: keeps cache files that correspond to current imports', async () => {
+  const appDir = join(tmpdir(), `webjs-test-pinAll-keep-${Date.now()}`);
+  const cacheDir = join(appDir, '.webjs', 'vendor');
+  await mkdir(cacheDir, { recursive: true });
+
+  // Plant a cache file for picocolors at the version installed in this repo.
+  // The source imports picocolors, so pinAll's scan should match and
+  // prune should NOT touch the file.
+  const version = getPackageVersion('picocolors', process.cwd());
+  await mkdir(join(appDir, 'src'), { recursive: true });
+  await writeFile(join(appDir, 'src', 'a.ts'), `import pico from 'picocolors';`);
+  await writeFile(join(cacheDir, `picocolors@${version}.js`), 'export default {}');
+  // Symlink node_modules from cwd so getPackageVersion finds picocolors.
+  const { symlink } = await import('node:fs/promises');
+  await symlink(join(process.cwd(), 'node_modules'), join(appDir, 'node_modules'));
+  // Copy the appDir's package.json so createRequire works.
+  await writeFile(join(appDir, 'package.json'), '{"name": "tmp", "version": "0.0.0"}');
+
+  const { pruned } = await pinAll(appDir, { prune: true });
+  assert.ok(!pruned.includes(`picocolors@${version}.js`), 'imported package must not be pruned');
+
+  await rm(appDir, { recursive: true, force: true });
 });
