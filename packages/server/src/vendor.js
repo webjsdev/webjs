@@ -26,7 +26,7 @@
  *   2. Build importmap entries pointing at `/__webjs/vendor/<pkg>@<ver>`.
  *
  *   3. On request for that URL, read from `vendor/javascript/` on disk.
- *      If absent, fetch from `esm.sh` (fallback `jspm.io`), write to
+ *      If absent, fetch from `esm.sh`, write to
  *      `vendor/javascript/`, serve the bytes. Subsequent requests are
  *      pure file reads with zero network involvement.
  *
@@ -72,32 +72,38 @@ const MEMORY_CACHE_MAX = 100;
 const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
 
 /**
- * Default CDN chain. esm.sh is the primary; jspm.io is a fallback.
+ * Vendor CDN: esm.sh, no fallback.
  *
- * Why esm.sh primary even though Rails uses jspm.io: esm.sh handles
- * the bare-import URL pattern (`https://esm.sh/<pkg>@<ver>`)
- * natively, returning ESM that the browser can execute directly.
- * jspm.io requires the resolved entry path (`https://ga.jspm.io/
- * npm:<pkg>@<ver>/<entry-file>`), which Rails' `bin/importmap pin`
- * resolves via the jspm Generator API. webjs's vendor pipeline
- * constructs URLs lazily at first-request time and doesn't currently
- * call the Generator API, so jspm.io is left as a fallback for
- * future work rather than primary.
+ * Why esm.sh: it handles the bare-import URL pattern
+ * (`https://esm.sh/<pkg>@<ver>[<subpath>]`) natively, returning ESM
+ * that the browser can execute directly. The CDN does the
+ * CJS-to-ESM conversion, transitive bundling, and entry-path
+ * resolution server-side.
  *
- * Tradeoff vs Rails: webjs gets esm.sh's broader CDN edge presence
- * (Cloudflare) at the cost of lower institutional backing. The
- * jspm.io fallback is partially broken today (returns metadata
- * instead of JS for the bare-URL pattern). TODO: implement local
- * entry-path resolution from `package.json` `exports`/`module`/`main`
- * to make the jspm.io URL well-formed, or call api.jspm.io/generate
- * at server boot to populate a resolved importmap eagerly.
+ * Why no fallback: jspm.io was originally in the chain as a
+ * resilience hedge, but its URL convention requires a resolved
+ * entry-path that Rails' `bin/importmap pin` derives via the
+ * jspm Generator API. webjs would have to either re-implement that
+ * resolver locally or call api.jspm.io/generate at boot. Until
+ * that's a strict requirement, a fallback that returns broken
+ * responses (`text/plain` version strings instead of JS) is
+ * worse than no fallback at all.
  *
- * `?target=es2022` on the esm.sh URL matches the runtime target the
- * framework expects.
+ * Bus-factor on esm.sh: backed by Cloudflare infrastructure with
+ * sponsorship from Deno, Val Town, and Guillermo Rauch (Vercel /
+ * Next.js founder), along with OpenCollective contributors. Active
+ * maintenance by @ije. Track record: serves 8+ billion modules
+ * per month.
+ *
+ * If esm.sh becomes a concern long-term, add jspm.io as a fallback
+ * by implementing entry-path resolution (track TODO in the next
+ * `webjs vendor` evolution). Until then, single CDN keeps the
+ * architecture honest.
+ *
+ * `?target=es2022` matches the runtime target the framework expects.
  */
 const CDN_TEMPLATES = [
   (pkg, version, sub) => `https://esm.sh/${pkg}@${version}${sub}?target=es2022`,
-  (pkg, version, sub) => `https://ga.jspm.io/npm:${pkg}@${version}${sub}`,
 ];
 
 /** Re-export so callers don't need to redefine the predicate. */
@@ -336,7 +342,7 @@ export async function removeFromCache(appDir, pkgName, version, subpath = '') {
 }
 
 // ---------------------------------------------------------------------------
-// CDN fetch (esm.sh primary, jspm.io fallback; see CDN_TEMPLATES comment)
+// CDN fetch (esm.sh only; see CDN_TEMPLATES comment)
 // ---------------------------------------------------------------------------
 
 /**
@@ -438,7 +444,7 @@ export async function serveVendorBundle(id, appDir, dev) {
     if (code == null) {
       return notFoundResponse(
         `vendor fetch failed for ${pkgName}@${version}${subpath}. ` +
-        `Possible causes: package not on esm.sh/jspm, network down, or ` +
+        `Possible causes: package not on esm.sh, network down, or ` +
         `the package ships only CJS without a working ESM build. ` +
         `Run "webjs vendor pin ${pkgName}@${version}" to retry, or check ` +
         `https://esm.sh/${pkgName}@${version} directly in a browser.`
