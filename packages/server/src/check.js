@@ -92,7 +92,7 @@ export const RULES = [
   {
     name: 'erasable-typescript-only',
     description:
-      'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax fall back to esbuild + inline sourcemap, which is supported as a safety net for third-party deps but should not be the path your own code takes. The rule checks the project\'s tsconfig.json and warns when `erasableSyntaxOnly` is missing or set to false. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply.',
+      'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax are rejected at request time with a 500 and a clear remediation message; there is no fallback to esbuild. The companion `no-non-erasable-typescript` rule scans .ts source for the four common offending patterns even if the tsconfig flag is unset. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply with this rule.',
   },
   {
     name: 'use-server-needs-extension',

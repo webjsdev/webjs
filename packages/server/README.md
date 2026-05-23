@@ -18,8 +18,10 @@ to scaffold and run an app, which pulls this package in as a dependency.
 - **WebSockets**: export `WS` from `route.ts` and it becomes a WebSocket
   endpoint on the same path.
 - **Live reload** for dev.
-- **Bare-specifier auto-bundling** for npm packages via import maps, backed
-  by esbuild (Vite-style `optimizeDeps`).
+- **Bare-specifier auto-resolution** for npm packages via import maps,
+  proxied from jspm.io (fallback esm.sh) and cached to
+  `vendor/javascript/` (Rails 7 + importmap-rails pattern). No local
+  bundler invocation.
 
 ## Install
 
