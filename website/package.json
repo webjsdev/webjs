@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "prestart": "npm run css:build",
+    "predev": "webjs vendor pin || true",
+    "prestart": "npm run css:build && webjs vendor pin || true",
     "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
     "start": "webjs start",
     "webjs:dev": "webjs dev --port 5000",

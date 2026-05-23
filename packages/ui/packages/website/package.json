@@ -5,8 +5,8 @@
   "private": true,
   "description": "Registry host + docs site for @webjsdev/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {
-    "predev": "node scripts/copy-registry.js",
-    "prestart": "node scripts/copy-registry.js && npm run css:build",
+    "predev": "node scripts/copy-registry.js && webjs vendor pin || true",
+    "prestart": "node scripts/copy-registry.js && npm run css:build && webjs vendor pin || true",
     "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
     "start": "webjs start",
     "webjs:dev": "webjs dev --port 5001",

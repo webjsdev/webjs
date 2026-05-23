@@ -217,8 +217,13 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     type: 'module',
     private: true,
     scripts: {
-      predev: 'prisma generate',
-      prestart: 'prisma migrate deploy',
+      // Hook chain: prisma client first, then warm the vendor cache
+      // by pinning every bare-specifier npm dep used in the app to
+      // .webjs/vendor/. `|| true` keeps the boot non-blocking if a
+      // package fails (server-only false-positive, offline, etc.).
+      // No-op after the cache is populated.
+      predev: 'prisma generate && webjs vendor pin || true',
+      prestart: 'prisma migrate deploy && webjs vendor pin || true',
       dev: 'webjs dev',
       start: 'webjs start',
       test: 'webjs test',

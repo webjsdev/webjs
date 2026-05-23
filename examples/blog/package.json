@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "predev": "prisma generate",
-    "prestart": "prisma migrate deploy",
+    "predev": "prisma generate && webjs vendor pin || true",
+    "prestart": "prisma migrate deploy && webjs vendor pin || true",
     "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
     "start": "webjs start",
     "webjs:dev": "webjs dev",
