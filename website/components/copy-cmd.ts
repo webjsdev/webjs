@@ -61,7 +61,7 @@ export class CopyCmd extends WebComponent {
         @click=${this._copy}
         @keydown=${this._onKey}
       >
-        <span data-copy-text class="flex-1 min-w-0 overflow-x-auto whitespace-nowrap">
+        <span data-copy-text class="whitespace-nowrap">
           <slot></slot>
         </span>
         <button
