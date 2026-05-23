@@ -116,8 +116,23 @@ export function isBuiltin(spec) {
 // ---------------------------------------------------------------------------
 
 /** @type {RegExp} */
-const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+// Matches `import { x } from 'pkg'`, `import 'pkg'`, `import * as x from 'pkg'`.
+// The `(?!type\s)` negative lookahead skips `import type … from 'pkg'`
+// because TypeScript type-only imports are fully erased at compile time
+// and never reach the browser, so they must not enter the vendor pipeline.
+const IMPORT_RE = /\bimport\s+(?!type\s)(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT_RE = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+// Strip `/* … */` block comments and `// …` line comments before running
+// the import regex. Comments in source files (JSDoc examples especially)
+// frequently contain `import 'foo'` snippets that aren't real imports;
+// without stripping, the scanner picks them up as bare specifiers and
+// the vendor pipeline tries (and fails) to fetch them.
+const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+const LINE_COMMENT_RE = /(^|[^:])\/\/.*$/gm;
+function stripComments(src) {
+  return src.replace(BLOCK_COMMENT_RE, '').replace(LINE_COMMENT_RE, '$1');
+}
 
 /**
  * Extract the package name from a bare specifier.
@@ -163,9 +178,22 @@ export function extractSubpath(spec) {
 
 /**
  * Recursively scan a directory tree for bare imports in `.js` / `.ts` /
- * `.mjs` / `.mts` files. Skips `node_modules`, `.webjs`, `public`, and
- * any directory starting with `_`. Files marked with `'use server'` are
- * skipped (their imports never reach the browser).
+ * `.mjs` / `.mts` files that are reachable from the browser. Skips:
+ *
+ *   - `node_modules`, `.webjs`, `public` directories
+ *   - Any directory starting with `_` (webjs `_private/` convention)
+ *   - Files whose name marks them as server-only by webjs convention:
+ *       * `*.server.{js,ts,mjs,mts}` (the path-level server-file boundary)
+ *       * `route.{js,ts,mjs,mts}` (file-router HTTP handler; server-only)
+ *       * `middleware.{js,ts,mjs,mts}` (file-router middleware; server-only)
+ *   - Any file whose first non-whitespace content is `'use server'`
+ *     (semantic server-action marker; imports never reach the browser)
+ *
+ * The route.ts and middleware.ts exclusions matter for the vendor
+ * pipeline: those files often import `@prisma/client`, `ws`, and other
+ * server-only packages that can't be bundled for the browser. Without
+ * the exclusion, the scanner adds them to the bare-imports set and the
+ * pin command tries (and fails) to fetch them from esm.sh.
  *
  * @param {string} dir
  * @returns {Promise<Set<string>>}  full bare specifiers (with subpath)
@@ -179,6 +207,22 @@ export async function scanBareImports(dir) {
 }
 
 /**
+ * Filename matches webjs's server-only file-router conventions.
+ * Returns true for `route.{ts,js,mjs,mts}` and
+ * `middleware.{ts,js,mjs,mts}`, plus any `.server.{ts,js,mjs,mts}`
+ * suffix file. These files never reach the browser, so their bare
+ * imports must not enter the vendor pipeline.
+ *
+ * @param {string} name  basename of the file
+ */
+function isServerOnlyFile(name) {
+  if (/\.server\.(js|ts|mjs|mts)$/.test(name)) return true;
+  if (/^route\.(js|ts|mjs|mts)$/.test(name)) return true;
+  if (/^middleware\.(js|ts|mjs|mts)$/.test(name)) return true;
+  return false;
+}
+
+/**
  * @param {string} dir
  * @param {Set<string>} found
  */
@@ -187,14 +231,29 @@ async function walk(dir, found) {
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
   for (const e of entries) {
-    if (e.name === 'node_modules' || e.name === '.webjs' || e.name === 'public' || e.name.startsWith('_')) continue;
+    // Skip directories that never contain browser-reachable code:
+    //   - `node_modules`: deps, scanned separately
+    //   - `.webjs`: framework cache
+    //   - `public`: static assets
+    //   - `test` / `tests`: test suites are server-only; their imports
+    //     of @prisma/client, ws, etc. shouldn't enter the vendor pipeline
+    //   - any dir starting with `_`: webjs `_private/` convention
+    if (
+      e.name === 'node_modules' ||
+      e.name === '.webjs' ||
+      e.name === 'public' ||
+      e.name === 'test' ||
+      e.name === 'tests' ||
+      e.name.startsWith('_')
+    ) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
       await walk(full, found);
-    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !e.name.endsWith('.server.ts') && !e.name.endsWith('.server.js')) {
+    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !isServerOnlyFile(e.name)) {
       try {
-        const src = await readFile(full, 'utf8');
-        if (src.trimStart().startsWith("'use server'") || src.trimStart().startsWith('"use server"')) continue;
+        const raw = await readFile(full, 'utf8');
+        if (raw.trimStart().startsWith("'use server'") || raw.trimStart().startsWith('"use server"')) continue;
+        const src = stripComments(raw);
         for (const m of src.matchAll(IMPORT_RE)) {
           const pkg = extractPackageName(m[1]);
           if (pkg && !BUILTIN.has(pkg)) found.add(m[1]);

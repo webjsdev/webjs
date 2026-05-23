@@ -113,6 +113,51 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: skips route.ts and middleware.ts (server-only by file-router convention)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-router-skip-${Date.now()}`);
+  await mkdir(join(dir, 'app', 'api', 'posts'), { recursive: true });
+  await mkdir(join(dir, 'app', 'dashboard'), { recursive: true });
+
+  // route.ts: server-only by file-router convention. @prisma/client and
+  // node:crypto here should NOT enter the vendor pipeline.
+  await writeFile(
+    join(dir, 'app', 'api', 'posts', 'route.ts'),
+    `import { PrismaClient } from '@prisma/client';
+     import { randomUUID } from 'node:crypto';
+     import 'server-only-helper';`,
+  );
+
+  // middleware.ts: server-only. ws here should NOT enter vendor pipeline.
+  await writeFile(
+    join(dir, 'app', 'dashboard', 'middleware.ts'),
+    `import { WebSocketServer } from 'ws';
+     import 'another-server-thing';`,
+  );
+
+  // Root-level middleware.ts: same convention.
+  await writeFile(
+    join(dir, 'middleware.ts'),
+    `import 'root-mw-server-only';`,
+  );
+
+  // A regular page.ts: bare imports SHOULD enter the vendor pipeline.
+  await writeFile(
+    join(dir, 'app', 'dashboard', 'page.ts'),
+    `import dayjs from 'dayjs';`,
+  );
+
+  const found = await scanBareImports(dir);
+
+  assert.ok(found.has('dayjs'), 'page.ts imports should be scanned');
+  assert.ok(!found.has('@prisma/client'), 'route.ts imports must be skipped');
+  assert.ok(!found.has('server-only-helper'), 'route.ts imports must be skipped');
+  assert.ok(!found.has('ws'), 'middleware.ts imports must be skipped');
+  assert.ok(!found.has('another-server-thing'), 'middleware.ts imports must be skipped');
+  assert.ok(!found.has('root-mw-server-only'), 'root middleware.ts imports must be skipped');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('scanBareImports: skips node_modules and _private dirs', async () => {
   const dir = join(tmpdir(), `webjs-test-vendor-skip-${Date.now()}`);
   await mkdir(join(dir, 'node_modules'), { recursive: true });
