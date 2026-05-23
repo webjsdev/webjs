@@ -72,15 +72,29 @@ const MEMORY_CACHE_MAX = 100;
 const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
 
 /**
- * Default CDN chain. esm.sh is the primary; jspm.io is the fallback if
- * esm.sh is down or returns a 4xx for the package. Both serve pre-built
- * ESM that handles the CJS-to-ESM conversion plus transitive bundling.
+ * Default CDN chain. jspm.io is the primary (matches Rails 7 +
+ * importmap-rails); esm.sh is the fallback for edge cases jspm.io
+ * rejects. Both serve pre-built ESM that handles the CJS-to-ESM
+ * conversion plus transitive bundling.
  *
- * `?target=es2022` matches the runtime target the framework expects.
+ * jspm.io as primary because: lower bus-factor risk (institutional
+ * sponsors include 37signals, CacheFly, Socket, Framer; Rails
+ * ecosystem depends on it). Status page at status.jspm.io for
+ * incident transparency. Standards-first maintainer (Guy Bedford,
+ * TC39 contributor on ESM / HTML / import maps).
+ *
+ * esm.sh as fallback because: Cloudflare-backed infrastructure;
+ * more permissive transformations (handles CSS imports, on-the-fly
+ * TypeScript / Vue / Svelte, broader CJS edge cases). Kept as
+ * fallback for packages jspm.io rejects.
+ *
+ * `?target=es2022` on the esm.sh URL matches the runtime target the
+ * framework expects. jspm.io's default output is already standards-
+ * pure ESM with no query needed.
  */
 const CDN_TEMPLATES = [
-  (pkg, version, sub) => `https://esm.sh/${pkg}@${version}${sub}?target=es2022`,
   (pkg, version, sub) => `https://ga.jspm.io/npm:${pkg}@${version}${sub}`,
+  (pkg, version, sub) => `https://esm.sh/${pkg}@${version}${sub}?target=es2022`,
 ];
 
 /** Re-export so callers don't need to redefine the predicate. */
@@ -319,7 +333,7 @@ export async function removeFromCache(appDir, pkgName, version, subpath = '') {
 }
 
 // ---------------------------------------------------------------------------
-// CDN fetch (esm.sh primary, jspm.io fallback)
+// CDN fetch (jspm.io primary, esm.sh fallback)
 // ---------------------------------------------------------------------------
 
 /**
