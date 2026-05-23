@@ -26,6 +26,10 @@ const USAGE = `webjs commands:
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
+  webjs vendor warm                               Pre-bundle every bare-specifier npm dep into the in-memory
+                                                  vendor cache, so the first user request after server boot
+                                                  pays no esbuild latency. Optional; add to your prestart hook
+                                                  for production cold-start mitigation. No disk artifacts.
   webjs help                                      Show this help`;
 
 /** @param {string[]} args */
@@ -264,6 +268,48 @@ Full docs: https://docs.webjs.com`);
       const noInstall = rest.includes('--no-install');
       const { scaffoldApp } = await import('../lib/create.js');
       await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
+      break;
+    }
+    case 'vendor': {
+      const sub = rest[0];
+      if (sub !== 'warm') {
+        console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
+          `Usage:\n` +
+          `  webjs vendor warm    Pre-bundle bare-import deps into in-memory cache.\n` +
+          `                       Run in prestart to eliminate first-user latency on production cold start.`);
+        process.exit(1);
+      }
+      // Pre-bundle every bare-import package into the in-memory vendor
+      // cache before the server starts accepting connections. After
+      // this completes, the first user request hits the cache and
+      // returns in ~1ms instead of paying esbuild's ~50-300ms per
+      // package. Off by default; users opt in via prestart hook.
+      const { scanBareImports, bundlePackage, getPackageVersion, extractPackageName } =
+        await import('@webjsdev/server');
+      const appDir = process.cwd();
+      console.log(`Warming vendor cache from ${appDir}...`);
+      const bare = await scanBareImports(appDir);
+      let okCount = 0;
+      let failCount = 0;
+      for (const spec of bare) {
+        const pkgName = extractPackageName(spec);
+        if (!pkgName) continue;
+        const version = getPackageVersion(pkgName, appDir);
+        if (!version) {
+          console.error(`  ${pkgName.padEnd(40)} skipped (version not resolvable)`);
+          continue;
+        }
+        const code = await bundlePackage(pkgName, version, appDir, false);
+        if (code) {
+          console.log(`  ${pkgName}@${version}`.padEnd(42) + ` ${(code.length / 1024).toFixed(1)} KB`);
+          okCount++;
+        } else {
+          console.error(`  ${pkgName}@${version}`.padEnd(42) + ` FAILED`);
+          failCount++;
+        }
+      }
+      console.log(`Warmed ${okCount} package${okCount === 1 ? '' : 's'}` +
+        (failCount ? `, ${failCount} failed (probably server-only deps; safe to ignore).` : '.'));
       break;
     }
     case 'help':
