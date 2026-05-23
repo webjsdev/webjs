@@ -769,12 +769,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
    }
    ```
 
-   If you turn `erasableSyntaxOnly` off and use non-erasable syntax,
-   the dev server falls back to esbuild and emits inline sourcemaps
-   for those specific files: roughly 3x wire bytes per request, and
-   stack-trace positions are no longer byte-exact. The
-   `erasable-typescript-only` convention check warns when the flag
-   is missing or set to false.
+   Non-erasable syntax is rejected at request time with a 500 and a
+   clear remediation message; there is no esbuild fallback. The
+   `erasable-typescript-only` convention check verifies the tsconfig
+   flag, and `no-non-erasable-typescript` scans `.ts` source for the
+   four common offending patterns even if the flag is unset.
 9. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used
    as a pause-punctuation substitute.** Prose, comments, code, JSON
    descriptions, commit messages. Rewrite the sentence so no
