@@ -72,29 +72,32 @@ const MEMORY_CACHE_MAX = 100;
 const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
 
 /**
- * Default CDN chain. jspm.io is the primary (matches Rails 7 +
- * importmap-rails); esm.sh is the fallback for edge cases jspm.io
- * rejects. Both serve pre-built ESM that handles the CJS-to-ESM
- * conversion plus transitive bundling.
+ * Default CDN chain. esm.sh is the primary; jspm.io is a fallback.
  *
- * jspm.io as primary because: lower bus-factor risk (institutional
- * sponsors include 37signals, CacheFly, Socket, Framer; Rails
- * ecosystem depends on it). Status page at status.jspm.io for
- * incident transparency. Standards-first maintainer (Guy Bedford,
- * TC39 contributor on ESM / HTML / import maps).
+ * Why esm.sh primary even though Rails uses jspm.io: esm.sh handles
+ * the bare-import URL pattern (`https://esm.sh/<pkg>@<ver>`)
+ * natively, returning ESM that the browser can execute directly.
+ * jspm.io requires the resolved entry path (`https://ga.jspm.io/
+ * npm:<pkg>@<ver>/<entry-file>`), which Rails' `bin/importmap pin`
+ * resolves via the jspm Generator API. webjs's vendor pipeline
+ * constructs URLs lazily at first-request time and doesn't currently
+ * call the Generator API, so jspm.io is left as a fallback for
+ * future work rather than primary.
  *
- * esm.sh as fallback because: Cloudflare-backed infrastructure;
- * more permissive transformations (handles CSS imports, on-the-fly
- * TypeScript / Vue / Svelte, broader CJS edge cases). Kept as
- * fallback for packages jspm.io rejects.
+ * Tradeoff vs Rails: webjs gets esm.sh's broader CDN edge presence
+ * (Cloudflare) at the cost of lower institutional backing. The
+ * jspm.io fallback is partially broken today (returns metadata
+ * instead of JS for the bare-URL pattern). TODO: implement local
+ * entry-path resolution from `package.json` `exports`/`module`/`main`
+ * to make the jspm.io URL well-formed, or call api.jspm.io/generate
+ * at server boot to populate a resolved importmap eagerly.
  *
  * `?target=es2022` on the esm.sh URL matches the runtime target the
- * framework expects. jspm.io's default output is already standards-
- * pure ESM with no query needed.
+ * framework expects.
  */
 const CDN_TEMPLATES = [
-  (pkg, version, sub) => `https://ga.jspm.io/npm:${pkg}@${version}${sub}`,
   (pkg, version, sub) => `https://esm.sh/${pkg}@${version}${sub}?target=es2022`,
+  (pkg, version, sub) => `https://ga.jspm.io/npm:${pkg}@${version}${sub}`,
 ];
 
 /** Re-export so callers don't need to redefine the predicate. */
@@ -333,7 +336,7 @@ export async function removeFromCache(appDir, pkgName, version, subpath = '') {
 }
 
 // ---------------------------------------------------------------------------
-// CDN fetch (jspm.io primary, esm.sh fallback)
+// CDN fetch (esm.sh primary, jspm.io fallback; see CDN_TEMPLATES comment)
 // ---------------------------------------------------------------------------
 
 /**

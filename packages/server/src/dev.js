@@ -409,7 +409,7 @@ async function handleCore(req, ctx) {
   }
 
   // Vendor bundles: /__webjs/vendor/<pkg>@<ver>[/<subpath>].js. Bytes
-  // come from jspm.io (fallback esm.sh) on first request, then from
+  // come from esm.sh (fallback jspm.io) on first request, then from
   // vendor/javascript/ on every request thereafter. See
   // vendor.js for the full architecture.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
