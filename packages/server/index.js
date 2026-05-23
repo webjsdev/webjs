@@ -11,7 +11,7 @@ export {
   invokeAction,
 } from './src/actions.js';
 export { buildImportMap, importMapTag, setVendorEntries } from './src/importmap.js';
-export { scanBareImports, extractPackageName, bundlePackage, vendorImportMapEntries, clearVendorCache, serveVendorBundle } from './src/vendor.js';
+export { scanBareImports, extractPackageName, vendorImportMapEntries, clearVendorCache, getPackageVersion, jspmGenerate } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
 export { headers, cookies, getRequest, withRequest } from './src/context.js';

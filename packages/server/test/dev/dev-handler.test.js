@@ -87,24 +87,19 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
 });
 
-/* ------------ vendor bundles ------------ */
+/* ------------ vendor URLs are not handled locally ------------ */
+//
+// Under the jspm.io direct architecture, the importmap routes bare
+// imports to https://ga.jspm.io/npm:<pkg>@<version>/... URLs and the
+// browser fetches the bundle directly from jspm.io. The webjs server
+// has no /__webjs/vendor/ handler. Requests to that path fall through
+// to the unknown-__webjs-path 404 branch, same as any other unknown
+// internal-prefixed URL.
 
-test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', async () => {
-  // Use the repo root as appDir so node_modules is resolvable via the
-  // monorepo hoisting chain: bundlePackage() uses createRequire against
-  // the appDir's package.json.
-  const repoRoot = resolve(__dirname, '..');
-  const silent = { info: () => {}, warn: () => {}, error: () => {} };
-  const app = await createRequestHandler({ appDir: repoRoot, dev: true, logger: silent });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/picocolors.js'));
-  assert.equal(resp.status, 200);
-  assert.ok(resp.headers.get('content-type').includes('javascript'));
-});
-
-test('handle: /__webjs/vendor/unknown.js → 404', async () => {
+test('handle: /__webjs/vendor/* path is unhandled (no local vendor proxy)', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz.js'));
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/anything.js'));
   assert.equal(resp.status, 404);
 });
 

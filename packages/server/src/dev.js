@@ -57,7 +57,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, vendorImportMapEntries, serveVendorBundle, clearVendorCache } from './vendor.js';
+import { scanBareImports, vendorImportMapEntries, clearVendorCache } from './vendor.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents } from './component-scanner.js';
 
@@ -130,7 +130,7 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(vendorImportMapEntries(bareImports));
+  setVendorEntries(await vendorImportMapEntries(bareImports, appDir));
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -171,7 +171,7 @@ export async function createRequestHandler(opts) {
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(vendorImportMapEntries(state.bareImports));
+    setVendorEntries(await vendorImportMapEntries(state.bareImports, appDir));
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
@@ -408,13 +408,10 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
-  // (Vite-style optimizeDeps) for any bare npm import that webjs can't
-  // serve directly as ESM.
-  if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    const pkgName = decodeURIComponent(path.slice('/__webjs/vendor/'.length, -'.js'.length));
-    return serveVendorBundle(pkgName, appDir, dev);
-  }
+  // No /__webjs/vendor/* URL handler. Vendor packages resolve via the
+  // importmap to jspm.io CDN URLs and the browser fetches them
+  // directly. webjs's server doesn't proxy or bundle vendor packages.
+  // See vendor.js for the Rails 7 + importmap-rails posture.
 
   // Internal server-action RPC endpoint
   const actMatch = /^\/__webjs\/action\/([a-f0-9]+)\/([A-Za-z0-9_$]+)$/.exec(path);

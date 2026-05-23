@@ -8,8 +8,8 @@ import {
   extractPackageName,
   scanBareImports,
   vendorImportMapEntries,
-  bundlePackage,
-  serveVendorBundle,
+  getPackageVersion,
+  jspmGenerate,
   clearVendorCache,
 } from '../../src/vendor.js';
 
@@ -49,6 +49,14 @@ test('extractPackageName: empty string returns null', () => {
   assert.equal(extractPackageName(''), null);
 });
 
+test('extractPackageName: __webjs-prefixed specifier returns null', () => {
+  assert.equal(extractPackageName('__webjs/vendor/x'), null);
+});
+
+test('extractPackageName: lone @scope with no package name returns null', () => {
+  assert.equal(extractPackageName('@scope'), null);
+});
+
 // --- scanBareImports ---
 
 test('scanBareImports: finds bare specifiers in source files', async () => {
@@ -64,7 +72,6 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
     import { z } from 'zod';
     const d = await import('dynamic-pkg');
   `);
-  // Server files should be skipped
   await writeFile(join(dir, 'c.server.ts'), `
     import pg from 'pg';
   `);
@@ -77,7 +84,6 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   assert.ok(found.has('dynamic-pkg'));
   assert.ok(!found.has('pg'), 'server-only imports should be skipped');
   assert.ok(!found.has('./local.js'), 'relative imports should be excluded');
-  // Built-ins should never appear
   assert.ok(!found.has('@webjsdev/core'));
 
   await rm(dir, { recursive: true, force: true });
@@ -88,27 +94,23 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
   await mkdir(join(dir, 'app', 'api', 'posts'), { recursive: true });
   await mkdir(join(dir, 'app', 'dashboard'), { recursive: true });
 
-  // route.ts: server-only by file-router convention.
   await writeFile(
     join(dir, 'app', 'api', 'posts', 'route.ts'),
     `import { PrismaClient } from '@prisma/client';
      import 'server-only-helper';`,
   );
 
-  // middleware.ts (per-segment): server-only.
   await writeFile(
     join(dir, 'app', 'dashboard', 'middleware.ts'),
     `import { WebSocketServer } from 'ws';
      import 'another-server-thing';`,
   );
 
-  // Root-level middleware.ts: same convention.
   await writeFile(
     join(dir, 'middleware.ts'),
     `import 'root-mw-server-only';`,
   );
 
-  // A regular page.ts: bare imports SHOULD enter the scan.
   await writeFile(
     join(dir, 'app', 'dashboard', 'page.ts'),
     `import dayjs from 'dayjs';`,
@@ -201,101 +203,80 @@ test('scanBareImports: skips node_modules and _private dirs', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// --- vendorImportMapEntries ---
+// --- getPackageVersion ---
 
-test('vendorImportMapEntries: generates correct URLs', () => {
-  const entries = vendorImportMapEntries(new Set(['dayjs', '@tanstack/query']));
-  assert.equal(entries['dayjs'], '/__webjs/vendor/dayjs.js');
-  assert.equal(entries['@tanstack/query'], '/__webjs/vendor/%40tanstack%2Fquery.js');
+test('getPackageVersion: returns installed version for a known package', () => {
+  // picocolors is installed in this repo. The exact version varies
+  // across npm bumps; assert the shape and non-empty value.
+  const v = getPackageVersion('picocolors', process.cwd());
+  assert.ok(v, 'expected a version string');
+  assert.match(v, /^\d+\.\d+\.\d+/);
 });
 
-test('vendorImportMapEntries: skips built-ins', () => {
-  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'dayjs']));
-  assert.ok(!('@webjsdev/core' in entries));
-  assert.ok('dayjs' in entries);
+test('getPackageVersion: returns null for unresolvable package', () => {
+  const v = getPackageVersion('this-package-truly-does-not-exist-xyz-123', process.cwd());
+  assert.equal(v, null);
 });
 
-// --- extractPackageName: edge cases ---
-
-test('extractPackageName: __webjs-prefixed specifier returns null', () => {
-  // The implementation treats specifiers starting with "__" as non-bundleable
-  // (framework-internal URLs like /__webjs/...).
-  assert.equal(extractPackageName('__webjs/vendor/x'), null);
-});
-
-test('extractPackageName: lone @scope with no package name returns null', () => {
-  assert.equal(extractPackageName('@scope'), null);
-});
-
-// --- bundlePackage + serveVendorBundle ---
+// --- jspmGenerate (network-gated) ---
 //
-// These exercise the esbuild path against a tiny, dependency-free package
-// that's already installed in node_modules (`picocolors`). A single esbuild
-// invocation usually completes in ~50–150ms.
+// These tests hit api.jspm.io. Skip via WEBJS_SKIP_NETWORK_TESTS=1 in
+// air-gapped CI.
 
-test('bundlePackage: bundles a real package → ESM source', async () => {
+const NETWORK_OK = !process.env.WEBJS_SKIP_NETWORK_TESTS;
+
+test('jspmGenerate: empty install list returns empty map', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
-  const code = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(typeof code, 'string');
-  assert.ok(code.length > 0, 'bundle should be non-empty');
-  // ESM bundles should export something.
-  assert.ok(/export\s*(?:default|{)/.test(code), 'expected ESM exports');
+  const result = await jspmGenerate([]);
+  assert.deepEqual(result, {});
 });
 
-test('bundlePackage: second call hits the in-memory cache', async () => {
-  // Prime
-  const first = await bundlePackage('picocolors', process.cwd(), false);
-  // Second call should return the exact same cached string without rebuilding
-  const second = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(first, second);
+test('jspmGenerate: resolves a real package to a CDN URL', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const result = await jspmGenerate(['picocolors@1.1.1']);
+  const url = result['picocolors'];
+  assert.ok(url, 'expected picocolors entry in result');
+  assert.match(url, /^https:\/\/ga\.jspm\.io\/npm:picocolors@1\.1\.1/);
 });
 
-test('bundlePackage: unknown package → null', async () => {
+test('jspmGenerate: second call with same installs hits in-process cache', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
-  const code = await bundlePackage('this-pkg-definitely-does-not-exist-xyz', process.cwd(), false);
-  assert.equal(code, null);
+  const first = await jspmGenerate(['picocolors@1.1.1']);
+  // No second network round-trip (cache hit). We can verify by
+  // ensuring the response is the same object reference.
+  const second = await jspmGenerate(['picocolors@1.1.1']);
+  assert.equal(first, second, 'cached call should return same object reference');
 });
 
-test('clearVendorCache: subsequent bundlePackage call re-builds', async () => {
-  await bundlePackage('picocolors', process.cwd(), false);   // populates cache
+test('jspmGenerate: install order does not affect cache key', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
-  // Re-build should still work (and return a string).
-  const code = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(typeof code, 'string');
-  assert.ok(code.length > 0);
+  const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
+  // Second call with reordered installs should hit the same cache entry.
+  const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
+  assert.equal(a, b, 'cache should be order-independent');
 });
 
-test('serveVendorBundle: known package → 200 JS response with cache headers', async () => {
+// --- vendorImportMapEntries (network-gated) ---
+
+test('vendorImportMapEntries: skips built-ins', async () => {
   clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), false);
-  assert.equal(resp.status, 200);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
+  const entries = await vendorImportMapEntries(new Set(['@webjsdev/core']), process.cwd());
+  assert.ok(!('@webjsdev/core' in entries), '@webjsdev/core is built-in, not vendored');
+});
+
+test('vendorImportMapEntries: skips packages with no installed version', async () => {
+  clearVendorCache();
+  const entries = await vendorImportMapEntries(
+    new Set(['this-package-does-not-exist-xyz-456']),
+    process.cwd(),
   );
-  assert.equal(
-    resp.headers.get('cache-control'),
-    'public, max-age=31536000, immutable',
-  );
-  const body = await resp.text();
-  assert.ok(body.length > 0);
+  assert.equal(entries['this-package-does-not-exist-xyz-456'], undefined);
 });
 
-test('serveVendorBundle: dev=true uses no-cache', async () => {
+test('vendorImportMapEntries: resolves installed packages to jspm.io URLs', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), true);
-  assert.equal(resp.status, 200);
-  assert.equal(resp.headers.get('cache-control'), 'no-cache');
-});
-
-test('serveVendorBundle: unknown package → 404 JS response', async () => {
-  clearVendorCache();
-  const resp = await serveVendorBundle('this-pkg-does-not-exist-abc', process.cwd(), false);
-  assert.equal(resp.status, 404);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
-  );
-  const body = await resp.text();
-  assert.ok(body.includes('this-pkg-does-not-exist-abc'));
+  const entries = await vendorImportMapEntries(new Set(['picocolors']), process.cwd());
+  const url = entries['picocolors'];
+  assert.ok(url, 'expected picocolors entry');
+  assert.match(url, /^https:\/\/ga\.jspm\.io\/npm:picocolors@/);
 });
