@@ -52,13 +52,15 @@ If a third-party package ships `.ts` source using non-erasable
 syntax (rare; most npm packages publish compiled `.js`), the dev
 server transparently falls back to `esbuild.transform` for those
 specific files. The fallback emits an inline sourcemap so DevTools
-can still resolve source positions. Your own code never takes this
-path as long as `erasableSyntaxOnly` is set.
+can still resolve source positions. Your own code never reaches the
+stripper's failure mode as long as `erasableSyntaxOnly` is set.
 
 If you manually turn `erasableSyntaxOnly` off and write non-erasable
-syntax in your own code, the same fallback fires: those files cost
-~3x wire bytes (sourcemap overhead) and lose strict position
-preservation. The convention check warns about this.
+syntax in your own code, the request fails with a 500 and a clear
+remediation message. There is no esbuild fallback. The
+`erasable-typescript-only` convention check warns when the tsconfig
+flag is off, and `no-non-erasable-typescript` scans `.ts` source for
+the four common offending patterns as a second line of defense.
 
 ## Import convention
 
