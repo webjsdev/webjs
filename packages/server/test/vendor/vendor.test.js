@@ -8,9 +8,11 @@ import {
   extractPackageName,
   scanBareImports,
   vendorImportMapEntries,
+  parseVendorId,
   bundlePackage,
   serveVendorBundle,
   clearVendorCache,
+  getPackageVersion,
 } from '../../src/vendor.js';
 
 // --- extractPackageName ---
@@ -201,18 +203,48 @@ test('scanBareImports: skips node_modules and _private dirs', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// --- vendorImportMapEntries ---
+// --- vendorImportMapEntries (with version-in-URL) ---
 
-test('vendorImportMapEntries: generates correct URLs', () => {
-  const entries = vendorImportMapEntries(new Set(['dayjs', '@tanstack/query']));
-  assert.equal(entries['dayjs'], '/__webjs/vendor/dayjs.js');
-  assert.equal(entries['@tanstack/query'], '/__webjs/vendor/%40tanstack%2Fquery.js');
+test('vendorImportMapEntries: emits /__webjs/vendor/<pkg>@<version>.js URLs', () => {
+  const entries = vendorImportMapEntries(new Set(['picocolors']), process.cwd());
+  const url = entries['picocolors'];
+  assert.ok(url, 'picocolors should get an entry');
+  assert.match(url, /^\/__webjs\/vendor\/picocolors@\d+\.\d+\.\d+\.js$/);
 });
 
 test('vendorImportMapEntries: skips built-ins', () => {
-  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'dayjs']));
+  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'picocolors']), process.cwd());
   assert.ok(!('@webjsdev/core' in entries));
-  assert.ok('dayjs' in entries);
+  assert.ok('picocolors' in entries);
+});
+
+test('vendorImportMapEntries: skips packages whose version cannot be resolved', () => {
+  const entries = vendorImportMapEntries(
+    new Set(['this-package-does-not-exist-xyz-123']),
+    process.cwd(),
+  );
+  assert.ok(!('this-package-does-not-exist-xyz-123' in entries));
+});
+
+// --- parseVendorId ---
+
+test('parseVendorId: plain package', () => {
+  assert.deepEqual(parseVendorId('dayjs@1.11.13.js'), { pkgName: 'dayjs', version: '1.11.13' });
+});
+
+test('parseVendorId: scoped package using `--` separator', () => {
+  assert.deepEqual(
+    parseVendorId('@hotwired--turbo@8.0.0.js'),
+    { pkgName: '@hotwired/turbo', version: '8.0.0' },
+  );
+});
+
+test('parseVendorId: missing @version returns null', () => {
+  assert.equal(parseVendorId('dayjs.js'), null);
+});
+
+test('parseVendorId: works without trailing .js', () => {
+  assert.deepEqual(parseVendorId('dayjs@1.11.13'), { pkgName: 'dayjs', version: '1.11.13' });
 });
 
 // --- extractPackageName: edge cases ---
@@ -235,67 +267,78 @@ test('extractPackageName: lone @scope with no package name returns null', () => 
 
 test('bundlePackage: bundles a real package → ESM source', async () => {
   clearVendorCache();
-  const code = await bundlePackage('picocolors', process.cwd(), false);
+  const version = getPackageVersion('picocolors', process.cwd());
+  const code = await bundlePackage('picocolors', version, process.cwd(), false);
   assert.equal(typeof code, 'string');
   assert.ok(code.length > 0, 'bundle should be non-empty');
-  // ESM bundles should export something.
   assert.ok(/export\s*(?:default|{)/.test(code), 'expected ESM exports');
 });
 
-test('bundlePackage: second call hits the in-memory cache', async () => {
-  // Prime
-  const first = await bundlePackage('picocolors', process.cwd(), false);
-  // Second call should return the exact same cached string without rebuilding
-  const second = await bundlePackage('picocolors', process.cwd(), false);
+test('bundlePackage: second call hits the in-memory cache (keyed by pkg@version)', async () => {
+  const version = getPackageVersion('picocolors', process.cwd());
+  const first = await bundlePackage('picocolors', version, process.cwd(), false);
+  const second = await bundlePackage('picocolors', version, process.cwd(), false);
   assert.equal(first, second);
 });
 
 test('bundlePackage: unknown package → null', async () => {
   clearVendorCache();
-  const code = await bundlePackage('this-pkg-definitely-does-not-exist-xyz', process.cwd(), false);
+  const code = await bundlePackage('this-pkg-definitely-does-not-exist-xyz', '1.0.0', process.cwd(), false);
   assert.equal(code, null);
 });
 
 test('clearVendorCache: subsequent bundlePackage call re-builds', async () => {
-  await bundlePackage('picocolors', process.cwd(), false);   // populates cache
+  const version = getPackageVersion('picocolors', process.cwd());
+  await bundlePackage('picocolors', version, process.cwd(), false);
   clearVendorCache();
-  // Re-build should still work (and return a string).
-  const code = await bundlePackage('picocolors', process.cwd(), false);
+  const code = await bundlePackage('picocolors', version, process.cwd(), false);
   assert.equal(typeof code, 'string');
   assert.ok(code.length > 0);
 });
 
-test('serveVendorBundle: known package → 200 JS response with cache headers', async () => {
+test('serveVendorBundle: known package id → 200 JS response with immutable cache headers', async () => {
   clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), false);
+  const version = getPackageVersion('picocolors', process.cwd());
+  const resp = await serveVendorBundle(`picocolors@${version}.js`, process.cwd(), false);
   assert.equal(resp.status, 200);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
-  );
-  assert.equal(
-    resp.headers.get('cache-control'),
-    'public, max-age=31536000, immutable',
-  );
+  assert.equal(resp.headers.get('content-type'), 'application/javascript; charset=utf-8');
+  assert.equal(resp.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   const body = await resp.text();
   assert.ok(body.length > 0);
 });
 
 test('serveVendorBundle: dev=true uses no-cache', async () => {
   clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), true);
+  const version = getPackageVersion('picocolors', process.cwd());
+  const resp = await serveVendorBundle(`picocolors@${version}.js`, process.cwd(), true);
   assert.equal(resp.status, 200);
   assert.equal(resp.headers.get('cache-control'), 'no-cache');
 });
 
-test('serveVendorBundle: unknown package → 404 JS response', async () => {
-  clearVendorCache();
-  const resp = await serveVendorBundle('this-pkg-does-not-exist-abc', process.cwd(), false);
+test('serveVendorBundle: malformed id (no @version) → 404', async () => {
+  const resp = await serveVendorBundle('not-a-valid-id.js', process.cwd(), false);
   assert.equal(resp.status, 404);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
-  );
+  const body = await resp.text();
+  assert.ok(body.includes('malformed vendor id'));
+});
+
+test('serveVendorBundle: unknown package id → 404', async () => {
+  clearVendorCache();
+  const resp = await serveVendorBundle('this-pkg-does-not-exist-abc@1.0.0.js', process.cwd(), false);
+  assert.equal(resp.status, 404);
   const body = await resp.text();
   assert.ok(body.includes('this-pkg-does-not-exist-abc'));
+});
+
+test('serveVendorBundle: version-in-URL means same pkg different versions cache independently', async () => {
+  clearVendorCache();
+  const version = getPackageVersion('picocolors', process.cwd());
+  // Real version bundles successfully.
+  const resp1 = await serveVendorBundle(`picocolors@${version}.js`, process.cwd(), false);
+  assert.equal(resp1.status, 200);
+  // Fake "old" version doesn't error; esbuild bundles whatever's in
+  // node_modules (the actual installed version). Cache key is the
+  // requested version, so this populates a separate cache entry.
+  const resp2 = await serveVendorBundle('picocolors@0.0.0-fake.js', process.cwd(), false);
+  assert.equal(resp2.status, 200);
 });

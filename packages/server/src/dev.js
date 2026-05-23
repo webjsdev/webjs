@@ -130,7 +130,7 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(vendorImportMapEntries(bareImports));
+  setVendorEntries(vendorImportMapEntries(bareImports, appDir));
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -171,7 +171,7 @@ export async function createRequestHandler(opts) {
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(vendorImportMapEntries(state.bareImports));
+    setVendorEntries(vendorImportMapEntries(state.bareImports, appDir));
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
@@ -408,12 +408,14 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
-  // (Vite-style optimizeDeps) for any bare npm import that webjs can't
-  // serve directly as ESM.
+  // Vendor bundles: /__webjs/vendor/<pkg>@<version>.js
+  // Generic auto-bundler (Vite-style optimizeDeps) for any bare npm
+  // import that webjs can't serve directly as ESM. URL includes the
+  // installed version so browser caches invalidate automatically on
+  // version bump.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    const pkgName = decodeURIComponent(path.slice('/__webjs/vendor/'.length, -'.js'.length));
-    return serveVendorBundle(pkgName, appDir, dev);
+    const id = path.slice('/__webjs/vendor/'.length);
+    return serveVendorBundle(id, appDir, dev);
   }
 
   // Internal server-action RPC endpoint

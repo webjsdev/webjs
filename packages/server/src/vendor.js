@@ -20,7 +20,8 @@
  */
 
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { join, extname, sep } from 'node:path';
+import { readFileSync, realpathSync, existsSync } from 'node:fs';
+import { join, dirname, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
 /**
@@ -161,15 +162,76 @@ async function walk(dir, found) {
 }
 
 /**
+ * Resolve a package's actual directory on disk, handling both direct
+ * installation and npm workspace hoisting. Returns null when the
+ * package isn't resolvable from `appDir`.
+ *
+ * @param {string} pkgName
+ * @param {string} appDir
+ * @returns {string | null}
+ */
+function resolvePackageDir(pkgName, appDir) {
+  try {
+    const require = createRequire(join(appDir, 'package.json'));
+    const entry = require.resolve(pkgName);
+    const parts = entry.split(sep);
+    const nmIdx = parts.lastIndexOf('node_modules');
+    if (nmIdx < 0) {
+      // Workspace-symlinked dep resolved to source location. Walk up
+      // to find the package.json.
+      let dir = dirname(entry);
+      for (let i = 0; i < 8; i++) {
+        if (existsSync(join(dir, 'package.json'))) return realpathSync(dir);
+        const parent = dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      return null;
+    }
+    const segmentsAfterNm = pkgName.startsWith('@') ? 2 : 1;
+    const root = parts.slice(0, nmIdx + 1 + segmentsAfterNm).join(sep);
+    return realpathSync(root);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the installed version of a package from `node_modules/<pkg>/
+ * package.json`. Handles workspace hoisting and packages that lock
+ * down `./package.json` in their exports field (which break a naive
+ * `require.resolve('<pkg>/package.json')`).
+ *
+ * @param {string} pkgName
+ * @param {string} appDir
+ * @returns {string | null}
+ */
+export function getPackageVersion(pkgName, appDir) {
+  const real = resolvePackageDir(pkgName, appDir);
+  if (!real) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Bundle an npm package into a single ESM file for the browser.
+ * Cache is keyed by `<pkgName>@<version>` so version bumps naturally
+ * miss and re-bundle without colliding with the previous version's
+ * bytes.
  *
  * @param {string} pkgName  e.g. `'dayjs'`
+ * @param {string} version  installed version (e.g. `'1.11.13'`)
  * @param {string} appDir   app root for resolving node_modules
  * @param {boolean} dev
  * @returns {Promise<string | null>}  bundled JS source, or null if not found
  */
-export async function bundlePackage(pkgName, appDir, dev) {
-  const cached = vendorCache.get(pkgName);
+export async function bundlePackage(pkgName, version, appDir, dev) {
+  const cacheKey = `${pkgName}@${version}`;
+  const cached = vendorCache.get(cacheKey);
   if (cached) return cached;
 
   let build;
@@ -202,7 +264,7 @@ export async function bundlePackage(pkgName, appDir, dev) {
       const oldest = vendorCache.keys().next().value;
       vendorCache.delete(oldest);
     }
-    vendorCache.set(pkgName, code);
+    vendorCache.set(cacheKey, code);
     return code;
   } catch (e) {
     // Build failed (native module, server-only dep, etc.): skip silently
@@ -213,17 +275,57 @@ export async function bundlePackage(pkgName, appDir, dev) {
 /**
  * Build extra import map entries for discovered bare imports.
  *
+ * URL shape: `/__webjs/vendor/<safe-name>@<version>.js`. Scoped
+ * packages encode `/` as `--` (filesystem and URL safe, mirrors the
+ * Rails 7 + importmap-rails vendor convention). Including the version
+ * in the URL means browser caches invalidate automatically on every
+ * version bump (no more stale-bundle bug after `npm install pkg@new`).
+ *
+ * Packages whose version can't be resolved from `appDir/node_modules/`
+ * are skipped (no importmap entry emitted). The browser will surface
+ * an "unresolved bare specifier" error at first import, which is the
+ * right signal that the package isn't installed.
+ *
  * @param {Set<string>} bareImports  from scanBareImports()
+ * @param {string} appDir
  * @returns {Record<string, string>}
  */
-export function vendorImportMapEntries(bareImports) {
+export function vendorImportMapEntries(bareImports, appDir) {
   /** @type {Record<string, string>} */
   const entries = {};
   for (const pkg of bareImports) {
     if (BUILTIN.has(pkg)) continue;
-    entries[pkg] = `/__webjs/vendor/${encodeURIComponent(pkg)}.js`;
+    const version = getPackageVersion(pkg, appDir);
+    if (!version) continue;
+    const safeName = pkg.replace(/\//g, '--');
+    entries[pkg] = `/__webjs/vendor/${safeName}@${version}.js`;
   }
   return entries;
+}
+
+/**
+ * Parse a vendor URL id (the URL path segment after `/__webjs/vendor/`
+ * with the trailing `.js` stripped) back into a `{ pkgName, version }`
+ * pair. Inverse of `vendorImportMapEntries`'s URL generation.
+ *
+ * Examples:
+ *   `dayjs@1.11.13`          → { pkgName: 'dayjs',           version: '1.11.13' }
+ *   `@hotwired--turbo@8.0.0` → { pkgName: '@hotwired/turbo', version: '8.0.0' }
+ *
+ * Returns null for malformed ids (no `@<version>` segment).
+ *
+ * @param {string} id  URL path after `/__webjs/vendor/`, without `.js` suffix
+ * @returns {{ pkgName: string, version: string } | null}
+ */
+export function parseVendorId(id) {
+  const stem = id.endsWith('.js') ? id.slice(0, -3) : id;
+  const atIdx = stem.lastIndexOf('@');
+  if (atIdx <= 0) return null;
+  const rawName = stem.slice(0, atIdx);
+  const version = stem.slice(atIdx + 1);
+  if (!version) return null;
+  const pkgName = rawName.replace(/--/g, '/');
+  return { pkgName, version };
 }
 
 /**
@@ -235,17 +337,29 @@ export function clearVendorCache() {
 }
 
 /**
- * Serve a vendor bundle for the given package name.
+ * Serve a vendor bundle in response to a `/__webjs/vendor/<id>.js`
+ * request. The id encodes both package name and version (see
+ * `parseVendorId`). Malformed ids return 404. Cache headers use
+ * `immutable` in production because the version baked into the URL
+ * guarantees content addresses are stable: a new version means a new
+ * URL, not a new payload behind the old URL.
  *
- * @param {string} pkgName
+ * @param {string} id        URL path after `/__webjs/vendor/`, including `.js`
  * @param {string} appDir
  * @param {boolean} dev
  * @returns {Promise<Response>}
  */
-export async function serveVendorBundle(pkgName, appDir, dev) {
-  const code = await bundlePackage(pkgName, appDir, dev);
+export async function serveVendorBundle(id, appDir, dev) {
+  const parsed = parseVendorId(id);
+  if (!parsed) {
+    return new Response(`/* malformed vendor id: ${id} */`, {
+      status: 404,
+      headers: { 'content-type': 'application/javascript; charset=utf-8' },
+    });
+  }
+  const code = await bundlePackage(parsed.pkgName, parsed.version, appDir, dev);
   if (code == null) {
-    return new Response(`/* vendor bundle failed for ${pkgName} */`, {
+    return new Response(`/* vendor bundle failed for ${parsed.pkgName}@${parsed.version} */`, {
       status: 404,
       headers: { 'content-type': 'application/javascript; charset=utf-8' },
     });

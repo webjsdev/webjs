@@ -89,14 +89,18 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
 
 /* ------------ vendor bundles ------------ */
 
-test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', async () => {
+test('handle: /__webjs/vendor/<pkg>@<version>.js serves a built bundle', async () => {
   // Use the repo root as appDir so node_modules is resolvable via the
   // monorepo hoisting chain: bundlePackage() uses createRequire against
   // the appDir's package.json.
   const repoRoot = resolve(__dirname, '..');
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
   const app = await createRequestHandler({ appDir: repoRoot, dev: true, logger: silent });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/picocolors.js'));
+  // Read picocolors's installed version so the test stays accurate
+  // across npm bumps in the repo.
+  const { getPackageVersion } = await import('../../src/vendor.js');
+  const version = getPackageVersion('picocolors', repoRoot);
+  const resp = await app.handle(new Request(`http://x/__webjs/vendor/picocolors@${version}.js`));
   assert.equal(resp.status, 200);
   assert.ok(resp.headers.get('content-type').includes('javascript'));
 });
@@ -104,7 +108,7 @@ test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', a
 test('handle: /__webjs/vendor/unknown.js → 404', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz.js'));
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz@1.0.0.js'));
   assert.equal(resp.status, 404);
 });
 
