@@ -11,6 +11,136 @@ async function makeTempApp() {
   return dir;
 }
 
+async function writeFileEnsureDir(filePath, contents) {
+  const dir = filePath.slice(0, filePath.lastIndexOf('/'));
+  await mkdir(dir, { recursive: true });
+  await writeFile(filePath, contents);
+}
+
+/**
+ * Tests for the no-non-erasable-typescript rule. Scans .ts source
+ * for the four constructs the framework's type-stripper rejects:
+ * enum, namespace with values, constructor parameter properties,
+ * `import = require`. Each test plants one offender and asserts
+ * the rule flags it.
+ */
+
+test('no-non-erasable-typescript: flags enum declaration', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'modules', 'auth', 'types.ts'),
+      `export enum Status { Active = 'active', Inactive = 'inactive' }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('types.ts'));
+    assert.ok(v, 'expected enum to be flagged');
+    assert.ok(v.message.includes('enum'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags constructor parameter property', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'box.ts'),
+      `export class Box {
+  constructor(public readonly width: number, public readonly height: number) {}
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('box.ts'));
+    assert.ok(v, 'expected parameter property to be flagged');
+    assert.ok(v.message.includes('parameter property'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags namespace with values', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'ns.ts'),
+      `export namespace Utils {
+  export const VERSION = '1.0';
+  export function bump() { return VERSION; }
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('ns.ts'));
+    assert.ok(v, 'expected namespace with values to be flagged');
+    assert.ok(v.message.includes('namespace'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags import = require', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'legacy.ts'),
+      `import legacy = require('legacy-module');\nexport { legacy };\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('legacy.ts'));
+    assert.ok(v, 'expected import = require to be flagged');
+    assert.ok(v.message.includes('import = require'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: passes for clean erasable .ts file', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'clean.ts'),
+      `export type Status = 'active' | 'inactive';
+export interface Box { width: number; height: number; }
+export const STATUS: Record<Status, number> = { active: 1, inactive: 0 };
+export class Counter {
+  count: number;
+  constructor(initial: number) { this.count = initial; }
+  increment(): void { this.count++; }
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('clean.ts'));
+    assert.equal(v, undefined, 'clean erasable code should not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: skips node_modules and _private folders', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'node_modules', 'somepkg', 'index.ts'),
+      `export enum Skip { A, B }\n`,
+    );
+    await writeFileEnsureDir(
+      join(appDir, '_private', 'helper.ts'),
+      `export enum AlsoSkip { A, B }\n`,
+    );
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'caught.ts'),
+      `export enum Caught { A, B }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const all = violations.filter((v) => v.rule === 'no-non-erasable-typescript');
+    assert.equal(all.length, 1, `expected one violation, got ${all.length}: ${all.map(v => v.file).join(', ')}`);
+    assert.ok(all[0].file.includes('caught.ts'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+
 test('tag-name-has-hyphen: flags component without hyphen in tag', async () => {
   const appDir = await makeTempApp();
   try {
