@@ -80,6 +80,18 @@ RUN npx tailwindcss -i website/public/input.css                       -o website
  && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
  && npx tailwindcss -i packages/ui/packages/website/public/input.css  -o packages/ui/packages/website/public/tailwind.css  --minify
 
-# Defaults - Railway / compose override per service.
+# Pre-populate node_modules/.webjs-cache/ with esm.sh bundles for every
+# bare-specifier npm dep used by each app. After this, the production
+# server has zero CDN dependency at runtime: every browser request for
+# /__webjs/vendor/<pkg>@<version>.js is served from the local disk
+# cache baked into the image. Mirrors Rails 7 + importmap-rails's
+# `bin/importmap pin` step.
+RUN cd website                           && /app/node_modules/.bin/webjs vendor pin \
+ && cd /app/docs                         && /app/node_modules/.bin/webjs vendor pin \
+ && cd /app/examples/blog                && /app/node_modules/.bin/webjs vendor pin \
+ && cd /app/packages/ui/packages/website && /app/node_modules/.bin/webjs vendor pin \
+ ; true # tolerate per-app pin failures so a transient CDN issue does not break the image build
+
+# Defaults (Railway / compose override per service).
 ENV NODE_ENV=production
 CMD ["node", "--help"]
