@@ -99,6 +99,11 @@ export const RULES = [
     description:
       'Files that declare the `\'use server\'` directive at the top must also have the `.server.{js,ts,mts,mjs}` extension. The two markers are complementary, not interchangeable: `.server.ts` is the path-level boundary that triggers source protection by the file router; `\'use server\'` is the semantic opt-in that registers exports as RPC-callable from client code. A `\'use server\'` directive without the extension is silently ignored: the file is served to the browser as plain source, exports are NOT registered as RPC, and code the developer expects to run on the server actually runs in the browser. Rename the file to add the `.server.` infix.',
   },
+  {
+    name: 'no-non-erasable-typescript',
+    description:
+      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -781,15 +786,16 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: erasable-typescript-only ---
-  // The dev server's primary type-stripper is Node's built-in
+  // The dev server's type-stripper is Node's built-in
   // module.stripTypeScriptTypes, which rejects non-erasable TS (enum,
   // namespace with values, constructor parameter properties, legacy
-  // decorators, `import = require`). The fallback path is esbuild +
-  // inline sourcemap, which is a real ~3x wire-byte hit on every .ts
-  // request that takes it. Enforce TS-side rejection of those patterns
-  // via `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json so
-  // violations surface as red squiggles in the editor before they ever
-  // hit the dev server.
+  // decorators, `import = require`). There is no fallback: non-erasable
+  // syntax is rejected at request time with a 500. Enforce TS-side
+  // rejection of those patterns via `compilerOptions.erasableSyntaxOnly:
+  // true` in tsconfig.json so violations surface as red squiggles in
+  // the editor before they ever hit the dev server. The companion
+  // no-non-erasable-typescript rule (below) catches violations even if
+  // the tsconfig flag is unset.
   if (isRuleEnabled('erasable-typescript-only', overrides)) {
     let tsconfigContent = null;
     try {
@@ -821,6 +827,93 @@ export async function checkConventions(appDir, opts) {
           fix:
             'Set `"erasableSyntaxOnly": true` under `compilerOptions` in tsconfig.json. Replace any existing `enum` declarations with `const X = { ... } as const` plus a `type X = typeof X[keyof typeof X]` union. Replace constructor parameter properties with explicit field declarations + assignments.',
         });
+      }
+    }
+  }
+
+  // --- Rule: no-non-erasable-typescript ---
+  // Scans .ts source for the four non-erasable TypeScript constructs
+  // that the runtime stripper rejects. Complement to
+  // erasable-typescript-only: the flag check catches the case where
+  // the user opts into the tsconfig flag; this scan catches the
+  // case where the flag is missing OR the user has bypassed it and
+  // written offending syntax anyway. Both rules ship enabled by
+  // default so violators get the strongest signal possible.
+  if (isRuleEnabled('no-non-erasable-typescript', overrides)) {
+    /** @type {Array<{ name: string, regex: RegExp, fix: string }>} */
+    const NON_ERASABLE_PATTERNS = [
+      {
+        name: 'enum',
+        // Matches `enum X {`, `export enum X {`, `const enum X {`,
+        // `declare enum X {`. Requires uppercase first letter on the
+        // identifier to avoid matching variables literally named "enum"
+        // in user code (rare but possible).
+        regex: /^[ \t]*(?:export[ \t]+)?(?:declare[ \t]+)?(?:const[ \t]+)?enum[ \t]+[A-Z]\w*[ \t]*\{/m,
+        fix: 'Replace `enum Foo { A, B }` with `const Foo = { A: "A", B: "B" } as const; type Foo = typeof Foo[keyof typeof Foo];`.',
+      },
+      {
+        name: 'namespace with values',
+        // Matches `namespace Foo { ... <value statement> ... }` at top
+        // level. Type-only namespaces (which ARE erasable) won't contain
+        // `let|const|var|function|class` as statements, so this catches
+        // only the value-carrying form. False positives possible for
+        // type-only namespaces that contain those words in type aliases;
+        // accept this as a soft warning.
+        regex: /^[ \t]*(?:export[ \t]+)?namespace[ \t]+\w+[ \t]*\{[\s\S]*?\b(?:let|const|var|function|class)\b/m,
+        fix: 'Replace `namespace Foo { export const x = 1 }` with `export const Foo = { x: 1 } as const;` or split the contents into separate modules.',
+      },
+      {
+        name: 'constructor parameter property',
+        // Matches `constructor(public x: T)`, `constructor(private foo, ...)`,
+        // `constructor(readonly bar)`. Looks for one of the four access
+        // modifiers immediately followed by an identifier inside the
+        // constructor's parameter list.
+        regex: /constructor[ \t]*\([^)]*\b(?:public|private|protected|readonly)[ \t]+\w+/,
+        fix: 'Replace `constructor(public x: number)` with `x: number; constructor(x: number) { this.x = x; }`. The reactive-props-use-declare rule has the framework-specific shape: `declare x: number;` (no value) plus the assignment in the constructor body.',
+      },
+      {
+        name: 'import = require',
+        // TypeScript-style CommonJS import. Catches `import foo =
+        // require("bar")` and `export import foo = require("bar")`.
+        regex: /^[ \t]*(?:export[ \t]+)?import[ \t]+\w+[ \t]*=[ \t]*require[ \t]*\(/m,
+        fix: 'Replace `import foo = require("bar")` with `import * as foo from "bar"` or `import { something } from "bar"`.',
+      },
+    ];
+
+    // Walk every .ts / .mts file under appDir, skipping node_modules,
+    // build outputs, version control, and the framework's own private
+    // folders. Match the conventional excludes that fs-walk.js's caller
+    // contract expects.
+    for await (const abs of walk(appDir, (p) => /\.m?ts$/.test(p))) {
+      // Skip anything inside node_modules or common build / cache dirs.
+      const relPath = relative(appDir, abs);
+      if (
+        relPath.includes('node_modules' + sep) ||
+        relPath.startsWith('dist' + sep) ||
+        relPath.startsWith('build' + sep) ||
+        relPath.startsWith('.next' + sep) ||
+        relPath.startsWith('.git' + sep) ||
+        relPath.split(sep).some((s) => s.startsWith('_'))
+      ) {
+        continue;
+      }
+      let content;
+      try {
+        content = await readFile(abs, 'utf8');
+      } catch {
+        continue;
+      }
+      for (const { name, regex, fix } of NON_ERASABLE_PATTERNS) {
+        const m = content.match(regex);
+        if (m && typeof m.index === 'number') {
+          const line = content.slice(0, m.index).split('\n').length;
+          violations.push({
+            rule: 'no-non-erasable-typescript',
+            file: relPath,
+            message: `Non-erasable TypeScript construct (${name}) detected at line ${line}. The framework's type-stripper rejects this at request time with a 500.`,
+            fix,
+          });
+        }
       }
     }
   }
