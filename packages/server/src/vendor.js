@@ -226,19 +226,9 @@ async function walk(dir, found) {
  * @returns {boolean}
  */
 export function isWorkspaceDep(pkgName, appDir) {
-  try {
-    // npm hoists workspace packages into node_modules via symlinks, so
-    // `require.resolve` always returns a path through node_modules.
-    // Resolve the symlink with `realpathSync` to find the actual target
-    // directory; if that target sits outside any node_modules tree it's a
-    // workspace package, otherwise a real install.
-    const linkPath = join(appDir, 'node_modules', pkgName);
-    if (!existsSync(linkPath)) return false;
-    const real = realpathSync(linkPath);
-    return !real.split(sep).includes('node_modules');
-  } catch {
-    return false;
-  }
+  const real = resolvePackageDir(pkgName, appDir);
+  if (!real) return false;
+  return !real.split(sep).includes('node_modules');
 }
 
 /**
@@ -249,17 +239,67 @@ export function isWorkspaceDep(pkgName, appDir) {
  * @returns {string | null}
  */
 export function getPackageVersion(pkgName, appDir) {
+  const real = resolvePackageDir(pkgName, appDir);
+  if (!real) return null;
   try {
-    // Many packages lock down `./package.json` in their `exports` field, so
-    // `require.resolve('<pkg>/package.json')` throws ERR_PACKAGE_PATH_NOT_EXPORTED
-    // for packages like `@webjsdev/core` that intentionally restrict subpaths.
-    // Walk to node_modules/<pkg>/package.json directly via the filesystem
-    // (after resolving any symlink, so workspace links also work).
-    const linkPath = join(appDir, 'node_modules', pkgName);
-    if (!existsSync(linkPath)) return null;
-    const real = realpathSync(linkPath);
     const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
     return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a package's actual directory on disk, handling both
+ * direct installation and npm workspace hoisting.
+ *
+ * In a workspace (monorepo) setup, npm hoists most packages from the
+ * leaf app's `node_modules/` up to the workspace root's
+ * `node_modules/`, leaving only workspace-linked symlinks (and a few
+ * package-manager-specific entries) under the leaf. A naive
+ * `join(appDir, 'node_modules', pkgName)` check misses the hoisted
+ * packages entirely.
+ *
+ * Use `require.resolve(pkgName)` to follow Node's standard module
+ * resolution (which walks up the directory tree looking for
+ * node_modules at each level), then climb back from the resolved
+ * entry file to the package's root directory (`node_modules/<pkg>/`
+ * for plain packages, `node_modules/@scope/<pkg>/` for scoped).
+ * Realpath the result so workspace symlinks resolve to their real
+ * source locations.
+ *
+ * Returns null when the package is not resolvable from `appDir`.
+ *
+ * @param {string} pkgName
+ * @param {string} appDir
+ * @returns {string | null}
+ */
+function resolvePackageDir(pkgName, appDir) {
+  try {
+    const require = createRequire(join(appDir, 'package.json'));
+    const entry = require.resolve(pkgName);
+    // Walk back from the resolved entry to the package root. The
+    // root contains the `node_modules/<pkgName>` (or `<@scope>/<pkg>`)
+    // segment as the last `node_modules/` parent in the path.
+    const parts = entry.split(sep);
+    const nmIdx = parts.lastIndexOf('node_modules');
+    if (nmIdx < 0) {
+      // No node_modules in the path: workspace dep resolved to its
+      // direct source location (e.g., the monorepo's packages/<x>/).
+      // Walk up until we find a package.json.
+      let dir = dirname(entry);
+      for (let i = 0; i < 8; i++) {
+        if (existsSync(join(dir, 'package.json'))) return realpathSync(dir);
+        const parent = dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      return null;
+    }
+    // node_modules/<scope-or-pkg>[/<pkg-if-scoped>] is the package root.
+    const segmentsAfterNm = pkgName.startsWith('@') ? 2 : 1;
+    const root = parts.slice(0, nmIdx + 1 + segmentsAfterNm).join(sep);
+    return realpathSync(root);
   } catch {
     return null;
   }

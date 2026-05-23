@@ -273,7 +273,7 @@ Full docs: https://docs.webjs.com`);
       const sub = rest[0];
       const args = rest.slice(1);
       const { pinPackage, pinAll, removeFromCache, listCache, extractPackageName, extractSubpath, getPackageVersion } =
-        await import('@webjsdev/server/src/vendor.js');
+        await import('@webjsdev/server');
       const appDir = process.cwd();
 
       if (sub === 'pin') {
