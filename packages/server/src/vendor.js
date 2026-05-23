@@ -39,6 +39,7 @@
  */
 
 import { readFile, readdir, stat, mkdir, writeFile, unlink } from 'node:fs/promises';
+import { realpathSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -194,9 +195,15 @@ async function walk(dir, found) {
  */
 export function isWorkspaceDep(pkgName, appDir) {
   try {
-    const require = createRequire(join(appDir, 'package.json'));
-    const resolved = require.resolve(pkgName + '/package.json');
-    return !resolved.split(sep).includes('node_modules');
+    // npm hoists workspace packages into node_modules via symlinks, so
+    // `require.resolve` always returns a path through node_modules.
+    // Resolve the symlink with `realpathSync` to find the actual target
+    // directory; if that target sits outside any node_modules tree it's a
+    // workspace package, otherwise a real install.
+    const linkPath = join(appDir, 'node_modules', pkgName);
+    if (!existsSync(linkPath)) return false;
+    const real = realpathSync(linkPath);
+    return !real.split(sep).includes('node_modules');
   } catch {
     return false;
   }
@@ -211,9 +218,15 @@ export function isWorkspaceDep(pkgName, appDir) {
  */
 export function getPackageVersion(pkgName, appDir) {
   try {
-    const require = createRequire(join(appDir, 'package.json'));
-    const pkgJson = require.resolve(pkgName + '/package.json');
-    const pkg = JSON.parse(require('node:fs').readFileSync(pkgJson, 'utf8'));
+    // Many packages lock down `./package.json` in their `exports` field, so
+    // `require.resolve('<pkg>/package.json')` throws ERR_PACKAGE_PATH_NOT_EXPORTED
+    // for packages like `@webjsdev/core` that intentionally restrict subpaths.
+    // Walk to node_modules/<pkg>/package.json directly via the filesystem
+    // (after resolving any symlink, so workspace links also work).
+    const linkPath = join(appDir, 'node_modules', pkgName);
+    if (!existsSync(linkPath)) return null;
+    const real = realpathSync(linkPath);
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
     return pkg.version || null;
   } catch {
     return null;

@@ -501,8 +501,25 @@ async function handleCore(req, ctx) {
         });
       }
       // TypeScript source: strip types via Node's built-in, cache by mtime.
+      // Non-erasable syntax (enum, parameter properties, etc.) throws
+      // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX from the stripper; surface that
+      // as a 500 with the error message in the body (dev only) instead
+      // of letting it bubble up as an unhandled rejection.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev);
+        try {
+          return await tsResponse(abs, dev);
+        } catch (e) {
+          if (e && e.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
+            const body = dev
+              ? `/* webjs: non-erasable TypeScript syntax in ${relative(appDir, abs)}\n${e.message}\nUser code must be erasable; see the erasable-typescript-only convention check. */`
+              : '/* internal error */';
+            return new Response(body, {
+              status: 500,
+              headers: { 'content-type': 'application/javascript; charset=utf-8' },
+            });
+          }
+          throw e;
+        }
       }
       return fileResponse(abs, { dev, immutable: false });
     }
