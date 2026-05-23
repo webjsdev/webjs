@@ -267,7 +267,7 @@ Full docs: https://docs.webjs.com`);
       break;
     }
     case 'vendor': {
-      // Pre-populate vendor/javascript/ with esm.sh bundles so the
+      // Pre-populate .webjs/vendor/ with esm.sh bundles so the
       // server never has to call out to a CDN at runtime. Mirrors Rails 7's
       // `bin/importmap pin` UX. See agent-docs/vendor.md for the full guide.
       const sub = rest[0];
@@ -335,7 +335,7 @@ Full docs: https://docs.webjs.com`);
       if (sub === 'list') {
         const entries = await listCache(appDir);
         if (entries.length === 0) { console.log('Cache is empty. Run "webjs vendor pin" to populate.'); break; }
-        console.log(`Cache: ${appDir}/vendor/javascript/`);
+        console.log(`Cache: ${appDir}/.webjs/vendor/`);
         let total = 0;
         for (const e of entries) {
           const name = `${e.pkg}@${e.version}${e.subpath}`;

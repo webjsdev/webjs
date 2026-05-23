@@ -80,7 +80,7 @@ RUN npx tailwindcss -i website/public/input.css                       -o website
  && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
  && npx tailwindcss -i packages/ui/packages/website/public/input.css  -o packages/ui/packages/website/public/tailwind.css  --minify
 
-# Pre-populate each app's vendor/javascript/ with esm.sh bundles for
+# Pre-populate each app's .webjs/vendor/ with esm.sh bundles for
 # every bare-specifier npm dep used. After this, the production server
 # has zero CDN dependency at runtime: every browser request for
 # /__webjs/vendor/<pkg>@<version>.js is served from the local disk
@@ -88,7 +88,7 @@ RUN npx tailwindcss -i website/public/input.css                       -o website
 # `bin/importmap pin` step.
 #
 # Note: this Dockerfile step is BACKUP coverage. The recommended
-# workflow is to commit `vendor/javascript/` to source control, so
+# workflow is to commit `.webjs/vendor/` to source control, so
 # COPY at line 53 above already brings the cache into the image and
 # this RUN becomes a no-op. The step here is defense-in-depth: any
 # package that the developer forgot to commit gets fetched and cached

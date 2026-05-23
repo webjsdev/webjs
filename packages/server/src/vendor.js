@@ -1,13 +1,13 @@
 /**
  * Auto-serve npm dependencies for the browser via esm.sh, with a
- * Rails-style `vendor/javascript/` cache that travels with the repo.
+ * Rails-style `.webjs/vendor/` cache that travels with the repo.
  *
  * When user code imports a bare specifier (e.g. `import dayjs from 'dayjs'`)
  * from a client-side file, the browser can't resolve it natively. Rather
  * than running a bundler on the user's machine, webjs follows the
  * Rails 7 + importmap-rails pattern: bare specifiers resolve to URLs
  * served by esm.sh (a CDN that pre-bundles npm packages as ESM), and the
- * dev server proxies + caches the response to `vendor/javascript/` at
+ * dev server proxies + caches the response to `.webjs/vendor/` at
  * the project root.
  *
  * The cache directory is committed to source control. The repo IS the
@@ -25,12 +25,12 @@
  *
  *   2. Build importmap entries pointing at `/__webjs/vendor/<pkg>@<ver>`.
  *
- *   3. On request for that URL, read from `vendor/javascript/` on disk.
+ *   3. On request for that URL, read from `.webjs/vendor/` on disk.
  *      If absent, fetch from `esm.sh`, write to
- *      `vendor/javascript/`, serve the bytes. Subsequent requests are
+ *      `.webjs/vendor/`, serve the bytes. Subsequent requests are
  *      pure file reads with zero network involvement.
  *
- *   4. Developers commit `vendor/javascript/` to source control so the
+ *   4. Developers commit `.webjs/vendor/` to source control so the
  *      deploy artifact is fully offline-capable. CDN access is only
  *      needed when first introducing a new package (then immediately
  *      committed).
@@ -42,7 +42,7 @@
  * published before it can be tested locally.
  *
  * Air-gapped / offline workflow: `webjs vendor pin` populates
- * `vendor/javascript/` eagerly. Commit the result. The production
+ * `.webjs/vendor/` eagerly. Commit the result. The production
  * server never has to hit a CDN at runtime, regardless of deploy
  * pipeline (Docker, direct git push, hand-copied build artifacts).
  */
@@ -266,13 +266,13 @@ export function getPackageVersion(pkgName, appDir) {
 }
 
 // ---------------------------------------------------------------------------
-// Disk cache (vendor/javascript/, Rails 7 + importmap-rails convention)
+// Disk cache (.webjs/vendor/, Rails 7 + importmap-rails convention)
 // ---------------------------------------------------------------------------
 
 /**
  * Compute the on-disk path for a cached vendor bundle.
  *
- * Stored at `vendor/javascript/` at the project root, matching the
+ * Stored at `.webjs/vendor/` at the project root, matching the
  * Rails 7 + importmap-rails convention. The location is OUTSIDE
  * `node_modules` so it survives `rm -rf node_modules` and ships with
  * the repo: `git clone && npm install && webjs start` works offline
@@ -282,9 +282,9 @@ export function getPackageVersion(pkgName, appDir) {
  * `/` (filesystem-safe), version + subpath baked in for cache-key
  * uniqueness:
  *
- *   `vendor/javascript/dayjs@1.11.13.js`
- *   `vendor/javascript/@hotwired--turbo@8.0.0.js`
- *   `vendor/javascript/dayjs@1.11.13__plugin__utc.js`
+ *   `.webjs/vendor/dayjs@1.11.13.js`
+ *   `.webjs/vendor/@hotwired--turbo@8.0.0.js`
+ *   `.webjs/vendor/dayjs@1.11.13__plugin__utc.js`
  *
  * @param {string} appDir
  * @param {string} pkgName

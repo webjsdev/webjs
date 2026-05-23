@@ -19,7 +19,7 @@ to scaffold and run an app, which pulls this package in as a dependency.
   endpoint on the same path.
 - **Live reload** for dev.
 - **Bare-specifier auto-resolution** for npm packages via import maps,
-  proxied from esm.sh and cached to `vendor/javascript/` (Rails 7 +
+  proxied from esm.sh and cached to `.webjs/vendor/` (Rails 7 +
   importmap-rails pattern). No local bundler invocation.
 
 ## Install
