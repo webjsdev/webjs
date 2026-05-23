@@ -37,11 +37,20 @@ const VENDOR_CACHE_MAX = 100;
 const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
 
 /**
- * Scan source files under `dir` for bare import specifiers. Returns a Set of
- * package names (e.g. `'dayjs'`, `'@tanstack/query-core'`).
+ * Scan source files under `dir` for bare import specifiers reachable
+ * from the browser. Returns a Set of package names.
  *
- * Only scans `.js`, `.ts`, `.mjs`, `.mts` files. Skips `node_modules`,
- * `.webjs`, `public`, and `_private` directories.
+ * Excludes:
+ *   - `node_modules`, `.webjs`, `public` directories
+ *   - Any directory starting with `_` (webjs `_private/` convention)
+ *   - `test/` and `tests/` (server-only by webjs convention)
+ *   - Files whose name marks them as server-only:
+ *       * `*.server.{js,ts,mjs,mts}` (path-level boundary)
+ *       * `route.{js,ts,mjs,mts}` (file-router HTTP handler)
+ *       * `middleware.{js,ts,mjs,mts}` (file-router middleware)
+ *   - Any file whose first non-whitespace content is `'use server'`
+ *   - `import type` statements (TypeScript erases them at compile time)
+ *   - `import` strings inside `/* … *​/` block comments or `//` line comments
  *
  * @param {string} dir
  * @returns {Promise<Set<string>>}
@@ -77,9 +86,39 @@ export function extractPackageName(spec) {
   return spec.split('/')[0];
 }
 
-/** @type {RegExp} */
-const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+// Matches `import { x } from 'pkg'`, `import 'pkg'`, `import * as x from 'pkg'`.
+// The `(?!type\s)` negative lookahead skips `import type … from 'pkg'`
+// because TypeScript type-only imports are fully erased at compile time
+// and never reach the browser, so they must not enter the vendor pipeline.
+const IMPORT_RE = /\bimport\s+(?!type\s)(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT_RE = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+// Strip `/* … */` block comments and `// …` line comments before running
+// the import regex. Comments in source files (JSDoc examples especially)
+// frequently contain `import 'foo'` snippets that aren't real imports;
+// without stripping, the scanner picks them up as bare specifiers and
+// the vendor pipeline tries (and fails) to bundle them.
+const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+const LINE_COMMENT_RE = /(^|[^:])\/\/.*$/gm;
+function stripComments(src) {
+  return src.replace(BLOCK_COMMENT_RE, '').replace(LINE_COMMENT_RE, '$1');
+}
+
+/**
+ * Filename matches webjs's server-only file-router conventions.
+ * Returns true for `route.{ts,js,mjs,mts}` and
+ * `middleware.{ts,js,mjs,mts}`, plus any `.server.{ts,js,mjs,mts}`
+ * suffix file. These files never reach the browser, so their bare
+ * imports must not enter the vendor pipeline.
+ *
+ * @param {string} name  basename of the file
+ */
+function isServerOnlyFile(name) {
+  if (/\.server\.(js|ts|mjs|mts)$/.test(name)) return true;
+  if (/^route\.(js|ts|mjs|mts)$/.test(name)) return true;
+  if (/^middleware\.(js|ts|mjs|mts)$/.test(name)) return true;
+  return false;
+}
 
 /**
  * @param {string} dir
@@ -90,15 +129,24 @@ async function walk(dir, found) {
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
   for (const e of entries) {
-    if (e.name === 'node_modules' || e.name === '.webjs' || e.name === 'public' || e.name.startsWith('_')) continue;
+    // Skip directories that never contain browser-reachable code.
+    if (
+      e.name === 'node_modules' ||
+      e.name === '.webjs' ||
+      e.name === 'public' ||
+      e.name === 'test' ||
+      e.name === 'tests' ||
+      e.name.startsWith('_')
+    ) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
       await walk(full, found);
-    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !e.name.endsWith('.server.ts') && !e.name.endsWith('.server.js')) {
+    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !isServerOnlyFile(e.name)) {
       try {
-        const src = await readFile(full, 'utf8');
-        // Skip files with 'use server' pragma
-        if (src.trimStart().startsWith("'use server'") || src.trimStart().startsWith('"use server"')) continue;
+        const raw = await readFile(full, 'utf8');
+        // Skip files with 'use server' pragma (their exports never reach the browser).
+        if (raw.trimStart().startsWith("'use server'") || raw.trimStart().startsWith('"use server"')) continue;
+        const src = stripComments(raw);
         for (const m of src.matchAll(IMPORT_RE)) {
           const pkg = extractPackageName(m[1]);
           if (pkg) found.add(pkg);

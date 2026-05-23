@@ -83,6 +83,107 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: skips route.ts and middleware.ts (file-router server-only convention)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-router-skip-${Date.now()}`);
+  await mkdir(join(dir, 'app', 'api', 'posts'), { recursive: true });
+  await mkdir(join(dir, 'app', 'dashboard'), { recursive: true });
+
+  // route.ts: server-only by file-router convention.
+  await writeFile(
+    join(dir, 'app', 'api', 'posts', 'route.ts'),
+    `import { PrismaClient } from '@prisma/client';
+     import 'server-only-helper';`,
+  );
+
+  // middleware.ts (per-segment): server-only.
+  await writeFile(
+    join(dir, 'app', 'dashboard', 'middleware.ts'),
+    `import { WebSocketServer } from 'ws';
+     import 'another-server-thing';`,
+  );
+
+  // Root-level middleware.ts: same convention.
+  await writeFile(
+    join(dir, 'middleware.ts'),
+    `import 'root-mw-server-only';`,
+  );
+
+  // A regular page.ts: bare imports SHOULD enter the scan.
+  await writeFile(
+    join(dir, 'app', 'dashboard', 'page.ts'),
+    `import dayjs from 'dayjs';`,
+  );
+
+  const found = await scanBareImports(dir);
+
+  assert.ok(found.has('dayjs'), 'page.ts imports should be scanned');
+  assert.ok(!found.has('@prisma/client'), 'route.ts imports must be skipped');
+  assert.ok(!found.has('server-only-helper'), 'route.ts imports must be skipped');
+  assert.ok(!found.has('ws'), 'middleware.ts imports must be skipped');
+  assert.ok(!found.has('another-server-thing'), 'middleware.ts imports must be skipped');
+  assert.ok(!found.has('root-mw-server-only'), 'root middleware.ts imports must be skipped');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('scanBareImports: skips test/ and tests/ directories', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-test-skip-${Date.now()}`);
+  await mkdir(join(dir, 'test'), { recursive: true });
+  await mkdir(join(dir, 'tests'), { recursive: true });
+
+  await writeFile(join(dir, 'test', 'a.test.ts'), `import 'test-only-pkg';`);
+  await writeFile(join(dir, 'tests', 'b.test.ts'), `import 'another-test-pkg';`);
+  await writeFile(join(dir, 'app.ts'), `import 'real-dep';`);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('real-dep'));
+  assert.ok(!found.has('test-only-pkg'));
+  assert.ok(!found.has('another-test-pkg'));
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('scanBareImports: skips import type statements (TS erases them)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-typeimport-skip-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  await writeFile(join(dir, 'a.ts'), `
+    import type { WebSocket } from 'ws';
+    import type { User } from '@prisma/client';
+    import dayjs from 'dayjs';
+  `);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('dayjs'), 'real value imports remain');
+  assert.ok(!found.has('ws'), 'type-only imports must be skipped');
+  assert.ok(!found.has('@prisma/client'), 'type-only imports must be skipped');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('scanBareImports: skips import strings inside comments (JSDoc examples etc.)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-comments-skip-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  await writeFile(join(dir, 'a.ts'), `
+    /**
+     * Example usage:
+     *   import { clsx } from 'clsx';
+     *   import { twMerge } from 'tailwind-merge';
+     */
+    // import 'commented-out-pkg';
+    import real from 'real-only-pkg';
+  `);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('real-only-pkg'));
+  assert.ok(!found.has('clsx'), 'JSDoc-comment imports must be skipped');
+  assert.ok(!found.has('tailwind-merge'), 'JSDoc-comment imports must be skipped');
+  assert.ok(!found.has('commented-out-pkg'), 'line-comment imports must be skipped');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('scanBareImports: skips node_modules and _private dirs', async () => {
   const dir = join(tmpdir(), `webjs-test-vendor-skip-${Date.now()}`);
   await mkdir(join(dir, 'node_modules'), { recursive: true });
