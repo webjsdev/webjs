@@ -191,7 +191,7 @@ CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
       <li><code>node:slim</code> works fine. The primary TypeScript stripper is Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed for the common case.</li>
-      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency, which keeps the esbuild fallback available for the rare third-party file that uses non-erasable TypeScript syntax. See <a href="/docs/no-build">No-Build Model</a> for when the fallback kicks in.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. Non-erasable TypeScript syntax is rejected at request time with a clear 500; there is no esbuild fallback. See <a href="/docs/no-build">No-Build Model</a> for the full request pipeline.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
