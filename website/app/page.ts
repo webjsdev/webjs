@@ -123,7 +123,7 @@ export default function LandingPage() {
         text-align: left;
         overflow-x: auto;
       }
-      .install .comment { color: var(--fg-subtle); }
+      .install .comment { color: var(--fg-subtle); white-space: nowrap; }
       .install .cmd { color: var(--fg); }
       /* On narrow viewports the box would stretch full-width and its
          left/right border + rounded corners would visibly clip the
@@ -258,16 +258,16 @@ export default function LandingPage() {
     </section>
 
     <div class="install">
-      <div class="comment"># get started in one command, no global install</div>
+      <div class="comment"># create a full-stack app</div>
       <copy-cmd>npm create webjs@latest my-app</copy-cmd>
       <div class="h-3"></div>
-      <div class="comment"># backend-only API</div>
+      <div class="comment"># create an API-only app</div>
       <copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd>
       <div class="h-3"></div>
-      <div class="comment"># SaaS starter (auth + dashboard + Prisma)</div>
+      <div class="comment"># create a SaaS app with auth</div>
       <copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd>
       <div class="h-3"></div>
-      <div class="comment"># or install the CLI globally for repeated use</div>
+      <div class="comment"># install the CLI globally</div>
       <copy-cmd>npm i -g webjsdev && webjs create my-app</copy-cmd>
     </div>
 
