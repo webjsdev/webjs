@@ -18,8 +18,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // to run on Bun, Deno, or another runtime that does NOT expose the
 // equivalent built-in, we will need to install `amaro` directly (or
 // an equivalent: Sucrase preserves lines but not columns; SWC's
-// strip-only also works). The fast-path `stripTs` helper would
-// change one import line; the fallback path (esbuild) stays.
+// strip-only also works). The `stripTs` helper would change one
+// import line. Non-erasable TypeScript syntax (enum, namespace with
+// values, parameter properties, legacy decorators) is a hard error;
+// the `erasable-typescript-only` lint catches it at commit time for
+// user code, and the framework itself is plain JS with JSDoc.
 //
 // Suppress the one-shot ExperimentalWarning that Node prints the
 // first time `stripTypeScriptTypes` is called. The API is committed
@@ -92,19 +95,16 @@ const MIME = {
  * Capped at 500 entries to prevent unbounded memory growth in
  * long-running production servers.
  *
- * Primary stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
+ * Stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
  * Position-preserving whitespace replacement. No sourcemap is
  * emitted because every (line, column) maps to itself in the source.
+ * Non-erasable TypeScript syntax throws hard; the `webjs check`
+ * `erasable-typescript-only` rule catches user-code violations at
+ * commit time. Third-party `.ts` files are not reachable through
+ * the vendor pipeline (vendor routes through esm.sh, which serves
+ * pre-compiled JavaScript).
  *
- * Fallback stripper: `esbuild.transform`. Triggered only when the
- * primary path throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (the file
- * uses `enum`, `namespace`, parameter properties, or legacy
- * decorators). Emits an inline sourcemap so DevTools can still
- * resolve source positions for the regenerated JS. Mostly fires for
- * third-party `.ts` files; user code is enforced erasable by
- * `webjs check`.
- *
- * @type {Map<string, { mtimeMs: number, code: string, map: string | null }>}
+ * @type {Map<string, { mtimeMs: number, code: string }>}
  */
 const TS_CACHE_MAX = 500;
 const TS_CACHE = new Map();
@@ -130,7 +130,7 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(vendorImportMapEntries(bareImports));
+  setVendorEntries(vendorImportMapEntries(bareImports, appDir));
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -171,7 +171,7 @@ export async function createRequestHandler(opts) {
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(vendorImportMapEntries(state.bareImports));
+    setVendorEntries(vendorImportMapEntries(state.bareImports, appDir));
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
@@ -408,12 +408,13 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
-  // (Vite-style optimizeDeps) for any bare npm import that webjs can't
-  // serve directly as ESM.
+  // Vendor bundles: /__webjs/vendor/<pkg>@<ver>[/<subpath>].js. Bytes
+  // come from esm.sh (fallback jspm.io) on first request, then from
+  // node_modules/.webjs-cache/ on every request thereafter. See
+  // vendor.js for the full architecture.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    const pkgName = decodeURIComponent(path.slice('/__webjs/vendor/'.length, -'.js'.length));
-    return serveVendorBundle(pkgName, appDir, dev);
+    const id = path.slice('/__webjs/vendor/'.length, -'.js'.length);
+    return serveVendorBundle(id, appDir, dev);
   }
 
   // Internal server-action RPC endpoint
@@ -499,7 +500,7 @@ async function handleCore(req, ctx) {
           headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-store' },
         });
       }
-      // TypeScript source: esbuild-strip types, cache by mtime.
+      // TypeScript source: strip types via Node's built-in, cache by mtime.
       if (/\.m?ts$/.test(abs)) {
         return tsResponse(abs, dev);
       }
@@ -817,38 +818,25 @@ async function exists(p) {
 }
 
 /**
- * Strip TypeScript types from `source`, using Node's built-in
- * `module.stripTypeScriptTypes` first (whitespace replacement,
- * position-preserving, no sourcemap needed) and falling back to
- * esbuild for files using non-erasable syntax (`enum`, `namespace`,
- * parameter properties, legacy decorators).
+/**
+ * Strip TypeScript types from `source` via Node's built-in
+ * `module.stripTypeScriptTypes`: whitespace replacement,
+ * position-preserving, no sourcemap needed.
  *
- * The framework's own code and the user's app code are kept on
- * erasable TS by the `erasable-typescript-only` convention check.
- * The fallback exists for third-party `.ts` files that the runtime
- * occasionally needs to serve.
+ * Non-erasable syntax (`enum`, `namespace` with values, parameter
+ * properties, legacy decorators with `emitDecoratorMetadata`, `import =
+ * require`) throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. The
+ * `erasable-typescript-only` convention check catches this at commit
+ * time for user code; the framework's own code is plain JS with JSDoc
+ * (no TS at all). Third-party `.ts` files are not reachable through
+ * the vendor pipeline (vendor goes through esm.sh, which serves
+ * pre-compiled JS).
  *
  * @param {string} source
- * @param {string} abs
- * @returns {Promise<string>}
+ * @returns {string}
  */
-async function stripTs(source, abs) {
-  try {
-    return stripTypeScriptTypes(source);
-  } catch (err) {
-    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
-      const { transform: esbuild } = await loadEsbuild();
-      const r = await esbuild(source, {
-        loader: 'ts',
-        format: 'esm',
-        target: 'es2022',
-        sourcemap: 'inline',
-        sourcefile: abs,
-      });
-      return r.code;
-    }
-    throw err;
-  }
+function stripTs(source) {
+  return stripTypeScriptTypes(source);
 }
 
 /**
@@ -871,13 +859,13 @@ async function tsResponse(abs, dev) {
     });
   }
   const source = await readFile(abs, 'utf8');
-  const code = await stripTs(source, abs);
+  const code = stripTs(source);
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
     const oldest = TS_CACHE.keys().next().value;
     TS_CACHE.delete(oldest);
   }
-  TS_CACHE.set(abs, { mtimeMs: st.mtimeMs, code, map: null });
+  TS_CACHE.set(abs, { mtimeMs: st.mtimeMs, code });
   return new Response(code, {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
@@ -930,20 +918,6 @@ function locatePackageDir(appDir, pkgName) {
   try { const d = tryFrom(join(appDir, 'package.json')); if (d) return d; } catch {}
   try { const d = tryFrom(fileURLToPath(import.meta.url)); if (d) return d; } catch {}
   return null;
-}
-
-/**
- * Load esbuild. Resolved as a real dependency of `@webjsdev/server`,
- * so the bare specifier always resolves regardless of where the cli is
- * installed (global, local, workspace-linked).
- *
- * @returns {Promise<typeof import('esbuild')>}
- */
-let _esbuild = null;
-async function loadEsbuild() {
-  if (_esbuild) return _esbuild;
-  _esbuild = await import('esbuild');
-  return _esbuild;
 }
 
 const RELOAD_CLIENT_JS = `// webjs dev reload client

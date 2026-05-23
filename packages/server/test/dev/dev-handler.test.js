@@ -6,7 +6,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -89,22 +89,28 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
 
 /* ------------ vendor bundles ------------ */
 
-test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', async () => {
-  // Use the repo root as appDir so node_modules is resolvable via the
-  // monorepo hoisting chain: bundlePackage() uses createRequire against
-  // the appDir's package.json.
+test('handle: /__webjs/vendor/<pkg>@<version>.js serves an esm.sh bundle for a known pkg', { skip: !!process.env.WEBJS_SKIP_NETWORK_TESTS }, async () => {
+  // The vendor pipeline goes through esm.sh + local cache. The URL
+  // shape includes the installed version (read from node_modules).
+  // Use the repo root as appDir so picocolors is resolvable via the
+  // monorepo hoisting chain.
+  const { createRequire } = await import('node:module');
   const repoRoot = resolve(__dirname, '..');
+  const req = createRequire(join(repoRoot, 'package.json'));
+  const picocolorsVersion = JSON.parse(
+    readFileSync(req.resolve('picocolors/package.json'), 'utf8')
+  ).version;
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
   const app = await createRequestHandler({ appDir: repoRoot, dev: true, logger: silent });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/picocolors.js'));
+  const resp = await app.handle(new Request(`http://x/__webjs/vendor/picocolors@${picocolorsVersion}.js`));
   assert.equal(resp.status, 200);
   assert.ok(resp.headers.get('content-type').includes('javascript'));
 });
 
-test('handle: /__webjs/vendor/unknown.js → 404', async () => {
+test('handle: /__webjs/vendor/<bogus>@1.0.0.js → 404', { skip: !!process.env.WEBJS_SKIP_NETWORK_TESTS }, async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz.js'));
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz@1.0.0.js'));
   assert.equal(resp.status, 404);
 });
 
@@ -148,39 +154,29 @@ test('handle: .ts source served as JS with esbuild-stripped types', async () => 
   assert.ok(!/: string/.test(code));
 });
 
-test('handle: .ts source supports non-erasable TS (enum, parameter properties)', async () => {
-  // Proves the browser-bound transform falls back to esbuild when
-  // Node's built-in stripper (module.stripTypeScriptTypes) rejects
-  // non-erasable syntax. The fallback emits an inline sourcemap so
-  // DevTools can still resolve positions for the regenerated JS.
-  // Server-side imports of the same file go through Node's native
-  // strip-types path; this works for erasable TS but errors at load
-  // time for non-erasable syntax. App code is held to erasable TS
-  // via tsconfig's erasableSyntaxOnly; this fallback exists for
-  // third-party .ts dependencies that publish non-erasable source.
+test('handle: .ts source rejects non-erasable TS with a 500 (no esbuild fallback)', async () => {
+  // The previous architecture fell back to esbuild for non-erasable
+  // syntax (enum, parameter properties, namespace, legacy decorators).
+  // The new architecture (vendor via esm.sh) makes that fallback
+  // structurally unneeded for third-party packages, and the
+  // `erasable-typescript-only` lint catches user-code violations at
+  // commit time. The runtime now throws ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX
+  // when it encounters non-erasable TS at a `.ts` route.
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/advanced.ts': `
       enum Status { Active = 'active', Inactive = 'inactive' }
       export class Box {
-        constructor(public readonly status: Status) {}
-        describe(): string { return \`box is \${this.status}\`; }
+        describe(): string { return \`box is \${Status.Active}\`; }
       }
-      export const initial: Status = Status.Active;
     `,
   });
-  const app = await createRequestHandler({ appDir, dev: true });
+  const silent = { info: () => {}, warn: () => {}, error: () => {} };
+  const app = await createRequestHandler({ appDir, dev: true, logger: silent });
   const resp = await app.handle(new Request('http://x/components/advanced.ts'));
-  assert.equal(resp.status, 200);
-  const code = await resp.text();
-  // enum compiled to a runtime object
-  assert.ok(/Status\s*\[/.test(code) || /Status\s*=\s*\{/.test(code) || /\(Status\b/.test(code),
-    `enum should compile to runtime code; got:\n${code.slice(0, 400)}`);
-  // parameter property desugared to constructor body assignment
-  assert.ok(/this\.status\s*=\s*status/.test(code),
-    `parameter property should desugar; got:\n${code.slice(0, 400)}`);
-  // type annotations gone
-  assert.ok(!/:\s*Status\b/.test(code), 'type annotations should be stripped');
+  // The dev handler turns thrown exceptions into 500s; we just need to
+  // confirm that the request DOES NOT succeed (no fallback).
+  assert.equal(resp.status, 500, 'non-erasable TS must not be silently transformed');
 });
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {

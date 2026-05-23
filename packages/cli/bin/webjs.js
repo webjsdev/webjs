@@ -266,6 +266,94 @@ Full docs: https://docs.webjs.com`);
       await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
       break;
     }
+    case 'vendor': {
+      // Pre-populate node_modules/.webjs-cache/ with esm.sh bundles so the
+      // server never has to call out to a CDN at runtime. Mirrors Rails 7's
+      // `bin/importmap pin` UX. See agent-docs/vendor.md for the full guide.
+      const sub = rest[0];
+      const args = rest.slice(1);
+      const { pinPackage, pinAll, removeFromCache, listCache, extractPackageName, extractSubpath, getPackageVersion } =
+        await import('@webjsdev/server/src/vendor.js');
+      const appDir = process.cwd();
+
+      if (sub === 'pin') {
+        if (args.length === 0) {
+          // Pin every bare import currently used in the app
+          console.log(`Pinning vendor packages from ${appDir}...`);
+          const results = await pinAll(appDir);
+          let totalBytes = 0;
+          let okCount = 0;
+          for (const r of results) {
+            if (r.ok) {
+              console.log(`  ${r.spec.padEnd(40)} ${(r.bytes / 1024).toFixed(1)} KB`);
+              totalBytes += r.bytes;
+              okCount++;
+            } else {
+              console.error(`  ${r.spec.padEnd(40)} FAILED: ${r.error}`);
+            }
+          }
+          console.log(`Pinned ${okCount} package${okCount === 1 ? '' : 's'}, ${(totalBytes / 1024).toFixed(1)} KB total.`);
+        } else {
+          // Pin specific packages by name (and optional @version)
+          for (const target of args) {
+            const atIdx = target.lastIndexOf('@');
+            const hasVersion = atIdx > 0; // > 0 to skip scoped @
+            const spec = hasVersion ? target.slice(0, atIdx) : target;
+            const pkgName = extractPackageName(spec);
+            const subpath = extractSubpath(spec);
+            if (!pkgName) { console.error(`  ${target}: invalid specifier`); continue; }
+            const version = hasVersion ? target.slice(atIdx + 1) : getPackageVersion(pkgName, appDir);
+            if (!version) {
+              console.error(`  ${target}: cannot determine version (package not installed and no @version given)`);
+              continue;
+            }
+            const r = await pinPackage(appDir, pkgName, version, subpath);
+            if (r.ok) console.log(`  ${pkgName}@${version}${subpath} ${(r.bytes / 1024).toFixed(1)} KB`);
+            else console.error(`  ${pkgName}@${version}${subpath} FAILED: ${r.error}`);
+          }
+        }
+        break;
+      }
+
+      if (sub === 'unpin') {
+        if (args.length === 0) { console.error('Usage: webjs vendor unpin <pkg>[@version]'); process.exit(1); }
+        for (const target of args) {
+          const atIdx = target.lastIndexOf('@');
+          const hasVersion = atIdx > 0;
+          const spec = hasVersion ? target.slice(0, atIdx) : target;
+          const pkgName = extractPackageName(spec);
+          const subpath = extractSubpath(spec);
+          if (!pkgName) { console.error(`  ${target}: invalid specifier`); continue; }
+          const version = hasVersion ? target.slice(atIdx + 1) : getPackageVersion(pkgName, appDir);
+          if (!version) { console.error(`  ${target}: cannot determine version`); continue; }
+          await removeFromCache(appDir, pkgName, version, subpath);
+          console.log(`  unpinned ${pkgName}@${version}${subpath}`);
+        }
+        break;
+      }
+
+      if (sub === 'list') {
+        const entries = await listCache(appDir);
+        if (entries.length === 0) { console.log('Cache is empty. Run "webjs vendor pin" to populate.'); break; }
+        console.log(`Cache: ${appDir}/node_modules/.webjs-cache/`);
+        let total = 0;
+        for (const e of entries) {
+          const name = `${e.pkg}@${e.version}${e.subpath}`;
+          console.log(`  ${name.padEnd(40)} ${(e.bytes / 1024).toFixed(1)} KB`);
+          total += e.bytes;
+        }
+        console.log(`${entries.length} package${entries.length === 1 ? '' : 's'} cached, ${(total / 1024).toFixed(1)} KB total.`);
+        break;
+      }
+
+      console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
+        `Usage:\n` +
+        `  webjs vendor pin                       pin every bare import in this app\n` +
+        `  webjs vendor pin <pkg>[@version]       pin a specific package\n` +
+        `  webjs vendor unpin <pkg>[@version]     remove a package from cache\n` +
+        `  webjs vendor list                      show cache contents`);
+      process.exit(1);
+    }
     case 'help':
     case undefined:
       console.log(USAGE);

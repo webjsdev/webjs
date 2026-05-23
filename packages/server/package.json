@@ -16,7 +16,6 @@
   "dependencies": {
     "@webjsdev/core": "^0.7.1",
     "chokidar": "^3.6.0",
-    "esbuild": "^0.28.0",
     "ws": "^8.20.0"
   },
   "publishConfig": {

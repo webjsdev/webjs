@@ -6,10 +6,15 @@ import { tmpdir } from 'node:os';
 
 import {
   extractPackageName,
+  extractSubpath,
   scanBareImports,
   vendorImportMapEntries,
-  bundlePackage,
   serveVendorBundle,
+  pinPackage,
+  removeFromCache,
+  listCache,
+  isWorkspaceDep,
+  getPackageVersion,
   clearVendorCache,
 } from '../../src/vendor.js';
 
@@ -49,6 +54,32 @@ test('extractPackageName: empty string returns null', () => {
   assert.equal(extractPackageName(''), null);
 });
 
+test('extractPackageName: __webjs-prefixed specifier returns null', () => {
+  assert.equal(extractPackageName('__webjs/vendor/x'), null);
+});
+
+test('extractPackageName: lone @scope with no package name returns null', () => {
+  assert.equal(extractPackageName('@scope'), null);
+});
+
+// --- extractSubpath ---
+
+test('extractSubpath: bare package returns empty', () => {
+  assert.equal(extractSubpath('dayjs'), '');
+});
+
+test('extractSubpath: package with subpath returns leading-slash subpath', () => {
+  assert.equal(extractSubpath('dayjs/locale/en'), '/locale/en');
+});
+
+test('extractSubpath: scoped package without subpath returns empty', () => {
+  assert.equal(extractSubpath('@scope/pkg'), '');
+});
+
+test('extractSubpath: scoped package with subpath returns leading-slash subpath', () => {
+  assert.equal(extractSubpath('@scope/pkg/sub/path'), '/sub/path');
+});
+
 // --- scanBareImports ---
 
 test('scanBareImports: finds bare specifiers in source files', async () => {
@@ -77,7 +108,6 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   assert.ok(found.has('dynamic-pkg'));
   assert.ok(!found.has('pg'), 'server-only imports should be skipped');
   assert.ok(!found.has('./local.js'), 'relative imports should be excluded');
-  // Built-ins should never appear
   assert.ok(!found.has('@webjsdev/core'));
 
   await rm(dir, { recursive: true, force: true });
@@ -100,101 +130,121 @@ test('scanBareImports: skips node_modules and _private dirs', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// --- vendorImportMapEntries ---
+// --- vendorImportMapEntries (new URL shape: includes @version) ---
 
-test('vendorImportMapEntries: generates correct URLs', () => {
-  const entries = vendorImportMapEntries(new Set(['dayjs', '@tanstack/query']));
-  assert.equal(entries['dayjs'], '/__webjs/vendor/dayjs.js');
-  assert.equal(entries['@tanstack/query'], '/__webjs/vendor/%40tanstack%2Fquery.js');
+test('vendorImportMapEntries: emits /__webjs/vendor/<pkg>@<version>.js URLs', () => {
+  // The function reads installed versions from the appDir's node_modules.
+  // Use the repo root where picocolors is hoisted.
+  const entries = vendorImportMapEntries(new Set(['picocolors']), process.cwd());
+  const url = entries['picocolors'];
+  assert.ok(url, 'picocolors should get an entry');
+  assert.match(url, /^\/__webjs\/vendor\/picocolors@\d+\.\d+\.\d+\.js$/);
 });
 
 test('vendorImportMapEntries: skips built-ins', () => {
-  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'dayjs']));
+  const entries = vendorImportMapEntries(new Set(['@webjsdev/core', 'picocolors']), process.cwd());
   assert.ok(!('@webjsdev/core' in entries));
-  assert.ok('dayjs' in entries);
+  assert.ok('picocolors' in entries);
 });
 
-// --- extractPackageName: edge cases ---
-
-test('extractPackageName: __webjs-prefixed specifier returns null', () => {
-  // The implementation treats specifiers starting with "__" as non-bundleable
-  // (framework-internal URLs like /__webjs/...).
-  assert.equal(extractPackageName('__webjs/vendor/x'), null);
+test('vendorImportMapEntries: skips packages with no installed version', () => {
+  const entries = vendorImportMapEntries(new Set(['this-package-does-not-exist-xyz']), process.cwd());
+  assert.ok(!('this-package-does-not-exist-xyz' in entries));
 });
 
-test('extractPackageName: lone @scope with no package name returns null', () => {
-  assert.equal(extractPackageName('@scope'), null);
+// --- workspace detection + version reading ---
+
+test('isWorkspaceDep: monorepo @webjsdev/core resolves inside repo, true', () => {
+  // The repo root is a npm workspace root; @webjsdev/core points back at
+  // packages/core via the workspace link.
+  assert.equal(isWorkspaceDep('@webjsdev/core', process.cwd()), true);
 });
 
-// --- bundlePackage + serveVendorBundle ---
+test('isWorkspaceDep: real node_modules package resolves outside repo, false', () => {
+  assert.equal(isWorkspaceDep('picocolors', process.cwd()), false);
+});
+
+test('getPackageVersion: returns version for installed package', () => {
+  const v = getPackageVersion('picocolors', process.cwd());
+  assert.match(v, /^\d+\.\d+\.\d+/);
+});
+
+test('getPackageVersion: returns null for missing package', () => {
+  assert.equal(getPackageVersion('this-pkg-not-installed-xyz', process.cwd()), null);
+});
+
+// --- pinPackage + serveVendorBundle (these hit esm.sh) ---
 //
-// These exercise the esbuild path against a tiny, dependency-free package
-// that's already installed in node_modules (`picocolors`). A single esbuild
-// invocation usually completes in ~50–150ms.
+// These exercise the CDN fetch + cache path against a tiny, well-known
+// package (picocolors). Each test requires network access to esm.sh.
+// Skip via WEBJS_SKIP_NETWORK_TESTS=1 in air-gapped CI environments.
 
-test('bundlePackage: bundles a real package → ESM source', async () => {
+const NETWORK_OK = !process.env.WEBJS_SKIP_NETWORK_TESTS;
+
+test('pinPackage: fetches a real package from esm.sh and writes cache', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
-  const code = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(typeof code, 'string');
-  assert.ok(code.length > 0, 'bundle should be non-empty');
-  // ESM bundles should export something.
-  assert.ok(/export\s*(?:default|{)/.test(code), 'expected ESM exports');
+  const version = getPackageVersion('picocolors', process.cwd());
+  // Unpin first so we exercise the fetch path, not the cache path.
+  await removeFromCache(process.cwd(), 'picocolors', version);
+  const result = await pinPackage(process.cwd(), 'picocolors', version);
+  assert.equal(result.ok, true, `pin failed: ${result.error}`);
+  assert.ok(result.bytes > 0, 'expected non-empty bundle');
 });
 
-test('bundlePackage: second call hits the in-memory cache', async () => {
-  // Prime
-  const first = await bundlePackage('picocolors', process.cwd(), false);
-  // Second call should return the exact same cached string without rebuilding
-  const second = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(first, second);
-});
-
-test('bundlePackage: unknown package → null', async () => {
-  clearVendorCache();
-  const code = await bundlePackage('this-pkg-definitely-does-not-exist-xyz', process.cwd(), false);
-  assert.equal(code, null);
-});
-
-test('clearVendorCache: subsequent bundlePackage call re-builds', async () => {
-  await bundlePackage('picocolors', process.cwd(), false);   // populates cache
-  clearVendorCache();
-  // Re-build should still work (and return a string).
-  const code = await bundlePackage('picocolors', process.cwd(), false);
-  assert.equal(typeof code, 'string');
-  assert.ok(code.length > 0);
-});
-
-test('serveVendorBundle: known package → 200 JS response with cache headers', async () => {
-  clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), false);
+test('serveVendorBundle: known package returns 200 JS response with cache headers', { skip: !NETWORK_OK }, async () => {
+  const version = getPackageVersion('picocolors', process.cwd());
+  const id = `picocolors@${version}`;
+  const resp = await serveVendorBundle(id, process.cwd(), false);
   assert.equal(resp.status, 200);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
-  );
-  assert.equal(
-    resp.headers.get('cache-control'),
-    'public, max-age=31536000, immutable',
-  );
+  assert.equal(resp.headers.get('content-type'), 'application/javascript; charset=utf-8');
+  assert.equal(resp.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   const body = await resp.text();
   assert.ok(body.length > 0);
 });
 
-test('serveVendorBundle: dev=true uses no-cache', async () => {
-  clearVendorCache();
-  const resp = await serveVendorBundle('picocolors', process.cwd(), true);
+test('serveVendorBundle: dev=true uses no-cache header', { skip: !NETWORK_OK }, async () => {
+  const version = getPackageVersion('picocolors', process.cwd());
+  const id = `picocolors@${version}`;
+  const resp = await serveVendorBundle(id, process.cwd(), true);
   assert.equal(resp.status, 200);
   assert.equal(resp.headers.get('cache-control'), 'no-cache');
 });
 
-test('serveVendorBundle: unknown package → 404 JS response', async () => {
-  clearVendorCache();
-  const resp = await serveVendorBundle('this-pkg-does-not-exist-abc', process.cwd(), false);
+test('serveVendorBundle: malformed id returns 404', async () => {
+  // No `@version` segment in the id: the parser rejects it before
+  // touching the network.
+  const resp = await serveVendorBundle('not-a-valid-id', process.cwd(), false);
   assert.equal(resp.status, 404);
-  assert.equal(
-    resp.headers.get('content-type'),
-    'application/javascript; charset=utf-8',
-  );
   const body = await resp.text();
-  assert.ok(body.includes('this-pkg-does-not-exist-abc'));
+  assert.ok(body.includes('malformed vendor id'));
+});
+
+test('serveVendorBundle: nonexistent package returns 404 with remediation message', { skip: !NETWORK_OK }, async () => {
+  const resp = await serveVendorBundle('this-pkg-does-not-exist-xyz@1.0.0', process.cwd(), false);
+  assert.equal(resp.status, 404);
+  const body = await resp.text();
+  assert.ok(body.includes('vendor fetch failed'));
+  assert.ok(body.includes('webjs vendor pin'), 'response should suggest the pin command for remediation');
+});
+
+// --- cache lifecycle ---
+
+test('listCache + removeFromCache: round-trip', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const version = getPackageVersion('picocolors', process.cwd());
+
+  // Populate
+  await pinPackage(process.cwd(), 'picocolors', version);
+
+  // List should include picocolors at the pinned version
+  const entries = await listCache(process.cwd());
+  const pico = entries.find((e) => e.pkg === 'picocolors' && e.version === version && e.subpath === '');
+  assert.ok(pico, `picocolors@${version} should appear in cache listing`);
+  assert.ok(pico.bytes > 0);
+
+  // Remove
+  await removeFromCache(process.cwd(), 'picocolors', version);
+  const afterRemove = await listCache(process.cwd());
+  const stillThere = afterRemove.find((e) => e.pkg === 'picocolors' && e.version === version && e.subpath === '');
+  assert.equal(stillThere, undefined, 'picocolors should be gone after removeFromCache');
 });
