@@ -1,18 +1,23 @@
 /**
- * Auto-serve npm dependencies for the browser via esm.sh, with a local
- * file cache.
+ * Auto-serve npm dependencies for the browser via esm.sh, with a
+ * Rails-style `vendor/javascript/` cache that travels with the repo.
  *
  * When user code imports a bare specifier (e.g. `import dayjs from 'dayjs'`)
  * from a client-side file, the browser can't resolve it natively. Rather
  * than running a bundler on the user's machine, webjs follows the
  * Rails 7 + importmap-rails pattern: bare specifiers resolve to URLs
  * served by esm.sh (a CDN that pre-bundles npm packages as ESM), and the
- * dev server proxies + caches the response so subsequent requests are
- * served from disk.
+ * dev server proxies + caches the response to `vendor/javascript/` at
+ * the project root.
+ *
+ * The cache directory is committed to source control. The repo IS the
+ * deploy artifact: `git clone && npm install && webjs start` works
+ * offline at the server because every needed package is already on
+ * disk. Matches Rails' production-deploy model.
  *
  * Net effect for end users: zero local esbuild dependency, smaller
  * framework wire bytes (single bundle vs many source files), one HTTP
- * request per package vs many.
+ * request per package vs many, deterministic offline-capable production.
  *
  *   1. On startup (and rebuild), scan client-reachable source for bare
  *      import specifiers. For each, resolve the installed version from
@@ -20,12 +25,15 @@
  *
  *   2. Build importmap entries pointing at `/__webjs/vendor/<pkg>@<ver>`.
  *
- *   3. On first browser request for that URL, fetch from `esm.sh` (fall
- *      back to `jspm.io` if esm.sh fails), write to
- *      `node_modules/.webjs-cache/`, serve the bytes.
+ *   3. On request for that URL, read from `vendor/javascript/` on disk.
+ *      If absent, fetch from `esm.sh` (fallback `jspm.io`), write to
+ *      `vendor/javascript/`, serve the bytes. Subsequent requests are
+ *      pure file reads with zero network involvement.
  *
- *   4. Subsequent requests serve from the on-disk cache without any
- *      network call. The cache persists across server restarts.
+ *   4. Developers commit `vendor/javascript/` to source control so the
+ *      deploy artifact is fully offline-capable. CDN access is only
+ *      needed when first introducing a new package (then immediately
+ *      committed).
  *
  * Workspace packages (anything resolving inside the monorepo via
  * `workspace:*`, `file:`, or a symlinked path) are served from their
@@ -33,9 +41,10 @@
  * framework-dev loop fast and avoids requiring the framework to be
  * published before it can be tested locally.
  *
- * Air-gapped / offline deploys: `webjs vendor pin` populates the cache
- * eagerly so the production server never has to hit a CDN at runtime.
- * Recommended for Docker builds: `RUN webjs vendor pin` after install.
+ * Air-gapped / offline workflow: `webjs vendor pin` populates
+ * `vendor/javascript/` eagerly. Commit the result. The production
+ * server never has to hit a CDN at runtime, regardless of deploy
+ * pipeline (Docker, direct git push, hand-copied build artifacts).
  */
 
 import { readFile, readdir, stat, mkdir, writeFile, unlink } from 'node:fs/promises';
@@ -234,11 +243,25 @@ export function getPackageVersion(pkgName, appDir) {
 }
 
 // ---------------------------------------------------------------------------
-// Disk cache (node_modules/.webjs-cache/)
+// Disk cache (vendor/javascript/, Rails 7 + importmap-rails convention)
 // ---------------------------------------------------------------------------
 
 /**
  * Compute the on-disk path for a cached vendor bundle.
+ *
+ * Stored at `vendor/javascript/` at the project root, matching the
+ * Rails 7 + importmap-rails convention. The location is OUTSIDE
+ * `node_modules` so it survives `rm -rf node_modules` and ships with
+ * the repo: `git clone && npm install && webjs start` works offline
+ * at the server even when the source machine had no internet at boot.
+ *
+ * Filename convention mirrors Rails: scoped names use `--` instead of
+ * `/` (filesystem-safe), version + subpath baked in for cache-key
+ * uniqueness:
+ *
+ *   `vendor/javascript/dayjs@1.11.13.js`
+ *   `vendor/javascript/@hotwired--turbo@8.0.0.js`
+ *   `vendor/javascript/dayjs@1.11.13__plugin__utc.js`
  *
  * @param {string} appDir
  * @param {string} pkgName
@@ -246,9 +269,10 @@ export function getPackageVersion(pkgName, appDir) {
  * @param {string} subpath   '' or '/sub/path'
  */
 function cachePath(appDir, pkgName, version, subpath) {
-  const safeSubpath = subpath.replace(/[\/]/g, '__');
-  const fname = `${encodeURIComponent(pkgName)}@${version}${safeSubpath}.js`;
-  return join(appDir, 'node_modules', '.webjs-cache', fname);
+  const safeName = pkgName.replace(/\//g, '--');
+  const safeSubpath = subpath.replace(/\//g, '__');
+  const fname = `${safeName}@${version}${safeSubpath}.js`;
+  return join(appDir, 'vendor', 'javascript', fname);
 }
 
 /**
@@ -482,7 +506,7 @@ export async function pinAll(appDir) {
  * @returns {Promise<Array<{ pkg: string, version: string, subpath: string, bytes: number }>>}
  */
 export async function listCache(appDir) {
-  const dir = join(appDir, 'node_modules', '.webjs-cache');
+  const dir = join(appDir, 'vendor', 'javascript');
   let files;
   try { files = await readdir(dir); } catch { return []; }
   const entries = [];
@@ -491,7 +515,9 @@ export async function listCache(appDir) {
     const stem = f.slice(0, -3); // drop .js
     const atIdx = stem.lastIndexOf('@');
     if (atIdx <= 0) continue;
-    const pkgName = decodeURIComponent(stem.slice(0, atIdx));
+    // Rails filename convention: `@scope--name` for scoped, `name` for plain.
+    // Reverse the `--` to `/` on read.
+    const pkgName = stem.slice(0, atIdx).replace(/--/g, '/');
     const rest = stem.slice(atIdx + 1);
     const subIdx = rest.indexOf('__');
     const version = subIdx < 0 ? rest : rest.slice(0, subIdx);
