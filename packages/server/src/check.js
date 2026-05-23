@@ -102,7 +102,7 @@ export const RULES = [
   {
     name: 'no-non-erasable-typescript',
     description:
-      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
+      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s native type-stripper rejects. Files hitting these take the esbuild fallback path which costs roughly 3x wire bytes (sourcemap overhead) and loses byte-exact stack-trace positions. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
   },
 ];
 
@@ -790,7 +790,7 @@ export async function checkConventions(appDir, opts) {
   // module.stripTypeScriptTypes, which rejects non-erasable TS (enum,
   // namespace with values, constructor parameter properties, legacy
   // decorators, `import = require`). There is no fallback: non-erasable
-  // syntax is rejected at request time with a 500. Enforce TS-side
+  // syntax takes the slower esbuild fallback path. Enforce TS-side
   // rejection of those patterns via `compilerOptions.erasableSyntaxOnly:
   // true` in tsconfig.json so violations surface as red squiggles in
   // the editor before they ever hit the dev server. The companion
@@ -910,7 +910,7 @@ export async function checkConventions(appDir, opts) {
           violations.push({
             rule: 'no-non-erasable-typescript',
             file: relPath,
-            message: `Non-erasable TypeScript construct (${name}) detected at line ${line}. The framework's type-stripper rejects this at request time with a 500.`,
+            message: `Non-erasable TypeScript construct (${name}) detected at line ${line}. The framework's native type-stripper rejects this; the file falls back to esbuild + inline sourcemap, costing roughly 3x wire bytes per request and losing byte-exact stack-trace positions.`,
             fix,
           });
         }
