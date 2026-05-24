@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, writeFile, rm, symlink, readFile as readFileFs } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import {
@@ -11,6 +11,12 @@ import {
   getPackageVersion,
   jspmGenerate,
   clearVendorCache,
+  pinAll,
+  unpinPackage,
+  listPinned,
+  readPinFile,
+  resolveVendorImports,
+  serveDownloadedBundle,
 } from '../../src/vendor.js';
 
 // --- extractPackageName ---
@@ -279,4 +285,197 @@ test('vendorImportMapEntries: resolves installed packages to jspm.io URLs', { sk
   const url = entries['picocolors'];
   assert.ok(url, 'expected picocolors entry');
   assert.match(url, /^https:\/\/ga\.jspm\.io\/npm:picocolors@/);
+});
+
+// --- file-based pin (Rails-style committed importmap.json) ---
+
+async function makeTempAppWithSource(sourceFiles) {
+  const dir = join(tmpdir(), `webjs-test-pin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(dir, { recursive: true });
+  // Symlink node_modules from repo root so picocolors etc. resolve via createRequire.
+  await symlink(join(process.cwd(), 'node_modules'), join(dir, 'node_modules'));
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+  for (const [path, body] of Object.entries(sourceFiles)) {
+    const full = join(dir, path);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, body);
+  }
+  return dir;
+}
+
+test('pinAll default: writes importmap.json with jspm.io URLs', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    const { pins, pruned, downloaded } = await pinAll(dir);
+    assert.ok(pins.length >= 1, 'should pin picocolors');
+    assert.equal(pruned.length, 0, 'no orphans on fresh pin');
+    assert.equal(downloaded, 0, 'default mode does not download');
+    const file = await readPinFile(dir);
+    assert.ok(file, 'pin file should exist');
+    assert.match(file.imports['picocolors'], /^https:\/\/ga\.jspm\.io\/npm:picocolors@/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll --download: writes importmap.json with local URLs + bundle files', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    const { pins, downloaded } = await pinAll(dir, { download: true });
+    assert.ok(pins.length >= 1);
+    assert.ok(downloaded >= 1, 'should download at least one bundle');
+    const file = await readPinFile(dir);
+    assert.match(file.imports['picocolors'], /^\/__webjs\/vendor\/picocolors@.*\.js$/);
+    const bundleFilename = file.imports['picocolors'].slice('/__webjs/vendor/'.length);
+    const bytes = await readFileFs(join(dir, '.webjs', 'vendor', bundleFilename), 'utf8');
+    assert.ok(bytes.length > 0, 'bundle file must contain bytes');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll: prune removes orphan bundle files from prior pins', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'orphan-package@1.0.0.js'), 'export default {}');
+    const { pruned } = await pinAll(dir);
+    assert.ok(pruned.includes('orphan-package@1.0.0.js'), `expected orphan in pruned list, got: ${pruned.join(', ')}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll: mode switch from --download to default removes bundles', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    const first = await pinAll(dir, { download: true });
+    assert.ok(first.downloaded >= 1);
+    const second = await pinAll(dir);
+    assert.ok(second.pruned.length >= 1, 'switching to default mode should prune leftover bundle files');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('unpinPackage: removes entry from importmap.json', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    await pinAll(dir);
+    const r = await unpinPackage(dir, 'picocolors');
+    assert.equal(r.removed, true);
+    const file = await readPinFile(dir);
+    assert.equal(file.imports['picocolors'], undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('unpinPackage: returns removed:false for non-existent package', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({ imports: {} }));
+    const r = await unpinPackage(dir, 'not-there');
+    assert.equal(r.removed, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('listPinned: parses jspm.io URLs and extracts versions', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js',
+        'clsx': 'https://ga.jspm.io/npm:clsx@2.1.1/dist/clsx.mjs',
+      },
+    }));
+    const entries = await listPinned(dir);
+    const dayjs = entries.find(e => e.pkg === 'dayjs');
+    assert.ok(dayjs);
+    assert.equal(dayjs.version, '1.11.13');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('listPinned: returns empty array when no pin file', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    const entries = await listPinned(dir);
+    assert.deepEqual(entries, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: prefers committed pin file over live API call', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'fake-pkg': 'https://example.com/fake.js' },
+    }));
+    const result = await resolveVendorImports(new Set(['unrelated']), dir);
+    assert.equal(result['fake-pkg'], 'https://example.com/fake.js');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('serveDownloadedBundle: rejects path-traversal filenames', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    const r1 = await serveDownloadedBundle('../../../etc/passwd.js', dir, false);
+    assert.equal(r1.status, 400);
+    const r2 = await serveDownloadedBundle('subdir/foo.js', dir, false);
+    assert.equal(r2.status, 400);
+    const r3 = await serveDownloadedBundle('not-a-js-file.txt', dir, false);
+    assert.equal(r3.status, 400);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('serveDownloadedBundle: serves a real file from .webjs/vendor/', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'fake@1.0.0.js'), 'export default 1;');
+    const resp = await serveDownloadedBundle('fake@1.0.0.js', dir, false);
+    assert.equal(resp.status, 200);
+    assert.match(resp.headers.get('content-type') || '', /javascript/);
+    const body = await resp.text();
+    assert.equal(body, 'export default 1;');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('serveDownloadedBundle: missing file returns 404', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    const resp = await serveDownloadedBundle('not-there@1.0.0.js', dir, false);
+    assert.equal(resp.status, 404);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
