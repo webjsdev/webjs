@@ -39,9 +39,9 @@
  * Matches Rails' "no build" posture literally.
  */
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, unlink, stat } from 'node:fs/promises';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
-import { join, dirname, sep } from 'node:path';
+import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
 /**
@@ -318,4 +318,291 @@ export async function vendorImportMapEntries(bareImports, appDir) {
  */
 export function clearVendorCache() {
   jspmCache.clear();
+}
+
+// ---------------------------------------------------------------------------
+// File-based pin (.webjs/vendor/importmap.json, optional --download bundles)
+// ---------------------------------------------------------------------------
+
+const PIN_DIR_REL = ['.webjs', 'vendor'];
+const PIN_FILE = 'importmap.json';
+
+/** Compute the absolute path of the pin directory for an app. */
+function pinDir(appDir) {
+  return join(appDir, ...PIN_DIR_REL);
+}
+
+/** Compute the absolute path of the importmap config file for an app. */
+function pinFilePath(appDir) {
+  return join(pinDir(appDir), PIN_FILE);
+}
+
+/** Filesystem-safe filename for a downloaded bundle. */
+function bundleFilename(pkgName, version) {
+  const safeName = pkgName.replace(/\//g, '--');
+  return `${safeName}@${version}.js`;
+}
+
+/**
+ * Read the committed pin importmap if one exists. Returns the parsed
+ * `{ imports: Record<string, string> }` shape or null if no pin file.
+ *
+ * @param {string} appDir
+ * @returns {Promise<{ imports: Record<string, string> } | null>}
+ */
+export async function readPinFile(appDir) {
+  try {
+    const raw = await readFile(pinFilePath(appDir), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.imports && typeof parsed.imports === 'object') {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write the pin importmap to `.webjs/vendor/importmap.json`. Ensures
+ * the directory exists. Pretty-printed for human-reviewable diffs.
+ *
+ * @param {string} appDir
+ * @param {Record<string, string>} imports
+ */
+async function writePinFile(appDir, imports) {
+  await mkdir(pinDir(appDir), { recursive: true });
+  const body = JSON.stringify({ imports }, null, 2) + '\n';
+  await writeFile(pinFilePath(appDir), body, 'utf8');
+}
+
+/**
+ * Download a single jspm.io URL and write the body to
+ * `.webjs/vendor/<filename>`. Returns the number of bytes written, or
+ * null on failure.
+ *
+ * @param {string} url
+ * @param {string} appDir
+ * @param {string} filename
+ * @returns {Promise<number | null>}
+ */
+async function downloadBundle(url, appDir, filename) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[webjs] download ${url} returned ${response.status}`);
+      return null;
+    }
+    const body = await response.text();
+    await mkdir(pinDir(appDir), { recursive: true });
+    await writeFile(join(pinDir(appDir), filename), body, 'utf8');
+    return body.length;
+  } catch (e) {
+    console.error(`[webjs] download ${url} failed: ${e && e.message}`);
+    return null;
+  }
+}
+
+/**
+ * After writing the new pin output, delete any file in the pin
+ * directory that doesn't belong. Handles three orphan scenarios
+ * uniformly: version-bump leftovers, removed packages, and mode
+ * switches (default <-> download).
+ *
+ * @param {string} appDir
+ * @param {Set<string>} expected  filenames that should remain
+ * @returns {Promise<string[]>}   list of pruned filenames
+ */
+async function pruneOrphans(appDir, expected) {
+  const dir = pinDir(appDir);
+  let files;
+  try { files = await readdir(dir); } catch { return []; }
+  const pruned = [];
+  for (const f of files) {
+    if (expected.has(f)) continue;
+    try {
+      await unlink(join(dir, f));
+      pruned.push(f);
+    } catch { /* race or permission; ignore */ }
+  }
+  return pruned;
+}
+
+/**
+ * Pin all currently-imported npm packages to `.webjs/vendor/
+ * importmap.json`. Two modes:
+ *
+ *   - Default: importmap URLs point at jspm.io (browser fetches from
+ *     CDN directly at runtime). Only `importmap.json` is committed.
+ *   - `download: true`: also fetches each bundle from jspm.io and
+ *     writes it to `.webjs/vendor/<pkg>@<version>.js`. importmap URLs
+ *     become local paths (`/__webjs/vendor/<filename>`), and the
+ *     server handler serves them from disk. Both `importmap.json` and
+ *     the bundle files are committed to source control.
+ *
+ * After pinning, prunes any orphan file in `.webjs/vendor/` not
+ * produced by the current run. Pin is idempotent with respect to the
+ * current source + node_modules: removed packages, bumped versions,
+ * and mode switches all leave a clean directory.
+ *
+ * @param {string} appDir
+ * @param {{ download?: boolean }} [opts]
+ * @returns {Promise<{
+ *   pins: Array<{ pkg: string, version: string, url: string, bytes?: number }>,
+ *   pruned: string[],
+ *   downloaded: number,
+ * }>}
+ */
+export async function pinAll(appDir, opts = {}) {
+  const download = !!opts.download;
+  const bare = await scanBareImports(appDir);
+  const installs = [];
+  /** @type {Map<string, string>} */
+  const versionsByPkg = new Map();
+  for (const pkg of bare) {
+    if (BUILTIN.has(pkg)) continue;
+    const version = getPackageVersion(pkg, appDir);
+    if (!version) continue;
+    installs.push(`${pkg}@${version}`);
+    versionsByPkg.set(pkg, version);
+  }
+  const resolved = await jspmGenerate(installs);
+
+  /** @type {Record<string, string>} */
+  const importmap = {};
+  /** @type {Array<{ pkg: string, version: string, url: string, bytes?: number }>} */
+  const pins = [];
+  const expected = new Set([PIN_FILE]);
+  let downloaded = 0;
+
+  for (const [pkg, jspmUrl] of Object.entries(resolved)) {
+    const version = versionsByPkg.get(pkg);
+    if (!version) continue;
+    if (download) {
+      const filename = bundleFilename(pkg, version);
+      const bytes = await downloadBundle(jspmUrl, appDir, filename);
+      if (bytes == null) continue;
+      importmap[pkg] = `/__webjs/vendor/${filename}`;
+      expected.add(filename);
+      pins.push({ pkg, version, url: importmap[pkg], bytes });
+      downloaded++;
+    } else {
+      importmap[pkg] = jspmUrl;
+      pins.push({ pkg, version, url: jspmUrl });
+    }
+  }
+
+  await writePinFile(appDir, importmap);
+  const pruned = await pruneOrphans(appDir, expected);
+  return { pins, pruned, downloaded };
+}
+
+/**
+ * Remove a single package from the committed pin output. Deletes the
+ * package's entry from `importmap.json`, and (if a bundle file
+ * exists for it) deletes that file too.
+ *
+ * @param {string} appDir
+ * @param {string} pkg
+ * @returns {Promise<{ removed: boolean, deletedFile?: string }>}
+ */
+export async function unpinPackage(appDir, pkg) {
+  const file = await readPinFile(appDir);
+  if (!file || !(pkg in file.imports)) return { removed: false };
+  const url = file.imports[pkg];
+  delete file.imports[pkg];
+  await writePinFile(appDir, file.imports);
+
+  let deletedFile;
+  if (url.startsWith('/__webjs/vendor/')) {
+    const filename = url.slice('/__webjs/vendor/'.length);
+    try {
+      await unlink(join(pinDir(appDir), filename));
+      deletedFile = filename;
+    } catch { /* file already gone; ignore */ }
+  }
+  return { removed: true, deletedFile };
+}
+
+/**
+ * List entries from the committed pin file. Parses the package
+ * version from the URL (jspm.io URL or the local file's @version).
+ *
+ * @param {string} appDir
+ * @returns {Promise<Array<{ pkg: string, version: string, url: string, bytes?: number }>>}
+ */
+export async function listPinned(appDir) {
+  const file = await readPinFile(appDir);
+  if (!file) return [];
+  const entries = [];
+  for (const [pkg, url] of Object.entries(file.imports)) {
+    let version = '(unknown)';
+    let bytes;
+    const jspmMatch = /\/npm:[^@]+@([^/]+)\//.exec(url);
+    if (jspmMatch) {
+      version = jspmMatch[1];
+    } else if (url.startsWith('/__webjs/vendor/')) {
+      const filename = url.slice('/__webjs/vendor/'.length);
+      const atIdx = filename.lastIndexOf('@');
+      if (atIdx > 0) version = filename.slice(atIdx + 1, -3);
+      try {
+        const st = await stat(join(pinDir(appDir), filename));
+        bytes = st.size;
+      } catch { /* file missing; bytes stays undefined */ }
+    }
+    entries.push({ pkg, version, url, bytes });
+  }
+  return entries;
+}
+
+/**
+ * Resolve the vendor importmap fragment for runtime use. Prefers the
+ * committed pin file over a live api.jspm.io call. Called by dev.js
+ * at server boot.
+ *
+ * Order of preference:
+ *   1. `.webjs/vendor/importmap.json` (committed; no network needed)
+ *   2. Live api.jspm.io/generate (fallback when no pin file exists)
+ *
+ * @param {Set<string>} bareImports
+ * @param {string} appDir
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function resolveVendorImports(bareImports, appDir) {
+  const file = await readPinFile(appDir);
+  if (file) return file.imports;
+  return vendorImportMapEntries(bareImports, appDir);
+}
+
+/**
+ * Serve a downloaded vendor bundle from `.webjs/vendor/<filename>`.
+ * Called by dev.js when the importmap contains `/__webjs/vendor/`
+ * paths (i.e. user ran `webjs vendor pin --download`).
+ *
+ * @param {string} filename  e.g. `'dayjs@1.11.13.js'`
+ * @param {string} appDir
+ * @param {boolean} dev
+ * @returns {Promise<Response>}
+ */
+export async function serveDownloadedBundle(filename, appDir, dev) {
+  if (!filename.endsWith('.js') || filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+    return new Response(`/* invalid vendor filename: ${filename} */`, {
+      status: 400,
+      headers: { 'content-type': 'application/javascript; charset=utf-8' },
+    });
+  }
+  try {
+    const body = await readFile(join(pinDir(appDir), filename), 'utf8');
+    return new Response(body, {
+      headers: {
+        'content-type': 'application/javascript; charset=utf-8',
+        'cache-control': dev ? 'no-cache' : 'public, max-age=31536000, immutable',
+      },
+    });
+  } catch {
+    return new Response(`/* vendor bundle not found: ${filename}. Run webjs vendor pin --download */`, {
+      status: 404,
+      headers: { 'content-type': 'application/javascript; charset=utf-8' },
+    });
+  }
 }

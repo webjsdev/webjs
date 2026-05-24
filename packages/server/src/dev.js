@@ -57,7 +57,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, vendorImportMapEntries, clearVendorCache } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents } from './component-scanner.js';
 
@@ -130,7 +130,7 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(await vendorImportMapEntries(bareImports, appDir));
+  setVendorEntries(await resolveVendorImports(bareImports, appDir));
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -171,7 +171,7 @@ export async function createRequestHandler(opts) {
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(await vendorImportMapEntries(state.bareImports, appDir));
+    setVendorEntries(await resolveVendorImports(state.bareImports, appDir));
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
@@ -408,10 +408,16 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // No /__webjs/vendor/* URL handler. Vendor packages resolve via the
-  // importmap to jspm.io CDN URLs and the browser fetches them
-  // directly. webjs's server doesn't proxy or bundle vendor packages.
-  // See vendor.js for the Rails 7 + importmap-rails posture.
+  // Vendor URL handler for `webjs vendor pin --download` mode only.
+  // In default pin mode (or no-pin mode) the importmap routes bare
+  // imports straight to ga.jspm.io URLs and the browser bypasses this
+  // server entirely. When the user ran `webjs vendor pin --download`,
+  // the importmap has local `/__webjs/vendor/<file>.js` URLs and this
+  // handler serves the committed bundle files from `.webjs/vendor/`.
+  if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
+    const filename = path.slice('/__webjs/vendor/'.length);
+    return serveDownloadedBundle(filename, appDir, dev);
+  }
 
   // Internal server-action RPC endpoint
   const actMatch = /^\/__webjs\/action\/([a-f0-9]+)\/([A-Za-z0-9_$]+)$/.exec(path);

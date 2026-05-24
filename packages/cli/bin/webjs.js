@@ -26,6 +26,11 @@ const USAGE = `webjs commands:
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
+  webjs vendor pin [--download]                   Pin client-side npm packages to .webjs/vendor/importmap.json
+                                                  Default: writes jspm.io URLs (browser fetches from CDN)
+                                                  --download: also downloads bundles for offline production
+  webjs vendor unpin <pkg>                        Remove a specific package from the pin file
+  webjs vendor list                               Show pinned packages with versions and URLs
   webjs help                                      Show this help`;
 
 /** @param {string[]} args */
@@ -265,6 +270,73 @@ Full docs: https://docs.webjs.com`);
       const { scaffoldApp } = await import('../lib/create.js');
       await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
       break;
+    }
+    case 'vendor': {
+      const sub = rest[0];
+      const args = rest.slice(1);
+      const appDir = process.cwd();
+      const { pinAll, unpinPackage, listPinned } = await import('@webjsdev/server');
+
+      if (sub === 'pin') {
+        const download = args.includes('--download');
+        console.log(
+          `Pinning vendor packages from ${appDir}` +
+          (download ? ' (downloading bundles)' : '') + '...',
+        );
+        const { pins, pruned, downloaded } = await pinAll(appDir, { download });
+        for (const p of pins) {
+          const sizeStr = p.bytes != null ? ` ${(p.bytes / 1024).toFixed(1)} KB` : '';
+          console.log(`  ${(p.pkg + '@' + p.version).padEnd(40)}${sizeStr}`);
+        }
+        for (const f of pruned) {
+          console.log(`  ${f.padEnd(40)} REMOVED (orphan)`);
+        }
+        const pinMsg = `Pinned ${pins.length} package${pins.length === 1 ? '' : 's'}, wrote .webjs/vendor/importmap.json` +
+          (downloaded ? ` + ${downloaded} bundle${downloaded === 1 ? '' : 's'}` : '') + '.';
+        const pruneMsg = pruned.length ? ` Pruned ${pruned.length} orphan${pruned.length === 1 ? '' : 's'}.` : '';
+        console.log(pinMsg + pruneMsg);
+        break;
+      }
+
+      if (sub === 'unpin') {
+        if (args.length === 0) {
+          console.error('Usage: webjs vendor unpin <pkg>');
+          process.exit(1);
+        }
+        for (const pkg of args) {
+          const r = await unpinPackage(appDir, pkg);
+          if (!r.removed) {
+            console.error(`  ${pkg.padEnd(40)} not in pin file`);
+            continue;
+          }
+          const extra = r.deletedFile ? ` (also deleted ${r.deletedFile})` : '';
+          console.log(`  ${pkg.padEnd(40)} unpinned${extra}`);
+        }
+        break;
+      }
+
+      if (sub === 'list') {
+        const entries = await listPinned(appDir);
+        if (entries.length === 0) {
+          console.log('No pin file. Run "webjs vendor pin" to create .webjs/vendor/importmap.json.');
+          break;
+        }
+        console.log(`Pinned packages from ${appDir}/.webjs/vendor/importmap.json:`);
+        for (const e of entries) {
+          const sizeStr = e.bytes != null ? ` ${(e.bytes / 1024).toFixed(1)} KB` : '';
+          console.log(`  ${(e.pkg + '@' + e.version).padEnd(40)}${sizeStr}`);
+          console.log(`    ${e.url}`);
+        }
+        console.log(`${entries.length} package${entries.length === 1 ? '' : 's'} pinned.`);
+        break;
+      }
+
+      console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
+        `Usage:\n` +
+        `  webjs vendor pin [--download]    Pin packages to .webjs/vendor/importmap.json\n` +
+        `  webjs vendor unpin <pkg>         Remove a package from the pin file\n` +
+        `  webjs vendor list                Show pinned packages with versions and URLs`);
+      process.exit(1);
     }
     case 'help':
     case undefined:
