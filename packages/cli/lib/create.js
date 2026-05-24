@@ -72,11 +72,10 @@ const UI_REGISTRY_ROOT = resolve(
  * utils/ folder: `../../lib/utils/cn.ts`.
  *
  * @param {string} name  component name without `.ts` (e.g. 'button')
- * @returns {Promise<string|null>} source or null if not found
+ * @returns {Promise<string>} source with import rewritten
  */
 async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
-  if (!existsSync(src)) return null;
   const raw = await readFile(src, 'utf8');
   return raw
     .replaceAll("'../lib/utils.ts'", "'../../lib/utils/cn.ts'")
@@ -85,7 +84,10 @@ async function readUiComponent(name) {
 
 /**
  * Copy a list of @webjsdev/ui registry components into the scaffolded app
- * under `components/ui/`. Silently skips any name that isn't in the registry.
+ * under `components/ui/`. Throws if any name is missing from the registry,
+ * since the scaffold's generated pages import these by name and a missing
+ * file would produce ERR_MODULE_NOT_FOUND at first request. Caller must
+ * have already invoked assertUiRegistryAvailable().
  *
  * @param {string} appDir  destination app root
  * @param {string[]} names list of component file basenames (without `.ts`)
@@ -94,9 +96,16 @@ async function copyUiComponents(appDir, names) {
   const uiDir = join(appDir, 'components', 'ui');
   await mkdir(uiDir, { recursive: true });
   for (const n of names) {
-    const content = await readUiComponent(n);
-    if (content == null) continue;
-    await writeFile(join(uiDir, `${n}.ts`), content);
+    const src = join(UI_REGISTRY_ROOT, 'components', `${n}.ts`);
+    if (!existsSync(src)) {
+      throw new Error(
+        `@webjsdev/ui registry is missing component '${n}.ts' at ${src}. ` +
+        `The scaffold's example pages import this component by name. ` +
+        `Either the registry was published incompletely or the scaffold's ` +
+        `component list is out of sync with the registry.`,
+      );
+    }
+    await writeFile(join(uiDir, `${n}.ts`), await readUiComponent(n));
   }
 }
 
@@ -110,13 +119,15 @@ async function copyUiComponents(appDir, names) {
  * @param {string} appDir
  */
 async function writeUiBootstrap(appDir) {
+  // Caller (scaffoldApp) has already invoked assertUiRegistryAvailable(),
+  // so the source files below are guaranteed to exist.
+
   // 1) lib/utils/cn.ts: the cn() helper
-  const utilsSrc = join(UI_REGISTRY_ROOT, 'lib', 'utils.ts');
-  if (existsSync(utilsSrc)) {
-    const content = await readFile(utilsSrc, 'utf8');
-    await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
-    await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), content);
-  }
+  const utilsContent = await readFile(
+    join(UI_REGISTRY_ROOT, 'lib', 'utils.ts'), 'utf8',
+  );
+  await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
+  await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), utilsContent);
 
   // 2) components.json: the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js). The utils alias
@@ -144,12 +155,11 @@ async function writeUiBootstrap(appDir) {
 
   // 3) app/globals.css: copy the neutral theme verbatim. components.json
   // references this path, and future `webjs ui add` calls append to it.
-  const themeSrc = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
-  if (existsSync(themeSrc)) {
-    const css = await readFile(themeSrc, 'utf8');
-    await mkdir(join(appDir, 'app'), { recursive: true });
-    await writeFile(join(appDir, 'app', 'globals.css'), css);
-  }
+  const css = await readFile(
+    join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
+  );
+  await mkdir(join(appDir, 'app'), { recursive: true });
+  await writeFile(join(appDir, 'app', 'globals.css'), css);
 }
 
 /**
@@ -159,12 +169,43 @@ async function writeUiBootstrap(appDir) {
  * tokens (`--color-primary`, `--color-card`, …) the registry components
  * consume are available at runtime without a build step.
  *
- * @returns {Promise<string>} theme CSS source, or '' if registry missing
+ * @returns {Promise<string>} theme CSS source
  */
 async function readThemeCss() {
   const src = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
-  if (!existsSync(src)) return '';
   return await readFile(src, 'utf8');
+}
+
+/**
+ * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
+ * reads component sources, the cn() helper, and the shadcn theme from
+ * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
+ * imports `components/ui/button.ts`. If the registry is missing, the
+ * generated app boots to ERR_MODULE_NOT_FOUND on first request, which is
+ * a confusing failure for end-users to debug.
+ *
+ * The check guards against an @webjsdev/ui published tarball that forgets
+ * to ship `packages/registry/` in its `files` array (the bug fixed in
+ * the same commit), and against a corrupted node_modules install.
+ */
+function assertUiRegistryAvailable() {
+  const required = [
+    join(UI_REGISTRY_ROOT, 'components'),
+    join(UI_REGISTRY_ROOT, 'lib', 'utils.ts'),
+    join(UI_REGISTRY_ROOT, 'themes', 'index.css'),
+  ];
+  const missing = required.filter((p) => !existsSync(p));
+  if (missing.length === 0) return;
+  throw new Error(
+    `@webjsdev/ui registry sources not found at ${UI_REGISTRY_ROOT}.\n` +
+    `Missing:\n${missing.map((p) => `  - ${p}`).join('\n')}\n\n` +
+    `The scaffold reads component sources from the installed @webjsdev/ui ` +
+    `package. If you see this from a fresh \`npm create webjs\`, the ` +
+    `published @webjsdev/ui tarball is missing \`packages/registry/\` ` +
+    `(check its package.json \`files\` array). Please file an issue at ` +
+    `https://github.com/webjsdev/webjs/issues with your @webjsdev/ui ` +
+    `version (\`npm ls @webjsdev/ui\`).`,
+  );
 }
 
 /**
@@ -512,6 +553,13 @@ export type ActionResult<T> =
     if (existsSync(uiSrc)) {
       await cp(uiSrc, join(utilsDir, 'ui.ts'));
     }
+
+    // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
+    // Without this, downstream copy helpers would silently skip and the
+    // generated app would boot to ERR_MODULE_NOT_FOUND on the first page
+    // render (the import in app/page.ts below points at a file we didn't
+    // write).
+    assertUiRegistryAvailable();
 
     // Pre-initialise @webjsdev/ui so the scaffold boots ready for
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
