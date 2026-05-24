@@ -15,6 +15,7 @@
   "files": [
     "bin",
     "src",
+    "packages/registry",
     "README.md"
   ],
   "scripts": {
