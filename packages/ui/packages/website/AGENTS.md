@@ -112,7 +112,7 @@ by overriding via the service env (e.g. Railway's variables):
 
 | Env var | Local fallback | Production value |
 |---|---|---|
-| `WEBSITE_URL` | `http://localhost:5000` | `https://webjs.dev` |
+| `WEBSITE_URL` | `http://localhost:5050` | `https://webjs.dev` |
 | `DOCS_URL` | `http://localhost:4000` | `https://docs.webjs.dev` |
 
 `.env.example` in this directory documents the same defaults. Copy it to

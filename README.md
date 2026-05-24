@@ -70,7 +70,7 @@ git clone https://github.com/webjsdev/webjs
 cd webjs && npm install
 cd examples/blog && npx prisma migrate dev --name init && cd ..
 npm run dev
-# → Website → http://localhost:5000
+# → Website → http://localhost:5050
 # → Docs    → http://localhost:4000
 # → Blog    → http://localhost:3456
 #

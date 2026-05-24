@@ -2,7 +2,7 @@
 /**
  * Starts the website, docs, and example blog together.
  * One command, three servers:
- *   - Website (landing)  → http://localhost:5000
+ *   - Website (landing)  → http://localhost:5050
  *   - Docs               → http://localhost:4000
  *   - Example blog       → http://localhost:3456
  *
@@ -45,7 +45,7 @@ function start(name, cwd, cmd, args, extraEnv = {}) {
 // Use each workspace's `npm run dev` so the concurrently-spawned
 // tailwind CLI watcher (and, for the blog, prisma generate) runs too.
 // The PORT env var is honoured by webjs dev's default-port fallback.
-start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: '5000' });
+start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: '5050' });
 start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: '4000' });
 start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: '3456' });
 
@@ -61,7 +61,7 @@ process.on('SIGTERM', cleanup);
 
 console.log(`
 ▲ webjs development servers:
-  Website   → http://localhost:5000
+  Website   → http://localhost:5050
   Docs      → http://localhost:4000
   Demo      → http://localhost:3456
 

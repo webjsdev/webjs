@@ -68,7 +68,7 @@ function. Edit the inline `<h1>` / `<p>` text.
 ## Run
 
 ```sh
-cd website && npm run dev       # http://localhost:5000
+cd website && npm run dev       # http://localhost:5050
 ```
 
 **Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs

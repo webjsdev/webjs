@@ -13,9 +13,9 @@ services:
     working_dir: /app/website
     # @webjsdev/cli installed in the root node_modules/.bin by npm workspaces;
     # invoke its binary directly rather than via `webjs`.
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5000"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5050"]
     ports:
-      - "15000:5000"
+      - "15000:5050"
     environment:
       DOCS_URL: ${DOCS_URL:-http://localhost:14000}
       BLOG_URL: ${BLOG_URL:-http://localhost:13000}
