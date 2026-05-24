@@ -38,8 +38,9 @@ on:
         default: false
 
 permissions:
-  contents: write   # gh release create needs write access to the repo
-  packages: write   # npm publish to GitHub Packages
+  contents: write        # gh release create needs write access to the repo
+  packages: write        # npm publish to GitHub Packages
+  pull-requests: write   # lockstep step opens + merges a wrapper-bump PR
 
 jobs:
   release:
@@ -164,11 +165,18 @@ jobs:
       #   1. Detect a new @webjsdev/cli changelog file in this push.
       #   2. Update each wrapper's package.json version + @webjsdev/cli
       #      dep range to match.
-      #   3. Commit + push the bumps as github-actions[bot]. The
+      #   3. Land the bumps on `main` by opening a PR from a temp
+      #      branch and immediately merging it. Branch protection on
+      #      main rejects direct pushes (even by github-actions[bot])
+      #      but accepts merges through a PR, which this satisfies.
+      #      No bypass entitlement needed.
+      #
+      #      The PR's commit message uses the `chore(release):` prefix,
+      #      which `scripts/backfill-changelog.js` filters out, so the
+      #      auto-opened PRs never pollute the rendered /changelog. The
       #      commit touches only `packages/*/package.json`, never
-      #      `changelog/**`, so it does NOT re-trigger this same
-      #      release workflow (the trigger filter is `paths:
-      #      ['changelog/**']`).
+      #      `changelog/**`, so the squash-merge does NOT re-trigger
+      #      this same release workflow.
       #   4. Publish each wrapper to npm. Idempotent: skip if the
       #      target version is already on the registry, so workflow
       #      re-runs after transient failures don't error.
@@ -182,6 +190,7 @@ jobs:
         if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -191,6 +200,7 @@ jobs:
           fi
 
           CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          BASE_BRANCH="${GITHUB_REF#refs/heads/}"
           echo "Lockstepping create-webjs + webjsdev to @webjsdev/cli@${CLI_VERSION}"
 
           # 1. Update each wrapper's package.json (version + cli dep range).
@@ -207,20 +217,36 @@ jobs:
             "
           done
 
-          # 2. Commit + push the bumps. If versions were already in sync
-          # (e.g. a developer landed the lockstep manually in the same
-          # commit), there's nothing to commit, so skip cleanly.
+          # 2. Land the bumps on main via PR + merge. If wrapper versions
+          # were already in sync (e.g. a developer landed the lockstep
+          # manually in the same commit), there's nothing to commit and
+          # the publish step below will idempotently skip both wrappers.
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add packages/create-webjs/package.json packages/webjsdev/package.json
           if git diff --cached --quiet; then
             echo "No package.json changes to commit (wrappers were already at ${CLI_VERSION})."
           else
+            # Branch name encodes both the target version and the
+            # current run id so concurrent or re-run workflows can
+            # never collide on the same branch.
+            BRANCH="auto/lockstep-${CLI_VERSION}-${GITHUB_RUN_ID}"
+            git checkout -b "$BRANCH"
             git commit -m "chore(release): lockstep bump create-webjs + webjsdev to match @webjsdev/cli@${CLI_VERSION}"
-            git push origin "HEAD:${GITHUB_REF#refs/heads/}"
+            git push origin "$BRANCH"
+
+            gh pr create \
+              --title "chore(release): lockstep bump wrappers to @webjsdev/cli@${CLI_VERSION}" \
+              --body "Auto-opened by Auto-release run #${GITHUB_RUN_ID}. Mirrors @webjsdev/cli@${CLI_VERSION} to create-webjs and webjsdev so npx cache misses on fresh installs. Squash-merged immediately." \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH"
+
+            gh pr merge "$BRANCH" --squash --delete-branch
           fi
 
-          # 3. Publish each wrapper to npm, idempotently.
+          # 3. Publish each wrapper to npm, idempotently. Local working
+          # tree still carries the bumped package.json (whether or not
+          # the PR was needed), so the publish reads the right version.
           for pkg in create-webjs webjsdev; do
             REMOTE=$(npm view "${pkg}@${CLI_VERSION}" version 2>/dev/null || echo "")
             if [ "$REMOTE" = "${CLI_VERSION}" ]; then
