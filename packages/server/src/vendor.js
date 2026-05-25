@@ -125,6 +125,15 @@ function isServerOnlyFile(name) {
 }
 
 /**
+ * Tooling config files at any depth. They import test runners, build
+ * helpers, AI plugins etc. that legitimately cannot resolve through
+ * jspm.io (e.g. `@web/test-runner-playwright` pulls in `playwright-core`
+ * with subpaths jspm.io can't bundle). Their bare imports must never
+ * reach the importmap.
+ */
+const CONFIG_FILE_RE = /\.config\.(js|ts|mjs|mts|cjs|cts)$/;
+
+/**
  * @param {string} dir
  * @param {Set<string>} found
  */
@@ -139,12 +148,20 @@ async function walk(dir, found) {
       e.name === 'public' ||
       e.name === 'test' ||
       e.name === 'tests' ||
-      e.name.startsWith('_')
+      e.name.startsWith('_') ||
+      // Skip ALL dot-prefixed dirs (.opencode, .claude, .github, .husky,
+      // .git, .vscode, .idea, .cursor, …). They hold tooling / IDE /
+      // agent state that imports packages the browser will never load
+      // (e.g. `@opencode-ai/plugin`). The walker visits dirs and files
+      // separately; this guard only fires for directory entries because
+      // dot-prefixed *files* (e.g. `.env.d.ts` someday) still need the
+      // extension check below.
+      (e.isDirectory() && e.name.startsWith('.'))
     ) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
       await walk(full, found);
-    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !isServerOnlyFile(e.name)) {
+    } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !isServerOnlyFile(e.name) && !CONFIG_FILE_RE.test(e.name)) {
       try {
         const raw = await readFile(full, 'utf8');
         if (raw.trimStart().startsWith("'use server'") || raw.trimStart().startsWith('"use server"')) continue;

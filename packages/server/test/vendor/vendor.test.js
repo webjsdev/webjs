@@ -231,6 +231,43 @@ test('scanBareImports: skips node_modules and _private dirs', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: skips dot-prefixed dirs (.opencode, .claude, .github, .husky, .git)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-dotdirs-${Date.now()}`);
+  // Each dot-dir holds a file with a bare import that would break jspm.io.
+  for (const name of ['.opencode', '.claude', '.github', '.husky', '.git', '.vscode']) {
+    await mkdir(join(dir, name), { recursive: true });
+    await writeFile(join(dir, name, 'a.ts'), `import { foo } from "${name}-only-pkg";`);
+  }
+  await writeFile(join(dir, 'app.ts'), `import 'visible';`);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('visible'));
+  for (const name of ['.opencode', '.claude', '.github', '.husky', '.git', '.vscode']) {
+    assert.ok(!found.has(`${name}-only-pkg`), `expected ${name} to be excluded`);
+  }
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('scanBareImports: skips *.config.{js,ts,mjs,cjs} files at any depth', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-configs-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  // Common tooling config files at project root. They import test
+  // runners / build helpers that legitimately cannot resolve via jspm.io.
+  await writeFile(join(dir, 'web-test-runner.config.js'), `import { x } from 'tooling-pkg-1';`);
+  await writeFile(join(dir, 'vitest.config.ts'), `import { y } from 'tooling-pkg-2';`);
+  await writeFile(join(dir, 'tailwind.config.mjs'), `import { z } from 'tooling-pkg-3';`);
+  await writeFile(join(dir, 'app.ts'), `import 'real-pkg';`);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('real-pkg'));
+  assert.ok(!found.has('tooling-pkg-1'));
+  assert.ok(!found.has('tooling-pkg-2'));
+  assert.ok(!found.has('tooling-pkg-3'));
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 // --- getPackageVersion ---
 
 test('getPackageVersion: returns installed version for a known package', () => {
