@@ -13,8 +13,8 @@ import './_components/theme-toggle.ts';
  * on the client during hydration.
  */
 const env = (globalThis as any).process?.env ?? {};
-const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5000';
-const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
+const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5001';
+const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
 
 const TITLE = 'Webjs UI: AI-first component library';
 const DESCRIPTION =
