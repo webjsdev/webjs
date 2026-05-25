@@ -2,8 +2,12 @@
  * Build the import map JSON injected into every SSR HTML document.
  *
  * Additional vendor entries are added automatically when the bare-import
- * scanner discovers npm packages used by client code (Vite-style
- * optimizeDeps).
+ * scanner discovers npm packages used by client code. The resolution
+ * happens via `vendor.js`'s `resolveVendorImports`, which reads the
+ * committed `.webjs/vendor/importmap.json` if present, else calls
+ * `api.jspm.io/generate` once at boot. Browser fetches vendor packages
+ * directly from jspm.io's CDN (default) or from local `/__webjs/vendor/`
+ * paths (after `webjs vendor pin --download`).
  */
 
 /** @type {Record<string, string>} */
