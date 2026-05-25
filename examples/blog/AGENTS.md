@@ -149,7 +149,7 @@ their custom element on import.
 ```sh
 cp .env.example .env          # AUTH_SECRET, SESSION_SECRET, DATABASE_URL
 npm run db:migrate            # creates prisma/dev.db + applies migrations
-npm run dev                   # http://localhost:3456
+npm run dev                   # http://localhost:5004
 ```
 
 **Always `npm run dev` / `npm start`, never `webjs dev` / `webjs start`

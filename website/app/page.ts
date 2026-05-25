@@ -17,9 +17,9 @@ export const metadata = {
 // the module and prevents custom elements (e.g. <theme-toggle>) from
 // upgrading.
 const env = (globalThis as any).process?.env ?? {};
-const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
-const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
-const UI_URL   = env.UI_URL   || 'http://localhost:5001';
+const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
+const BLOG_URL = env.BLOG_URL || 'http://localhost:5004';
+const UI_URL   = env.UI_URL   || 'http://localhost:5003';
 const STORY_URL = 'https://heyvivek.com/i-built-a-tiny-in-size-not-in-power-full-stack-framework-for-the-ai-era-i-call-it-webjs';
 
 const FEATURES = [

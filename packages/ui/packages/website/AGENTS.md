@@ -86,7 +86,7 @@ which composes JSON on demand from `../registry/` (no build step).
 ## Dev
 
 ```sh
-npm run dev    # http://localhost:5001
+npm run dev    # http://localhost:5003
 ```
 
 **Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs
@@ -112,8 +112,8 @@ by overriding via the service env (e.g. Railway's variables):
 
 | Env var | Local fallback | Production value |
 |---|---|---|
-| `WEBSITE_URL` | `http://localhost:5000` | `https://webjs.dev` |
-| `DOCS_URL` | `http://localhost:4000` | `https://docs.webjs.dev` |
+| `WEBSITE_URL` | `http://localhost:5001` | `https://webjs.dev` |
+| `DOCS_URL` | `http://localhost:5002` | `https://docs.webjs.dev` |
 
 `.env.example` in this directory documents the same defaults. Copy it to
 `.env` only if you need to override locally; the fallbacks already match.

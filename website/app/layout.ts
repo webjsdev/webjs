@@ -16,9 +16,9 @@ import '../components/theme-toggle.ts';
 // Guarded against `process` being undefined because this file also
 // loads on the client during hydration.
 const env = (globalThis as any).process?.env ?? {};
-const DOCS_URL = env.DOCS_URL || 'http://localhost:4000';
-const BLOG_URL = env.BLOG_URL || 'http://localhost:3456';
-const UI_URL = env.UI_URL || 'http://localhost:5001';
+const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
+const BLOG_URL = env.BLOG_URL || 'http://localhost:5004';
+const UI_URL = env.UI_URL || 'http://localhost:5003';
 
 // Site-wide Open Graph + Twitter card metadata. `generateMetadata`
 // receives the request context so we can derive an absolute og:image

@@ -22,7 +22,7 @@ generated output to commit.
 ## Dev
 
 ```sh
-npm run dev      # http://localhost:5001
+npm run dev      # http://localhost:5003
 ```
 
 A `predev` hook runs `scripts/copy-registry.js`, which mirrors the
