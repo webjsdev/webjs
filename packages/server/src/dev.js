@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // equivalent built-in, we will need to install `amaro` directly (or
 // an equivalent: Sucrase preserves lines but not columns; SWC's
 // strip-only also works). The fast-path `stripTs` helper would
-// change one import line; the fallback path (esbuild) stays.
+// change one import line.
 //
 // Suppress the one-shot ExperimentalWarning that Node prints the
 // first time `stripTypeScriptTypes` is called. The API is committed
@@ -92,17 +92,16 @@ const MIME = {
  * Capped at 500 entries to prevent unbounded memory growth in
  * long-running production servers.
  *
- * Primary stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
+ * Stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
  * Position-preserving whitespace replacement. No sourcemap is
  * emitted because every (line, column) maps to itself in the source.
  *
- * Fallback stripper: `esbuild.transform`. Triggered only when the
- * primary path throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (the file
- * uses `enum`, `namespace`, parameter properties, or legacy
- * decorators). Emits an inline sourcemap so DevTools can still
- * resolve source positions for the regenerated JS. Mostly fires for
- * third-party `.ts` files; user code is enforced erasable by
- * `webjs check`.
+ * Only erasable TypeScript is supported. Non-erasable syntax (`enum`,
+ * `namespace` with values, parameter properties, legacy decorators
+ * with `emitDecoratorMetadata`, `import = require`) throws at strip
+ * time. The `erasable-typescript-only` and `no-non-erasable-typescript`
+ * lint rules catch these at edit time. webjs is buildless end-to-end:
+ * there is no bundler fallback.
  *
  * @type {Map<string, { mtimeMs: number, code: string, map: string | null }>}
  */
@@ -504,7 +503,7 @@ async function handleCore(req, ctx) {
           headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-store' },
         });
       }
-      // TypeScript source: esbuild-strip types, cache by mtime.
+      // TypeScript source: strip types via Node 24+'s built-in, cache by mtime.
       if (/\.m?ts$/.test(abs)) {
         return tsResponse(abs, dev);
       }
@@ -822,38 +821,26 @@ async function exists(p) {
 }
 
 /**
- * Strip TypeScript types from `source`, using Node's built-in
- * `module.stripTypeScriptTypes` first (whitespace replacement,
- * position-preserving, no sourcemap needed) and falling back to
- * esbuild for files using non-erasable syntax (`enum`, `namespace`,
- * parameter properties, legacy decorators).
+ * Strip TypeScript types from `source` via Node's built-in
+ * `module.stripTypeScriptTypes`. Position-preserving whitespace
+ * replacement: no sourcemap is needed because every (line, column)
+ * maps to itself in the source.
  *
- * The framework's own code and the user's app code are kept on
- * erasable TS by the `erasable-typescript-only` convention check.
- * The fallback exists for third-party `.ts` files that the runtime
- * occasionally needs to serve.
+ * Only erasable TypeScript is supported. Non-erasable syntax
+ * (`enum`, `namespace` with values, parameter properties, legacy
+ * decorators with `emitDecoratorMetadata`, `import = require`)
+ * throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` from Node and the
+ * dev server returns the error to the caller. The
+ * `erasable-typescript-only` and `no-non-erasable-typescript` lint
+ * rules catch these at edit time. There is no bundler fallback;
+ * webjs is buildless end-to-end.
  *
  * @param {string} source
- * @param {string} abs
+ * @param {string} _abs  (unused; preserved for symmetry with prior signature)
  * @returns {Promise<string>}
  */
-async function stripTs(source, abs) {
-  try {
-    return stripTypeScriptTypes(source);
-  } catch (err) {
-    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
-      const { transform: esbuild } = await loadEsbuild();
-      const r = await esbuild(source, {
-        loader: 'ts',
-        format: 'esm',
-        target: 'es2022',
-        sourcemap: 'inline',
-        sourcefile: abs,
-      });
-      return r.code;
-    }
-    throw err;
-  }
+async function stripTs(source, _abs) {
+  return stripTypeScriptTypes(source);
 }
 
 /**
@@ -876,7 +863,31 @@ async function tsResponse(abs, dev) {
     });
   }
   const source = await readFile(abs, 'utf8');
-  const code = await stripTs(source, abs);
+  let code;
+  try {
+    code = await stripTs(source, abs);
+  } catch (err) {
+    // Node's stripTypeScriptTypes throws ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX
+    // for enum, namespace with values, parameter properties, legacy
+    // decorators with emitDecoratorMetadata, and import = require.
+    // Return a clean 500 with the file path and a pointer at the
+    // erasable-typescript-only lint rule rather than letting the
+    // error bubble up unstyled.
+    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
+      const msg =
+        `[webjs] non-erasable TypeScript in ${abs}: ${err.message}\n` +
+        `\n` +
+        `webjs is buildless: only erasable TS syntax is supported. ` +
+        `Replace enum / namespace / parameter-property / legacy-decorator / ` +
+        `import = require constructs with their erasable equivalents. ` +
+        `Run \`webjs check\` for guidance (no-non-erasable-typescript rule).`;
+      return new Response(`/* ${msg.replace(/\*\//g, '*\\/')} */`, {
+        status: 500,
+        headers: { 'content-type': 'application/javascript; charset=utf-8' },
+      });
+    }
+    throw err;
+  }
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
     const oldest = TS_CACHE.keys().next().value;
@@ -935,20 +946,6 @@ function locatePackageDir(appDir, pkgName) {
   try { const d = tryFrom(join(appDir, 'package.json')); if (d) return d; } catch {}
   try { const d = tryFrom(fileURLToPath(import.meta.url)); if (d) return d; } catch {}
   return null;
-}
-
-/**
- * Load esbuild. Resolved as a real dependency of `@webjsdev/server`,
- * so the bare specifier always resolves regardless of where the cli is
- * installed (global, local, workspace-linked).
- *
- * @returns {Promise<typeof import('esbuild')>}
- */
-let _esbuild = null;
-async function loadEsbuild() {
-  if (_esbuild) return _esbuild;
-  _esbuild = await import('esbuild');
-  return _esbuild;
 }
 
 const RELOAD_CLIENT_JS = `// webjs dev reload client

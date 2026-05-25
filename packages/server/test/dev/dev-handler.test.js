@@ -171,39 +171,26 @@ test('handle: .ts source served as JS with esbuild-stripped types', async () => 
   assert.ok(!/: string/.test(code));
 });
 
-test('handle: .ts source supports non-erasable TS (enum, parameter properties)', async () => {
-  // Proves the browser-bound transform falls back to esbuild when
-  // Node's built-in stripper (module.stripTypeScriptTypes) rejects
-  // non-erasable syntax. The fallback emits an inline sourcemap so
-  // DevTools can still resolve positions for the regenerated JS.
-  // Server-side imports of the same file go through Node's native
-  // strip-types path; this works for erasable TS but errors at load
-  // time for non-erasable syntax. App code is held to erasable TS
-  // via tsconfig's erasableSyntaxOnly; this fallback exists for
-  // third-party .ts dependencies that publish non-erasable source.
+test('handle: .ts source with non-erasable TS returns 500 pointing at the lint rule', async () => {
+  // webjs is buildless end-to-end. Node's stripTypeScriptTypes
+  // rejects enum / namespace / parameter properties / legacy
+  // decorators / import = require; there is no longer an esbuild
+  // fallback. The dev server returns a clean 500 with the file path
+  // and a pointer at the no-non-erasable-typescript lint rule.
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/advanced.ts': `
       enum Status { Active = 'active', Inactive = 'inactive' }
-      export class Box {
-        constructor(public readonly status: Status) {}
-        describe(): string { return \`box is \${this.status}\`; }
-      }
       export const initial: Status = Status.Active;
     `,
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/components/advanced.ts'));
-  assert.equal(resp.status, 200);
-  const code = await resp.text();
-  // enum compiled to a runtime object
-  assert.ok(/Status\s*\[/.test(code) || /Status\s*=\s*\{/.test(code) || /\(Status\b/.test(code),
-    `enum should compile to runtime code; got:\n${code.slice(0, 400)}`);
-  // parameter property desugared to constructor body assignment
-  assert.ok(/this\.status\s*=\s*status/.test(code),
-    `parameter property should desugar; got:\n${code.slice(0, 400)}`);
-  // type annotations gone
-  assert.ok(!/:\s*Status\b/.test(code), 'type annotations should be stripped');
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  assert.match(body, /non-erasable TypeScript/, 'body should explain the error');
+  assert.match(body, /advanced\.ts/, 'body should name the offending file');
+  assert.match(body, /no-non-erasable-typescript/, 'body should point at the lint rule');
 });
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {
