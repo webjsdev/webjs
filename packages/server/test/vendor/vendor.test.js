@@ -528,7 +528,8 @@ test('resolveVendorImports: prefers committed pin file over live API call', asyn
       imports: { 'fake-pkg': 'https://example.com/fake.js' },
     }));
     const result = await resolveVendorImports(new Set(['unrelated']), dir);
-    assert.equal(result['fake-pkg'], 'https://example.com/fake.js');
+    assert.equal(result.imports['fake-pkg'], 'https://example.com/fake.js');
+    assert.deepEqual(result.integrity, {}, 'no integrity field in pin -> empty map');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

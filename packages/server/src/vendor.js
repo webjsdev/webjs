@@ -43,6 +43,7 @@ import { readFile, readdir, writeFile, mkdir, unlink, stat } from 'node:fs/promi
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 
 /**
  * Set of package names known to be framework-internal (served per-file
@@ -426,11 +427,27 @@ function bundleFilename(pkgName, version) {
 }
 
 /**
+ * Compute the SHA-384 SRI hash for a bundle body. Matches the format
+ * the browser's importmap `integrity` field and the `integrity`
+ * attribute on `<link rel="modulepreload">` expect.
+ *
+ * @param {string | Buffer} body
+ * @returns {string}  e.g. `sha384-<base64>`
+ */
+export function sha384Integrity(body) {
+  const digest = createHash('sha384').update(body).digest('base64');
+  return `sha384-${digest}`;
+}
+
+/**
  * Read the committed pin importmap if one exists. Returns the parsed
- * `{ imports: Record<string, string> }` shape or null if no pin file.
+ * `{ imports, integrity? }` shape or null if no pin file. The
+ * `integrity` field is optional: pin files written before SRI support
+ * lack it; pin files written by `webjs vendor pin` (current version)
+ * include it.
  *
  * @param {string} appDir
- * @returns {Promise<{ imports: Record<string, string> } | null>}
+ * @returns {Promise<{ imports: Record<string, string>, integrity?: Record<string, string> } | null>}
  */
 export async function readPinFile(appDir) {
   try {
@@ -449,24 +466,34 @@ export async function readPinFile(appDir) {
  * Write the pin importmap to `.webjs/vendor/importmap.json`. Ensures
  * the directory exists. Pretty-printed for human-reviewable diffs.
  *
+ * When `integrity` is provided and non-empty, it's included alongside
+ * `imports` as a sibling key (matching the browser importmap-integrity
+ * spec: a flat `{url: 'sha384-...'}` map). Omitted entirely when empty
+ * so older webjs versions read the file as before.
+ *
  * @param {string} appDir
  * @param {Record<string, string>} imports
+ * @param {Record<string, string>} [integrity]
  */
-async function writePinFile(appDir, imports) {
+async function writePinFile(appDir, imports, integrity) {
   await mkdir(pinDir(appDir), { recursive: true });
-  const body = JSON.stringify({ imports }, null, 2) + '\n';
+  const payload = integrity && Object.keys(integrity).length
+    ? { imports, integrity }
+    : { imports };
+  const body = JSON.stringify(payload, null, 2) + '\n';
   await writeFile(pinFilePath(appDir), body, 'utf8');
 }
 
 /**
  * Download a single jspm.io URL and write the body to
- * `.webjs/vendor/<filename>`. Returns the number of bytes written, or
- * null on failure.
+ * `.webjs/vendor/<filename>`. Returns `{ bytes, integrity }` on
+ * success or null on failure. The integrity hash is computed from the
+ * downloaded bytes so it's always consistent with what's on disk.
  *
  * @param {string} url
  * @param {string} appDir
  * @param {string} filename
- * @returns {Promise<number | null>}
+ * @returns {Promise<{ bytes: number, integrity: string } | null>}
  */
 async function downloadBundle(url, appDir, filename) {
   try {
@@ -478,9 +505,33 @@ async function downloadBundle(url, appDir, filename) {
     const body = await response.text();
     await mkdir(pinDir(appDir), { recursive: true });
     await writeFile(join(pinDir(appDir), filename), body, 'utf8');
-    return body.length;
+    return { bytes: body.length, integrity: sha384Integrity(body) };
   } catch (e) {
     console.error(`[webjs] download ${url} failed: ${e && e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Fetch a jspm.io URL just to compute its SHA-384 hash, without
+ * writing anything to disk. Used by `webjs vendor pin` (default mode)
+ * so the importmap can carry SRI hashes even when bundles aren't
+ * locally vendored.
+ *
+ * @param {string} url
+ * @returns {Promise<string | null>}  the integrity string, or null on failure
+ */
+async function fetchIntegrity(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[webjs] hash ${url} returned ${response.status}`);
+      return null;
+    }
+    const body = await response.text();
+    return sha384Integrity(body);
+  } catch (e) {
+    console.error(`[webjs] hash ${url} failed: ${e && e.message}`);
     return null;
   }
 }
@@ -561,7 +612,16 @@ export async function pinAll(appDir, opts = {}) {
 
   /** @type {Record<string, string>} */
   const importmap = {};
-  /** @type {Array<{ pkg: string, version: string, url: string, bytes?: number }>} */
+  /**
+   * SRI integrity by FINAL URL (post-rewrite). The browser's
+   * importmap-integrity spec keys on the URL that appears in the
+   * importmap, not the source jspm.io URL. For default mode the two
+   * are identical; for --download mode the URL is the local
+   * /__webjs/vendor/<filename> path.
+   * @type {Record<string, string>}
+   */
+  const integrity = {};
+  /** @type {Array<{ pkg: string, version: string, url: string, bytes?: number, integrity?: string }>} */
   const pins = [];
   const expected = new Set([PIN_FILE]);
   let downloaded = 0;
@@ -572,19 +632,27 @@ export async function pinAll(appDir, opts = {}) {
     const { pkg, version, subpath } = parts;
     if (download) {
       const filename = bundleFilenameWithSubpath(pkg, version, subpath);
-      const bytes = await downloadBundle(jspmUrl, appDir, filename);
-      if (bytes == null) continue;
-      importmap[spec] = `/__webjs/vendor/${filename}`;
+      const result = await downloadBundle(jspmUrl, appDir, filename);
+      if (result == null) continue;
+      const localUrl = `/__webjs/vendor/${filename}`;
+      importmap[spec] = localUrl;
+      integrity[localUrl] = result.integrity;
       expected.add(filename);
-      pins.push({ pkg: spec, version, url: importmap[spec], bytes });
+      pins.push({ pkg: spec, version, url: localUrl, bytes: result.bytes, integrity: result.integrity });
       downloaded++;
     } else {
       importmap[spec] = jspmUrl;
-      pins.push({ pkg: spec, version, url: jspmUrl });
+      // Fetch the bundle just to hash it. Bytes aren't written to
+      // disk; only the SHA-384 reaches the pin file. CDN compromise
+      // defense for default mode: if jspm.io serves different bytes
+      // later, the browser refuses to execute (integrity mismatch).
+      const sri = await fetchIntegrity(jspmUrl);
+      if (sri) integrity[jspmUrl] = sri;
+      pins.push({ pkg: spec, version, url: jspmUrl, integrity: sri || undefined });
     }
   }
 
-  await writePinFile(appDir, importmap);
+  await writePinFile(appDir, importmap, integrity);
   const pruned = await pruneOrphans(appDir, expected);
   return { pins, pruned, downloaded };
 }
@@ -663,14 +731,23 @@ export async function listPinned(appDir) {
  *   1. `.webjs/vendor/importmap.json` (committed; no network needed)
  *   2. Live api.jspm.io/generate (fallback when no pin file exists)
  *
+ * Returns both `imports` (the URL map) and `integrity` (SRI hashes
+ * keyed by URL). Integrity is populated only from the pin file;
+ * live-API mode skips it (would require per-package fetches just to
+ * hash, defeating the live-mode speed advantage. Users who want SRI
+ * run `webjs vendor pin`).
+ *
  * @param {Set<string>} bareImports
  * @param {string} appDir
- * @returns {Promise<Record<string, string>>}
+ * @returns {Promise<{ imports: Record<string, string>, integrity: Record<string, string> }>}
  */
 export async function resolveVendorImports(bareImports, appDir) {
   const file = await readPinFile(appDir);
-  if (file) return file.imports;
-  return vendorImportMapEntries(bareImports, appDir);
+  if (file) {
+    return { imports: file.imports, integrity: file.integrity || {} };
+  }
+  const imports = await vendorImportMapEntries(bareImports, appDir);
+  return { imports, integrity: {} };
 }
 
 /**

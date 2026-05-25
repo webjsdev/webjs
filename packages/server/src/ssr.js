@@ -1,7 +1,7 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy } from '@webjsdev/core';
-import { importMapTag } from './importmap.js';
+import { importMapTag, vendorIntegrityFor } from './importmap.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
 
@@ -920,10 +920,16 @@ function wrapHead(opts) {
   // double-fetch in some browsers because the preload becomes CORS
   // but the import doesn't.
   for (const url of opts.moduleUrls) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}"${preloadCrossOriginAttr(url)}>`);
+    linkTags.push(
+      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}>`,
+    );
   }
   for (const url of opts.preloads || []) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}"${preloadCrossOriginAttr(url)}>`);
+    linkTags.push(
+      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}>`,
+    );
   }
   if (Array.isArray(m.preload)) {
     for (const p of m.preload) {
@@ -1251,6 +1257,20 @@ function escapeAttr(s) {
  */
 export function preloadCrossOriginAttr(url) {
   return /^https?:\/\//i.test(url) ? ' crossorigin="anonymous"' : '';
+}
+
+/**
+ * Look up the SRI integrity hash for a vendor URL and format it as a
+ * `integrity="sha384-..."` attribute. Empty string for URLs without a
+ * known hash (framework files, user code, vendor URLs in live-API
+ * mode without a pin file).
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function integrityAttr(url) {
+  const hash = vendorIntegrityFor(url);
+  return hash ? ` integrity="${hash}"` : '';
 }
 
 /**

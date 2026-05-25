@@ -130,7 +130,8 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(await resolveVendorImports(bareImports, appDir));
+  const initialVendor = await resolveVendorImports(bareImports, appDir);
+  setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -171,7 +172,8 @@ export async function createRequestHandler(opts) {
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(await resolveVendorImports(state.bareImports, appDir));
+    const v = await resolveVendorImports(state.bareImports, appDir);
+    setVendorEntries(v.imports, v.integrity);
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
