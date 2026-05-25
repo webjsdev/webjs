@@ -14,7 +14,30 @@
  * the test code uses that same-origin prefix.
  */
 import { playwrightLauncher } from '@web/test-runner-playwright';
-import { esbuildPlugin } from '@web/dev-server-esbuild';
+import { stripTypeScriptTypes } from 'node:module';
+
+/**
+ * Custom WTR plugin: strip TypeScript types via Node 24+'s built-in
+ * `module.stripTypeScriptTypes`. Same shape as the one in the
+ * root web-test-runner.config.js; duplicated rather than imported
+ * because WTR configs load their plugins eagerly.
+ *
+ * @returns {import('@web/test-runner').TestRunnerPlugin}
+ */
+function stripTypesPlugin() {
+  return {
+    name: 'webjs-strip-types',
+    resolveMimeType(context) {
+      if (context.path.endsWith('.ts') || context.path.endsWith('.mts')) return 'js';
+    },
+    transform(context) {
+      if (!context.path.endsWith('.ts') && !context.path.endsWith('.mts')) return;
+      const src = typeof context.body === 'string' ? context.body : null;
+      if (src == null) return;
+      return { body: stripTypeScriptTypes(src) };
+    },
+  };
+}
 
 const BLOG = 'http://localhost:3456';
 
@@ -49,7 +72,7 @@ function pickHeaders(h) {
 export default {
   files: ['test/examples/blog/browser/**/*.test.js'],
   nodeResolve: true,
-  plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
+  plugins: [stripTypesPlugin()],
   middleware: [proxyBlog],
   browsers: [playwrightLauncher({ product: 'chromium' })],
   testFramework: {
