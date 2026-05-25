@@ -65,20 +65,18 @@ npm create webjs@latest my-saas -- --template saas
 npm i -g webjsdev && webjs create my-app
 cd my-app && npm run dev
 
-# or run everything in the monorepo (website + docs + blog together)
+# or run everything in the monorepo (website + docs + blog + UI registry together)
 git clone https://github.com/webjsdev/webjs
 cd webjs && npm install
 cd examples/blog && npx prisma migrate dev --name init && cd ..
 npm run dev
-# → Website → http://localhost:5001
-# → Docs    → http://localhost:5002
-# → Blog    → http://localhost:5004
-#
-# Or run any one individually:
-cd examples/blog && npm run dev      # just the blog
-cd docs           && npm run dev     # just the docs
-cd website        && npm run dev     # just the website
+# → Website     → http://localhost:5001
+# → Docs        → http://localhost:5002
+# → UI registry → http://localhost:5003
+# → Blog        → http://localhost:5004
 ```
+
+See [Local development](#local-development) for running one app at a time and overriding ports.
 
 ## Repo layout
 
@@ -101,6 +99,46 @@ website/            # landing site (built on webjs itself)
 AGENTS.md           # AI-agent contract for the framework
 CLAUDE.md           # Claude Code quick-reference
 ```
+
+## Local development
+
+Contributing to the framework itself? Run the monorepo's apps with
+`npm run dev` (never `webjs dev` directly: each app's `npm run dev`
+also spawns its Tailwind watcher, and the blog and UI site run extra
+prep steps via `predev` hooks).
+
+```sh
+npm install                          # once, from the repo root (installs every workspace)
+npm run dev                          # all four apps at once
+```
+
+Default ports (a contiguous 5001-5004 block; port 5000 is skipped
+because macOS reserves it for the AirPlay Receiver / Control Center):
+
+| App | Dir | Port | Env override |
+|---|---|---|---|
+| Landing site | `website/` | 5001 | `WEBSITE_PORT` |
+| Docs | `docs/` | 5002 | `DOCS_PORT` |
+| UI registry site | `packages/ui/packages/website/` | 5003 | `UI_PORT` |
+| Example blog | `examples/blog/` | 5004 | `BLOG_PORT` |
+
+**Run a single app** (from its directory). Each honors a `PORT` env var:
+
+```sh
+cd docs && npm run dev               # docs on 5002
+PORT=8080 npm run dev                # ...or on 8080
+```
+
+**Override ports when running all four** via the per-app env vars:
+
+```sh
+WEBSITE_PORT=8001 DOCS_PORT=8002 UI_PORT=8003 BLOG_PORT=8004 npm run dev
+```
+
+The apps cross-link by URL (the landing site links to docs/blog/UI,
+the UI site links back). Those default to the localhost ports above and
+are overridable via `DOCS_URL` / `BLOG_URL` / `UI_URL` / `WEBSITE_URL`
+(this is also how deploys point them at real domains).
 
 ## Example
 
