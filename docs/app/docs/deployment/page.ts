@@ -36,6 +36,15 @@ npm run start -- --port 8080</pre>
     <h3>ETags and Cache Headers</h3>
     <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. Vendor npm packages resolve through importmap to jspm.io URLs (default) or to local <code>/__webjs/vendor/&lt;pkg&gt;@&lt;version&gt;.js</code> paths (after <code>webjs vendor pin --download</code>). Direct jspm.io URLs use jspm.io's own immutable headers; locally-served <code>--download</code> bundles use <code>max-age=31536000, immutable</code>. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
 
+    <h3>Content Security Policy (CSP) and vendor packages</h3>
+    <p>The default vendor mode serves bundles from <code>https://ga.jspm.io</code> (the jspm.io CDN). If your app sets a strict <code>Content-Security-Policy</code> header with <code>script-src 'self'</code>, the browser blocks the jspm.io script and vendor imports fail to load.</p>
+    <p>Two ways to handle this:</p>
+    <ol>
+      <li><strong>Allow jspm.io in CSP</strong>: add <code>https://ga.jspm.io</code> to your <code>script-src</code> directive. Example: <code>script-src 'self' https://ga.jspm.io</code>. Browsers fetch bundles from jspm.io's CDN. Same-origin-only consumers (compliance-locked, air-gapped) cannot use this mode.</li>
+      <li><strong>Switch to <code>--download</code> mode</strong>: run <code>webjs vendor pin --download</code> at deploy-prep time and commit the resulting <code>.webjs/vendor/&lt;pkg&gt;@&lt;version&gt;.js</code> bundle files. The importmap then points at local <code>/__webjs/vendor/</code> paths served by your own origin. <code>script-src 'self'</code> alone is sufficient; no third-party allowlist needed. Suitable for compliance-locked, air-gapped, or strictest-CSP environments.</li>
+    </ol>
+    <p>Pick the mode that matches your security posture. The choice is per-deploy, not per-package: either everything goes through jspm.io or everything is locally vendored. Mixing modes per-package is not supported.</p>
+
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
     <ol>
