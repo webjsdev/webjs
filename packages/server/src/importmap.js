@@ -38,7 +38,18 @@ export function buildImportMap() {
   };
 }
 
-/** Serialise the import map to an HTML script tag string. */
-export function importMapTag() {
-  return `<script type="importmap">${JSON.stringify(buildImportMap())}</script>`;
+/**
+ * Serialise the import map to an HTML script tag string.
+ *
+ * When `nonce` is provided (extracted from the incoming
+ * Content-Security-Policy header by ssr.js), it's emitted as
+ * `nonce="..."` on the script tag. Strict-CSP apps using
+ * `script-src 'nonce-...'` require this; without it the browser
+ * blocks the importmap and every bare-specifier import fails.
+ *
+ * @param {{ nonce?: string }} [opts]
+ */
+export function importMapTag(opts = {}) {
+  const n = opts.nonce ? ` nonce="${opts.nonce.replace(/"/g, '&quot;')}"` : '';
+  return `<script type="importmap"${n}>${JSON.stringify(buildImportMap())}</script>`;
 }

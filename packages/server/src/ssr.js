@@ -1013,7 +1013,7 @@ function wrapHead(opts) {
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
-${importMapTag()}
+${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
 ${boot}
 ${reload}
