@@ -919,16 +919,23 @@ function wrapHead(opts) {
   // URLs get no attribute; adding `crossorigin=""` there would also
   // double-fetch in some browsers because the preload becomes CORS
   // but the import doesn't.
+  // CSP nonce on the preload link: under strict CSP (script-src
+  // 'nonce-...') the browser also gates modulepreload by the same
+  // policy. Without the attribute the preload is blocked and the
+  // import either falls back to a cold fetch or fails. Rails (via
+  // importmap-rails) applies nonce on every modulepreload tag for
+  // the same reason.
+  const noncePreload = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
   for (const url of opts.moduleUrls) {
     linkTags.push(
       `<link rel="modulepreload" href="${escapeAttr(url)}"` +
-      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}>`,
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
   for (const url of opts.preloads || []) {
     linkTags.push(
       `<link rel="modulepreload" href="${escapeAttr(url)}"` +
-      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}>`,
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
   if (Array.isArray(m.preload)) {

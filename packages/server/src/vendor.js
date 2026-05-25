@@ -284,6 +284,15 @@ async function jspmResolveOne(install) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           install: [install],
+          // flattenScope:true merges transitive ESM deps into the
+          // flat `imports` map instead of returning them in a
+          // separate `scopes` field. Webjs only consumes `imports`
+          // (the importmap output doesn't carry `scopes`), so
+          // without this any package with an unbundled ESM
+          // transitive (e.g. react-dom imports `scheduler`)
+          // would break in the browser with an unresolved-bare-
+          // specifier error. Matches importmap-rails's posture.
+          flattenScope: true,
           env: ['browser', 'production', 'module'],
           provider: 'jspm.io',
         }),
