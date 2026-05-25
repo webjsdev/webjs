@@ -956,6 +956,31 @@ test('ssrPage: modulepreload never points at server-only files', async () => {
     `'use server' plain file should not be preloaded; got preloads:\n${preloads}`);
 });
 
+test('preloadCrossOriginAttr: adds crossorigin=anonymous for cross-origin URLs only', async () => {
+  // Browsers require crossorigin on cross-origin modulepreload, else
+  // the preload is ignored or double-fetched (defeating the
+  // optimization). Same-origin preloads must NOT have crossorigin
+  // (browser would double-fetch in the reverse direction).
+  const { preloadCrossOriginAttr } = await import(
+    new URL('../../packages/server/src/ssr.js', import.meta.url).href
+  );
+
+  // Cross-origin (vendor packages from jspm.io etc.)
+  assert.equal(
+    preloadCrossOriginAttr('https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js'),
+    ' crossorigin="anonymous"',
+  );
+  assert.equal(
+    preloadCrossOriginAttr('http://cdn.example.com/x.js'),
+    ' crossorigin="anonymous"',
+  );
+
+  // Same-origin (framework + user code)
+  assert.equal(preloadCrossOriginAttr('/__webjs/core/index.js'), '');
+  assert.equal(preloadCrossOriginAttr('/components/foo.ts'), '');
+  assert.equal(preloadCrossOriginAttr('/__webjs/vendor/dayjs@1.11.20.js'), '');
+});
+
 /* ------------ ssrNotFound + not-found.js rendering ------------ */
 
 test('ssrNotFound: no notFound file → plain 404 fallback', async () => {

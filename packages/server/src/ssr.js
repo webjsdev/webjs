@@ -910,11 +910,20 @@ function wrapHead(opts) {
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
   // (linkTags array was declared earlier so the metadata block above can
   // push icons / canonical / hreflang / archives / etc. into it.)
+  //
+  // Cross-origin URLs (vendor packages served from jspm.io etc.) MUST
+  // carry `crossorigin="anonymous"` on the preload link. Without it
+  // the browser either ignores the preload entirely or double-fetches
+  // (once for the preload as a non-CORS request, once for the actual
+  // module as a CORS request, defeating the optimization). Same-origin
+  // URLs get no attribute; adding `crossorigin=""` there would also
+  // double-fetch in some browsers because the preload becomes CORS
+  // but the import doesn't.
   for (const url of opts.moduleUrls) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
+    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}"${preloadCrossOriginAttr(url)}>`);
   }
   for (const url of opts.preloads || []) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
+    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}"${preloadCrossOriginAttr(url)}>`);
   }
   if (Array.isArray(m.preload)) {
     for (const p of m.preload) {
@@ -1224,6 +1233,24 @@ function escapeHtml(s) {
 /** @param {string} s */
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Decide whether a `<link rel="modulepreload">` href needs a
+ * `crossorigin="anonymous"` attribute. True for absolute URLs with
+ * an http(s) scheme (vendor packages from jspm.io etc.); false for
+ * same-origin paths like `/__webjs/core/index.js`. Browsers require
+ * crossorigin on cross-origin module preload, else the preload is
+ * wasted or double-fetched. Same-origin URLs must NOT have it for
+ * the same reason in reverse.
+ *
+ * Exported for tests; production callers use it via documentParts.
+ *
+ * @param {string} url
+ * @returns {string}  either ` crossorigin="anonymous"` or empty
+ */
+export function preloadCrossOriginAttr(url) {
+  return /^https?:\/\//i.test(url) ? ' crossorigin="anonymous"' : '';
 }
 
 /**
