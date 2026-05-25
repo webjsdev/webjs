@@ -18,8 +18,13 @@ to scaffold and run an app, which pulls this package in as a dependency.
 - **WebSockets**: export `WS` from `route.ts` and it becomes a WebSocket
   endpoint on the same path.
 - **Live reload** for dev.
-- **Bare-specifier auto-bundling** for npm packages via import maps, backed
-  by esbuild (Vite-style `optimizeDeps`).
+- **Bare-specifier resolution** for npm packages via import maps,
+  resolved through jspm.io at runtime (Rails 7 + importmap-rails
+  posture). Browser fetches bundles directly from `ga.jspm.io` CDN;
+  webjs's server does not bundle vendor packages. Run `webjs vendor
+  pin` to commit resolved URLs to `.webjs/vendor/importmap.json`
+  (deterministic deploys), or `--download` to additionally vendor
+  bundle bytes for offline-capable production.
 
 ## Install
 

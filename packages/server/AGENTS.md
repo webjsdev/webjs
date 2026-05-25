@@ -46,8 +46,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`) |
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
-| `check.js` | Convention validator backing `webjs check`. New rule: `no-json-data-files` |
-| `vendor.js` | Auto-bundle bare-specifier npm deps for the browser |
+| `check.js` | Convention validator backing `webjs check`. Rules include `no-json-data-files`, `no-non-erasable-typescript` |
+| `vendor.js` | Resolve bare-specifier npm deps via jspm.io. Reads `.webjs/vendor/importmap.json` if present (committed pin file), else calls `api.jspm.io/generate` at boot. `--download` mode also serves cached bundle files from `.webjs/vendor/` |
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
