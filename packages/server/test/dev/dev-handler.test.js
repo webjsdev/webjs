@@ -156,7 +156,7 @@ test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
   assert.ok(resp.headers.get('content-type').includes('image/x-icon'));
 });
 
-test('handle: .ts source served as JS with esbuild-stripped types', async () => {
+test('handle: .ts source served as JS with types stripped', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/widget.ts':
@@ -203,8 +203,8 @@ test('handle: /foo.js falls through to sibling foo.ts when .js is missing', asyn
   const resp = await app.handle(new Request('http://x/components/util.js'));
   assert.equal(resp.status, 200);
   const code = await resp.text();
-  // esbuild may rewrite `export const foo` to a trailing `export { foo };`
-  // - both forms should mention the identifier.
+  // Node's stripTypeScriptTypes preserves the source verbatim aside
+  // from type annotations; the identifier reaches the output unchanged.
   assert.ok(/greeting/.test(code), `missing greeting in ${code.slice(0, 200)}`);
   assert.ok(/["']hello["']/.test(code));
 });
@@ -695,7 +695,7 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
   assert.equal(resp.status, 403);
 });
 
-/* ------------ tsResponse cache path + missing esbuild path ------------ */
+/* ------------ tsResponse cache path ------------ */
 
 test('handle: TS source responses share an mtime-keyed cache (second req is fast)', async () => {
   const appDir = makeApp({

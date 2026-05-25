@@ -801,7 +801,7 @@ export async function createPost(input: {
     constructor(x: number) { this.x = x; }
   }
   ```
-  If you turn `erasableSyntaxOnly` off and use non-erasable syntax, the dev server falls back to esbuild and ships inline sourcemaps for those files (~3x wire bytes per request and stack traces lose strict accuracy). The `erasable-typescript-only` convention check warns when the flag is off.
+  If you turn `erasableSyntaxOnly` off and use non-erasable syntax, the dev server fails at strip time and returns a 500 pointing at the `no-non-erasable-typescript` lint rule. webjs is buildless end-to-end and has no bundler fallback. The `erasable-typescript-only` convention check warns when the flag is off.
 - No semicolons (or with semicolons, pick one and stay consistent)
 - `const` by default, `let` when needed, never `var`
 - Prefer `async/await` over `.then()` chains
