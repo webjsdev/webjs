@@ -320,6 +320,63 @@ const users = await prisma.user.findMany();
 To switch to Postgres or MySQL: change `provider` in `prisma/schema.prisma`
 and the `DATABASE_URL` in `.env`.
 
+## NPM packages (vendor pipeline)
+
+Adding a third-party npm package follows the same `npm install` flow
+as any Node project, with one webjs-specific concern: how the BROWSER
+fetches that package.
+
+```sh
+npm install dayjs                 # standard npm install
+```
+
+Now write `import dayjs from 'dayjs'` in any component or page. The
+import works in dev immediately. webjs's scanner discovers bare
+imports on each server boot and asks `api.jspm.io` to resolve them to
+CDN URLs (jspm.io serves pre-bundled ESM for every npm package). The
+browser fetches the bundle directly from `https://ga.jspm.io`.
+
+**For production deploys**, run `webjs vendor pin` once and commit
+the result:
+
+```sh
+webjs vendor pin                  # writes .webjs/vendor/importmap.json
+git add .webjs/vendor/
+git commit -m "vendor dayjs"
+```
+
+The pin file holds the resolved jspm.io URLs. Server reads from disk
+on boot; no `api.jspm.io` call needed in production. Deterministic
+across deploys.
+
+**For offline-capable / strict-CSP production**, use `--download`:
+
+```sh
+webjs vendor pin --download       # also vendors bundle bytes locally
+git add .webjs/vendor/
+git commit -m "vendor + download dayjs"
+```
+
+Bundle files land in `.webjs/vendor/<pkg>@<version>.js`. importmap
+points at local `/__webjs/vendor/` paths. Browser fetches from your
+own origin. Suitable for `script-src 'self'` CSP, air-gapped deploys,
+or compliance environments. See [docs.webjs.com Deployment → CSP](https://docs.webjs.com/docs/deployment#csp).
+
+**Other CLI commands:**
+
+```sh
+webjs vendor list                 # show pinned packages with versions
+webjs vendor unpin <pkg>          # remove one entry from pin file
+```
+
+Same posture as Rails 7 + importmap-rails: explicit pin command,
+committed manifest, optional `--download` for full offline capability.
+
+**Don't auto-run `webjs vendor pin` in `predev` / `prestart`.** Auto-pin
+would silently churn the committed importmap.json as jspm.io resolves
+URLs or transitive deps drift. Pin is a deliberate developer action,
+like `npm install` itself.
+
 ## Imports
 
 ```ts
