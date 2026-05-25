@@ -256,41 +256,57 @@ const JSPM_GENERATE_TIMEOUT_MS = 10_000;
 export async function jspmGenerate(installs) {
   if (installs.length === 0) return {};
   const cacheKey = [...installs].sort().join('\n');
-  if (jspmCache.has(cacheKey)) return jspmCache.get(cacheKey);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), JSPM_GENERATE_TIMEOUT_MS);
-  try {
-    const response = await fetch(JSPM_GENERATE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        install: installs,
-        env: ['browser', 'production', 'module'],
-        provider: 'jspm.io',
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      console.error(
-        `[webjs] api.jspm.io/generate returned ${response.status}. ` +
-        `Vendor packages will not be resolved until api.jspm.io is reachable.`,
-      );
+  // Cache pending Promises, not just resolved values. Two concurrent
+  // callers with the same install list share the in-flight request
+  // (only one HTTP round trip to api.jspm.io). Without this, two
+  // simultaneous rebuilds during dev (chokidar firing twice in quick
+  // succession) would each issue their own jspm.io request.
+  const existing = jspmCache.get(cacheKey);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), JSPM_GENERATE_TIMEOUT_MS);
+    try {
+      const response = await fetch(JSPM_GENERATE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          install: installs,
+          env: ['browser', 'production', 'module'],
+          provider: 'jspm.io',
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        console.error(
+          `[webjs] api.jspm.io/generate returned ${response.status}. ` +
+          `Vendor packages will not be resolved until api.jspm.io is reachable.`,
+        );
+        // Drop the failed Promise from the cache so the next call
+        // retries instead of returning {} forever.
+        jspmCache.delete(cacheKey);
+        return {};
+      }
+      const result = await response.json();
+      const imports = (result && result.map && result.map.imports) || {};
+      return imports;
+    } catch (e) {
+      const msg = e && e.name === 'AbortError'
+        ? `api.jspm.io/generate timed out after ${JSPM_GENERATE_TIMEOUT_MS}ms`
+        : `api.jspm.io/generate failed: ${e && e.message}`;
+      console.error(`[webjs] ${msg}. Vendor packages will not be resolved.`);
+      // Same: drop the failed Promise so retries work.
+      jspmCache.delete(cacheKey);
       return {};
+    } finally {
+      clearTimeout(timer);
     }
-    const result = await response.json();
-    const imports = (result && result.map && result.map.imports) || {};
-    jspmCache.set(cacheKey, imports);
-    return imports;
-  } catch (e) {
-    const msg = e && e.name === 'AbortError'
-      ? `api.jspm.io/generate timed out after ${JSPM_GENERATE_TIMEOUT_MS}ms`
-      : `api.jspm.io/generate failed: ${e && e.message}`;
-    console.error(`[webjs] ${msg}. Vendor packages will not be resolved.`);
-    return {};
-  } finally {
-    clearTimeout(timer);
-  }
+  })();
+
+  jspmCache.set(cacheKey, promise);
+  return promise;
 }
 
 /**
