@@ -21,7 +21,32 @@
  *   npm run test:all                  # everything
  */
 import { playwrightLauncher } from '@web/test-runner-playwright';
-import { esbuildPlugin } from '@web/dev-server-esbuild';
+import { stripTypeScriptTypes } from 'node:module';
+
+/**
+ * Custom WTR plugin: strip TypeScript types via Node 24+'s built-in
+ * `module.stripTypeScriptTypes` so browsers can `import()` .ts files
+ * directly. Mirrors what `webjs dev` does in production. No esbuild,
+ * no separate toolchain. Only erasable TS is supported (enum / namespace
+ * with values / parameter properties / legacy decorators throw and the
+ * test bundle will fail loudly with a clear error).
+ *
+ * @returns {import('@web/test-runner').TestRunnerPlugin}
+ */
+function stripTypesPlugin() {
+  return {
+    name: 'webjs-strip-types',
+    resolveMimeType(context) {
+      if (context.path.endsWith('.ts') || context.path.endsWith('.mts')) return 'js';
+    },
+    transform(context) {
+      if (!context.path.endsWith('.ts') && !context.path.endsWith('.mts')) return;
+      const src = typeof context.body === 'string' ? context.body : null;
+      if (src == null) return;
+      return { body: stripTypeScriptTypes(src) };
+    },
+  };
+}
 
 export default {
   files: [
@@ -33,11 +58,7 @@ export default {
     '!test/examples/blog/browser/**/*.test.js',
   ],
   nodeResolve: true,
-  // Transform .ts → JS on the fly so browsers can `import()` the @webjsdev/ui
-  // component sources directly. Mirrors `webjs dev` (which registers an esbuild
-  // ESM loader hook for the same purpose): esbuild is already a hard dep of
-  // @webjsdev/server, so this isn't adding a new toolchain.
-  plugins: [esbuildPlugin({ ts: true, target: 'es2022' })],
+  plugins: [stripTypesPlugin()],
   browsers: [
     playwrightLauncher({ product: 'chromium' }),
   ],
