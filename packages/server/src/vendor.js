@@ -254,32 +254,24 @@ const JSPM_GENERATE_ENDPOINT = 'https://api.jspm.io/generate';
 const JSPM_GENERATE_TIMEOUT_MS = 10_000;
 
 /**
- * Call api.jspm.io/generate to resolve a list of `pkg@version` installs
- * into a fully-formed importmap fragment. Returns the importmap's
- * `imports` map.
+ * Resolve a SINGLE `pkg@version` (or `pkg@version/subpath`) install via
+ * api.jspm.io/generate. Returns the imports fragment (typically one or
+ * two entries; subpath installs sometimes include the root package).
  *
- * Cached in-process by the exact install-list cache key. A rebuild
- * (via clearVendorCache) drops the cache so version bumps get
- * re-resolved on next boot.
+ * Per-package isolation is the whole point: api.jspm.io/generate fails
+ * the ENTIRE batch with a 401 when any single package can't be
+ * resolved (e.g. a transitive that has no jspm.io-compatible exports).
+ * Calling per-package means one bad dep can no longer poison the
+ * importmap for legitimate deps.
  *
- * If the API call fails (network down, jspm.io 5xx, timeout), logs
- * the failure and returns an empty map. The server still boots and
- * serves user routes; vendor-importing pages get an "unresolved bare
- * specifier" error in the browser until the API is reachable again.
+ * Cached in-process by the install spec. Failures are logged loudly
+ * with the package name and the reason jspm.io returned.
  *
- * @param {Array<string>} installs  e.g. ['dayjs@1.11.13', '@hotwired/turbo@8.0.0']
+ * @param {string} install  e.g. 'dayjs@1.11.13' or 'dayjs@1.11.13/plugin/utc'
  * @returns {Promise<Record<string, string>>}
  */
-export async function jspmGenerate(installs) {
-  if (installs.length === 0) return {};
-  const cacheKey = [...installs].sort().join('\n');
-
-  // Cache pending Promises, not just resolved values. Two concurrent
-  // callers with the same install list share the in-flight request
-  // (only one HTTP round trip to api.jspm.io). Without this, two
-  // simultaneous rebuilds during dev (chokidar firing twice in quick
-  // succession) would each issue their own jspm.io request.
-  const existing = jspmCache.get(cacheKey);
+async function jspmResolveOne(install) {
+  const existing = jspmCache.get(install);
   if (existing) return existing;
 
   const promise = (async () => {
@@ -290,40 +282,66 @@ export async function jspmGenerate(installs) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          install: installs,
+          install: [install],
           env: ['browser', 'production', 'module'],
           provider: 'jspm.io',
         }),
         signal: controller.signal,
       });
       if (!response.ok) {
+        // jspm.io returns the error reason in the body with a 401 (its
+        // quirk: 401 is what it sends for unresolvable installs, not
+        // auth failures). Surface it so the user sees WHICH dep failed
+        // and why, not just a generic "vendor pipeline broken".
+        let detail = '';
+        try {
+          const body = await response.json();
+          if (body && typeof body.error === 'string') detail = `: ${body.error}`;
+        } catch { /* non-JSON body */ }
         console.error(
-          `[webjs] api.jspm.io/generate returned ${response.status}. ` +
-          `Vendor packages will not be resolved until api.jspm.io is reachable.`,
+          `[webjs] could not vendor '${install}' via jspm.io (status ${response.status})${detail}`,
         );
-        // Drop the failed Promise from the cache so the next call
-        // retries instead of returning {} forever.
-        jspmCache.delete(cacheKey);
+        jspmCache.delete(install);
         return {};
       }
       const result = await response.json();
-      const imports = (result && result.map && result.map.imports) || {};
-      return imports;
+      return (result && result.map && result.map.imports) || {};
     } catch (e) {
       const msg = e && e.name === 'AbortError'
-        ? `api.jspm.io/generate timed out after ${JSPM_GENERATE_TIMEOUT_MS}ms`
-        : `api.jspm.io/generate failed: ${e && e.message}`;
-      console.error(`[webjs] ${msg}. Vendor packages will not be resolved.`);
-      // Same: drop the failed Promise so retries work.
-      jspmCache.delete(cacheKey);
+        ? `timed out after ${JSPM_GENERATE_TIMEOUT_MS}ms`
+        : `${e && e.message}`;
+      console.error(`[webjs] could not vendor '${install}' via jspm.io: ${msg}`);
+      jspmCache.delete(install);
       return {};
     } finally {
       clearTimeout(timer);
     }
   })();
 
-  jspmCache.set(cacheKey, promise);
+  jspmCache.set(install, promise);
   return promise;
+}
+
+/**
+ * Resolve a list of `pkg@version` installs to importmap entries by
+ * calling api.jspm.io/generate ONCE PER INSTALL in parallel. Per-package
+ * isolation prevents one bad dep from collapsing the whole importmap
+ * (see jspmResolveOne for the rationale).
+ *
+ * The merge is last-write-wins per key. In practice subpath installs
+ * never collide with each other (their keys include the subpath), and
+ * the bare-package install for `dayjs` always produces the same root
+ * URL as `dayjs@x.y.z/plugin/foo`'s incidental `dayjs` entry.
+ *
+ * @param {Array<string>} installs  e.g. ['dayjs@1.11.13', 'clsx@2.1.1']
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function jspmGenerate(installs) {
+  if (installs.length === 0) return {};
+  const perPackage = await Promise.all(installs.map(jspmResolveOne));
+  const merged = {};
+  for (const fragment of perPackage) Object.assign(merged, fragment);
+  return merged;
 }
 
 /**

@@ -307,18 +307,32 @@ test('jspmGenerate: resolves a real package to a CDN URL', { skip: !NETWORK_OK }
 test('jspmGenerate: second call with same installs hits in-process cache', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
   const first = await jspmGenerate(['picocolors@1.1.1']);
-  // No second network round-trip (cache hit). We can verify by
-  // ensuring the response is the same object reference.
+  // Per-install cache: each call rebuilds a merged container but the
+  // underlying URL is the cached Promise's resolved value, so the URL
+  // is identical and no second HTTP round-trip fires.
   const second = await jspmGenerate(['picocolors@1.1.1']);
-  assert.equal(first, second, 'cached call should return same object reference');
+  assert.deepEqual(first, second, 'cached call returns the same URLs');
 });
 
-test('jspmGenerate: install order does not affect cache key', { skip: !NETWORK_OK }, async () => {
+test('jspmGenerate: install order does not affect output', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
   const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
-  // Second call with reordered installs should hit the same cache entry.
   const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
-  assert.equal(a, b, 'cache should be order-independent');
+  assert.deepEqual(a, b, 'output should be order-independent');
+});
+
+test('jspmGenerate: per-package isolation - one bad install does not poison good ones', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  // Mix a known-good package with a known-bad one. jspm.io 401s the
+  // bad one alone, but the good one MUST still resolve. This is the
+  // regression test for the batched-call bug where one unresolvable
+  // dep collapsed the entire importmap.
+  const result = await jspmGenerate([
+    'picocolors@1.1.1',
+    'this-package-truly-does-not-exist-xyz-789@99.0.0',
+  ]);
+  assert.ok(result['picocolors'], 'good package must resolve despite bad neighbor');
+  assert.match(result['picocolors'], /^https:\/\/ga\.jspm\.io\//);
 });
 
 // --- vendorImportMapEntries (network-gated) ---
