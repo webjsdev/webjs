@@ -250,7 +250,7 @@ export async function createRequestHandler(opts) {
  */
 export async function startServer(opts) {
   const dev = !!opts.dev;
-  const port = opts.port ?? 3000;
+  const port = opts.port ?? 8080;
   // Compression default: on in prod, off in dev (cheaper to debug raw bytes).
   const compress = opts.compress ?? !dev;
   const logger = opts.logger || defaultLogger({ dev });
