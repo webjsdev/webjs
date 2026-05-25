@@ -439,6 +439,26 @@ test('listPinned: parses jspm.io URLs and extracts versions', async () => {
   }
 });
 
+test('listPinned: parses subpath URLs and extracts versions (not subpath as version)', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'dayjs@1.11.13__plugin__utc.js'), 'export default {}');
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js',
+        'dayjs/plugin/utc': '/__webjs/vendor/dayjs@1.11.13__plugin__utc.js',
+      },
+    }));
+    const entries = await listPinned(dir);
+    const subpath = entries.find(e => e.pkg === 'dayjs/plugin/utc');
+    assert.ok(subpath, 'subpath entry should be listed');
+    assert.equal(subpath.version, '1.11.13', 'version should be 1.11.13, not 1.11.13__plugin__utc');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('listPinned: returns empty array when no pin file', async () => {
   const dir = await makeTempAppWithSource({});
   try {

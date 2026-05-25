@@ -1,8 +1,16 @@
 # deps
 node_modules/
 
-# webjs / framework caches
+# webjs / framework caches.
+# `.webjs/vendor/` is the EXCEPTION: it holds the committed importmap
+# manifest (.webjs/vendor/importmap.json) and optionally the vendored
+# bundle files (after `webjs vendor pin --download`). Both ship to
+# production via source control so the server doesn't need
+# api.jspm.io reachable at boot. Pattern is `.webjs/` ignored,
+# `.webjs/vendor/` un-ignored, mirroring Rails' config/importmap.rb
+# + vendor/javascript/ being committed.
 .webjs/
+!.webjs/vendor/
 
 # generated Tailwind CSS, built from public/input.css via npm run dev / start
 public/tailwind.css

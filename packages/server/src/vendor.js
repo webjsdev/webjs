@@ -585,7 +585,14 @@ export async function listPinned(appDir) {
     } else if (url.startsWith('/__webjs/vendor/')) {
       const filename = url.slice('/__webjs/vendor/'.length);
       const atIdx = filename.lastIndexOf('@');
-      if (atIdx > 0) version = filename.slice(atIdx + 1, -3);
+      if (atIdx > 0) {
+        // Strip trailing `.js`, split off any `__subpath` segment, keep
+        // only the version. `dayjs@1.11.13__plugin__utc.js` parses as
+        // version `1.11.13` (not `1.11.13__plugin__utc`).
+        const afterAt = filename.slice(atIdx + 1, -3);
+        const subIdx = afterAt.indexOf('__');
+        version = subIdx < 0 ? afterAt : afterAt.slice(0, subIdx);
+      }
       try {
         const st = await stat(join(pinDir(appDir), filename));
         bytes = st.size;
