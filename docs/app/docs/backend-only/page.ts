@@ -203,7 +203,7 @@ const events = await richFetch('/api/events');
 // events[0].createdAt is a real Date object
 
 // External client (curl, Postman) gets plain JSON automatically
-// curl http://localhost:3000/api/events</pre>
+// curl http://localhost:8080/api/events</pre>
     <p>The <code>json()</code> helper reads the <code>Accept</code> header. If the client sent <code>Accept: application/vnd.webjs+json</code> (as <code>richFetch</code> does), the response is encoded with the webjs serializer. Otherwise, plain <code>application/json</code>. The <code>Vary: Accept</code> header is set automatically.</p>
     <p>For reading request bodies with the same content negotiation, use <code>readBody(req)</code> from <code>@webjsdev/server</code>.</p>
 
@@ -250,7 +250,7 @@ fastify.all('*', async (request, reply) =&gt; {
   reply.send(body);
 });
 
-fastify.listen({ port: 3000 });</pre>
+fastify.listen({ port: 8080 });</pre>
 
     <h2>Comparison with Express/Fastify</h2>
     <p>Here is what webjs gives you compared to a traditional Node.js API framework:</p>
@@ -329,9 +329,9 @@ export async function POST(req: Request) {
 
     <h3>Run it</h3>
     <pre>webjs dev
-# API is live at http://localhost:3000
-# curl http://localhost:3000/api/posts
-# curl http://localhost:3000/__webjs/health</pre>
+# API is live at http://localhost:8080
+# curl http://localhost:8080/api/posts
+# curl http://localhost:8080/__webjs/health</pre>
     <p>No pages, no layouts, no components, no SSR. Just a fast, typed API server with file-based routing.</p>
   `;
 }

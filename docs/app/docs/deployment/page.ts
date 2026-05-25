@@ -10,10 +10,10 @@ export default function Deployment() {
     <h2>Dev vs Prod</h2>
     <p>webjs has two modes, controlled by the npm script (which wraps the underlying <code>webjs dev</code> / <code>webjs start</code> CLI):</p>
     <pre># Development: live reload, no compression, no caching, verbose errors
-npm run dev -- --port 3000
+npm run dev -- --port 8080
 
 # Production: compression, ETags, cache headers, graceful shutdown
-npm run start -- --port 3000</pre>
+npm run start -- --port 8080</pre>
     <p>Key differences:</p>
     <ul>
       <li><strong>Dev:</strong> chokidar watches your source tree and triggers live reload via SSE. TypeScript files are served with <code>Cache-Control: no-cache</code>. Errors include full stack traces. No compression.</li>
@@ -55,13 +55,13 @@ GET /__webjs/ready     # { "status": "ok" }</pre>
 livenessProbe:
   httpGet:
     path: /__webjs/health
-    port: 3000
+    port: 8080
   initialDelaySeconds: 5
   periodSeconds: 10
 readinessProbe:
   httpGet:
     path: /__webjs/ready
-    port: 3000
+    port: 8080
   initialDelaySeconds: 3
   periodSeconds: 5</pre>
 
@@ -77,10 +77,10 @@ readinessProbe:
     <h2>Pluggable Logger</h2>
     <p>webjs includes a minimal logger that writes structured JSON in production and human-readable lines in development:</p>
     <pre># Dev output:
-[webjs] webjs dev server ready on http://localhost:3000
+[webjs] webjs dev server ready on http://localhost:8080
 
 # Prod output (one JSON line per event):
-{"level":"info","msg":"webjs prod server ready on http://localhost:3000","time":"2026-01-15T10:30:00.000Z"}</pre>
+{"level":"info","msg":"webjs prod server ready on http://localhost:8080","time":"2026-01-15T10:30:00.000Z"}</pre>
     <p>Replace it with your own logger by passing any object with <code>info</code>, <code>warn</code>, and <code>error</code> methods to <code>createRequestHandler</code>:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 import pino from 'pino';
@@ -139,7 +139,7 @@ server.all('*', async (req, res) =&gt; {
   res.end();
 });
 
-server.listen(3000);</pre>
+server.listen(8080);</pre>
 
     <h3>Bun</h3>
     <pre>import { createRequestHandler } from '@webjsdev/server';
@@ -147,7 +147,7 @@ server.listen(3000);</pre>
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });
 
 Bun.serve({
-  port: 3000,
+  port: 8080,
   fetch: (req) =&gt; app.handle(req),
 });</pre>
 
@@ -156,12 +156,12 @@ Bun.serve({
 
 const app = await createRequestHandler({ appDir: Deno.cwd(), dev: false });
 
-Deno.serve({ port: 3000 }, (req) =&gt; app.handle(req));</pre>
+Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</pre>
 
     <h2>Environment Variables</h2>
     <p>webjs reads the following environment variables:</p>
     <ul>
-      <li><strong>PORT</strong>: server port (default: 3000). Overridden by <code>--port</code> CLI flag.</li>
+      <li><strong>PORT</strong>: server port (default: 8080). Overridden by <code>--port</code> CLI flag.</li>
       <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
     </ul>
     <p>For app-specific environment variables, use <code>process.env</code> in server-side code (pages, server actions, middleware, API routes). These are never exposed to the client.</p>
@@ -184,8 +184,8 @@ RUN npm ci --omit=dev
 # Copy app source as-is; the server serves it directly
 COPY . .
 
-EXPOSE 3000
-HEALTHCHECK CMD curl -f http://localhost:3000/__webjs/health || exit 1
+EXPOSE 8080
+HEALTHCHECK CMD curl -f http://localhost:8080/__webjs/health || exit 1
 
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
@@ -202,7 +202,7 @@ CMD ["npx", "webjs", "start"]</pre>
 
     <h3>nginx</h3>
     <pre>upstream webjs {
-    server 127.0.0.1:3000;
+    server 127.0.0.1:8080;
 }
 
 server {
@@ -227,7 +227,7 @@ server {
 
     <h3>Caddy</h3>
     <pre>example.com {
-    reverse_proxy localhost:3000
+    reverse_proxy localhost:8080
 }</pre>
     <p>Caddy automatically provisions TLS certificates via Let's Encrypt and enables HTTP/2. It also handles WebSocket upgrades transparently.</p>
 
@@ -243,7 +243,7 @@ After=network.target
 Type=simple
 User=www
 WorkingDirectory=/srv/my-app
-ExecStart=/usr/bin/webjs start --port 3000
+ExecStart=/usr/bin/webjs start --port 8080
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production

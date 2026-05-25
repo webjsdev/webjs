@@ -12,8 +12,8 @@ const [cmd, ...rest] = process.argv.slice(2);
 const TEMPLATES = ['full-stack', 'api', 'saas'];
 
 const USAGE = `webjs commands:
-  webjs dev   [--port 3000]                       Start dev server with live reload
-  webjs start [--port 3000]                       Start production server (serves source directly, no build step)
+  webjs dev   [--port 8080]                       Start dev server with live reload
+  webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Validate app against conventions
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
@@ -41,7 +41,7 @@ async function main() {
       // If we're already inside the --watch child, start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
         const { startServer } = await import('@webjsdev/server');
-        const port = Number(flag(rest, '--port', process.env.PORT || 3000));
+        const port = Number(flag(rest, '--port', process.env.PORT || 8080));
         await startServer({ appDir: process.cwd(), port, dev: true });
         break;
       }
@@ -81,7 +81,7 @@ async function main() {
     }
     case 'start': {
       const { startServer } = await import('@webjsdev/server');
-      const port = Number(flag(rest, '--port', process.env.PORT || 3000));
+      const port = Number(flag(rest, '--port', process.env.PORT || 8080));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;
     }

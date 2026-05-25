@@ -299,7 +299,7 @@ export function createAuth(config) {
 
   async function oauthRedirect(provider, opts) {
     const req = opts.req || getRequest();
-    const origin = req ? new URL(req.url).origin : 'http://localhost:3000';
+    const origin = req ? new URL(req.url).origin : 'http://localhost:8080';
     const state = randomId();
 
     const url = new URL(provider.authorizationUrl);

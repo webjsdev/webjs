@@ -18,7 +18,7 @@ Then scaffold a new app anywhere:
 ```sh
 webjs create my-app
 cd my-app && npm run dev
-# → http://localhost:3000
+# → http://localhost:8080
 ```
 
 One-shot without a global install, two ways:

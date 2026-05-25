@@ -1028,7 +1028,7 @@ For AI agents, read this before editing scaffolded files:
   console.log(`
 Next steps:
   ${runCommand}
-  # → http://localhost:3000
+  # → http://localhost:8080
 
 Optional:
   ${uiNote}

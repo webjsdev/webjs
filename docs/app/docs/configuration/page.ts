@@ -9,9 +9,9 @@ export default function Configuration() {
 
     <h2>CLI Options</h2>
     <h3>webjs dev</h3>
-    <pre>webjs dev [--port 3000]</pre>
+    <pre>webjs dev [--port 8080]</pre>
     <ul>
-      <li><code>--port</code>: dev server port (default: <code>3000</code>, or <code>PORT</code> env var)</li>
+      <li><code>--port</code>: dev server port (default: <code>8080</code>, or <code>PORT</code> env var)</li>
       <li>File watching via chokidar (automatic)</li>
       <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
       <li>TypeScript files transformed on the fly</li>
@@ -19,9 +19,9 @@ export default function Configuration() {
     </ul>
 
     <h3>webjs start</h3>
-    <pre>webjs start [--port 3000]</pre>
+    <pre>webjs start [--port 8080]</pre>
     <ul>
-      <li><code>--port</code>: production server port (also honors the <code>PORT</code> env var, default 3000)</li>
+      <li><code>--port</code>: production server port (also honors the <code>PORT</code> env var, default 8080)</li>
       <li>Speaks plain HTTP/1.1. TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
       <li>gzip/brotli compression enabled by default</li>
       <li>Static file ETag + Cache-Control headers</li>
@@ -104,7 +104,7 @@ class Checkout extends WebComponent {
 // Option 1: Full server
 await startServer({
   appDir: process.cwd(),
-  port: 3000,
+  port: 8080,
   dev: false,
   compress: true,
   http2: false,
