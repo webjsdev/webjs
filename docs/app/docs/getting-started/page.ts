@@ -20,7 +20,7 @@ npm i -g @webjsdev/cli
 # scaffold a new app
 webjs create my-app
 cd my-app && npm run dev
-# → http://localhost:3000</pre>
+# → http://localhost:8080</pre>
 
     <p>Every scaffold ships with Prisma + SQLite wired up (<code>prisma/schema.prisma</code> with an example <code>User</code> model and <code>lib/prisma.server.ts</code> singleton). Run <code>npm run db:migrate</code> the first time to create <code>prisma/dev.db</code>.</p>
 
@@ -116,7 +116,7 @@ Counter.register('my-counter');</pre>
 
     <h3>Run it</h3>
     <pre>npm run dev
-# → http://localhost:3000</pre>
+# → http://localhost:8080</pre>
 
     <p>That's it. No build step, no bundler config, no compilation. Edit any <code>.ts</code> file, refresh, and see it.</p>
 

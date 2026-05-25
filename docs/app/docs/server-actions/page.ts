@@ -337,7 +337,7 @@ export class TodoApp extends WebComponent {
 TodoApp.register('todo-app');
 
 // 3. Call the REST endpoint from curl
-// curl -X POST http://localhost:3000/api/todos \\
+// curl -X POST http://localhost:8080/api/todos \\
 //   -H 'Content-Type: application/json' \\
 //   -d '{"text":"Buy milk"}'
 // => {"id":1,"text":"Buy milk","done":false,"createdAt":"2026-04-15T..."}</pre>

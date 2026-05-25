@@ -52,7 +52,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 # Get started in one command (no global install required)
 npm create webjs@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
 cd my-app && npm run dev
-# → http://localhost:3000
+# → http://localhost:8080
 
 # Backend-only API
 npm create webjs@latest my-api  -- --template api

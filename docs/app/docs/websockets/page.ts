@@ -128,7 +128,7 @@ conn.close();</pre>
     <h3>URL Resolution</h3>
     <p>Relative paths like <code>'/api/chat'</code> are automatically promoted to the correct WebSocket URL based on the current page's protocol:</p>
     <ul>
-      <li><code>http://</code> page: <code>ws://localhost:3000/api/chat</code></li>
+      <li><code>http://</code> page: <code>ws://localhost:8080/api/chat</code></li>
       <li><code>https://</code> page: <code>wss://example.com/api/chat</code></li>
     </ul>
     <p>Absolute <code>ws://</code> or <code>wss://</code> URLs pass through unchanged.</p>
@@ -498,7 +498,7 @@ export function WS(ws: WebSocket) {
 import type { WebSocket } from 'ws';
 
 export function WS(ws: WebSocket, req: Request, { params }: { params: { roomId: string } }) {
-  const room = params.roomId;  // e.g. "general" for ws://localhost:3000/api/rooms/general
+  const room = params.roomId;  // e.g. "general" for ws://localhost:8080/api/rooms/general
   joinRoom(room, ws);
   ws.on('message', (data) =&gt; broadcastToRoom(room, data.toString(), ws));
   ws.on('close', () =&gt; leaveRoom(room, ws));

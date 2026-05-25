@@ -41,7 +41,7 @@ Or programmatically:
 ```js
 import { startServer } from '@webjsdev/server';
 
-await startServer({ port: 3000, appDir: process.cwd(), dev: true });
+await startServer({ port: 8080, appDir: process.cwd(), dev: true });
 ```
 
 See the full framework docs at https://github.com/webjsdev/webjs.

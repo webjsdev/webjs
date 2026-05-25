@@ -5,7 +5,7 @@ Scaffold a new [webjs](https://webjs.dev) app with one command, no global instal
 ```sh
 npm create webjs@latest my-app
 cd my-app && npm run dev
-# → http://localhost:3000
+# → http://localhost:8080
 ```
 
 `npm create webjs@latest` is npm's documented shorthand for `npx create-webjs@latest`; both routes dispatch to this same package. Under the hood it calls [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli)'s `scaffoldApp()` and auto-runs the detected package manager's install in the new directory.

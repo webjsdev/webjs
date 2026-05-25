@@ -106,7 +106,7 @@ JWT sessions by default (stateless, scales horizontally). OAuth providers handle
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth (optional) |
 | `SESSION_SECRET` | Cookie session signing |
 | `REDIS_URL` | When set, sessions + rate limit + cache use Redis |
-| `PORT` | Server port (default 3000) |
+| `PORT` | Server port (default 8080) |
 
 ## Scaling to multiple instances
 
