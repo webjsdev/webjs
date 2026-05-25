@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 import { checkConventions } from '../../src/check.js';
 
@@ -1143,6 +1144,77 @@ export async function login() { return 1; }
     const violations = await checkConventions(appDir);
     const v = violations.find((x) => x.rule === 'use-server-needs-extension');
     assert.equal(v, undefined, 'override should disable the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Tests for the gitignore-vendor-not-ignored rule. Uses a real
+ * `git init` in a temp directory so `git check-ignore` behaves
+ * exactly as it would in a real project.
+ */
+
+function initGit(appDir) {
+  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe' });
+  return result.status === 0;
+}
+
+test('gitignore-vendor-not-ignored: flags the broken `.webjs/` pattern', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    // The structurally-broken pattern: parent excluded, child negations
+    // can never re-include anything because git stops at the parent.
+    await writeFile(join(appDir, '.gitignore'), '.webjs/\n!.webjs/vendor/\n');
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.ok(v, 'expected gitignore-vendor-not-ignored violation');
+    assert.match(v.fix, /\.webjs\/\*/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: passes for the correct pattern', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'correct pattern should not violate');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: skipped when not a git repo', async () => {
+  const appDir = await makeTempApp();
+  try {
+    // No `git init`. A .gitignore exists but there is no .git/ dir,
+    // so the rule must skip rather than emit a false positive.
+    await writeFile(join(appDir, '.gitignore'), '.webjs/\n');
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'rule must skip when .git is absent');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    // git repo exists but no .gitignore at all (user has not opted
+    // into ignore rules yet). Rule must skip.
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'rule must skip when .gitignore is absent');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

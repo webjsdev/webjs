@@ -9,6 +9,9 @@ out/
 # `.webjs/vendor/` is the EXCEPTION: holds the committed importmap
 # manifest + optional downloaded bundles for `webjs vendor pin`. See
 # packages/cli/templates/.gitignore for the full rationale.
+# DO NOT collapse to `.webjs/`: parent exclusion blocks child
+# negations and silently breaks `webjs vendor pin`. The
+# `gitignore-vendor-not-ignored` lint rule guards this.
 .webjs/*
 !.webjs/vendor/
 !.webjs/vendor/**

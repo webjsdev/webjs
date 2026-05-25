@@ -104,6 +104,11 @@ export const RULES = [
     description:
       'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
   },
+  {
+    name: 'gitignore-vendor-not-ignored',
+    description:
+      'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `.webjs/*` (NOT `.webjs/`) plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -967,5 +972,63 @@ export async function checkConventions(appDir, opts) {
     }
   }
 
+  // --- Rule: gitignore-vendor-not-ignored ---
+  // The .gitignore pattern for .webjs/vendor/ is subtle: `.webjs/`
+  // alone excludes the directory entirely and git can't re-include
+  // children of an excluded parent. The correct pattern is `.webjs/*`
+  // plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. AI agents
+  // and human reviewers frequently "simplify" this back to `.webjs/`,
+  // silently breaking `webjs vendor pin`.
+  //
+  // This rule verifies the actual gitignore behavior by spawning
+  // `git check-ignore` against a representative pin-file path. If
+  // git reports the file as ignored, the pattern is broken.
+  //
+  // Skipped when the directory isn't a git repo or has no .gitignore
+  // (the user hasn't opted into version control yet).
+  if (isRuleEnabled('gitignore-vendor-not-ignored', overrides)) {
+    const hasGit = await pathExists(join(appDir, '.git'));
+    const hasGitignore = await pathExists(join(appDir, '.gitignore'));
+    if (hasGit && hasGitignore) {
+      const { spawnSync } = await import('node:child_process');
+      // `git check-ignore -q <path>` exits 0 when the path IS ignored,
+      // 1 when it's NOT ignored. We want exit 1 (NOT ignored).
+      const result = spawnSync('git', ['check-ignore', '-q', '.webjs/vendor/importmap.json'], {
+        cwd: appDir,
+        stdio: 'pipe',
+      });
+      if (result.status === 0) {
+        violations.push({
+          rule: 'gitignore-vendor-not-ignored',
+          file: '.gitignore',
+          message:
+            '.webjs/vendor/importmap.json is gitignored, but `webjs vendor pin` writes it and the file MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a `.webjs/` line in .gitignore that excludes the parent directory before the `!.webjs/vendor/` exception can take effect (git semantics: a parent exclusion blocks child negations).',
+          fix:
+            'Replace `.webjs/` in your .gitignore with this three-line pattern:\n' +
+            '  .webjs/*\n' +
+            '  !.webjs/vendor/\n' +
+            '  !.webjs/vendor/**\n' +
+            'Verify with `git check-ignore -q .webjs/vendor/importmap.json` (exit 1 means correctly un-ignored).',
+        });
+      }
+    }
+  }
+
   return violations;
+}
+
+/**
+ * Async fs.exists shim. Returns true if the path exists at all (file
+ * or directory), false on ENOENT or any other stat failure.
+ *
+ * @param {string} p absolute path
+ * @returns {Promise<boolean>}
+ */
+async function pathExists(p) {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
