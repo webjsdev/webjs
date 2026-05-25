@@ -36,11 +36,14 @@ on:
         description: 'Republish every existing changelog file to GitHub Packages (one-time bootstrap; npm.com + GH Releases steps are skipped)'
         type: boolean
         default: false
+      lockstep_only:
+        description: 'Only (re)publish the unscoped wrappers (create-webjs, webjsdev) at the current @webjsdev/cli version. Use to recover a release whose wrapper publish did not land.'
+        type: boolean
+        default: false
 
 permissions:
-  contents: write        # gh release create needs write access to the repo
-  packages: write        # npm publish to GitHub Packages
-  pull-requests: write   # lockstep step opens + merges a wrapper-bump PR
+  contents: write   # gh release create needs write access to the repo
+  packages: write   # npm publish to GitHub Packages
 
 jobs:
   release:
@@ -151,60 +154,57 @@ jobs:
             node scripts/publish-release.js "$f"
           done < .new-changelog-files.txt
 
-      # Lockstep-bump the unscoped wrapper packages (`create-webjs`,
-      # `webjsdev`) to match the new @webjsdev/cli version whenever
-      # this push landed a new cli changelog. The wrappers exist
-      # purely as version mirrors of cli, so their npm versions
-      # MUST equal cli's version exactly; otherwise the npx cache
-      # serves an outdated cli through them (a wrapper cached at
-      # 0.8.4 keeps resolving cli@0.8.4 even after cli@0.8.5
-      # publishes, because the wrapper's pkg-version is what npx
-      # keys its cache on).
+      # Lockstep-publish the unscoped wrapper packages (`create-webjs`,
+      # `webjsdev`) at the new @webjsdev/cli version whenever this push
+      # landed a new cli changelog. The wrappers exist purely as version
+      # mirrors of cli, so their npm versions MUST equal cli's version
+      # exactly; otherwise the npx cache serves an outdated cli through
+      # them (a wrapper cached at 0.8.4 keeps resolving cli@0.8.4 even
+      # after cli@0.8.5 publishes, because the wrapper's pkg-version is
+      # what npx keys its cache on).
       #
-      # Steps:
-      #   1. Detect a new @webjsdev/cli changelog file in this push.
-      #   2. Update each wrapper's package.json version + @webjsdev/cli
-      #      dep range to match.
-      #   3. Land the bumps on `main` by opening a PR from a temp
-      #      branch and immediately merging it. Branch protection on
-      #      main rejects direct pushes (even by github-actions[bot])
-      #      but accepts merges through a PR, which this satisfies.
-      #      No bypass entitlement needed.
+      # This step does NOT write back to the repo. Earlier designs tried
+      # to commit the wrapper bumps (direct push, then PR + merge), but
+      # the webjsdev org disables write permissions for GITHUB_TOKEN:
+      # direct pushes are refused by branch protection and `gh pr create`
+      # is refused with "GitHub Actions is not permitted to create or
+      # approve pull requests". Since the wrapper version is recomputed
+      # from CLI_VERSION here on every release, the repo copy of the
+      # wrapper package.json is irrelevant to publishing, so we simply
+      # set the version in the runner's working tree and `npm publish`.
+      # The repo's wrapper package.json versions intentionally drift (npm
+      # is the source of truth for them); nothing reads them.
       #
-      #      The PR's commit message uses the `chore(release):` prefix,
-      #      which `scripts/backfill-changelog.js` filters out, so the
-      #      auto-opened PRs never pollute the rendered /changelog. The
-      #      commit touches only `packages/*/package.json`, never
-      #      `changelog/**`, so the squash-merge does NOT re-trigger
-      #      this same release workflow.
-      #   4. Publish each wrapper to npm. Idempotent: skip if the
-      #      target version is already on the registry, so workflow
-      #      re-runs after transient failures don't error.
+      # Publishing is idempotent: a wrapper already on the registry at
+      # CLI_VERSION is skipped, so re-runs and the `lockstep_only`
+      # manual dispatch are safe.
       #
-      # No changelog files are created for the wrappers (their
-      # bumps mirror cli's changelog 1:1) and no GitHub Releases
-      # are produced for them either. See scripts/backfill-changelog.js
-      # PACKAGES for the related "wrappers are not tracked in the
-      # repo's changelog system" decision.
-      - name: Lockstep-bump wrappers to match @webjsdev/cli
-        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
+      # `lockstep_only` (workflow_dispatch input) runs ONLY this step at
+      # the current CLI_VERSION: the recovery path for a release whose
+      # wrapper publish did not land.
+      - name: Lockstep-publish wrappers to match @webjsdev/cli
+        if: inputs.lockstep_only || (steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
-          if ! grep -q '^changelog/cli/' .new-changelog-files.txt; then
-            echo "No new @webjsdev/cli changelog in this push; skipping wrapper lockstep."
-            exit 0
+          # In a normal release run, only proceed if a cli changelog
+          # landed in this push. The lockstep_only dispatch skips this
+          # gate (there is no .new-changelog-files.txt to consult).
+          if [ "${{ inputs.lockstep_only }}" != "true" ]; then
+            if ! grep -q '^changelog/cli/' .new-changelog-files.txt; then
+              echo "No new @webjsdev/cli changelog in this push; skipping wrapper lockstep."
+              exit 0
+            fi
           fi
 
           CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
-          BASE_BRANCH="${GITHUB_REF#refs/heads/}"
-          echo "Lockstepping create-webjs + webjsdev to @webjsdev/cli@${CLI_VERSION}"
+          echo "Lockstep-publishing create-webjs + webjsdev at @webjsdev/cli@${CLI_VERSION}"
 
-          # 1. Update each wrapper's package.json (version + cli dep range).
           for pkg in create-webjs webjsdev; do
+            # Set the version + cli dep range in the runner's working
+            # tree only (never committed). npm publish reads from here.
             node -e "
               const fs = require('node:fs');
               const path = './packages/${pkg}/package.json';
@@ -215,39 +215,6 @@ jobs:
               }
               fs.writeFileSync(path, JSON.stringify(j, null, 2) + '\n');
             "
-          done
-
-          # 2. Land the bumps on main via PR + merge. If wrapper versions
-          # were already in sync (e.g. a developer landed the lockstep
-          # manually in the same commit), there's nothing to commit and
-          # the publish step below will idempotently skip both wrappers.
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add packages/create-webjs/package.json packages/webjsdev/package.json
-          if git diff --cached --quiet; then
-            echo "No package.json changes to commit (wrappers were already at ${CLI_VERSION})."
-          else
-            # Branch name encodes both the target version and the
-            # current run id so concurrent or re-run workflows can
-            # never collide on the same branch.
-            BRANCH="auto/lockstep-${CLI_VERSION}-${GITHUB_RUN_ID}"
-            git checkout -b "$BRANCH"
-            git commit -m "chore(release): lockstep bump create-webjs + webjsdev to match @webjsdev/cli@${CLI_VERSION}"
-            git push origin "$BRANCH"
-
-            gh pr create \
-              --title "chore(release): lockstep bump wrappers to @webjsdev/cli@${CLI_VERSION}" \
-              --body "Auto-opened by Auto-release run #${GITHUB_RUN_ID}. Mirrors @webjsdev/cli@${CLI_VERSION} to create-webjs and webjsdev so npx cache misses on fresh installs. Squash-merged immediately." \
-              --base "$BASE_BRANCH" \
-              --head "$BRANCH"
-
-            gh pr merge "$BRANCH" --squash --delete-branch
-          fi
-
-          # 3. Publish each wrapper to npm, idempotently. Local working
-          # tree still carries the bumped package.json (whether or not
-          # the PR was needed), so the publish reads the right version.
-          for pkg in create-webjs webjsdev; do
             REMOTE=$(npm view "${pkg}@${CLI_VERSION}" version 2>/dev/null || echo "")
             if [ "$REMOTE" = "${CLI_VERSION}" ]; then
               echo "  skip ${pkg}@${CLI_VERSION}: already on registry"
