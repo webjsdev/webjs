@@ -1,8 +1,11 @@
 # deps
 node_modules/
 
-# webjs / framework caches
+# webjs / framework caches.
+# `.webjs/vendor/` is the EXCEPTION: holds the committed importmap
+# manifest + optional downloaded bundles for `webjs vendor pin`.
 .webjs/
+!.webjs/vendor/
 
 # generated Tailwind CSS, built from public/input.css via npm run dev / start
 public/tailwind.css

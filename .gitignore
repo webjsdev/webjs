@@ -6,7 +6,11 @@ dist/
 build/
 out/
 .cache/
+# `.webjs/vendor/` is the EXCEPTION: holds the committed importmap
+# manifest + optional downloaded bundles for `webjs vendor pin`. See
+# packages/cli/templates/.gitignore for the full rationale.
 .webjs/
+!.webjs/vendor/
 
 # generated Tailwind CSS - built from public/input.css via `npm run dev` / `npm run start`
 **/public/tailwind.css
