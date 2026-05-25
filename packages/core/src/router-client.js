@@ -1256,12 +1256,87 @@ function diffChildren(dst, src) {
  *
  * @param {HTMLHeadElement} newHead
  */
+
+/**
+ * Read the CSP nonce that the original page load published via
+ * `<meta name="csp-nonce" content="...">`. Returns empty string when
+ * no meta tag is present (apps without strict CSP).
+ *
+ * The meta tag is the contract: server emits it once at SSR time,
+ * client reads it for every dynamically-created script. The browser
+ * enforces CSP against the nonce the original page declared, NOT the
+ * per-request nonce on subsequent navigations. So we always apply
+ * THIS nonce, not the source-page nonce that arrived with the new
+ * head fragment.
+ *
+ * Mirrors hotwired/turbo's `getCspNonce` in src/util.js. Not cached:
+ * a single querySelector on document.head is cheap, and caching
+ * would break if the user (or a test) inserted the meta tag late.
+ *
+ * @returns {string}
+ */
+function getCspNonce() {
+  if (typeof document === 'undefined') return '';
+  const meta = document.querySelector('meta[name="csp-nonce"]');
+  return meta ? meta.getAttribute('content') || '' : '';
+}
+
+/**
+ * Create a `<script>` clone of `source` that's safe to insert into the
+ * live document under strict CSP. Copies every attribute EXCEPT
+ * nonce (the source's nonce is from the new page's per-request token,
+ * which the browser's CSP cache from the original page load will
+ * reject), then applies the cached nonce from the meta tag. Re-emits
+ * textContent so inline scripts execute as if first-loaded.
+ *
+ * @param {HTMLScriptElement} source
+ * @returns {HTMLScriptElement}
+ */
+function cloneScriptWithCorrectNonce(source) {
+  const script = document.createElement('script');
+  for (const attr of source.attributes) {
+    if (attr.name === 'nonce') continue;
+    script.setAttribute(attr.name, attr.value);
+  }
+  const nonce = getCspNonce();
+  if (nonce) {
+    // Use setAttribute so the attribute is queryable
+    // (`getAttribute('nonce')`, outerHTML serialization, etc.).
+    // Per CSP3 the .nonce IDL property is the authoritative source
+    // for the CSP check, but real browsers reflect setAttribute into
+    // .nonce automatically. Test environments (linkedom) reflect only
+    // one direction, so we set the attribute.
+    script.setAttribute('nonce', nonce);
+  }
+  script.textContent = source.textContent;
+  return script;
+}
+
+/**
+ * Return an `outerHTML` string suitable for head-diff comparison: strip
+ * any nonce attribute so per-request nonces don't cause every script in
+ * the head to look "changed" on every navigation. The original element
+ * is left untouched (we clone first).
+ *
+ * Mirrors hotwired/turbo's `elementWithoutNonce` pattern in
+ * src/core/drive/head_snapshot.js.
+ *
+ * @param {Element} el
+ * @returns {string}
+ */
+function outerHTMLForDiff(el) {
+  if (el.tagName !== 'SCRIPT' || !el.hasAttribute('nonce')) return el.outerHTML;
+  const clone = /** @type {Element} */ (el.cloneNode(true));
+  clone.removeAttribute('nonce');
+  return clone.outerHTML;
+}
+
 function addNewHeadElements(newHead) {
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
 
   const currentSet = new Set();
-  for (const el of document.head.children) currentSet.add(el.outerHTML);
+  for (const el of document.head.children) currentSet.add(outerHTMLForDiff(el));
 
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') {
@@ -1283,12 +1358,11 @@ function addNewHeadElements(newHead) {
     }
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!currentSet.has(el.outerHTML)) {
+    if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
-        const script = document.createElement('script');
-        for (const attr of el.attributes) script.setAttribute(attr.name, attr.value);
-        script.textContent = el.textContent;
-        document.head.appendChild(script);
+        document.head.appendChild(
+          cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
+        );
       } else {
         document.head.appendChild(el.cloneNode(true));
       }
@@ -1307,33 +1381,32 @@ function mergeHead(newHead) {
   for (const el of currentHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
-    currentSet.add(el.outerHTML);
+    currentSet.add(outerHTMLForDiff(el));
   }
 
   const newSet = new Set();
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
-    newSet.add(el.outerHTML);
+    newSet.add(outerHTMLForDiff(el));
   }
 
   for (const el of [...currentHead.children]) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!newSet.has(el.outerHTML)) el.remove();
+    if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!currentSet.has(el.outerHTML)) {
+    if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
-        const script = document.createElement('script');
-        for (const attr of el.attributes) script.setAttribute(attr.name, attr.value);
-        script.textContent = el.textContent;
-        currentHead.appendChild(script);
+        currentHead.appendChild(
+          cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
+        );
       } else {
         currentHead.appendChild(el.cloneNode(true));
       }
@@ -1380,10 +1453,7 @@ function forwardSuspenseResolvers(fetchedBody) {
 /** @param {Element} container */
 function reactivateScripts(container) {
   for (const old of container.querySelectorAll('script')) {
-    const script = document.createElement('script');
-    for (const attr of old.attributes) script.setAttribute(attr.name, attr.value);
-    script.textContent = old.textContent;
-    old.replaceWith(script);
+    old.replaceWith(cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (old)));
   }
 }
 

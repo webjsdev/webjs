@@ -1325,6 +1325,36 @@ test('ssrPage: CSP nonce on request → nonce attribute on injected scripts', as
   assert.ok(body.includes('nonce="abc123XYZ"'));
 });
 
+test('ssrPage: CSP nonce → meta csp-nonce tag emitted for client-router pickup', async () => {
+  // Turbo's convention: server emits <meta name="csp-nonce" content="..."> so
+  // the client router (router-client.js) can apply the original page-load
+  // nonce to dynamically-created scripts (head merge, script reactivation).
+  // Without this, strict-CSP apps break on every client-side nav.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+  });
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-xyz789' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.match(body, /<meta name="csp-nonce" content="xyz789">/);
+});
+
+test('ssrPage: no nonce in CSP → no meta csp-nonce tag', async () => {
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+  });
+  const req = new Request('http://localhost/');
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.ok(!body.includes('csp-nonce'), 'no meta tag when no nonce in request CSP');
+});
+
 test('ssrPage: response attaches a csrf set-cookie when request has no token', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:

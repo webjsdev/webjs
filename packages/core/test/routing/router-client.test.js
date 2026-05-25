@@ -396,6 +396,40 @@ test('addNewHeadElements: script elements are recreated (not cloned) to execute'
   assert.equal(added.getAttribute('type'), 'module');
 });
 
+test('addNewHeadElements: dynamically-created scripts get the meta csp-nonce, not the source page\'s per-request nonce', () => {
+  // Set up the meta tag the server emits for the original page load.
+  document.head.innerHTML = '<meta name="csp-nonce" content="original-page-nonce">';
+  // The fetched new-page head ships a script with the new request's nonce.
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<meta name="csp-nonce" content="original-page-nonce">' +
+    '<script src="/added.js" nonce="new-request-nonce"></script>';
+  _addNewHead(newHead);
+  const added = document.head.querySelector('script[src="/added.js"]');
+  assert.ok(added, 'script should be added');
+  // Browser's CSP cache holds the FIRST page-load nonce, so the new
+  // script must carry that one (not the per-request nonce that came
+  // with the fetched head fragment).
+  assert.equal(added.getAttribute('nonce'), 'original-page-nonce',
+    'dynamic script nonce must match the page-load meta tag, not the source-page nonce');
+});
+
+test('addNewHeadElements: head diff ignores per-request nonce differences (no spurious re-add)', () => {
+  // Same script src, same content, but differs only in nonce attribute.
+  // Without nonce-aware diff, the current page's script would not match
+  // the new page's, and the new page's would be appended every nav.
+  document.head.innerHTML =
+    '<script src="/x.js" nonce="page-load-nonce"></script>';
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<script src="/x.js" nonce="some-other-per-request-nonce"></script>';
+  const before = document.head.querySelectorAll('script[src="/x.js"]').length;
+  _addNewHead(newHead);
+  const after = document.head.querySelectorAll('script[src="/x.js"]').length;
+  assert.equal(after, before,
+    'nonce-only difference must not trigger re-add (would duplicate the script every nav)');
+});
+
 /* ====================================================================
  * mergeHead: full-merge head (used on full body swap)
  * ==================================================================== */

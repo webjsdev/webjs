@@ -1032,6 +1032,7 @@ function wrapHead(opts) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+${opts.nonce ? `<meta name="csp-nonce" content="${escapeAttr(opts.nonce)}">` : ''}
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
