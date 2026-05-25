@@ -377,6 +377,19 @@ would silently churn the committed importmap.json as jspm.io resolves
 URLs or transitive deps drift. Pin is a deliberate developer action,
 like `npm install` itself.
 
+**Do NOT modify the `.webjs/` lines in `.gitignore` / `.dockerignore`.**
+The scaffolded pattern is three lines (`.webjs/*` + `!.webjs/vendor/`
++ `!.webjs/vendor/**`) and is structurally load-bearing. Collapsing it
+to a single `.webjs/` excludes the parent directory; once the parent
+is excluded, git cannot re-include `.webjs/vendor/` via a child
+negation (gitignore semantics: parent exclusion blocks child
+negations). The breakage is invisible: `webjs vendor pin` runs, writes
+files, and git silently ignores them. Production then has no
+importmap.json and the server falls back to calling api.jspm.io on
+every cold start. The `gitignore-vendor-not-ignored` lint rule
+(`webjs check`) verifies the pattern with `git check-ignore` and will
+fail CI if it regresses.
+
 ## Imports
 
 ```ts

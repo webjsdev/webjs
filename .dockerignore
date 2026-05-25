@@ -7,6 +7,10 @@ node_modules
 # importmap.json) and optionally downloaded bundle bytes (from
 # `webjs vendor pin --download`). Both must reach the production
 # image so the server doesn't need api.jspm.io reachable at boot.
+# DO NOT collapse to `**/.webjs`: parent exclusion blocks child
+# negations and the vendor files would silently never reach the
+# image. Mirrors the .gitignore pattern enforced by the
+# `gitignore-vendor-not-ignored` lint rule.
 **/.webjs/*
 !**/.webjs/vendor/
 !**/.webjs/vendor/**
