@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm, symlink, readFile as readFileFs } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import {
@@ -369,6 +369,17 @@ async function makeTempAppWithSource(sourceFiles) {
   await symlink(join(process.cwd(), 'node_modules'), join(dir, 'node_modules'));
   await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
   for (const [path, body] of Object.entries(sourceFiles)) {
+    // Refuse paths that would resolve through the symlinked
+    // node_modules: writing them clobbers the repo's real packages
+    // (previous bug: a sourceFiles entry for
+    // 'node_modules/picocolors/package.json' overwrote the real
+    // picocolors package.json with a 2-line stub).
+    if (path.startsWith('node_modules/') || path.startsWith('node_modules' + sep)) {
+      throw new Error(
+        `makeTempAppWithSource: refusing to write '${path}' through the symlinked node_modules. ` +
+        `Mock packages must be set up some other way.`,
+      );
+    }
     const full = join(dir, path);
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, body);
@@ -530,6 +541,89 @@ test('resolveVendorImports: prefers committed pin file over live API call', asyn
     const result = await resolveVendorImports(new Set(['unrelated']), dir);
     assert.equal(result.imports['fake-pkg'], 'https://example.com/fake.js');
     assert.deepEqual(result.integrity, {}, 'no integrity field in pin -> empty map');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: returns integrity when present in pin', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'foo': 'https://cdn.example/foo.js' },
+      integrity: { 'https://cdn.example/foo.js': 'sha384-abcdef' },
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(file.integrity, { 'https://cdn.example/foo.js': 'sha384-abcdef' });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: returns no integrity field on old pin format (backwards-compatible)', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    // Old format: imports only, no integrity field. Must still load.
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'foo': 'https://cdn.example/foo.js' },
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(file.imports, { 'foo': 'https://cdn.example/foo.js' });
+    assert.equal(file.integrity, undefined);
+    // resolveVendorImports normalises the missing field to {}.
+    const r = await resolveVendorImports(new Set(), dir);
+    assert.deepEqual(r.integrity, {});
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('sha384Integrity: returns a sha384-<base64> string', async () => {
+  const { sha384Integrity } = await import('../../src/vendor.js');
+  const h = sha384Integrity('hello world');
+  assert.match(h, /^sha384-[A-Za-z0-9+/=]+$/);
+  // Deterministic: same input always produces same output.
+  assert.equal(h, sha384Integrity('hello world'));
+  // Different input produces different output.
+  assert.notEqual(h, sha384Integrity('hello worl'));
+});
+
+test('pinAll default mode: writes integrity field alongside imports', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    await pinAll(dir);
+    const file = await readPinFile(dir);
+    assert.ok(file.integrity, 'integrity field should be written');
+    const url = file.imports['picocolors'];
+    assert.ok(url, 'picocolors should pin');
+    assert.match(file.integrity[url], /^sha384-/, 'integrity must be sha384 hash of fetched bundle');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll --download: writes integrity matching the on-disk bytes', { skip: !NETWORK_OK }, async () => {
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import pico from 'picocolors';`,
+  });
+  try {
+    await pinAll(dir, { download: true });
+    const file = await readPinFile(dir);
+    assert.ok(file.integrity, 'integrity field should be written');
+    const localUrl = file.imports['picocolors'];
+    assert.match(localUrl, /^\/__webjs\/vendor\//);
+    assert.match(file.integrity[localUrl], /^sha384-/, 'integrity must match downloaded bytes');
+    // Recompute hash from the on-disk file to prove it matches.
+    const { sha384Integrity } = await import('../../src/vendor.js');
+    const filename = localUrl.slice('/__webjs/vendor/'.length);
+    const onDisk = await readFileFs(join(dir, '.webjs', 'vendor', filename), 'utf8');
+    assert.equal(file.integrity[localUrl], sha384Integrity(onDisk));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
