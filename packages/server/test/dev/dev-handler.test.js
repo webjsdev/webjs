@@ -87,20 +87,48 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
 });
 
-/* ------------ vendor URLs are not handled locally ------------ */
+/* ------------ vendor URLs: --download mode handler ------------ */
 //
-// Under the jspm.io direct architecture, the importmap routes bare
-// imports to https://ga.jspm.io/npm:<pkg>@<version>/... URLs and the
-// browser fetches the bundle directly from jspm.io. The webjs server
-// has no /__webjs/vendor/ handler. Requests to that path fall through
-// to the unknown-__webjs-path 404 branch, same as any other unknown
-// internal-prefixed URL.
+// In the default jspm.io mode, the importmap routes bare imports to
+// https://ga.jspm.io/npm:<pkg>@<version>/... URLs and the browser
+// fetches the bundle directly from jspm.io. The webjs server never
+// sees those requests.
+//
+// In `webjs vendor pin --download` mode, the importmap routes to
+// local `/__webjs/vendor/<filename>.js` paths and the server serves
+// the downloaded bundle from `.webjs/vendor/<filename>.js`. The
+// handler exists but returns 404 when the file isn't on disk.
 
-test('handle: /__webjs/vendor/* path is unhandled (no local vendor proxy)', async () => {
+test('handle: /__webjs/vendor/<file>.js returns 404 when no downloaded bundle exists', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/anything.js'));
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/anything@1.0.0.js'));
   assert.equal(resp.status, 404);
+  // Response body should hint at the resolution path.
+  const body = await resp.text();
+  assert.match(body, /webjs vendor pin --download/);
+});
+
+test('handle: /__webjs/vendor/<file>.js serves a real bundle when present on disk', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get('content-type') || '', /javascript/);
+  const body = await resp.text();
+  assert.equal(body, 'export default 1;');
+});
+
+test('handle: /__webjs/vendor/ rejects path-traversal filenames', async () => {
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/..%2F..%2Fetc%2Fpasswd.js'));
+  // Either 400 (rejected by serveDownloadedBundle's safety check) or
+  // 404 (URL parser normalised it away). Both are safe outcomes.
+  assert.ok(resp.status === 400 || resp.status === 404, `expected 400 or 404, got ${resp.status}`);
 });
 
 /* ------------ static files + TS compilation ------------ */
