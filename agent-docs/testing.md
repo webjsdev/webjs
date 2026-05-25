@@ -184,3 +184,26 @@ a feature, the test is probably testing too many things at once.
 - **Don't add `.unit` / `.integration` filename suffixes.** The
   folder tells you the kind; the filename should match what it
   tests.
+
+---
+
+## Verifying UI and theming changes
+
+For anything visual (layout, components, themes), a passing unit test or a
+clean-looking code diff is not enough. Render it in a real browser and look.
+
+- **Test both light AND dark mode.** Light mode passing proves nothing about
+  dark mode. The scaffold drives dark mode through two signals (a `data-theme`
+  attribute for the editorial chrome and a `.dark` class for the ui-* kit, see
+  `agent-docs/styling.md`), and when neither is set both default to a
+  coincidentally matching light, so a desync only shows once dark is active.
+  Emulate dark (Playwright `newContext({ colorScheme: 'dark' })` or flip the
+  theme toggle) and inspect a component's **computed** `background-color` /
+  `color`, not just the page chrome.
+- **Read the screenshot.** Capture `page.screenshot({ fullPage: true })` and
+  open the PNG; white-on-white or a stray light box is obvious visually and
+  invisible in the markup.
+- **Guard the wiring in a fast test where you can.** A runtime cascade bug
+  needs a browser, but the mechanism that triggers it (e.g. the theme toggle
+  setting `.dark`) can be asserted cheaply. See the dark-mode assertions in
+  `test/scaffolds/scaffold-integration.test.js`.

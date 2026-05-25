@@ -642,10 +642,21 @@ export default function RootLayout({ children }: { children: unknown }) {
     <script>
       (function(){
         try {
-          var t = localStorage.getItem('webjs_theme');
-          if (t === 'light' || t === 'dark') {
-            document.documentElement.dataset.theme = t;
+          var mq = window.matchMedia('(prefers-color-scheme: light)');
+          function apply(){
+            var t = null;
+            try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
+            var el = document.documentElement;
+            if (t === 'light' || t === 'dark') el.dataset.theme = t;
+            else delete el.dataset.theme;
+            // Keep shadcn's .dark class in sync with the effective theme so the
+            // copied ui-* components (button, card, etc.) follow light/dark too.
+            // Dark is the default unless the OS prefers light or 'light' is set.
+            var dark = t === 'dark' || (t !== 'light' && !mq.matches);
+            el.classList.toggle('dark', dark);
           }
+          apply();
+          mq.addEventListener('change', apply);
         } catch (_) {}
       })();
     </script>
@@ -874,8 +885,13 @@ export class ThemeToggle extends WebComponent {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
     } catch {}
-    if (next === 'system') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = next;
+    const el = document.documentElement;
+    if (next === 'system') delete el.dataset.theme;
+    else el.dataset.theme = next;
+    // Keep shadcn's .dark class in sync so the ui-* components follow the theme.
+    const dark = next === 'dark'
+      || (next === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+    el.classList.toggle('dark', dark);
   }
 
   render() {

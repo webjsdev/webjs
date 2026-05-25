@@ -63,6 +63,18 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
     assert.ok(existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'theme-toggle written');
 
+    // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
+    // must toggle the shadcn `.dark` class, not only the `data-theme`
+    // attribute. Without `.dark`, the copied components/ui/* render light
+    // tokens on the dark chrome (white buttons/cards, invisible text). Light
+    // mode hides this, so guard it here. See agent-docs/styling.md "Dark mode".
+    const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
+    const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
+    assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,
+      'layout head script must toggle the .dark class (shadcn dark-mode signal)');
+    assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
+      'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
+
     // Prisma + lib singleton wired up
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');

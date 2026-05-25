@@ -63,6 +63,34 @@ the definition site and compose naturally with other props (conditional
 classes, active states, etc.). They run at SSR time. Output HTML is
 identical to inline classes, no client-side runtime.
 
+## Dark mode: two signals, keep them in sync
+
+The default scaffold runs **two** theming systems, and a theme switch must
+drive **both** or one half goes stale (this is the single most common
+dark-mode bug in a scaffolded app):
+
+1. **Editorial chrome tokens** (`--fg`, `--bg`, `--accent`, ...) declared in
+   the root layout. They react to a **`data-theme` attribute** on `<html>`
+   (`data-theme="light"` vs absent) and default to dark.
+2. **Webjs UI (shadcn) component tokens** (`--background`, `--foreground`,
+   `--primary`, ...) used by everything under `components/ui/`. They react
+   to a **`.dark` class** on an ancestor (`@custom-variant dark (&:is(.dark *))`)
+   and default to light.
+
+The scaffold's head init script and `theme-toggle` set **both** signals on
+`<html>`: they write `data-theme` AND `classList.toggle('dark', isDark)`. If
+you wire your own theme switch or replace the toggle, you MUST set both.
+Setting only `data-theme` leaves the ui-* components rendering light tokens
+on a dark page (white buttons, white cards, invisible text) while the chrome
+looks correct.
+
+**Verify dark mode in a real browser, not just light.** Light mode passing
+proves nothing about dark mode: with neither signal set, both systems sit at
+a coincidentally matching default, so the divergence only appears once
+`.dark` / `data-theme` are applied. Emulate dark (`colorScheme: 'dark'` or
+flip the toggle) and check a shadcn component's computed `background-color`,
+not just the page chrome.
+
 ## Vanilla CSS for the whole app (opt-out of Tailwind)
 
 Tailwind isn't required. To hand-write CSS everywhere, you need a
