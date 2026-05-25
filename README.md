@@ -70,9 +70,9 @@ git clone https://github.com/webjsdev/webjs
 cd webjs && npm install
 cd examples/blog && npx prisma migrate dev --name init && cd ..
 npm run dev
-# → Website → http://localhost:5000
-# → Docs    → http://localhost:4000
-# → Blog    → http://localhost:3456
+# → Website → http://localhost:5001
+# → Docs    → http://localhost:5002
+# → Blog    → http://localhost:5004
 #
 # Or run any one individually:
 cd examples/blog && npm run dev      # just the blog

@@ -52,7 +52,7 @@ That's it. No separate manifest, no rebuild.
 ## Run
 
 ```sh
-cd docs && npm run dev          # http://localhost:4000
+cd docs && npm run dev          # http://localhost:5002
 ```
 
 **Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs

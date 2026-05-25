@@ -300,7 +300,7 @@ the overall layout.
 ## Building / running
 
 ```sh
-npm run ui:dev                       # serve the registry website on :5001
+npm run ui:dev                       # serve the registry website on :5003
 ```
 
 **No registry build step.** Registry JSON is composed on demand by the
