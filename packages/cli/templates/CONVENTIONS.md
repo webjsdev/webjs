@@ -568,6 +568,17 @@ or a build-step pipeline. The framework has no hard dependency on Tailwind.
 If you mix custom CSS into a light-DOM component, apply the class-prefix
 rule (see Components section above).
 
+**Dark mode uses two signals; a theme switch must set both.** The editorial
+chrome tokens (`--fg`, `--bg`, `--accent`) follow a `data-theme` attribute on
+`<html>`; the Webjs UI kit under `components/ui/` follows a `.dark` class
+(`@custom-variant dark (&:is(.dark *))`). The scaffold's head init script and
+`theme-toggle` set **both** (`data-theme` AND
+`classList.toggle('dark', isDark)`). If you replace the toggle or build your
+own theme switch, set both, or the `components/ui/*` render light tokens on a
+dark page (white buttons and cards, invisible text) while the chrome looks
+correct. Light mode hides this (both systems default to light), so **verify
+dark mode in a browser, not just light.**
+
 ---
 
 ## Styling alternative: vanilla CSS end-to-end
