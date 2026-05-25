@@ -840,9 +840,9 @@ composition, so a nested shell ends up dropped by the HTML parser.
    ```
 
    If you turn `erasableSyntaxOnly` off and use non-erasable syntax,
-   the dev server falls back to esbuild and emits inline sourcemaps
-   for those specific files: roughly 3x wire bytes per request, and
-   stack-trace positions are no longer byte-exact. The
+   the dev server fails at strip time and returns a 500 naming the
+   file and pointing at the `no-non-erasable-typescript` lint rule.
+   webjs is buildless end-to-end and has no bundler fallback. The
    `erasable-typescript-only` convention check warns when the flag
    is missing or set to false.
 9. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used
