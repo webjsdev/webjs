@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 /**
- * Starts the website, docs, and example blog together.
- * One command, three servers:
- *   - Website (landing)  → http://localhost:5000
- *   - Docs               → http://localhost:4000
- *   - Example blog       → http://localhost:3456
+ * Starts the website, docs, example blog, and UI registry site together.
+ * One command, four servers (defaults):
+ *   - Website (landing)  → http://localhost:5001
+ *   - Docs               → http://localhost:5002
+ *   - UI registry site   → http://localhost:5003
+ *   - Example blog       → http://localhost:5004
  *
- * All three are webjs apps running in dev mode with file watching.
+ * Ports sit in the 5001-5004 block on purpose: macOS reserves 5000 for
+ * the AirPlay Receiver / Control Center, so a dev server there silently
+ * fails to bind on Macs.
+ *
+ * Override any port via its env var:
+ *   WEBSITE_PORT=8080 DOCS_PORT=8081 npm run dev
+ *
+ * All four are webjs apps running in dev mode with file watching.
  * Ctrl-C stops all.
  */
 import { spawn } from 'node:child_process';
@@ -42,12 +50,23 @@ function start(name, cwd, cmd, args, extraEnv = {}) {
   return child;
 }
 
+// Per-service ports, each overridable via its own env var. Each app's
+// `webjs:dev` script reads PORT (with a matching default baked in), so
+// setting PORT here is what actually drives the bind.
+const ports = {
+  website: process.env.WEBSITE_PORT || '5001',
+  docs:    process.env.DOCS_PORT    || '5002',
+  ui:      process.env.UI_PORT      || '5003',
+  blog:    process.env.BLOG_PORT    || '5004',
+};
+
 // Use each workspace's `npm run dev` so the concurrently-spawned
-// tailwind CLI watcher (and, for the blog, prisma generate) runs too.
-// The PORT env var is honoured by webjs dev's default-port fallback.
-start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: '5000' });
-start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: '4000' });
-start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: '3456' });
+// tailwind CLI watcher (and, for the blog, prisma generate; for the UI
+// site, the predev copy-registry step) runs too.
+start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: ports.website });
+start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: ports.docs });
+start('ui',      resolve(root, 'packages', 'ui', 'packages', 'website'), 'npm', ['run', 'dev'], { PORT: ports.ui });
+start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: ports.blog });
 
 function cleanup() {
   console.log('\n▲ shutting down...');
@@ -61,9 +80,11 @@ process.on('SIGTERM', cleanup);
 
 console.log(`
 ▲ webjs development servers:
-  Website   → http://localhost:5000
-  Docs      → http://localhost:4000
-  Demo      → http://localhost:3456
+  Website     → http://localhost:${ports.website}
+  Docs        → http://localhost:${ports.docs}
+  UI registry → http://localhost:${ports.ui}
+  Demo        → http://localhost:${ports.blog}
 
+  Override any port: WEBSITE_PORT / DOCS_PORT / UI_PORT / BLOG_PORT
   Ctrl-C to stop all.
 `);
