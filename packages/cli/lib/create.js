@@ -15,6 +15,7 @@ import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 
 /**
@@ -54,14 +55,33 @@ const TEMPLATES = resolve(__dirname, '..', 'templates');
 // directly from disk at create time so the scaffolded app boots ready for
 // `webjs ui add` without an HTTP round-trip during scaffolding.
 //
-// Layout in the monorepo:
-//   packages/cli/lib/create.js                       ← __dirname
-//   packages/ui/packages/registry/components/*.ts
-//   packages/ui/packages/registry/lib/utils.ts
-//   packages/ui/packages/registry/themes/index.css
-const UI_REGISTRY_ROOT = resolve(
-  __dirname, '..', '..', 'ui', 'packages', 'registry',
-);
+//   <ui-pkg-root>/packages/registry/components/*.ts
+//   <ui-pkg-root>/packages/registry/lib/utils.ts
+//   <ui-pkg-root>/packages/registry/themes/index.css
+//
+// Locate <ui-pkg-root> via Node's module resolver rather than path
+// arithmetic off __dirname. The old `__dirname/../../ui/packages/registry`
+// form assumed @webjsdev/ui was a hoisted sibling of @webjsdev/cli under
+// node_modules/@webjsdev/. That holds for npm/yarn's default hoisting, but
+// breaks on nested layouts (pnpm's isolated linker, `npm install
+// --install-strategy=nested`, some CI setups), where @webjsdev/ui lives at
+// node_modules/@webjsdev/cli/node_modules/@webjsdev/ui and the arithmetic
+// resolves to a path that doesn't exist, failing `webjs create`.
+//
+// @webjsdev/ui's package.json isn't reachable via require.resolve (its
+// `exports` map doesn't expose `./package.json`), so resolve the package
+// entry and walk up to the directory that owns its package.json.
+function resolveUiRegistryRoot() {
+  const require = createRequire(import.meta.url);
+  let dir = dirname(require.resolve('@webjsdev/ui'));
+  while (!existsSync(join(dir, 'package.json'))) {
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root; give up
+    dir = parent;
+  }
+  return resolve(dir, 'packages', 'registry');
+}
+const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
  * Read a single @webjsdev/ui registry component, rewrite its relative import
