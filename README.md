@@ -135,6 +135,13 @@ PORT=8080 npm run dev                # ...or on 8080
 WEBSITE_PORT=8001 DOCS_PORT=8002 UI_PORT=8003 BLOG_PORT=8004 npm run dev
 ```
 
+> Use the `PORT` / `*_PORT` env vars, **not** a `--port` flag. `npm run dev
+> --port 5678` does not work: npm parses `--port` as its own (deprecated)
+> config, and the `dev` script runs each app through `concurrently`, which
+> would intercept any passthrough args before they reached `webjs dev`. The
+> env var is the supported interface (and the conventional one: Railway,
+> Heroku, Fly, etc. all drive port via `PORT`).
+
 The apps cross-link by URL (the landing site links to docs/blog/UI,
 the UI site links back). Those default to the localhost ports above and
 are overridable via `DOCS_URL` / `BLOG_URL` / `UI_URL` / `WEBSITE_URL`
