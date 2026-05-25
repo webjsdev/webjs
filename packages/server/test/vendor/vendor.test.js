@@ -169,6 +169,28 @@ test('scanBareImports: skips import type statements (TS erases them)', async () 
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: preserves full specifiers including subpaths', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-subpath-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  await writeFile(join(dir, 'a.ts'), `
+    import dayjs from 'dayjs';
+    import utc from 'dayjs/plugin/utc';
+    import timezone from 'dayjs/plugin/timezone';
+    import { Turbo } from '@hotwired/turbo';
+    import frame from '@hotwired/turbo/elements/turbo-frame';
+  `);
+
+  const found = await scanBareImports(dir);
+  assert.ok(found.has('dayjs'), 'root dayjs import preserved');
+  assert.ok(found.has('@hotwired/turbo'), 'root scoped import preserved');
+  assert.ok(found.has('dayjs/plugin/utc'), 'subpath import preserved with full path');
+  assert.ok(found.has('dayjs/plugin/timezone'), 'second subpath import preserved');
+  assert.ok(found.has('@hotwired/turbo/elements/turbo-frame'), 'scoped subpath preserved');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('scanBareImports: skips import strings inside comments (JSDoc examples etc.)', async () => {
   const dir = join(tmpdir(), `webjs-test-vendor-comments-skip-${Date.now()}`);
   await mkdir(dir, { recursive: true });

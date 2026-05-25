@@ -149,13 +149,18 @@ async function walk(dir, found) {
         const raw = await readFile(full, 'utf8');
         if (raw.trimStart().startsWith("'use server'") || raw.trimStart().startsWith('"use server"')) continue;
         const src = stripComments(raw);
+        // We keep the FULL specifier (with subpath), not just the package
+        // name. `import 'dayjs/plugin/utc'` adds `'dayjs/plugin/utc'` to the
+        // set, not just `'dayjs'`. vendorImportMapEntries needs the
+        // subpath to emit a per-specifier importmap entry; jspm.io
+        // resolves each subpath independently via the package's `exports`
+        // field. extractPackageName is still applied to filter out
+        // relative / absolute / protocol-URL specifiers.
         for (const m of src.matchAll(IMPORT_RE)) {
-          const pkg = extractPackageName(m[1]);
-          if (pkg) found.add(pkg);
+          if (extractPackageName(m[1])) found.add(m[1]);
         }
         for (const m of src.matchAll(DYNAMIC_IMPORT_RE)) {
-          const pkg = extractPackageName(m[1]);
-          if (pkg) found.add(pkg);
+          if (extractPackageName(m[1])) found.add(m[1]);
         }
       } catch { /* unreadable file */ }
     }
@@ -302,11 +307,19 @@ export async function jspmGenerate(installs) {
  */
 export async function vendorImportMapEntries(bareImports, appDir) {
   const installs = [];
-  for (const pkg of bareImports) {
-    if (BUILTIN.has(pkg)) continue;
+  for (const spec of bareImports) {
+    if (BUILTIN.has(spec)) continue;
+    const pkg = extractPackageName(spec);
+    if (!pkg || BUILTIN.has(pkg)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) continue;
-    installs.push(`${pkg}@${version}`);
+    // Splice the version into the specifier: 'dayjs/plugin/utc' with
+    // version 1.11.13 becomes 'dayjs@1.11.13/plugin/utc'. jspm.io's
+    // Generator API resolves subpaths individually via the package's
+    // `exports` field. Root imports stay as `<pkg>@<version>` with no
+    // trailing subpath.
+    const subpath = spec.slice(pkg.length);
+    installs.push(`${pkg}@${version}${subpath}`);
   }
   return jspmGenerate(installs);
 }
@@ -337,7 +350,25 @@ function pinFilePath(appDir) {
   return join(pinDir(appDir), PIN_FILE);
 }
 
-/** Filesystem-safe filename for a downloaded bundle. */
+/**
+ * Filesystem-safe filename for a downloaded bundle. Encodes the full
+ * specifier (which may include a subpath) into a flat filename:
+ *
+ *   bundleFilename('dayjs', '1.11.13', '')             → 'dayjs@1.11.13.js'
+ *   bundleFilename('dayjs', '1.11.13', '/plugin/utc')  → 'dayjs@1.11.13__plugin__utc.js'
+ *   bundleFilename('@hotwired/turbo', '8.0.0', '')     → '@hotwired--turbo@8.0.0.js'
+ *
+ * Scoped names use `--` to encode `/`; subpath separators use `__`.
+ * Both are reversible round-trip so unpin / list can parse the
+ * package + version + subpath back from the filename.
+ */
+function bundleFilenameWithSubpath(pkgName, version, subpath) {
+  const safeName = pkgName.replace(/\//g, '--');
+  const safeSubpath = subpath.replace(/\//g, '__');
+  return `${safeName}@${version}${safeSubpath}.js`;
+}
+
+/** Backwards-compatible alias for root-package bundle filenames. */
 function bundleFilename(pkgName, version) {
   const safeName = pkgName.replace(/\//g, '--');
   return `${safeName}@${version}.js`;
@@ -457,14 +488,23 @@ export async function pinAll(appDir, opts = {}) {
   const download = !!opts.download;
   const bare = await scanBareImports(appDir);
   const installs = [];
-  /** @type {Map<string, string>} */
-  const versionsByPkg = new Map();
-  for (const pkg of bare) {
-    if (BUILTIN.has(pkg)) continue;
+  /**
+   * Map from install spec (`pkg@version<subpath>`) to its components,
+   * so we can recover the pkg + version + subpath when iterating jspm.io's
+   * resolved imports.
+   * @type {Map<string, { pkg: string, version: string, subpath: string }>}
+   */
+  const partsByInstall = new Map();
+  for (const spec of bare) {
+    if (BUILTIN.has(spec)) continue;
+    const pkg = extractPackageName(spec);
+    if (!pkg || BUILTIN.has(pkg)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) continue;
-    installs.push(`${pkg}@${version}`);
-    versionsByPkg.set(pkg, version);
+    const subpath = spec.slice(pkg.length);
+    const install = `${pkg}@${version}${subpath}`;
+    installs.push(install);
+    partsByInstall.set(spec, { pkg, version, subpath });
   }
   const resolved = await jspmGenerate(installs);
 
@@ -475,20 +515,21 @@ export async function pinAll(appDir, opts = {}) {
   const expected = new Set([PIN_FILE]);
   let downloaded = 0;
 
-  for (const [pkg, jspmUrl] of Object.entries(resolved)) {
-    const version = versionsByPkg.get(pkg);
-    if (!version) continue;
+  for (const [spec, jspmUrl] of Object.entries(resolved)) {
+    const parts = partsByInstall.get(spec);
+    if (!parts) continue;
+    const { pkg, version, subpath } = parts;
     if (download) {
-      const filename = bundleFilename(pkg, version);
+      const filename = bundleFilenameWithSubpath(pkg, version, subpath);
       const bytes = await downloadBundle(jspmUrl, appDir, filename);
       if (bytes == null) continue;
-      importmap[pkg] = `/__webjs/vendor/${filename}`;
+      importmap[spec] = `/__webjs/vendor/${filename}`;
       expected.add(filename);
-      pins.push({ pkg, version, url: importmap[pkg], bytes });
+      pins.push({ pkg: spec, version, url: importmap[spec], bytes });
       downloaded++;
     } else {
-      importmap[pkg] = jspmUrl;
-      pins.push({ pkg, version, url: jspmUrl });
+      importmap[spec] = jspmUrl;
+      pins.push({ pkg: spec, version, url: jspmUrl });
     }
   }
 
