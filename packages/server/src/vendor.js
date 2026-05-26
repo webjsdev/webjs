@@ -661,6 +661,17 @@ export async function pinAll(appDir, opts = {}) {
     }
   }
 
+  // If pin was attempted (installs non-empty) but resolved zero, do
+  // NOT write the pin file. Writing `{ imports: {} }` would shadow
+  // the live-API fallback (which reads when no pin file exists) and
+  // leave the browser with an empty importmap, silently breaking
+  // every bare-specifier import. Better: surface the failure so the
+  // user knows pin didn't take, and let the next boot fall back to
+  // live API resolution (which may have recovered by then).
+  if (installs.length > 0 && pins.length === 0) {
+    return { pins, pruned: [], downloaded, failed: true, attemptedInstalls: installs };
+  }
+
   await writePinFile(appDir, importmap, integrity);
   const pruned = await pruneOrphans(appDir, expected);
   return { pins, pruned, downloaded };

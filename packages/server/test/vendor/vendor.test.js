@@ -393,13 +393,46 @@ test('pinAll default: writes importmap.json with jspm.io URLs', { skip: !NETWORK
     'app/page.ts': `import pico from 'picocolors';`,
   });
   try {
-    const { pins, pruned, downloaded } = await pinAll(dir);
-    assert.ok(pins.length >= 1, 'should pin picocolors');
-    assert.equal(pruned.length, 0, 'no orphans on fresh pin');
-    assert.equal(downloaded, 0, 'default mode does not download');
+    const result = await pinAll(dir);
+    assert.ok(!result.failed, 'pin should not be flagged failed');
+    assert.ok(result.pins.length >= 1, 'should pin picocolors');
+    assert.equal(result.pruned.length, 0, 'no orphans on fresh pin');
+    assert.equal(result.downloaded, 0, 'default mode does not download');
     const file = await readPinFile(dir);
     assert.ok(file, 'pin file should exist');
     assert.match(file.imports['picocolors'], /^https:\/\/ga\.jspm\.io\/npm:picocolors@/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll: refuses to write empty pin file when every install fails', { skip: !NETWORK_OK }, async () => {
+  // Regression: previously pinAll wrote `{ imports: {} }` when every
+  // jspm.io call failed (e.g. brand-new package version not yet on
+  // CDN, or unrelated transient errors). The empty pin file would
+  // shadow the live-API fallback path on next boot, leaving the
+  // browser with no vendor entries and silently breaking every
+  // bare-specifier import.
+  clearVendorCache();
+  // Isolated temp dir (no symlinked node_modules, so we can plant a
+  // fake package.json safely). Build minimal app structure by hand.
+  const dir = join(tmpdir(), `webjs-pin-fail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version'), { recursive: true });
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+  await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'package.json'),
+    JSON.stringify({ name: 'fake-pkg-xyz-no-such-version', version: '99.99.99', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'index.js'),
+    'export default 1;');
+  await writeFile(join(dir, 'app', 'page.ts'),
+    `import x from 'fake-pkg-xyz-no-such-version';`);
+  try {
+    const result = await pinAll(dir);
+    assert.ok(result.failed, 'pin must be flagged failed');
+    assert.deepEqual(result.pins, [], 'no pins recorded');
+    // Pin file MUST NOT have been written (so live API fallback runs next boot).
+    const file = await readPinFile(dir);
+    assert.equal(file, null, 'pin file must not exist after total failure');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

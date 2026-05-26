@@ -283,7 +283,27 @@ Full docs: https://docs.webjs.com`);
           `Pinning vendor packages from ${appDir}` +
           (download ? ' (downloading bundles)' : '') + '...',
         );
-        const { pins, pruned, downloaded } = await pinAll(appDir, { download });
+        const result = await pinAll(appDir, { download });
+        if (result.failed) {
+          // pinAll refused to write the pin file because every install
+          // failed to resolve via jspm.io (e.g. brand-new published
+          // version not yet on the CDN, network outage, jspm.io 5xx).
+          // Surface the failure so the user fixes the cause before
+          // shipping; the per-package failures already logged via
+          // jspmResolveOne above tell the user which packages broke.
+          console.error(
+            `Pin FAILED: every package failed to resolve via jspm.io. No pin file written ` +
+            `(would shadow the live-API fallback with an empty importmap and break the browser).`,
+          );
+          console.error(`Attempted installs:`);
+          for (const i of result.attemptedInstalls) console.error(`  ${i}`);
+          console.error(
+            `Possible causes: the package version is too new for jspm.io's CDN to have indexed yet; ` +
+            `network outage; jspm.io is down. Try again in a few minutes, or pin an older version.`,
+          );
+          process.exit(1);
+        }
+        const { pins, pruned, downloaded } = result;
         for (const p of pins) {
           const sizeStr = p.bytes != null ? ` ${(p.bytes / 1024).toFixed(1)} KB` : '';
           console.log(`  ${(p.pkg + '@' + p.version).padEnd(40)}${sizeStr}`);
