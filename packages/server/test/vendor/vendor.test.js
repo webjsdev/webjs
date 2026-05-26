@@ -947,6 +947,58 @@ test('readPinFile: filters out non-string imports values', async () => {
   }
 });
 
+test('readPinFile: rejects URL schemes that could execute attacker code (javascript:, data:)', async () => {
+  // Defense: a malicious pin file commit could otherwise inject
+  // arbitrary script via the importmap. The browser's importmap
+  // parser accepts data: URLs (per spec) and some engines accept
+  // javascript:; readPinFile filters these so they never reach the
+  // served importmap. Only http(s) URLs and root-relative paths
+  // (matching what `webjs vendor pin` itself produces) are allowed.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'safe-https': 'https://cdn.example/safe.js',
+        'safe-relative': '/__webjs/vendor/foo.js',
+        'javascript': 'javascript:alert(1)',
+        'data': 'data:text/javascript,alert(1)',
+        'blob': 'blob:https://evil.example/abc',
+        'file': 'file:///etc/passwd',
+        'ftp': 'ftp://example.com/x.js',
+      },
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(Object.keys(file.imports).sort(), ['safe-https', 'safe-relative'].sort(),
+      'only http(s) and root-relative URLs should survive');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: rejects keys containing control characters', async () => {
+  // Newlines in keys would land in the served importmap JSON as escape
+  // sequences and could confuse client-side textContent comparison or
+  // log injection. Belt-and-suspenders; the browser would accept them
+  // but rejecting at parse time keeps the served output predictable.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'normal': 'https://x/n.js',
+        'has\nnewline': 'https://x/e.js',
+        'has\rcr': 'https://x/r.js',
+        'hasnull-ish': 'https://x/c.js',
+      },
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(Object.keys(file.imports), ['normal']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('readPinFile: rejects integrity values that are not SRI hash strings', async () => {
   // Defense: integrity must look like `sha(256|384|512)-...`. A bogus
   // value (123, null, 'not-a-hash', 'sha999-foo') is dropped so the

@@ -465,15 +465,27 @@ export async function readPinFile(appDir) {
     if (!parsed || typeof parsed.imports !== 'object' || Array.isArray(parsed.imports)) {
       return null;
     }
-    // Validate that every imports value is a string. A pin file with
-    // non-string values (numbers / objects / nulls, e.g. from a
-    // malformed hand-edit or a malicious PR) would otherwise land
-    // structurally invalid entries in the served importmap and break
-    // module resolution for the whole page.
+    // Validate every imports entry. Drop:
+    // - non-string keys/values (numbers, nulls, objects from malformed
+    //   hand-edits would otherwise land structurally-invalid entries in
+    //   the served importmap and break the browser parser);
+    // - keys containing newlines or other control chars (they would
+    //   serialize to escape sequences in JSON and confuse downstream
+    //   diffing logic);
+    // - values whose URL scheme isn't `http(s)://` or a path starting
+    //   with `/` (relative to the app's origin). `javascript:` and
+    //   `data:` URLs in a malicious pin file would otherwise be
+    //   accepted by the browser's importmap parser and let an attacker
+    //   ship code via a single-line pin diff. Tightest acceptable
+    //   set: matches what `webjs vendor pin` itself produces
+    //   (`https://ga.jspm.io/...` or `/__webjs/vendor/...`).
     /** @type {Record<string, string>} */
     const cleanImports = {};
     for (const [k, v] of Object.entries(parsed.imports)) {
-      if (typeof k === 'string' && typeof v === 'string') cleanImports[k] = v;
+      if (typeof k !== 'string' || typeof v !== 'string') continue;
+      if (/[\x00-\x1f\x7f]/.test(k)) continue;
+      if (!/^(?:https?:\/\/|\/)/.test(v)) continue;
+      cleanImports[k] = v;
     }
     if (Object.keys(cleanImports).length === 0) return null;
 
