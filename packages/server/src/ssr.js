@@ -94,6 +94,7 @@ export async function ssrPage(route, params, url, opts) {
       opts.req,
       url,
       metadata,
+      nonce,
     );
   } catch (err) {
     if (isRedirect(err)) {
@@ -1155,7 +1156,7 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
  * @param {URL | undefined} url
  * @param {Record<string, any>} [metadata]
  */
-function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata) {
+function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default: the developer
@@ -1198,9 +1199,16 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
             // Emit just the <template>: the MutationObserver-based resolver
             // in the boot script detects it and swaps it into the placeholder.
             // Falls back to the __webjsResolve global for browsers without MO.
+            // The fallback <script> carries the request's CSP nonce so
+            // strict-CSP enforcement passes. Browsers that support
+            // MutationObserver (all evergreen) handle the swap via the
+            // boot script's observer and skip this fallback; the
+            // <script> is here for legacy / extremely-restrictive
+            // environments. Either way it must be nonce-signed.
+            const scriptNonce = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
             const chunk =
               `<template data-webjs-resolve="${r.id}">${r.html}</template>` +
-              `<script>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
+              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
             controller.enqueue(encoder.encode(chunk));
           }
         }

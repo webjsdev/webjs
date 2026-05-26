@@ -1289,6 +1289,42 @@ test('ssrPage: loading.js wraps the page in Suspense (fallback in initial HTML)'
   assert.ok(/data-webjs-resolve/.test(body));
 });
 
+test('ssrPage: Suspense resolution fallback <script> carries the CSP nonce', async () => {
+  // The fallback script `<script>window.__webjsResolve&&...</script>`
+  // streams inline for each settled Suspense boundary. Under strict
+  // CSP it was being blocked by the browser because the nonce wasn't
+  // threaded into the streaming response. Regression test.
+  const sub = mkdtempSync(join(tmpDir, 'suspense-csp-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+  const pageFile = join(appDir, 'page.js');
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default async function Page() {\n` +
+    `  await new Promise(r => setTimeout(r, 10));\n` +
+    `  return html\`<p>ready</p>\`;\n` +
+    `}\n`);
+  const loadingFile = join(appDir, 'loading.js');
+  writeFileSync(loadingFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Loading() { return html\`<p>loading…</p>\`; }\n`);
+
+  const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [], loadings: [loadingFile] };
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-suspNonce99' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  // Locate every script that contains __webjsResolve and assert each one
+  // carries nonce="suspNonce99".
+  const resolveScripts = body.match(/<script[^>]*>[^<]*__webjsResolve[^<]*<\/script>/g) || [];
+  assert.ok(resolveScripts.length >= 1, 'expected at least one Suspense resolve script');
+  for (const s of resolveScripts) {
+    assert.match(s, /nonce="suspNonce99"/,
+      `Suspense resolve script missing nonce: ${s}`);
+  }
+});
+
 test('ssrPage: loading.js that fails to load → page renders without Suspense', async () => {
   const sub = mkdtempSync(join(tmpDir, 'loading-err-'));
   const appDir = join(sub, 'app');
