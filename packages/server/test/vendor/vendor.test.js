@@ -623,6 +623,78 @@ test('sha384Integrity: returns a sha384-<base64> string', async () => {
   assert.notEqual(h, sha384Integrity('hello worl'));
 });
 
+test('readPinFile + resolveVendorImports: integrity keyed by FINAL URL (post-rewrite)', async () => {
+  // Regression check: --download mode rewrites imports to local
+  // /__webjs/vendor/<filename> paths, and integrity must key on
+  // those (the URL the browser actually fetches), not on the
+  // original jspm.io URL. setVendorEntries propagates this verbatim.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    const pinJson = {
+      imports: {
+        'dayjs': '/__webjs/vendor/dayjs@1.11.20.js',
+        'dayjs/plugin/relativeTime.js': '/__webjs/vendor/dayjs@1.11.20__plugin__relativeTime.js.js',
+      },
+      integrity: {
+        '/__webjs/vendor/dayjs@1.11.20.js': 'sha384-aaaa',
+        '/__webjs/vendor/dayjs@1.11.20__plugin__relativeTime.js.js': 'sha384-bbbb',
+      },
+    };
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify(pinJson));
+    const r = await resolveVendorImports(new Set(['dayjs', 'dayjs/plugin/relativeTime.js']), dir);
+    assert.equal(r.imports['dayjs'], '/__webjs/vendor/dayjs@1.11.20.js');
+    assert.equal(r.integrity['/__webjs/vendor/dayjs@1.11.20.js'], 'sha384-aaaa');
+    // Subpath import: integrity keyed by its OWN final URL, not by dayjs's.
+    assert.equal(
+      r.integrity['/__webjs/vendor/dayjs@1.11.20__plugin__relativeTime.js.js'],
+      'sha384-bbbb',
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: tolerates extra fields in pin JSON (forward-compat)', async () => {
+  // A future pin file version might include extra fields (e.g.
+  // resolver: 'jspm.io', generatedAt: '...'). readPinFile should
+  // ignore them and surface imports + integrity unchanged.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'x': 'https://cdn.example/x.js' },
+      integrity: { 'https://cdn.example/x.js': 'sha384-zzz' },
+      resolver: 'jspm.io',
+      generatedAt: '2026-01-01T00:00:00Z',
+      _comment: 'extra fields should not break parsing',
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(file.imports, { 'x': 'https://cdn.example/x.js' });
+    assert.equal(file.integrity['https://cdn.example/x.js'], 'sha384-zzz');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('importMapTag: integrity field omitted when empty, present when populated', async () => {
+  const { setVendorEntries, importMapTag } = await import('../../src/importmap.js');
+  // Empty integrity → no integrity field in JSON.
+  setVendorEntries({ 'a': 'https://cdn/a.js' }, {});
+  let tag = importMapTag();
+  assert.ok(!tag.includes('"integrity"'), 'integrity omitted when empty');
+  // Populated → integrity field present.
+  setVendorEntries(
+    { 'a': 'https://cdn/a.js' },
+    { 'https://cdn/a.js': 'sha384-xxxx' },
+  );
+  tag = importMapTag();
+  assert.ok(tag.includes('"integrity"'), 'integrity present when populated');
+  assert.ok(tag.includes('"sha384-xxxx"'), 'integrity value emitted');
+  // Reset.
+  setVendorEntries({}, {});
+});
+
 test('pinAll default mode: writes integrity field alongside imports', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
   const dir = await makeTempAppWithSource({

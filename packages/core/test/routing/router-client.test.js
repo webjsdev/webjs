@@ -479,6 +479,51 @@ test('mergeHead: re-creates script elements so they execute', () => {
   assert.equal(added.getAttribute('type'), 'module');
 });
 
+test('mergeHead: applies meta csp-nonce to created scripts (replaces source nonce)', () => {
+  // Same Turbo pattern as addNewHeadElements but exercised through
+  // the full-merge code path. Meta is in the current head BEFORE
+  // mergeHead runs; the new head is what we navigate to.
+  document.head.innerHTML = '<meta name="csp-nonce" content="page-nonce">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<meta name="csp-nonce" content="page-nonce">' +
+    '<script src="/m.js" nonce="per-request-stale"></script>';
+  _merge(newHead);
+  const added = document.head.querySelector('script[src="/m.js"]');
+  assert.ok(added, 'script added');
+  assert.equal(added.getAttribute('nonce'), 'page-nonce',
+    'mergeHead must apply the meta nonce, not the source-page nonce');
+});
+
+test('addNewHeadElements + mergeHead: nonce-only diff on <link> tags does not duplicate preloads', () => {
+  // Browsers gate cross-origin modulepreload by script-src nonce, so
+  // preload links also carry per-request nonces after the recent CSP
+  // fix. Without nonce-aware diff, every nav would re-append the
+  // same preload because the nonce differs.
+  document.head.innerHTML =
+    '<link rel="modulepreload" href="https://cdn.example/x.js" crossorigin="anonymous" nonce="page-nonce">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<link rel="modulepreload" href="https://cdn.example/x.js" crossorigin="anonymous" nonce="request-2-nonce">';
+  _addNewHead(newHead);
+  const links = document.head.querySelectorAll('link[rel="modulepreload"][href="https://cdn.example/x.js"]');
+  assert.equal(links.length, 1, 'no duplicate preload after nonce-only diff');
+});
+
+test('reactivateScripts: applies meta csp-nonce to re-emitted body scripts', () => {
+  // After a full body swap, reactivateScripts walks body scripts and
+  // re-creates them so the browser executes them. Each created
+  // script must carry the meta nonce, not whatever was in the new
+  // page's source.
+  document.head.innerHTML = '<meta name="csp-nonce" content="body-nonce">';
+  document.body.innerHTML = '<script nonce="stale-source-nonce">window.x = 1;</script>';
+  _reactivateScripts(document.body);
+  const s = document.body.querySelector('script');
+  assert.ok(s, 'script reactivated');
+  assert.equal(s.getAttribute('nonce'), 'body-nonce',
+    'reactivated body scripts must carry the meta nonce, not the source nonce');
+});
+
 /* ====================================================================
  * isNonHtmlPath
  * ==================================================================== */
