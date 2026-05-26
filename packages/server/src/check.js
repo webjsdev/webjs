@@ -747,8 +747,8 @@ export async function checkConventions(appDir, opts) {
       violations.push({
         rule: 'no-json-data-files',
         file: s.rel,
-        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
-        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.ts'\`. Delete ${s.rel} once the data has moved.`,
+        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.server.ts), not JSON files.`,
+        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.server.ts'\`. Delete ${s.rel} once the data has moved.`,
       });
     }
   }
