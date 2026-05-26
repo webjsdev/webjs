@@ -462,10 +462,36 @@ export async function readPinFile(appDir) {
   try {
     const raw = await readFile(pinFilePath(appDir), 'utf8');
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.imports && typeof parsed.imports === 'object') {
-      return parsed;
+    if (!parsed || typeof parsed.imports !== 'object' || Array.isArray(parsed.imports)) {
+      return null;
     }
-    return null;
+    // Validate that every imports value is a string. A pin file with
+    // non-string values (numbers / objects / nulls, e.g. from a
+    // malformed hand-edit or a malicious PR) would otherwise land
+    // structurally invalid entries in the served importmap and break
+    // module resolution for the whole page.
+    /** @type {Record<string, string>} */
+    const cleanImports = {};
+    for (const [k, v] of Object.entries(parsed.imports)) {
+      if (typeof k === 'string' && typeof v === 'string') cleanImports[k] = v;
+    }
+    if (Object.keys(cleanImports).length === 0) return null;
+
+    /** @type {Record<string, string>} */
+    const cleanIntegrity = {};
+    if (parsed.integrity && typeof parsed.integrity === 'object' && !Array.isArray(parsed.integrity)) {
+      for (const [k, v] of Object.entries(parsed.integrity)) {
+        // Integrity values must look like SRI hashes (e.g.
+        // `sha384-<base64>`) so a hand-edited bogus integrity value
+        // can't slip an unverified hash into the served importmap.
+        if (typeof k === 'string' && typeof v === 'string' && /^sha(256|384|512)-/.test(v)) {
+          cleanIntegrity[k] = v;
+        }
+      }
+    }
+    const out = { imports: cleanImports };
+    if (Object.keys(cleanIntegrity).length) out.integrity = cleanIntegrity;
+    return out;
   } catch {
     return null;
   }
@@ -691,7 +717,18 @@ export async function unpinPackage(appDir, pkg) {
   if (!file || !(pkg in file.imports)) return { removed: false };
   const url = file.imports[pkg];
   delete file.imports[pkg];
-  await writePinFile(appDir, file.imports);
+  // Also strip the integrity entry for this URL, if present.
+  const newIntegrity = { ...(file.integrity || {}) };
+  delete newIntegrity[url];
+  if (Object.keys(file.imports).length === 0) {
+    // The pin file would now be empty. Delete it so the next boot
+    // falls back to live API resolution rather than seeing an empty
+    // importmap. Same reasoning as pinAll's "don't write empty pin"
+    // guard.
+    try { await unlink(pinFilePath(appDir)); } catch { /* race or never existed */ }
+  } else {
+    await writePinFile(appDir, file.imports, newIntegrity);
+  }
 
   let deletedFile;
   if (url.startsWith('/__webjs/vendor/')) {

@@ -87,9 +87,15 @@ describe('webjs vendor CLI', () => {
     assert.equal(code, 0);
     assert.match(stdout, /picocolors\s+unpinned/);
 
-    const file = await readFile(join(appDir, '.webjs', 'vendor', 'importmap.json'), 'utf8');
-    const parsed = JSON.parse(file);
-    assert.equal(parsed.imports.picocolors, undefined);
+    // If unpinning the LAST entry, the file is removed entirely so
+    // the next boot falls back to live API resolution (otherwise an
+    // empty `{ imports: {} }` would shadow that fallback). If the
+    // test scaffold had multiple pinned packages we'd assert the
+    // file persists with the other entries; here it had just
+    // picocolors, so the file is gone.
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(join(appDir, '.webjs', 'vendor', 'importmap.json')), false,
+      'pin file removed when last pin unpinned');
   });
 
   test('unpin a non-existent package reports "not in pin file"', async () => {

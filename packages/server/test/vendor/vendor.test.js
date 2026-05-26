@@ -487,7 +487,7 @@ test('pinAll: mode switch from --download to default removes bundles', { skip: !
   }
 });
 
-test('unpinPackage: removes entry from importmap.json', { skip: !NETWORK_OK }, async () => {
+test('unpinPackage: removes entry from importmap.json (deletes file when last pin removed)', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
   const dir = await makeTempAppWithSource({
     'app/page.ts': `import pico from 'picocolors';`,
@@ -496,8 +496,42 @@ test('unpinPackage: removes entry from importmap.json', { skip: !NETWORK_OK }, a
     await pinAll(dir);
     const r = await unpinPackage(dir, 'picocolors');
     assert.equal(r.removed, true);
+    // After the last pin is removed the pin file is deleted so the
+    // next boot falls back to live API resolution. Otherwise an
+    // empty `{ imports: {} }` would shadow the fallback and serve a
+    // broken importmap.
     const file = await readPinFile(dir);
-    assert.equal(file.imports['picocolors'], undefined);
+    assert.equal(file, null,
+      'pin file should be removed when last pin is unpinned');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('unpinPackage: keeps file when other pins remain (deletes only the targeted entry + integrity)', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'a': 'https://cdn.example/a.js',
+        'b': 'https://cdn.example/b.js',
+      },
+      integrity: {
+        'https://cdn.example/a.js': 'sha384-aaaa',
+        'https://cdn.example/b.js': 'sha384-bbbb',
+      },
+    }));
+    const r = await unpinPackage(dir, 'a');
+    assert.equal(r.removed, true);
+    const file = await readPinFile(dir);
+    assert.ok(file, 'pin file should still exist');
+    assert.equal(file.imports['a'], undefined, 'unpinned entry removed');
+    assert.equal(file.imports['b'], 'https://cdn.example/b.js', 'other entry preserved');
+    assert.equal(file.integrity['https://cdn.example/a.js'], undefined,
+      "unpinned URL's integrity stripped too");
+    assert.equal(file.integrity['https://cdn.example/b.js'], 'sha384-bbbb',
+      "other integrity preserved");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -650,6 +684,79 @@ test('readPinFile + resolveVendorImports: integrity keyed by FINAL URL (post-rew
       r.integrity['/__webjs/vendor/dayjs@1.11.20__plugin__relativeTime.js.js'],
       'sha384-bbbb',
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: returns null for corrupt JSON', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), '{not valid json');
+    assert.equal(await readPinFile(dir), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: rejects non-object imports field', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    for (const bad of ['"not an object"', 'null', '123', 'true', '[1,2,3]']) {
+      await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), `{"imports": ${bad}}`);
+      assert.equal(await readPinFile(dir), null, `imports=${bad} must yield null`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: filters out non-string imports values', async () => {
+  // A hand-edited or malicious pin file with non-string values would
+  // otherwise land structurally invalid entries in the importmap
+  // (numbers / objects / nulls) and break browser-side parsing.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: {
+        'valid': 'https://cdn.example/v.js',
+        'numeric': 123,
+        'nully': null,
+        'objy': { x: 1 },
+      },
+    }));
+    const file = await readPinFile(dir);
+    assert.deepEqual(file.imports, { 'valid': 'https://cdn.example/v.js' });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: rejects integrity values that are not SRI hash strings', async () => {
+  // Defense: integrity must look like `sha(256|384|512)-...`. A bogus
+  // value (123, null, 'not-a-hash', 'sha999-foo') is dropped so the
+  // browser doesn't get a malformed integrity attribute (which would
+  // either fail SRI check or be silently ignored, both bad).
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'a': 'https://cdn.example/a.js', 'b': 'https://cdn.example/b.js' },
+      integrity: {
+        'https://cdn.example/a.js': 'sha384-validhashvalue',
+        'https://cdn.example/b.js': 'not-a-hash',
+        'https://cdn.example/c.js': 123,
+      },
+    }));
+    const file = await readPinFile(dir);
+    assert.equal(file.integrity['https://cdn.example/a.js'], 'sha384-validhashvalue');
+    assert.equal(file.integrity['https://cdn.example/b.js'], undefined,
+      'bogus integrity string filtered out');
+    assert.equal(file.integrity['https://cdn.example/c.js'], undefined,
+      'numeric integrity filtered out');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
