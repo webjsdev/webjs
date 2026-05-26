@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { parseCookies } from './csrf.js';
+import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
 
 /**
  * Per-request context backed by AsyncLocalStorage. Lets server-side code
@@ -32,30 +33,31 @@ export function getRequest() {
 }
 
 /**
- * Return the CSP nonce for the in-flight request, or empty string if
- * the request has no `Content-Security-Policy: script-src 'nonce-...'`
- * directive. Intended for user code that emits inline `<script>` tags
- * from a layout / page / metadata route and needs them to pass strict
- * CSP. Use:
+ * Server-only implementation of the CSP nonce reader: pulls the
+ * current request from AsyncLocalStorage, parses the
+ * `script-src 'nonce-...'` value from its CSP header, returns ''
+ * when none in scope.
  *
- *   import { cspNonce } from '@webjsdev/server';
- *   return html`<script nonce="${cspNonce()}">...</script>`;
- *
- * When a CSP nonce is in effect the script gets the matching value;
- * when not, the attribute is empty (browser ignores it). Safe to call
- * from any server-side render path. Returns '' outside a request
- * (e.g. module top-level), so the call is safe in SSR boundary cases
- * where context may not be set up yet.
- *
- * @returns {string}
+ * The public `cspNonce()` function lives in `@webjsdev/core` so user
+ * layouts / pages can import it without dragging server-only deps
+ * (node:async_hooks etc.) into browser-loaded modules. The actual
+ * implementation is wired here, server-side only, via
+ * `setCspNonceProvider`. On the browser there is no provider, so
+ * `cspNonce()` returns '' (empty `nonce=""` attribute, browser
+ * ignores it).
  */
-export function cspNonce() {
+setCspNonceProvider(() => {
   const req = als.getStore()?.req;
   if (!req) return '';
   const csp = req.headers.get('content-security-policy') || '';
   const match = /\bnonce-([A-Za-z0-9+/=]+)/.exec(csp);
   return match ? match[1] : '';
-}
+});
+
+// Re-export for backwards-compat: callers that imported cspNonce from
+// @webjsdev/server still work. New code should import from
+// @webjsdev/core for browser-isomorphism.
+export { cspNonce };
 
 /**
  * Read-only headers for the in-flight request. Throws outside a request
