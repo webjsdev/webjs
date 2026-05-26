@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, cspNonce } from '@webjsdev/core';
 import './_components/theme-toggle.ts';
 
 /**
@@ -54,6 +54,7 @@ export default function Layout({ children }: { children: any }) {
   // Don't wrap in <!doctype><html><head><body>: the framework's SSR pipeline
   // emits those + hoists <link>/<style>/<meta>/<script> from this output into
   // the real <head>. Other markup goes into <body>.
+  const nonce = cspNonce();
   return html`
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/public/favicon.png" type="image/png" />
@@ -61,7 +62,7 @@ export default function Layout({ children }: { children: any }) {
     <link rel="stylesheet" href="/public/tailwind.css" />
     <!-- Synchronous theme bootstrap: mirrors webjs.dev so saved themes
          apply before first paint and avoid FOUC. -->
-    <script>
+    <script nonce="${nonce}">
       (function(){
         try {
           var t = localStorage.getItem('webjs_theme');
