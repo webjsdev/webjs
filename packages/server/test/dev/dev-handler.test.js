@@ -171,7 +171,7 @@ test('handle: .ts source served as JS with types stripped', async () => {
   assert.ok(!/: string/.test(code));
 });
 
-test('handle: .ts source with non-erasable TS returns 500 pointing at the lint rule', async () => {
+test('handle: .ts source with non-erasable TS returns 500 pointing at the lint rule (DEV)', async () => {
   // webjs is buildless end-to-end. Node's stripTypeScriptTypes
   // rejects enum / namespace / parameter properties / legacy
   // decorators / import = require; there is no longer an esbuild
@@ -191,6 +191,34 @@ test('handle: .ts source with non-erasable TS returns 500 pointing at the lint r
   assert.match(body, /non-erasable TypeScript/, 'body should explain the error');
   assert.match(body, /advanced\.ts/, 'body should name the offending file');
   assert.match(body, /no-non-erasable-typescript/, 'body should point at the lint rule');
+});
+
+test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no filesystem path leak)', async () => {
+  // Prod mode must NOT leak filesystem paths or Node's error message
+  // (which can include source snippets) to the browser. Lint catches
+  // non-erasable TS at edit time, so this only fires if someone
+  // misconfigured tsconfig and shipped. Operators get full detail in
+  // server logs (via console.error).
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'components/advanced.ts': `
+      enum Status { Active = 'active' }
+      export const initial: Status = Status.Active;
+    `,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const resp = await app.handle(new Request('http://x/components/advanced.ts'));
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  // Filesystem path must NOT appear in the response.
+  assert.ok(!body.includes(appDir),
+    `prod response must not leak appDir; got: ${body}`);
+  // Node's specific error text must NOT appear either (it can include source).
+  assert.ok(!/enum is not supported/.test(body),
+    `prod response must not leak Node's stripTypeScriptTypes error message; got: ${body}`);
+  // But the response should still be helpful enough that the operator
+  // knows where to look (server logs).
+  assert.match(body, /Check server logs/i);
 });
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {

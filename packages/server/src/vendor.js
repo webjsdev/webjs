@@ -781,8 +781,14 @@ export async function resolveVendorImports(bareImports, appDir) {
  * @returns {Promise<Response>}
  */
 export async function serveDownloadedBundle(filename, appDir, dev) {
-  if (!filename.endsWith('.js') || filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-    return new Response(`/* invalid vendor filename: ${filename} */`, {
+  // Strict allowlist. Vendor filenames are framework-generated:
+  // `<pkg>@<version>.js` or `<pkg>@<version>__<subpath>.js` plus the
+  // `@scope__name` form for scoped packages. The legal charset is
+  // alphanumeric plus `@`, `.`, `_`, `-`. Reject anything else
+  // (slashes / backslashes / dots-dots / null bytes / Unicode
+  // separators / glob chars) without echoing the input.
+  if (!/^[A-Za-z0-9@._-]+\.js$/.test(filename) || filename.includes('..')) {
+    return new Response(`/* invalid vendor filename */`, {
       status: 400,
       headers: { 'content-type': 'application/javascript; charset=utf-8' },
     });
@@ -796,7 +802,10 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
       },
     });
   } catch {
-    return new Response(`/* vendor bundle not found: ${filename}. Run webjs vendor pin --download */`, {
+    // Don't echo `filename` (already validated by the regex above so
+    // safe to echo, but keep the body fixed for grep-ability and to
+    // discourage anyone copying this pattern with untrusted input).
+    return new Response(`/* vendor bundle not found. Run webjs vendor pin --download to (re-)download. */`, {
       status: 404,
       headers: { 'content-type': 'application/javascript; charset=utf-8' },
     });

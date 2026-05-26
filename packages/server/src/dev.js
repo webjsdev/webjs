@@ -874,13 +874,25 @@ async function tsResponse(abs, dev) {
     // erasable-typescript-only lint rule rather than letting the
     // error bubble up unstyled.
     if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
-      const msg =
-        `[webjs] non-erasable TypeScript in ${abs}: ${err.message}\n` +
-        `\n` +
-        `webjs is buildless: only erasable TS syntax is supported. ` +
-        `Replace enum / namespace / parameter-property / legacy-decorator / ` +
-        `import = require constructs with their erasable equivalents. ` +
-        `Run \`webjs check\` for guidance (no-non-erasable-typescript rule).`;
+      // Log full detail server-side regardless of mode so operators
+      // see what went wrong in their logs.
+      // eslint-disable-next-line no-console
+      console.error(`[webjs] non-erasable TypeScript in ${abs}: ${err.message}`);
+      const msg = dev
+        // Dev: include the file path and Node's error message so the
+        // developer's browser tooling can point them at the offending
+        // construct. Replace `*` + `/` with `*\\/` so a path or
+        // message containing the comment-close sequence cannot
+        // terminate the wrapper comment early.
+        ? `[webjs] non-erasable TypeScript in ${abs}: ${err.message}\n\n` +
+          `webjs is buildless: only erasable TS syntax is supported. ` +
+          `Replace enum / namespace / parameter-property / legacy-decorator / ` +
+          `import = require constructs with their erasable equivalents. ` +
+          `Run \`webjs check\` for guidance (no-non-erasable-typescript rule).`
+        // Prod: terse, no path leak, no Node-message leak (Node's
+        // message can include source snippets). Operators get the
+        // detail in server logs above.
+        : `[webjs] server error transforming a .ts response. Check server logs.`;
       return new Response(`/* ${msg.replace(/\*\//g, '*\\/')} */`, {
         status: 500,
         headers: { 'content-type': 'application/javascript; charset=utf-8' },
