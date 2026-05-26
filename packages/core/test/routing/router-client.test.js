@@ -632,6 +632,46 @@ test('navigate: cross-origin URL delegates to location.href (no fetch)', async (
   } finally { restore(); }
 });
 
+test('navigate: importmap mismatch triggers full-page reload (no partial swap)', async () => {
+  // After a deploy that bumped a vendor pin, current-tab nav must
+  // fall back to a full page load. The new page expects the new
+  // module URLs (and new SRI hashes); partial swap leaves the old
+  // importmap in place and silently breaks module resolution.
+  // Mirrors Turbo's tracked_element_mismatch reload behavior.
+  document.head.innerHTML = '<script type="importmap">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+  const newBody =
+    '<!doctype html><html><head>' +
+    '<script type="importmap">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
+    '</head><body><p>after deploy</p></body></html>';
+  const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
+  try {
+    await navigate('http://localhost/posts/123');
+    // Hard reload should fire; partial swap must NOT run.
+    assert.equal(redirect.href, 'http://localhost/posts/123',
+      'mismatched importmap must trigger full reload to the target URL');
+    // The current document.body must NOT have been swapped.
+    assert.equal(document.body.querySelector('p')?.textContent, 'current',
+      'partial swap must have been aborted');
+  } finally { restore(); }
+});
+
+test('navigate: identical importmap proceeds with partial swap (no reload)', async () => {
+  const map = '{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}';
+  document.head.innerHTML = `<script type="importmap">${map}</script>`;
+  document.body.innerHTML = '<p>current</p>';
+  const newBody =
+    `<!doctype html><html><head><script type="importmap">${map}</script></head>` +
+    `<body><p>new</p></body></html>`;
+  const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
+  try {
+    await navigate('http://localhost/about');
+    // No hard reload: redirect.assigns should not include the target.
+    assert.ok(!redirect.assigns.includes('http://localhost/about'),
+      'identical importmap must NOT trigger reload; expected partial swap');
+  } finally { restore(); }
+});
+
 test('navigate: fetch rejection falls back to full page navigation', async () => {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;
@@ -1384,7 +1424,7 @@ function captureWarn(fn) {
   return calls;
 }
 
-test('addNewHeadElements: warns when incoming importmap differs from current', () => {
+test('addNewHeadElements: skips incoming importmap (importmap-mismatch reload handled by applySwap)', () => {
   document.head.innerHTML = '<script type="importmap">{"imports":{"a":"/a.js"}}</script>';
   const newHead = new globalThis.DOMParser().parseFromString(
     '<!doctype html><html><head><script type="importmap">{"imports":{"a":"/v2/a.js"}}</script></head><body></body></html>',
@@ -1392,32 +1432,13 @@ test('addNewHeadElements: warns when incoming importmap differs from current', (
   ).head;
 
   const warnings = captureWarn(() => _addNewHead(newHead));
-  assert.equal(warnings.length, 1, 'one warning emitted');
-  assert.match(warnings[0], /importmap/, 'warning mentions importmap');
-});
-
-test('addNewHeadElements: silent when incoming importmap matches current', () => {
-  const map = '{"imports":{"a":"/a.js"}}';
-  document.head.innerHTML = `<script type="importmap">${map}</script>`;
-  const newHead = new globalThis.DOMParser().parseFromString(
-    `<!doctype html><html><head><script type="importmap">${map}</script></head><body></body></html>`,
-    'text/html'
-  ).head;
-
-  const warnings = captureWarn(() => _addNewHead(newHead));
-  assert.equal(warnings.length, 0, 'no warning when importmaps are identical');
-});
-
-test('addNewHeadElements: silent when current page has no importmap', () => {
-  document.head.innerHTML = '';
-  const newHead = new globalThis.DOMParser().parseFromString(
-    '<!doctype html><html><head><script type="importmap">{"imports":{}}</script></head><body></body></html>',
-    'text/html'
-  ).head;
-
-  const warnings = captureWarn(() => _addNewHead(newHead));
-  assert.equal(warnings.length, 0,
-    "no current importmap to conflict with: silent (the new map still won't be injected, but that's separate)");
+  // No console.warn now. Mismatch triggers a full-page reload at
+  // applySwap's entry; if execution reaches here, the maps are
+  // identical or there's no current map yet.
+  assert.equal(warnings.length, 0, 'addNewHeadElements no longer warns');
+  // Importmap not added to current head (immutable; current wins).
+  const maps = document.head.querySelectorAll('script[type="importmap"]');
+  assert.equal(maps.length, 1, 'only the original importmap remains in head');
 });
 
 /* ====================================================================

@@ -596,7 +596,7 @@ async function performNavigation(href, isPopState, frameId) {
       if (cached) {
         const cachedDoc = parseHTML(cached.html);
         if (cachedDoc) {
-          applySwap(cachedDoc, frameId, /* revalidating */ true);
+          applySwap(cachedDoc, frameId, /* revalidating */ true, /* href */ null);
           // Restore window scroll to where the user left it.
           if (typeof window !== 'undefined') {
             window.scrollTo(cached.scrollX, cached.scrollY);
@@ -801,7 +801,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   const doc = parseHTML(html);
   if (!doc) { location.href = href; return; }
 
-  applySwap(doc, frameId, false);
+  applySwap(doc, frameId, false, finalUrl);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -834,11 +834,42 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * Picks the most-scoped match: explicit webjs-frame > deepest shared
  * layout marker > full body swap.
  *
+ * If the incoming page carries a different importmap from the current
+ * page (typical after a deploy that bumped a vendor pin), partial swap
+ * is unsafe: importmaps are immutable once applied, so the new page
+ * would resolve modules against the stale URLs. We fall back to a full
+ * page load via `location.assign(href)`. Mirrors Turbo's
+ * `tracked_element_mismatch` reload, applied specifically to
+ * importmaps. Called with `href = null` for revalidation flows (which
+ * never trigger a hard reload).
+ *
  * @param {Document} doc
  * @param {string | null} frameId
- * @param {boolean} revalidating  Restore from cache - already-matched markers may stomp inflight state; signal helps loading templates skip.
+ * @param {boolean} revalidating  Restore from cache; already-matched markers may stomp inflight state, signal helps loading templates skip.
+ * @param {string | null} [href]  Target URL for hard-reload fallback on importmap mismatch.
  */
-function applySwap(doc, frameId, revalidating) {
+function applySwap(doc, frameId, revalidating, href) {
+  // Importmap-mismatch guard. Only fires for foreground navs (href
+  // present); revalidation passes href=null to keep cache restores
+  // soft. Skipped if a <webjs-frame> escape hatch is in play (frame
+  // swaps are intra-page and don't change the importmap).
+  if (href && !frameId && !revalidating) {
+    const incoming = doc.querySelector('script[type="importmap"]');
+    const current = document.querySelector('script[type="importmap"]');
+    if (
+      incoming && current &&
+      (incoming.textContent || '').trim() !== (current.textContent || '').trim()
+    ) {
+      if (typeof location !== 'undefined') {
+        // Use location.href assignment (not .assign()) to match the
+        // existing cross-origin / parse-failure fallback pattern in
+        // this file and to stay testable via the same mock surface.
+        location.href = href;
+        return;
+      }
+    }
+  }
+
   // 1. webjs-frame escape hatch.
   if (frameId) {
     const target = document.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
@@ -1313,6 +1344,32 @@ function cloneScriptWithCorrectNonce(source) {
 }
 
 /**
+ * Clone any head element while substituting the page-load CSP nonce
+ * for the source's per-request nonce. Used for `<link rel="modulepreload"
+ * nonce="...">` and any other nonce-carrying head element: browsers
+ * gate cross-origin module preload by script-src nonce too, so the
+ * per-request nonce from the new page's head would be blocked by the
+ * browser's CSP cache from the original page load.
+ *
+ * Returns a cloneNode(true) for elements without a nonce attribute,
+ * so non-CSP cases stay zero-cost.
+ *
+ * @param {Element} source
+ * @returns {Element}
+ */
+function cloneElementWithCorrectNonce(source) {
+  if (!source.hasAttribute('nonce')) return source.cloneNode(true);
+  const clone = /** @type {Element} */ (source.cloneNode(true));
+  const nonce = getCspNonce();
+  if (nonce) {
+    clone.setAttribute('nonce', nonce);
+  } else {
+    clone.removeAttribute('nonce');
+  }
+  return clone;
+}
+
+/**
  * Return an `outerHTML` string suitable for head-diff comparison: strip
  * any nonce attribute so per-request nonces don't cause every script in
  * the head to look "changed" on every navigation. The original element
@@ -1325,7 +1382,12 @@ function cloneScriptWithCorrectNonce(source) {
  * @returns {string}
  */
 function outerHTMLForDiff(el) {
-  if (el.tagName !== 'SCRIPT' || !el.hasAttribute('nonce')) return el.outerHTML;
+  // Strip nonce from ANY element type. SCRIPT obviously, but also LINK
+  // (modulepreload tags carry nonce per the recent CSP fix). Without
+  // this, per-request nonces on link tags would cause the diff to
+  // treat every preload as "changed", duplicating preloads on every
+  // navigation.
+  if (!el.hasAttribute('nonce')) return el.outerHTML;
   const clone = /** @type {Element} */ (el.cloneNode(true));
   clone.removeAttribute('nonce');
   return clone.outerHTML;
@@ -1341,19 +1403,11 @@ function addNewHeadElements(newHead) {
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') {
       // Skip: partial swaps keep the outer layout mounted, so the
-      // existing importmap stays authoritative. Warn if the incoming
-      // map differs: importmaps are immutable once a script has run
-      // (modern browsers ignore subsequent <script type=importmap>),
-      // so a mismatch means module resolution on this page won't match
-      // what SSR rendered against.
-      const incoming = (el.textContent || '').trim();
-      if (incoming) {
-        const current = document.querySelector('script[type="importmap"]');
-        const currentText = current ? (current.textContent || '').trim() : '';
-        if (currentText && currentText !== incoming && typeof console !== 'undefined') {
-          console.warn('[webjs] incoming page has a different importmap; keeping the current page\'s map. Cross-layout module aliasing may be inconsistent.');
-        }
-      }
+      // existing importmap stays authoritative. Importmaps are
+      // immutable once a script has run (modern browsers ignore
+      // subsequent `<script type=importmap>`). Importmap-mismatch
+      // detection lives at the applySwap entry: a mismatch there
+      // triggers a full reload before we ever reach this loop.
       continue;
     }
     if (el.tagName === 'BASE') continue;
@@ -1364,7 +1418,7 @@ function addNewHeadElements(newHead) {
           cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
         );
       } else {
-        document.head.appendChild(el.cloneNode(true));
+        document.head.appendChild(cloneElementWithCorrectNonce(el));
       }
     }
   }
@@ -1408,7 +1462,7 @@ function mergeHead(newHead) {
           cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
         );
       } else {
-        currentHead.appendChild(el.cloneNode(true));
+        currentHead.appendChild(cloneElementWithCorrectNonce(el));
       }
     }
   }
