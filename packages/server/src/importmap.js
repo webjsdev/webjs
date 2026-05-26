@@ -1,3 +1,5 @@
+import { jsonForScriptTag } from './script-tag-json.js';
+
 /**
  * Build the import map JSON injected into every SSR HTML document.
  *
@@ -75,9 +77,14 @@ export function buildImportMap() {
  * `script-src 'nonce-...'` require this; without it the browser
  * blocks the importmap and every bare-specifier import fails.
  *
+ * Defense-in-depth: JSON content is run through `jsonForScriptTag`
+ * so a string value containing `</script>` (e.g. a maliciously
+ * crafted vendor URL that somehow slipped past the jspm.io filter)
+ * cannot close the importmap tag early and inject script content.
+ *
  * @param {{ nonce?: string }} [opts]
  */
 export function importMapTag(opts = {}) {
   const n = opts.nonce ? ` nonce="${opts.nonce.replace(/"/g, '&quot;')}"` : '';
-  return `<script type="importmap"${n}>${JSON.stringify(buildImportMap())}</script>`;
+  return `<script type="importmap"${n}>${jsonForScriptTag(buildImportMap())}</script>`;
 }

@@ -2,6 +2,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy } from '@webjsdev/core';
 import { importMapTag, vendorIntegrityFor } from './importmap.js';
+import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
 
@@ -632,11 +633,10 @@ export function publicEnvShim(opts) {
     }
   }
   env.NODE_ENV = opts.dev ? 'development' : 'production';
-  const json = JSON.stringify(env).replace(/<\//g, '<\\/');
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
   return `<script${n}>`
     + `window.process=window.process||{};`
-    + `window.process.env=Object.assign(window.process.env||{},${json});`
+    + `window.process.env=Object.assign(window.process.env||{},${jsonForScriptTag(env)});`
     + `</script>`;
 }
 
@@ -646,12 +646,12 @@ function wrapHead(opts) {
   // the request's CSP header by the caller.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
 
-  const imports = opts.moduleUrls.map((u) => `import ${JSON.stringify(u)};`).join('\n');
+  const imports = opts.moduleUrls.map((u) => `import ${jsonForScriptTag(u)};`).join('\n');
   const lazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
     ? opts.lazyComponents
     : null;
   const lazyBoot = lazyEntries
-    ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${JSON.stringify(lazyEntries)});`
+    ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${jsonForScriptTag(lazyEntries)});`
     : '';
   const boot = (imports || lazyBoot) ? `<script type="module"${n}>\n${imports}${lazyBoot}\n</script>` : '';
   const reload = opts.dev ? `<script type="module"${n} src="/__webjs/reload.js"></script>` : '';

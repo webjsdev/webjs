@@ -38,3 +38,38 @@ test('buildImportMap: vendor entries merge alongside framework entries', () => {
   assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
   setVendorEntries({}); // reset for other tests
 });
+
+test('importMapTag: escapes `</script>` in vendor URL (defense-in-depth XSS guard)', () => {
+  // Pathological vendor entry: a URL containing a script-close
+  // sequence. Without defensive escaping, JSON.stringify emits
+  // </script> literally and closes the importmap tag, letting
+  // injected content after it execute as fresh HTML / scripts.
+  setVendorEntries({
+    'evil': 'https://attacker.example/x.js?</script><img onerror=alert(1) src=x>',
+  });
+  const tag = importMapTag();
+  // The script element body must NOT contain a closing </script>
+  // sequence before the framework's intended closer.
+  // Per jsonForScriptTag the </ becomes <\/.
+  assert.ok(!/<\/script>\s*<(?:img|script)/i.test(tag),
+    `unescaped </script> in tag: ${tag}`);
+  assert.match(tag, /<\\\/script/, 'closing tag sequence escaped to <\\/script');
+  setVendorEntries({});
+});
+
+test('importMapTag: escapes U+2028 / U+2029 line separators in URLs', () => {
+  // U+2028 / U+2029 are legal in JSON strings but historically
+  // terminated JS strings, which would break the importmap parser.
+  const u2028 = String.fromCharCode(0x2028);
+  const u2029 = String.fromCharCode(0x2029);
+  setVendorEntries({
+    'a': `https://cdn.example/a${u2028}.js`,
+    'b': `https://cdn.example/b${u2029}.js`,
+  });
+  const tag = importMapTag();
+  assert.ok(!tag.includes(u2028), 'raw U+2028 must not survive');
+  assert.ok(!tag.includes(u2029), 'raw U+2029 must not survive');
+  assert.ok(tag.includes('\\u2028'), 'U+2028 must be escape-encoded');
+  assert.ok(tag.includes('\\u2029'), 'U+2029 must be escape-encoded');
+  setVendorEntries({});
+});
