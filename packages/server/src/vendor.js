@@ -755,7 +755,13 @@ export async function listPinned(appDir) {
   for (const [pkg, url] of Object.entries(file.imports)) {
     let version = '(unknown)';
     let bytes;
-    const jspmMatch = /\/npm:[^@]+@([^/]+)\//.exec(url);
+    // Match `/npm:<pkg>@<version>/...`. The non-capturing `(?:@[^/]+\/)?`
+    // consumes an optional scope prefix (`@scope/`) so the second
+    // `@<version>` is what we capture. Without it, scoped packages
+    // (e.g. `/npm:@scope/name@1.2.3/`) would silently fall through to
+    // "(unknown)" because the original `[^@]+` couldn't accept a
+    // leading `@`.
+    const jspmMatch = /\/npm:(?:@[^/]+\/)?[^@/]+@([^/]+)\//.exec(url);
     if (jspmMatch) {
       version = jspmMatch[1];
     } else if (url.startsWith('/__webjs/vendor/')) {
