@@ -131,6 +131,32 @@ test('handle: /__webjs/vendor/ rejects path-traversal filenames', async () => {
   assert.ok(resp.status === 400 || resp.status === 404, `expected 400 or 404, got ${resp.status}`);
 });
 
+test('handle: /__webjs/vendor/<file>.js rejects non-GET/HEAD methods with 405', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js', { method }));
+    assert.equal(resp.status, 405, `${method} should return 405`);
+    assert.equal(resp.headers.get('allow'), 'GET, HEAD');
+  }
+});
+
+test('handle: /__webjs/vendor/<file>.js HEAD returns same headers as GET, empty body', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const head = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js', { method: 'HEAD' }));
+  assert.equal(head.status, 200);
+  assert.match(head.headers.get('content-type') || '', /javascript/);
+  const body = await head.text();
+  assert.equal(body, '', 'HEAD body must be empty');
+});
+
 /* ------------ static files + TS compilation ------------ */
 
 test('handle: /public/* serves static files with MIME', async () => {
