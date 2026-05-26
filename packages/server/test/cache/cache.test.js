@@ -92,3 +92,46 @@ test('setStore swaps the default store', async () => {
   // Restore default
   setStore(memoryStore());
 });
+
+test('memoryStore: NaN ttl falls back to no expiration (was: silent eternal entry)', async () => {
+  const s = memoryStore();
+  await s.set('k', 'v', NaN);
+  await new Promise((r) => setTimeout(r, 10));
+  // NaN is non-finite, so we fall back to "no TTL" (entry persists).
+  // This matches the documented "no TTL when ttlMs is undefined" path
+  // rather than the prior surprise where NaN slipped past truthiness.
+  assert.equal(await s.get('k'), 'v');
+});
+
+test('memoryStore: Infinity ttl falls back to no expiration', async () => {
+  const s = memoryStore();
+  await s.set('k', 'v', Infinity);
+  assert.equal(await s.get('k'), 'v');
+});
+
+test('memoryStore: zero ttl falls back to no expiration', async () => {
+  const s = memoryStore();
+  await s.set('k', 'v', 0);
+  assert.equal(await s.get('k'), 'v');
+});
+
+test('memoryStore: negative ttl is treated as no TTL (not "expire in the past")', async () => {
+  const s = memoryStore();
+  await s.set('k', 'v', -1000);
+  assert.equal(await s.get('k'), 'v');
+});
+
+test('memoryStore: increment bumps LRU position (hot key survives eviction)', async () => {
+  const s = memoryStore({ maxSize: 3 });
+  await s.increment('hot', 60000);
+  await s.set('b', '2', 60000);
+  await s.set('c', '3', 60000);
+  for (let i = 0; i < 5; i++) await s.increment('hot', 60000);
+  await s.set('d', '4', 60000);
+  // With the LRU-bump fix, 'hot' is most-recent and 'b' is oldest → 'b' evicts.
+  // Pre-fix: 'hot' was at the original position 1 and got evicted instead.
+  assert.equal(await s.get('hot'), '6');
+  assert.equal(await s.get('b'), null);
+  assert.equal(await s.get('c'), '3');
+  assert.equal(await s.get('d'), '4');
+});

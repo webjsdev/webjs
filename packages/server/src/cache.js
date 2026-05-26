@@ -47,6 +47,17 @@ export function memoryStore(opts = {}) {
     return entry.expiresAt !== null && Date.now() > entry.expiresAt;
   }
 
+  // Only a finite, positive ttlMs sets an expiration. NaN, Infinity,
+  // 0, negative, or non-number all fall back to "no TTL" (null).
+  // Without this, NaN slips past the truthiness check and entries
+  // silently live forever, which masks bugs in caller code that
+  // computes ttl from arithmetic.
+  function expiresAtFrom(ttlMs) {
+    return typeof ttlMs === 'number' && Number.isFinite(ttlMs) && ttlMs > 0
+      ? Date.now() + ttlMs
+      : null;
+  }
+
   return {
     async get(key) {
       const entry = map.get(key);
@@ -61,7 +72,7 @@ export function memoryStore(opts = {}) {
       map.delete(key); // remove old position
       map.set(key, {
         value,
-        expiresAt: ttlMs ? Date.now() + ttlMs : null,
+        expiresAt: expiresAtFrom(ttlMs),
       });
       evict();
     },
@@ -73,12 +84,18 @@ export function memoryStore(opts = {}) {
       if (!entry || isExpired(entry)) {
         map.set(key, {
           value: '1',
-          expiresAt: ttlMs ? Date.now() + ttlMs : null,
+          expiresAt: expiresAtFrom(ttlMs),
         });
         return 1;
       }
       const next = parseInt(entry.value, 10) + 1;
+      // Mutate value + re-insert so the bumped key counts as recent
+      // for LRU eviction. Without the re-insert, a hot rate-limit
+      // bucket stays at its original position and gets evicted ahead
+      // of less-active keys.
       entry.value = String(next);
+      map.delete(key);
+      map.set(key, entry);
       return next;
     },
   };
