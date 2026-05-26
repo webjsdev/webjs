@@ -32,6 +32,32 @@ export function getRequest() {
 }
 
 /**
+ * Return the CSP nonce for the in-flight request, or empty string if
+ * the request has no `Content-Security-Policy: script-src 'nonce-...'`
+ * directive. Intended for user code that emits inline `<script>` tags
+ * from a layout / page / metadata route and needs them to pass strict
+ * CSP. Use:
+ *
+ *   import { cspNonce } from '@webjsdev/server';
+ *   return html`<script nonce="${cspNonce()}">...</script>`;
+ *
+ * When a CSP nonce is in effect the script gets the matching value;
+ * when not, the attribute is empty (browser ignores it). Safe to call
+ * from any server-side render path. Returns '' outside a request
+ * (e.g. module top-level), so the call is safe in SSR boundary cases
+ * where context may not be set up yet.
+ *
+ * @returns {string}
+ */
+export function cspNonce() {
+  const req = als.getStore()?.req;
+  if (!req) return '';
+  const csp = req.headers.get('content-security-policy') || '';
+  const match = /\bnonce-([A-Za-z0-9+/=]+)/.exec(csp);
+  return match ? match[1] : '';
+}
+
+/**
  * Read-only headers for the in-flight request. Throws outside a request
  * (e.g. at module top-level).
  * @returns {Headers}
