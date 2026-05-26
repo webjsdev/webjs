@@ -164,7 +164,25 @@ export async function createRequestHandler(opts) {
     moduleGraph,
   };
 
+  // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
+  // jspm.io fetch) cannot overwrite a fresher rebuild #2's
+  // setVendorEntries / route table when it finally finishes. Without
+  // this, two file edits inside one chokidar debounce window could
+  // produce a permanently-stale importmap until the next rebuild.
+  // Each rebuild also gets a monotonic token; setVendorEntries is only
+  // applied if its token still matches the latest scheduled rebuild.
+  let rebuildInFlight = Promise.resolve();
+  let latestRebuildToken = 0;
+
   async function rebuild() {
+    const token = ++latestRebuildToken;
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(token)).catch((e) => {
+      logger.error?.(`[webjs] rebuild failed:`, e);
+    });
+    return rebuildInFlight;
+  }
+
+  async function doRebuild(token) {
     state.routeTable = await buildRouteTable(appDir);
     state.actionIndex = await buildActionIndex(appDir, dev);
     state.middleware = await loadMiddleware(appDir, dev, logger);
@@ -172,7 +190,13 @@ export async function createRequestHandler(opts) {
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
     const v = await resolveVendorImports(state.bareImports, appDir);
-    setVendorEntries(v.imports, v.integrity);
+    // Defensive: if a newer rebuild has been queued while we were
+    // awaiting resolveVendorImports, drop our result. The newer one
+    // will overwrite anyway, but checking the token here avoids a
+    // brief window of stale entries.
+    if (token === latestRebuildToken) {
+      setVendorEntries(v.imports, v.integrity);
+    }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
