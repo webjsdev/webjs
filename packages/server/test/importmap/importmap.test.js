@@ -57,6 +57,34 @@ test('importMapTag: escapes `</script>` in vendor URL (defense-in-depth XSS guar
   setVendorEntries({});
 });
 
+test('buildImportMap: emits keys in sorted order (stable across boots/renames)', () => {
+  // Regression: the client router's importmap-mismatch hard-reload
+  // compares textContent. Filesystem-iteration order (which drives
+  // scanner output) can change between deploys (e.g. after a file
+  // rename), so logically-identical importmaps must serialize
+  // identically. Otherwise the user gets a spurious full reload on
+  // every nav until the order stabilizes.
+  setVendorEntries(
+    { 'z-pkg': 'https://x/z.js', 'a-pkg': 'https://x/a.js', 'm-pkg': 'https://x/m.js' },
+    { 'https://x/z.js': 'sha384-zzz', 'https://x/a.js': 'sha384-aaa' },
+  );
+  const out = buildImportMap();
+  const importKeys = Object.keys(out.imports);
+  assert.deepEqual(importKeys, [...importKeys].sort(),
+    `imports keys must be sorted; got: ${importKeys.join(',')}`);
+  const intKeys = Object.keys(out.integrity);
+  assert.deepEqual(intKeys, [...intKeys].sort(),
+    `integrity keys must be sorted; got: ${intKeys.join(',')}`);
+  // Verifying byte-identical output across two different insertion orders:
+  setVendorEntries({ 'b': 'https://x/b.js', 'a': 'https://x/a.js' });
+  const json1 = JSON.stringify(buildImportMap());
+  setVendorEntries({ 'a': 'https://x/a.js', 'b': 'https://x/b.js' });
+  const json2 = JSON.stringify(buildImportMap());
+  assert.equal(json1, json2,
+    'same content in different insertion order must produce byte-identical JSON');
+  setVendorEntries({}); // reset
+});
+
 test('importMapTag: escapes U+2028 / U+2029 line separators in URLs', () => {
   // U+2028 / U+2029 are legal in JSON strings but historically
   // terminated JS strings, which would break the importmap parser.

@@ -47,7 +47,7 @@ export function vendorIntegrityFor(url) {
 }
 
 export function buildImportMap() {
-  const imports = {
+  const merged = {
     '@webjsdev/core':               '/__webjs/core/index.js',
     '@webjsdev/core/':              '/__webjs/core/src/',
     '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
@@ -58,12 +58,26 @@ export function buildImportMap() {
     '@webjsdev/core/task':          '/__webjs/core/src/task.js',
     ..._extraEntries,
   };
+  // Sort keys so logically-identical importmaps serialize byte-for-byte
+  // identically. The client router compares textContent to detect
+  // post-deploy importmap mismatches; without a stable order the
+  // scanner's filesystem-iteration order could change between deploys
+  // (e.g. after a file rename) and trigger a spurious hard reload
+  // even though the content didn't actually change.
+  /** @type {Record<string, string>} */
+  const imports = {};
+  for (const k of Object.keys(merged).sort()) imports[k] = merged[k];
+
   // Emit `integrity` per the importmap-integrity spec (Chrome 132+,
   // Safari 18.4+, Firefox flagged). Browsers without support ignore
   // the field; per-tag SRI on modulepreload covers them.
   const out = { imports };
-  if (Object.keys(_vendorIntegrity).length) {
-    out.integrity = { ..._vendorIntegrity };
+  const intKeys = Object.keys(_vendorIntegrity).sort();
+  if (intKeys.length) {
+    /** @type {Record<string, string>} */
+    const integrity = {};
+    for (const k of intKeys) integrity[k] = _vendorIntegrity[k];
+    out.integrity = integrity;
   }
   return out;
 }
