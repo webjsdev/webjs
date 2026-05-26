@@ -991,18 +991,26 @@ export async function checkConventions(appDir, opts) {
     const hasGitignore = await pathExists(join(appDir, '.gitignore'));
     if (hasGit && hasGitignore) {
       const { spawnSync } = await import('node:child_process');
-      // `git check-ignore -q <path>` exits 0 when the path IS ignored,
-      // 1 when it's NOT ignored. We want exit 1 (NOT ignored).
-      const result = spawnSync('git', ['check-ignore', '-q', '.webjs/vendor/importmap.json'], {
-        cwd: appDir,
-        stdio: 'pipe',
-      });
-      if (result.status === 0) {
-        violations.push({
-          rule: 'gitignore-vendor-not-ignored',
-          file: '.gitignore',
-          message:
-            '.webjs/vendor/importmap.json is gitignored, but `webjs vendor pin` writes it and the file MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a `.webjs/` line in .gitignore that excludes the parent directory before the `!.webjs/vendor/` exception can take effect (git semantics: a parent exclusion blocks child negations).',
+      // Check two representative paths: the pin manifest AND a sample
+      // downloaded bundle. A `.gitignore` that allows the manifest
+      // but blocks bundles (e.g. `*.js` higher up) would still break
+      // `webjs vendor pin --download`. `git check-ignore -q` exits 0
+      // when ignored, 1 when not ignored.
+      const probes = [
+        '.webjs/vendor/importmap.json',
+        '.webjs/vendor/sample-pkg@1.0.0.js',
+      ];
+      for (const probe of probes) {
+        const result = spawnSync('git', ['check-ignore', '-q', probe], {
+          cwd: appDir,
+          stdio: 'pipe',
+        });
+        if (result.status === 0) {
+          violations.push({
+            rule: 'gitignore-vendor-not-ignored',
+            file: '.gitignore',
+            message:
+              `${probe} is gitignored, but \`webjs vendor pin\` writes files under .webjs/vendor/ and they MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a \`.webjs/\` line in .gitignore that excludes the parent directory before the \`!.webjs/vendor/\` exception can take effect (git semantics: a parent exclusion blocks child negations). A second possible cause is a broader rule (e.g. \`*.js\` at root) that hides bundle files added by \`webjs vendor pin --download\`.`,
           fix:
             'Replace `.webjs/` in your .gitignore with this three-line pattern:\n' +
             '  .webjs/*\n' +
@@ -1011,6 +1019,7 @@ export async function checkConventions(appDir, opts) {
             'Verify with `git check-ignore -q .webjs/vendor/importmap.json` (exit 1 means correctly un-ignored).',
         });
       }
+    }
     }
   }
 

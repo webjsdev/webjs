@@ -1192,6 +1192,26 @@ test('gitignore-vendor-not-ignored: passes for the correct pattern', async () =>
   }
 });
 
+test('gitignore-vendor-not-ignored: flags broader `*.js` rule that hides bundle files', async () => {
+  // The pin manifest gets through because it ends in .json, but
+  // `webjs vendor pin --download` writes <pkg>@<version>.js files
+  // and those get blocked. Two-probe check catches this.
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.ok(v, 'broader *.js rule should be flagged');
+    assert.match(v.message, /sample-pkg|\.js/, 'message should reference the bundle file probe');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('gitignore-vendor-not-ignored: skipped when not a git repo', async () => {
   const appDir = await makeTempApp();
   try {
