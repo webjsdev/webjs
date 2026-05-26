@@ -1355,6 +1355,27 @@ test('ssrPage: no nonce in CSP → no meta csp-nonce tag', async () => {
   assert.ok(!body.includes('csp-nonce'), 'no meta tag when no nonce in request CSP');
 });
 
+test('ssrPage: CSP nonce propagates to error-page response (boot scripts on error page need it)', async () => {
+  // When the page render throws, the error response goes through a
+  // different path (wrapInDocument with route.errors / fallback) but
+  // still emits inline scripts because moduleUrls includes the
+  // page + layouts. Strict-CSP would block those scripts if the
+  // nonce isn't threaded through the error path.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { throw new Error('boom'); }\n`,
+  });
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-errnonceXYZ' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  assert.match(body, /<meta name="csp-nonce" content="errnonceXYZ">/,
+    'error response must carry the meta csp-nonce tag');
+});
+
 test('ssrPage: response attaches a csrf set-cookie when request has no token', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:

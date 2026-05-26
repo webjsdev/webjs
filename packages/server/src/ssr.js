@@ -104,6 +104,10 @@ export async function ssrPage(route, params, url, opts) {
       const html = await ssrNotFoundHtml(null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
+    // Error paths still need to honor the request's CSP nonce so the
+    // error page's boot scripts (when moduleUrls is non-empty) and
+    // the meta csp-nonce tag both pass strict-CSP enforcement.
+    const errNonce = opts.req ? getNonce(opts.req) : undefined;
     // Try nearest error.js (innermost → outermost).
     for (let i = route.errors.length - 1; i >= 0; i--) {
       try {
@@ -112,7 +116,7 @@ export async function ssrPage(route, params, url, opts) {
         const tree = await mod.default({ ...ctx, error: err });
         const body = await renderToString(tree);
         const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
-        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev });
+        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
       } catch (nested) {
         // fall through to next error boundary
@@ -126,7 +130,7 @@ export async function ssrPage(route, params, url, opts) {
         )}</pre>`
       : `<h1>Server error</h1><p>Something went wrong. Please try again.</p>`;
     return htmlResponse(
-      wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev }),
+      wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev, nonce: errNonce }),
       500,
       opts.req,
       url
@@ -176,10 +180,12 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
       body = `<h1>404: Not found</h1><pre>${escapeHtml(String(e))}</pre>`;
     }
   }
+  const nonce = opts.req ? getNonce(opts.req) : undefined;
   return wrapInDocument(body, {
     metadata: { title: 'Not found' },
     moduleUrls: [],
     dev: opts.dev,
+    nonce,
   });
 }
 
