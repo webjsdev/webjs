@@ -491,6 +491,19 @@ async function handleCore(req, ctx) {
   if (path.startsWith('/public/') || path === '/favicon.ico') {
     const p = path === '/favicon.ico' ? '/public/favicon.ico' : path;
     const abs = join(appDir, p);
+    // Containment check. `join` normalises `..` segments, so a path
+    // like `/public/%2E%2E/secret/x.svg` decodes (after URL parsing,
+    // which doesn't touch `%2E`) to `/public/../secret/x.svg` and
+    // `join(appDir, ...)` resolves it to `appDir/secret/x.svg`. The
+    // resulting `abs` could be inside `appDir` but OUTSIDE `appDir/
+    // public/`, exposing files the user reasonably thought were
+    // private under their non-public directories. Reject anything
+    // that doesn't stay under `appDir/public/` (and the favicon
+    // exception, which is already validated above).
+    const publicRoot = join(appDir, 'public') + sep;
+    if (!abs.startsWith(publicRoot)) {
+      return new Response(null, { status: 404 });
+    }
     if (await exists(abs)) return fileResponse(abs, { dev, immutable: false });
   }
 
