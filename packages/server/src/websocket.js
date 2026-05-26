@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws';
 import { pathToFileURL } from 'node:url';
 import { matchApi } from './router.js';
 import { urlFromRequest } from './forwarded.js';
+import { registerClient } from './broadcast.js';
 
 /**
  * WebSocket support.
@@ -54,6 +55,7 @@ export function attachWebSocket(server, getRouteTable, opts) {
 
       wss.handleUpgrade(req, socket, head, (ws) => {
         try {
+          registerClient(url.pathname, ws);
           const webReq = buildRequestFromUpgrade(req, url);
           mod.WS(ws, webReq, { params: match.params });
         } catch (e) {

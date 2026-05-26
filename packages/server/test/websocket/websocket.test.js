@@ -98,3 +98,45 @@ test('426 when route.js exists but has no WS export', async () => {
     } finally { await close(); }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('upgraded clients are auto-registered for broadcast()', async () => {
+  const { broadcast, clientCount } = await import('../../src/broadcast.js');
+  const dir = await scaffold({
+    'app/api/room/route.js': `
+      export function WS(ws) {
+        ws.on('message', () => {});
+      }
+    `,
+  });
+  try {
+    const { port, close } = await startTestServer(dir);
+    try {
+      const a = new WebSocket(`ws://localhost:${port}/api/room`);
+      const b = new WebSocket(`ws://localhost:${port}/api/room`);
+      await Promise.all([
+        new Promise((r) => a.on('open', r)),
+        new Promise((r) => b.on('open', r)),
+      ]);
+
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(clientCount('/api/room'), 2);
+
+      const got = [];
+      a.on('message', (d) => got.push('a:' + d.toString()));
+      b.on('message', (d) => got.push('b:' + d.toString()));
+      broadcast('/api/room', 'ping');
+      await new Promise((r) => setTimeout(r, 30));
+      assert.deepEqual(got.sort(), ['a:ping', 'b:ping']);
+
+      a.close();
+      await new Promise((r) => a.on('close', r));
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(clientCount('/api/room'), 1);
+
+      b.close();
+      await new Promise((r) => b.on('close', r));
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(clientCount('/api/room'), 0);
+    } finally { await close(); }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
