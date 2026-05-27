@@ -757,6 +757,25 @@ export async function pinAll(appDir, opts = {}) {
     return { pins, pruned: [], downloaded, failed: true, attemptedInstalls: installs };
   }
 
+  // Partial-failure surface. Some installs were attempted but not
+  // every one made it into pins (jspm.io returned the package OK,
+  // but downloadBundle failed mid-stream in --download mode, or the
+  // resolver response was missing the package entirely). Write the
+  // pin file anyway so the working packages get committed, but warn
+  // so the user knows the next runtime fetch for the missing
+  // packages will fall through to a live jspm.io call (or 404 in
+  // --download mode).
+  if (installs.length > pins.length) {
+    const pinnedSpecs = new Set(pins.map(p => p.pkg));
+    const missing = installs.filter(spec => !pinnedSpecs.has(spec));
+    console.warn(
+      `[webjs] pin: partial success. The following installs did NOT ` +
+      `make it into the pin file and will fall back to live ` +
+      `resolution on next boot:`,
+    );
+    for (const m of missing) console.warn(`  ${m}`);
+  }
+
   // The app legitimately has zero bare-specifier imports (or the
   // scanner is running outside a webjs project). Don't create an
   // empty `.webjs/vendor/importmap.json`. Without this guard the file
@@ -897,10 +916,11 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
   // Strict allowlist. Vendor filenames are framework-generated:
   // `<pkg>@<version>.js` or `<pkg>@<version>__<subpath>.js` plus the
   // `@scope__name` form for scoped packages. The legal charset is
-  // alphanumeric plus `@`, `.`, `_`, `-`. Reject anything else
+  // alphanumeric plus `@`, `.`, `_`, `-`, `+` (`+` covers semver
+  // build metadata like `1.0.0+build.42`). Reject anything else
   // (slashes / backslashes / dots-dots / null bytes / Unicode
   // separators / glob chars) without echoing the input.
-  if (!/^[A-Za-z0-9@._-]+\.js$/.test(filename) || filename.includes('..')) {
+  if (!/^[A-Za-z0-9@._+-]+\.js$/.test(filename) || filename.includes('..')) {
     return new Response(`/* invalid vendor filename */`, {
       status: 400,
       headers: { 'content-type': 'application/javascript; charset=utf-8' },

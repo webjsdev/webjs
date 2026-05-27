@@ -891,16 +891,19 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
     if (mismatch && typeof location !== 'undefined') {
       // Infinite-reload guard: if the importmap appears to genuinely
       // change EVERY navigation (e.g. a developer is live-editing the
-      // pin file in dev), the user would experience a hard reload on
-      // every click. Use a one-shot sessionStorage flag so that we
-      // only allow one consecutive importmap-driven reload before
-      // surrendering to the partial swap (which is still correct
-      // most of the time; only vendor URLs would be stale).
+      // pin file in dev, or a misbehaving CDN returns different
+      // jspm.io URLs each request), the user would experience a hard
+      // reload on every click. Use a one-shot sessionStorage flag:
+      // set before the first reload, cleared by the next successful
+      // swap. Two reloads BACK-TO-BACK (without an intervening clean
+      // nav) trip the guard.
       try {
         const flag = 'webjs:importmap-reload';
         if (sessionStorage && sessionStorage.getItem(flag)) {
-          // Already reloaded once for an importmap mismatch on this
-          // session-tab. Clear the flag and continue with the swap.
+          // Already reloaded once for an importmap mismatch and the
+          // next nav STILL mismatches: bail to the partial swap. The
+          // user is on a stale importmap but at least the page
+          // renders.
           sessionStorage.removeItem(flag);
         } else {
           if (sessionStorage) sessionStorage.setItem(flag, '1');
@@ -913,6 +916,17 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
         location.href = href;
         return;
       }
+    } else if (!mismatch) {
+      // A clean swap (no importmap mismatch) means we're back to
+      // matching client/server importmaps. Clear the reload flag so
+      // a future LEGITIMATE mismatch (e.g. a later deploy) gets a
+      // fresh single-shot reload instead of being suppressed by a
+      // stale flag from an unrelated earlier reload.
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('webjs:importmap-reload');
+        }
+      } catch { /* ignore */ }
     }
   }
 

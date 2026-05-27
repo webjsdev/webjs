@@ -102,6 +102,34 @@ test('importMapTag: escapes U+2028 / U+2029 line separators in URLs', () => {
   setVendorEntries({});
 });
 
+test('importMapHash: changes when vendor entries change, stable when they do not', async () => {
+  const { importMapHash } = await import('../../src/importmap.js');
+  setVendorEntries({});
+  const h1 = importMapHash();
+  // Same input → same hash (cache returns identical value).
+  assert.equal(importMapHash(), h1);
+  setVendorEntries({ a: 'https://cdn.example/a.js' });
+  const h2 = importMapHash();
+  assert.notEqual(h2, h1, 'adding a vendor entry must change the hash');
+  // Resetting to the prior state recomputes back to the same hash
+  // (deterministic, no hidden state).
+  setVendorEntries({});
+  assert.equal(importMapHash(), h1, 'reverting must restore the original hash');
+});
+
+test('importMapHash: integrity change alone changes the hash', async () => {
+  const { importMapHash } = await import('../../src/importmap.js');
+  setVendorEntries({ a: 'https://cdn.example/a.js' });
+  const without = importMapHash();
+  setVendorEntries(
+    { a: 'https://cdn.example/a.js' },
+    { 'https://cdn.example/a.js': 'sha384-abcd' },
+  );
+  const withInt = importMapHash();
+  assert.notEqual(withInt, without, 'adding integrity must invalidate the hash');
+  setVendorEntries({});
+});
+
 test('importMapTag: escapes `<!--` to defeat HTML script-data-escaped state transition', () => {
   // The HTML5 tokenizer transitions to "script-data-escaped" when it
   // sees `<!--` inside a <script> body. From there a subsequent
