@@ -1087,3 +1087,57 @@ test('handle: /__webjs/vendor/ sets ETag for downstream cache revalidation', asy
   const resp2 = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
   assert.equal(resp2.headers.get('etag'), etag);
 });
+
+test('createRequestHandler: auto-loads <appDir>/.env into process.env', async () => {
+  // Scaffolded apps ship .env.example. A user who copies it to .env
+  // and runs `npm run dev` expects the framework to read it without
+  // any extra import (Rails / Next / Astro all do this). Without
+  // this, `lib/auth.server.ts` calling `createAuth({ secret:
+  // process.env.AUTH_SECRET })` at module init fails to boot the
+  // SaaS scaffold. See tracker #37.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    '.env': 'WEBJS_TEST_ENV_FOO=loaded-from-env-file\n',
+  });
+  // Pre-condition: var must not already be in process.env.
+  delete process.env.WEBJS_TEST_ENV_FOO;
+  try {
+    await createRequestHandler({ appDir, dev: false });
+    assert.equal(
+      process.env.WEBJS_TEST_ENV_FOO, 'loaded-from-env-file',
+      '.env file in appDir should auto-load into process.env',
+    );
+  } finally {
+    delete process.env.WEBJS_TEST_ENV_FOO;
+  }
+});
+
+test('createRequestHandler: shell-set env var wins over .env (does not override)', async () => {
+  // Standard dotenv precedence: shell / process-manager / parent
+  // process beats the file. Allows production deploys to override
+  // any value without editing the .env file.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    '.env': 'WEBJS_TEST_ENV_PRECEDENCE=from-file\n',
+  });
+  process.env.WEBJS_TEST_ENV_PRECEDENCE = 'from-shell';
+  try {
+    await createRequestHandler({ appDir, dev: false });
+    assert.equal(
+      process.env.WEBJS_TEST_ENV_PRECEDENCE, 'from-shell',
+      'pre-set process.env value must win over .env file content',
+    );
+  } finally {
+    delete process.env.WEBJS_TEST_ENV_PRECEDENCE;
+  }
+});
+
+test('createRequestHandler: missing .env file is silent (no error, server boots)', async () => {
+  // The common case: dev project with no .env, no shell-set vars.
+  // The boot path must NOT throw or log an error.
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  // No .env file created. createRequestHandler should still return
+  // a working handler.
+  const app = await createRequestHandler({ appDir, dev: false });
+  assert.equal(typeof app.handle, 'function', 'handle() must exist even without a .env file');
+});
