@@ -325,20 +325,22 @@ Full docs: https://docs.webjs.com`);
         }
         if (result.failed) {
           // pinAll refused to write the pin file because every install
-          // failed to resolve via jspm.io (e.g. brand-new published
-          // version not yet on the CDN, network outage, jspm.io 5xx).
-          // Surface the failure so the user fixes the cause before
-          // shipping; the per-package failures already logged via
-          // jspmResolveOne above tell the user which packages broke.
+          // failed to resolve via the chosen resolver (jspm.io's
+          // Generator API powers all providers; the failure mode is
+          // typically a brand-new published version not yet on the
+          // CDN, a network outage, or a provider-side 5xx). Surface
+          // the failure with the actual provider in the message so
+          // the user can fix the cause before shipping.
+          const provider = result.provider || 'jspm.io';
           console.error(
-            `Pin FAILED: every package failed to resolve via jspm.io. No pin file written ` +
+            `Pin FAILED: every package failed to resolve via ${provider}. No pin file written ` +
             `(would shadow the live-API fallback with an empty importmap and break the browser).`,
           );
           console.error(`Attempted installs:`);
           for (const i of result.attemptedInstalls) console.error(`  ${i}`);
           console.error(
-            `Possible causes: the package version is too new for jspm.io's CDN to have indexed yet; ` +
-            `network outage; jspm.io is down. Try again in a few minutes, or pin an older version.`,
+            `Possible causes: the package version is too new for ${provider}'s CDN to have indexed yet; ` +
+            `network outage; ${provider} is down. Try again in a few minutes, or pin an older version.`,
           );
           process.exit(1);
         }
