@@ -736,6 +736,12 @@ export async function pinAll(appDir, opts = {}) {
       // later, the browser refuses to execute (integrity mismatch).
       const sri = await fetchIntegrity(jspmUrl);
       if (sri) integrity[jspmUrl] = sri;
+      else console.warn(
+        `[webjs] could not compute SRI for ${jspmUrl}; pinning without ` +
+        `integrity (browser will accept any bytes from this URL on ` +
+        `next load). Rerun \`webjs vendor pin\` when jspm.io is healthy ` +
+        `to lock in the integrity hash.`,
+      );
       pins.push({ pkg: spec, version, url: jspmUrl, integrity: sri || undefined });
     }
   }
@@ -909,10 +915,15 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
     // match if any byte didn't round-trip exactly (e.g. invalid
     // surrogate replacement). Keep the I/O binary end-to-end.
     const body = await readFile(join(pinDir(appDir), filename));
+    // ETag for downstream caches that strip the `immutable` directive.
+    // Bundle filenames already carry the version, so content + ETag
+    // round-trip is deterministic per filename.
+    const etag = `"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
     return new Response(body, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
         'cache-control': dev ? 'no-cache' : 'public, max-age=31536000, immutable',
+        'etag': etag,
       },
     });
   } catch {
