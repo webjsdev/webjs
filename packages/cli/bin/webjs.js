@@ -335,15 +335,22 @@ Full docs: https://docs.webjs.com`);
           console.error('Usage: webjs vendor unpin <pkg>');
           process.exit(1);
         }
+        let unpinFailed = false;
         for (const pkg of args) {
           const r = await unpinPackage(appDir, pkg);
           if (!r.removed) {
             console.error(`  ${pkg.padEnd(40)} not in pin file`);
+            unpinFailed = true;
             continue;
           }
           const extra = r.deletedFile ? ` (also deleted ${r.deletedFile})` : '';
           console.log(`  ${pkg.padEnd(40)} unpinned${extra}`);
         }
+        // Exit non-zero if ANY of the requested packages weren't in
+        // the pin file. Scripts wrapping the CLI rely on the exit
+        // code to detect "nothing was removed"; printing the message
+        // alone wasn't enough.
+        if (unpinFailed) process.exit(1);
         break;
       }
 

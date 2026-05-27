@@ -98,9 +98,12 @@ describe('webjs vendor CLI', () => {
       'pin file removed when last pin unpinned');
   });
 
-  test('unpin a non-existent package reports "not in pin file"', async () => {
+  test('unpin a non-existent package reports "not in pin file" and exits non-zero', async () => {
     const { code, stderr } = await runCli(['vendor', 'unpin', 'not-pinned-xyz'], appDir);
-    assert.equal(code, 0);
+    // Exit non-zero so scripts wrapping the CLI can detect that
+    // nothing was removed. The message alone wasn't enough for
+    // pipelines that rely on the exit code.
+    assert.equal(code, 1);
     assert.match(stderr, /not in pin file/);
   });
 
