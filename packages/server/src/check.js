@@ -92,12 +92,22 @@ export const RULES = [
   {
     name: 'erasable-typescript-only',
     description:
-      'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax fall back to esbuild + inline sourcemap, which is supported as a safety net for third-party deps but should not be the path your own code takes. The rule checks the project\'s tsconfig.json and warns when `erasableSyntaxOnly` is missing or set to false. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply.',
+      'Apps must opt into TypeScript\'s `erasableSyntaxOnly: true` so the compiler rejects non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators with emitDecoratorMetadata, import = require) at edit time. webjs strips types via Node\'s built-in `module.stripTypeScriptTypes`, which only supports erasable TypeScript and produces byte-exact position preservation (no sourcemap overhead). Files using non-erasable syntax fail at strip time and the dev server returns a 500 pointing at the no-non-erasable-typescript rule; webjs is buildless end-to-end and has no bundler fallback. The rule checks the project\'s tsconfig.json and warns when `erasableSyntaxOnly` is missing or set to false. Set `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json to comply.',
   },
   {
     name: 'use-server-needs-extension',
     description:
       'Files that declare the `\'use server\'` directive at the top must also have the `.server.{js,ts,mts,mjs}` extension. The two markers are complementary, not interchangeable: `.server.ts` is the path-level boundary that triggers source protection by the file router; `\'use server\'` is the semantic opt-in that registers exports as RPC-callable from client code. A `\'use server\'` directive without the extension is silently ignored: the file is served to the browser as plain source, exports are NOT registered as RPC, and code the developer expects to run on the server actually runs in the browser. Rename the file to add the `.server.` infix.',
+  },
+  {
+    name: 'no-non-erasable-typescript',
+    description:
+      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
+  },
+  {
+    name: 'gitignore-vendor-not-ignored',
+    description:
+      'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `.webjs/*` (NOT `.webjs/`) plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
   },
 ];
 
@@ -737,8 +747,8 @@ export async function checkConventions(appDir, opts) {
       violations.push({
         rule: 'no-json-data-files',
         file: s.rel,
-        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.ts), not JSON files.`,
-        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.ts'\`. Delete ${s.rel} once the data has moved.`,
+        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.server.ts), not JSON files.`,
+        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.server.ts'\`. Delete ${s.rel} once the data has moved.`,
       });
     }
   }
@@ -781,15 +791,16 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: erasable-typescript-only ---
-  // The dev server's primary type-stripper is Node's built-in
+  // The dev server's type-stripper is Node's built-in
   // module.stripTypeScriptTypes, which rejects non-erasable TS (enum,
   // namespace with values, constructor parameter properties, legacy
-  // decorators, `import = require`). The fallback path is esbuild +
-  // inline sourcemap, which is a real ~3x wire-byte hit on every .ts
-  // request that takes it. Enforce TS-side rejection of those patterns
-  // via `compilerOptions.erasableSyntaxOnly: true` in tsconfig.json so
-  // violations surface as red squiggles in the editor before they ever
-  // hit the dev server.
+  // decorators, `import = require`). There is no fallback: non-erasable
+  // syntax is rejected at request time with a 500. Enforce TS-side
+  // rejection of those patterns via `compilerOptions.erasableSyntaxOnly:
+  // true` in tsconfig.json so violations surface as red squiggles in
+  // the editor before they ever hit the dev server. The companion
+  // no-non-erasable-typescript rule (below) catches violations even if
+  // the tsconfig flag is unset.
   if (isRuleEnabled('erasable-typescript-only', overrides)) {
     let tsconfigContent = null;
     try {
@@ -816,11 +827,98 @@ export async function checkConventions(appDir, opts) {
           file: 'tsconfig.json',
           message:
             flag === false
-              ? '`compilerOptions.erasableSyntaxOnly` is `false`. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators) falls back to esbuild + inline sourcemap on every request, costing ~3x wire bytes and losing byte-exact stack-trace positions.'
-              : '`compilerOptions.erasableSyntaxOnly` is not set. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Setting this flag makes the TypeScript compiler flag non-erasable syntax as a red squiggle in the editor instead of letting it silently slip through to a slower runtime fallback.',
+              ? '`compilerOptions.erasableSyntaxOnly` is `false`. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Non-erasable syntax (enum, namespace with values, constructor parameter properties, legacy decorators) fails at strip time and the dev server returns a 500. webjs is buildless end-to-end and has no bundler fallback; turn the flag on so the TypeScript compiler catches non-erasable constructs as red squiggles at edit time.'
+              : '`compilerOptions.erasableSyntaxOnly` is not set. The framework strips TypeScript via Node\'s built-in stripper, which only supports erasable TS. Setting this flag makes the TypeScript compiler flag non-erasable syntax as a red squiggle in the editor instead of letting it silently slip through to a 500 at runtime.',
           fix:
             'Set `"erasableSyntaxOnly": true` under `compilerOptions` in tsconfig.json. Replace any existing `enum` declarations with `const X = { ... } as const` plus a `type X = typeof X[keyof typeof X]` union. Replace constructor parameter properties with explicit field declarations + assignments.',
         });
+      }
+    }
+  }
+
+  // --- Rule: no-non-erasable-typescript ---
+  // Scans .ts source for the four non-erasable TypeScript constructs
+  // that the runtime stripper rejects. Complement to
+  // erasable-typescript-only: the flag check catches the case where
+  // the user opts into the tsconfig flag; this scan catches the
+  // case where the flag is missing OR the user has bypassed it and
+  // written offending syntax anyway. Both rules ship enabled by
+  // default so violators get the strongest signal possible.
+  if (isRuleEnabled('no-non-erasable-typescript', overrides)) {
+    /** @type {Array<{ name: string, regex: RegExp, fix: string }>} */
+    const NON_ERASABLE_PATTERNS = [
+      {
+        name: 'enum',
+        // Matches `enum X {`, `export enum X {`, `const enum X {`,
+        // `declare enum X {`. Requires uppercase first letter on the
+        // identifier to avoid matching variables literally named "enum"
+        // in user code (rare but possible).
+        regex: /^[ \t]*(?:export[ \t]+)?(?:declare[ \t]+)?(?:const[ \t]+)?enum[ \t]+[A-Z]\w*[ \t]*\{/m,
+        fix: 'Replace `enum Foo { A, B }` with `const Foo = { A: "A", B: "B" } as const; type Foo = typeof Foo[keyof typeof Foo];`.',
+      },
+      {
+        name: 'namespace with values',
+        // Matches `namespace Foo { ... <value statement> ... }` at top
+        // level. Type-only namespaces (which ARE erasable) won't contain
+        // `let|const|var|function|class` as statements, so this catches
+        // only the value-carrying form. False positives possible for
+        // type-only namespaces that contain those words in type aliases;
+        // accept this as a soft warning.
+        regex: /^[ \t]*(?:export[ \t]+)?namespace[ \t]+\w+[ \t]*\{[\s\S]*?\b(?:let|const|var|function|class)\b/m,
+        fix: 'Replace `namespace Foo { export const x = 1 }` with `export const Foo = { x: 1 } as const;` or split the contents into separate modules.',
+      },
+      {
+        name: 'constructor parameter property',
+        // Matches `constructor(public x: T)`, `constructor(private foo, ...)`,
+        // `constructor(readonly bar)`. Looks for one of the four access
+        // modifiers immediately followed by an identifier inside the
+        // constructor's parameter list.
+        regex: /constructor[ \t]*\([^)]*\b(?:public|private|protected|readonly)[ \t]+\w+/,
+        fix: 'Replace `constructor(public x: number)` with `x: number; constructor(x: number) { this.x = x; }`. The reactive-props-use-declare rule has the framework-specific shape: `declare x: number;` (no value) plus the assignment in the constructor body.',
+      },
+      {
+        name: 'import = require',
+        // TypeScript-style CommonJS import. Catches `import foo =
+        // require("bar")` and `export import foo = require("bar")`.
+        regex: /^[ \t]*(?:export[ \t]+)?import[ \t]+\w+[ \t]*=[ \t]*require[ \t]*\(/m,
+        fix: 'Replace `import foo = require("bar")` with `import * as foo from "bar"` or `import { something } from "bar"`.',
+      },
+    ];
+
+    // Walk every .ts / .mts file under appDir, skipping node_modules,
+    // build outputs, version control, and the framework's own private
+    // folders. Match the conventional excludes that fs-walk.js's caller
+    // contract expects.
+    for await (const abs of walk(appDir, (p) => /\.m?ts$/.test(p))) {
+      // Skip anything inside node_modules or common build / cache dirs.
+      const relPath = relative(appDir, abs);
+      if (
+        relPath.includes('node_modules' + sep) ||
+        relPath.startsWith('dist' + sep) ||
+        relPath.startsWith('build' + sep) ||
+        relPath.startsWith('.next' + sep) ||
+        relPath.startsWith('.git' + sep) ||
+        relPath.split(sep).some((s) => s.startsWith('_'))
+      ) {
+        continue;
+      }
+      let content;
+      try {
+        content = await readFile(abs, 'utf8');
+      } catch {
+        continue;
+      }
+      for (const { name, regex, fix } of NON_ERASABLE_PATTERNS) {
+        const m = content.match(regex);
+        if (m && typeof m.index === 'number') {
+          const line = content.slice(0, m.index).split('\n').length;
+          violations.push({
+            rule: 'no-non-erasable-typescript',
+            file: relPath,
+            message: `Non-erasable TypeScript construct (${name}) detected at line ${line}. The framework's type-stripper rejects this at request time with a 500.`,
+            fix,
+          });
+        }
       }
     }
   }
@@ -874,5 +972,72 @@ export async function checkConventions(appDir, opts) {
     }
   }
 
+  // --- Rule: gitignore-vendor-not-ignored ---
+  // The .gitignore pattern for .webjs/vendor/ is subtle: `.webjs/`
+  // alone excludes the directory entirely and git can't re-include
+  // children of an excluded parent. The correct pattern is `.webjs/*`
+  // plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. AI agents
+  // and human reviewers frequently "simplify" this back to `.webjs/`,
+  // silently breaking `webjs vendor pin`.
+  //
+  // This rule verifies the actual gitignore behavior by spawning
+  // `git check-ignore` against a representative pin-file path. If
+  // git reports the file as ignored, the pattern is broken.
+  //
+  // Skipped when the directory isn't a git repo or has no .gitignore
+  // (the user hasn't opted into version control yet).
+  if (isRuleEnabled('gitignore-vendor-not-ignored', overrides)) {
+    const hasGit = await pathExists(join(appDir, '.git'));
+    const hasGitignore = await pathExists(join(appDir, '.gitignore'));
+    if (hasGit && hasGitignore) {
+      const { spawnSync } = await import('node:child_process');
+      // Check two representative paths: the pin manifest AND a sample
+      // downloaded bundle. A `.gitignore` that allows the manifest
+      // but blocks bundles (e.g. `*.js` higher up) would still break
+      // `webjs vendor pin --download`. `git check-ignore -q` exits 0
+      // when ignored, 1 when not ignored.
+      const probes = [
+        '.webjs/vendor/importmap.json',
+        '.webjs/vendor/sample-pkg@1.0.0.js',
+      ];
+      for (const probe of probes) {
+        const result = spawnSync('git', ['check-ignore', '-q', probe], {
+          cwd: appDir,
+          stdio: 'pipe',
+        });
+        if (result.status === 0) {
+          violations.push({
+            rule: 'gitignore-vendor-not-ignored',
+            file: '.gitignore',
+            message:
+              `${probe} is gitignored, but \`webjs vendor pin\` writes files under .webjs/vendor/ and they MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a \`.webjs/\` line in .gitignore that excludes the parent directory before the \`!.webjs/vendor/\` exception can take effect (git semantics: a parent exclusion blocks child negations). A second possible cause is a broader rule (e.g. \`*.js\` at root) that hides bundle files added by \`webjs vendor pin --download\`.`,
+          fix:
+            'Replace `.webjs/` in your .gitignore with this three-line pattern:\n' +
+            '  .webjs/*\n' +
+            '  !.webjs/vendor/\n' +
+            '  !.webjs/vendor/**\n' +
+            'Verify with `git check-ignore -q .webjs/vendor/importmap.json` (exit 1 means correctly un-ignored).',
+        });
+      }
+    }
+    }
+  }
+
   return violations;
+}
+
+/**
+ * Async fs.exists shim. Returns true if the path exists at all (file
+ * or directory), false on ENOENT or any other stat failure.
+ *
+ * @param {string} p absolute path
+ * @returns {Promise<boolean>}
+ */
+async function pathExists(p) {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
 }

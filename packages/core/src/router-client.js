@@ -596,7 +596,7 @@ async function performNavigation(href, isPopState, frameId) {
       if (cached) {
         const cachedDoc = parseHTML(cached.html);
         if (cachedDoc) {
-          applySwap(cachedDoc, frameId, /* revalidating */ true);
+          applySwap(cachedDoc, frameId, /* revalidating */ true, /* href */ null);
           // Restore window scroll to where the user left it.
           if (typeof window !== 'undefined') {
             window.scrollTo(cached.scrollX, cached.scrollY);
@@ -734,6 +734,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
+  let incomingBuild = null;
   /** @type {string} */
   let finalUrl = href;
   try {
@@ -782,6 +783,12 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // (turbo/src/core/drive/navigator.js:92-107). Critical for the
     // standard server-rendered validation pattern: 422 + re-rendered
     // form with errors keeps the user's typed input and shows context.
+    // Capture the server's build hash header BEFORE reading the body.
+    // The header is set on every SSR response, including X-Webjs-Have
+    // partial responses where the body has no head and no importmap
+    // tag to compare. The applySwap importmap-mismatch guard reads
+    // this to detect deploys that bumped the vendor pin.
+    incomingBuild = resp.headers.get('x-webjs-build');
     html = await resp.text();
   } catch (err) {
     // Aborted by a newer navigation: let it run, don't fall back.
@@ -801,7 +808,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   const doc = parseHTML(html);
   if (!doc) { location.href = href; return; }
 
-  applySwap(doc, frameId, false);
+  applySwap(doc, frameId, false, finalUrl, incomingBuild);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -834,11 +841,107 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * Picks the most-scoped match: explicit webjs-frame > deepest shared
  * layout marker > full body swap.
  *
+ * If the incoming page carries a different importmap from the current
+ * page (typical after a deploy that bumped a vendor pin), partial swap
+ * is unsafe: importmaps are immutable once applied, so the new page
+ * would resolve modules against the stale URLs. We fall back to a full
+ * page load via `location.assign(href)`. Mirrors Turbo's
+ * `tracked_element_mismatch` reload, applied specifically to
+ * importmaps. Called with `href = null` for revalidation flows (which
+ * never trigger a hard reload).
+ *
+ * Detection uses the `X-Webjs-Build` response header (read by the
+ * fetch path and passed in as `incomingBuild`). The header is set on
+ * EVERY SSR response, including X-Webjs-Have partial responses that
+ * omit the head and importmap entirely. Without it, comparing
+ * `<script type="importmap">` textContent would silently no-op on
+ * partial responses (incoming is null) and the user would stay on the
+ * stale importmap after a deploy. Fallback: when the header is absent
+ * (older server, non-SSR response), compare textContent as before.
+ *
  * @param {Document} doc
  * @param {string | null} frameId
- * @param {boolean} revalidating  Restore from cache - already-matched markers may stomp inflight state; signal helps loading templates skip.
+ * @param {boolean} revalidating  Restore from cache; already-matched markers may stomp inflight state, signal helps loading templates skip.
+ * @param {string | null} [href]  Target URL for hard-reload fallback on importmap mismatch.
+ * @param {string | null} [incomingBuild]  X-Webjs-Build header from the response, or null.
  */
-function applySwap(doc, frameId, revalidating) {
+function applySwap(doc, frameId, revalidating, href, incomingBuild) {
+  // Any clean swap (no importmap mismatch, including cache restores
+  // and frame swaps where we don't even run the mismatch check) is a
+  // signal that the user successfully navigated, so clear the reload
+  // flag. Otherwise a sequence "reload because of mismatch → Back to
+  // a cache restore → Forward to a deploy-bumped URL" would find the
+  // stale flag still set and suppress the second legitimate reload.
+  try {
+    if (typeof sessionStorage !== 'undefined' && (!href || frameId || revalidating)) {
+      sessionStorage.removeItem('webjs:importmap-reload');
+    }
+  } catch { /* ignore */ }
+
+  // Importmap-mismatch guard. Only fires for foreground navs (href
+  // present); revalidation passes href=null to keep cache restores
+  // soft. Skipped if a <webjs-frame> escape hatch is in play (frame
+  // swaps are intra-page and don't change the importmap).
+  if (href && !frameId && !revalidating) {
+    const currentTag = document.querySelector('script[type="importmap"]');
+    const currentBuild = currentTag ? currentTag.getAttribute('data-webjs-build') : null;
+    let mismatch = false;
+    if (incomingBuild && currentBuild) {
+      // Preferred path: compare per-response build hash. Works even
+      // when the response body has no importmap (partial swap).
+      mismatch = incomingBuild !== currentBuild;
+    } else {
+      // Fallback for responses without X-Webjs-Build (older servers,
+      // hand-crafted HTML in tests). Match the previous behavior of
+      // comparing the importmap textContent in the parsed document.
+      const incoming = doc.querySelector('script[type="importmap"]');
+      mismatch = !!(
+        incoming && currentTag &&
+        (incoming.textContent || '').trim() !== (currentTag.textContent || '').trim()
+      );
+    }
+    if (mismatch && typeof location !== 'undefined') {
+      // Infinite-reload guard: if the importmap appears to genuinely
+      // change EVERY navigation (e.g. a developer is live-editing the
+      // pin file in dev, or a misbehaving CDN returns different
+      // jspm.io URLs each request), the user would experience a hard
+      // reload on every click. Use a one-shot sessionStorage flag:
+      // set before the first reload, cleared by the next successful
+      // swap. Two reloads BACK-TO-BACK (without an intervening clean
+      // nav) trip the guard.
+      try {
+        const flag = 'webjs:importmap-reload';
+        if (sessionStorage && sessionStorage.getItem(flag)) {
+          // Already reloaded once for an importmap mismatch and the
+          // next nav STILL mismatches: bail to the partial swap. The
+          // user is on a stale importmap but at least the page
+          // renders.
+          sessionStorage.removeItem(flag);
+        } else {
+          if (sessionStorage) sessionStorage.setItem(flag, '1');
+          location.href = href;
+          return;
+        }
+      } catch {
+        // sessionStorage unavailable (private mode w/ quota etc.):
+        // fall through to a single reload like before.
+        location.href = href;
+        return;
+      }
+    } else if (!mismatch) {
+      // A clean swap (no importmap mismatch) means we're back to
+      // matching client/server importmaps. Clear the reload flag so
+      // a future LEGITIMATE mismatch (e.g. a later deploy) gets a
+      // fresh single-shot reload instead of being suppressed by a
+      // stale flag from an unrelated earlier reload.
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('webjs:importmap-reload');
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
   // 1. webjs-frame escape hatch.
   if (frameId) {
     const target = document.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
@@ -1256,41 +1359,146 @@ function diffChildren(dst, src) {
  *
  * @param {HTMLHeadElement} newHead
  */
+
+/**
+ * Read the CSP nonce that the original page load published via
+ * `<meta name="csp-nonce" content="...">`. Returns empty string when
+ * no meta tag is present (apps without strict CSP).
+ *
+ * The meta tag is the contract: server emits it once at SSR time,
+ * client reads it for every dynamically-created script. The browser
+ * enforces CSP against the nonce the original page declared, NOT the
+ * per-request nonce on subsequent navigations. So we always apply
+ * THIS nonce, not the source-page nonce that arrived with the new
+ * head fragment.
+ *
+ * Mirrors hotwired/turbo's `getCspNonce` in src/util.js. Not cached:
+ * a single querySelector on document.head is cheap, and caching
+ * would break if the user (or a test) inserted the meta tag late.
+ *
+ * @returns {string}
+ */
+function getCspNonce() {
+  if (typeof document === 'undefined') return '';
+  const meta = document.querySelector('meta[name="csp-nonce"]');
+  // Read the `content` attribute, not the `.nonce` IDL property.
+  // Turbo's getCspNonce in src/util.js falls back to `.nonce` first
+  // because it can be called against script/link elements (where
+  // browsers DO expose `.nonce` and additionally clear the
+  // `nonce` attribute on document load). The `<meta name="csp-nonce">`
+  // element webjs targets has no `.nonce` IDL (only script + link
+  // elements do per HTML spec), so the only viable source is the
+  // `content` attribute.
+  return meta ? meta.getAttribute('content') || '' : '';
+}
+
+/**
+ * Create a `<script>` clone of `source` that's safe to insert into the
+ * live document under strict CSP. Copies every attribute EXCEPT
+ * nonce (the source's nonce is from the new page's per-request token,
+ * which the browser's CSP cache from the original page load will
+ * reject), then applies the cached nonce from the meta tag. Re-emits
+ * textContent so inline scripts execute as if first-loaded.
+ *
+ * @param {HTMLScriptElement} source
+ * @returns {HTMLScriptElement}
+ */
+function cloneScriptWithCorrectNonce(source) {
+  const script = document.createElement('script');
+  for (const attr of source.attributes) {
+    if (attr.name === 'nonce') continue;
+    script.setAttribute(attr.name, attr.value);
+  }
+  const nonce = getCspNonce();
+  if (nonce) {
+    // Use setAttribute so the attribute is queryable
+    // (`getAttribute('nonce')`, outerHTML serialization, etc.).
+    // Per CSP3 the .nonce IDL property is the authoritative source
+    // for the CSP check, but real browsers reflect setAttribute into
+    // .nonce automatically. Test environments (linkedom) reflect only
+    // one direction, so we set the attribute.
+    script.setAttribute('nonce', nonce);
+  }
+  script.textContent = source.textContent;
+  return script;
+}
+
+/**
+ * Clone any head element while substituting the page-load CSP nonce
+ * for the source's per-request nonce. Used for `<link rel="modulepreload"
+ * nonce="...">` and any other nonce-carrying head element: browsers
+ * gate cross-origin module preload by script-src nonce too, so the
+ * per-request nonce from the new page's head would be blocked by the
+ * browser's CSP cache from the original page load.
+ *
+ * Returns a cloneNode(true) for elements without a nonce attribute,
+ * so non-CSP cases stay zero-cost.
+ *
+ * @param {Element} source
+ * @returns {Element}
+ */
+function cloneElementWithCorrectNonce(source) {
+  if (!source.hasAttribute('nonce')) return source.cloneNode(true);
+  const clone = /** @type {Element} */ (source.cloneNode(true));
+  const nonce = getCspNonce();
+  if (nonce) {
+    clone.setAttribute('nonce', nonce);
+  } else {
+    clone.removeAttribute('nonce');
+  }
+  return clone;
+}
+
+/**
+ * Return an `outerHTML` string suitable for head-diff comparison: strip
+ * any nonce attribute so per-request nonces don't cause every script in
+ * the head to look "changed" on every navigation. The original element
+ * is left untouched (we clone first).
+ *
+ * Mirrors hotwired/turbo's `elementWithoutNonce` pattern in
+ * src/core/drive/head_snapshot.js.
+ *
+ * @param {Element} el
+ * @returns {string}
+ */
+function outerHTMLForDiff(el) {
+  // Strip nonce from ANY element type. SCRIPT obviously, but also LINK
+  // (modulepreload tags carry nonce per the recent CSP fix). Without
+  // this, per-request nonces on link tags would cause the diff to
+  // treat every preload as "changed", duplicating preloads on every
+  // navigation.
+  if (!el.hasAttribute('nonce')) return el.outerHTML;
+  const clone = /** @type {Element} */ (el.cloneNode(true));
+  clone.removeAttribute('nonce');
+  return clone.outerHTML;
+}
+
 function addNewHeadElements(newHead) {
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
 
   const currentSet = new Set();
-  for (const el of document.head.children) currentSet.add(el.outerHTML);
+  for (const el of document.head.children) currentSet.add(outerHTMLForDiff(el));
 
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') {
       // Skip: partial swaps keep the outer layout mounted, so the
-      // existing importmap stays authoritative. Warn if the incoming
-      // map differs: importmaps are immutable once a script has run
-      // (modern browsers ignore subsequent <script type=importmap>),
-      // so a mismatch means module resolution on this page won't match
-      // what SSR rendered against.
-      const incoming = (el.textContent || '').trim();
-      if (incoming) {
-        const current = document.querySelector('script[type="importmap"]');
-        const currentText = current ? (current.textContent || '').trim() : '';
-        if (currentText && currentText !== incoming && typeof console !== 'undefined') {
-          console.warn('[webjs] incoming page has a different importmap; keeping the current page\'s map. Cross-layout module aliasing may be inconsistent.');
-        }
-      }
+      // existing importmap stays authoritative. Importmaps are
+      // immutable once a script has run (modern browsers ignore
+      // subsequent `<script type=importmap>`). Importmap-mismatch
+      // detection lives at the applySwap entry: a mismatch there
+      // triggers a full reload before we ever reach this loop.
       continue;
     }
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!currentSet.has(el.outerHTML)) {
+    if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
-        const script = document.createElement('script');
-        for (const attr of el.attributes) script.setAttribute(attr.name, attr.value);
-        script.textContent = el.textContent;
-        document.head.appendChild(script);
+        document.head.appendChild(
+          cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
+        );
       } else {
-        document.head.appendChild(el.cloneNode(true));
+        document.head.appendChild(cloneElementWithCorrectNonce(el));
       }
     }
   }
@@ -1307,35 +1515,34 @@ function mergeHead(newHead) {
   for (const el of currentHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
-    currentSet.add(el.outerHTML);
+    currentSet.add(outerHTMLForDiff(el));
   }
 
   const newSet = new Set();
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
-    newSet.add(el.outerHTML);
+    newSet.add(outerHTMLForDiff(el));
   }
 
   for (const el of [...currentHead.children]) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!newSet.has(el.outerHTML)) el.remove();
+    if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
   for (const el of newHead.children) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
-    if (!currentSet.has(el.outerHTML)) {
+    if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
-        const script = document.createElement('script');
-        for (const attr of el.attributes) script.setAttribute(attr.name, attr.value);
-        script.textContent = el.textContent;
-        currentHead.appendChild(script);
+        currentHead.appendChild(
+          cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (el)),
+        );
       } else {
-        currentHead.appendChild(el.cloneNode(true));
+        currentHead.appendChild(cloneElementWithCorrectNonce(el));
       }
     }
   }
@@ -1380,10 +1587,7 @@ function forwardSuspenseResolvers(fetchedBody) {
 /** @param {Element} container */
 function reactivateScripts(container) {
   for (const old of container.querySelectorAll('script')) {
-    const script = document.createElement('script');
-    for (const attr of old.attributes) script.setAttribute(attr.name, attr.value);
-    script.textContent = old.textContent;
-    old.replaceWith(script);
+    old.replaceWith(cloneScriptWithCorrectNonce(/** @type {HTMLScriptElement} */ (old)));
   }
 }
 

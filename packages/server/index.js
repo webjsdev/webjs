@@ -11,10 +11,23 @@ export {
   invokeAction,
 } from './src/actions.js';
 export { buildImportMap, importMapTag, setVendorEntries } from './src/importmap.js';
-export { scanBareImports, extractPackageName, bundlePackage, vendorImportMapEntries, clearVendorCache, serveVendorBundle } from './src/vendor.js';
+export {
+  scanBareImports,
+  extractPackageName,
+  vendorImportMapEntries,
+  resolveVendorImports,
+  clearVendorCache,
+  getPackageVersion,
+  jspmGenerate,
+  pinAll,
+  unpinPackage,
+  listPinned,
+  readPinFile,
+  serveDownloadedBundle,
+} from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
-export { headers, cookies, getRequest, withRequest } from './src/context.js';
+export { headers, cookies, getRequest, withRequest, cspNonce } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
 export { rateLimit, parseWindow } from './src/rate-limit.js';
 export { memoryStore, redisStore, getStore, setStore } from './src/cache.js';

@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // equivalent built-in, we will need to install `amaro` directly (or
 // an equivalent: Sucrase preserves lines but not columns; SWC's
 // strip-only also works). The fast-path `stripTs` helper would
-// change one import line; the fallback path (esbuild) stays.
+// change one import line.
 //
 // Suppress the one-shot ExperimentalWarning that Node prints the
 // first time `stripTypeScriptTypes` is called. The API is committed
@@ -57,7 +57,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, vendorImportMapEntries, serveVendorBundle, clearVendorCache } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents } from './component-scanner.js';
 
@@ -92,17 +92,16 @@ const MIME = {
  * Capped at 500 entries to prevent unbounded memory growth in
  * long-running production servers.
  *
- * Primary stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
+ * Stripper: `module.stripTypeScriptTypes` (Node 24+ built-in).
  * Position-preserving whitespace replacement. No sourcemap is
  * emitted because every (line, column) maps to itself in the source.
  *
- * Fallback stripper: `esbuild.transform`. Triggered only when the
- * primary path throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (the file
- * uses `enum`, `namespace`, parameter properties, or legacy
- * decorators). Emits an inline sourcemap so DevTools can still
- * resolve source positions for the regenerated JS. Mostly fires for
- * third-party `.ts` files; user code is enforced erasable by
- * `webjs check`.
+ * Only erasable TypeScript is supported. Non-erasable syntax (`enum`,
+ * `namespace` with values, parameter properties, legacy decorators
+ * with `emitDecoratorMetadata`, `import = require`) throws at strip
+ * time. The `erasable-typescript-only` and `no-non-erasable-typescript`
+ * lint rules catch these at edit time. webjs is buildless end-to-end:
+ * there is no bundler fallback.
  *
  * @type {Map<string, { mtimeMs: number, code: string, map: string | null }>}
  */
@@ -130,7 +129,8 @@ export async function createRequestHandler(opts) {
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
-  setVendorEntries(vendorImportMapEntries(bareImports));
+  const initialVendor = await resolveVendorImports(bareImports, appDir);
+  setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -164,14 +164,39 @@ export async function createRequestHandler(opts) {
     moduleGraph,
   };
 
+  // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
+  // jspm.io fetch) cannot overwrite a fresher rebuild #2's
+  // setVendorEntries / route table when it finally finishes. Without
+  // this, two file edits inside one chokidar debounce window could
+  // produce a permanently-stale importmap until the next rebuild.
+  // Each rebuild also gets a monotonic token; setVendorEntries is only
+  // applied if its token still matches the latest scheduled rebuild.
+  let rebuildInFlight = Promise.resolve();
+  let latestRebuildToken = 0;
+
   async function rebuild() {
+    const token = ++latestRebuildToken;
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(token)).catch((e) => {
+      logger.error?.(`[webjs] rebuild failed:`, e);
+    });
+    return rebuildInFlight;
+  }
+
+  async function doRebuild(token) {
     state.routeTable = await buildRouteTable(appDir);
     state.actionIndex = await buildActionIndex(appDir, dev);
     state.middleware = await loadMiddleware(appDir, dev, logger);
     // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
     state.bareImports = await scanBareImports(appDir);
-    setVendorEntries(vendorImportMapEntries(state.bareImports));
+    const v = await resolveVendorImports(state.bareImports, appDir);
+    // Defensive: if a newer rebuild has been queued while we were
+    // awaiting resolveVendorImports, drop our result. The newer one
+    // will overwrite anyway, but checking the token here avoids a
+    // brief window of stale entries.
+    if (token === latestRebuildToken) {
+      setVendorEntries(v.imports, v.integrity);
+    }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
@@ -408,12 +433,31 @@ async function handleCore(req, ctx) {
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // Vendor bundles: /__webjs/vendor/<pkg>.js: generic auto-bundler
-  // (Vite-style optimizeDeps) for any bare npm import that webjs can't
-  // serve directly as ESM.
+  // Vendor URL handler for `webjs vendor pin --download` mode only.
+  // In default pin mode (or no-pin mode) the importmap routes bare
+  // imports straight to ga.jspm.io URLs and the browser bypasses this
+  // server entirely. When the user ran `webjs vendor pin --download`,
+  // the importmap has local `/__webjs/vendor/<file>.js` URLs and this
+  // handler serves the committed bundle files from `.webjs/vendor/`.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    const pkgName = decodeURIComponent(path.slice('/__webjs/vendor/'.length, -'.js'.length));
-    return serveVendorBundle(pkgName, appDir, dev);
+    // Vendor bundles are read-only static content. Allow GET/HEAD for
+    // the normal fetch, OPTIONS for any cross-origin preflight (we
+    // return 204 with the same Allow header rather than 405, which
+    // some intermediaries treat as a hard failure even for a CORS
+    // probe), and 405 everything else.
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: { allow: 'GET, HEAD, OPTIONS' } });
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      return new Response(null, { status: 405, headers: { allow: 'GET, HEAD, OPTIONS' } });
+    }
+    const filename = path.slice('/__webjs/vendor/'.length);
+    const resp = await serveDownloadedBundle(filename, appDir, dev);
+    if (method === 'HEAD') {
+      // HEAD must return same headers as GET with no body.
+      return new Response(null, { status: resp.status, headers: resp.headers });
+    }
+    return resp;
   }
 
   // Internal server-action RPC endpoint
@@ -450,6 +494,19 @@ async function handleCore(req, ctx) {
   if (path.startsWith('/public/') || path === '/favicon.ico') {
     const p = path === '/favicon.ico' ? '/public/favicon.ico' : path;
     const abs = join(appDir, p);
+    // Containment check. `join` normalises `..` segments, so a path
+    // like `/public/%2E%2E/secret/x.svg` decodes (after URL parsing,
+    // which doesn't touch `%2E`) to `/public/../secret/x.svg` and
+    // `join(appDir, ...)` resolves it to `appDir/secret/x.svg`. The
+    // resulting `abs` could be inside `appDir` but OUTSIDE `appDir/
+    // public/`, exposing files the user reasonably thought were
+    // private under their non-public directories. Reject anything
+    // that doesn't stay under `appDir/public/` (and the favicon
+    // exception, which is already validated above).
+    const publicRoot = join(appDir, 'public') + sep;
+    if (!abs.startsWith(publicRoot)) {
+      return new Response(null, { status: 404 });
+    }
     if (await exists(abs)) return fileResponse(abs, { dev, immutable: false });
   }
 
@@ -499,7 +556,7 @@ async function handleCore(req, ctx) {
           headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'no-store' },
         });
       }
-      // TypeScript source: esbuild-strip types, cache by mtime.
+      // TypeScript source: strip types via Node 24+'s built-in, cache by mtime.
       if (/\.m?ts$/.test(abs)) {
         return tsResponse(abs, dev);
       }
@@ -817,38 +874,26 @@ async function exists(p) {
 }
 
 /**
- * Strip TypeScript types from `source`, using Node's built-in
- * `module.stripTypeScriptTypes` first (whitespace replacement,
- * position-preserving, no sourcemap needed) and falling back to
- * esbuild for files using non-erasable syntax (`enum`, `namespace`,
- * parameter properties, legacy decorators).
+ * Strip TypeScript types from `source` via Node's built-in
+ * `module.stripTypeScriptTypes`. Position-preserving whitespace
+ * replacement: no sourcemap is needed because every (line, column)
+ * maps to itself in the source.
  *
- * The framework's own code and the user's app code are kept on
- * erasable TS by the `erasable-typescript-only` convention check.
- * The fallback exists for third-party `.ts` files that the runtime
- * occasionally needs to serve.
+ * Only erasable TypeScript is supported. Non-erasable syntax
+ * (`enum`, `namespace` with values, parameter properties, legacy
+ * decorators with `emitDecoratorMetadata`, `import = require`)
+ * throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` from Node and the
+ * dev server returns the error to the caller. The
+ * `erasable-typescript-only` and `no-non-erasable-typescript` lint
+ * rules catch these at edit time. There is no bundler fallback;
+ * webjs is buildless end-to-end.
  *
  * @param {string} source
- * @param {string} abs
+ * @param {string} _abs  (unused; preserved for symmetry with prior signature)
  * @returns {Promise<string>}
  */
-async function stripTs(source, abs) {
-  try {
-    return stripTypeScriptTypes(source);
-  } catch (err) {
-    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
-      const { transform: esbuild } = await loadEsbuild();
-      const r = await esbuild(source, {
-        loader: 'ts',
-        format: 'esm',
-        target: 'es2022',
-        sourcemap: 'inline',
-        sourcefile: abs,
-      });
-      return r.code;
-    }
-    throw err;
-  }
+async function stripTs(source, _abs) {
+  return stripTypeScriptTypes(source);
 }
 
 /**
@@ -871,7 +916,43 @@ async function tsResponse(abs, dev) {
     });
   }
   const source = await readFile(abs, 'utf8');
-  const code = await stripTs(source, abs);
+  let code;
+  try {
+    code = await stripTs(source, abs);
+  } catch (err) {
+    // Node's stripTypeScriptTypes throws ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX
+    // for enum, namespace with values, parameter properties, legacy
+    // decorators with emitDecoratorMetadata, and import = require.
+    // Return a clean 500 with the file path and a pointer at the
+    // erasable-typescript-only lint rule rather than letting the
+    // error bubble up unstyled.
+    if (err && err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX') {
+      // Log full detail server-side regardless of mode so operators
+      // see what went wrong in their logs.
+      // eslint-disable-next-line no-console
+      console.error(`[webjs] non-erasable TypeScript in ${abs}: ${err.message}`);
+      const msg = dev
+        // Dev: include the file path and Node's error message so the
+        // developer's browser tooling can point them at the offending
+        // construct. Replace `*` + `/` with `*\\/` so a path or
+        // message containing the comment-close sequence cannot
+        // terminate the wrapper comment early.
+        ? `[webjs] non-erasable TypeScript in ${abs}: ${err.message}\n\n` +
+          `webjs is buildless: only erasable TS syntax is supported. ` +
+          `Replace enum / namespace / parameter-property / legacy-decorator / ` +
+          `import = require constructs with their erasable equivalents. ` +
+          `Run \`webjs check\` for guidance (no-non-erasable-typescript rule).`
+        // Prod: terse, no path leak, no Node-message leak (Node's
+        // message can include source snippets). Operators get the
+        // detail in server logs above.
+        : `[webjs] server error transforming a .ts response. Check server logs.`;
+      return new Response(`/* ${msg.replace(/\*\//g, '*\\/')} */`, {
+        status: 500,
+        headers: { 'content-type': 'application/javascript; charset=utf-8' },
+      });
+    }
+    throw err;
+  }
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
     const oldest = TS_CACHE.keys().next().value;
@@ -930,20 +1011,6 @@ function locatePackageDir(appDir, pkgName) {
   try { const d = tryFrom(join(appDir, 'package.json')); if (d) return d; } catch {}
   try { const d = tryFrom(fileURLToPath(import.meta.url)); if (d) return d; } catch {}
   return null;
-}
-
-/**
- * Load esbuild. Resolved as a real dependency of `@webjsdev/server`,
- * so the bare specifier always resolves regardless of where the cli is
- * installed (global, local, workspace-linked).
- *
- * @returns {Promise<typeof import('esbuild')>}
- */
-let _esbuild = null;
-async function loadEsbuild() {
-  if (_esbuild) return _esbuild;
-  _esbuild = await import('esbuild');
-  return _esbuild;
 }
 
 const RELOAD_CLIENT_JS = `// webjs dev reload client

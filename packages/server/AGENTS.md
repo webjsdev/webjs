@@ -30,7 +30,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 
 | File | What it owns |
 |---|---|
-| `dev.js` | The request handler. File serving, TypeScript stripping (Node 24+ built-in `module.stripTypeScriptTypes`, backed by the `amaro` package, with an esbuild fallback for non-erasable syntax), **server-file guardrail**, live reload via SSE |
+| `dev.js` | The request handler. File serving, TypeScript stripping (Node 24+ built-in `module.stripTypeScriptTypes`, backed by the `amaro` package; non-erasable syntax fails at strip time with a 500), **server-file guardrail**, live reload via SSE |
 | `router.js` | Scans `app/` once, builds the route table, matches pages + APIs (`buildRouteTable`, `matchPage`, `matchApi`) |
 | `ssr.js` | SSR pipeline: nested layouts, metadata → `<head>`, Suspense streaming, error boundaries |
 | `actions.js` | `.server.js` / `.server.ts` scanner. Generates RPC stubs for browser-bound imports; exposes RPC endpoints; honours `expose()` |
@@ -46,8 +46,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`) |
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
-| `check.js` | Convention validator backing `webjs check`. New rule: `no-json-data-files` |
-| `vendor.js` | Auto-bundle bare-specifier npm deps for the browser |
+| `check.js` | Convention validator backing `webjs check`. Rules include `no-json-data-files`, `no-non-erasable-typescript` |
+| `vendor.js` | Resolve bare-specifier npm deps via jspm.io. Reads `.webjs/vendor/importmap.json` if present (committed pin file), else calls `api.jspm.io/generate` at boot. `--download` mode also serves cached bundle files from `.webjs/vendor/` |
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |

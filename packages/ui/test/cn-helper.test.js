@@ -6,8 +6,9 @@
  * `text-` group (text-sm got eaten by text-primary-foreground).
  *
  * The helper is shipped to user projects verbatim. To run it in the plain
- * Node test runner we transform the .ts source via esbuild (already a
- * transitive dep through @webjsdev/server) and import the JS module.
+ * Node test runner we strip its TypeScript types via Node 24+'s built-in
+ * `module.stripTypeScriptTypes` (the same primitive `webjs dev` uses) and
+ * import the resulting JS module.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { transformSync } from 'esbuild';
+import { stripTypeScriptTypes } from 'node:module';
 
 const UTILS_SRC = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -27,7 +28,7 @@ const UTILS_SRC = join(
 );
 
 const ts = readFileSync(UTILS_SRC, 'utf8');
-const { code: js } = transformSync(ts, { loader: 'ts', format: 'esm', target: 'es2022' });
+const js = stripTypeScriptTypes(ts);
 const dir = mkdtempSync(join(tmpdir(), 'webjs-ui-cn-'));
 const file = join(dir, 'utils.mjs');
 writeFileSync(file, js);

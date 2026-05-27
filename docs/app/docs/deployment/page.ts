@@ -34,7 +34,16 @@ npm run start -- --port 8080</pre>
     <p>In production mode, webjs automatically negotiates <code>Accept-Encoding</code> and compresses responses with Brotli (quality 4) or Gzip (level 6). Compression applies to text-based content types: HTML, JavaScript, JSON, CSS, SVG, XML. Binary assets (images, fonts) are served uncompressed.</p>
 
     <h3>ETags and Cache Headers</h3>
-    <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. Auto-vendored npm packages at <code>/__webjs/vendor/&lt;pkg&gt;.js</code> are served with <code>max-age=31536000, immutable</code> since their content is addressed by hash. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
+    <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. Vendor npm packages resolve through importmap to jspm.io URLs (default) or to local <code>/__webjs/vendor/&lt;pkg&gt;@&lt;version&gt;.js</code> paths (after <code>webjs vendor pin --download</code>). Direct jspm.io URLs use jspm.io's own immutable headers; locally-served <code>--download</code> bundles use <code>max-age=31536000, immutable</code>. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
+
+    <h3>Content Security Policy (CSP) and vendor packages</h3>
+    <p>The default vendor mode serves bundles from <code>https://ga.jspm.io</code> (the jspm.io CDN). If your app sets a strict <code>Content-Security-Policy</code> header with <code>script-src 'self'</code>, the browser blocks the jspm.io script and vendor imports fail to load.</p>
+    <p>Two ways to handle this:</p>
+    <ol>
+      <li><strong>Allow jspm.io in CSP</strong>: add <code>https://ga.jspm.io</code> to your <code>script-src</code> directive. Example: <code>script-src 'self' https://ga.jspm.io</code>. Browsers fetch bundles from jspm.io's CDN. Same-origin-only consumers (compliance-locked, air-gapped) cannot use this mode.</li>
+      <li><strong>Switch to <code>--download</code> mode</strong>: run <code>webjs vendor pin --download</code> at deploy-prep time and commit the resulting <code>.webjs/vendor/&lt;pkg&gt;@&lt;version&gt;.js</code> bundle files. The importmap then points at local <code>/__webjs/vendor/</code> paths served by your own origin. <code>script-src 'self'</code> alone is sufficient; no third-party allowlist needed. Suitable for compliance-locked, air-gapped, or strictest-CSP environments.</li>
+    </ol>
+    <p>Pick the mode that matches your security posture. The choice is per-deploy, not per-package: either everything goes through jspm.io or everything is locally vendored. Mixing modes per-package is not supported.</p>
 
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
@@ -190,8 +199,8 @@ HEALTHCHECK CMD curl -f http://localhost:8080/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine. The primary TypeScript stripper is Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed for the common case.</li>
-      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency, which keeps the esbuild fallback available for the rare third-party file that uses non-erasable TypeScript syntax. See <a href="/docs/no-build">No-Build Model</a> for when the fallback kicks in.</li>
+      <li><code>node:slim</code> works fine. webjs strips TypeScript via Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>

@@ -6,6 +6,7 @@ import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
+import { cspNonce } from './csp-nonce.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -1100,6 +1101,14 @@ async function streamTemplate(tr, ctx, controller) {
  * @param {ReadableStreamDefaultController<string>} controller
  */
 async function streamSuspenseBoundaries(ctx, controller) {
+  // Resolve the per-request nonce once per call. The provider in
+  // @webjsdev/server sources it from AsyncLocalStorage; outside a
+  // request scope (or in the browser) the helper returns '' and we
+  // emit the script unnonced, which is fine on documents not under
+  // strict CSP and matches the no-nonce case for the rest of the
+  // SSR pipeline.
+  const nonce = cspNonce();
+  const nonceAttr = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
   while (ctx.pending.length) {
     const batch = ctx.pending.splice(0);
     await Promise.all(
@@ -1110,7 +1119,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
           const full = await injectDSD(html, ctx);
           controller.enqueue(
             `<template data-webjs-resolve="${id}">${full}</template>` +
-            `<script>` +
+            `<script${nonceAttr}>` +
             `(function(){` +
             `var t=document.currentScript.previousElementSibling;` +
             `var b=document.getElementById("${id}");` +

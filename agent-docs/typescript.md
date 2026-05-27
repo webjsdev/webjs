@@ -50,15 +50,15 @@ set. Run `webjs check` to confirm.
 
 If a third-party package ships `.ts` source using non-erasable
 syntax (rare; most npm packages publish compiled `.js`), the dev
-server transparently falls back to `esbuild.transform` for those
-specific files. The fallback emits an inline sourcemap so DevTools
-can still resolve source positions. Your own code never takes this
-path as long as `erasableSyntaxOnly` is set.
+server fails at strip time and returns a 500 naming the file and
+pointing at the `no-non-erasable-typescript` lint rule. webjs is
+buildless end-to-end and has no bundler fallback. Your own code
+never hits this as long as `erasableSyntaxOnly` is set.
 
 If you manually turn `erasableSyntaxOnly` off and write non-erasable
-syntax in your own code, the same fallback fires: those files cost
-~3x wire bytes (sourcemap overhead) and lose strict position
-preservation. The convention check warns about this.
+syntax in your own code, the dev server fails the same way. The
+`erasable-typescript-only` convention check warns when the flag is
+off so you catch the configuration drift before runtime.
 
 ## Import convention
 
@@ -97,7 +97,7 @@ import { formatPost } from '../utils/slugify.ts';         // TS file
 The `erasableSyntaxOnly: true` line is the non-negotiable one. It
 aligns the TypeScript compiler's accepted syntax with what Node's
 strip-types accepts, so violations surface as editor diagnostics
-instead of runtime fallback to esbuild.
+instead of a runtime 500.
 
 ## Full-stack type safety
 

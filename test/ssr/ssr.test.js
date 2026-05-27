@@ -956,6 +956,31 @@ test('ssrPage: modulepreload never points at server-only files', async () => {
     `'use server' plain file should not be preloaded; got preloads:\n${preloads}`);
 });
 
+test('preloadCrossOriginAttr: adds crossorigin=anonymous for cross-origin URLs only', async () => {
+  // Browsers require crossorigin on cross-origin modulepreload, else
+  // the preload is ignored or double-fetched (defeating the
+  // optimization). Same-origin preloads must NOT have crossorigin
+  // (browser would double-fetch in the reverse direction).
+  const { preloadCrossOriginAttr } = await import(
+    new URL('../../packages/server/src/ssr.js', import.meta.url).href
+  );
+
+  // Cross-origin (vendor packages from jspm.io etc.)
+  assert.equal(
+    preloadCrossOriginAttr('https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js'),
+    ' crossorigin="anonymous"',
+  );
+  assert.equal(
+    preloadCrossOriginAttr('http://cdn.example.com/x.js'),
+    ' crossorigin="anonymous"',
+  );
+
+  // Same-origin (framework + user code)
+  assert.equal(preloadCrossOriginAttr('/__webjs/core/index.js'), '');
+  assert.equal(preloadCrossOriginAttr('/components/foo.ts'), '');
+  assert.equal(preloadCrossOriginAttr('/__webjs/vendor/dayjs@1.11.20.js'), '');
+});
+
 /* ------------ ssrNotFound + not-found.js rendering ------------ */
 
 test('ssrNotFound: no notFound file → plain 404 fallback', async () => {
@@ -1264,6 +1289,42 @@ test('ssrPage: loading.js wraps the page in Suspense (fallback in initial HTML)'
   assert.ok(/data-webjs-resolve/.test(body));
 });
 
+test('ssrPage: Suspense resolution fallback <script> carries the CSP nonce', async () => {
+  // The fallback script `<script>window.__webjsResolve&&...</script>`
+  // streams inline for each settled Suspense boundary. Under strict
+  // CSP it was being blocked by the browser because the nonce wasn't
+  // threaded into the streaming response. Regression test.
+  const sub = mkdtempSync(join(tmpDir, 'suspense-csp-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+  const pageFile = join(appDir, 'page.js');
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default async function Page() {\n` +
+    `  await new Promise(r => setTimeout(r, 10));\n` +
+    `  return html\`<p>ready</p>\`;\n` +
+    `}\n`);
+  const loadingFile = join(appDir, 'loading.js');
+  writeFileSync(loadingFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Loading() { return html\`<p>loading…</p>\`; }\n`);
+
+  const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [], loadings: [loadingFile] };
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-suspNonce99' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  // Locate every script that contains __webjsResolve and assert each one
+  // carries nonce="suspNonce99".
+  const resolveScripts = body.match(/<script[^>]*>[^<]*__webjsResolve[^<]*<\/script>/g) || [];
+  assert.ok(resolveScripts.length >= 1, 'expected at least one Suspense resolve script');
+  for (const s of resolveScripts) {
+    assert.match(s, /nonce="suspNonce99"/,
+      `Suspense resolve script missing nonce: ${s}`);
+  }
+});
+
 test('ssrPage: loading.js that fails to load → page renders without Suspense', async () => {
   const sub = mkdtempSync(join(tmpDir, 'loading-err-'));
   const appDir = join(sub, 'app');
@@ -1298,6 +1359,57 @@ test('ssrPage: CSP nonce on request → nonce attribute on injected scripts', as
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
   const body = await resp.text();
   assert.ok(body.includes('nonce="abc123XYZ"'));
+});
+
+test('ssrPage: CSP nonce → meta csp-nonce tag emitted for client-router pickup', async () => {
+  // Turbo's convention: server emits <meta name="csp-nonce" content="..."> so
+  // the client router (router-client.js) can apply the original page-load
+  // nonce to dynamically-created scripts (head merge, script reactivation).
+  // Without this, strict-CSP apps break on every client-side nav.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+  });
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-xyz789' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.match(body, /<meta name="csp-nonce" content="xyz789">/);
+});
+
+test('ssrPage: no nonce in CSP → no meta csp-nonce tag', async () => {
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+  });
+  const req = new Request('http://localhost/');
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.ok(!body.includes('csp-nonce'), 'no meta tag when no nonce in request CSP');
+});
+
+test('ssrPage: CSP nonce propagates to error-page response (boot scripts on error page need it)', async () => {
+  // When the page render throws, the error response goes through a
+  // different path (wrapInDocument with route.errors / fallback) but
+  // still emits inline scripts because moduleUrls includes the
+  // page + layouts. Strict-CSP would block those scripts if the
+  // nonce isn't threaded through the error path.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { throw new Error('boom'); }\n`,
+  });
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-errnonceXYZ' 'self'" },
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  assert.match(body, /<meta name="csp-nonce" content="errnonceXYZ">/,
+    'error response must carry the meta csp-nonce tag');
 });
 
 test('ssrPage: response attaches a csrf set-cookie when request has no token', async () => {
@@ -1342,3 +1454,56 @@ test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', as
 
 /* ------------ bundle mode skips per-file preloads ------------ */
 
+
+test('vendor: pin file changes update served importmap (chokidar drives clearVendorCache)', async () => {
+  // The pin file is at .webjs/vendor/importmap.json under the app
+  // directory. When the dev-server file watcher fires for that path
+  // it calls clearVendorCache so the next SSR rereads the new
+  // bindings. This integration test verifies the seam: changing
+  // the in-memory vendor entries (the same hook clearVendorCache
+  // resets to) and re-rendering produces an importmap reflecting
+  // the new state.
+  const { setVendorEntries, buildImportMap } = await import(
+    new URL('../../packages/server/src/importmap.js', import.meta.url).href
+  );
+  setVendorEntries({ 'a': 'https://cdn.example/a.js' });
+  let map = buildImportMap();
+  assert.equal(map.imports.a, 'https://cdn.example/a.js');
+  // Hand-edit equivalent: a new pin file would update the in-memory
+  // entries on the next chokidar fire. Simulate by re-setting.
+  setVendorEntries({ 'a': 'https://cdn.example/a-v2.js', 'b': 'https://cdn.example/b.js' });
+  map = buildImportMap();
+  assert.equal(map.imports.a, 'https://cdn.example/a-v2.js', 'updated URL replaces old');
+  assert.equal(map.imports.b, 'https://cdn.example/b.js', 'new entry appears');
+  setVendorEntries({});
+});
+
+test('integrityAttr: emits integrity attribute for vendor URLs with known SRI hash', async () => {
+  // Companion to preloadCrossOriginAttr coverage. Tests that the
+  // integrityAttr helper used by the modulepreload emission loop
+  // returns the matching integrity attribute when the URL has a
+  // pinned hash, and nothing when it doesn't.
+  const { setVendorEntries } = await import(
+    new URL('../../packages/server/src/importmap.js', import.meta.url).href
+  );
+  const { integrityAttr } = await import(
+    new URL('../../packages/server/src/ssr.js', import.meta.url).href
+  );
+  setVendorEntries(
+    { 'fake-vendor': '/__webjs/vendor/fake-vendor@1.0.0.js' },
+    { '/__webjs/vendor/fake-vendor@1.0.0.js': 'sha384-validHashValueHere==' },
+  );
+  try {
+    assert.equal(
+      integrityAttr('/__webjs/vendor/fake-vendor@1.0.0.js'),
+      ' integrity="sha384-validHashValueHere=="',
+    );
+    // URL not in the integrity map: no attribute.
+    assert.equal(integrityAttr('/__webjs/vendor/unpinned.js'), '');
+    // Non-vendor URLs always return empty.
+    assert.equal(integrityAttr('/components/foo.ts'), '');
+    assert.equal(integrityAttr('/__webjs/core/index.js'), '');
+  } finally {
+    setVendorEntries({});
+  }
+});

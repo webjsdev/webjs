@@ -26,6 +26,11 @@ const USAGE = `webjs commands:
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
+  webjs vendor pin [--download]                   Pin client-side npm packages to .webjs/vendor/importmap.json
+                                                  Default: writes jspm.io URLs (browser fetches from CDN)
+                                                  --download: also downloads bundles for offline production
+  webjs vendor unpin <pkg>                        Remove a specific package from the pin file
+  webjs vendor list                               Show pinned packages with versions and URLs
   webjs help                                      Show this help`;
 
 /** @param {string[]} args */
@@ -265,6 +270,112 @@ Full docs: https://docs.webjs.com`);
       const { scaffoldApp } = await import('../lib/create.js');
       await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
       break;
+    }
+    case 'vendor': {
+      const sub = rest[0];
+      const args = rest.slice(1);
+      const appDir = process.cwd();
+      const { pinAll, unpinPackage, listPinned } = await import('@webjsdev/server');
+
+      if (sub === 'pin') {
+        const download = args.includes('--download');
+        console.log(
+          `Pinning vendor packages from ${appDir}` +
+          (download ? ' (downloading bundles)' : '') + '...',
+        );
+        const result = await pinAll(appDir, { download });
+        if (result.noBareImports) {
+          // Scanner found zero bare-specifier imports in client-
+          // reachable source. Without this branch pinAll would write
+          // `{ imports: {} }`, which readPinFile then rejects as empty,
+          // leaving a useless file behind in whatever cwd.
+          console.error(
+            `Pin: no bare-specifier npm imports found in client code under ${appDir}. ` +
+            `Nothing to pin (no pin file written). Add a bare import like ` +
+            `\`import x from 'pkg-name'\` to a page or component, then rerun.`,
+          );
+          process.exit(1);
+        }
+        if (result.failed) {
+          // pinAll refused to write the pin file because every install
+          // failed to resolve via jspm.io (e.g. brand-new published
+          // version not yet on the CDN, network outage, jspm.io 5xx).
+          // Surface the failure so the user fixes the cause before
+          // shipping; the per-package failures already logged via
+          // jspmResolveOne above tell the user which packages broke.
+          console.error(
+            `Pin FAILED: every package failed to resolve via jspm.io. No pin file written ` +
+            `(would shadow the live-API fallback with an empty importmap and break the browser).`,
+          );
+          console.error(`Attempted installs:`);
+          for (const i of result.attemptedInstalls) console.error(`  ${i}`);
+          console.error(
+            `Possible causes: the package version is too new for jspm.io's CDN to have indexed yet; ` +
+            `network outage; jspm.io is down. Try again in a few minutes, or pin an older version.`,
+          );
+          process.exit(1);
+        }
+        const { pins, pruned, downloaded } = result;
+        for (const p of pins) {
+          const sizeStr = p.bytes != null ? ` ${(p.bytes / 1024).toFixed(1)} KB` : '';
+          console.log(`  ${(p.pkg + '@' + p.version).padEnd(40)}${sizeStr}`);
+        }
+        for (const f of pruned) {
+          console.log(`  ${f.padEnd(40)} REMOVED (orphan)`);
+        }
+        const pinMsg = `Pinned ${pins.length} package${pins.length === 1 ? '' : 's'}, wrote .webjs/vendor/importmap.json` +
+          (downloaded ? ` + ${downloaded} bundle${downloaded === 1 ? '' : 's'}` : '') + '.';
+        const pruneMsg = pruned.length ? ` Pruned ${pruned.length} orphan${pruned.length === 1 ? '' : 's'}.` : '';
+        console.log(pinMsg + pruneMsg);
+        break;
+      }
+
+      if (sub === 'unpin') {
+        if (args.length === 0) {
+          console.error('Usage: webjs vendor unpin <pkg>');
+          process.exit(1);
+        }
+        let unpinFailed = false;
+        for (const pkg of args) {
+          const r = await unpinPackage(appDir, pkg);
+          if (!r.removed) {
+            console.error(`  ${pkg.padEnd(40)} not in pin file`);
+            unpinFailed = true;
+            continue;
+          }
+          const extra = r.deletedFile ? ` (also deleted ${r.deletedFile})` : '';
+          console.log(`  ${pkg.padEnd(40)} unpinned${extra}`);
+        }
+        // Exit non-zero if ANY of the requested packages weren't in
+        // the pin file. Scripts wrapping the CLI rely on the exit
+        // code to detect "nothing was removed"; printing the message
+        // alone wasn't enough.
+        if (unpinFailed) process.exit(1);
+        break;
+      }
+
+      if (sub === 'list') {
+        const entries = await listPinned(appDir);
+        if (entries.length === 0) {
+          console.log('No pin file. Run "webjs vendor pin" to create .webjs/vendor/importmap.json.');
+          break;
+        }
+        console.log(`Pinned packages from ${appDir}/.webjs/vendor/importmap.json:`);
+        for (const e of entries) {
+          const sizeStr = e.bytes != null ? ` ${(e.bytes / 1024).toFixed(1)} KB` : '';
+          console.log(`  ${(e.pkg + '@' + e.version).padEnd(40)}${sizeStr}`);
+          console.log(`    ${e.url}`);
+        }
+        console.log(`${entries.length} package${entries.length === 1 ? '' : 's'} pinned.`);
+        break;
+      }
+
+      console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
+        `Usage:\n` +
+        `  webjs vendor pin [--download]    Pin packages to .webjs/vendor/importmap.json\n` +
+        `  webjs vendor unpin <pkg>         Remove a package from the pin file\n` +
+        `  webjs vendor list                Show pinned packages with versions and URLs`);
+      process.exit(1);
     }
     case 'help':
     case undefined:

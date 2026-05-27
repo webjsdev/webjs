@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 
@@ -59,19 +59,21 @@ export function generateMetadata(ctx: { url: string }) {
  * pseudo-elements.
  */
 export default function RootLayout({ children }: { children: unknown }) {
+  // CSP nonce for inline scripts. Empty when no nonce in CSP.
+  const nonce = cspNonce();
   return html`
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/public/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/public/favicon.png">
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P"></script>
-    <script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
+    <script nonce="${nonce}">
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-3RC87HXJ3P');
     </script>
-    <script>
+    <script nonce="${nonce}">
       (function(){
         try {
           var t = localStorage.getItem('webjs_theme');

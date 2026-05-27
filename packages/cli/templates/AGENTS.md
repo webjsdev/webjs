@@ -320,6 +320,76 @@ const users = await prisma.user.findMany();
 To switch to Postgres or MySQL: change `provider` in `prisma/schema.prisma`
 and the `DATABASE_URL` in `.env`.
 
+## NPM packages (vendor pipeline)
+
+Adding a third-party npm package follows the same `npm install` flow
+as any Node project, with one webjs-specific concern: how the BROWSER
+fetches that package.
+
+```sh
+npm install dayjs                 # standard npm install
+```
+
+Now write `import dayjs from 'dayjs'` in any component or page. The
+import works in dev immediately. webjs's scanner discovers bare
+imports on each server boot and asks `api.jspm.io` to resolve them to
+CDN URLs (jspm.io serves pre-bundled ESM for every npm package). The
+browser fetches the bundle directly from `https://ga.jspm.io`.
+
+**For production deploys**, run `webjs vendor pin` once and commit
+the result:
+
+```sh
+webjs vendor pin                  # writes .webjs/vendor/importmap.json
+git add .webjs/vendor/
+git commit -m "vendor dayjs"
+```
+
+The pin file holds the resolved jspm.io URLs. Server reads from disk
+on boot; no `api.jspm.io` call needed in production. Deterministic
+across deploys.
+
+**For offline-capable / strict-CSP production**, use `--download`:
+
+```sh
+webjs vendor pin --download       # also vendors bundle bytes locally
+git add .webjs/vendor/
+git commit -m "vendor + download dayjs"
+```
+
+Bundle files land in `.webjs/vendor/<pkg>@<version>.js`. importmap
+points at local `/__webjs/vendor/` paths. Browser fetches from your
+own origin. Suitable for `script-src 'self'` CSP, air-gapped deploys,
+or compliance environments. See [docs.webjs.com Deployment → CSP](https://docs.webjs.com/docs/deployment#csp).
+
+**Other CLI commands:**
+
+```sh
+webjs vendor list                 # show pinned packages with versions
+webjs vendor unpin <pkg>          # remove one entry from pin file
+```
+
+Same posture as Rails 7 + importmap-rails: explicit pin command,
+committed manifest, optional `--download` for full offline capability.
+
+**Don't auto-run `webjs vendor pin` in `predev` / `prestart`.** Auto-pin
+would silently churn the committed importmap.json as jspm.io resolves
+URLs or transitive deps drift. Pin is a deliberate developer action,
+like `npm install` itself.
+
+**Do NOT modify the `.webjs/` lines in `.gitignore` / `.dockerignore`.**
+The scaffolded pattern is three lines (`.webjs/*` + `!.webjs/vendor/`
++ `!.webjs/vendor/**`) and is structurally load-bearing. Collapsing it
+to a single `.webjs/` excludes the parent directory; once the parent
+is excluded, git cannot re-include `.webjs/vendor/` via a child
+negation (gitignore semantics: parent exclusion blocks child
+negations). The breakage is invisible: `webjs vendor pin` runs, writes
+files, and git silently ignores them. Production then has no
+importmap.json and the server falls back to calling api.jspm.io on
+every cold start. The `gitignore-vendor-not-ignored` lint rule
+(`webjs check`) verifies the pattern with `git check-ignore` and will
+fail CI if it regresses.
+
 ## Imports
 
 ```ts
@@ -770,9 +840,9 @@ composition, so a nested shell ends up dropped by the HTML parser.
    ```
 
    If you turn `erasableSyntaxOnly` off and use non-erasable syntax,
-   the dev server falls back to esbuild and emits inline sourcemaps
-   for those specific files: roughly 3x wire bytes per request, and
-   stack-trace positions are no longer byte-exact. The
+   the dev server fails at strip time and returns a 500 naming the
+   file and pointing at the `no-non-erasable-typescript` lint rule.
+   webjs is buildless end-to-end and has no bundler fallback. The
    `erasable-typescript-only` convention check warns when the flag
    is missing or set to false.
 9. **No em-dashes (U+2014) anywhere, and no hyphen or semicolon used

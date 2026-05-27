@@ -87,25 +87,85 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
 });
 
-/* ------------ vendor bundles ------------ */
+/* ------------ vendor URLs: --download mode handler ------------ */
+//
+// In the default jspm.io mode, the importmap routes bare imports to
+// https://ga.jspm.io/npm:<pkg>@<version>/... URLs and the browser
+// fetches the bundle directly from jspm.io. The webjs server never
+// sees those requests.
+//
+// In `webjs vendor pin --download` mode, the importmap routes to
+// local `/__webjs/vendor/<filename>.js` paths and the server serves
+// the downloaded bundle from `.webjs/vendor/<filename>.js`. The
+// handler exists but returns 404 when the file isn't on disk.
 
-test('handle: /__webjs/vendor/<pkg>.js serves a built bundle for a known pkg', async () => {
-  // Use the repo root as appDir so node_modules is resolvable via the
-  // monorepo hoisting chain: bundlePackage() uses createRequire against
-  // the appDir's package.json.
-  const repoRoot = resolve(__dirname, '..');
-  const silent = { info: () => {}, warn: () => {}, error: () => {} };
-  const app = await createRequestHandler({ appDir: repoRoot, dev: true, logger: silent });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/picocolors.js'));
-  assert.equal(resp.status, 200);
-  assert.ok(resp.headers.get('content-type').includes('javascript'));
-});
-
-test('handle: /__webjs/vendor/unknown.js → 404', async () => {
+test('handle: /__webjs/vendor/<file>.js returns 404 when no downloaded bundle exists', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/vendor/this-pkg-does-not-exist-xyz.js'));
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/anything@1.0.0.js'));
   assert.equal(resp.status, 404);
+  // Response body should hint at the resolution path.
+  const body = await resp.text();
+  assert.match(body, /webjs vendor pin --download/);
+});
+
+test('handle: /__webjs/vendor/<file>.js serves a real bundle when present on disk', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get('content-type') || '', /javascript/);
+  const body = await resp.text();
+  assert.equal(body, 'export default 1;');
+});
+
+test('handle: /__webjs/vendor/ rejects path-traversal filenames', async () => {
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/..%2F..%2Fetc%2Fpasswd.js'));
+  // Either 400 (rejected by serveDownloadedBundle's safety check) or
+  // 404 (URL parser normalised it away). Both are safe outcomes.
+  assert.ok(resp.status === 400 || resp.status === 404, `expected 400 or 404, got ${resp.status}`);
+});
+
+test('handle: /__webjs/vendor/<file>.js rejects non-GET/HEAD/OPTIONS methods with 405', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js', { method }));
+    assert.equal(resp.status, 405, `${method} should return 405`);
+    assert.equal(resp.headers.get('allow'), 'GET, HEAD, OPTIONS');
+  }
+});
+
+test('handle: /__webjs/vendor/<file>.js OPTIONS preflight returns 204 with Allow header', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js', { method: 'OPTIONS' }));
+  assert.equal(resp.status, 204);
+  assert.equal(resp.headers.get('allow'), 'GET, HEAD, OPTIONS');
+});
+
+test('handle: /__webjs/vendor/<file>.js HEAD returns same headers as GET, empty body', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const head = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js', { method: 'HEAD' }));
+  assert.equal(head.status, 200);
+  assert.match(head.headers.get('content-type') || '', /javascript/);
+  const body = await head.text();
+  assert.equal(body, '', 'HEAD body must be empty');
 });
 
 /* ------------ static files + TS compilation ------------ */
@@ -133,7 +193,7 @@ test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
   assert.ok(resp.headers.get('content-type').includes('image/x-icon'));
 });
 
-test('handle: .ts source served as JS with esbuild-stripped types', async () => {
+test('handle: .ts source served as JS with types stripped', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/widget.ts':
@@ -148,39 +208,54 @@ test('handle: .ts source served as JS with esbuild-stripped types', async () => 
   assert.ok(!/: string/.test(code));
 });
 
-test('handle: .ts source supports non-erasable TS (enum, parameter properties)', async () => {
-  // Proves the browser-bound transform falls back to esbuild when
-  // Node's built-in stripper (module.stripTypeScriptTypes) rejects
-  // non-erasable syntax. The fallback emits an inline sourcemap so
-  // DevTools can still resolve positions for the regenerated JS.
-  // Server-side imports of the same file go through Node's native
-  // strip-types path; this works for erasable TS but errors at load
-  // time for non-erasable syntax. App code is held to erasable TS
-  // via tsconfig's erasableSyntaxOnly; this fallback exists for
-  // third-party .ts dependencies that publish non-erasable source.
+test('handle: .ts source with non-erasable TS returns 500 pointing at the lint rule (DEV)', async () => {
+  // webjs is buildless end-to-end. Node's stripTypeScriptTypes
+  // rejects enum / namespace / parameter properties / legacy
+  // decorators / import = require; there is no longer an esbuild
+  // fallback. The dev server returns a clean 500 with the file path
+  // and a pointer at the no-non-erasable-typescript lint rule.
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'components/advanced.ts': `
       enum Status { Active = 'active', Inactive = 'inactive' }
-      export class Box {
-        constructor(public readonly status: Status) {}
-        describe(): string { return \`box is \${this.status}\`; }
-      }
       export const initial: Status = Status.Active;
     `,
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/components/advanced.ts'));
-  assert.equal(resp.status, 200);
-  const code = await resp.text();
-  // enum compiled to a runtime object
-  assert.ok(/Status\s*\[/.test(code) || /Status\s*=\s*\{/.test(code) || /\(Status\b/.test(code),
-    `enum should compile to runtime code; got:\n${code.slice(0, 400)}`);
-  // parameter property desugared to constructor body assignment
-  assert.ok(/this\.status\s*=\s*status/.test(code),
-    `parameter property should desugar; got:\n${code.slice(0, 400)}`);
-  // type annotations gone
-  assert.ok(!/:\s*Status\b/.test(code), 'type annotations should be stripped');
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  assert.match(body, /non-erasable TypeScript/, 'body should explain the error');
+  assert.match(body, /advanced\.ts/, 'body should name the offending file');
+  assert.match(body, /no-non-erasable-typescript/, 'body should point at the lint rule');
+});
+
+test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no filesystem path leak)', async () => {
+  // Prod mode must NOT leak filesystem paths or Node's error message
+  // (which can include source snippets) to the browser. Lint catches
+  // non-erasable TS at edit time, so this only fires if someone
+  // misconfigured tsconfig and shipped. Operators get full detail in
+  // server logs (via console.error).
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'components/advanced.ts': `
+      enum Status { Active = 'active' }
+      export const initial: Status = Status.Active;
+    `,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const resp = await app.handle(new Request('http://x/components/advanced.ts'));
+  assert.equal(resp.status, 500);
+  const body = await resp.text();
+  // Filesystem path must NOT appear in the response.
+  assert.ok(!body.includes(appDir),
+    `prod response must not leak appDir; got: ${body}`);
+  // Node's specific error text must NOT appear either (it can include source).
+  assert.ok(!/enum is not supported/.test(body),
+    `prod response must not leak Node's stripTypeScriptTypes error message; got: ${body}`);
+  // But the response should still be helpful enough that the operator
+  // knows where to look (server logs).
+  assert.match(body, /Check server logs/i);
 });
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {
@@ -193,8 +268,8 @@ test('handle: /foo.js falls through to sibling foo.ts when .js is missing', asyn
   const resp = await app.handle(new Request('http://x/components/util.js'));
   assert.equal(resp.status, 200);
   const code = await resp.text();
-  // esbuild may rewrite `export const foo` to a trailing `export { foo };`
-  // - both forms should mention the identifier.
+  // Node's stripTypeScriptTypes preserves the source verbatim aside
+  // from type annotations; the identifier reaches the output unchanged.
   assert.ok(/greeting/.test(code), `missing greeting in ${code.slice(0, 200)}`);
   assert.ok(/["']hello["']/.test(code));
 });
@@ -685,7 +760,7 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
   assert.equal(resp.status, 403);
 });
 
-/* ------------ tsResponse cache path + missing esbuild path ------------ */
+/* ------------ tsResponse cache path ------------ */
 
 test('handle: TS source responses share an mtime-keyed cache (second req is fast)', async () => {
   const appDir = makeApp({
@@ -956,3 +1031,59 @@ test('handle: percent-encoded pathname is decoded before matching', async () => 
   assert.ok((await resp.text()).includes('slug:hello world'));
 });
 
+
+test('handle: /__webjs/vendor/ round-trips raw bytes byte-for-byte (no UTF-8 decode/re-encode)', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  // Construct a Buffer mixing valid ASCII JS, a comment with raw
+  // non-UTF-8 bytes (lone 0xC3 followed by ASCII would be invalid
+  // UTF-8 and survive utf8 decode only via U+FFFD replacement),
+  // and trailing valid JS. The exact bytes must round-trip end-to-
+  // end for the browser's SRI check to pass.
+  const orig = Buffer.concat([
+    Buffer.from('/* '),
+    Buffer.from([0xC3, 0x28, 0xA0, 0xFF]),
+    Buffer.from(' */ export default 1;'),
+  ]);
+  writeFileSync(`${appDir}/.webjs/vendor/binary@1.0.0.js`, orig);
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/binary@1.0.0.js'));
+  assert.equal(resp.status, 200);
+  const served = Buffer.from(await resp.arrayBuffer());
+  assert.equal(served.length, orig.length, 'served length must match on-disk length exactly');
+  assert.ok(served.equals(orig), 'served bytes must be byte-identical to on-disk bytes');
+});
+
+test('handle: /__webjs/vendor/ serves filenames with semver build-metadata "+" character', async () => {
+  // serveDownloadedBundle's filename allowlist must include `+` so
+  // packages with build-metadata versions like `1.0.0+build.42`
+  // (legal per semver) can be served. Previously the regex was
+  // /^[A-Za-z0-9@._-]+\.js$/ which rejected `+` and bundles with
+  // such versions wrote to disk fine but 400'd on serve.
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/foo@1.0.0+build.42.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/foo@1.0.0+build.42.js'));
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get('content-type') || '', /javascript/);
+  const body = await resp.text();
+  assert.equal(body, 'export default 1;');
+});
+
+test('handle: /__webjs/vendor/ sets ETag for downstream cache revalidation', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: false });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  const etag = resp.headers.get('etag');
+  assert.ok(etag, 'etag header must be present');
+  assert.match(etag, /^"[0-9a-f]{16}"$/, 'etag is a 16-char hex string in quotes');
+  // Same content must produce the same ETag (deterministic).
+  const resp2 = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  assert.equal(resp2.headers.get('etag'), etag);
+});

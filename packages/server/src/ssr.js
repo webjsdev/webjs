@@ -1,7 +1,8 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy } from '@webjsdev/core';
-import { importMapTag } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, importMapHash } from './importmap.js';
+import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
 
@@ -93,6 +94,7 @@ export async function ssrPage(route, params, url, opts) {
       opts.req,
       url,
       metadata,
+      nonce,
     );
   } catch (err) {
     if (isRedirect(err)) {
@@ -103,6 +105,10 @@ export async function ssrPage(route, params, url, opts) {
       const html = await ssrNotFoundHtml(null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
+    // Error paths still need to honor the request's CSP nonce so the
+    // error page's boot scripts (when moduleUrls is non-empty) and
+    // the meta csp-nonce tag both pass strict-CSP enforcement.
+    const errNonce = opts.req ? getNonce(opts.req) : undefined;
     // Try nearest error.js (innermost → outermost).
     for (let i = route.errors.length - 1; i >= 0; i--) {
       try {
@@ -111,7 +117,7 @@ export async function ssrPage(route, params, url, opts) {
         const tree = await mod.default({ ...ctx, error: err });
         const body = await renderToString(tree);
         const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
-        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev });
+        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
       } catch (nested) {
         // fall through to next error boundary
@@ -125,7 +131,7 @@ export async function ssrPage(route, params, url, opts) {
         )}</pre>`
       : `<h1>Server error</h1><p>Something went wrong. Please try again.</p>`;
     return htmlResponse(
-      wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev }),
+      wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev, nonce: errNonce }),
       500,
       opts.req,
       url
@@ -156,6 +162,11 @@ function htmlResponse(html, status, req, url, metadata) {
   // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
+  // X-Webjs-Build carries the current importmap hash so the client
+  // router can detect post-deploy importmap changes on EVERY
+  // response, including the X-Webjs-Have partial responses that
+  // omit the head entirely. See router-client.js applySwap.
+  headers.set('x-webjs-build', importMapHash());
   if (req && !readToken(req)) {
     const secure = url ? url.protocol === 'https:' : false;
     headers.append('set-cookie', cookieHeader(newToken(), { secure }));
@@ -175,10 +186,12 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
       body = `<h1>404: Not found</h1><pre>${escapeHtml(String(e))}</pre>`;
     }
   }
+  const nonce = opts.req ? getNonce(opts.req) : undefined;
   return wrapInDocument(body, {
     metadata: { title: 'Not found' },
     moduleUrls: [],
     dev: opts.dev,
+    nonce,
   });
 }
 
@@ -632,11 +645,10 @@ export function publicEnvShim(opts) {
     }
   }
   env.NODE_ENV = opts.dev ? 'development' : 'production';
-  const json = JSON.stringify(env).replace(/<\//g, '<\\/');
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
   return `<script${n}>`
     + `window.process=window.process||{};`
-    + `window.process.env=Object.assign(window.process.env||{},${json});`
+    + `window.process.env=Object.assign(window.process.env||{},${jsonForScriptTag(env)});`
     + `</script>`;
 }
 
@@ -646,12 +658,12 @@ function wrapHead(opts) {
   // the request's CSP header by the caller.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
 
-  const imports = opts.moduleUrls.map((u) => `import ${JSON.stringify(u)};`).join('\n');
+  const imports = opts.moduleUrls.map((u) => `import ${jsonForScriptTag(u)};`).join('\n');
   const lazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
     ? opts.lazyComponents
     : null;
   const lazyBoot = lazyEntries
-    ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${JSON.stringify(lazyEntries)});`
+    ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${jsonForScriptTag(lazyEntries)});`
     : '';
   const boot = (imports || lazyBoot) ? `<script type="module"${n}>\n${imports}${lazyBoot}\n</script>` : '';
   const reload = opts.dev ? `<script type="module"${n} src="/__webjs/reload.js"></script>` : '';
@@ -910,11 +922,33 @@ function wrapHead(opts) {
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
   // (linkTags array was declared earlier so the metadata block above can
   // push icons / canonical / hreflang / archives / etc. into it.)
+  //
+  // Cross-origin URLs (vendor packages served from jspm.io etc.) MUST
+  // carry `crossorigin="anonymous"` on the preload link. Without it
+  // the browser either ignores the preload entirely or double-fetches
+  // (once for the preload as a non-CORS request, once for the actual
+  // module as a CORS request, defeating the optimization). Same-origin
+  // URLs get no attribute; adding `crossorigin=""` there would also
+  // double-fetch in some browsers because the preload becomes CORS
+  // but the import doesn't.
+  // CSP nonce on the preload link: under strict CSP (script-src
+  // 'nonce-...') the browser also gates modulepreload by the same
+  // policy. Without the attribute the preload is blocked and the
+  // import either falls back to a cold fetch or fails. Rails (via
+  // importmap-rails) applies nonce on every modulepreload tag for
+  // the same reason.
+  const noncePreload = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
   for (const url of opts.moduleUrls) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
+    linkTags.push(
+      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
+    );
   }
   for (const url of opts.preloads || []) {
-    linkTags.push(`<link rel="modulepreload" href="${escapeAttr(url)}">`);
+    linkTags.push(
+      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
+    );
   }
   if (Array.isArray(m.preload)) {
     for (const p of m.preload) {
@@ -1010,10 +1044,11 @@ function wrapHead(opts) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+${opts.nonce ? `<meta name="csp-nonce" content="${escapeAttr(opts.nonce)}">` : ''}
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
-${importMapTag()}
+${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
 ${boot}
 ${reload}
@@ -1126,12 +1161,15 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
  * @param {URL | undefined} url
  * @param {Record<string, any>} [metadata]
  */
-function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata) {
+function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
+  // See htmlResponse: build hash on every response for the client
+  // router's importmap-mismatch detection on partial swaps.
+  headers.set('x-webjs-build', importMapHash());
   if (req && !readToken(req)) {
     const secure = url ? url.protocol === 'https:' : false;
     headers.append('set-cookie', cookieHeader(newToken(), { secure }));
@@ -1169,9 +1207,16 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
             // Emit just the <template>: the MutationObserver-based resolver
             // in the boot script detects it and swaps it into the placeholder.
             // Falls back to the __webjsResolve global for browsers without MO.
+            // The fallback <script> carries the request's CSP nonce so
+            // strict-CSP enforcement passes. Browsers that support
+            // MutationObserver (all evergreen) handle the swap via the
+            // boot script's observer and skip this fallback; the
+            // <script> is here for legacy / extremely-restrictive
+            // environments. Either way it must be nonce-signed.
+            const scriptNonce = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
             const chunk =
               `<template data-webjs-resolve="${r.id}">${r.html}</template>` +
-              `<script>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
+              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
             controller.enqueue(encoder.encode(chunk));
           }
         }
@@ -1208,6 +1253,17 @@ function toUrlPath(file, appDir) {
 /**
  * Extract a CSP nonce from the request's Content-Security-Policy header.
  * Matches `'nonce-<base64>'` in the script-src directive.
+ *
+ * The regex matches the first `nonce-...` token anywhere in the
+ * header, regardless of which directive it sits under. This is
+ * intentional: in practice every reasonable CSP uses the same
+ * nonce across `script-src` and `style-src` (a per-request
+ * single-nonce model), and webjs only emits `<script>` /
+ * `<link rel="modulepreload">` tags, so reading the first match
+ * is the right behaviour. A future caller that emits styled
+ * inline content under a separate style nonce would need to
+ * extend this to be directive-scoped.
+ *
  * @param {Request} req
  * @returns {string | undefined}
  */
@@ -1224,6 +1280,44 @@ function escapeHtml(s) {
 /** @param {string} s */
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+/**
+ * Decide whether a `<link rel="modulepreload">` href needs a
+ * `crossorigin="anonymous"` attribute. True for absolute URLs with
+ * an http(s) scheme (vendor packages from jspm.io etc.); false for
+ * same-origin paths like `/__webjs/core/index.js`. Browsers require
+ * crossorigin on cross-origin module preload, else the preload is
+ * wasted or double-fetched. Same-origin URLs must NOT have it for
+ * the same reason in reverse.
+ *
+ * Exported for tests; production callers use it via documentParts.
+ *
+ * @param {string} url
+ * @returns {string}  either ` crossorigin="anonymous"` or empty
+ */
+export function preloadCrossOriginAttr(url) {
+  return /^https?:\/\//i.test(url) ? ' crossorigin="anonymous"' : '';
+}
+
+/**
+ * Look up the SRI integrity hash for a vendor URL and format it as a
+ * `integrity="sha384-..."` attribute. Empty string for URLs without a
+ * known hash (framework files, user code, vendor URLs in live-API
+ * mode without a pin file).
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function integrityAttr(url) {
+  const hash = vendorIntegrityFor(url);
+  // Belt and suspenders: readPinFile already validates the integrity
+  // value end-to-end against /^sha(256|384|512)-[A-Za-z0-9+/=]+$/, so
+  // a valid hash has no HTML-special chars and escapeAttr is a no-op.
+  // But emission goes through the same attribute-injection-safe path
+  // as everything else in the SSR pipeline so a future regression in
+  // the validator doesn't bypass it.
+  return hash ? ` integrity="${escapeAttr(hash)}"` : '';
 }
 
 /**

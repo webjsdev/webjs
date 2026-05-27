@@ -606,7 +606,7 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 // Webjs UI components are tiered:
@@ -638,8 +638,13 @@ const navLink = (href: string, label: string) => html\`
 \`;
 
 export default function RootLayout({ children }: { children: unknown }) {
+  // Read the in-flight request's CSP nonce so the theme-detection
+  // inline script below passes strict CSP (script-src 'nonce-...').
+  // Returns '' when no CSP nonce is set, in which case the attribute
+  // is empty and the browser ignores it.
+  const nonce = cspNonce();
   return html\`
-    <script>
+    <script nonce="\${nonce}">
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');

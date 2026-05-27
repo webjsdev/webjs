@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 import { checkConventions } from '../../src/check.js';
 
@@ -10,6 +11,136 @@ async function makeTempApp() {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-check-'));
   return dir;
 }
+
+async function writeFileEnsureDir(filePath, contents) {
+  const dir = filePath.slice(0, filePath.lastIndexOf('/'));
+  await mkdir(dir, { recursive: true });
+  await writeFile(filePath, contents);
+}
+
+/**
+ * Tests for the no-non-erasable-typescript rule. Scans .ts source
+ * for the four constructs the framework's type-stripper rejects:
+ * enum, namespace with values, constructor parameter properties,
+ * `import = require`. Each test plants one offender and asserts
+ * the rule flags it.
+ */
+
+test('no-non-erasable-typescript: flags enum declaration', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'modules', 'auth', 'types.ts'),
+      `export enum Status { Active = 'active', Inactive = 'inactive' }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('types.ts'));
+    assert.ok(v, 'expected enum to be flagged');
+    assert.ok(v.message.includes('enum'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags constructor parameter property', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'box.ts'),
+      `export class Box {
+  constructor(public readonly width: number, public readonly height: number) {}
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('box.ts'));
+    assert.ok(v, 'expected parameter property to be flagged');
+    assert.ok(v.message.includes('parameter property'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags namespace with values', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'ns.ts'),
+      `export namespace Utils {
+  export const VERSION = '1.0';
+  export function bump() { return VERSION; }
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('ns.ts'));
+    assert.ok(v, 'expected namespace with values to be flagged');
+    assert.ok(v.message.includes('namespace'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags import = require', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'legacy.ts'),
+      `import legacy = require('legacy-module');\nexport { legacy };\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('legacy.ts'));
+    assert.ok(v, 'expected import = require to be flagged');
+    assert.ok(v.message.includes('import = require'), 'message should name the pattern');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: passes for clean erasable .ts file', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'clean.ts'),
+      `export type Status = 'active' | 'inactive';
+export interface Box { width: number; height: number; }
+export const STATUS: Record<Status, number> = { active: 1, inactive: 0 };
+export class Counter {
+  count: number;
+  constructor(initial: number) { this.count = initial; }
+  increment(): void { this.count++; }
+}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('clean.ts'));
+    assert.equal(v, undefined, 'clean erasable code should not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: skips node_modules and _private folders', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'node_modules', 'somepkg', 'index.ts'),
+      `export enum Skip { A, B }\n`,
+    );
+    await writeFileEnsureDir(
+      join(appDir, '_private', 'helper.ts'),
+      `export enum AlsoSkip { A, B }\n`,
+    );
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'caught.ts'),
+      `export enum Caught { A, B }\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const all = violations.filter((v) => v.rule === 'no-non-erasable-typescript');
+    assert.equal(all.length, 1, `expected one violation, got ${all.length}: ${all.map(v => v.file).join(', ')}`);
+    assert.ok(all[0].file.includes('caught.ts'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 
 test('tag-name-has-hyphen: flags component without hyphen in tag', async () => {
   const appDir = await makeTempApp();
@@ -1013,6 +1144,97 @@ export async function login() { return 1; }
     const violations = await checkConventions(appDir);
     const v = violations.find((x) => x.rule === 'use-server-needs-extension');
     assert.equal(v, undefined, 'override should disable the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Tests for the gitignore-vendor-not-ignored rule. Uses a real
+ * `git init` in a temp directory so `git check-ignore` behaves
+ * exactly as it would in a real project.
+ */
+
+function initGit(appDir) {
+  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe' });
+  return result.status === 0;
+}
+
+test('gitignore-vendor-not-ignored: flags the broken `.webjs/` pattern', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    // The structurally-broken pattern: parent excluded, child negations
+    // can never re-include anything because git stops at the parent.
+    await writeFile(join(appDir, '.gitignore'), '.webjs/\n!.webjs/vendor/\n');
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.ok(v, 'expected gitignore-vendor-not-ignored violation');
+    assert.match(v.fix, /\.webjs\/\*/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: passes for the correct pattern', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'correct pattern should not violate');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: flags broader `*.js` rule that hides bundle files', async () => {
+  // The pin manifest gets through because it ends in .json, but
+  // `webjs vendor pin --download` writes <pkg>@<version>.js files
+  // and those get blocked. Two-probe check catches this.
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.ok(v, 'broader *.js rule should be flagged');
+    assert.match(v.message, /sample-pkg|\.js/, 'message should reference the bundle file probe');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: skipped when not a git repo', async () => {
+  const appDir = await makeTempApp();
+  try {
+    // No `git init`. A .gitignore exists but there is no .git/ dir,
+    // so the rule must skip rather than emit a false positive.
+    await writeFile(join(appDir, '.gitignore'), '.webjs/\n');
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'rule must skip when .git is absent');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    // git repo exists but no .gitignore at all (user has not opted
+    // into ignore rules yet). Rule must skip.
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, 'rule must skip when .gitignore is absent');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

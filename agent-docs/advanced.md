@@ -40,10 +40,16 @@ Five stacked zero-build optimizations:
    `IntersectionObserver` (200px root margin). The SSR-rendered DSD content
    is visible immediately. `static hydrate = 'visible'` further defers
    `connectedCallback` activation. Ideal for below-the-fold widgets.
-5. **Auto-vendor bundling (Vite-style optimizeDeps).** At startup the server
-   scans client-reachable source for bare npm import specifiers. Each
-   package is bundled into a single ESM file via esbuild and served at
-   `/__webjs/vendor/<pkg>.js`. The import map is populated automatically.
+5. **Auto-vendor via jspm.io (Rails 7 + importmap-rails posture).** At
+   startup the server scans client-reachable source for bare npm import
+   specifiers. Each `pkg@version` is resolved through `api.jspm.io/generate`
+   to a CDN URL (`https://ga.jspm.io/npm:<pkg>@<version>/...`) and added
+   to the import map; the browser fetches each package directly from
+   the CDN. `webjs vendor pin` commits the resolved URLs + SHA-384
+   integrity hashes to `.webjs/vendor/importmap.json` for reproducible
+   deploys; `webjs vendor pin --download` also caches the bundle bytes
+   locally under `.webjs/vendor/<pkg>@<version>.js` for air-gapped /
+   strict-CSP deployments. No bundler runs at any point.
 
 ## No-build production model
 
@@ -53,8 +59,15 @@ production. The Rails 7+ / Hotwire pattern:
 
 - **Importmap-driven**: bare-specifier imports (`from "react"`) are
   resolved via `<script type="importmap">` emitted into the document
-  head. Each package is auto-bundled once at server startup (`vendor.js`)
-  and served at `/__webjs/vendor/<pkg>.js`.
+  head. By default each package resolves through `api.jspm.io/generate`
+  to a `https://ga.jspm.io/npm:<pkg>@<version>/...` URL and the browser
+  fetches it from the CDN directly. `webjs vendor pin` commits the
+  resolved URLs + SHA-384 integrity hashes to `.webjs/vendor/importmap.json`
+  for reproducible deploys; `webjs vendor pin --download` additionally
+  caches each bundle to `.webjs/vendor/<pkg>@<version>.js` and rewrites
+  the importmap to `/__webjs/vendor/<pkg>@<version>.js` so the server
+  serves the bytes from disk (air-gapped / strict-CSP path). No bundler
+  runs at any point.
 - **Per-file ESM serving**: every app `.js` / `.ts` becomes its own HTTP
   resource. The browser walks the import graph and fetches each module
   on demand.
