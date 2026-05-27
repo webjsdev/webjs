@@ -956,7 +956,7 @@ function init(modules) {
             `attribute '${ctx.attr}' of type '${checker.typeToString(propType)}' on <${ctx.tag}>.`,
           category: ts.DiagnosticCategory.Error,
           code: 9001,
-          source: 'webjskit-ts-plugin',
+          source: 'webjsdev-ts-plugin',
         });
       }
     }
