@@ -59,8 +59,15 @@ production. The Rails 7+ / Hotwire pattern:
 
 - **Importmap-driven**: bare-specifier imports (`from "react"`) are
   resolved via `<script type="importmap">` emitted into the document
-  head. Each package is auto-bundled once at server startup (`vendor.js`)
-  and served at `/__webjs/vendor/<pkg>.js`.
+  head. By default each package resolves through `api.jspm.io/generate`
+  to a `https://ga.jspm.io/npm:<pkg>@<version>/...` URL and the browser
+  fetches it from the CDN directly. `webjs vendor pin` commits the
+  resolved URLs + SHA-384 integrity hashes to `.webjs/vendor/importmap.json`
+  for reproducible deploys; `webjs vendor pin --download` additionally
+  caches each bundle to `.webjs/vendor/<pkg>@<version>.js` and rewrites
+  the importmap to `/__webjs/vendor/<pkg>@<version>.js` so the server
+  serves the bytes from disk (air-gapped / strict-CSP path). No bundler
+  runs at any point.
 - **Per-file ESM serving**: every app `.js` / `.ts` becomes its own HTTP
   resource. The browser walks the import graph and fetches each module
   on demand.
