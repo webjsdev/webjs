@@ -1031,3 +1031,41 @@ test('handle: percent-encoded pathname is decoded before matching', async () => 
   assert.ok((await resp.text()).includes('slug:hello world'));
 });
 
+
+test('handle: /__webjs/vendor/ round-trips raw bytes byte-for-byte (no UTF-8 decode/re-encode)', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  // Construct a Buffer mixing valid ASCII JS, a comment with raw
+  // non-UTF-8 bytes (lone 0xC3 followed by ASCII would be invalid
+  // UTF-8 and survive utf8 decode only via U+FFFD replacement),
+  // and trailing valid JS. The exact bytes must round-trip end-to-
+  // end for the browser's SRI check to pass.
+  const orig = Buffer.concat([
+    Buffer.from('/* '),
+    Buffer.from([0xC3, 0x28, 0xA0, 0xFF]),
+    Buffer.from(' */ export default 1;'),
+  ]);
+  writeFileSync(`${appDir}/.webjs/vendor/binary@1.0.0.js`, orig);
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/binary@1.0.0.js'));
+  assert.equal(resp.status, 200);
+  const served = Buffer.from(await resp.arrayBuffer());
+  assert.equal(served.length, orig.length, 'served length must match on-disk length exactly');
+  assert.ok(served.equals(orig), 'served bytes must be byte-identical to on-disk bytes');
+});
+
+test('handle: /__webjs/vendor/ sets ETag for downstream cache revalidation', async () => {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/fake@1.0.0.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: false });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  const etag = resp.headers.get('etag');
+  assert.ok(etag, 'etag header must be present');
+  assert.match(etag, /^"[0-9a-f]{16}"$/, 'etag is a 16-char hex string in quotes');
+  // Same content must produce the same ETag (deterministic).
+  const resp2 = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
+  assert.equal(resp2.headers.get('etag'), etag);
+});

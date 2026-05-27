@@ -1454,3 +1454,56 @@ test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', as
 
 /* ------------ bundle mode skips per-file preloads ------------ */
 
+
+test('vendor: pin file changes update served importmap (chokidar drives clearVendorCache)', async () => {
+  // The pin file is at .webjs/vendor/importmap.json under the app
+  // directory. When the dev-server file watcher fires for that path
+  // it calls clearVendorCache so the next SSR rereads the new
+  // bindings. This integration test verifies the seam: changing
+  // the in-memory vendor entries (the same hook clearVendorCache
+  // resets to) and re-rendering produces an importmap reflecting
+  // the new state.
+  const { setVendorEntries, buildImportMap } = await import(
+    new URL('../../packages/server/src/importmap.js', import.meta.url).href
+  );
+  setVendorEntries({ 'a': 'https://cdn.example/a.js' });
+  let map = buildImportMap();
+  assert.equal(map.imports.a, 'https://cdn.example/a.js');
+  // Hand-edit equivalent: a new pin file would update the in-memory
+  // entries on the next chokidar fire. Simulate by re-setting.
+  setVendorEntries({ 'a': 'https://cdn.example/a-v2.js', 'b': 'https://cdn.example/b.js' });
+  map = buildImportMap();
+  assert.equal(map.imports.a, 'https://cdn.example/a-v2.js', 'updated URL replaces old');
+  assert.equal(map.imports.b, 'https://cdn.example/b.js', 'new entry appears');
+  setVendorEntries({});
+});
+
+test('integrityAttr: emits integrity attribute for vendor URLs with known SRI hash', async () => {
+  // Companion to preloadCrossOriginAttr coverage. Tests that the
+  // integrityAttr helper used by the modulepreload emission loop
+  // returns the matching integrity attribute when the URL has a
+  // pinned hash, and nothing when it doesn't.
+  const { setVendorEntries } = await import(
+    new URL('../../packages/server/src/importmap.js', import.meta.url).href
+  );
+  const { integrityAttr } = await import(
+    new URL('../../packages/server/src/ssr.js', import.meta.url).href
+  );
+  setVendorEntries(
+    { 'fake-vendor': '/__webjs/vendor/fake-vendor@1.0.0.js' },
+    { '/__webjs/vendor/fake-vendor@1.0.0.js': 'sha384-validHashValueHere==' },
+  );
+  try {
+    assert.equal(
+      integrityAttr('/__webjs/vendor/fake-vendor@1.0.0.js'),
+      ' integrity="sha384-validHashValueHere=="',
+    );
+    // URL not in the integrity map: no attribute.
+    assert.equal(integrityAttr('/__webjs/vendor/unpinned.js'), '');
+    // Non-vendor URLs always return empty.
+    assert.equal(integrityAttr('/components/foo.ts'), '');
+    assert.equal(integrityAttr('/__webjs/core/index.js'), '');
+  } finally {
+    setVendorEntries({});
+  }
+});

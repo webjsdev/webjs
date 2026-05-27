@@ -1309,7 +1309,7 @@ export function preloadCrossOriginAttr(url) {
  * @param {string} url
  * @returns {string}
  */
-function integrityAttr(url) {
+export function integrityAttr(url) {
   const hash = vendorIntegrityFor(url);
   // Belt and suspenders: readPinFile already validates the integrity
   // value end-to-end against /^sha(256|384|512)-[A-Za-z0-9+/=]+$/, so
