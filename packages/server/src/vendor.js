@@ -881,7 +881,14 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
     });
   }
   try {
-    const body = await readFile(join(pinDir(appDir), filename), 'utf8');
+    // Read as raw bytes (no encoding arg). downloadBundle writes the
+    // file from the response arrayBuffer (the same primitive the
+    // browser's SRI implementation hashes), so the bytes on disk are
+    // byte-identical to what jspm.io originally served. Reading with
+    // utf8 here would decode-then-re-encode and risk dropping the SRI
+    // match if any byte didn't round-trip exactly (e.g. invalid
+    // surrogate replacement). Keep the I/O binary end-to-end.
+    const body = await readFile(join(pinDir(appDir), filename));
     return new Response(body, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
