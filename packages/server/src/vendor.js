@@ -963,9 +963,15 @@ export async function listPinned(appDir) {
       // exactly and just need to find the `<bare>@<version>`
       // substring. Stop at the first `/` after the version so we
       // don't include the entry-point path.
+      //
+      // Anchor the match against a non-pkg-name char (or string
+      // start) so a short package name like `ms` doesn't false-
+      // match inside another package's URL like `npm/terms@1.0.0/`.
+      // npm package names use `[a-zA-Z0-9._-]` (plus `@` and `/`
+      // for scoped names), so anything else is a safe boundary.
       const bare = extractPackageName(pkg) || pkg;
       const escapedBare = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const bareMatch = new RegExp(`${escapedBare}@([^/]+)`).exec(url);
+      const bareMatch = new RegExp(`(?:^|[^a-zA-Z0-9_.-])${escapedBare}@([^/]+)`).exec(url);
       if (bareMatch) version = bareMatch[1];
     }
     entries.push({ pkg, version, url, bytes });

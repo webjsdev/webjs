@@ -1614,3 +1614,26 @@ test('findOutdated: returns an Array, not undefined (ASI regression guard)', asy
   assert.equal(result.length, 0);
   await rm(dir, { recursive: true, force: true });
 });
+
+test('listPinned: short package names do not false-match inside other package URLs', async () => {
+  // Regression: a bare-name regex without a boundary check would
+  // find `ms@1.0.0` inside `terms@1.0.0/ms@2.0.0.js`, returning
+  // version 1.0.0 for the `ms` package when the actual version
+  // is 2.0.0. The boundary check ensures the match starts at
+  // a non-pkg-name char (URL separator).
+  const dir = join(tmpdir(), `webjs-list-boundary-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'ms': 'https://cdn.example/npm/terms@1.0.0/ms@2.0.0/index.js',
+    },
+  }));
+  try {
+    const entries = await listPinned(dir);
+    const ms = entries.find(e => e.pkg === 'ms');
+    assert.equal(ms.version, '2.0.0',
+      'must extract ms\'s own version, not the embedded "ms" inside "terms"');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
