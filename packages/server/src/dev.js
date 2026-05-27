@@ -440,13 +440,16 @@ async function handleCore(req, ctx) {
   // the importmap has local `/__webjs/vendor/<file>.js` URLs and this
   // handler serves the committed bundle files from `.webjs/vendor/`.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    // Vendor bundles are read-only static content. Reject non-GET/HEAD
-    // methods up front so a POST/PUT/DELETE to a vendor URL doesn't
-    // come back with the bundle body (some browser prefetchers / probe
-    // tools issue non-GET; treating them as 405 is the standard
-    // static-file behavior).
+    // Vendor bundles are read-only static content. Allow GET/HEAD for
+    // the normal fetch, OPTIONS for any cross-origin preflight (we
+    // return 204 with the same Allow header rather than 405, which
+    // some intermediaries treat as a hard failure even for a CORS
+    // probe), and 405 everything else.
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: { allow: 'GET, HEAD, OPTIONS' } });
+    }
     if (method !== 'GET' && method !== 'HEAD') {
-      return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
+      return new Response(null, { status: 405, headers: { allow: 'GET, HEAD, OPTIONS' } });
     }
     const filename = path.slice('/__webjs/vendor/'.length);
     const resp = await serveDownloadedBundle(filename, appDir, dev);
