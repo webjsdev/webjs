@@ -545,7 +545,7 @@ test('flags number passed where string is declared', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 1, `expected one webjs diagnostic, got ${ours.length}`);
   const m = ours[0].messageText;
   assert.ok(/'number'/.test(m) && /'mode'/.test(m) && /'string'/.test(m),
@@ -570,7 +570,7 @@ test('passes when interpolated value is assignable to declared string type', () 
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 0, `unexpected diagnostics: ${ours.map((d) => d.messageText).join('; ')}`);
 });
 
@@ -593,7 +593,7 @@ test('flags string-or-number against a string-literal-union type', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 1, `expected one diagnostic for string|number against Mode`);
 });
 
@@ -616,7 +616,7 @@ test('does not type-check static (non-interpolated) attribute values', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 0, 'static attribute value should not produce a webjs diagnostic');
 });
 
@@ -639,7 +639,7 @@ test('skips check when component is reachable but the prop has no `declare` anno
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 0, 'no declare → no check, no diagnostic');
 });
 
@@ -665,7 +665,7 @@ test('does not check tags that are not reachable through imports', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjskit-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 0, 'unreachable tag → no value-check (lit-plugin keeps its own "unknown tag" warning)');
 });
 
