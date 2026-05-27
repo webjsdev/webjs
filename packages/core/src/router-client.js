@@ -1309,6 +1309,14 @@ function diffChildren(dst, src) {
 function getCspNonce() {
   if (typeof document === 'undefined') return '';
   const meta = document.querySelector('meta[name="csp-nonce"]');
+  // Read the `content` attribute, not the `.nonce` IDL property.
+  // Turbo's getCspNonce in src/util.js falls back to `.nonce` first
+  // because it can be called against script/link elements (where
+  // browsers DO expose `.nonce` and additionally clear the
+  // `nonce` attribute on document load). The `<meta name="csp-nonce">`
+  // element webjs targets has no `.nonce` IDL (only script + link
+  // elements do per HTML spec), so the only viable source is the
+  // `content` attribute.
   return meta ? meta.getAttribute('content') || '' : '';
 }
 
