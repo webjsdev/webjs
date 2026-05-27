@@ -1091,29 +1091,40 @@ export async function findOutdated(appDir) {
   const entries = await listPinned(appDir);
   if (!entries.length) return [];
   const grouped = groupPinnedByPackage(entries);
-  /** @type {Array<{ pkg: string, current: string, latest: string }>} */
-  const outdated = [];
-  for (const [pkg, versions] of grouped) {
-    // Scoped packages: the `/` between `@scope` and `name` is part of
-    // the URL path, NOT a path separator that should be encoded.
-    // `encodeURIComponent` would emit `%2F`, which the npm registry
-    // accepts but other npm-compatible registries (Verdaccio, JFrog,
-    // GitHub Packages) sometimes reject. The npm-cli uses the literal
-    // form. npm package-name rules disallow URL-unsafe chars so this
-    // is safe.
+  // Fetch in parallel. With sequential awaits a 50-package project
+  // could take 50 × 10s = 500s in the worst case (one npm registry
+  // timeout each). Parallel `Promise.all` collapses this to one
+  // round-trip's wall-clock, while staying well below npm registry's
+  // unauthenticated-client soft rate limit (registry-side concern,
+  // not ours to throttle).
+  //
+  // Scoped packages: the `/` between `@scope` and `name` is part of
+  // the URL path, NOT a path separator that should be encoded.
+  // `encodeURIComponent` would emit `%2F`, which the npm registry
+  // accepts but other npm-compatible registries (Verdaccio, JFrog,
+  // GitHub Packages) sometimes reject. The npm-cli uses the literal
+  // form. npm package-name rules disallow URL-unsafe chars so this
+  // is safe.
+  const queries = [...grouped].map(async ([pkg, versions]) => {
     const meta = await fetchNpmJson(`${NPM_REGISTRY}/${pkg}`);
     const latest = meta?.['dist-tags']?.latest;
-    if (typeof latest !== 'string') continue;
+    if (typeof latest !== 'string') return null;
     // A package can be pinned at multiple versions (subpath imports).
     // Take the max pinned version as the "current" for the comparison
     // so we only report it as outdated when EVERY pinned version
     // trails latest.
     const current = maxSemverVersion([...versions]);
-    if (compareSemver(current, latest) < 0) {
-      outdated.push({ pkg, current, latest });
-    }
-  }
-  return outdated;
+    if (compareSemver(current, latest) >= 0) return null;
+    return { pkg, current, latest };
+  });
+  const results = await Promise.all(queries);
+  // `return` followed by a newline triggers ASI: `return; (expr);`
+  // returns undefined and drops the value. Keep the filter on the
+  // same line as `return` (or pull the result into a variable
+  // first) to avoid the trap.
+  /** @type {Array<{ pkg: string, current: string, latest: string }>} */
+  const out = results.filter((x) => x !== null);
+  return out;
 }
 
 /**

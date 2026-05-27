@@ -1597,3 +1597,20 @@ test('unpinPackage: preserves the pin file provider field after removing an entr
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('findOutdated: returns an Array, not undefined (ASI regression guard)', async () => {
+  // Regression: a `return` followed by a newline + JSDoc-cast parens
+  // triggers automatic semicolon insertion (`return; (expr);`), so
+  // the value gets dropped and findOutdated returns undefined.
+  // Callers like updatePinned then crash with
+  // `Cannot read properties of undefined (reading 'length')`.
+  const dir = join(tmpdir(), `webjs-outdated-arr-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  // No pin file → grouped is empty → no fetches → return empty array.
+  // The interesting assertion is that the return value is an
+  // ARRAY (.length accessible), not undefined.
+  const result = await findOutdated(dir);
+  assert.ok(Array.isArray(result), 'findOutdated must always return an Array');
+  assert.equal(result.length, 0);
+  await rm(dir, { recursive: true, force: true });
+});
