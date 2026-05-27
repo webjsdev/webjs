@@ -101,3 +101,22 @@ test('importMapTag: escapes U+2028 / U+2029 line separators in URLs', () => {
   assert.ok(tag.includes('\\u2029'), 'U+2029 must be escape-encoded');
   setVendorEntries({});
 });
+
+test('importMapTag: escapes `<!--` to defeat HTML script-data-escaped state transition', () => {
+  // The HTML5 tokenizer transitions to "script-data-escaped" when it
+  // sees `<!--` inside a <script> body. From there a subsequent
+  // `<script>` (any casing) hits "script-data-double-escaped" where
+  // a later `</script>` no longer terminates the host element until
+  // a matching `-->` arrives. Without escaping, a vendor URL
+  // carrying `<!--<script>...</script>` could survive the `</` escape
+  // and still break out.
+  setVendorEntries({
+    'evil': 'https://cdn.example/<!--<script>alert(1)</script>--><img src=x>.js',
+  });
+  const tag = importMapTag();
+  assert.ok(!tag.includes('<!--'), 'raw <!-- must not survive');
+  assert.ok(!tag.includes('-->'), 'raw --> must not survive');
+  assert.ok(tag.includes('<\\!--'), '<!-- must be escape-encoded');
+  assert.ok(tag.includes('--\\>'), '--> must be escape-encoded');
+  setVendorEntries({});
+});
