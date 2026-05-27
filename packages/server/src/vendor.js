@@ -1094,7 +1094,14 @@ export async function findOutdated(appDir) {
   /** @type {Array<{ pkg: string, current: string, latest: string }>} */
   const outdated = [];
   for (const [pkg, versions] of grouped) {
-    const meta = await fetchNpmJson(`${NPM_REGISTRY}/${encodeURIComponent(pkg)}`);
+    // Scoped packages: the `/` between `@scope` and `name` is part of
+    // the URL path, NOT a path separator that should be encoded.
+    // `encodeURIComponent` would emit `%2F`, which the npm registry
+    // accepts but other npm-compatible registries (Verdaccio, JFrog,
+    // GitHub Packages) sometimes reject. The npm-cli uses the literal
+    // form. npm package-name rules disallow URL-unsafe chars so this
+    // is safe.
+    const meta = await fetchNpmJson(`${NPM_REGISTRY}/${pkg}`);
     const latest = meta?.['dist-tags']?.latest;
     if (typeof latest !== 'string') continue;
     // A package can be pinned at multiple versions (subpath imports).
