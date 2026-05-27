@@ -592,7 +592,17 @@ function installNavigationMocks({ contentType, body = '', ok = true, captureHead
   globalThis.fetch = async (url, init) => {
     captured.url = String(url);
     captured.headers = init && init.headers ? { ...init.headers } : null;
-    const respHeaders = { 'content-type': contentType, ...headersFn() };
+    // Normalize all response-header keys to lowercase so headers.get
+    // (which itself lowercases its argument per Fetch spec) finds
+    // them regardless of how the test author cased the input. Without
+    // this, a test passing { 'X-Webjs-Build': 'foo' } would silently
+    // see headers.get('x-webjs-build') return null.
+    const raw = { 'content-type': contentType, ...headersFn() };
+    /** @type {Record<string, string>} */
+    const respHeaders = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v != null) respHeaders[String(k).toLowerCase()] = String(v);
+    }
     return {
       ok,
       status: ok ? 200 : 500,
@@ -736,6 +746,31 @@ test('navigate: identical importmap proceeds with partial swap (no reload)', asy
   } finally { restore(); }
 });
 
+test('navigate: response-header lookup is case-insensitive (mock contract)', async () => {
+  // The Fetch spec says Headers.get() is case-insensitive. Our mock
+  // normalizes to lowercase so a test passing `X-Webjs-Build` in any
+  // casing reaches the production code that calls
+  // `resp.headers.get('x-webjs-build')`.
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="A">{"imports":{"x":"/x"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>x</p>',
+    responseHeaders: { 'X-Webjs-Build': 'B' }, // intentionally mixed case
+  });
+  try {
+    await navigate('http://localhost/case');
+    assert.equal(redirect.href, 'http://localhost/case',
+      'mixed-case X-Webjs-Build must still be found by lowercase lookup');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
 test('navigate: importmap drift detected via X-Webjs-Build header on partial response', async () => {
   // Partial-response navs (the X-Webjs-Have optimization) carry only
   // the inner body, no head. Without the X-Webjs-Build header the
@@ -819,6 +854,65 @@ test('navigate: two consecutive importmap mismatches → second falls through (i
       'flag is cleared by the guard after the second mismatch');
   } finally {
     restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('popstate cache restore clears the importmap-reload flag', async () => {
+  // The bug: the reload-flag clear was nested inside
+  // `if (href && !frameId && !revalidating)` so cache restores
+  // (revalidating=true, href=null) never cleared the flag. After
+  // "reload due to deploy → Back to a cached page", the flag would
+  // stay set, suppressing the next legitimate reload. Fix moves the
+  // clear to ANY clean swap including revalidation. This test:
+  // pre-set the flag, popstate to a cached URL, verify cleared.
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const prevPageUrl = _currentPageUrl();
+  sessionStorage.setItem('webjs:importmap-reload', '1');
+  _snapshotCache.set('/cached-here', {
+    html: '<!doctype html><html><head></head><body><!--wj:children:/-->cached<!--/wj:children--></body></html>',
+    scrollX: 0,
+    scrollY: 0,
+  });
+  globalThis.location = /** @type any */ ({
+    href: 'http://localhost/cached-here',
+    pathname: '/cached-here',
+    origin: 'http://localhost',
+    search: '',
+    hash: '',
+  });
+  _setCurrentPageUrl('http://localhost/elsewhere');
+  globalThis.fetch = async () => new Response('<html></html>', {
+    status: 200, headers: { 'content-type': 'text/html' },
+  });
+  const origScrollTo = globalThis.window?.scrollTo;
+  if (globalThis.window) globalThis.window.scrollTo = () => {};
+  document.head.innerHTML = '';
+  document.body.innerHTML = '<!--wj:children:/-->before-pop<!--/wj:children-->';
+  try {
+    // Synchronous assertion: _onPopState calls performNavigation
+    // which runs synchronously until its first await. For a cache-
+    // hit popstate, the entire body up to and including the
+    // cache-restore applySwap and the (un-awaited) background
+    // revalidation kickoff runs sync. So immediately after
+    // _onPopState returns, the cache-restore applySwap has run
+    // BUT the background revalidation's own applySwap (which would
+    // also clear the flag via the no-mismatch path) has not. This
+    // isolates the test to the cache-restore clear specifically.
+    _onPopState({});
+    assert.equal(sessionStorage.getItem('webjs:importmap-reload'), null,
+      'cache restore (revalidating=true) MUST clear the reload flag SYNCHRONOUSLY');
+    // Let the background revalidation finish (avoid unhandled rejection).
+    await new Promise((r) => setTimeout(r, 5));
+  } finally {
+    _snapshotCache.delete('/cached-here');
+    _setCurrentPageUrl(prevPageUrl);
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+    if (globalThis.window) globalThis.window.scrollTo = origScrollTo;
     sessionStorage.removeItem('webjs:importmap-reload');
     document.head.innerHTML = '';
     document.body.innerHTML = '';
