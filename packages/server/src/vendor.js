@@ -39,7 +39,7 @@
  * Matches Rails' "no build" posture literally.
  */
 
-import { readFile, readdir, writeFile, mkdir, unlink, stat } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, unlink, stat, rename } from 'node:fs/promises';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -415,9 +415,9 @@ function pinFilePath(appDir) {
  * Filesystem-safe filename for a downloaded bundle. Encodes the full
  * specifier (which may include a subpath) into a flat filename:
  *
- *   bundleFilename('dayjs', '1.11.13', '')             → 'dayjs@1.11.13.js'
- *   bundleFilename('dayjs', '1.11.13', '/plugin/utc')  → 'dayjs@1.11.13__plugin__utc.js'
- *   bundleFilename('@hotwired/turbo', '8.0.0', '')     → '@hotwired--turbo@8.0.0.js'
+ *   bundleFilenameWithSubpath('dayjs', '1.11.13', '')             returns 'dayjs@1.11.13.js'
+ *   bundleFilenameWithSubpath('dayjs', '1.11.13', '/plugin/utc')  returns 'dayjs@1.11.13__plugin__utc.js'
+ *   bundleFilenameWithSubpath('@hotwired/turbo', '8.0.0', '')     returns '@hotwired--turbo@8.0.0.js'
  *
  * Scoped names use `--` to encode `/`; subpath separators use `__`.
  * Both are reversible round-trip so unpin / list can parse the
@@ -427,12 +427,6 @@ function bundleFilenameWithSubpath(pkgName, version, subpath) {
   const safeName = pkgName.replace(/\//g, '--');
   const safeSubpath = subpath.replace(/\//g, '__');
   return `${safeName}@${version}${safeSubpath}.js`;
-}
-
-/** Backwards-compatible alias for root-package bundle filenames. */
-function bundleFilename(pkgName, version) {
-  const safeName = pkgName.replace(/\//g, '--');
-  return `${safeName}@${version}.js`;
 }
 
 /**
@@ -484,7 +478,15 @@ export async function readPinFile(appDir) {
     for (const [k, v] of Object.entries(parsed.imports)) {
       if (typeof k !== 'string' || typeof v !== 'string') continue;
       if (/[\x00-\x1f\x7f]/.test(k)) continue;
-      if (!/^(?:https?:\/\/|\/)/.test(v)) continue;
+      // Require a non-slash byte after the scheme prefix so a
+      // hand-edited or tampered pin file cannot smuggle a
+      // protocol-relative URL like `//attacker.tld/x.js` past the
+      // filter. Browsers resolve `//host/path` against the document
+      // origin and would happily fetch attacker-controlled code if
+      // the importmap accepted it. The framework itself only writes
+      // `https://ga.jspm.io/...` or `/__webjs/vendor/...`, which both
+      // satisfy the tighter form.
+      if (!/^(?:https?:\/\/[^/]|\/[^/])/.test(v)) continue;
       cleanImports[k] = v;
     }
     if (Object.keys(cleanImports).length === 0) return null;
@@ -528,7 +530,18 @@ async function writePinFile(appDir, imports, integrity) {
     ? { imports, integrity }
     : { imports };
   const body = JSON.stringify(payload, null, 2) + '\n';
-  await writeFile(pinFilePath(appDir), body, 'utf8');
+  // Atomic write: stage into a sibling tmp file, then rename onto the
+  // final path. Rename within the same directory is atomic on POSIX
+  // and on Windows since Node 14+, so a crash mid-write can leave the
+  // tmp file as garbage but cannot corrupt the live pin file. Without
+  // this, a partially-written importmap.json round-trips through
+  // readPinFile as null (fail-closed) but still requires the user to
+  // notice and rerun pin; the rename keeps the live file intact across
+  // every failure mode.
+  const finalPath = pinFilePath(appDir);
+  const tmpPath = `${finalPath}.tmp-${process.pid}-${Date.now()}`;
+  await writeFile(tmpPath, body, 'utf8');
+  await rename(tmpPath, finalPath);
 }
 
 /**
@@ -549,10 +562,16 @@ async function downloadBundle(url, appDir, filename) {
       console.error(`[webjs] download ${url} returned ${response.status}`);
       return null;
     }
-    const body = await response.text();
+    // Hash raw response bytes, not the UTF-8 decoded string. The
+    // browser's SRI implementation hashes the raw body bytes; if we
+    // hashed `.text()` here we'd risk encoding round-trip drift on
+    // any byte sequence the decode-then-re-encode pipeline doesn't
+    // round-trip exactly. arrayBuffer + Buffer.from gives us the
+    // same primitive the browser uses.
+    const buf = Buffer.from(await response.arrayBuffer());
     await mkdir(pinDir(appDir), { recursive: true });
-    await writeFile(join(pinDir(appDir), filename), body, 'utf8');
-    return { bytes: body.length, integrity: sha384Integrity(body) };
+    await writeFile(join(pinDir(appDir), filename), buf);
+    return { bytes: buf.byteLength, integrity: sha384Integrity(buf) };
   } catch (e) {
     console.error(`[webjs] download ${url} failed: ${e && e.message}`);
     return null;
@@ -575,8 +594,11 @@ async function fetchIntegrity(url) {
       console.error(`[webjs] hash ${url} returned ${response.status}`);
       return null;
     }
-    const body = await response.text();
-    return sha384Integrity(body);
+    // Hash raw response bytes so the integrity matches what the
+    // browser computes when fetching the same URL. See the
+    // matching comment in downloadBundle.
+    const buf = Buffer.from(await response.arrayBuffer());
+    return sha384Integrity(buf);
   } catch (e) {
     console.error(`[webjs] hash ${url} failed: ${e && e.message}`);
     return null;
@@ -625,12 +647,22 @@ async function pruneOrphans(appDir, expected) {
  * current source + node_modules: removed packages, bumped versions,
  * and mode switches all leave a clean directory.
  *
+ * On success (at least one install resolved), returns
+ * `{ pins, pruned, downloaded }`. On total failure (one or more
+ * installs were attempted but every jspm.io resolution failed), the
+ * pin file is NOT written and the function returns
+ * `{ pins: [], pruned: [], downloaded: 0, failed: true, attemptedInstalls }`
+ * instead. Callers that need to surface a non-zero exit code key off
+ * `failed`; the field is absent on the success path.
+ *
  * @param {string} appDir
  * @param {{ download?: boolean }} [opts]
  * @returns {Promise<{
- *   pins: Array<{ pkg: string, version: string, url: string, bytes?: number }>,
+ *   pins: Array<{ pkg: string, version: string, url: string, bytes?: number, integrity?: string }>,
  *   pruned: string[],
  *   downloaded: number,
+ *   failed?: boolean,
+ *   attemptedInstalls?: string[],
  * }>}
  */
 export async function pinAll(appDir, opts = {}) {
