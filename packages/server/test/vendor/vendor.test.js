@@ -1473,3 +1473,127 @@ test('pinAll: respects existing pin file provider when --from is not passed', as
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('listPinned: extracts version from jsdelivr CDN URL pattern', async () => {
+  // Bug fix: listPinned only recognized jspm.io URLs (`npm:pkg@ver/`).
+  // jsdelivr/unpkg/skypack pins fell through to '(unknown)', which
+  // broke audit/outdated/update for any non-default provider. New
+  // logic derives version by searching for `<pkg-name>@<version>`
+  // in the URL.
+  const dir = join(tmpdir(), `webjs-list-jsdelivr-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm',
+      '@hotwired/turbo': 'https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.0/+esm',
+    },
+    provider: 'jsdelivr',
+  }));
+  try {
+    const entries = await listPinned(dir);
+    const dayjs = entries.find(e => e.pkg === 'dayjs');
+    const turbo = entries.find(e => e.pkg === '@hotwired/turbo');
+    assert.equal(dayjs.version, '1.11.13');
+    assert.equal(turbo.version, '8.0.0', 'scoped package version is correctly extracted');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('listPinned: extracts version from unpkg + skypack URL patterns', async () => {
+  const dir = join(tmpdir(), `webjs-list-multi-cdn-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'lodash': 'https://www.unpkg.com/lodash@4.17.21/lodash.js',
+      'preact': 'https://cdn.skypack.dev/preact@10.19.3',
+    },
+    provider: 'unpkg',
+  }));
+  try {
+    const entries = await listPinned(dir);
+    assert.equal(entries.find(e => e.pkg === 'lodash').version, '4.17.21');
+    assert.equal(entries.find(e => e.pkg === 'preact').version, '10.19.3');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: only counts a package as updated when at least one spec resolved', async () => {
+  // Regression: previously updatePinned pushed every outdated pkg
+  // to result.updated regardless of whether any subpath actually
+  // got a new URL from jspm.io. A user could see "Updated dayjs
+  // 1.11.13 → 1.11.20" while the pin file was unchanged because
+  // every jspm.io call failed. Now `anySpecUpdated` gates the push.
+  //
+  // We mock the package's latest by stubbing fetch: only the
+  // npm-registry call for dayjs returns a "latest" newer than the
+  // pinned version, but the jspm.io call for the new install
+  // fails. Result: findOutdated reports dayjs as outdated, but
+  // updatePinned tries jspm.io and the resolve returns nothing,
+  // so updated[] stays empty.
+  const dir = join(tmpdir(), `webjs-update-no-resolve-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: { 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js' },
+  }));
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('registry.npmjs.org/dayjs')) {
+      // Pretend the latest is newer than the pinned 1.11.13.
+      return /** @type any */ ({
+        ok: true, status: 200,
+        json: async () => ({ 'dist-tags': { latest: '99.99.99' } }),
+      });
+    }
+    if (u.includes('api.jspm.io')) {
+      // Pretend jspm.io fails for the new version. updatePinned's
+      // resolved[spec] will be undefined, so the inner loop hits
+      // `continue` for every spec.
+      return /** @type any */ ({
+        ok: false, status: 401,
+        json: async () => ({ error: 'simulated' }),
+      });
+    }
+    // No other fetches should fire in this test.
+    return /** @type any */ ({ ok: false, status: 404, json: async () => ({}) });
+  };
+  try {
+    const result = await updatePinned(dir);
+    assert.deepEqual(result.updated, [],
+      'no spec resolved, so updated[] must be empty even though findOutdated saw dayjs as outdated');
+  } finally {
+    globalThis.fetch = origFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('unpinPackage: preserves the pin file provider field after removing an entry', async () => {
+  // Regression: unpinPackage rewrote the pin file via
+  // writePinFile(appDir, imports, integrity) without the provider
+  // argument, so a user who pinned with --from jsdelivr would lose
+  // that choice after running `webjs vendor unpin <pkg>` for any
+  // single package. Other pinned packages must keep their CDN.
+  const dir = join(tmpdir(), `webjs-unpin-provider-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm',
+      'lodash': 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/+esm',
+    },
+    provider: 'jsdelivr',
+  }));
+  try {
+    const result = await unpinPackage(dir, 'dayjs');
+    assert.ok(result.removed);
+    const after = await readPinFile(dir);
+    assert.ok(after, 'pin file still exists (lodash remains)');
+    assert.equal(after.provider, 'jsdelivr',
+      'provider field must survive a single-package unpin');
+    assert.equal(Object.keys(after.imports).length, 1);
+    assert.equal(after.imports.lodash, 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/+esm');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

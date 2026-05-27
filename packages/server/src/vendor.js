@@ -899,7 +899,11 @@ export async function unpinPackage(appDir, pkg) {
     // guard.
     try { await unlink(pinFilePath(appDir)); } catch { /* race or never existed */ }
   } else {
-    await writePinFile(appDir, file.imports, newIntegrity);
+    // Preserve the pin file's persisted provider (jsdelivr, unpkg,
+    // etc.). Without this, `webjs vendor unpin <pkg>` would silently
+    // revert the file to the default jspm provider, defeating
+    // pinAll's stickiness for the remaining packages.
+    await writePinFile(appDir, file.imports, newIntegrity, file.provider);
   }
 
   let deletedFile;
@@ -927,16 +931,14 @@ export async function listPinned(appDir) {
   for (const [pkg, url] of Object.entries(file.imports)) {
     let version = '(unknown)';
     let bytes;
-    // Match `/npm:<pkg>@<version>/...`. The non-capturing `(?:@[^/]+\/)?`
-    // consumes an optional scope prefix (`@scope/`) so the second
-    // `@<version>` is what we capture. Without it, scoped packages
-    // (e.g. `/npm:@scope/name@1.2.3/`) would silently fall through to
-    // "(unknown)" because the original `[^@]+` couldn't accept a
-    // leading `@`.
-    const jspmMatch = /\/npm:(?:@[^/]+\/)?[^@/]+@([^/]+)\//.exec(url);
-    if (jspmMatch) {
-      version = jspmMatch[1];
-    } else if (url.startsWith('/__webjs/vendor/')) {
+    // Order matters: try the local `/__webjs/vendor/` filename
+    // parser first, then the CDN bare-name search. The local
+    // filename embeds the subpath as `__plugin__utc.js`, which the
+    // bare-name regex would match as part of the version (greedy
+    // `[^/]+` swallows the encoded subpath). Handling the local
+    // case explicitly preserves the cleaner version output for
+    // `--download` mode pins.
+    if (url.startsWith('/__webjs/vendor/')) {
       const filename = url.slice('/__webjs/vendor/'.length);
       const atIdx = filename.lastIndexOf('@');
       if (atIdx > 0) {
@@ -951,6 +953,20 @@ export async function listPinned(appDir) {
         const st = await stat(join(pinDir(appDir), filename));
         bytes = st.size;
       } catch { /* file missing; bytes stays undefined */ }
+    } else {
+      // Derive the version from the URL by searching for the spec's
+      // bare package name followed by `@<version>`. Works across
+      // every CDN we support (jspm.io's `npm:dayjs@1.11.13`,
+      // jsdelivr's `npm/dayjs@1.11.13`, unpkg's bare
+      // `dayjs@1.11.13/`, skypack's `dayjs@1.11.13`). The bare name
+      // lives in entries[].pkg (the import-map key), so we know it
+      // exactly and just need to find the `<bare>@<version>`
+      // substring. Stop at the first `/` after the version so we
+      // don't include the entry-point path.
+      const bare = extractPackageName(pkg) || pkg;
+      const escapedBare = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const bareMatch = new RegExp(`${escapedBare}@([^/]+)`).exec(url);
+      if (bareMatch) version = bareMatch[1];
     }
     entries.push({ pkg, version, url, bytes });
   }
@@ -1138,6 +1154,7 @@ export async function updatePinned(appDir, opts = {}) {
     // returns URLs for `<pkg>@<latest>` (and any subpath we ask
     // for, but for update we just refresh the bare root pin and
     // any subpaths that were already pinned).
+    let anySpecUpdated = false;
     for (const [spec, oldUrl] of Object.entries(file.imports)) {
       const specPkg = extractPackageName(spec) || spec;
       if (specPkg !== pkg) continue;
@@ -1153,8 +1170,13 @@ export async function updatePinned(appDir, opts = {}) {
       delete newIntegrity[oldUrl];
       const sri = await fetchIntegrity(newUrl);
       if (sri) newIntegrity[newUrl] = sri;
+      anySpecUpdated = true;
     }
-    updated.push({ pkg, from: current, to: latest });
+    // Only report `pkg` as updated when at least one spec actually
+    // got a new URL. If every subpath failed to resolve via
+    // jspm.io (transient outage, the new version not yet indexed),
+    // the CLI must not lie about having updated it.
+    if (anySpecUpdated) updated.push({ pkg, from: current, to: latest });
   }
   await writePinFile(appDir, newImports, newIntegrity, from);
   return { updated, provider: from };
