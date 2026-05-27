@@ -156,6 +156,34 @@ inner tree is wrapped in that layout's marker pair and returned. Outer
 layouts are not loaded, not rendered, not re-serialized. Real savings
 on every same-shell navigation.
 
+### Cross-deploy hard-reload signals
+
+Two complementary mechanisms tell the client when a partial swap is
+unsafe and a hard reload is required:
+
+1. **Importmap drift** (the common case after a vendor pin change).
+   Server stamps a SHA-256 of the importmap on `<script type="importmap"
+   data-webjs-build="…">` AND emits the same hash as `X-Webjs-Build`
+   on every response, including X-Webjs-Have partial responses with no
+   head. Client compares the response header against the live
+   document's `data-webjs-build`; mismatch triggers `location.href =
+   target` instead of partial swap. Works for every nav, including
+   partial-response navs.
+
+2. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
+   e.g. a CSS bundle hash, a build-id meta tag). Any head element with
+   the attribute joins a signature computed from concatenated outerHTML.
+   On nav, mismatched signatures trigger reload. Mirrors hotwired/turbo's
+   `data-turbo-track="reload"`.
+
+```html
+<link rel="stylesheet" href="/build/main-abc123.css" data-webjs-track="reload">
+<meta name="build-id" content="rev-42" data-webjs-track="reload">
+```
+
+Both paths share a one-shot `sessionStorage` reload guard so a
+genuinely-churning resource doesn't loop reloads.
+
 ### Snapshot cache + revalidation
 
 URL-keyed `Map<url, snapshot>` (LRU, cap 16). Back/forward via
