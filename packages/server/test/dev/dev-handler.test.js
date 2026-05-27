@@ -1055,6 +1055,24 @@ test('handle: /__webjs/vendor/ round-trips raw bytes byte-for-byte (no UTF-8 dec
   assert.ok(served.equals(orig), 'served bytes must be byte-identical to on-disk bytes');
 });
 
+test('handle: /__webjs/vendor/ serves filenames with semver build-metadata "+" character', async () => {
+  // serveDownloadedBundle's filename allowlist must include `+` so
+  // packages with build-metadata versions like `1.0.0+build.42`
+  // (legal per semver) can be served. Previously the regex was
+  // /^[A-Za-z0-9@._-]+\.js$/ which rejected `+` and bundles with
+  // such versions wrote to disk fine but 400'd on serve.
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  mkdirSync(`${appDir}/.webjs/vendor`, { recursive: true });
+  writeFileSync(`${appDir}/.webjs/vendor/foo@1.0.0+build.42.js`, 'export default 1;');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/vendor/foo@1.0.0+build.42.js'));
+  assert.equal(resp.status, 200);
+  assert.match(resp.headers.get('content-type') || '', /javascript/);
+  const body = await resp.text();
+  assert.equal(body, 'export default 1;');
+});
+
 test('handle: /__webjs/vendor/ sets ETag for downstream cache revalidation', async () => {
   const { writeFileSync, mkdirSync } = await import('node:fs');
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
