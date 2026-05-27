@@ -603,7 +603,16 @@ webjs db <prisma-subcommand> [...]                    # passthrough to prisma
 webjs ui init                                         # @webjsdev/ui CLI
 webjs ui add <names...>                               # copy components into your project
 webjs ui list / view <name>                           # browse the registry
+
+webjs vendor pin [--from PROVIDER] [--download]       # pin npm packages to .webjs/vendor/importmap.json
+webjs vendor unpin <pkg>                              # remove a package from the pin file
+webjs vendor list                                     # show pinned packages
+webjs vendor audit                                    # npm security advisories against pinned versions
+webjs vendor outdated                                 # list pinned packages with newer versions
+webjs vendor update [--from PROVIDER]                 # re-pin every outdated package to latest
 ```
+
+`--from PROVIDER` accepts `jspm` (default), `jsdelivr`, `unpkg`, `skypack`. The chosen provider is persisted in `.webjs/vendor/importmap.json` so subsequent `pin` / `update` runs stay on the same CDN until you switch back with another `--from`. Same posture as Rails 7's `bin/importmap pin foo --from jsdelivr`.
 
 `PORT` env is honoured by `dev` and `start` when `--port` is absent.
 
