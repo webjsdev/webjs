@@ -765,9 +765,20 @@ export async function pinAll(appDir, opts = {}) {
   // so the user knows the next runtime fetch for the missing
   // packages will fall through to a live jspm.io call (or 404 in
   // --download mode).
+  //
+  // Derive the missing set from partsByInstall (the bare-spec keys)
+  // rather than from `installs` (the versioned strings). pins[].pkg
+  // is the bare spec, so a direct filter over `installs` wouldn't
+  // match anything.
   if (installs.length > pins.length) {
     const pinnedSpecs = new Set(pins.map(p => p.pkg));
-    const missing = installs.filter(spec => !pinnedSpecs.has(spec));
+    /** @type {string[]} */
+    const missing = [];
+    for (const [spec, parts] of partsByInstall.entries()) {
+      if (!pinnedSpecs.has(spec)) {
+        missing.push(`${parts.pkg}@${parts.version}${parts.subpath}`);
+      }
+    }
     console.warn(
       `[webjs] pin: partial success. The following installs did NOT ` +
       `make it into the pin file and will fall back to live ` +

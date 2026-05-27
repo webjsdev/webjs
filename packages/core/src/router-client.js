@@ -866,6 +866,18 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * @param {string | null} [incomingBuild]  X-Webjs-Build header from the response, or null.
  */
 function applySwap(doc, frameId, revalidating, href, incomingBuild) {
+  // Any clean swap (no importmap mismatch, including cache restores
+  // and frame swaps where we don't even run the mismatch check) is a
+  // signal that the user successfully navigated, so clear the reload
+  // flag. Otherwise a sequence "reload because of mismatch → Back to
+  // a cache restore → Forward to a deploy-bumped URL" would find the
+  // stale flag still set and suppress the second legitimate reload.
+  try {
+    if (typeof sessionStorage !== 'undefined' && (!href || frameId || revalidating)) {
+      sessionStorage.removeItem('webjs:importmap-reload');
+    }
+  } catch { /* ignore */ }
+
   // Importmap-mismatch guard. Only fires for foreground navs (href
   // present); revalidation passes href=null to keep cache restores
   // soft. Skipped if a <webjs-frame> escape hatch is in play (frame
