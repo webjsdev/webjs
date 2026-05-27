@@ -12,6 +12,7 @@
  */
 
 import { readFile, readdir, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, resolve, dirname, extname } from 'node:path';
 
 /** @type {RegExp} match static `import … from '…'` and `import '…'` */
@@ -133,9 +134,25 @@ function resolveImport(spec, fromFile, appDir) {
   } else {
     target = resolve(base, spec);
   }
-  // Exact match check: we can't use async `stat` in a sync resolver, so we
-  // store the resolved path optimistically. The graph is advisory (for preload
-  // hints), not load-bearing, so a wrong entry is harmless: the browser will
-  // just get a redundant preload that 404s and is ignored.
+  // Sync exact-then-fallback resolution. The graph is advisory (it
+  // drives preload hints, not module loading), so a wrong entry is
+  // harmless: the browser just gets a redundant preload that 404s.
+  // But emitting a working modulepreload when the user wrote
+  // `import x from './foo'` (no extension) is much better than
+  // leaving the resolver waterfall to discover it lazily, so probe
+  // existsSync for the common fallbacks the JSDoc above promises.
+  if (existsSync(target)) return target;
+  if (!extname(target)) {
+    for (const ext of ['.ts', '.js', '.mts', '.mjs']) {
+      if (existsSync(target + ext)) return target + ext;
+    }
+    for (const ext of ['.ts', '.js']) {
+      const indexed = join(target, 'index' + ext);
+      if (existsSync(indexed)) return indexed;
+    }
+  }
+  // Optimistic fallback: return the original resolution so the graph
+  // still has an entry, even though the path may 404 on the browser.
+  // Matches prior behavior.
   return target;
 }
