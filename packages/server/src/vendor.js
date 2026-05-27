@@ -656,8 +656,12 @@ async function pruneOrphans(appDir, expected) {
  * installs were attempted but every jspm.io resolution failed), the
  * pin file is NOT written and the function returns
  * `{ pins: [], pruned: [], downloaded: 0, failed: true, attemptedInstalls }`
- * instead. Callers that need to surface a non-zero exit code key off
- * `failed`; the field is absent on the success path.
+ * instead. When the app has zero bare-specifier imports at all
+ * (scanned source produced nothing), returns
+ * `{ pins: [], pruned: [], downloaded: 0, noBareImports: true }`
+ * WITHOUT writing the pin file. Callers that need to surface a
+ * non-zero exit code key off `failed` or `noBareImports`; both
+ * are absent on the success path.
  *
  * @param {string} appDir
  * @param {{ download?: boolean }} [opts]
@@ -666,6 +670,7 @@ async function pruneOrphans(appDir, expected) {
  *   pruned: string[],
  *   downloaded: number,
  *   failed?: boolean,
+ *   noBareImports?: boolean,
  *   attemptedInstalls?: string[],
  * }>}
  */
@@ -744,6 +749,17 @@ export async function pinAll(appDir, opts = {}) {
   // live API resolution (which may have recovered by then).
   if (installs.length > 0 && pins.length === 0) {
     return { pins, pruned: [], downloaded, failed: true, attemptedInstalls: installs };
+  }
+
+  // The app legitimately has zero bare-specifier imports (or the
+  // scanner is running outside a webjs project). Don't create an
+  // empty `.webjs/vendor/importmap.json`. Without this guard the file
+  // gets written as `{ imports: {} }` in whatever cwd the CLI was
+  // invoked from, then immediately rejected by readPinFile's empty
+  // -imports filter, so the file exists but does nothing. The CLI
+  // surfaces this as a clearer "no bare imports found" message.
+  if (installs.length === 0) {
+    return { pins, pruned: [], downloaded, noBareImports: true };
   }
 
   await writePinFile(appDir, importmap, integrity);

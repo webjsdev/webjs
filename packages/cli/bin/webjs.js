@@ -284,6 +284,18 @@ Full docs: https://docs.webjs.com`);
           (download ? ' (downloading bundles)' : '') + '...',
         );
         const result = await pinAll(appDir, { download });
+        if (result.noBareImports) {
+          // Scanner found zero bare-specifier imports in client-
+          // reachable source. Without this branch pinAll would write
+          // `{ imports: {} }`, which readPinFile then rejects as empty,
+          // leaving a useless file behind in whatever cwd.
+          console.error(
+            `Pin: no bare-specifier npm imports found in client code under ${appDir}. ` +
+            `Nothing to pin (no pin file written). Add a bare import like ` +
+            `\`import x from 'pkg-name'\` to a page or component, then rerun.`,
+          );
+          process.exit(1);
+        }
         if (result.failed) {
           // pinAll refused to write the pin file because every install
           // failed to resolve via jspm.io (e.g. brand-new published

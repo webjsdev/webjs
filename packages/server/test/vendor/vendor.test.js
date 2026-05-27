@@ -564,6 +564,30 @@ test('pinAll default: writes importmap.json with jspm.io URLs', { skip: !NETWORK
   }
 });
 
+test('pinAll: returns noBareImports without writing pin file when no bare imports exist', async () => {
+  // Previously pinAll's "don't write empty pin" guard only fired when
+  // installs.length > 0 && pins.length === 0. An app with zero bare-
+  // specifier imports (or pin invoked outside a webjs project) fell
+  // through to writePinFile with empty maps, creating a useless
+  // `{ imports: {} }` file. The new noBareImports branch surfaces the
+  // case to the CLI so it can print a clear message and exit non-zero.
+  clearVendorCache();
+  const dir = join(tmpdir(), `webjs-pin-empty-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+  await writeFile(join(dir, 'app', 'page.ts'), `export default () => 'no bare imports here';`);
+  try {
+    const result = await pinAll(dir);
+    assert.ok(result.noBareImports, 'noBareImports must be true');
+    assert.equal(result.failed, undefined, 'failed must be absent (not a failure, just nothing to do)');
+    assert.deepEqual(result.pins, []);
+    const file = await readPinFile(dir);
+    assert.equal(file, null, 'pin file must not exist when there is nothing to pin');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('pinAll: refuses to write empty pin file when every install fails', { skip: !NETWORK_OK }, async () => {
   // Regression: previously pinAll wrote `{ imports: {} }` when every
   // jspm.io call failed (e.g. brand-new package version not yet on
