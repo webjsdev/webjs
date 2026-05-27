@@ -620,6 +620,53 @@ test('pinAll: refuses to write empty pin file when every install fails', { skip:
   }
 });
 
+test('pinAll: warns by name when some installs fail (partial success)', { skip: !NETWORK_OK }, async () => {
+  // Regression for the partial-warning bug: the missing-installs
+  // list was derived by filtering installs[] (versioned strings)
+  // against pinnedSpecs (bare specs), which never matched. The warn
+  // always listed ALL installs as missing. Fix derives missing from
+  // partsByInstall (bare spec → parts). This test: pin two packages
+  // where one resolves (picocolors, a real package) and one fails
+  // (fake-pkg-xyz). The warn output must name only the fake one.
+  clearVendorCache();
+  const dir = join(tmpdir(), `webjs-pin-partial-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(join(dir, 'node_modules', 'picocolors'), { recursive: true });
+  await mkdir(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version'), { recursive: true });
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+  await writeFile(join(dir, 'node_modules', 'picocolors', 'package.json'),
+    JSON.stringify({ name: 'picocolors', version: '1.0.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', 'picocolors', 'index.js'), 'export default {};');
+  await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'package.json'),
+    JSON.stringify({ name: 'fake-pkg-xyz-no-such-version', version: '99.99.99', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'index.js'), 'export default 1;');
+  await writeFile(join(dir, 'app', 'page.ts'),
+    `import a from 'picocolors';\nimport b from 'fake-pkg-xyz-no-such-version';`);
+  /** @type {string[]} */
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => { warns.push(args.join(' ')); };
+  try {
+    const result = await pinAll(dir);
+    // picocolors succeeded so pinAll proceeded; partial-warn must fire.
+    assert.equal(result.failed, undefined, 'partial success is not total failure');
+    assert.ok(result.pins.length >= 1, 'at least picocolors made it into pins');
+    const partial = warns.find(w => w.includes('partial success'));
+    assert.ok(partial, `expected partial-success warn; got warns:\n${warns.join('\n')}`);
+    const missingLines = warns.filter(w => w.includes('fake-pkg-xyz-no-such-version'));
+    assert.ok(missingLines.length > 0, 'fake-pkg-xyz must appear in the missing list');
+    // The successful package must NOT appear in the missing list.
+    const wronglyListed = warns.find(w =>
+      /^\s+picocolors@/.test(w) && !w.includes('partial success')
+    );
+    assert.equal(wronglyListed, undefined,
+      'successful packages must NOT appear in the missing list');
+  } finally {
+    console.warn = origWarn;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('pinAll --download: writes importmap.json with local URLs + bundle files', { skip: !NETWORK_OK }, async () => {
   clearVendorCache();
   const dir = await makeTempAppWithSource({

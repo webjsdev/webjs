@@ -55,6 +55,18 @@ before(async () => {
   globalThis.CSS = globalThis.CSS || {
     escape(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, (m) => `\\${m}`); },
   };
+  // linkedom doesn't ship Web Storage either. Tests that exercise the
+  // importmap reload-guard need sessionStorage; provide a minimal
+  // in-memory shim.
+  if (typeof globalThis.sessionStorage === 'undefined') {
+    const store = new Map();
+    globalThis.sessionStorage = /** @type any */ ({
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); },
+      clear: () => { store.clear(); },
+    });
+  }
 
   ({
     _collectChildrenSlots: _collect,
@@ -561,7 +573,7 @@ test('isNonHtmlPath: does NOT skip normal page paths', () => {
  * navigate: Content-Type guard + fallback paths
  * ==================================================================== */
 
-function installNavigationMocks({ contentType, body = '', ok = true, captureHeaders = false }) {
+function installNavigationMocks({ contentType, body = '', ok = true, captureHeaders = false, responseHeaders = {} }) {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;
   const originalHistory = globalThis.history;
@@ -571,14 +583,21 @@ function installNavigationMocks({ contentType, body = '', ok = true, captureHead
   /** @type {{ url: string | null, headers: Record<string,string> | null }} */
   const captured = { url: null, headers: null };
 
+  // Caller may pass `body` and `responseHeaders` as a function so the
+  // mock returns a different shape per call (used to chain navigations
+  // against different mismatched importmaps).
+  const bodyFn = typeof body === 'function' ? body : () => body;
+  const headersFn = typeof responseHeaders === 'function' ? responseHeaders : () => responseHeaders;
+
   globalThis.fetch = async (url, init) => {
     captured.url = String(url);
     captured.headers = init && init.headers ? { ...init.headers } : null;
+    const respHeaders = { 'content-type': contentType, ...headersFn() };
     return {
       ok,
       status: ok ? 200 : 500,
-      headers: { get: (k) => (k.toLowerCase() === 'content-type' ? contentType : null) },
-      text: async () => body,
+      headers: { get: (k) => respHeaders[String(k).toLowerCase()] ?? null },
+      text: async () => bodyFn(),
     };
   };
 
@@ -715,6 +734,150 @@ test('navigate: identical importmap proceeds with partial swap (no reload)', asy
     assert.ok(!redirect.assigns.includes('http://localhost/about'),
       'identical importmap must NOT trigger reload; expected partial swap');
   } finally { restore(); }
+});
+
+test('navigate: importmap drift detected via X-Webjs-Build header on partial response', async () => {
+  // Partial-response navs (the X-Webjs-Have optimization) carry only
+  // the inner body, no head. Without the X-Webjs-Build header the
+  // client has nothing to compare against and would silently apply
+  // a stale importmap. With the header, the server-side hash is
+  // sufficient to detect drift even when the body has no importmap.
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="OLDHASH">{"imports":{"dayjs":"/__webjs/vendor/dayjs@1.11.13.js"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+  // Simulate a partial response: just the inner body fragment, no
+  // <head>, no importmap tag.
+  const partialBody = '<p>after deploy</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: partialBody,
+    responseHeaders: { 'x-webjs-build': 'NEWHASH' },
+  });
+  try {
+    await navigate('http://localhost/posts/123');
+    assert.equal(redirect.href, 'http://localhost/posts/123',
+      'partial response with different X-Webjs-Build must trigger reload');
+    // The current document.body must NOT have been swapped.
+    assert.equal(document.body.querySelector('p')?.textContent, 'current',
+      'partial swap must have been aborted');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: matching X-Webjs-Build proceeds with partial swap (no reload)', async () => {
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="SAMEHASH">{"imports":{"dayjs":"/__webjs/vendor/dayjs@1.11.13.js"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>after nav</p>',
+    responseHeaders: { 'x-webjs-build': 'SAMEHASH' },
+  });
+  try {
+    await navigate('http://localhost/about');
+    assert.ok(!redirect.assigns.includes('http://localhost/about'),
+      'matching X-Webjs-Build must NOT trigger reload');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: two consecutive importmap mismatches → second falls through (infinite-reload guard)', async () => {
+  // The reload-guard sessionStorage flag prevents an infinite reload
+  // loop if the importmap genuinely changes on every nav (live pin
+  // editing in dev, etc).
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH0">{"imports":{"a":"/a"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  let buildVersion = 1;
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>partial</p>',
+    // Each call returns a different x-webjs-build, simulating churn.
+    responseHeaders: () => ({ 'x-webjs-build': `HASH${buildVersion++}` }),
+  });
+  try {
+    await navigate('http://localhost/first');
+    assert.equal(redirect.href, 'http://localhost/first',
+      'first mismatch must reload');
+    assert.equal(sessionStorage.getItem('webjs:importmap-reload'), '1',
+      'reload flag must be set after first reload');
+    // Second consecutive mismatch (same tab, no clean swap in between):
+    // guard must fall through to the partial swap.
+    redirect.href = null;
+    await navigate('http://localhost/second');
+    assert.equal(redirect.href, null,
+      'second consecutive mismatch must NOT reload (infinite-loop guard)');
+    assert.equal(sessionStorage.getItem('webjs:importmap-reload'), null,
+      'flag is cleared by the guard after the second mismatch');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: clean swap clears reload flag so a later mismatch reloads again', async () => {
+  // After "reload due to mismatch → clean nav → later mismatch", the
+  // later mismatch must trigger its own fresh reload. Regression for
+  // the bug where the flag stayed set across the clean nav and
+  // suppressed the legitimate later reload.
+  sessionStorage.removeItem('webjs:importmap-reload');
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH1">{"imports":{"a":"/a"}}</script>';
+  document.body.innerHTML = '<p>current</p>';
+
+  // Step 1: mismatch → reload, flag set.
+  let mocks = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>partial</p>',
+    responseHeaders: { 'x-webjs-build': 'HASH2' },
+  });
+  try {
+    await navigate('http://localhost/step1');
+    assert.equal(mocks.redirect.href, 'http://localhost/step1');
+    assert.equal(sessionStorage.getItem('webjs:importmap-reload'), '1');
+  } finally { mocks.restore(); }
+
+  // Step 2: clean swap (matching build → no reload). Flag should be cleared.
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH2">{"imports":{"a":"/a"}}</script>';
+  mocks = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>clean</p>',
+    responseHeaders: { 'x-webjs-build': 'HASH2' },
+  });
+  try {
+    await navigate('http://localhost/step2');
+    assert.ok(!mocks.redirect.assigns.includes('http://localhost/step2'),
+      'matching build must NOT reload');
+    assert.equal(sessionStorage.getItem('webjs:importmap-reload'), null,
+      'clean swap MUST clear the reload flag (the bug fixed in this commit)');
+  } finally { mocks.restore(); }
+
+  // Step 3: another mismatch (e.g. a second deploy) → fresh reload.
+  mocks = installNavigationMocks({
+    contentType: 'text/html',
+    body: '<p>partial2</p>',
+    responseHeaders: { 'x-webjs-build': 'HASH3' },
+  });
+  try {
+    await navigate('http://localhost/step3');
+    assert.equal(mocks.redirect.href, 'http://localhost/step3',
+      'a later mismatch after a clean nav must reload again');
+  } finally {
+    mocks.restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    // Reset document state so later tests don't inherit our importmap.
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
 });
 
 test('navigate: fetch rejection falls back to full page navigation', async () => {
