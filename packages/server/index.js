@@ -22,8 +22,13 @@ export {
   pinAll,
   unpinPackage,
   listPinned,
+  auditPinned,
+  findOutdated,
+  updatePinned,
   readPinFile,
   serveDownloadedBundle,
+  SUPPORTED_PROVIDERS,
+  normalizeProvider,
 } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';

@@ -255,6 +255,32 @@ const JSPM_GENERATE_ENDPOINT = 'https://api.jspm.io/generate';
 const JSPM_GENERATE_TIMEOUT_MS = 10_000;
 
 /**
+ * Provider names accepted by `webjs vendor pin --from <provider>`.
+ * Default `jspm` resolves to jspm.io. Same set Rails's importmap-rails
+ * accepts (`packager.rb:normalize_provider`).
+ *
+ * jspm.io's Generator API itself supports multiple providers via the
+ * `provider` field in the request body. We surface the same choice as
+ * a CLI flag.
+ *
+ * @type {Set<string>}
+ */
+export const SUPPORTED_PROVIDERS = new Set(['jspm', 'jsdelivr', 'unpkg', 'skypack']);
+
+/**
+ * Normalize the user-facing provider name to what the jspm.io API
+ * expects in its `provider` field. Mirrors importmap-rails's
+ * `normalize_provider`: `jspm` is shorthand for `jspm.io`; the rest
+ * pass through verbatim.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function normalizeProvider(name) {
+  return name === 'jspm' ? 'jspm.io' : name;
+}
+
+/**
  * Resolve a SINGLE `pkg@version` (or `pkg@version/subpath`) install via
  * api.jspm.io/generate. Returns the imports fragment (typically one or
  * two entries; subpath installs sometimes include the root package).
@@ -265,14 +291,20 @@ const JSPM_GENERATE_TIMEOUT_MS = 10_000;
  * Calling per-package means one bad dep can no longer poison the
  * importmap for legitimate deps.
  *
- * Cached in-process by the install spec. Failures are logged loudly
- * with the package name and the reason jspm.io returned.
+ * Cached in-process by the install spec + provider. Failures are
+ * logged loudly with the package name and the reason jspm.io
+ * returned.
  *
  * @param {string} install  e.g. 'dayjs@1.11.13' or 'dayjs@1.11.13/plugin/utc'
+ * @param {string} [provider]  one of SUPPORTED_PROVIDERS; defaults to 'jspm'
  * @returns {Promise<Record<string, string>>}
  */
-async function jspmResolveOne(install) {
-  const existing = jspmCache.get(install);
+async function jspmResolveOne(install, provider = 'jspm') {
+  // Cache key includes provider since the same install can resolve
+  // to different URLs across CDNs (e.g. `dayjs@1.11.13` returns
+  // ga.jspm.io vs cdn.jsdelivr.net depending on `provider`).
+  const cacheKey = `${provider}::${install}`;
+  const existing = jspmCache.get(cacheKey);
   if (existing) return existing;
 
   const promise = (async () => {
@@ -294,7 +326,7 @@ async function jspmResolveOne(install) {
           // specifier error. Matches importmap-rails's posture.
           flattenScope: true,
           env: ['browser', 'production', 'module'],
-          provider: 'jspm.io',
+          provider: normalizeProvider(provider),
         }),
         signal: controller.signal,
       });
@@ -309,9 +341,9 @@ async function jspmResolveOne(install) {
           if (body && typeof body.error === 'string') detail = `: ${body.error}`;
         } catch { /* non-JSON body */ }
         console.error(
-          `[webjs] could not vendor '${install}' via jspm.io (status ${response.status})${detail}`,
+          `[webjs] could not vendor '${install}' via ${provider} (status ${response.status})${detail}`,
         );
-        jspmCache.delete(install);
+        jspmCache.delete(cacheKey);
         return {};
       }
       const result = await response.json();
@@ -320,15 +352,15 @@ async function jspmResolveOne(install) {
       const msg = e && e.name === 'AbortError'
         ? `timed out after ${JSPM_GENERATE_TIMEOUT_MS}ms`
         : `${e && e.message}`;
-      console.error(`[webjs] could not vendor '${install}' via jspm.io: ${msg}`);
-      jspmCache.delete(install);
+      console.error(`[webjs] could not vendor '${install}' via ${provider}: ${msg}`);
+      jspmCache.delete(cacheKey);
       return {};
     } finally {
       clearTimeout(timer);
     }
   })();
 
-  jspmCache.set(install, promise);
+  jspmCache.set(cacheKey, promise);
   return promise;
 }
 
@@ -344,11 +376,12 @@ async function jspmResolveOne(install) {
  * URL as `dayjs@x.y.z/plugin/foo`'s incidental `dayjs` entry.
  *
  * @param {Array<string>} installs  e.g. ['dayjs@1.11.13', 'clsx@2.1.1']
+ * @param {string} [provider]  one of SUPPORTED_PROVIDERS; defaults to 'jspm'
  * @returns {Promise<Record<string, string>>}
  */
-export async function jspmGenerate(installs) {
+export async function jspmGenerate(installs, provider = 'jspm') {
   if (installs.length === 0) return {};
-  const perPackage = await Promise.all(installs.map(jspmResolveOne));
+  const perPackage = await Promise.all(installs.map(i => jspmResolveOne(i, provider)));
   const merged = {};
   for (const fragment of perPackage) Object.assign(merged, fragment);
   return merged;
@@ -444,13 +477,14 @@ export function sha384Integrity(body) {
 
 /**
  * Read the committed pin importmap if one exists. Returns the parsed
- * `{ imports, integrity? }` shape or null if no pin file. The
- * `integrity` field is optional: pin files written before SRI support
- * lack it; pin files written by `webjs vendor pin` (current version)
- * include it.
+ * `{ imports, integrity?, provider? }` shape or null if no pin file.
+ * The `integrity` and `provider` fields are optional: pin files
+ * written before SRI / multi-CDN support lack them; pin files written
+ * by current `webjs vendor pin` include them (provider only when
+ * non-default).
  *
  * @param {string} appDir
- * @returns {Promise<{ imports: Record<string, string>, integrity?: Record<string, string> } | null>}
+ * @returns {Promise<{ imports: Record<string, string>, integrity?: Record<string, string>, provider?: string } | null>}
  */
 export async function readPinFile(appDir) {
   try {
@@ -507,8 +541,15 @@ export async function readPinFile(appDir) {
         }
       }
     }
+    /** @type {{ imports: Record<string,string>, integrity?: Record<string,string>, provider?: string }} */
     const out = { imports: cleanImports };
     if (Object.keys(cleanIntegrity).length) out.integrity = cleanIntegrity;
+    // Provider is optional in the pin file. Validate against the
+    // supported set so a tampered file can't smuggle an arbitrary
+    // string into downstream code paths.
+    if (typeof parsed.provider === 'string' && SUPPORTED_PROVIDERS.has(parsed.provider)) {
+      out.provider = parsed.provider;
+    }
     return out;
   } catch {
     return null;
@@ -524,15 +565,24 @@ export async function readPinFile(appDir) {
  * spec: a flat `{url: 'sha384-...'}` map). Omitted entirely when empty
  * so older webjs versions read the file as before.
  *
+ * `provider` is persisted alongside imports when non-default. It lets
+ * `webjs vendor update` know which CDN to re-resolve against, and
+ * makes the pin file self-describing for incident response: if jspm.io
+ * has an outage you can read the file and know which alternate CDN
+ * the deploy targets. Omitted for the default jspm provider so the
+ * pin file shape stays stable for the 99% case.
+ *
  * @param {string} appDir
  * @param {Record<string, string>} imports
  * @param {Record<string, string>} [integrity]
+ * @param {string} [provider]
  */
-async function writePinFile(appDir, imports, integrity) {
+async function writePinFile(appDir, imports, integrity, provider) {
   await mkdir(pinDir(appDir), { recursive: true });
-  const payload = integrity && Object.keys(integrity).length
-    ? { imports, integrity }
-    : { imports };
+  /** @type {Record<string, any>} */
+  const payload = { imports };
+  if (integrity && Object.keys(integrity).length) payload.integrity = integrity;
+  if (provider && provider !== 'jspm') payload.provider = provider;
   const body = JSON.stringify(payload, null, 2) + '\n';
   // Atomic write: stage into a sibling tmp file, then rename onto the
   // final path. Rename within the same directory is atomic on POSIX
@@ -652,9 +702,9 @@ async function pruneOrphans(appDir, expected) {
  * and mode switches all leave a clean directory.
  *
  * On success (at least one install resolved), returns
- * `{ pins, pruned, downloaded }`. On total failure (one or more
- * installs were attempted but every jspm.io resolution failed), the
- * pin file is NOT written and the function returns
+ * `{ pins, pruned, downloaded, provider }`. On total failure (one or
+ * more installs were attempted but every jspm.io resolution failed),
+ * the pin file is NOT written and the function returns
  * `{ pins: [], pruned: [], downloaded: 0, failed: true, attemptedInstalls }`
  * instead. When the app has zero bare-specifier imports at all
  * (scanned source produced nothing), returns
@@ -663,12 +713,20 @@ async function pruneOrphans(appDir, expected) {
  * non-zero exit code key off `failed` or `noBareImports`; both
  * are absent on the success path.
  *
+ * The `from` option mirrors importmap-rails's `bin/importmap pin foo
+ * --from jsdelivr`. Default `jspm` resolves to jspm.io; other values
+ * (jsdelivr, unpkg, skypack) are passed through to jspm.io's
+ * Generator API which returns URLs from the chosen CDN. The provider
+ * is persisted in the pin file so `vendor update` and incident
+ * response know which CDN to re-resolve against.
+ *
  * @param {string} appDir
- * @param {{ download?: boolean }} [opts]
+ * @param {{ download?: boolean, from?: string }} [opts]
  * @returns {Promise<{
  *   pins: Array<{ pkg: string, version: string, url: string, bytes?: number, integrity?: string }>,
  *   pruned: string[],
  *   downloaded: number,
+ *   provider?: string,
  *   failed?: boolean,
  *   noBareImports?: boolean,
  *   attemptedInstalls?: string[],
@@ -676,6 +734,12 @@ async function pruneOrphans(appDir, expected) {
  */
 export async function pinAll(appDir, opts = {}) {
   const download = !!opts.download;
+  const from = opts.from || 'jspm';
+  if (!SUPPORTED_PROVIDERS.has(from)) {
+    throw new Error(
+      `[webjs] unknown provider '${from}'. Supported: ${[...SUPPORTED_PROVIDERS].join(', ')}.`,
+    );
+  }
   const bare = await scanBareImports(appDir);
   const installs = [];
   /**
@@ -696,7 +760,7 @@ export async function pinAll(appDir, opts = {}) {
     installs.push(install);
     partsByInstall.set(spec, { pkg, version, subpath });
   }
-  const resolved = await jspmGenerate(installs);
+  const resolved = await jspmGenerate(installs, from);
 
   /** @type {Record<string, string>} */
   const importmap = {};
@@ -798,9 +862,9 @@ export async function pinAll(appDir, opts = {}) {
     return { pins, pruned: [], downloaded, noBareImports: true };
   }
 
-  await writePinFile(appDir, importmap, integrity);
+  await writePinFile(appDir, importmap, integrity, from);
   const pruned = await pruneOrphans(appDir, expected);
-  return { pins, pruned, downloaded };
+  return { pins, pruned, downloaded, provider: from };
 }
 
 /**
@@ -883,6 +947,217 @@ export async function listPinned(appDir) {
     entries.push({ pkg, version, url, bytes });
   }
   return entries;
+}
+
+// ---------------------------------------------------------------------------
+// npm registry queries: audit + outdated + update
+// ---------------------------------------------------------------------------
+
+const NPM_REGISTRY = 'https://registry.npmjs.org';
+const NPM_TIMEOUT_MS = 10_000;
+
+/**
+ * Fetch one URL from registry.npmjs.org with a small timeout. Returns
+ * the parsed JSON body on 2xx, or null on any non-2xx / network /
+ * timeout. Used by audit + outdated.
+ *
+ * @param {string} url
+ * @param {RequestInit} [init]
+ * @returns {Promise<any | null>}
+ */
+async function fetchNpmJson(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NPM_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, { ...init, signal: controller.signal });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+/**
+ * Group the pin file's entries by package name + the set of versions
+ * actually pinned (a single package can be pinned at multiple versions
+ * via subpath imports). Used by audit (npm advisories want
+ * `{ pkgName: [versions] }`) and outdated (one query per package).
+ *
+ * @param {Array<{ pkg: string, version: string }>} entries
+ * @returns {Map<string, Set<string>>}
+ */
+function groupPinnedByPackage(entries) {
+  const out = new Map();
+  for (const e of entries) {
+    if (!e.version || e.version === '(unknown)') continue;
+    // entries[].pkg can include a subpath (e.g. `dayjs/plugin/utc`).
+    // Extract the bare package name (`dayjs` or `@scope/name`).
+    const bare = extractPackageName(e.pkg) || e.pkg;
+    if (!out.has(bare)) out.set(bare, new Set());
+    out.get(bare).add(e.version);
+  }
+  return out;
+}
+
+/**
+ * Run a security audit against the pinned versions in the committed
+ * pin file. POSTs to npm's bulk-advisory endpoint, the same one
+ * `npm audit` uses internally.
+ *
+ * Mirrors importmap-rails's `bin/importmap audit`.
+ *
+ * @param {string} appDir
+ * @returns {Promise<{
+ *   vulnerable: Array<{ name: string, severity: string, vulnerableVersions: string, title: string }>,
+ *   totalChecked: number,
+ * }>}
+ */
+export async function auditPinned(appDir) {
+  const entries = await listPinned(appDir);
+  if (!entries.length) return { vulnerable: [], totalChecked: 0 };
+  const grouped = groupPinnedByPackage(entries);
+  const body = {};
+  for (const [pkg, versions] of grouped) body[pkg] = [...versions];
+  const result = await fetchNpmJson(`${NPM_REGISTRY}/-/npm/v1/security/advisories/bulk`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const totalChecked = grouped.size;
+  if (!result || typeof result !== 'object') return { vulnerable: [], totalChecked };
+  /** @type {Array<{ name: string, severity: string, vulnerableVersions: string, title: string }>} */
+  const vulnerable = [];
+  for (const [name, advisories] of Object.entries(result)) {
+    if (!Array.isArray(advisories)) continue;
+    for (const a of advisories) {
+      vulnerable.push({
+        name,
+        severity: String(a?.severity || 'unknown'),
+        vulnerableVersions: String(a?.vulnerable_versions || a?.range || ''),
+        title: String(a?.title || a?.overview || ''),
+      });
+    }
+  }
+  return { vulnerable, totalChecked };
+}
+
+/**
+ * Find pinned packages that have a newer version available on npm.
+ * Queries `registry.npmjs.org/<pkg>` per pinned package, compares the
+ * pinned version against `dist-tags.latest` with semver-shaped string
+ * ordering (regex parse, then numeric compare per segment).
+ *
+ * Mirrors importmap-rails's `bin/importmap outdated`.
+ *
+ * @param {string} appDir
+ * @returns {Promise<Array<{ pkg: string, current: string, latest: string }>>}
+ */
+export async function findOutdated(appDir) {
+  const entries = await listPinned(appDir);
+  if (!entries.length) return [];
+  const grouped = groupPinnedByPackage(entries);
+  /** @type {Array<{ pkg: string, current: string, latest: string }>} */
+  const outdated = [];
+  for (const [pkg, versions] of grouped) {
+    const meta = await fetchNpmJson(`${NPM_REGISTRY}/${encodeURIComponent(pkg)}`);
+    const latest = meta?.['dist-tags']?.latest;
+    if (typeof latest !== 'string') continue;
+    // A package can be pinned at multiple versions (subpath imports).
+    // Take the max pinned version as the "current" for the comparison
+    // so we only report it as outdated when EVERY pinned version
+    // trails latest.
+    const current = maxSemverVersion([...versions]);
+    if (compareSemver(current, latest) < 0) {
+      outdated.push({ pkg, current, latest });
+    }
+  }
+  return outdated;
+}
+
+/**
+ * Re-pin every package returned by findOutdated to its latest version.
+ * Calls jspm.io's Generator API with `<pkg>@<latest>` for each
+ * outdated entry, then writes the new pin file.
+ *
+ * Mirrors importmap-rails's `bin/importmap update`, with the same
+ * caveat: this updates the pin file but does NOT update the user's
+ * `package.json` / `node_modules`. The user should run `npm install
+ * <pkg>@<latest>` afterward to keep package.json in sync.
+ *
+ * @param {string} appDir
+ * @param {{ from?: string }} [opts]
+ * @returns {Promise<{ updated: Array<{ pkg: string, from: string, to: string }>, noOutdated?: boolean }>}
+ */
+export async function updatePinned(appDir, opts = {}) {
+  const from = opts.from || 'jspm';
+  if (!SUPPORTED_PROVIDERS.has(from)) {
+    throw new Error(
+      `[webjs] unknown provider '${from}'. Supported: ${[...SUPPORTED_PROVIDERS].join(', ')}.`,
+    );
+  }
+  const outdated = await findOutdated(appDir);
+  if (!outdated.length) return { updated: [], noOutdated: true };
+  const file = await readPinFile(appDir);
+  if (!file) return { updated: [] };
+  const newImports = { ...file.imports };
+  const newIntegrity = { ...(file.integrity || {}) };
+  /** @type {Array<{ pkg: string, from: string, to: string }>} */
+  const updated = [];
+  for (const { pkg, current, latest } of outdated) {
+    // Resolve the new version via jspm.io. The Generator API
+    // returns URLs for `<pkg>@<latest>` (and any subpath we ask
+    // for, but for update we just refresh the bare root pin and
+    // any subpaths that were already pinned).
+    for (const [spec, oldUrl] of Object.entries(file.imports)) {
+      const specPkg = extractPackageName(spec) || spec;
+      if (specPkg !== pkg) continue;
+      const subpath = spec.slice(specPkg.length);
+      const install = `${pkg}@${latest}${subpath}`;
+      const resolved = await jspmGenerate([install], from);
+      const newUrl = resolved[spec];
+      if (!newUrl) continue;
+      newImports[spec] = newUrl;
+      // Recompute integrity for the new URL. Drop the stale entry
+      // even on fetch failure so the new pin doesn't carry the
+      // wrong hash silently.
+      delete newIntegrity[oldUrl];
+      const sri = await fetchIntegrity(newUrl);
+      if (sri) newIntegrity[newUrl] = sri;
+    }
+    updated.push({ pkg, from: current, to: latest });
+  }
+  await writePinFile(appDir, newImports, newIntegrity, from);
+  return { updated };
+}
+
+/**
+ * Lightweight semver-aware comparison (no prerelease tags). Returns
+ * negative if a < b, zero if equal, positive if a > b. Used by
+ * findOutdated to decide if `current` lags `latest`. Non-numeric
+ * segments fall back to string compare so prerelease-ish strings
+ * still sort somewhere.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareSemver(a, b) {
+  const aParts = a.split(/[.+-]/).map((p) => /^\d+$/.test(p) ? Number(p) : p);
+  const bParts = b.split(/[.+-]/).map((p) => /^\d+$/.test(p) ? Number(p) : p);
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const ai = aParts[i] ?? 0;
+    const bi = bParts[i] ?? 0;
+    if (typeof ai === 'number' && typeof bi === 'number') {
+      if (ai !== bi) return ai - bi;
+    } else if (ai !== bi) {
+      return String(ai) < String(bi) ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+/** @param {string[]} versions */
+function maxSemverVersion(versions) {
+  return versions.reduce((max, v) => compareSemver(v, max) > 0 ? v : max, versions[0]);
 }
 
 /**
