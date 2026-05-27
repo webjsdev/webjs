@@ -734,7 +734,15 @@ async function pruneOrphans(appDir, expected) {
  */
 export async function pinAll(appDir, opts = {}) {
   const download = !!opts.download;
-  const from = opts.from || 'jspm';
+  // Provider precedence (same as updatePinned for consistency):
+  //   1. explicit opts.from (CLI --from flag wins)
+  //   2. existing pin file's persisted provider (stickiness: user
+  //      who pinned via jsdelivr stays on jsdelivr until they
+  //      explicitly switch back)
+  //   3. default 'jspm'
+  // Pre-read the file once to access its provider.
+  const existing = await readPinFile(appDir);
+  const from = opts.from || existing?.provider || 'jspm';
   if (!SUPPORTED_PROVIDERS.has(from)) {
     throw new Error(
       `[webjs] unknown provider '${from}'. Supported: ${[...SUPPORTED_PROVIDERS].join(', ')}.`,

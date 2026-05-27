@@ -275,7 +275,7 @@ Full docs: https://docs.webjs.com`);
       const sub = rest[0];
       const args = rest.slice(1);
       const appDir = process.cwd();
-      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
+      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
 
       // Parse `--from <provider>` once at the top so subcommands share it.
       // Mirrors importmap-rails's `bin/importmap pin foo --from jsdelivr`.
@@ -296,12 +296,21 @@ Full docs: https://docs.webjs.com`);
 
       if (sub === 'pin') {
         const download = args.includes('--download');
+        // Same precedence rule as `vendor update`: explicit --from
+        // wins; otherwise pinAll reads the pin file's persisted
+        // provider so a user who pinned via jsdelivr stays on it.
+        // Pass undefined (not the parsed 'jspm' default) when no
+        // --from to engage the pin-file fallback. Peek at the pin
+        // file here to compute the log line before pinAll runs.
+        const explicitFrom = fromIdx !== -1 ? from : undefined;
+        const existing = await readPinFile(appDir);
+        const usedFrom = explicitFrom || existing?.provider || 'jspm';
         console.log(
           `Pinning vendor packages from ${appDir}` +
-          (from !== 'jspm' ? ` via ${from}` : '') +
+          (usedFrom !== 'jspm' ? ` via ${usedFrom}` : '') +
           (download ? ' (downloading bundles)' : '') + '...',
         );
-        const result = await pinAll(appDir, { download, from });
+        const result = await pinAll(appDir, { download, from: explicitFrom });
         if (result.noBareImports) {
           // Scanner found zero bare-specifier imports in client-
           // reachable source. Without this branch pinAll would write
@@ -460,9 +469,10 @@ Full docs: https://docs.webjs.com`);
         // default) when no --from was given so updatePinned's
         // pin-file fallback engages.
         const explicitFrom = fromIdx !== -1 ? from : undefined;
-        const result = await updatePinned(appDir, { from: explicitFrom });
-        const usedFrom = result.provider || 'jspm';
+        const existing = await readPinFile(appDir);
+        const usedFrom = explicitFrom || existing?.provider || 'jspm';
         console.log(`Updating outdated vendor pins in ${appDir}${usedFrom !== 'jspm' ? ` via ${usedFrom}` : ''}...`);
+        const result = await updatePinned(appDir, { from: explicitFrom });
         if (result.noOutdated) {
           console.log('No outdated packages found.');
           break;
