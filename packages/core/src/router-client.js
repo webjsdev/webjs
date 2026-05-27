@@ -865,6 +865,38 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * @param {string | null} [href]  Target URL for hard-reload fallback on importmap mismatch.
  * @param {string | null} [incomingBuild]  X-Webjs-Build header from the response, or null.
  */
+/**
+ * Compute the signature of all `data-webjs-track="reload"` elements
+ * in the head of `root`. Returns the concatenation of each element's
+ * `outerHTML`, in document order. Two documents with identical
+ * tracked-element sets produce identical signatures; any change in
+ * attributes, content, or set membership produces a different one.
+ *
+ * Mirrors hotwired/turbo's `head_snapshot.js` `trackedElementSignature`
+ * (the data-turbo-track="reload" mechanism). Used by applySwap as a
+ * generic opt-in next to the importmap-specific build hash.
+ *
+ * Returns the empty string when `root` has no head (e.g. an
+ * X-Webjs-Have partial response) or when no elements opt in.
+ *
+ * @param {Document | undefined} root
+ * @returns {string}
+ */
+function trackedReloadSignature(root) {
+  if (!root || !root.head) return '';
+  const tracked = root.head.querySelectorAll('[data-webjs-track="reload"]');
+  if (!tracked.length) return '';
+  // Use outerHTMLForDiff so the CSP nonce (which rotates per
+  // request) is stripped before signature comparison. Without this,
+  // a nonced tracked script like `<script nonce="${cspNonce()}"
+  // data-webjs-track="reload" src="/build.js?v=42">` would mismatch
+  // every navigation and infinite-reload. Matches Turbo's
+  // head_snapshot.js elementWithoutNonce posture.
+  let sig = '';
+  for (const el of tracked) sig += outerHTMLForDiff(el);
+  return sig;
+}
+
 function applySwap(doc, frameId, revalidating, href, incomingBuild) {
   // Any clean swap (no importmap mismatch, including cache restores
   // and frame swaps where we don't even run the mismatch check) is a
@@ -899,6 +931,33 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
         incoming && currentTag &&
         (incoming.textContent || '').trim() !== (currentTag.textContent || '').trim()
       );
+    }
+    // Generic `data-webjs-track="reload"` opt-in. ANY element in the
+    // head that the user marks gets included in the tracked-element
+    // signature. If the signature differs between current and incoming
+    // documents, hard-reload. Mirrors hotwired/turbo's
+    // data-turbo-track="reload" semantics (head_snapshot.js
+    // trackedElementSignature). Lets app authors tag arbitrary
+    // version-sensitive elements (CSS bundle <link>, deploy meta tag)
+    // for cross-deploy reload, not just the importmap.
+    //
+    // Importmap-specific data-webjs-build / X-Webjs-Build remain the
+    // primary mechanism because they ALSO work on partial responses
+    // (no head in the body). data-webjs-track is for elements that
+    // can't ride the build hash.
+    //
+    // Skip the check when the incoming response has no head content
+    // (X-Webjs-Have partial-fragment response). Without this guard
+    // a partial response would always mismatch any current tracked
+    // signature and falsely reload. With the guard, a partial
+    // response means "trust the build hash; don't decide based on
+    // missing head info." Comparing on full responses also catches
+    // added/removed track markers because empty `incomingSig`
+    // would correctly differ from a non-empty `currentSig`.
+    if (!mismatch && doc.head && doc.head.children.length > 0) {
+      const currentSig = trackedReloadSignature(document);
+      const incomingSig = trackedReloadSignature(doc);
+      if (currentSig !== incomingSig) mismatch = true;
     }
     if (mismatch && typeof location !== 'undefined') {
       // Infinite-reload guard: if the importmap appears to genuinely

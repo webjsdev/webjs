@@ -17,6 +17,11 @@ import {
   readPinFile,
   resolveVendorImports,
   serveDownloadedBundle,
+  SUPPORTED_PROVIDERS,
+  normalizeProvider,
+  auditPinned,
+  findOutdated,
+  updatePinned,
 } from '../../src/vendor.js';
 
 // --- extractPackageName ---
@@ -1234,6 +1239,400 @@ test('serveDownloadedBundle: missing file returns 404', async () => {
   try {
     const resp = await serveDownloadedBundle('not-there@1.0.0.js', dir, false);
     assert.equal(resp.status, 404);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// --- provider (--from) parity tests ---
+
+test('SUPPORTED_PROVIDERS lists the four Rails-importmap-rails CDNs', () => {
+  assert.deepEqual(
+    [...SUPPORTED_PROVIDERS].sort(),
+    ['jsdelivr', 'jspm', 'skypack', 'unpkg'],
+  );
+});
+
+test('normalizeProvider: jspm → jspm.io, others pass through (Rails parity)', () => {
+  assert.equal(normalizeProvider('jspm'), 'jspm.io');
+  assert.equal(normalizeProvider('jsdelivr'), 'jsdelivr');
+  assert.equal(normalizeProvider('unpkg'), 'unpkg');
+  assert.equal(normalizeProvider('skypack'), 'skypack');
+});
+
+test('pinAll: rejects unknown provider with a clear error', async () => {
+  const dir = join(tmpdir(), `webjs-pin-bad-prov-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp"}');
+  try {
+    await assert.rejects(
+      () => pinAll(dir, { from: 'not-a-real-cdn' }),
+      /unknown provider 'not-a-real-cdn'/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('writePinFile + readPinFile: provider persists for non-jspm choice', async () => {
+  // Verify the provider round-trips through the pin file when the
+  // user picked something other than the default. For default jspm
+  // the field is omitted to keep the pin file shape stable for the
+  // 99% case (covered by other tests).
+  const dir = join(tmpdir(), `webjs-pin-prov-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const file = await readPinFile(dir);
+    assert.ok(file);
+    assert.equal(file.provider, 'jsdelivr');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: rejects unknown provider value (tamper guard)', async () => {
+  const dir = join(tmpdir(), `webjs-pin-prov-bad-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'a': 'https://cdn.example/a.js' },
+      provider: 'malicious-resolver',
+    }),
+  );
+  try {
+    const file = await readPinFile(dir);
+    assert.ok(file);
+    assert.equal(file.provider, undefined,
+      'provider must be dropped when not in SUPPORTED_PROVIDERS');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// --- audit / outdated / update parity tests ---
+
+test('auditPinned: no pin file returns zero-checked', async () => {
+  const dir = join(tmpdir(), `webjs-audit-empty-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const { vulnerable, totalChecked } = await auditPinned(dir);
+    assert.equal(totalChecked, 0);
+    assert.deepEqual(vulnerable, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('findOutdated: no pin file returns []', async () => {
+  const dir = join(tmpdir(), `webjs-outdated-empty-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    assert.deepEqual(await findOutdated(dir), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: rejects unknown provider', async () => {
+  const dir = join(tmpdir(), `webjs-update-bad-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    await assert.rejects(
+      () => updatePinned(dir, { from: 'not-real' }),
+      /unknown provider/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: no outdated returns noOutdated:true without writing', async () => {
+  // Mock listPinned + findOutdated trivially: empty pin file means
+  // both return empty, and updatePinned short-circuits before
+  // any network call.
+  const dir = join(tmpdir(), `webjs-update-clean-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const result = await updatePinned(dir);
+    assert.ok(result.noOutdated);
+    assert.deepEqual(result.updated, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: respects pin file provider when --from is not passed', async () => {
+  // Regression: a user who pinned `--from jsdelivr` and later runs
+  // `webjs vendor update` (no flag) should stay on jsdelivr, not
+  // silently fall back to jspm.
+  const dir = join(tmpdir(), `webjs-update-provider-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      // No actual outdated packages here; we're checking the
+      // provider read path. updatePinned reaches the
+      // findOutdated network call and returns noOutdated:true OR
+      // updated:[]. Either way, the `provider` field on the
+      // result should reflect what was on the pin file.
+      imports: { 'a': 'https://cdn.jsdelivr.net/npm/a@1.0.0/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const result = await updatePinned(dir);
+    assert.equal(result.provider, 'jsdelivr',
+      'updatePinned must use the pin file provider when no --from passed');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: explicit --from overrides pin file provider', async () => {
+  const dir = join(tmpdir(), `webjs-update-override-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'a': 'https://cdn.jsdelivr.net/npm/a@1.0.0/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const result = await updatePinned(dir, { from: 'unpkg' });
+    assert.equal(result.provider, 'unpkg',
+      'explicit opts.from must override pin file provider');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('auditPinned: surfaces network failure as errored:true', { skip: !NETWORK_OK }, async () => {
+  // The audit command must NOT silently report "no vulnerabilities"
+  // when the registry call failed. Use an obviously-unresolvable
+  // hostname by stubbing the global fetch for the duration of the
+  // test. Fail-closed contract: errored:true means the user must
+  // retry.
+  const dir = join(tmpdir(), `webjs-audit-err-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js' },
+    }),
+  );
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('simulated network failure'); };
+  try {
+    const result = await auditPinned(dir);
+    assert.equal(result.errored, true);
+    assert.deepEqual(result.vulnerable, []);
+    assert.equal(result.totalChecked, 1);
+  } finally {
+    globalThis.fetch = origFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('pinAll: respects existing pin file provider when --from is not passed', async () => {
+  // Regression for the consistency gap: pinAll used to default to
+  // 'jspm' on every run, silently reverting a user's jsdelivr choice
+  // on subsequent re-pins. Now reads the existing pin file's
+  // provider as the default. Explicit opts.from still wins.
+  const dir = join(tmpdir(), `webjs-pin-sticky-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp"}');
+  await writeFile(join(dir, 'app', 'page.ts'), `export default () => 'no bare imports';`);
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'a': 'https://cdn.jsdelivr.net/npm/a@1.0.0/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    // App has zero bare imports, so pinAll returns noBareImports
+    // without writing. The interesting assertion: it didn't throw
+    // and pinAll read the provider for whatever it would have done.
+    // Verify by checking pin file's provider field unchanged.
+    const result = await pinAll(dir);
+    assert.ok(result.noBareImports);
+    const file = await readPinFile(dir);
+    assert.equal(file.provider, 'jsdelivr',
+      'pinAll must not overwrite a non-default provider field even on noBareImports');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('listPinned: extracts version from jsdelivr CDN URL pattern', async () => {
+  // Bug fix: listPinned only recognized jspm.io URLs (`npm:pkg@ver/`).
+  // jsdelivr/unpkg/skypack pins fell through to '(unknown)', which
+  // broke audit/outdated/update for any non-default provider. New
+  // logic derives version by searching for `<pkg-name>@<version>`
+  // in the URL.
+  const dir = join(tmpdir(), `webjs-list-jsdelivr-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm',
+      '@hotwired/turbo': 'https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.0/+esm',
+    },
+    provider: 'jsdelivr',
+  }));
+  try {
+    const entries = await listPinned(dir);
+    const dayjs = entries.find(e => e.pkg === 'dayjs');
+    const turbo = entries.find(e => e.pkg === '@hotwired/turbo');
+    assert.equal(dayjs.version, '1.11.13');
+    assert.equal(turbo.version, '8.0.0', 'scoped package version is correctly extracted');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('listPinned: extracts version from unpkg + skypack URL patterns', async () => {
+  const dir = join(tmpdir(), `webjs-list-multi-cdn-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'lodash': 'https://www.unpkg.com/lodash@4.17.21/lodash.js',
+      'preact': 'https://cdn.skypack.dev/preact@10.19.3',
+    },
+    provider: 'unpkg',
+  }));
+  try {
+    const entries = await listPinned(dir);
+    assert.equal(entries.find(e => e.pkg === 'lodash').version, '4.17.21');
+    assert.equal(entries.find(e => e.pkg === 'preact').version, '10.19.3');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: only counts a package as updated when at least one spec resolved', async () => {
+  // Regression: previously updatePinned pushed every outdated pkg
+  // to result.updated regardless of whether any subpath actually
+  // got a new URL from jspm.io. A user could see "Updated dayjs
+  // 1.11.13 → 1.11.20" while the pin file was unchanged because
+  // every jspm.io call failed. Now `anySpecUpdated` gates the push.
+  //
+  // We mock the package's latest by stubbing fetch: only the
+  // npm-registry call for dayjs returns a "latest" newer than the
+  // pinned version, but the jspm.io call for the new install
+  // fails. Result: findOutdated reports dayjs as outdated, but
+  // updatePinned tries jspm.io and the resolve returns nothing,
+  // so updated[] stays empty.
+  const dir = join(tmpdir(), `webjs-update-no-resolve-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: { 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js' },
+  }));
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('registry.npmjs.org/dayjs')) {
+      // Pretend the latest is newer than the pinned 1.11.13.
+      return /** @type any */ ({
+        ok: true, status: 200,
+        json: async () => ({ 'dist-tags': { latest: '99.99.99' } }),
+      });
+    }
+    if (u.includes('api.jspm.io')) {
+      // Pretend jspm.io fails for the new version. updatePinned's
+      // resolved[spec] will be undefined, so the inner loop hits
+      // `continue` for every spec.
+      return /** @type any */ ({
+        ok: false, status: 401,
+        json: async () => ({ error: 'simulated' }),
+      });
+    }
+    // No other fetches should fire in this test.
+    return /** @type any */ ({ ok: false, status: 404, json: async () => ({}) });
+  };
+  try {
+    const result = await updatePinned(dir);
+    assert.deepEqual(result.updated, [],
+      'no spec resolved, so updated[] must be empty even though findOutdated saw dayjs as outdated');
+  } finally {
+    globalThis.fetch = origFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('unpinPackage: preserves the pin file provider field after removing an entry', async () => {
+  // Regression: unpinPackage rewrote the pin file via
+  // writePinFile(appDir, imports, integrity) without the provider
+  // argument, so a user who pinned with --from jsdelivr would lose
+  // that choice after running `webjs vendor unpin <pkg>` for any
+  // single package. Other pinned packages must keep their CDN.
+  const dir = join(tmpdir(), `webjs-unpin-provider-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm',
+      'lodash': 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/+esm',
+    },
+    provider: 'jsdelivr',
+  }));
+  try {
+    const result = await unpinPackage(dir, 'dayjs');
+    assert.ok(result.removed);
+    const after = await readPinFile(dir);
+    assert.ok(after, 'pin file still exists (lodash remains)');
+    assert.equal(after.provider, 'jsdelivr',
+      'provider field must survive a single-package unpin');
+    assert.equal(Object.keys(after.imports).length, 1);
+    assert.equal(after.imports.lodash, 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/+esm');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('findOutdated: returns an Array, not undefined (ASI regression guard)', async () => {
+  // Regression: a `return` followed by a newline + JSDoc-cast parens
+  // triggers automatic semicolon insertion (`return; (expr);`), so
+  // the value gets dropped and findOutdated returns undefined.
+  // Callers like updatePinned then crash with
+  // `Cannot read properties of undefined (reading 'length')`.
+  const dir = join(tmpdir(), `webjs-outdated-arr-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  // No pin file → grouped is empty → no fetches → return empty array.
+  // The interesting assertion is that the return value is an
+  // ARRAY (.length accessible), not undefined.
+  const result = await findOutdated(dir);
+  assert.ok(Array.isArray(result), 'findOutdated must always return an Array');
+  assert.equal(result.length, 0);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('listPinned: short package names do not false-match inside other package URLs', async () => {
+  // Regression: a bare-name regex without a boundary check would
+  // find `ms@1.0.0` inside `terms@1.0.0/ms@2.0.0.js`, returning
+  // version 1.0.0 for the `ms` package when the actual version
+  // is 2.0.0. The boundary check ensures the match starts at
+  // a non-pkg-name char (URL separator).
+  const dir = join(tmpdir(), `webjs-list-boundary-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+    imports: {
+      'ms': 'https://cdn.example/npm/terms@1.0.0/ms@2.0.0/index.js',
+    },
+  }));
+  try {
+    const entries = await listPinned(dir);
+    const ms = entries.find(e => e.pkg === 'ms');
+    assert.equal(ms.version, '2.0.0',
+      'must extract ms\'s own version, not the embedded "ms" inside "terms"');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

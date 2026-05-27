@@ -275,15 +275,42 @@ Full docs: https://docs.webjs.com`);
       const sub = rest[0];
       const args = rest.slice(1);
       const appDir = process.cwd();
-      const { pinAll, unpinPackage, listPinned } = await import('@webjsdev/server');
+      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
+
+      // Parse `--from <provider>` once at the top so subcommands share it.
+      // Mirrors importmap-rails's `bin/importmap pin foo --from jsdelivr`.
+      let from = 'jspm';
+      const fromIdx = args.indexOf('--from');
+      if (fromIdx !== -1) {
+        from = args[fromIdx + 1];
+        if (!from || !SUPPORTED_PROVIDERS.has(from)) {
+          console.error(
+            `Unknown --from provider '${from || ''}'. Supported: ${[...SUPPORTED_PROVIDERS].join(', ')}.`,
+          );
+          process.exit(1);
+        }
+        // Strip --from + its argument so downstream flag checks like
+        // `args.includes('--download')` aren't confused.
+        args.splice(fromIdx, 2);
+      }
 
       if (sub === 'pin') {
         const download = args.includes('--download');
+        // Same precedence rule as `vendor update`: explicit --from
+        // wins; otherwise pinAll reads the pin file's persisted
+        // provider so a user who pinned via jsdelivr stays on it.
+        // Pass undefined (not the parsed 'jspm' default) when no
+        // --from to engage the pin-file fallback. Peek at the pin
+        // file here to compute the log line before pinAll runs.
+        const explicitFrom = fromIdx !== -1 ? from : undefined;
+        const existing = await readPinFile(appDir);
+        const usedFrom = explicitFrom || existing?.provider || 'jspm';
         console.log(
           `Pinning vendor packages from ${appDir}` +
+          (usedFrom !== 'jspm' ? ` via ${usedFrom}` : '') +
           (download ? ' (downloading bundles)' : '') + '...',
         );
-        const result = await pinAll(appDir, { download });
+        const result = await pinAll(appDir, { download, from: explicitFrom });
         if (result.noBareImports) {
           // Scanner found zero bare-specifier imports in client-
           // reachable source. Without this branch pinAll would write
@@ -298,20 +325,22 @@ Full docs: https://docs.webjs.com`);
         }
         if (result.failed) {
           // pinAll refused to write the pin file because every install
-          // failed to resolve via jspm.io (e.g. brand-new published
-          // version not yet on the CDN, network outage, jspm.io 5xx).
-          // Surface the failure so the user fixes the cause before
-          // shipping; the per-package failures already logged via
-          // jspmResolveOne above tell the user which packages broke.
+          // failed to resolve via the chosen resolver (jspm.io's
+          // Generator API powers all providers; the failure mode is
+          // typically a brand-new published version not yet on the
+          // CDN, a network outage, or a provider-side 5xx). Surface
+          // the failure with the actual provider in the message so
+          // the user can fix the cause before shipping.
+          const provider = result.provider || 'jspm.io';
           console.error(
-            `Pin FAILED: every package failed to resolve via jspm.io. No pin file written ` +
+            `Pin FAILED: every package failed to resolve via ${provider}. No pin file written ` +
             `(would shadow the live-API fallback with an empty importmap and break the browser).`,
           );
           console.error(`Attempted installs:`);
           for (const i of result.attemptedInstalls) console.error(`  ${i}`);
           console.error(
-            `Possible causes: the package version is too new for jspm.io's CDN to have indexed yet; ` +
-            `network outage; jspm.io is down. Try again in a few minutes, or pin an older version.`,
+            `Possible causes: the package version is too new for ${provider}'s CDN to have indexed yet; ` +
+            `network outage; ${provider} is down. Try again in a few minutes, or pin an older version.`,
           );
           process.exit(1);
         }
@@ -370,11 +399,111 @@ Full docs: https://docs.webjs.com`);
         break;
       }
 
+      if (sub === 'audit') {
+        // npm bulk-advisories check against pinned versions. Mirrors
+        // bin/importmap audit. Exits non-zero when any vulnerability
+        // is found so CI can gate on it.
+        const { vulnerable, totalChecked, errored } = await auditPinned(appDir);
+        if (totalChecked === 0) {
+          console.log('No pinned packages to audit. Run "webjs vendor pin" first.');
+          break;
+        }
+        if (errored) {
+          console.error(
+            `Could not reach registry.npmjs.org for security advisories ` +
+            `(network failure, timeout, or 5xx). Retry when connectivity is back.`,
+          );
+          process.exit(1);
+        }
+        if (vulnerable.length === 0) {
+          console.log(`No vulnerable packages found (${totalChecked} checked).`);
+          break;
+        }
+        console.log(`Package                                  Severity   Vulnerable versions       Title`);
+        for (const v of vulnerable) {
+          console.log(
+            `  ${v.name.padEnd(38)} ${v.severity.padEnd(10)} ${v.vulnerableVersions.padEnd(25)} ${v.title}`,
+          );
+        }
+        const bySeverity = vulnerable.reduce((acc, v) => {
+          acc[v.severity] = (acc[v.severity] || 0) + 1;
+          return acc;
+        }, /** @type {Record<string,number>} */ ({}));
+        const summary = Object.entries(bySeverity)
+          .sort((a, b) => b[1] - a[1])
+          .map(([sev, n]) => `${n} ${sev}`).join(', ');
+        console.error(
+          `  ${vulnerable.length} vulnerabilit${vulnerable.length === 1 ? 'y' : 'ies'} found: ${summary}`,
+        );
+        process.exit(1);
+      }
+
+      if (sub === 'outdated') {
+        // npm registry latest-version check against pinned versions.
+        // Mirrors bin/importmap outdated. Exits non-zero when any
+        // package is outdated so CI / Renovate-style automation can
+        // detect it.
+        const outdated = await findOutdated(appDir);
+        if (outdated.length === 0) {
+          console.log('No outdated packages found.');
+          break;
+        }
+        console.log(`Package                                  Current               Latest`);
+        for (const o of outdated) {
+          console.log(`  ${o.pkg.padEnd(38)} ${o.current.padEnd(21)} ${o.latest}`);
+        }
+        console.error(
+          `  ${outdated.length} outdated package${outdated.length === 1 ? '' : 's'} found.`,
+        );
+        process.exit(1);
+      }
+
+      if (sub === 'update') {
+        // Re-pin outdated packages to latest. Mirrors bin/importmap
+        // update. Does NOT modify package.json or node_modules; the
+        // user should run `npm install <pkg>@<latest>` afterward to
+        // keep the local install in sync.
+        //
+        // Provider precedence: explicit --from CLI flag wins. Without
+        // it, updatePinned reads the pin file's persisted provider so
+        // a user who pinned via jsdelivr stays on jsdelivr after
+        // update. Pass `undefined` (not the parsed `from = 'jspm'`
+        // default) when no --from was given so updatePinned's
+        // pin-file fallback engages.
+        const explicitFrom = fromIdx !== -1 ? from : undefined;
+        const existing = await readPinFile(appDir);
+        const usedFrom = explicitFrom || existing?.provider || 'jspm';
+        console.log(`Updating outdated vendor pins in ${appDir}${usedFrom !== 'jspm' ? ` via ${usedFrom}` : ''}...`);
+        const result = await updatePinned(appDir, { from: explicitFrom });
+        if (result.noOutdated) {
+          console.log('No outdated packages found.');
+          break;
+        }
+        if (result.updated.length === 0) {
+          console.error('No packages were updated (jspm.io may have failed to resolve any of the new versions).');
+          process.exit(1);
+        }
+        for (const u of result.updated) {
+          console.log(`  ${u.pkg.padEnd(38)} ${u.from} → ${u.to}`);
+        }
+        console.log(
+          `Updated ${result.updated.length} package${result.updated.length === 1 ? '' : 's'}. ` +
+          `Run \`npm install ${result.updated.map(u => `${u.pkg}@${u.to}`).join(' ')}\` to ` +
+          `sync your node_modules.`,
+        );
+        break;
+      }
+
       console.error(`Unknown vendor subcommand: ${sub || '(none)'}\n` +
         `Usage:\n` +
-        `  webjs vendor pin [--download]    Pin packages to .webjs/vendor/importmap.json\n` +
-        `  webjs vendor unpin <pkg>         Remove a package from the pin file\n` +
-        `  webjs vendor list                Show pinned packages with versions and URLs`);
+        `  webjs vendor pin [--from PROVIDER] [--download]   Pin packages to .webjs/vendor/importmap.json\n` +
+        `  webjs vendor unpin <pkg>                          Remove a package from the pin file\n` +
+        `  webjs vendor list                                 Show pinned packages with versions and URLs\n` +
+        `  webjs vendor audit                                Run a security audit against pinned versions\n` +
+        `  webjs vendor outdated                             Check pinned packages for newer versions\n` +
+        `  webjs vendor update [--from PROVIDER]             Re-pin outdated packages to latest\n` +
+        `\n` +
+        `  --from PROVIDER     CDN to resolve through. One of: ${[...SUPPORTED_PROVIDERS].join(', ')}. Default: jspm.`);
       process.exit(1);
     }
     case 'help':

@@ -367,10 +367,20 @@ or compliance environments. See [docs.webjs.com Deployment → CSP](https://docs
 ```sh
 webjs vendor list                 # show pinned packages with versions
 webjs vendor unpin <pkg>          # remove one entry from pin file
+webjs vendor audit                # npm security advisories against pinned versions
+webjs vendor outdated             # list pinned packages with newer versions on npm
+webjs vendor update               # re-pin every outdated package to its latest
+
+# Switch CDN at pin time (default: jspm.io). Resolver options:
+# jspm, jsdelivr, unpkg, skypack. Useful for jspm.io incident response.
+webjs vendor pin --from jsdelivr
+webjs vendor update --from jsdelivr
 ```
 
 Same posture as Rails 7 + importmap-rails: explicit pin command,
-committed manifest, optional `--download` for full offline capability.
+committed manifest, optional `--download` for full offline capability,
+and a `--from` knob to swap the resolver CDN if jspm.io has an
+incident.
 
 **Don't auto-run `webjs vendor pin` in `predev` / `prestart`.** Auto-pin
 would silently churn the committed importmap.json as jspm.io resolves

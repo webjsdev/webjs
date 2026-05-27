@@ -111,6 +111,19 @@ Pinned 2 packages, wrote .webjs/vendor/importmap.json + 2 bundles.</pre>
     <p>Pin is intentionally manual (no <code>predev</code>/<code>prestart</code> auto-run). Auto-pin would cause silent churn in the committed importmap.json as jspm.io resolves URLs or transitive deps drift. Rails takes the same posture: <code>bin/importmap pin</code> is always developer-invoked.</p>
     <p>The pin command computes a <code>sha384</code> integrity hash for every vendor URL and writes them alongside the imports in <code>importmap.json</code> under an <code>integrity</code> key. The SSR pipeline stamps the matching hash on each <code>&lt;link rel="modulepreload"&gt;</code> and on the importmap entry itself, so the browser refuses to execute a bundle whose bytes don't match (CDN compromise defense). Both <code>webjs vendor pin</code> and <code>webjs vendor pin --download</code> populate <code>integrity</code>. The hashes only update when <code>webjs vendor pin</code> is rerun; routine cache-busting cannot drop them.</p>
 
+    <h2>Switch CDN with <code>--from</code></h2>
+    <p>If jspm.io has an incident, or you want jsdelivr-served packages, pass a different resolver:</p>
+    <pre>$ webjs vendor pin --from jsdelivr
+Pinning vendor packages from /home/me/my-app via jsdelivr...</pre>
+    <p>Accepts <code>jspm</code> (default), <code>jsdelivr</code>, <code>unpkg</code>, or <code>skypack</code>. Same shape as Rails's <code>bin/importmap pin foo --from jsdelivr</code>. The chosen resolver is persisted in <code>importmap.json</code> as a <code>provider</code> sibling field so <code>webjs vendor update</code> targets the same CDN.</p>
+
+    <h2>Maintenance commands</h2>
+    <p>For pinned packages, three commands stand in for <code>npm audit</code> / <code>npm outdated</code> / <code>npm update</code>:</p>
+    <pre>$ webjs vendor audit
+$ webjs vendor outdated
+$ webjs vendor update</pre>
+    <p><code>audit</code> POSTs your pinned versions to the same <code>registry.npmjs.org/-/npm/v1/security/advisories/bulk</code> endpoint <code>npm audit</code> uses, prints any CVEs, and exits non-zero on findings so CI can gate. <code>outdated</code> queries each pinned package's <code>dist-tags.latest</code> and lists what trails. <code>update</code> re-pins every outdated package to its latest, recomputes SRI, and writes the new pin file (you still run <code>npm install &lt;pkg&gt;@&lt;latest&gt;</code> afterward to sync your <code>node_modules</code>).</p>
+
     <h2>Why jspm.io and not local bundling?</h2>
     <p>A stricter "browser-native ESM only" interpretation of no-build would refuse to run any bundler anywhere on the user's machine, including for npm packages. Rails 7+ with <code>importmap-rails</code> is the canonical example, and webjs adopts the same posture exactly. The webjs server never invokes a bundler for vendor packages; jspm.io pre-bundled them on their CDN.</p>
     <p>Why jspm.io specifically: institutional sponsors (37signals, CacheFly, Socket, Framer), years of uptime, status page at <code>status.jspm.io</code>, standards-first maintenance by Guy Bedford (TC39 ESM + import maps + HTML spec). Same CDN Rails uses.</p>
