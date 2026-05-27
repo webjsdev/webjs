@@ -109,6 +109,43 @@ const TS_CACHE_MAX = 500;
 const TS_CACHE = new Map();
 
 /**
+ * Auto-load `<appDir>/.env` into `process.env` once at boot. Mirrors
+ * what Rails / Next / Astro do out of the box: a scaffolded app with
+ * a committed `.env.example` and a developer-copied `.env` should
+ * "just work" without the user having to add a dotenv import or set
+ * the file path on the CLI.
+ *
+ * Uses Node 24+'s built-in `process.loadEnvFile`, which is dotenv-
+ * compatible and DOES NOT override pre-existing `process.env` values.
+ * Calls that hit a missing file or parse error are silenced; the
+ * server should still come up cleanly when there's no `.env`.
+ *
+ * Idempotent: re-running is a no-op for any env var the user already
+ * exported (e.g. via the host shell or a process manager). That
+ * keeps the "shell-set wins over file" precedence Rails users
+ * expect.
+ *
+ * Must run before any server-only module is loaded by
+ * buildActionIndex, since module-init code in `lib/*.server.ts`
+ * (e.g. `createAuth({ secret: process.env.AUTH_SECRET })`) reads
+ * process.env at import time. createRequestHandler is the
+ * single entry point where this is guaranteed.
+ *
+ * @param {string} appDir
+ */
+function loadAppEnv(appDir) {
+  try {
+    if (typeof process.loadEnvFile === 'function') {
+      process.loadEnvFile(join(appDir, '.env'));
+    }
+  } catch {
+    // No .env file, malformed file, or Node version without
+    // loadEnvFile. Either way, fall through silently: the user
+    // may not need any env vars, or they may set them via shell.
+  }
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -123,6 +160,14 @@ const TS_CACHE = new Map();
  */
 export async function createRequestHandler(opts) {
   const appDir = resolve(opts.appDir);
+  // Load <appDir>/.env into process.env BEFORE anything else.
+  // buildActionIndex below imports server-only files (lib/*.server.ts,
+  // modules/**/*.server.ts), some of which read process.env at module
+  // init (e.g. createAuth reads AUTH_SECRET). Without this call,
+  // scaffolded apps with a committed .env.example + .env would fail
+  // to boot until the user discovered the missing env-load. See
+  // tracker #37.
+  loadAppEnv(appDir);
   const dev = !!opts.dev;
   const logger = opts.logger || defaultLogger({ dev });
   const coreDir = locateCoreDir(appDir);
