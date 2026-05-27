@@ -111,8 +111,15 @@ export function buildImportMap() {
   // Emit `integrity` per the importmap-integrity spec (Chrome 132+,
   // Safari 18.4+, Firefox flagged). Browsers without support ignore
   // the field; per-tag SRI on modulepreload covers them.
+  //
+  // Filter orphan integrity entries (URLs that aren't actually in
+  // imports). The browser only consults integrity for URLs that
+  // resolve through the importmap, so orphans are harmless but bloat
+  // the JSON, defeat the importMapHash stability invariant on
+  // unrelated pin file edits, and leak removed URLs to the wire.
   const out = { imports };
-  const intKeys = Object.keys(_vendorIntegrity).sort();
+  const usedUrls = new Set(Object.values(imports));
+  const intKeys = Object.keys(_vendorIntegrity).filter(k => usedUrls.has(k)).sort();
   if (intKeys.length) {
     /** @type {Record<string, string>} */
     const integrity = {};
