@@ -1,7 +1,7 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, importMapHash } from './importmap.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
@@ -162,6 +162,11 @@ function htmlResponse(html, status, req, url, metadata) {
   // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
+  // X-Webjs-Build carries the current importmap hash so the client
+  // router can detect post-deploy importmap changes on EVERY
+  // response, including the X-Webjs-Have partial responses that
+  // omit the head entirely. See router-client.js applySwap.
+  headers.set('x-webjs-build', importMapHash());
   if (req && !readToken(req)) {
     const secure = url ? url.protocol === 'https:' : false;
     headers.append('set-cookie', cookieHeader(newToken(), { secure }));
@@ -1162,6 +1167,9 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
   // Default: no caching. Pages are dynamic by default: the developer
   // opts in to caching explicitly via metadata.cacheControl.
   headers.set('cache-control', metadata?.cacheControl || 'no-store');
+  // See htmlResponse: build hash on every response for the client
+  // router's importmap-mismatch detection on partial swaps.
+  headers.set('x-webjs-build', importMapHash());
   if (req && !readToken(req)) {
     const secure = url ? url.protocol === 'https:' : false;
     headers.append('set-cookie', cookieHeader(newToken(), { secure }));

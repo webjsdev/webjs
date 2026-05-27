@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { jsonForScriptTag } from './script-tag-json.js';
 
 // Local attribute escaper. Matches ssr.js's escapeAttr (the source
@@ -39,6 +40,38 @@ let _vendorIntegrity = {};
 export function setVendorEntries(entries, integrity) {
   _extraEntries = entries;
   _vendorIntegrity = integrity || {};
+  // Bust the importmap-hash cache. Next call to importMapHash()
+  // recomputes against the new entries.
+  _importMapHash = '';
+}
+
+/**
+ * Stable SHA-256 of the current importmap JSON, used as the
+ * `data-webjs-build` attribute on `<script type="importmap">` and
+ * as the `X-Webjs-Build` response header on every SSR response.
+ *
+ * Purpose: the X-Webjs-Have partial-response optimization in ssr.js
+ * short-circuits at the outermost cached layout and returns only the
+ * inner body (no head, no importmap). Without the build header the
+ * client router has no way to detect a deploy that bumped the
+ * importmap. After a `webjs vendor pin` rerun the user's next
+ * intra-shell nav would stay on the stale importmap and the new
+ * vendor URLs would never load. The header lets applySwap detect
+ * the change and hard-reload before applying the swap.
+ *
+ * Cached because buildImportMap + JSON.stringify per request would
+ * be wasteful; setVendorEntries invalidates the cache.
+ *
+ * @returns {string}  e.g. `abc123…` (hex, 64 chars)
+ */
+let _importMapHash = '';
+export function importMapHash() {
+  if (!_importMapHash) {
+    _importMapHash = createHash('sha256')
+      .update(JSON.stringify(buildImportMap()))
+      .digest('hex');
+  }
+  return _importMapHash;
 }
 
 /**
@@ -112,5 +145,9 @@ export function importMapTag(opts = {}) {
   // base64-ish. A misconfigured upstream emitting `nonce-<bad>` should
   // not get its `<` rendered raw into our HTML.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
-  return `<script type="importmap"${n}>${jsonForScriptTag(buildImportMap())}</script>`;
+  // Stamp the build hash so the client router can detect post-deploy
+  // importmap changes on intra-shell partial-response navigations.
+  // See importMapHash() above for the rationale.
+  const b = ` data-webjs-build="${importMapHash()}"`;
+  return `<script type="importmap"${n}${b}>${jsonForScriptTag(buildImportMap())}</script>`;
 }

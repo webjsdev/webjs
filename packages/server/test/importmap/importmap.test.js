@@ -6,14 +6,14 @@ import { importMapTag, setVendorEntries, buildImportMap } from '../../src/import
 test('importMapTag: emits a bare script tag when no nonce is provided', () => {
   setVendorEntries({});
   const tag = importMapTag();
-  assert.match(tag, /^<script type="importmap">/);
+  assert.match(tag, /^<script type="importmap" data-webjs-build="[0-9a-f]{64}">/);
   assert.ok(!tag.includes('nonce='));
 });
 
 test('importMapTag: emits nonce attribute when provided', () => {
   setVendorEntries({});
   const tag = importMapTag({ nonce: 'abc123' });
-  assert.match(tag, /^<script type="importmap" nonce="abc123">/);
+  assert.match(tag, /^<script type="importmap" nonce="abc123" data-webjs-build="[0-9a-f]{64}">/);
 });
 
 test('importMapTag: HTML-escapes embedded quotes in nonce', () => {

@@ -734,6 +734,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
+  let incomingBuild = null;
   /** @type {string} */
   let finalUrl = href;
   try {
@@ -782,6 +783,12 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // (turbo/src/core/drive/navigator.js:92-107). Critical for the
     // standard server-rendered validation pattern: 422 + re-rendered
     // form with errors keeps the user's typed input and shows context.
+    // Capture the server's build hash header BEFORE reading the body.
+    // The header is set on every SSR response, including X-Webjs-Have
+    // partial responses where the body has no head and no importmap
+    // tag to compare. The applySwap importmap-mismatch guard reads
+    // this to detect deploys that bumped the vendor pin.
+    incomingBuild = resp.headers.get('x-webjs-build');
     html = await resp.text();
   } catch (err) {
     // Aborted by a newer navigation: let it run, don't fall back.
@@ -801,7 +808,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   const doc = parseHTML(html);
   if (!doc) { location.href = href; return; }
 
-  applySwap(doc, frameId, false, finalUrl);
+  applySwap(doc, frameId, false, finalUrl, incomingBuild);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -843,30 +850,50 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * importmaps. Called with `href = null` for revalidation flows (which
  * never trigger a hard reload).
  *
+ * Detection uses the `X-Webjs-Build` response header (read by the
+ * fetch path and passed in as `incomingBuild`). The header is set on
+ * EVERY SSR response, including X-Webjs-Have partial responses that
+ * omit the head and importmap entirely. Without it, comparing
+ * `<script type="importmap">` textContent would silently no-op on
+ * partial responses (incoming is null) and the user would stay on the
+ * stale importmap after a deploy. Fallback: when the header is absent
+ * (older server, non-SSR response), compare textContent as before.
+ *
  * @param {Document} doc
  * @param {string | null} frameId
  * @param {boolean} revalidating  Restore from cache; already-matched markers may stomp inflight state, signal helps loading templates skip.
  * @param {string | null} [href]  Target URL for hard-reload fallback on importmap mismatch.
+ * @param {string | null} [incomingBuild]  X-Webjs-Build header from the response, or null.
  */
-function applySwap(doc, frameId, revalidating, href) {
+function applySwap(doc, frameId, revalidating, href, incomingBuild) {
   // Importmap-mismatch guard. Only fires for foreground navs (href
   // present); revalidation passes href=null to keep cache restores
   // soft. Skipped if a <webjs-frame> escape hatch is in play (frame
   // swaps are intra-page and don't change the importmap).
   if (href && !frameId && !revalidating) {
-    const incoming = doc.querySelector('script[type="importmap"]');
-    const current = document.querySelector('script[type="importmap"]');
-    if (
-      incoming && current &&
-      (incoming.textContent || '').trim() !== (current.textContent || '').trim()
-    ) {
-      if (typeof location !== 'undefined') {
-        // Use location.href assignment (not .assign()) to match the
-        // existing cross-origin / parse-failure fallback pattern in
-        // this file and to stay testable via the same mock surface.
-        location.href = href;
-        return;
-      }
+    const currentTag = document.querySelector('script[type="importmap"]');
+    const currentBuild = currentTag ? currentTag.getAttribute('data-webjs-build') : null;
+    let mismatch = false;
+    if (incomingBuild && currentBuild) {
+      // Preferred path: compare per-response build hash. Works even
+      // when the response body has no importmap (partial swap).
+      mismatch = incomingBuild !== currentBuild;
+    } else {
+      // Fallback for responses without X-Webjs-Build (older servers,
+      // hand-crafted HTML in tests). Match the previous behavior of
+      // comparing the importmap textContent in the parsed document.
+      const incoming = doc.querySelector('script[type="importmap"]');
+      mismatch = !!(
+        incoming && currentTag &&
+        (incoming.textContent || '').trim() !== (currentTag.textContent || '').trim()
+      );
+    }
+    if (mismatch && typeof location !== 'undefined') {
+      // Use location.href assignment (not .assign()) to match the
+      // existing cross-origin / parse-failure fallback pattern in
+      // this file and to stay testable via the same mock surface.
+      location.href = href;
+      return;
     }
   }
 
