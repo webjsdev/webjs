@@ -1003,12 +1003,17 @@ function groupPinnedByPackage(entries) {
  * pin file. POSTs to npm's bulk-advisory endpoint, the same one
  * `npm audit` uses internally.
  *
+ * Returns `{ errored: true }` when the registry call failed (network
+ * down, timeout, 5xx) so the CLI can surface the failure clearly
+ * instead of misleading the user with "no vulnerabilities found".
+ *
  * Mirrors importmap-rails's `bin/importmap audit`.
  *
  * @param {string} appDir
  * @returns {Promise<{
  *   vulnerable: Array<{ name: string, severity: string, vulnerableVersions: string, title: string }>,
  *   totalChecked: number,
+ *   errored?: boolean,
  * }>}
  */
 export async function auditPinned(appDir) {
@@ -1023,7 +1028,14 @@ export async function auditPinned(appDir) {
     body: JSON.stringify(body),
   });
   const totalChecked = grouped.size;
-  if (!result || typeof result !== 'object') return { vulnerable: [], totalChecked };
+  if (result === null) {
+    // Distinguish "registry returned no advisories" (success, empty
+    // object) from "couldn't reach registry" (null). The latter is
+    // user-visible because a silent "no vulnerabilities" on a failed
+    // call would falsely reassure the user.
+    return { vulnerable: [], totalChecked, errored: true };
+  }
+  if (typeof result !== 'object') return { vulnerable: [], totalChecked };
   /** @type {Array<{ name: string, severity: string, vulnerableVersions: string, title: string }>} */
   const vulnerable = [];
   for (const [name, advisories] of Object.entries(result)) {
@@ -1083,21 +1095,32 @@ export async function findOutdated(appDir) {
  * `package.json` / `node_modules`. The user should run `npm install
  * <pkg>@<latest>` afterward to keep package.json in sync.
  *
+ * When `opts.from` is not passed, the existing pin file's `provider`
+ * field is used (so a user who pinned `--from jsdelivr` originally
+ * stays on jsdelivr after update). When the file has no provider
+ * field, defaults to `jspm`.
+ *
  * @param {string} appDir
  * @param {{ from?: string }} [opts]
- * @returns {Promise<{ updated: Array<{ pkg: string, from: string, to: string }>, noOutdated?: boolean }>}
+ * @returns {Promise<{ updated: Array<{ pkg: string, from: string, to: string }>, noOutdated?: boolean, provider?: string }>}
  */
 export async function updatePinned(appDir, opts = {}) {
-  const from = opts.from || 'jspm';
+  const file = await readPinFile(appDir);
+  // Provider precedence:
+  //   1. explicit opts.from (CLI flag wins)
+  //   2. pin file's persisted provider
+  //   3. default 'jspm'
+  // Validate AFTER resolving so a stale pin file with a previously-
+  // valid-but-now-removed provider still errors clearly.
+  const from = opts.from || file?.provider || 'jspm';
   if (!SUPPORTED_PROVIDERS.has(from)) {
     throw new Error(
       `[webjs] unknown provider '${from}'. Supported: ${[...SUPPORTED_PROVIDERS].join(', ')}.`,
     );
   }
   const outdated = await findOutdated(appDir);
-  if (!outdated.length) return { updated: [], noOutdated: true };
-  const file = await readPinFile(appDir);
-  if (!file) return { updated: [] };
+  if (!outdated.length) return { updated: [], noOutdated: true, provider: from };
+  if (!file) return { updated: [], provider: from };
   const newImports = { ...file.imports };
   const newIntegrity = { ...(file.integrity || {}) };
   /** @type {Array<{ pkg: string, from: string, to: string }>} */
@@ -1126,7 +1149,7 @@ export async function updatePinned(appDir, opts = {}) {
     updated.push({ pkg, from: current, to: latest });
   }
   await writePinFile(appDir, newImports, newIntegrity, from);
-  return { updated };
+  return { updated, provider: from };
 }
 
 /**

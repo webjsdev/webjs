@@ -392,10 +392,17 @@ Full docs: https://docs.webjs.com`);
         // npm bulk-advisories check against pinned versions. Mirrors
         // bin/importmap audit. Exits non-zero when any vulnerability
         // is found so CI can gate on it.
-        const { vulnerable, totalChecked } = await auditPinned(appDir);
+        const { vulnerable, totalChecked, errored } = await auditPinned(appDir);
         if (totalChecked === 0) {
           console.log('No pinned packages to audit. Run "webjs vendor pin" first.');
           break;
+        }
+        if (errored) {
+          console.error(
+            `Could not reach registry.npmjs.org for security advisories ` +
+            `(network failure, timeout, or 5xx). Retry when connectivity is back.`,
+          );
+          process.exit(1);
         }
         if (vulnerable.length === 0) {
           console.log(`No vulnerable packages found (${totalChecked} checked).`);
@@ -445,8 +452,17 @@ Full docs: https://docs.webjs.com`);
         // update. Does NOT modify package.json or node_modules; the
         // user should run `npm install <pkg>@<latest>` afterward to
         // keep the local install in sync.
-        console.log(`Updating outdated vendor pins in ${appDir}${from !== 'jspm' ? ` via ${from}` : ''}...`);
-        const result = await updatePinned(appDir, { from });
+        //
+        // Provider precedence: explicit --from CLI flag wins. Without
+        // it, updatePinned reads the pin file's persisted provider so
+        // a user who pinned via jsdelivr stays on jsdelivr after
+        // update. Pass `undefined` (not the parsed `from = 'jspm'`
+        // default) when no --from was given so updatePinned's
+        // pin-file fallback engages.
+        const explicitFrom = fromIdx !== -1 ? from : undefined;
+        const result = await updatePinned(appDir, { from: explicitFrom });
+        const usedFrom = result.provider || 'jspm';
+        console.log(`Updating outdated vendor pins in ${appDir}${usedFrom !== 'jspm' ? ` via ${usedFrom}` : ''}...`);
         if (result.noOutdated) {
           console.log('No outdated packages found.');
           break;

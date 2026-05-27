@@ -1368,3 +1368,76 @@ test('updatePinned: no outdated returns noOutdated:true without writing', async 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('updatePinned: respects pin file provider when --from is not passed', async () => {
+  // Regression: a user who pinned `--from jsdelivr` and later runs
+  // `webjs vendor update` (no flag) should stay on jsdelivr, not
+  // silently fall back to jspm.
+  const dir = join(tmpdir(), `webjs-update-provider-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      // No actual outdated packages here; we're checking the
+      // provider read path. updatePinned reaches the
+      // findOutdated network call and returns noOutdated:true OR
+      // updated:[]. Either way, the `provider` field on the
+      // result should reflect what was on the pin file.
+      imports: { 'a': 'https://cdn.jsdelivr.net/npm/a@1.0.0/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const result = await updatePinned(dir);
+    assert.equal(result.provider, 'jsdelivr',
+      'updatePinned must use the pin file provider when no --from passed');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: explicit --from overrides pin file provider', async () => {
+  const dir = join(tmpdir(), `webjs-update-override-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'a': 'https://cdn.jsdelivr.net/npm/a@1.0.0/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const result = await updatePinned(dir, { from: 'unpkg' });
+    assert.equal(result.provider, 'unpkg',
+      'explicit opts.from must override pin file provider');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('auditPinned: surfaces network failure as errored:true', { skip: !NETWORK_OK }, async () => {
+  // The audit command must NOT silently report "no vulnerabilities"
+  // when the registry call failed. Use an obviously-unresolvable
+  // hostname by stubbing the global fetch for the duration of the
+  // test. Fail-closed contract: errored:true means the user must
+  // retry.
+  const dir = join(tmpdir(), `webjs-audit-err-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js' },
+    }),
+  );
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('simulated network failure'); };
+  try {
+    const result = await auditPinned(dir);
+    assert.equal(result.errored, true);
+    assert.deepEqual(result.vulnerable, []);
+    assert.equal(result.totalChecked, 1);
+  } finally {
+    globalThis.fetch = origFetch;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
