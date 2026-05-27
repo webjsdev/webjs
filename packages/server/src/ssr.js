@@ -1245,6 +1245,17 @@ function toUrlPath(file, appDir) {
 /**
  * Extract a CSP nonce from the request's Content-Security-Policy header.
  * Matches `'nonce-<base64>'` in the script-src directive.
+ *
+ * The regex matches the first `nonce-...` token anywhere in the
+ * header, regardless of which directive it sits under. This is
+ * intentional: in practice every reasonable CSP uses the same
+ * nonce across `script-src` and `style-src` (a per-request
+ * single-nonce model), and webjs only emits `<script>` /
+ * `<link rel="modulepreload">` tags, so reading the first match
+ * is the right behaviour. A future caller that emits styled
+ * inline content under a separate style nonce would need to
+ * extend this to be directive-scoped.
+ *
  * @param {Request} req
  * @returns {string | undefined}
  */

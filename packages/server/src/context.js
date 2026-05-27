@@ -46,6 +46,14 @@ export function getRequest() {
  * `cspNonce()` returns '' (empty `nonce=""` attribute, browser
  * ignores it).
  */
+// The regex captures the first `nonce-...` token anywhere in the CSP
+// header. Webjs uses a single per-request nonce shared across all
+// directives that emit it (the standard CSP3 single-nonce model),
+// so reading the first match is correct. If a future caller emits
+// styled inline content under a separate style nonce, this reader
+// would need to become directive-scoped. Kept identical to the
+// matching helper in ssr.js so both paths interpret the header the
+// same way.
 setCspNonceProvider(() => {
   const req = als.getStore()?.req;
   if (!req) return '';
