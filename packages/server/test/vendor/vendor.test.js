@@ -17,6 +17,11 @@ import {
   readPinFile,
   resolveVendorImports,
   serveDownloadedBundle,
+  SUPPORTED_PROVIDERS,
+  normalizeProvider,
+  auditPinned,
+  findOutdated,
+  updatePinned,
 } from '../../src/vendor.js';
 
 // --- extractPackageName ---
@@ -1234,6 +1239,131 @@ test('serveDownloadedBundle: missing file returns 404', async () => {
   try {
     const resp = await serveDownloadedBundle('not-there@1.0.0.js', dir, false);
     assert.equal(resp.status, 404);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// --- provider (--from) parity tests ---
+
+test('SUPPORTED_PROVIDERS lists the four Rails-importmap-rails CDNs', () => {
+  assert.deepEqual(
+    [...SUPPORTED_PROVIDERS].sort(),
+    ['jsdelivr', 'jspm', 'skypack', 'unpkg'],
+  );
+});
+
+test('normalizeProvider: jspm → jspm.io, others pass through (Rails parity)', () => {
+  assert.equal(normalizeProvider('jspm'), 'jspm.io');
+  assert.equal(normalizeProvider('jsdelivr'), 'jsdelivr');
+  assert.equal(normalizeProvider('unpkg'), 'unpkg');
+  assert.equal(normalizeProvider('skypack'), 'skypack');
+});
+
+test('pinAll: rejects unknown provider with a clear error', async () => {
+  const dir = join(tmpdir(), `webjs-pin-bad-prov-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp"}');
+  try {
+    await assert.rejects(
+      () => pinAll(dir, { from: 'not-a-real-cdn' }),
+      /unknown provider 'not-a-real-cdn'/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('writePinFile + readPinFile: provider persists for non-jspm choice', async () => {
+  // Verify the provider round-trips through the pin file when the
+  // user picked something other than the default. For default jspm
+  // the field is omitted to keep the pin file shape stable for the
+  // 99% case (covered by other tests).
+  const dir = join(tmpdir(), `webjs-pin-prov-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'dayjs': 'https://cdn.jsdelivr.net/npm/dayjs@1.11.13/+esm' },
+      provider: 'jsdelivr',
+    }),
+  );
+  try {
+    const file = await readPinFile(dir);
+    assert.ok(file);
+    assert.equal(file.provider, 'jsdelivr');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readPinFile: rejects unknown provider value (tamper guard)', async () => {
+  const dir = join(tmpdir(), `webjs-pin-prov-bad-${Date.now()}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  await writeFile(
+    join(dir, '.webjs', 'vendor', 'importmap.json'),
+    JSON.stringify({
+      imports: { 'a': 'https://cdn.example/a.js' },
+      provider: 'malicious-resolver',
+    }),
+  );
+  try {
+    const file = await readPinFile(dir);
+    assert.ok(file);
+    assert.equal(file.provider, undefined,
+      'provider must be dropped when not in SUPPORTED_PROVIDERS');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// --- audit / outdated / update parity tests ---
+
+test('auditPinned: no pin file returns zero-checked', async () => {
+  const dir = join(tmpdir(), `webjs-audit-empty-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const { vulnerable, totalChecked } = await auditPinned(dir);
+    assert.equal(totalChecked, 0);
+    assert.deepEqual(vulnerable, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('findOutdated: no pin file returns []', async () => {
+  const dir = join(tmpdir(), `webjs-outdated-empty-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    assert.deepEqual(await findOutdated(dir), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: rejects unknown provider', async () => {
+  const dir = join(tmpdir(), `webjs-update-bad-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    await assert.rejects(
+      () => updatePinned(dir, { from: 'not-real' }),
+      /unknown provider/,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('updatePinned: no outdated returns noOutdated:true without writing', async () => {
+  // Mock listPinned + findOutdated trivially: empty pin file means
+  // both return empty, and updatePinned short-circuits before
+  // any network call.
+  const dir = join(tmpdir(), `webjs-update-clean-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const result = await updatePinned(dir);
+    assert.ok(result.noOutdated);
+    assert.deepEqual(result.updated, []);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

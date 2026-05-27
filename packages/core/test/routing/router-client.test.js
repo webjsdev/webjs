@@ -771,6 +771,59 @@ test('navigate: response-header lookup is case-insensitive (mock contract)', asy
   }
 });
 
+test('navigate: data-webjs-track="reload" signature change triggers hard reload', async () => {
+  // Generic Turbo-style tracked-element opt-in: any element in the
+  // head marked data-webjs-track="reload" gets included in a signature.
+  // Mismatch between current and incoming signature triggers reload.
+  document.head.innerHTML = '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
+  document.body.innerHTML = '<p>current</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  const newBody =
+    '<!doctype html><html><head>' +
+    '<meta data-webjs-track="reload" name="build-id" content="rev-2">' +
+    '</head><body><p>after deploy</p></body></html>';
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: newBody,
+  });
+  try {
+    await navigate('http://localhost/path');
+    assert.equal(redirect.href, 'http://localhost/path',
+      'data-webjs-track="reload" signature change must trigger reload');
+    assert.equal(document.body.querySelector('p')?.textContent, 'current',
+      'partial swap must have been aborted');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: matching data-webjs-track="reload" elements proceed with partial swap', async () => {
+  document.head.innerHTML = '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
+  document.body.innerHTML = '<p>current</p>';
+  sessionStorage.removeItem('webjs:importmap-reload');
+  const newBody =
+    '<!doctype html><html><head>' +
+    '<meta data-webjs-track="reload" name="build-id" content="rev-1">' +
+    '</head><body><p>after</p></body></html>';
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body: newBody,
+  });
+  try {
+    await navigate('http://localhost/other');
+    assert.ok(!redirect.assigns.includes('http://localhost/other'),
+      'identical tracked-element signature must NOT trigger reload');
+  } finally {
+    restore();
+    sessionStorage.removeItem('webjs:importmap-reload');
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
 test('navigate: importmap drift detected via X-Webjs-Build header on partial response', async () => {
   // Partial-response navs (the X-Webjs-Have optimization) carry only
   // the inner body, no head. Without the X-Webjs-Build header the
