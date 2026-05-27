@@ -826,7 +826,7 @@ export async function pinAll(appDir, opts = {}) {
   // user knows pin didn't take, and let the next boot fall back to
   // live API resolution (which may have recovered by then).
   if (installs.length > 0 && pins.length === 0) {
-    return { pins, pruned: [], downloaded, failed: true, attemptedInstalls: installs };
+    return { pins, pruned: [], downloaded, failed: true, attemptedInstalls: installs, provider: from };
   }
 
   // Partial-failure surface. Some installs were attempted but not
@@ -867,7 +867,7 @@ export async function pinAll(appDir, opts = {}) {
   // -imports filter, so the file exists but does nothing. The CLI
   // surfaces this as a clearer "no bare imports found" message.
   if (installs.length === 0) {
-    return { pins, pruned: [], downloaded, noBareImports: true };
+    return { pins, pruned: [], downloaded, noBareImports: true, provider: from };
   }
 
   await writePinFile(appDir, importmap, integrity, from);
