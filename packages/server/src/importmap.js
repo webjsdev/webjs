@@ -1,5 +1,12 @@
 import { jsonForScriptTag } from './script-tag-json.js';
 
+// Local attribute escaper. Matches ssr.js's escapeAttr (the source
+// of truth for HTML attribute escaping in this package). Kept inline
+// to avoid a cross-file dependency for one small helper.
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 /**
  * Build the import map JSON injected into every SSR HTML document.
  *
@@ -99,6 +106,11 @@ export function buildImportMap() {
  * @param {{ nonce?: string }} [opts]
  */
 export function importMapTag(opts = {}) {
-  const n = opts.nonce ? ` nonce="${opts.nonce.replace(/"/g, '&quot;')}"` : '';
+  // Full attribute escape, not just `"` to `&quot;`. The nonce arrives
+  // from the request's CSP header (parsed by ssr.js), which we treat
+  // as untrusted input even though CSP spec restricts nonce charset to
+  // base64-ish. A misconfigured upstream emitting `nonce-<bad>` should
+  // not get its `<` rendered raw into our HTML.
+  const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
   return `<script type="importmap"${n}>${jsonForScriptTag(buildImportMap())}</script>`;
 }

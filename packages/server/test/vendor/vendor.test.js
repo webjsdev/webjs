@@ -1026,6 +1026,30 @@ test('readPinFile: rejects integrity values that are not SRI hash strings', asyn
   }
 });
 
+test('readPinFile: rejects integrity values with attribute-injection payloads', async () => {
+  // A hand-edited or tampered pin file with an integrity value like
+  // `sha384-x"><script>alert(1)</script>` would pass a prefix-only
+  // /^sha(256|384|512)-/ regex but break out of `integrity="..."`
+  // when emitted into HTML. End-to-end regex anchored to the base64
+  // alphabet (`[A-Za-z0-9+/=]+`) rejects anything past the valid
+  // hash body.
+  const dir = await makeTempAppWithSource({});
+  try {
+    await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { 'a': 'https://cdn.example/a.js' },
+      integrity: {
+        'https://cdn.example/a.js': 'sha384-x"><script>alert(1)</script>',
+      },
+    }));
+    const file = await readPinFile(dir);
+    assert.equal(file.integrity, undefined,
+      'attribute-injection payload filtered out, no integrity emitted');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('readPinFile: tolerates extra fields in pin JSON (forward-compat)', async () => {
   // A future pin file version might include extra fields (e.g.
   // resolver: 'jspm.io', generatedAt: '...'). readPinFile should

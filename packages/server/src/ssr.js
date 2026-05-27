@@ -1303,7 +1303,13 @@ export function preloadCrossOriginAttr(url) {
  */
 function integrityAttr(url) {
   const hash = vendorIntegrityFor(url);
-  return hash ? ` integrity="${hash}"` : '';
+  // Belt and suspenders: readPinFile already validates the integrity
+  // value end-to-end against /^sha(256|384|512)-[A-Za-z0-9+/=]+$/, so
+  // a valid hash has no HTML-special chars and escapeAttr is a no-op.
+  // But emission goes through the same attribute-injection-safe path
+  // as everything else in the SSR pipeline so a future regression in
+  // the validator doesn't bypass it.
+  return hash ? ` integrity="${escapeAttr(hash)}"` : '';
 }
 
 /**

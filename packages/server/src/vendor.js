@@ -495,10 +495,14 @@ export async function readPinFile(appDir) {
     const cleanIntegrity = {};
     if (parsed.integrity && typeof parsed.integrity === 'object' && !Array.isArray(parsed.integrity)) {
       for (const [k, v] of Object.entries(parsed.integrity)) {
-        // Integrity values must look like SRI hashes (e.g.
-        // `sha384-<base64>`) so a hand-edited bogus integrity value
-        // can't slip an unverified hash into the served importmap.
-        if (typeof k === 'string' && typeof v === 'string' && /^sha(256|384|512)-/.test(v)) {
+        // Integrity values must look like SRI hashes end-to-end
+        // (`sha(256|384|512)-<base64>`). Anchor the regex on both
+        // ends and constrain the body to the base64 alphabet so a
+        // hand-edited or tampered pin file can't slip an attribute
+        // injection (e.g. `sha384-x"><script>`) past the prefix
+        // check and through to `integrity="..."` emission in ssr.js
+        // unescaped.
+        if (typeof k === 'string' && typeof v === 'string' && /^sha(256|384|512)-[A-Za-z0-9+/=]+$/.test(v)) {
           cleanIntegrity[k] = v;
         }
       }
