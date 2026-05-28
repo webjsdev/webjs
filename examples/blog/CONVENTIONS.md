@@ -825,7 +825,7 @@ export async function createPost(input: {
 <!-- OVERRIDE -->
 
 This project enforces a git workflow via agent-specific config files
-(`.claude/settings.json`, `.cursorrules`, `.windsurfrules`,
+(`.claude/settings.json`, `.cursorrules`, `.agents/rules/workflow.md`,
 `.github/copilot-instructions.md`). These rules apply to ALL AI agents:
 
 **Commit rules:**
@@ -850,7 +850,7 @@ This project enforces a git workflow via agent-specific config files
   Delete or keep `<branch>` after?" Wait for approval AND the preference.
 - **Claude Code hook** (`.claude/hooks/guard-main-merge.sh`) enforces
   merge/push-to-main approval programmatically for Claude agents.
-  Other agents enforce this via `.cursorrules`, `.windsurfrules`,
+  Other agents enforce this via `.cursorrules`, `.agents/rules/workflow.md`,
   `.github/copilot-instructions.md`.
 
 **Pre-commit checks:**
