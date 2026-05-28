@@ -337,22 +337,24 @@ export async function startServer(opts) {
     },
   });
 
+  /** @type {AbortController | null} */
+  let watcherAbort = null;
   if (dev) {
     // Watch the app root recursively via Node's built-in
     // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
     // Node 24. No external dep needed.
     //
-    // fs.watch returns relative paths (POSIX separators in the
-    // event payload on all platforms). We apply the same ignore
-    // filter chokidar used before: skip node_modules, .git, and
-    // prisma's dev artefacts (dev.db, migrations/) which the dev
-    // server writes during db:migrate and would otherwise loop.
+    // fs.watch returns relative paths in event.filename. We apply
+    // the same ignore filter chokidar used before: skip
+    // node_modules, .git, and prisma's dev artefacts (dev.db,
+    // migrations/) which the dev server writes during db:migrate
+    // and would otherwise loop.
     const IGNORE = /(^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)(?:[\\/]|$)/;
     const rebuild = debounce(() => app.rebuild(), 80);
-    const ac = new AbortController();
+    watcherAbort = new AbortController();
     (async () => {
       try {
-        const events = fsWatch(app.appDir, { recursive: true, signal: ac.signal });
+        const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
           if (IGNORE.test(filename)) continue;
@@ -364,9 +366,6 @@ export async function startServer(opts) {
         }
       }
     })();
-    // Stop watching on graceful shutdown.
-    process.once('SIGTERM', () => ac.abort());
-    process.once('SIGINT', () => ac.abort());
   }
 
   // SSE keepalive: send a comment frame every 25s to defeat proxy idle timeouts.
@@ -444,7 +443,13 @@ export async function startServer(opts) {
   // corrupted, so log + start an orderly shutdown rather than continuing.
   installProcessHandlers(logger, () => shutdown('uncaughtException'));
 
-  return { server, close: () => new Promise((r) => server.close(() => r())) };
+  return {
+    server,
+    close: () => new Promise((r) => {
+      if (watcherAbort) watcherAbort.abort();
+      server.close(() => r());
+    }),
+  };
 }
 
 /**
