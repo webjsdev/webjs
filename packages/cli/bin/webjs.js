@@ -8,7 +8,7 @@ const [cmd, ...rest] = process.argv.slice(2);
 
 // Exactly three scaffolds exist. Keep this list as the single source of
 // truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
-// .windsurfrules / .github/copilot-instructions.md mirror it.
+// .agents/rules/workflow.md / .github/copilot-instructions.md mirror it.
 const TEMPLATES = ['full-stack', 'api', 'saas'];
 
 const USAGE = `webjs commands:

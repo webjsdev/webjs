@@ -31,7 +31,7 @@ lib/
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
                          copy time. The AGENTS.md / CLAUDE.md /
-                         CONVENTIONS.md / .cursorrules / .windsurfrules
+                         CONVENTIONS.md / .cursorrules / .agents/rules/workflow.md
                          / .github/copilot-instructions.md / .editorconfig
                          / .env.example / .claude.json / .claude/hooks/
                          all live here.

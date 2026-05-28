@@ -381,9 +381,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.cursor/hooks/nudge-uncommitted.sh',
     // OpenCode plugins (loaded as TS by Bun at runtime)
     '.opencode/plugins/nudge-uncommitted.ts',
+    // Antigravity workspace rules (Google's documented convention is
+    // `.agents/rules/*.md`, lowercase, per the Codelab
+    // "Build Autonomous Developer Pipelines using agents.md and skills.md
+    // in Antigravity"). Replaced the legacy `.windsurfrules` ship when
+    // Windsurf was acquired by Google.
+    '.agents/rules/workflow.md',
     // Cross-agent config files
     '.cursorrules',
-    '.windsurfrules',
     '.github/copilot-instructions.md',
     '.github/pull_request_template.md',
     '.editorconfig',

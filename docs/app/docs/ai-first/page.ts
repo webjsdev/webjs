@@ -8,7 +8,7 @@ export default function AIFirst() {
     <p>webjs is designed from the ground up to be <strong>the framework AI agents can read, write, and ship</strong>. Every architectural decision (from the file layout to the naming conventions to the one-function-per-file rule) was made with one question in mind: <em>can an LLM understand this without loading the entire codebase into context?</em></p>
 
     <h2>Why AI-First Matters</h2>
-    <p>Modern AI coding assistants (Claude Code, GitHub Copilot, Cursor, Windsurf, etc.) are increasingly writing production code. But most frameworks were designed for humans who hold the whole project in their head. They rely on:</p>
+    <p>Modern AI coding assistants (Claude Code, GitHub Copilot, Cursor, Antigravity, etc.) are increasingly writing production code. But most frameworks were designed for humans who hold the whole project in their head. They rely on:</p>
     <ul>
       <li><strong>Implicit conventions</strong>: "you just know" where to put things.</li>
       <li><strong>Barrel files</strong>: re-exports that hide the real location of code.</li>
@@ -86,7 +86,7 @@ export async function createPost(
     <ul>
       <li><code>CLAUDE.md</code> + <code>.claude/settings.json</code> + hooks for Claude Code</li>
       <li><code>.cursorrules</code> for Cursor</li>
-      <li><code>.windsurfrules</code> for Windsurf</li>
+      <li><code>.agents/rules/workflow.md</code> for Antigravity (Google)</li>
       <li><code>.github/copilot-instructions.md</code> for GitHub Copilot</li>
       <li><code>AGENTS.md</code> + <code>CONVENTIONS.md</code> for all agents</li>
     </ul>

@@ -109,7 +109,7 @@ webjs test --e2e
     <p>The <code>webjs check</code> command flags modules without tests.</p>
 
     <h2>AI Agent Guardrails</h2>
-    <p>webjs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Windsurf, and others.</p>
+    <p>webjs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Antigravity, and others.</p>
 
     <h3>Branch Checking</h3>
     <p>AI agents must never commit directly to <code>main</code> or <code>master</code>. Before any edit, the agent checks what branch it is on:</p>
@@ -148,7 +148,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Points to AGENTS.md + CONVENTIONS.md</td></tr>
         <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>PreToolUse hook guarding git merge/push to main</td></tr>
         <tr><td><code>.cursorrules</code></td><td>Cursor</td><td>Workflow rules, git rules, framework patterns</td></tr>
-        <tr><td><code>.windsurfrules</code></td><td>Windsurf</td><td>Same rules in Windsurf format</td></tr>
+        <tr><td><code>.agents/rules/workflow.md</code></td><td>Antigravity (Google)</td><td>Workspace rules per Google's documented <code>.agents/rules/*.md</code> convention. Replaces the legacy <code>.windsurfrules</code> shipped pre-acquisition.</td></tr>
         <tr><td><code>.github/copilot-instructions.md</code></td><td>GitHub Copilot</td><td>Same rules in Copilot format</td></tr>
         <tr><td><code>.github/pull_request_template.md</code></td><td>All (via GitHub)</td><td>PR checklist: tests, docs, convention check</td></tr>
         <tr><td><code>.editorconfig</code></td><td>All editors</td><td>Consistent indent/encoding/line endings</td></tr>
@@ -194,7 +194,7 @@ cd my-app && npm run dev</pre>
       <li><code>CONVENTIONS.md</code>: editable project conventions</li>
       <li><code>AGENTS.md</code>: full framework API reference</li>
       <li><code>CLAUDE.md</code>: quick reminders for Claude Code</li>
-      <li>Agent config files (<code>.cursorrules</code>, <code>.windsurfrules</code>, <code>.github/copilot-instructions.md</code>)</li>
+      <li>Agent config files (<code>.cursorrules</code>, <code>.agents/rules/workflow.md</code>, <code>.github/copilot-instructions.md</code>)</li>
       <li><code>.editorconfig</code> for consistent formatting</li>
       <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>) and webjs conventions config</li>
     </ul>

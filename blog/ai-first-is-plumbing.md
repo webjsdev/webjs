@@ -20,13 +20,13 @@ AGENTS.md                                  agent contract (this is the load-bear
 CONVENTIONS.md                             project-specific overridable conventions
 CLAUDE.md                                  Claude Code import file (points at AGENTS.md)
 .cursorrules                               Cursor rules (same content, different format)
-.windsurfrules                             Windsurf rules
+.agents/rules/workflow.md                  Antigravity (Google) workspace rules
 .github/copilot-instructions.md            GitHub Copilot
 .github/pull_request_template.md           PR template (also AI-readable)
 .editorconfig                              text-tool consistency
 ```
 
-The trick is that all of them say the same thing. AGENTS.md is the source of truth; CLAUDE.md is just `@AGENTS.md` (Claude Code's import syntax). Cursor and Windsurf use their own formats that load equivalent content. The PR template carries the convention checklist into every code review.
+The trick is that all of them say the same thing. AGENTS.md is the source of truth; CLAUDE.md is just `@AGENTS.md` (Claude Code's import syntax). Cursor and Antigravity (formerly Windsurf) use their own formats that load equivalent content. The PR template carries the convention checklist into every code review.
 
 Most agents read whichever file matches their tool first. AGENTS.md is the cross-tool standard ([emerging spec, FYI](https://agents.md/)). Every webjs scaffold ships it.
 

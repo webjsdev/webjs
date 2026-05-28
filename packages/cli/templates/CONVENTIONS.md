@@ -190,11 +190,10 @@ Saying "ready for merge" before a self-review loop converges is a recurring sour
    - **Cursor**: open a new composer tab.
    - **Claude Code**: spawn a `general-purpose` subagent via the Agent tool.
    - **GitHub Copilot**: open a new chat (reset the side panel).
-   - **Windsurf**: open a new Cascade thread.
+   - **Antigravity** (Google, formerly Windsurf): open a new Cascade thread or a fresh side-panel session.
    - **Aider**: invoke a separately-started `aider` session (do NOT use `/ask` inside the same session; `/ask` only flips the mode for the next message and still sees the existing context).
    - **Gemini CLI**: invoke a separately-started `gemini` session.
    - **OpenCode**: open a new agent session (the `tool.execute.after` hook is a different surface and not a fresh-context primitive).
-   - **Antigravity**: open a fresh side-panel session.
 
    The shared property is that the reviewer does not see your decision log. That independence is what makes the review catch blind spots. If your tool does not expose a true fresh-context primitive, the canonical fallback is a separately-invoked CLI process; what matters is the reviewer starts with an empty context, not the specific UI affordance.
 
@@ -967,7 +966,7 @@ export async function createPost(input: {
 <!-- OVERRIDE -->
 
 This project enforces a git workflow via agent-specific config files
-(`.claude/settings.json`, `.cursorrules`, `.windsurfrules`,
+(`.claude/settings.json`, `.cursorrules`, `.agents/rules/workflow.md`,
 `.github/copilot-instructions.md`). These rules apply to ALL AI agents:
 
 **Commit rules:**
@@ -992,7 +991,7 @@ This project enforces a git workflow via agent-specific config files
   Delete or keep `<branch>` after?" Wait for approval AND the preference.
 - **Claude Code hook** (`.claude/hooks/guard-main-merge.sh`) enforces
   merge/push-to-main approval programmatically for Claude agents.
-  Other agents enforce this via `.cursorrules`, `.windsurfrules`,
+  Other agents enforce this via `.cursorrules`, `.agents/rules/workflow.md`,
   `.github/copilot-instructions.md`.
 
 **Pre-commit checks:**

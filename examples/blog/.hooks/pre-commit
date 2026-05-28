@@ -22,7 +22,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 fi
 
 # webjs test + webjs check on every commit. Tool-agnostic enforcement:
-# fires regardless of which agent (Claude, Cursor, Windsurf, Copilot,
+# fires regardless of which agent (Claude, Cursor, Antigravity, Copilot,
 # human) is making the commit. Skipped if the CLI is not yet installed
 # (fresh clone before npm install).
 if command -v webjs >/dev/null 2>&1 || [ -x "node_modules/.bin/webjs" ]; then
