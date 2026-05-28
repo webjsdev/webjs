@@ -1,5 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { digestHex } from './crypto-utils.js';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
@@ -65,7 +66,7 @@ import { primeComponentRegistry, findOrphanComponents, scanComponents } from './
 function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
-import { setVendorEntries } from './importmap.js';
+import { setVendorEntries, setCoreDistMode } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 
 const MIME = {
@@ -171,6 +172,13 @@ export async function createRequestHandler(opts) {
   const dev = !!opts.dev;
   const logger = opts.logger || defaultLogger({ dev });
   const coreDir = locateCoreDir(appDir);
+  // Switch the importmap between dist/ bundles and src/ per-file
+  // URLs depending on whether the resolved @webjsdev/core install
+  // has built bundles on disk. npm-installed copies always do;
+  // workspace dev does only after `npm run build:dist`. Without
+  // a built dist the server falls back to the historical per-file
+  // src/ URLs so dev iteration does not require a build step.
+  await setCoreDistMode(existsSync(join(coreDir, 'dist', 'webjs-core.js')));
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);

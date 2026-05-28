@@ -90,16 +90,64 @@ export function vendorIntegrityFor(url) {
   return _vendorIntegrity[url] || '';
 }
 
+/**
+ * Whether the resolved `@webjsdev/core` install has a `dist/`
+ * directory ready to serve. The dev server detects this at boot
+ * (and on every rebuild) and calls `setCoreDistMode` accordingly.
+ *
+ * `true` (npm-installed package, or a workspace dev that already
+ * ran `npm run build:dist`): the browser fetches the bundled
+ * `dist/webjs-core-*.js` for each subpath. One HTTP request per
+ * subpath instead of the per-file waterfall through `src/`.
+ *
+ * `false` (workspace dev with no built dist on disk): keep the
+ * historical per-file `src/` URLs so dev iteration does not
+ * require a build step.
+ */
+let _coreDistMode = false;
+
+/**
+ * Toggle whether `@webjsdev/core/*` subpaths resolve to bundled
+ * `dist/` URLs or to per-file `src/` URLs. Like `setVendorEntries`,
+ * the importmap-hash is recomputed eagerly so `importMapHash()`
+ * stays synchronous on the per-request SSR hot path.
+ * @param {boolean} on
+ * @returns {Promise<void>}
+ */
+export async function setCoreDistMode(on) {
+  _coreDistMode = !!on;
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
+}
+
 export function buildImportMap() {
+  // Both maps share the catch-all `@webjsdev/core/` prefix for the
+  // unbundled subpaths (`./client`, `./server`, `./component`,
+  // `./registry`, `./signals`) that the framework keeps source-only;
+  // the prefix maps to /__webjs/core/src/ so anything not explicitly
+  // listed below still resolves.
+  const coreMappings = _coreDistMode
+    ? {
+        '@webjsdev/core':               '/__webjs/core/dist/webjs-core.js',
+        '@webjsdev/core/':              '/__webjs/core/src/',
+        '@webjsdev/core/client-router': '/__webjs/core/dist/webjs-core-client-router.js',
+        '@webjsdev/core/lazy-loader':   '/__webjs/core/dist/webjs-core-lazy-loader.js',
+        '@webjsdev/core/directives':    '/__webjs/core/dist/webjs-core-directives.js',
+        '@webjsdev/core/context':       '/__webjs/core/dist/webjs-core-context.js',
+        '@webjsdev/core/testing':       '/__webjs/core/dist/webjs-core-testing.js',
+        '@webjsdev/core/task':          '/__webjs/core/dist/webjs-core-task.js',
+      }
+    : {
+        '@webjsdev/core':               '/__webjs/core/index.js',
+        '@webjsdev/core/':              '/__webjs/core/src/',
+        '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
+        '@webjsdev/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',
+        '@webjsdev/core/directives':    '/__webjs/core/src/directives.js',
+        '@webjsdev/core/context':       '/__webjs/core/src/context.js',
+        '@webjsdev/core/testing':       '/__webjs/core/src/testing.js',
+        '@webjsdev/core/task':          '/__webjs/core/src/task.js',
+      };
   const merged = {
-    '@webjsdev/core':               '/__webjs/core/index.js',
-    '@webjsdev/core/':              '/__webjs/core/src/',
-    '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
-    '@webjsdev/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',
-    '@webjsdev/core/directives':    '/__webjs/core/src/directives.js',
-    '@webjsdev/core/context':       '/__webjs/core/src/context.js',
-    '@webjsdev/core/testing':       '/__webjs/core/src/testing.js',
-    '@webjsdev/core/task':          '/__webjs/core/src/task.js',
+    ...coreMappings,
     ..._extraEntries,
   };
   // Sort keys so logically-identical importmaps serialize byte-for-byte
