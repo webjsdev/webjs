@@ -76,7 +76,7 @@ can load it without booting the full server.
    serves as plain source. Regression tests live at
    `test/server-file-guardrail.test.js`.
 2. **File router has no manifest.** `buildRouteTable()` walks `app/`
-   at boot; route invalidation in dev is via chokidar → SSE.
+   at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
 3. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
