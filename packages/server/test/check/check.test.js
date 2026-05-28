@@ -1239,3 +1239,399 @@ test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async ()
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+// --- Template-literal-aware scanner: docs-page false-positive regressions ---
+
+test('tag-name-has-hyphen: ignores register(\'tag\') inside a template literal (docs example)', async () => {
+  // A docs page renders example tag strings inside an `html\`...\``
+  // template body. Pre-fix, the scanner read those as real
+  // `register('tag')` calls and flagged unhyphenated names. Post-fix,
+  // the redactor blanks template-literal bodies before the rule
+  // scans, so example calls are invisible.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'docs-page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function Docs() {\n' +
+      '  return html`\n' +
+      '    <p>Example: <code>MyTag.register("tag")</code></p>\n' +
+      '  `;\n' +
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen');
+    assert.equal(v, undefined,
+      'register() call inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: still flags real register(\'tag\') at top level', async () => {
+  // Counterfactual: the redactor must NOT silence real violations.
+  // A real top-level register() call without a hyphen still fires.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'real.js'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class BadTag extends WebComponent {}\n' +
+      "BadTag.register('badtag');\n", // no hyphen, real call
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen');
+    assert.ok(v, 'real top-level register() must still be checked');
+    assert.ok(v.message.includes('badtag'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: ignores `enum`/`namespace` inside a template literal', async () => {
+  // Docs page teaches users which TS constructs the runtime stripper
+  // rejects. The example syntax lives inside an `html\`...\``
+  // template body. Pre-fix, the rule read those as real declarations.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'docs', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function TypeScript() {\n' +
+      '  return html`\n' +
+      '    <pre>enum Direction { Up, Down }</pre>\n' +
+      '    <pre>namespace Util { export const VERSION = "1.0"; }</pre>\n' +
+      '    <pre>class Foo { constructor(public x: number) {} }</pre>\n' +
+      '  `;\n' +
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript');
+    assert.equal(v, undefined,
+      'non-erasable syntax inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: still flags real top-level enum', async () => {
+  // Counterfactual: real top-level enum still fires.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'real.ts'),
+      'export enum Real { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript');
+    assert.ok(v, 'real top-level enum must still be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: ignores fixture-style class strings inside template literals', async () => {
+  // Test files write fixture sources to disk as template-literal
+  // strings. Pre-fix, the scanner read those fixture strings as real
+  // class declarations in the test file itself, flagging the
+  // test-file as the violator.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'test-runner.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      '// This file writes a fixture string. The fixture LOOKS like a\n' +
+      '// reactive-props violation, but inside a template literal.\n' +
+      'export const fixture = `\n' +
+      '  class FixtureClass extends WebComponent {\n' +
+      '    static properties = { x: { type: Number } };\n' +
+      '    x = 0;\n' +
+      '  }\n' +
+      '`;\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined,
+      'class-field initializer inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: still flags a real class-field initializer at top level', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'real.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class RealBad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' + // real top-level violation
+      '}\n' +
+      "RealBad.register('real-bad');\n",
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.ok(v, 'real top-level violation must still be flagged');
+    assert.equal(v.message.includes('x'), true);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: single- and double-quote strings are preserved verbatim', async () => {
+  // The redactor keeps single/double-quote string contents because
+  // rules like tag-name-has-hyphen need to read register('tag') to
+  // assert the hyphen. Verified end-to-end via the rule.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'good.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class GoodTag extends WebComponent {}\n' +
+      "GoodTag.register('good-tag');\n", // hyphenated, real call: must pass
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('good.ts'));
+    assert.equal(v, undefined,
+      'redactor must NOT blank single-quote string contents (rule needs them)');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: line and column positions are preserved across redaction', async () => {
+  // Indirect test: the no-non-erasable-typescript rule reports a line
+  // number. If the redactor shifted columns/lines, the reported line
+  // would be wrong. Plant a real enum after several blank-able
+  // constructs (string + template) and verify the line maps right.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'pos.ts'),
+      'const a = "string with many chars including the word enum {";\n' + // 1
+      'const b = `template with enum { Up }`;\n' +                          // 2
+      'const c = /* block comment with enum { A, B } */ 42;\n' +            // 3
+      'enum REAL { A, B }\n',                                               // 4 <- real
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('pos.ts'));
+    assert.ok(v);
+    assert.match(v.message, /line 4/,
+      'reported line must point at the real enum, not the redacted positions');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// --- Backtick-quoted register() arguments ---
+
+test('components-have-register: accepts backtick-quoted tag argument', async () => {
+  // Documented equivalence: register(`tag`) is treated the same as
+  // register('tag') / register("tag").
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'tick.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Tick extends WebComponent {}\n' +
+      'Tick.register(`tick-tock`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'components-have-register' && v.file.includes('tick.ts'));
+    assert.equal(v, undefined,
+      'backtick-quoted register() call must satisfy components-have-register');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: still validates the tag inside backticks', async () => {
+  // Counterfactual: backticks must not let an unhyphenated tag slip
+  // past tag-name-has-hyphen.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {}\n' +
+      'Bad.register(`badtag`);\n', // backtick + no hyphen
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('bad.ts'));
+    assert.ok(v, 'unhyphenated backtick-quoted tag must still flag');
+    assert.ok(v.message.includes('badtag'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: accepts hyphenated backtick-quoted tag', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'ok.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Ok extends WebComponent {}\n' +
+      'Ok.register(`ok-tag`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('ok.ts'));
+    assert.equal(v, undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: tagged template body is still blanked even when untagged backticks are preserved', async () => {
+  // The tag-detection heuristic must distinguish html`...` (tagged,
+  // body blanked) from `tag` (untagged, body preserved). Test by
+  // mixing both in the same file.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'mixed.ts'),
+      "import { WebComponent, html } from '@webjsdev/core';\n" +
+      'class Mixed extends WebComponent {\n' +
+      '  render() {\n' +
+      // Tagged: must be blanked, so the fake register inside is invisible.
+      '    return html`<p>Example: Fake.register("nohyphen")</p>`;\n' +
+      '  }\n' +
+      '}\n' +
+      // Untagged: must be visible, with hyphenated tag.
+      'Mixed.register(`mixed-tag`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('mixed.ts'));
+    assert.equal(v, undefined,
+      'untagged backtick is preserved (hyphen check passes), tagged html template is blanked (no false positive)');
+    const v2 = violations.find((v) => v.rule === 'components-have-register' && v.file.includes('mixed.ts'));
+    assert.equal(v2, undefined, 'class is registered via backticks; rule must see it');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: tagged template with ASI-style newline between tag and backtick is still blanked', async () => {
+  // The walkback for tag detection must skip newlines so an
+  // ASI-style break between the tag and the backtick still
+  // classifies as tagged. Otherwise a `const x = html\n  \`...\``
+  // body would be preserved verbatim and trip lint rules on
+  // example code inside.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'asi.ts'),
+      "import { html, WebComponent } from '@webjsdev/core';\n" +
+      'class Foo extends WebComponent {\n' +
+      '  render() {\n' +
+      // Tag on previous line, backtick at start of next line.
+      '    return html\n' +
+      '      `<p>Example: Fake.register("nohyphen")</p>`;\n' +
+      '  }\n' +
+      '}\n' +
+      "Foo.register('foo-bar');\n",
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.message.includes('nohyphen'));
+    assert.equal(v, undefined,
+      'tagged template with newline before backtick must be blanked');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// --- package.json overrides still apply to rules touched by PR #109 ---
+
+test('package.json override disables tag-name-has-hyphen for backtick + scan changes', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'tag-name-has-hyphen': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {}\n' +
+      'Bad.register(`badtag`);\n', // backtick + no hyphen
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'tag-name-has-hyphen'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables components-have-register after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'components-have-register': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'unreg.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Unreg extends WebComponent {}\n', // no register call
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'components-have-register'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables reactive-props-use-declare after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'reactive-props-use-declare': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'props.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class P extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n' +
+      "P.register('p-tag');\n",
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'reactive-props-use-declare'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables no-non-erasable-typescript after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'no-non-erasable-typescript': false } } }),
+    );
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'thing.ts'),
+      'export enum Real { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-non-erasable-typescript'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

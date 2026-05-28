@@ -115,6 +115,192 @@ export const RULES = [
 const RULE_NAMES = new Set(RULES.map((r) => r.name));
 
 /**
+ * Return `src` with the BODY of every comment, single-quoted string,
+ * double-quoted string, and template literal replaced by spaces (with
+ * newlines preserved). Quote delimiters / comment markers themselves
+ * are kept so the brace counter and other structural scanners still
+ * see the surrounding shape. Positions (line + column) are preserved
+ * exactly, so a violation reported against the redacted source maps
+ * back to the same line/column in the original.
+ *
+ * The point: lint rules that pattern-match across raw source (regex
+ * for `class X extends WebComponent`, `enum`, `register('tag')`,
+ * etc.) must not match the same pattern when it appears as a
+ * code-example string INSIDE an `html\`...\`` template body. Docs
+ * pages legitimately render such examples to teach users; without
+ * redaction the scanner reads them as real declarations and emits
+ * false positives.
+ *
+ * Template literals split by tag + shape:
+ *
+ * Preserved verbatim only when ALL of: untagged, no newline in the
+ * body, no `${...}` interpolation. This is the "backticks as a
+ * quote-style alias" shape, e.g. `` register(`my-tag`) ``, where
+ * the backtick literal is morally a short string argument. Lint
+ * rules then read it the same way they read `register('my-tag')`.
+ *
+ * Blanked in every other case:
+ *   (a) TAGGED templates like `` html`...` ``, `` css`...` ``,
+ *       `` Class.method`...` ``, which carry multi-line code-shaped
+ *       strings in docs pages and JSDoc examples.
+ *   (b) Multi-line untagged literals, typically code-shaped
+ *       fixtures the linter should not read in place.
+ *   (c) Interpolated literals; the `${...}` body is dynamic and
+ *       cannot be statically validated anyway.
+ *
+ * A real `register('foo')` call inside a blanked region (e.g.
+ * inside a tagged interpolation `` html`${X.register('foo')}` ``)
+ * disappears from the lint surface. Accepted trade-off: register()
+ * calls in practice live at top-level in component files, not
+ * inside template interpolations.
+ *
+ * Regex literals are NOT specifically tracked. A `/.../` in source
+ * that contains text resembling a comment-open or quote would be
+ * misread by this walker, but the lint rules don't look for
+ * patterns that would collide with regex bodies (`class extends`,
+ * `enum`, etc. are not valid regex syntax). Acceptable until
+ * proven otherwise.
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+function redactStringsAndTemplates(src) {
+  let out = '';
+  const n = src.length;
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    const next = src[i + 1];
+
+    // Line comment: //...\n
+    if (c === '/' && next === '/') {
+      out += '//';
+      i += 2;
+      while (i < n && src[i] !== '\n') {
+        out += ' ';
+        i++;
+      }
+      // Newline handled by outer loop on next iteration.
+      continue;
+    }
+
+    // Block comment: /* ... */
+    if (c === '/' && next === '*') {
+      out += '/*';
+      i += 2;
+      while (i < n) {
+        if (src[i] === '*' && src[i + 1] === '/') {
+          out += '*/';
+          i += 2;
+          break;
+        }
+        out += src[i] === '\n' ? '\n' : ' ';
+        i++;
+      }
+      continue;
+    }
+
+    // Single- or double-quoted string: KEEP the body verbatim so
+    // rules like tag-name-has-hyphen can read register('foo').
+    if (c === "'" || c === '"') {
+      const quote = c;
+      out += quote;
+      i++;
+      while (i < n) {
+        if (src[i] === '\\' && i + 1 < n) {
+          out += src[i];
+          out += src[i + 1];
+          i += 2;
+          continue;
+        }
+        if (src[i] === quote) {
+          out += quote;
+          i++;
+          break;
+        }
+        if (src[i] === '\n') {
+          // Unterminated; emit and continue.
+          out += '\n';
+          i++;
+          break;
+        }
+        out += src[i];
+        i++;
+      }
+      continue;
+    }
+
+    // Template literal: see redactStringsAndTemplates JSDoc for the
+    // tag + shape classification. Delimiters always stay so
+    // structural scanners see them.
+    if (c === '`') {
+      // Walk back through whitespace to find the previous
+      // significant character. Newlines count as whitespace so
+      // `const x = html\n  ` ... `` `(ASI-style line break between tag
+      // and backtick) is still recognized as tagged.
+      let j = out.length - 1;
+      while (j >= 0 && /\s/.test(out[j])) j--;
+      const prev = j >= 0 ? out[j] : '';
+      const isTagged = /[A-Za-z0-9_$)\]]/.test(prev);
+
+      let endIdx = -1;
+      let hasInterp = false;
+      let hasNewline = false;
+      let k = i + 1;
+      while (k < n) {
+        if (src[k] === '\\' && k + 1 < n) { k += 2; continue; }
+        if (src[k] === '`') { endIdx = k; break; }
+        if (src[k] === '\n') hasNewline = true;
+        if (src[k] === '$' && src[k + 1] === '{') hasInterp = true;
+        k++;
+      }
+      const preserveVerbatim = !isTagged && endIdx !== -1 && !hasNewline && !hasInterp;
+
+      out += '`';
+      i++;
+      if (preserveVerbatim) {
+        while (i < n) {
+          if (src[i] === '\\' && i + 1 < n) {
+            out += src[i];
+            out += src[i + 1];
+            i += 2;
+            continue;
+          }
+          if (src[i] === '`') {
+            out += '`';
+            i++;
+            break;
+          }
+          out += src[i];
+          i++;
+        }
+      } else {
+        while (i < n) {
+          if (src[i] === '\\' && i + 1 < n) {
+            out += ' ';
+            out += src[i + 1] === '\n' ? '\n' : ' ';
+            i += 2;
+            continue;
+          }
+          if (src[i] === '`') {
+            out += '`';
+            i++;
+            break;
+          }
+          out += src[i] === '\n' ? '\n' : ' ';
+          i++;
+        }
+      }
+      continue;
+    }
+
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+/**
  * Check whether a file has the `'use server'` directive in its first
  * five lines. Used by the `use-server-needs-extension` rule, and by
  * `isServerActionFile` below.
@@ -502,8 +688,15 @@ export async function checkConventions(appDir, opts) {
     }
   }
 
-  // Collect all JS/TS files in the app directory
-  /** @type {{ abs: string, rel: string, content: string }[]} */
+  // Collect all JS/TS files in the app directory. Each entry carries
+  // both the raw `content` (for rules that need verbatim source: the
+  // `'use server'` directive detector, the `.gitignore` reader, etc.)
+  // and a `scan` view with comments, string contents, and
+  // template-literal bodies redacted to whitespace. Rules that
+  // pattern-match across raw source should consume `scan` so docs-
+  // page code-block examples and JSDoc samples don't trigger false
+  // positives.
+  /** @type {{ abs: string, rel: string, content: string, scan: string }[]} */
   const files = [];
   for await (const abs of walk(appDir, (p) => /\.m?[jt]sx?$/.test(p))) {
     const rel = relative(appDir, abs);
@@ -513,7 +706,7 @@ export async function checkConventions(appDir, opts) {
     } catch {
       continue;
     }
-    files.push({ abs, rel, content });
+    files.push({ abs, rel, content, scan: redactStringsAndTemplates(content) });
   }
 
   // --- Rule: actions-in-modules ---
@@ -566,15 +759,19 @@ export async function checkConventions(appDir, opts) {
 
   // --- Rule: components-have-register ---
   if (isRuleEnabled('components-have-register', overrides)) {
-    for (const { rel, content } of files) {
+    for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
-      // Check if it defines a class extending WebComponent
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
+      // Use redacted source so a code-example string like
+      // `Foo.register('bar')` inside a tagged template literal does
+      // not falsely satisfy the rule for a sibling unregistered
+      // class. Real register() calls live at top level where the
+      // redactor leaves them alone.
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       // Accept either registration pattern:
       //   Counter.register('tag')                    (webjs idiom)
       //   customElements.define('tag', Counter)      (native)
-      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"]/.test(content)) continue;
-      if (/\bcustomElements\.define\s*\(/.test(content)) continue;
+      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"`]/.test(scan)) continue;
+      if (/\bcustomElements\.define\s*\(/.test(scan)) continue;
       violations.push({
         rule: 'components-have-register',
         file: rel,
@@ -586,9 +783,13 @@ export async function checkConventions(appDir, opts) {
 
   // --- Rule: reactive-props-use-declare ---
   if (isRuleEnabled('reactive-props-use-declare', overrides)) {
-    for (const { rel, content } of files) {
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
-      for (const body of extractWebComponentClassBodies(content)) {
+    for (const { rel, scan } of files) {
+      // Use redacted source so test-fixture-style strings like
+      // `class X extends WebComponent { x = 0 }` inside template
+      // literals don't trip the rule. Real declarations live at
+      // top-level code where the redactor leaves them alone.
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const body of extractWebComponentClassBodies(scan)) {
         const propNames = extractStaticPropertyNames(body);
         if (propNames.size === 0) continue;
         for (const bad of findFieldInitializers(body, propNames)) {
@@ -908,8 +1109,14 @@ export async function checkConventions(appDir, opts) {
       } catch {
         continue;
       }
+      // Redact comments, string contents, and template-literal bodies
+      // so docs-page code examples like `<pre>enum Direction { ... }</pre>`
+      // inside `html\`...\`` template literals don't trip the rule.
+      // The redactor preserves line + column so the reported line
+      // number still maps to the right place in the original.
+      const scan = redactStringsAndTemplates(content);
       for (const { name, regex, fix } of NON_ERASABLE_PATTERNS) {
-        const m = content.match(regex);
+        const m = scan.match(regex);
         if (m && typeof m.index === 'number') {
           const line = content.slice(0, m.index).split('\n').length;
           violations.push({
@@ -947,17 +1154,23 @@ export async function checkConventions(appDir, opts) {
 
   // --- Rule: tag-name-has-hyphen ---
   if (isRuleEnabled('tag-name-has-hyphen', overrides)) {
-    for (const { rel, content } of files) {
+    for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
+      // Use redacted source. A `register('tag')` call inside a
+      // TAGGED template literal (docs-page code example) is blanked.
+      // Calls at top level keep their structure AND their string
+      // argument. Quote style can be ', ", or ` (untagged backtick
+      // literals survive the redactor, like single/double-quote
+      // strings).
       const patterns = [
-        // Class.register('tag')
-        /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"])([^'"]+)\1/g,
-        // customElements.define('tag', Class)
-        /\bcustomElements\.define\s*\(\s*(['"])([^'"]+)\1/g,
+        // Class.register('tag') / register("tag") / register(`tag`)
+        /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"`])([^'"`]+)\1/g,
+        // customElements.define('tag', Class) and quote variants
+        /\bcustomElements\.define\s*\(\s*(['"`])([^'"`]+)\1/g,
       ];
       for (const re of patterns) {
         let match;
-        while ((match = re.exec(content)) !== null) {
+        while ((match = re.exec(scan)) !== null) {
           const tagName = match[2];
           if (!tagName.includes('-')) {
             violations.push({
