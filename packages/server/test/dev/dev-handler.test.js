@@ -1194,3 +1194,24 @@ test('startServer dev=true: fs.watch fires reload event on file change', async (
     await close();
   }
 });
+
+test('fileResponse prod: ETag is 16-char SHA-1 hex digest in quotes', async () => {
+  // Regression coverage for the createHash → crypto.subtle.digest
+  // migration. The Web Crypto path must produce the same shape as
+  // the old createHash('sha1') ETag: a 16-character hex slice in
+  // double quotes. (Browser/proxy ETag matching is byte-exact, so
+  // any shape drift would break revalidation.)
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'public/static.txt': 'fixed body for etag check',
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const resp = await app.handle(new Request('http://x/public/static.txt'));
+  assert.equal(resp.status, 200);
+  const etag = resp.headers.get('etag');
+  assert.match(etag, /^"[0-9a-f]{16}"$/,
+    `ETag must be a 16-char hex slice in quotes; got ${etag}`);
+  // Second request must produce identical ETag (stable hash).
+  const resp2 = await app.handle(new Request('http://x/public/static.txt'));
+  assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');
+});

@@ -148,3 +148,28 @@ test('importMapTag: escapes `<!--` to defeat HTML script-data-escaped state tran
   assert.ok(tag.includes('--\\>'), '--> must be escape-encoded');
   await setVendorEntries({});
 });
+
+test('importMapHash: empty string before any setVendorEntries call', async () => {
+  // Documents the embed/test edge case. Module-fresh imports start
+  // with an empty hash; the client router treats an empty
+  // X-Webjs-Build as "version unknown" and skips the drift check.
+  // We can't reset the singleton; the existing tests have already
+  // called setVendorEntries earlier, so reimport via a fresh URL.
+  const url = new URL('../../src/importmap.js', import.meta.url).href +
+    `?fresh=${Date.now()}-${Math.random()}`;
+  const fresh = await import(url);
+  assert.equal(fresh.importMapHash(), '',
+    'importMapHash() must return empty string until setVendorEntries runs');
+});
+
+test('importMapHash: hash available synchronously after await setVendorEntries', async () => {
+  // The precompute design contract: setVendorEntries computes the
+  // hash inside its body before returning, so the SSR hot path can
+  // read it synchronously without ever crossing a Promise boundary.
+  const { setVendorEntries, importMapHash } = await import('../../src/importmap.js');
+  await setVendorEntries({ 'lib-x': 'https://cdn/lib-x.js' });
+  const h = importMapHash();
+  assert.match(h, /^[0-9a-f]{64}$/,
+    'hash must be a 64-char SHA-256 hex string immediately after await');
+  await setVendorEntries({});
+});
