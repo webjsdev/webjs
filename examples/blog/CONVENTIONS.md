@@ -667,9 +667,11 @@ SSR content is visible immediately. Only the JS download is deferred.
 ## expose(): REST endpoints from server actions
 
 <!-- OVERRIDE -->
-Tag a server action to also be reachable over HTTP:
+Tag a server action to also be reachable over HTTP. The file MUST be a `.server.{js,ts}` file: `expose()` is server-only and the bare `@webjsdev/core` specifier resolves to the browser entry which excludes it, so importing from a client-bound file silently reads `undefined`.
 
 ```ts
+// modules/posts/actions/create-post.server.ts
+'use server';
 import { expose } from '@webjsdev/core';
 export const createPost = expose('POST /api/posts', async ({ title, body }) => {
   return prisma.post.create({ data: { title, body } });
