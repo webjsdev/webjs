@@ -193,6 +193,57 @@ async function loadOverrides(appDir) {
  * @param {Record<string, boolean>} overrides
  * @returns {boolean}
  */
+/**
+ * Parse `// webjs-disable-file [rules]` directives out of a source file.
+ * Returns the set of rule names disabled for the entire file, or the
+ * literal string `'*'` if the directive is unqualified (all rules
+ * disabled). An empty Set means no directives in the file.
+ *
+ * Two valid shapes (line comment only, no block-comment form yet):
+ *   // webjs-disable-file
+ *   // webjs-disable-file tag-name-has-hyphen, no-non-erasable-typescript
+ *
+ * Use case: a docs page that renders code-block examples (tag-name
+ * strings, `enum` syntax) gets falsely flagged by the source scanners.
+ * Adding a single comment at the top suppresses the rule for that
+ * page without disabling it project-wide.
+ *
+ * Per-line `webjs-disable-next-line` is intentionally deferred:
+ * file-level granularity is enough for the documented use cases (a
+ * docs page or test fixture is "all examples"); finer control can
+ * land later if requests come in.
+ *
+ * @param {string} content
+ * @returns {Set<string> | '*'}
+ */
+function parseFileDisables(content) {
+  /** @type {Set<string>} */
+  const disabled = new Set();
+  // Anchor to start-of-line OR start-of-file so a string that
+  // happens to contain `// webjs-disable-file` inside a code-example
+  // template literal doesn't accidentally disable the rule for the
+  // very file the example is illustrating. Multi-line mode.
+  const fileDisableRe = /^\s*\/\/\s*webjs-disable-file(?:\s+([\w,\s-]+))?\s*$/gm;
+  let m;
+  while ((m = fileDisableRe.exec(content)) !== null) {
+    if (!m[1]) return '*';
+    for (const r of m[1].split(/[\s,]+/).filter(Boolean)) disabled.add(r);
+  }
+  return disabled;
+}
+
+/**
+ * Returns true when the given rule should NOT be reported for the
+ * file based on the file's `webjs-disable-file` directives.
+ *
+ * @param {Set<string> | '*'} disabled  result of parseFileDisables
+ * @param {string} rule
+ */
+function isDisabledForFile(disabled, rule) {
+  if (disabled === '*') return true;
+  return disabled.has(rule);
+}
+
 function isRuleEnabled(ruleName, overrides) {
   if (ruleName in overrides) return overrides[ruleName] !== false;
   return true;
@@ -514,6 +565,18 @@ export async function checkConventions(appDir, opts) {
       continue;
     }
     files.push({ abs, rel, content });
+  }
+
+  // Per-file `webjs-disable-file <rule>` directives. Built once
+  // upfront so rule loops can stay simple (they all push violations
+  // unconditionally; we filter at the end). Empty Set is fine; we
+  // store an entry only when at least one rule is disabled to keep
+  // the map small.
+  /** @type {Map<string, Set<string> | '*'>} */
+  const fileDisables = new Map();
+  for (const { rel, content } of files) {
+    const d = parseFileDisables(content);
+    if (d === '*' || d.size > 0) fileDisables.set(rel, d);
   }
 
   // --- Rule: actions-in-modules ---
@@ -1021,6 +1084,19 @@ export async function checkConventions(appDir, opts) {
       }
     }
     }
+  }
+
+  // Filter out violations suppressed by per-file
+  // `webjs-disable-file <rule>` directives. Done at the end so the
+  // rule implementations stay unchanged and so we cleanly handle
+  // rules that push multiple violations per file (e.g. four
+  // different unhyphenated tags in one docs page).
+  if (fileDisables.size > 0) {
+    return violations.filter((v) => {
+      const d = fileDisables.get(v.file);
+      if (!d) return true;
+      return !isDisabledForFile(d, v.rule);
+    });
   }
 
   return violations;

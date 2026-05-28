@@ -1,3 +1,10 @@
+// webjs-disable-file reactive-props-use-declare
+// This test file contains class-field initializer fixtures used to
+// assert that the `reactive-props-use-declare` rule catches them.
+// The fixture strings are inside template literals or contained
+// classes that the file-walking source scanner reads as real source.
+// Disable the rule for this file so `webjs check` on the framework
+// repo itself stays clean.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -1235,6 +1242,156 @@ test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async ()
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
     assert.equal(v, undefined, 'rule must skip when .gitignore is absent');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('webjs-disable-file: suppresses a single rule for the whole file', async () => {
+  // The directive: `// webjs-disable-file <rule>` at the top of a
+  // file tells `webjs check` to ignore the named rule's violations
+  // in that file. Use case: a docs page rendering example code
+  // strings that the scanner reads as real source. Verify with the
+  // `reactive-props-use-declare` rule + a real violation that
+  // would normally fire.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'fixture.ts'),
+      '// webjs-disable-file reactive-props-use-declare\n' +
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +  // class-field initializer: would normally violate
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined,
+      'directive must suppress the named rule for this file');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('webjs-disable-file: bare directive (no rule) suppresses all rules', async () => {
+  // `// webjs-disable-file` with no rule list disables every rule
+  // for the file. Useful for test fixtures or docs pages that
+  // violate many rules at once.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'fixture.ts'),
+      '// webjs-disable-file\n' +
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n' +
+      // also triggers no-non-erasable-typescript:
+      'enum E { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    // Filter to violations in our fixture file; other rules on
+    // other files are out of scope for this assertion.
+    const ours = violations.filter((v) => v.file.endsWith('fixture.ts'));
+    assert.deepEqual(ours, [],
+      'bare webjs-disable-file must suppress every rule for the file');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('webjs-disable-file: comma-separated rule list suppresses each named rule', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'fixture.ts'),
+      '// webjs-disable-file reactive-props-use-declare, no-non-erasable-typescript\n' +
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n' +
+      "Bad.register('bad-tag');\n" + // keep components-have-register happy
+      'enum E { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const ours = violations.filter((v) => v.file.endsWith('fixture.ts'));
+    // Both named rules suppressed. Any OTHER rules that fire on this
+    // fixture are fine to assert against here (none expected with
+    // the register() call in place).
+    const named = ours.filter((v) => v.rule === 'reactive-props-use-declare' || v.rule === 'no-non-erasable-typescript');
+    assert.deepEqual(named, [], 'both named rules must be suppressed');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('webjs-disable-file: only the named rule is suppressed (other rules still fire)', async () => {
+  // Defensive: a single-rule directive must NOT silence unrelated
+  // rules. If it did, users would lose lint coverage by mistake.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'fixture.ts'),
+      '// webjs-disable-file reactive-props-use-declare\n' +
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n' +
+      // Also triggers no-non-erasable-typescript, but that rule is
+      // NOT in the disable list, so it must still fire.
+      'enum E { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const reactive = violations.find((v) => v.rule === 'reactive-props-use-declare' && v.file.endsWith('fixture.ts'));
+    const tsRule = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('fixture.ts'));
+    assert.equal(reactive, undefined, 'named rule must be suppressed');
+    assert.ok(tsRule, 'unrelated rule must still fire');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('webjs-disable-file: directive inside a template-literal string does NOT disable the rule', async () => {
+  // Anti-bypass: the directive must be a real top-of-file comment.
+  // If a string value inside source code happens to contain
+  // "// webjs-disable-file ...", that should not silently disable
+  // lint coverage. Implementation anchors the regex with `^\s*//`
+  // (multi-line mode), which still matches if the directive begins
+  // a line, but does not match characters strictly embedded inside
+  // an expression. The realistic threat is documentation prose
+  // containing the literal directive; we accept that as a "looks
+  // like a real comment" indistinguishable case and rely on
+  // authoring discipline (the directive is opt-in, anyone reading
+  // the file sees it).
+  //
+  // What we DO guard against: a directive that's clearly inside a
+  // string concatenation expression (no `//` line-start). Verified
+  // by ensuring the rule still fires when the directive is part of
+  // a string literal returned by a function rather than a real
+  // line comment.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'fixture.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'const fake = `// webjs-disable-file reactive-props-use-declare`;\n' +
+      'class Bad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare' && v.file.endsWith('fixture.ts'));
+    assert.ok(v, 'directive in a string literal must NOT disable the rule');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
