@@ -40,6 +40,59 @@ test('buildImportMap: framework entries always present', async () => {
   assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/src/directives.js');
 });
 
+test('buildCoreEntries: src-only subpaths (./component) get explicit src/ URLs', async () => {
+  // Regression for #118: the previous hardcoded table omitted
+  // `@webjsdev/core/component`, so a browser import of that subpath
+  // resolved through the catch-all to `/__webjs/core/src/component`
+  // (no `.js` extension) and 404'd unless the user wrote `.js`
+  // manually. The derivation now picks up the `default` value from
+  // `package.json` exports when `source` is absent and emits the
+  // full URL.
+  const { buildCoreEntries } = await import('../../src/importmap.js');
+  const src = buildCoreEntries(CORE_DIR, false);
+  const dist = buildCoreEntries(CORE_DIR, true);
+  assert.equal(src['@webjsdev/core/component'], '/__webjs/core/src/component.js');
+  assert.equal(dist['@webjsdev/core/component'], '/__webjs/core/src/component.js');
+});
+
+test('buildCoreEntries: pre-setCoreInstall fail-open defaults', async () => {
+  // Document the contract: a fresh-import of importmap.js (no setter
+  // call yet) still exposes the two minimum-safe @webjsdev/core
+  // entries so any consumer that calls `buildImportMap()` before
+  // dev.js boots `setCoreInstall` still gets a usable map. Pre-#118
+  // the legacy `coreMappings` were derived inline from a boolean
+  // and so were never empty; this preserves that posture.
+  const url = new URL('../../src/importmap.js', import.meta.url).href +
+    '?fail-open=' + Date.now();
+  const freshModule = await import(url);
+  const map = freshModule.buildImportMap();
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index-browser.js');
+  assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
+});
+
+test('buildCoreEntries: rejects path-traversal in synthetic exports', async () => {
+  // Defensive: any `default` / `source` whose value contains `..`
+  // is skipped. The trust boundary today is the framework's own
+  // package.json, but the guard makes a future `--core-dir` flag
+  // safe by construction.
+  const { mkdtemp, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-malformed-core-'));
+  await writeFile(join(dir, 'package.json'), JSON.stringify({
+    name: '@webjsdev/core',
+    exports: {
+      './ok':  { source: './src/ok.js',  default: './dist/ok.js' },
+      './bad': { source: './../etc/passwd', default: './../etc/passwd' },
+    },
+  }));
+  const { buildCoreEntries } = await import('../../src/importmap.js');
+  const entries = buildCoreEntries(dir, false);
+  assert.equal(entries['@webjsdev/core/ok'], '/__webjs/core/src/ok.js');
+  assert.equal(entries['@webjsdev/core/bad'], undefined,
+    'path-traversal subpath must be skipped');
+});
+
 test('buildImportMap: vendor entries merge alongside framework entries', async () => {
   await setVendorEntries({ 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js' });
   const map = buildImportMap();

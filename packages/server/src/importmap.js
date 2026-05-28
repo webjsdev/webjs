@@ -95,14 +95,23 @@ export function vendorIntegrityFor(url) {
 /**
  * The `@webjsdev/core` install's importmap entries, derived from its
  * own `package.json` `exports` field. Populated by `setCoreInstall`
- * at boot (and on every rebuild). Stays empty until then so the
- * first `buildImportMap()` call before boot just doesn't include the
- * core entries; in practice every code path that consumes the map
- * goes through `setCoreInstall` first via `dev.js`.
+ * at boot.
+ *
+ * Initialized to the two minimum-safe defaults (the bare specifier
+ * pointing at the browser source-mode entry and the catch-all prefix
+ * pointing at `src/`) so any consumer that calls `buildImportMap()`
+ * before `setCoreInstall` runs still gets a usable map. Pre-#118 the
+ * legacy `coreMappings` were always derived from a boolean and so
+ * could not be empty; this keeps that fail-open posture for embedded
+ * SSR test helpers and one-shot tooling that imports `importmap.js`
+ * without booting `dev.js`.
  *
  * @type {Record<string, string>}
  */
-let _coreEntries = {};
+let _coreEntries = {
+  '@webjsdev/core': '/__webjs/core/index-browser.js',
+  '@webjsdev/core/': '/__webjs/core/src/',
+};
 
 /**
  * Bind the importmap to a specific `@webjsdev/core` install. The
@@ -119,6 +128,14 @@ let _coreEntries = {};
  * `dist/webjs-core-browser.js`) because that file is not declared
  * in the exports field, by design: it is a server-stripped surface
  * meant for the importmap-driven browser route, not Node resolution.
+ *
+ * Called once by `dev.js` at boot. Not re-called on file-watcher
+ * rebuilds today; if `@webjsdev/core/package.json` is edited in a
+ * long-running dev session (e.g. workspace dev that runs a fresh
+ * `npm run build:dist`), the derivation is refreshed on next server
+ * restart, not on the watcher tick. Pre-#118 the legacy
+ * `setCoreDistMode` had the same behaviour: only the dist-presence
+ * boolean was watched, not the package.json itself.
  *
  * Like `setVendorEntries`, the importmap-hash is recomputed eagerly
  * so `importMapHash()` stays synchronous on the per-request SSR
@@ -138,15 +155,25 @@ export async function setCoreInstall(coreDir, distMode) {
  * its `exports` field. The function is pure (no side effects) and
  * exported so tests can exercise the derivation directly.
  *
- * For each subpath in `exports` whose value is an object with
- * `default` and `source` conditions, emit one entry. Pick the
- * `default` value in dist mode (a bundled `dist/webjs-core-*.js`)
- * and the `source` value in src mode (a per-file `src/*.js`).
- * Subpaths with a single string value (e.g. `./client`,
- * `./server`, `./component`, `./registry`, `./signals`) are not
- * mapped explicitly; the catch-all `@webjsdev/core/` prefix routes
- * them through `/__webjs/core/src/` so any future addition still
- * resolves.
+ * For each subpath in `exports` whose value is an object form, emit
+ * one entry. Pick the `default` value in dist mode (a bundled
+ * `dist/webjs-core-*.js`) and the `source` value in src mode (a
+ * per-file `src/*.js`). When `source` is absent (e.g. `./component`,
+ * whose shape is `{ types, default }` and whose `default` is itself
+ * a `src/` path), fall back to `default` in src mode so the import
+ * still resolves with a `.js` extension on the URL.
+ *
+ * Subpaths with a plain string value (`./client`, `./server`,
+ * `./registry`, `./signals`, `./package.json`) are not mapped
+ * explicitly; the catch-all `@webjsdev/core/` prefix routes them
+ * through `/__webjs/core/src/`. Future-added subpaths added in
+ * string form land on the catch-all the same way.
+ *
+ * Path-traversal guard: any `default` / `source` value that contains
+ * `..` is skipped. The trust boundary today is the framework's own
+ * `@webjsdev/core/package.json`, but the guard makes a future shift
+ * to user-controlled `coreDir` (e.g. via a `--core-dir` flag) safe
+ * by construction.
  *
  * @param {string} coreDir
  * @param {boolean} distMode
@@ -196,6 +223,11 @@ export function buildCoreEntries(coreDir, distMode) {
     let targetRel = distMode ? entry.default : entry.source;
     if (typeof targetRel !== 'string') targetRel = entry.default;
     if (typeof targetRel !== 'string' || !targetRel.startsWith('./')) continue;
+    // Reject paths containing `..` to guard against a malformed or
+    // adversarial `exports` field producing a path-traversal URL.
+    // The check is deliberately broad: `..` substring catches both
+    // `../etc/passwd` and `./foo/../bar`.
+    if (targetRel.includes('..')) continue;
     // `./directives` → `@webjsdev/core/directives`,
     // `./dist/webjs-core-directives.js` → `/__webjs/core/dist/webjs-core-directives.js`.
     out['@webjsdev/core' + subpath.slice(1)] = '/__webjs/core/' + targetRel.slice(2);
