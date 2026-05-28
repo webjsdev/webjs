@@ -465,9 +465,11 @@ function bundleFilenameWithSubpath(pkgName, version, subpath) {
 /**
  * Compute the SHA-384 SRI hash for a bundle body. Matches the format
  * the browser's importmap `integrity` field and the `integrity`
- * attribute on `<link rel="modulepreload">` expect.
+ * attribute on `<link rel="modulepreload">` expect. Accepts a string
+ * or any ArrayBufferView (Uint8Array / Buffer / DataView): createHash
+ * normalizes all of them to bytes.
  *
- * @param {string | Buffer} body
+ * @param {string | ArrayBufferView} body
  * @returns {string}  e.g. `sha384-<base64>`
  */
 export function sha384Integrity(body) {
@@ -620,9 +622,9 @@ async function downloadBundle(url, appDir, filename) {
     // browser's SRI implementation hashes the raw body bytes; if we
     // hashed `.text()` here we'd risk encoding round-trip drift on
     // any byte sequence the decode-then-re-encode pipeline doesn't
-    // round-trip exactly. arrayBuffer + Buffer.from gives us the
+    // round-trip exactly. arrayBuffer + Uint8Array gives us the
     // same primitive the browser uses.
-    const buf = Buffer.from(await response.arrayBuffer());
+    const buf = new Uint8Array(await response.arrayBuffer());
     await mkdir(pinDir(appDir), { recursive: true });
     await writeFile(join(pinDir(appDir), filename), buf);
     return { bytes: buf.byteLength, integrity: sha384Integrity(buf) };
@@ -651,7 +653,7 @@ async function fetchIntegrity(url) {
     // Hash raw response bytes so the integrity matches what the
     // browser computes when fetching the same URL. See the
     // matching comment in downloadBundle.
-    const buf = Buffer.from(await response.arrayBuffer());
+    const buf = new Uint8Array(await response.arrayBuffer());
     return sha384Integrity(buf);
   } catch (e) {
     console.error(`[webjs] hash ${url} failed: ${e && e.message}`);

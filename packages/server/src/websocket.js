@@ -87,7 +87,7 @@ function reject(socket, status, message) {
   socket.write(
     `HTTP/1.1 ${status} ${message}\r\n` +
     `Content-Type: text/plain\r\n` +
-    `Content-Length: ${Buffer.byteLength(message)}\r\n` +
+    `Content-Length: ${new TextEncoder().encode(message).byteLength}\r\n` +
     `Connection: close\r\n\r\n` +
     message
   );
