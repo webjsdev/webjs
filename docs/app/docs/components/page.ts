@@ -588,6 +588,8 @@ render() {
 
     <blockquote>Always call <code>Class.register</code> at the module's top level, outside the class body. The component registers as soon as the module is imported, both on server and client.</blockquote>
 
+    <p>The tag argument accepts any short-string quote style. <code>register('my-counter')</code>, <code>register("my-counter")</code>, and <code>register(&#96;my-counter&#96;)</code> are all equivalent. The framework's <code>tag-name-has-hyphen</code> lint rule reads the tag through any of them.</p>
+
     <h2>Server Rendering</h2>
     <p>webjs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
 

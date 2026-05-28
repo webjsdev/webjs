@@ -1550,3 +1550,88 @@ test('tag-name-has-hyphen: tagged template with ASI-style newline between tag an
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+// --- package.json overrides still apply to rules touched by PR #109 ---
+
+test('package.json override disables tag-name-has-hyphen for backtick + scan changes', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'tag-name-has-hyphen': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {}\n' +
+      'Bad.register(`badtag`);\n', // backtick + no hyphen
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'tag-name-has-hyphen'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables components-have-register after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'components-have-register': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'unreg.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Unreg extends WebComponent {}\n', // no register call
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'components-have-register'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables reactive-props-use-declare after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'reactive-props-use-declare': false } } }),
+    );
+    await writeFile(
+      join(appDir, 'components', 'props.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class P extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' +
+      '}\n' +
+      "P.register('p-tag');\n",
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'reactive-props-use-declare'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('package.json override disables no-non-erasable-typescript after scan switch', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'package.json'),
+      JSON.stringify({ webjs: { conventions: { 'no-non-erasable-typescript': false } } }),
+    );
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'thing.ts'),
+      'export enum Real { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.find((v) => v.rule === 'no-non-erasable-typescript'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
