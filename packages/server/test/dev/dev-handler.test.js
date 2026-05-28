@@ -1392,3 +1392,26 @@ test('gate: page entry itself is servable (browser fetches it for hydration)', a
   const resp = await app.handle(new Request('http://x/app/page.ts'));
   assert.equal(resp.status, 200, 'page entries must be servable');
 });
+
+test('gate: newly-imported file becomes servable after rebuild', async () => {
+  // Boots a dev server, fetches a file that's NOT YET imported, asserts
+  // 404. Then rewrites the page to import the file and rebuilds. Asserts
+  // the file is now servable. Covers the fs.watch → graph-recompute path.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'lib/late.ts': `export const k = 'k';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const before = await app.handle(new Request('http://x/lib/late.ts'));
+  assert.equal(before.status, 404, 'file is unreachable before any page imports it');
+
+  // Rewrite the page to import lib/late.ts, then trigger a rebuild.
+  writeFileSync(
+    join(appDir, 'app/page.ts'),
+    `import { k } from '../lib/late.ts';\nexport default () => k;\n`,
+  );
+  await app.rebuild();
+
+  const after = await app.handle(new Request('http://x/lib/late.ts'));
+  assert.equal(after.status, 200, 'file becomes servable after rebuild adds it to the graph');
+});

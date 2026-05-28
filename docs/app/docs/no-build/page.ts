@@ -71,6 +71,11 @@ export default function NoBuild() {
     <p>This converts a sequential <code>import</code> waterfall into a parallel fetch. The browser fires every request as soon as the HTML head is parsed, well before <code>&lt;script type="module"&gt;</code> at the bottom would have discovered them.</p>
     <p>Server-only modules (filename matches <code>.server.{js,ts}</code> or content has a <code>'use server'</code> directive) are excluded from preload hints. They never reach the browser as source. Lazy components (<code>static lazy = true</code>) are also excluded, since they load on viewport entry via IntersectionObserver, not page load.</p>
 
+    <h3>The module graph is also the authorisation gate</h3>
+    <p>The same graph drives a second purpose: deciding which URLs the dev server is allowed to serve as source. Only files reachable from a page / layout / error / loading / not-found / component entry are servable; everything else 404s before any filesystem operation. This is webjs's equivalent of Next.js's bundler-derived page manifest, computed statically at boot (and on every <code>fs.watch</code> rebuild) instead of via a build step.</p>
+    <p>Concretely: <code>GET /package.json</code>, <code>GET /node_modules/&lt;pkg&gt;/index.js</code>, <code>GET /scripts/build.js</code>, and any other file no client code imports return 404 by construction. The model is convention-neutral; if a page imports from <code>src/</code> or <code>features/</code>, those dirs become servable automatically. No <code>servedDirs</code> config to maintain.</p>
+    <p>The <code>.server.{js,ts}</code> stub guardrail still runs as defense in depth: a server file that <em>does</em> reach the gate (because client code imports it for the RPC stub) gets stubbed at request time so its source never crosses the wire.</p>
+
     <h2>103 Early Hints</h2>
     <p>In production, when a GET or HEAD request matches a page route, webjs sends a <code>103 Early Hints</code> response <em>before</em> SSR begins. The hints carry <code>Link: &lt;url&gt;; rel=modulepreload</code> headers for the page's modules:</p>
     <pre>HTTP/1.1 103 Early Hints

@@ -62,28 +62,40 @@ can load it without booting the full server.
 
 ## Package-specific invariants
 
-1. **Server-file source is unreachable from the browser.** `dev.js`
-   re-verifies every JS/TS request against the path-level server-file
-   predicate (filename suffix `.server.{js,ts,mjs,mts}`) before
-   serving bytes. A server file ALWAYS responds with a generated
-   stub, never its source, regardless of route-index state, FS race
-   conditions, or developer error. The stub variant depends on
-   whether the file declares `'use server'`: a server action (with
+1. **Source-file branch is gated by the browser-bound module graph.**
+   `dev.js` walks the import graph from every page / layout / error /
+   loading / not-found / component entry at boot (and on every
+   `fs.watch` rebuild), producing `state.browserBoundFiles`. The
+   source-file branch in `handle()` only serves paths whose resolved
+   absolute file is in that Set; everything else 404s before any
+   filesystem operation. Same model as Next.js's bundler manifest,
+   derived statically at boot instead of via a build step. The
+   `module-graph.js` module exports `reachableFromEntries` as the
+   reusable BFS helper.
+2. **Server-file source is unreachable from the browser.** `dev.js`
+   re-verifies every in-graph JS/TS request against the path-level
+   server-file predicate (filename suffix `.server.{js,ts,mjs,mts}`)
+   before serving bytes. A server file ALWAYS responds with a
+   generated stub, never its source, regardless of route-index state,
+   FS race conditions, or developer error. The stub variant depends
+   on whether the file declares `'use server'`: a server action (with
    the directive) returns the RPC stub; a server-only utility
    (without) returns a throw-at-load stub. The `'use server'`
    directive WITHOUT the extension is silently ignored at the runtime
    layer (a `webjs check` lint rule flags it instead) and the file
-   serves as plain source. Regression tests live at
-   `test/server-file-guardrail.test.js`.
-2. **File router has no manifest.** `buildRouteTable()` walks `app/`
+   serves as plain source. The guardrail runs INSIDE the graph gate
+   as defense in depth (a file reaches the guardrail only if a client
+   import names it; the graph then re-checks the extension). Regression
+   tests live at `test/guardrails/server-file-guardrail.test.js`.
+3. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
-3. **One pluggable cache store, four built-in consumers.** `cache.js`
+4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
    startup switches all of them to Redis.
-4. **`webjs check` is part of this package** (`src/check.js`). New
+5. **`webjs check` is part of this package** (`src/check.js`). New
    rules go there; tests in `test/check.test.js`.
-5. **No `node:*` imports in code reachable from the browser.** The
+6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
 
 ## Tests
