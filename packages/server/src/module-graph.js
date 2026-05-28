@@ -171,7 +171,17 @@ async function walk(dir, appDir, graph) {
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
   for (const e of entries) {
-    if (e.name === 'node_modules' || e.name === '.webjs' || e.name === 'public' || e.name.startsWith('_')) continue;
+    // Skip filesystem locations the browser-bound graph never
+    // touches: node_modules (huge, npm deps reach the browser via
+    // the importmap, not direct fs paths), .webjs (framework cache),
+    // public/ (served by a separate route with its own containment
+    // check). Do NOT skip `_*` dirs: the `_private` / `_components`
+    // / `_lib` convention is a ROUTER-ignore mechanism (router.js
+    // line 100), but files inside are still importable by pages and
+    // layouts, so the graph walker must enter them or the gate
+    // 404s legitimate imports.
+    if (e.name === 'node_modules' || e.name === '.webjs' || e.name === 'public') continue;
+    if (e.name.startsWith('.')) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
       await walk(full, appDir, graph);

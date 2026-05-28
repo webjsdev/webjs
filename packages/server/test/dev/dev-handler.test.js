@@ -1515,3 +1515,33 @@ test('gate: file imported by BOTH a page AND a .server.ts stays servable', async
   const resp = await app.handle(new Request('http://x/lib/format.ts'));
   assert.equal(resp.status, 200, 'utility imported by both a page and a .server file stays servable');
 });
+
+test('gate: page imports from app/_components/ stay servable', async () => {
+  // The `_components` / `_private` / `_lib` convention is a
+  // ROUTER-ignore mechanism (no page route is mounted under
+  // them), but files inside are still importable from pages and
+  // layouts. The graph walker must enter `_*` dirs to follow
+  // those imports, or legitimate imports 404.
+  // Real example: packages/ui/packages/website/app/layout.ts
+  // imports from `./_components/theme-toggle.ts`.
+  const appDir = makeApp({
+    'app/layout.ts':
+      `import './_components/theme-toggle.ts';\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+    'app/page.ts': `export default () => 'ok';`,
+    'app/_components/theme-toggle.ts':
+      `import { swatch } from './palette.ts';\n` +
+      `export const themeToggle = () => swatch;\n`,
+    'app/_components/palette.ts':
+      `export const swatch = 'light';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  for (const url of [
+    '/app/_components/theme-toggle.ts',
+    '/app/_components/palette.ts',  // transitive through _components
+  ]) {
+    const resp = await app.handle(new Request(`http://x${url}`));
+    assert.equal(resp.status, 200, `${url} should be reachable through _components imports`);
+  }
+});
