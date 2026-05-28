@@ -224,18 +224,30 @@ test('browser entry does not re-export server-only symbols', async () => {
   const browserEntry = resolve(here, '../../../core/index-browser.js');
   const source = await readFile(browserEntry, 'utf8');
 
+  // Strip JSDoc / block comments so the comment block that names
+  // the banned symbols does not trigger a false positive when we
+  // search for those names below.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '');
+
   const banned = ['renderToString', 'renderToStream', 'setCspNonceProvider', 'expose', 'getExposed'];
   for (const symbol of banned) {
-    // Match export statements only (avoid matching the comment block
-    // that names them as deliberately-stripped).
+    // Match named re-export statements: `export { X } from '...'` or
+    // multi-symbol forms.
     const re = new RegExp(`export\\s*\\{[^}]*\\b${symbol}\\b`);
-    assert.equal(re.test(source), false, `index-browser.js re-exports server-only symbol "${symbol}"`);
+    assert.equal(re.test(code), false, `index-browser.js re-exports server-only symbol "${symbol}"`);
   }
   // Sanity check: it DOES still re-export the browser-safe ones.
   for (const symbol of ['html', 'WebComponent', 'render', 'cspNonce', 'signal']) {
     const re = new RegExp(`export\\s*\\{[^}]*\\b${symbol}\\b`);
-    assert.equal(re.test(source), true, `index-browser.js missing browser-safe symbol "${symbol}"`);
+    assert.equal(re.test(code), true, `index-browser.js missing browser-safe symbol "${symbol}"`);
   }
+  // `export *` shapes are banned wholesale. A future "fix" that adds
+  // `export * from './index.js'` or `export * from './src/render-server.js'`
+  // would silently re-introduce the entire server surface and slip
+  // past the named-symbol regex above. Reject the shape outright.
+  const starRe = /export\s*\*\s*from\s*['"`]/g;
+  assert.equal(starRe.test(code), false,
+    'index-browser.js uses `export *`; that shape can drag server-only symbols in unnoticed. Use explicit named re-exports.');
 });
 
 test('setCoreDistMode: toggling invalidates importMapHash', async () => {

@@ -178,7 +178,18 @@ export async function createRequestHandler(opts) {
   // workspace dev does only after `npm run build:dist`. Without
   // a built dist the server falls back to the historical per-file
   // src/ URLs so dev iteration does not require a build step.
-  await setCoreDistMode(existsSync(join(coreDir, 'dist', 'webjs-core.js')));
+  //
+  // Both required bundles must exist. An older @webjsdev/core
+  // install built BEFORE the browser-entry split (#119/#128) has
+  // `webjs-core.js` but no `webjs-core-browser.js`. Enabling dist
+  // mode in that case would route the bare `@webjsdev/core`
+  // specifier at a 404 on every page. Require both so a partial
+  // dist transparently degrades to src/ mode instead.
+  const distDir = join(coreDir, 'dist');
+  const distComplete =
+    existsSync(join(distDir, 'webjs-core.js')) &&
+    existsSync(join(distDir, 'webjs-core-browser.js'));
+  await setCoreDistMode(distComplete);
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
