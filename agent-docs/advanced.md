@@ -154,31 +154,20 @@ from the trusted socket address, otherwise a malicious client forges
 the header and the framework trusts it. Call the exported helper:
 
 ```js
-// express adapter sketch
-import express from 'express';
 import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
-
-const app = express();
 const handler = await createRequestHandler({ appDir });
 
-app.use(async (req, res) => {
-  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : req;
-  const webReq = new Request(url, {
-    method: req.method,
-    headers: new Headers(req.headers),
-    body,
-    duplex: 'half',
-  });
-  // Strips any forged x-webjs-remote-ip, stamps the real socket address.
-  const safe = stampRemoteIp(webReq, req.socket.remoteAddress);
-  const webRes = await handler.handle(safe);
-  res.status(webRes.status);
-  webRes.headers.forEach((v, k) => res.setHeader(k, v));
-  if (webRes.body) webRes.body.pipeTo(new WritableStream({ write: (c) => res.write(c) })).then(() => res.end());
-  else res.end();
-});
+// Inside the host adapter's per-request callback. `nodeReq` is the
+// host's request object (Express req, Node IncomingMessage, etc.).
+// `webReq` is whatever Request you constructed from the wire (URL,
+// method, headers, body); building that is host-specific. The
+// security-relevant line is the one that wraps it in stampRemoteIp:
+const safe = stampRemoteIp(webReq, nodeReq.socket.remoteAddress);
+const webRes = await handler.handle(safe);
+// Pipe webRes back through the host's response API.
 ```
+
+The host-specific Request construction has its own gotchas (Node `Readable` to WHATWG `ReadableStream` for bodies; coalescing array-valued raw headers into comma-joined strings; URL synthesis from host + path). The `stampRemoteIp` line is what makes the result safe to hand off to webjs's rate limit; it MUST come after the inbound headers land in `webReq` and before `handler.handle(safe)` is called.
 
 If the adapter cannot expose a trusted socket address, pass a custom
 `key` function to `rateLimit()` that reads whatever client identifier
