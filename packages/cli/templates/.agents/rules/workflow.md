@@ -92,7 +92,7 @@ self-review loop.
   Wait for approval AND the delete/keep preference. Applies to ALL merges.
 - Run `webjs test` before every commit.
 
-## Framework specifics
+## Framework rules
 
 - No build step: ES modules served directly.
 - **Erasable TypeScript only.** Node 24+ strips types via

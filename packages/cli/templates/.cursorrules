@@ -36,7 +36,7 @@ FIRST, before writing any code:
    - If upstream has new commits: `git rebase origin/main` before starting.
    - Resolve any conflicts before proceeding with the task.
 
-## Autonomous mode (sandbox / no-prompt mode)
+## Autonomous mode (sandbox / no-prompt)
 
 If running without interactive approval, auto-decide:
 - On main? Auto-create feature/<task-slug> branch
@@ -98,7 +98,6 @@ self-review loop.
   Wait for approval AND the delete/keep preference before proceeding.
   This applies to ALL merges, not just merges into main.
 - Run tests before every commit
-- Keep commits small and focused
 
 ## Framework rules
 
