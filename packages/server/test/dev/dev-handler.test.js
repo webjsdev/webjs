@@ -1215,3 +1215,49 @@ test('fileResponse prod: ETag is 16-char SHA-1 hex digest in quotes', async () =
   const resp2 = await app.handle(new Request('http://x/public/static.txt'));
   assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');
 });
+
+test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writes', async () => {
+  // Regression coverage for the IGNORE-regex bug surfaced during
+  // PR #110 review: the chokidar substring-style ignore on
+  // /prisma\/(dev|migrations)/ caught `prisma/dev.db`, but the
+  // first cut of the fs.watch replacement required a trailing
+  // separator and missed the SQLite sidecar file, causing a
+  // rebuild loop on every db:migrate.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>v1</p>\`; }\n`,
+    'prisma/dev.db': 'placeholder',
+  });
+  const logger = { info: () => {}, warn: () => {}, error: () => {} };
+  const { server, close } = await startServer({ appDir, dev: true, port: 0, logger, compress: false });
+  try {
+    const addr = server.address();
+    const ac = new AbortController();
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/__webjs/events`, {
+      headers: { accept: 'text/event-stream' },
+      signal: ac.signal,
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    // Drain the head of the SSE stream so we know the connection is open.
+    await reader.read();
+    // Touch prisma/dev.db plus the journal sidecar. Both are written
+    // during db:migrate and must NOT trigger a reload.
+    writeFileSync(join(appDir, 'prisma/dev.db'), 'updated');
+    writeFileSync(join(appDir, 'prisma/dev.db-journal'), 'wal');
+    // Wait longer than the 80ms debounce window so any rebuild would
+    // have fired by now.
+    await new Promise((r) => setTimeout(r, 250));
+    // Non-blocking read: collect whatever's been buffered.
+    const racer = new Promise((r) => setTimeout(() => r({ done: true, value: null }), 50));
+    const { value } = await Promise.race([reader.read(), racer]);
+    if (value) buf += decoder.decode(value, { stream: true });
+    ac.abort();
+    assert.ok(!buf.includes('event: reload'),
+      `prisma/dev.db writes must NOT fire a reload; got SSE buffer: ${JSON.stringify(buf)}`);
+  } finally {
+    await close();
+  }
+});

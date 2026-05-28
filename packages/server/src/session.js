@@ -36,7 +36,10 @@ async function hmacKey(secret) {
 
 /** @param {ArrayBuffer | ArrayBufferView} buf @returns {string} */
 function b64url(buf) {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer);
+  let bytes;
+  if (buf instanceof Uint8Array) bytes = buf;
+  else if (buf instanceof ArrayBuffer) bytes = new Uint8Array(buf);
+  else bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   let s = '';
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

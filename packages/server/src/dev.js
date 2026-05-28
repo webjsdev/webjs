@@ -347,9 +347,15 @@ export async function startServer(opts) {
     // fs.watch returns relative paths in event.filename. We apply
     // the same ignore filter chokidar used before: skip
     // node_modules, .git, and prisma's dev artefacts (dev.db,
-    // migrations/) which the dev server writes during db:migrate
-    // and would otherwise loop.
-    const IGNORE = /(^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)(?:[\\/]|$)/;
+    // dev.db-journal, migrations/) which the dev server writes
+    // during db:migrate and would otherwise loop.
+    //
+    // The prisma branch uses prefix-only matching (no required
+    // trailing separator) so the SQLite sidecar files like
+    // `prisma/dev.db` and `prisma/dev.db-journal` are ignored too.
+    // node_modules / .git stay separator-anchored so unrelated
+    // names like `node_modules.bak/foo` don't get caught.
+    const IGNORE = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/;
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
     (async () => {
