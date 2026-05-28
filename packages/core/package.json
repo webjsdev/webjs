@@ -41,7 +41,8 @@
       "default": "./src/component.js"
     },
     "./registry": "./src/registry.js",
-    "./signals": "./src/signal.js"
+    "./signals": "./src/signal.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
