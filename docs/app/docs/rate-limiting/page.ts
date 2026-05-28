@@ -34,10 +34,39 @@ export default rateLimit({ window: '1m', max: 10 });</pre>
     <ul>
       <li><code>window</code>: duration string or milliseconds. Supports: <code>'10s'</code>, <code>'1m'</code>, <code>'1h'</code>, <code>60000</code>. Default: <code>'1m'</code>.</li>
       <li><code>max</code>: maximum requests per window. Default: <code>60</code>.</li>
-      <li><code>key</code>: a string prefix or a function <code>(req) => string</code> that returns a unique key per client. Default: IP address from <code>x-forwarded-for</code>, <code>cf-connecting-ip</code>, or <code>x-real-ip</code> headers.</li>
+      <li><code>key</code>: a string prefix or a function <code>(req) => string</code> that returns a unique key per client. Default: the framework-stamped socket IP, see <strong>Behind a proxy</strong> below.</li>
+      <li><code>trustProxy</code>: when <code>true</code>, the default key resolution honours the leftmost <code>X-Forwarded-For</code> entry, then <code>CF-Connecting-IP</code>, then <code>X-Real-IP</code>, before falling back to the socket IP. Default: <code>false</code>. See <strong>Behind a proxy</strong> below for the threat model.</li>
       <li><code>message</code>: error message in the 429 response body. Default: <code>'Too Many Requests'</code>.</li>
       <li><code>store</code>: override the cache store (e.g. a dedicated Redis instance for rate limits).</li>
     </ul>
+
+    <h2>Behind a proxy</h2>
+    <p>The default IP source is the TCP socket address that the framework stamps onto every inbound request via the <code>x-webjs-remote-ip</code> internal header. <code>dev.js</code>'s <code>toWebRequest</code> strips any inbound copy of that header before adding its own, so clients cannot spoof it from the wire. Forwarded-IP headers (<code>X-Forwarded-For</code>, <code>CF-Connecting-IP</code>, <code>X-Real-IP</code>) are ignored. This is the correct default for any server that handles its own TCP connections directly (bare-metal, single-VM, dev mode).</p>
+
+    <p><strong>When you're fronted by a reverse proxy or CDN</strong> (Cloudflare, nginx, Caddy, Railway, Fly, Render, Vercel, Heroku), the socket IP is the proxy, not the user. Every request shares the same IP and the limiter buckets everyone together. Opt in to forwarded-header parsing:</p>
+
+    <pre>// app/api/auth/middleware.ts
+import { rateLimit } from '@webjsdev/server';
+
+export default rateLimit({ window: '1m', max: 10, trustProxy: true });</pre>
+
+    <p>With <code>trustProxy: true</code>, the limiter reads the leftmost <code>X-Forwarded-For</code> entry, then <code>CF-Connecting-IP</code>, then <code>X-Real-IP</code>, then the stamped socket IP, then <code>'_anon_'</code>. Your reverse proxy MUST strip any inbound <code>X-Forwarded-For</code> from the wire before adding its own; otherwise <code>trustProxy</code> re-introduces the spoofability it exists to defend against. Cloudflare, Fly, Railway, Render, and Vercel all strip by default. Nginx and Caddy strip only if explicitly configured (<code>proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for</code> in nginx).</p>
+
+    <p><strong>Embedded adapters</strong> (running webjs via <code>createRequestHandler</code> under Express / Fastify / Bun / Deno / edge runtimes) do NOT get the socket-stamping automatically, the framework's <code>startServer</code> path does it. The adapter MUST call <code>stampRemoteIp(req, remoteAddress)</code> before passing the request to webjs:</p>
+
+    <pre>// express adapter
+import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
+
+const handler = createRequestHandler({ appDir: './app' });
+
+app.use(async (req, res) => {
+  const webReq = new Request(/* ... */, { method: req.method, headers: req.headers, /* ... */ });
+  const safe = stampRemoteIp(webReq, req.socket.remoteAddress);
+  const webRes = await handler.handle(safe);
+  // write webRes back to res
+});</pre>
+
+    <p>Without <code>stampRemoteIp</code>, the adapter passes inbound headers through unmodified. A malicious client can include <code>x-webjs-remote-ip: &lt;anything&gt;</code> on the wire and <code>clientIp(req)</code> will trust it, defeating the limiter even with <code>trustProxy: false</code>.</p>
 
     <h2>Custom key function</h2>
     <p>Rate limit by authenticated user instead of IP:</p>

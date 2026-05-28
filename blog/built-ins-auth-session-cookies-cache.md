@@ -117,14 +117,18 @@ The cache is opt-in. We do not auto-memoize all queries. Each function the user 
 ```ts
 import { rateLimit } from '@webjsdev/server';
 
-export default rateLimit({
-  window: '10s',
-  max: 5,
-  key: (req) => req.headers.get('x-forwarded-for') || 'anonymous',
-});
+// Direct deploy (default). Keys on the framework-stamped socket IP.
+// Forwarded-IP headers are ignored, so clients cannot bucket-shift
+// by setting x-forwarded-for on the wire.
+export default rateLimit({ window: '10s', max: 5 });
+
+// Behind a trusted reverse proxy or CDN. Opt in to forwarded-header
+// parsing. Your proxy MUST strip inbound x-forwarded-for before
+// adding its own, or trustProxy reintroduces spoofability.
+export default rateLimit({ window: '10s', max: 5, trustProxy: true });
 ```
 
-Five requests per ten seconds per IP. The `key` function is the user-controlled bucket id.
+Five requests per ten seconds per IP. The default `key` resolves the IP via the framework-stamped `x-webjs-remote-ip` header (`startServer` derives it from the TCP socket and strips any inbound copy). Custom keys are still supported (per-tenant, per-authenticated-user); when you want one that includes the IP, compose with the exported `clientIp(req, { trustProxy })` helper rather than reading `x-forwarded-for` by hand.
 
 Internally it computes the current windowed key (e.g. `ratelimit:<bucket>:<window-start>`), calls `store.increment(...)`, and 429s if the result exceeds `max`. Atomic on Redis. Works in-memory for development. The single-process memory store implements increment atomically too, so the rate limiter works there as well.
 

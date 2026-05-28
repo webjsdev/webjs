@@ -631,7 +631,15 @@ Use `rateLimit()` as per-segment middleware to protect routes:
 ```ts
 // app/api/auth/middleware.ts: protect auth endpoints
 import { rateLimit } from '@webjsdev/server';
+
+// Direct deploy (default). Keys on the socket-stamped IP, ignoring
+// forwarded-IP headers.
 export default rateLimit({ window: '10s', max: 5 });
+
+// Behind a reverse proxy or CDN (Cloudflare, Railway, Fly, Vercel,
+// nginx, Caddy). Set trustProxy to honour X-Forwarded-For. The proxy
+// MUST strip inbound X-Forwarded-For before adding its own.
+export default rateLimit({ window: '10s', max: 5, trustProxy: true });
 ```
 
 Place `middleware.ts` at any route level. It applies to that subtree only.
