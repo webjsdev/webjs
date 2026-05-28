@@ -93,12 +93,16 @@ const REMOTE_IP_HEADER = 'x-webjs-remote-ip';
  * Resolve the client IP for rate-limit bucket keying.
  *
  * `trustProxy: false` (default, safe everywhere): read ONLY the
- * framework-stamped `x-webjs-remote-ip` header, which `dev.js`
- * derives from the actual TCP socket and which clients cannot
- * spoof. Forwarded-IP headers (`x-forwarded-for`, `cf-connecting-ip`,
- * `x-real-ip`) are IGNORED. Fallback `_anon_` covers embedded use
- * (`createRequestHandler`) where the host adapter never stamped a
- * remote IP.
+ * framework-stamped `x-webjs-remote-ip` header. Under `startServer`
+ * the framework derives it from the actual TCP socket and strips
+ * any inbound copy via `toWebRequest`, so clients cannot spoof it.
+ * Under `createRequestHandler` (embedded use) the host adapter MUST
+ * call `stampRemoteIp(req, remoteAddress)` first, otherwise the
+ * adapter may pass forged inbound headers straight through and the
+ * "cannot spoof" guarantee no longer holds. Forwarded-IP headers
+ * (`x-forwarded-for`, `cf-connecting-ip`, `x-real-ip`) are IGNORED
+ * regardless. Fallback `_anon_` covers requests that arrive without
+ * a stamped IP.
  *
  * `trustProxy: true`: honour forwarded-IP headers, preferring the
  * leftmost entry of `X-Forwarded-For`, then `CF-Connecting-IP`,
@@ -159,6 +163,11 @@ export function stampRemoteIp(req, remoteAddress) {
   if (remoteAddress) headers.set(REMOTE_IP_HEADER, remoteAddress);
   /** @type {RequestInit & { duplex?: string }} */
   const init = { method: req.method, headers };
+  // Preserve AbortSignal so host-side cancellation propagates
+  // (e.g. client disconnects mid-request). The framework's body
+  // stream has its own teardown, but downstream consumers may
+  // listen on the signal directly.
+  if (req.signal) init.signal = req.signal;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     init.body = req.body;
     init.duplex = 'half';

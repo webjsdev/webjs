@@ -226,3 +226,14 @@ test('createRequestHandler WITHOUT stampRemoteIp trusts wire headers (documented
   assert.equal(clientIp(forged), '6.6.6.6',
     'without stampRemoteIp, forged header IS read; adapters MUST call the helper');
 });
+
+test('stampRemoteIp: preserves AbortSignal for host-side cancellation', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const ac = new AbortController();
+  const inbound = new Request('http://x/', { headers: {}, signal: ac.signal });
+  const safe = stampRemoteIp(inbound, '127.0.0.1');
+  assert.equal(safe.signal.aborted, false, 'signal must not be pre-aborted');
+  ac.abort();
+  assert.equal(safe.signal.aborted, true,
+    'aborting the source controller must propagate to the safe Request');
+});

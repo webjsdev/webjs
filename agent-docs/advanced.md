@@ -154,15 +154,29 @@ from the trusted socket address, otherwise a malicious client forges
 the header and the framework trusts it. Call the exported helper:
 
 ```js
+// express adapter sketch
+import express from 'express';
 import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
+
+const app = express();
 const handler = await createRequestHandler({ appDir });
 
 app.use(async (req, res) => {
-  const webReq = new Request(buildUrl(req), { method: req.method, headers: req.headers, body: ... });
+  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : req;
+  const webReq = new Request(url, {
+    method: req.method,
+    headers: new Headers(req.headers),
+    body,
+    duplex: 'half',
+  });
   // Strips any forged x-webjs-remote-ip, stamps the real socket address.
   const safe = stampRemoteIp(webReq, req.socket.remoteAddress);
   const webRes = await handler.handle(safe);
-  // write webRes back to res
+  res.status(webRes.status);
+  webRes.headers.forEach((v, k) => res.setHeader(k, v));
+  if (webRes.body) webRes.body.pipeTo(new WritableStream({ write: (c) => res.write(c) })).then(() => res.end());
+  else res.end();
 });
 ```
 
