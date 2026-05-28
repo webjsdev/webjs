@@ -210,8 +210,11 @@ Every file is a plain ES module.
 ## Public API of `@webjsdev/core`
 
 ```js
-import { html, css, WebComponent, render, renderToString } from '@webjsdev/core';
+import { html, css, WebComponent, render } from '@webjsdev/core';
+import { renderToString } from '@webjsdev/core/server';
 ```
+
+The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops server-only modules (the 1.1k-line `render-server.js`, `expose.js`, `setCspNonceProvider`). `renderToString` / `renderToStream` live at `@webjsdev/core/server`; Node-side consumers (SSR pipeline, unit tests) import them from there. The framework's own `packages/server/` keeps using the bare specifier where it only needs the isomorphic surface.
 
 | Export | Purpose |
 |---|---|
@@ -223,7 +226,7 @@ import { html, css, WebComponent, render, renderToString } from '@webjsdev/core'
 | `renderToString` | Server-side **async** render → HTML string with DSD. |
 | `notFound()` | Throw to return 404 rendered via `not-found.js`. |
 | `redirect(url)` | Throw to return 307 (default) or 308 redirect. |
-| `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. |
+| `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. **Server-side only**; import inside `.server.{js,ts}` files. The bare `@webjsdev/core` specifier resolves to the browser entry, which excludes `expose`; an import from a client-bound file silently reads `undefined`. |
 | `repeat(items, k, t)` | Keyed list directive. Preserves DOM identity on reorder. |
 | `Suspense({fallback, children})` | Streaming boundary. |
 | `connectWS(url, handlers)` | Client WebSocket: auto-reconnect, JSON, queued sends. |

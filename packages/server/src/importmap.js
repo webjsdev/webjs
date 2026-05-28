@@ -125,9 +125,14 @@ export function buildImportMap() {
   // `./registry`, `./signals`) that the framework keeps source-only;
   // the prefix maps to /__webjs/core/src/ so anything not explicitly
   // listed below still resolves.
+  // `@webjsdev/core` (no subpath) routes to the BROWSER entry so
+  // server-only modules (render-server, expose, setCspNonceProvider)
+  // don't ride the wire. Node-side consumers (the SSR pipeline,
+  // tests, anything resolving the package via Node's package.json
+  // exports) still land on `index.js` and get the full surface.
   const coreMappings = _coreDistMode
     ? {
-        '@webjsdev/core':               '/__webjs/core/dist/webjs-core.js',
+        '@webjsdev/core':               '/__webjs/core/dist/webjs-core-browser.js',
         '@webjsdev/core/':              '/__webjs/core/src/',
         '@webjsdev/core/client-router': '/__webjs/core/dist/webjs-core-client-router.js',
         '@webjsdev/core/lazy-loader':   '/__webjs/core/dist/webjs-core-lazy-loader.js',
@@ -137,7 +142,7 @@ export function buildImportMap() {
         '@webjsdev/core/task':          '/__webjs/core/dist/webjs-core-task.js',
       }
     : {
-        '@webjsdev/core':               '/__webjs/core/index.js',
+        '@webjsdev/core':               '/__webjs/core/index-browser.js',
         '@webjsdev/core/':              '/__webjs/core/src/',
         '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
         '@webjsdev/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',

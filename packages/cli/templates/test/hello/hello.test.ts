@@ -6,7 +6,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { html, renderToString } from '@webjsdev/core';
+import { html } from '@webjsdev/core';
+import { renderToString } from '@webjsdev/core/server';
 
 test('html template renders correctly', async () => {
   const result = await renderToString(html`<p>Hello, ${'world'}!</p>`);

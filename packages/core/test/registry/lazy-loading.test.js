@@ -32,7 +32,7 @@ test('setVendorEntries: adds entries to import map', async () => {
   const map = buildImportMap();
   assert.equal(map.imports['dayjs'], '/__webjs/vendor/dayjs.js');
   // Built-ins should still be there
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index-browser.js');
   // Clean up
   await setVendorEntries({});
 });

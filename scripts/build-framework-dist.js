@@ -38,6 +38,11 @@ const CORE = resolve(HERE, '..', 'packages', 'core');
  */
 const ENTRIES = [
   { in: 'index.js',                  out: 'webjs-core' },
+  // Browser-only entry: same as index.js minus render-server, expose,
+  // and setCspNonceProvider. The browser importmap points at this
+  // bundle (or the un-bundled `index-browser.js` in workspace dev
+  // mode); Node-side consumers keep landing on `webjs-core.js`.
+  { in: 'index-browser.js',          out: 'webjs-core-browser' },
   { in: 'src/directives.js',         out: 'webjs-core-directives' },
   { in: 'src/context.js',            out: 'webjs-core-context' },
   { in: 'src/task.js',               out: 'webjs-core-task' },
