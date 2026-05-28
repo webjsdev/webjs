@@ -71,15 +71,21 @@ webjs db studio       # prisma studio</pre>
     <p>See <a href="/docs/conventions">Conventions &amp; AI Workflow</a> for the rule catalogue, the workflow for AI agents, and what <code>webjs check --rules</code> prints. This page does not duplicate the list; the linter's <code>RULES</code> array is the single source of truth.</p>
 
     <h2>Environment Variables</h2>
-    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). There's no built-in <code>.env</code> loader, so use <code>dotenv</code> or pass vars via the shell:</p>
-    <pre>DATABASE_URL=postgres://... webjs start</pre>
+    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). webjs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> once at boot using Node 24+'s built-in <code>process.loadEnvFile</code>, so a scaffolded app with a committed <code>.env.example</code> and a developer-copied <code>.env</code> just works without installing <code>dotenv</code> or wiring up the file path. The auto-load fires before any server-only module is imported, which matters for code that reads <code>process.env</code> at module-init time (e.g. <code>createAuth({ secret: process.env.AUTH_SECRET })</code>).</p>
+
+    <p><strong>Precedence: shell wins over file.</strong> <code>process.loadEnvFile</code> does not override values that are already present in <code>process.env</code>, so values exported by the host shell or a process manager (Docker, systemd, Railway, Fly) take precedence over the same key in <code>.env</code>. This matches the Rails / Next / Astro convention: <code>.env</code> is for developer-local defaults; production secrets come from the platform.</p>
+
+    <p><strong>No file, no problem.</strong> A missing <code>.env</code>, a malformed file, or running on Node without <code>loadEnvFile</code> all fail silently. The server still boots; only the missing values are <code>undefined</code> (the same way a typo would be).</p>
+
+    <p>Override per-invocation by passing values on the command line:</p>
+    <pre>DATABASE_URL=postgres://... npm start</pre>
 
     <h3>Server-only env vars (the default)</h3>
     <p>Any environment variable that does not start with <code>WEBJS_PUBLIC_</code> is <strong>server-only</strong>. It is never sent to the browser. <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, OAuth client secrets, third-party API keys: read them in server actions, route handlers, middleware, or page functions, and pass derived values (not the raw secret) to components.</p>
 
     <h3>Public env vars (WEBJS_PUBLIC_*)</h3>
     <p>Any env var whose name starts with <code>WEBJS_PUBLIC_</code> is exposed to the browser as <code>process.env.WEBJS_PUBLIC_X</code>. webjs injects an inline script in the SSR'd HTML head that sets <code>window.process.env</code> before any user code or vendor bundle runs. Components can read these directly:</p>
-    <pre>// app/.env (loaded via dotenv or shell)
+    <pre>// .env at the app root (auto-loaded at boot)
 WEBJS_PUBLIC_API_URL=https://api.example.com
 WEBJS_PUBLIC_STRIPE_KEY=pk_live_abc
 SENTRY_DSN=https://x@sentry.io/y      # server-only, no prefix

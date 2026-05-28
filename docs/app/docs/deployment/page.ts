@@ -174,11 +174,11 @@ Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</pre>
       <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
     </ul>
     <p>For app-specific environment variables, use <code>process.env</code> in server-side code (pages, server actions, middleware, API routes). These are never exposed to the client.</p>
-    <pre># .env (load with dotenv or your deployment platform)
+    <pre># .env at the app root (auto-loaded at boot)
 DATABASE_URL="postgresql://user:pass@localhost:5432/mydb"
 SESSION_SECRET="change-me"
 API_KEY="sk-..."</pre>
-    <p>webjs does not have built-in <code>.env</code> file loading. Use <a href="https://www.npmjs.com/package/dotenv">dotenv</a>, your platform's secrets management, or pass variables via your process manager.</p>
+    <p>webjs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> on boot via Node 24+'s built-in <code>process.loadEnvFile</code>. No <code>dotenv</code> dependency. Shell-exported values take precedence over the file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration">Configuration</a> for the full precedence rules.</p>
 
     <h2>Docker / Containerisation</h2>
     <p>A minimal Dockerfile for a webjs app:</p>
