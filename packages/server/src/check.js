@@ -115,13 +115,6 @@ export const RULES = [
 const RULE_NAMES = new Set(RULES.map((r) => r.name));
 
 /**
- * Check whether a file has the `'use server'` directive in its first
- * five lines. Used by the `use-server-needs-extension` rule, and by
- * `isServerActionFile` below.
- * @param {string} content file content (already read)
- * @returns {boolean}
- */
-/**
  * Return `src` with the BODY of every comment, single-quoted string,
  * double-quoted string, and template literal replaced by spaces (with
  * newlines preserved). Quote delimiters / comment markers themselves
@@ -241,8 +234,12 @@ function redactStringsAndTemplates(src) {
     // tag + shape classification. Delimiters always stay so
     // structural scanners see them.
     if (c === '`') {
+      // Walk back through whitespace to find the previous
+      // significant character. Newlines count as whitespace so
+      // `const x = html\n  ` ... `` `(ASI-style line break between tag
+      // and backtick) is still recognized as tagged.
       let j = out.length - 1;
-      while (j >= 0 && (out[j] === ' ' || out[j] === '\t')) j--;
+      while (j >= 0 && /\s/.test(out[j])) j--;
       const prev = j >= 0 ? out[j] : '';
       const isTagged = /[A-Za-z0-9_$)\]]/.test(prev);
 
@@ -303,6 +300,13 @@ function redactStringsAndTemplates(src) {
   return out;
 }
 
+/**
+ * Check whether a file has the `'use server'` directive in its first
+ * five lines. Used by the `use-server-needs-extension` rule, and by
+ * `isServerActionFile` below.
+ * @param {string} content file content (already read)
+ * @returns {boolean}
+ */
 function hasUseServerDirective(content) {
   const head = content.split('\n').slice(0, 5).join('\n');
   return /^\s*(['"])use server\1\s*;?\s*$/m.test(head);
@@ -755,15 +759,19 @@ export async function checkConventions(appDir, opts) {
 
   // --- Rule: components-have-register ---
   if (isRuleEnabled('components-have-register', overrides)) {
-    for (const { rel, content } of files) {
+    for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
-      // Check if it defines a class extending WebComponent
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
+      // Use redacted source so a code-example string like
+      // `Foo.register('bar')` inside a tagged template literal does
+      // not falsely satisfy the rule for a sibling unregistered
+      // class. Real register() calls live at top level where the
+      // redactor leaves them alone.
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       // Accept either registration pattern:
       //   Counter.register('tag')                    (webjs idiom)
       //   customElements.define('tag', Counter)      (native)
-      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"`]/.test(content)) continue;
-      if (/\bcustomElements\.define\s*\(/.test(content)) continue;
+      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"`]/.test(scan)) continue;
+      if (/\bcustomElements\.define\s*\(/.test(scan)) continue;
       violations.push({
         rule: 'components-have-register',
         file: rel,

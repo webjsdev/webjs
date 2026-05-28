@@ -1520,3 +1520,33 @@ test('redactor: tagged template body is still blanked even when untagged backtic
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+test('tag-name-has-hyphen: tagged template with ASI-style newline between tag and backtick is still blanked', async () => {
+  // The walkback for tag detection must skip newlines so an
+  // ASI-style break between the tag and the backtick still
+  // classifies as tagged. Otherwise a `const x = html\n  \`...\``
+  // body would be preserved verbatim and trip lint rules on
+  // example code inside.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'asi.ts'),
+      "import { html, WebComponent } from '@webjsdev/core';\n" +
+      'class Foo extends WebComponent {\n' +
+      '  render() {\n' +
+      // Tag on previous line, backtick at start of next line.
+      '    return html\n' +
+      '      `<p>Example: Fake.register("nohyphen")</p>`;\n' +
+      '  }\n' +
+      '}\n' +
+      "Foo.register('foo-bar');\n",
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.message.includes('nohyphen'));
+    assert.equal(v, undefined,
+      'tagged template with newline before backtick must be blanked');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
