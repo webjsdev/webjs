@@ -40,38 +40,42 @@ If running without interactive approval (sandbox, auto-approve, etc.):
 - Parent behind? Auto-rebase. Merge? Auto-merge + delete feature branches.
 - Auto-generate meaningful commit messages. Fix tests and violations.
 
-## Mandatory workflow
+## Mandatory workflow (never skip)
 
 Every code change must include:
-1. Commit and push PER LOGICAL UNIT, not at the end. One feature, one fix,
-   one rename, one doc rewrite per commit. Always `git push` after
-   committing. Don't accumulate changes. If you have 5+ unstaged files
-   spanning different concerns, commit before continuing. The Claude Code
-   hook at `.claude/hooks/nudge-uncommitted.sh` enforces threshold 4 for
-   Claude users; Copilot users should self-enforce the same rule. Automatic.
-2. Server tests in test/<feature>/*.test.ts (node:test for actions, queries, utilities)
-3. Browser tests in test/<feature>/browser/*.test.js (WTR + Playwright, real Chromium)
-4. Documentation updates. Walk every surface in the **Definition of
-   done** section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md,
-   README.md, docs/, website/, scaffold scripts) and either update or
-   write "N/A because <reason>" in the PR body. Docs land on the same
-   PR as the code.
-5. Convention validation: `webjs check` must pass
-6. Pre-merge self-review loop. Before saying the PR is ready for
-   merge, run fresh-context review rounds until one round finds zero
-   issues. Copilot primitive: open a NEW chat session (reset the
-   side panel) for each round so the reviewer has no prior context
-   on the implementation decisions. Minimum two rounds; rotate focus
-   each round. Skip the loop only for one-line trivial changes;
-   skipping on a change that touches logic, public surface, build,
-   security, or multiple files is the exact failure mode the loop
-   exists to prevent. The full rule, prompt template, and reporting
-   contract live in the **Pre-merge self-review loop** section of
-   CONVENTIONS.md.
+1. Server tests in `test/<feature>/*.test.ts` (node:test).
+2. Browser tests in `test/<feature>/browser/*.test.js` (WTR + Playwright, real Chromium).
+3. Documentation updates. Walk every surface in the **Definition of done**
+   section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md, README.md, docs/,
+   website/, scaffold scripts) and either update or write
+   "N/A because <reason>" in the PR body. Docs land on the same PR as the
+   code, never as a follow-up.
+4. Convention check: `webjs check` must pass.
+5. Pre-merge self-review loop. Before saying the PR is ready for merge,
+   run fresh-context review rounds until one round finds zero issues.
+   Copilot primitive: open a NEW chat session (reset the side panel) for
+   each round so the reviewer has no prior context on the implementation
+   decisions. Minimum two rounds; rotate focus each round. Skip the loop
+   only for one-line trivial changes; skipping on a change that touches
+   logic, public surface, build, security, or multiple files is the exact
+   failure mode the loop exists to prevent. The full rule, prompt
+   template, and reporting contract live in the **Pre-merge self-review
+   loop** section of CONVENTIONS.md.
+
+The user should never have to ask for tests, documentation, or the
+self-review loop. The commit-per-logical-unit rule lives under "Git rules"
+below, not here, since it governs how work is grouped rather than what
+each change must include.
 
 ## Git rules
 
-- Commit after each logical unit of work
+- COMMIT AND PUSH PER LOGICAL UNIT, NOT AT THE END. One feature, one fix,
+  one rename, one doc rewrite per commit. Always `git push` after
+  committing. Don't accumulate changes. If you have 5+ unstaged files
+  spanning different concerns, commit before continuing. The Claude Code
+  hook at `.claude/hooks/nudge-uncommitted.sh` enforces threshold 4 for
+  Claude users; Copilot users should self-enforce the same rule. The user
+  should never have to ask for a commit.
 - Meaningful commit messages: what changed and why
 - NEVER add Co-Authored-By or AI attribution trailers to commits
 - Work on feature branches, create PRs, never push directly to main
