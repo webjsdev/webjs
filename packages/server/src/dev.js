@@ -66,7 +66,7 @@ import { primeComponentRegistry, findOrphanComponents, scanComponents } from './
 function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
-import { setVendorEntries, setCoreDistMode } from './importmap.js';
+import { setVendorEntries, setCoreInstall } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 
 const MIME = {
@@ -189,7 +189,7 @@ export async function createRequestHandler(opts) {
   const distComplete =
     existsSync(join(distDir, 'webjs-core.js')) &&
     existsSync(join(distDir, 'webjs-core-browser.js'));
-  await setCoreDistMode(distComplete);
+  await setCoreInstall(coreDir, distComplete);
 
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);

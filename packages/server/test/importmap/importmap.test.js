@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
-import { importMapTag, setVendorEntries, buildImportMap } from '../../src/importmap.js';
+import { importMapTag, setVendorEntries, buildImportMap, setCoreInstall } from '../../src/importmap.js';
+
+const CORE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../core');
+
+// Bind the importmap to the workspace @webjsdev/core install before
+// any test runs so framework entries are populated. Tests that exercise
+// dist-vs-src mode rebind via setCoreInstall(CORE_DIR, true/false).
+await setCoreInstall(CORE_DIR, false);
 
 test('importMapTag: emits a bare script tag when no nonce is provided', async () => {
   await setVendorEntries({});
@@ -174,12 +183,12 @@ test('importMapHash: hash available synchronously after await setVendorEntries',
   await setVendorEntries({});
 });
 
-/* ---------- setCoreDistMode: dist vs src URL routing ---------- */
+/* ---------- setCoreInstall: dist vs src URL routing ---------- */
 
-test('setCoreDistMode(false): @webjsdev/core/* maps to /__webjs/core/src/*', async () => {
-  const { setCoreDistMode, buildImportMap } = await import('../../src/importmap.js');
+test('setCoreInstall(false): @webjsdev/core/* maps to /__webjs/core/src/*', async () => {
+  const { buildImportMap } = await import('../../src/importmap.js');
   await setVendorEntries({});
-  await setCoreDistMode(false);
+  await setCoreInstall(CORE_DIR, false);
   const map = buildImportMap();
   // Bare `@webjsdev/core` routes to the BROWSER entry (drops the
   // server-only render-server / expose surface). Node-side
@@ -191,10 +200,10 @@ test('setCoreDistMode(false): @webjsdev/core/* maps to /__webjs/core/src/*', asy
   assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
 });
 
-test('setCoreDistMode(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-core-*', async () => {
-  const { setCoreDistMode, buildImportMap } = await import('../../src/importmap.js');
+test('setCoreInstall(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-core-*', async () => {
+  const { buildImportMap } = await import('../../src/importmap.js');
   await setVendorEntries({});
-  await setCoreDistMode(true);
+  await setCoreInstall(CORE_DIR, true);
   const map = buildImportMap();
   // Same browser-routing logic in dist mode: bare specifier lands
   // on the slim `webjs-core-browser.js`, not the universal
@@ -207,7 +216,7 @@ test('setCoreDistMode(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-c
   // ./signals) still resolve.
   assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
   // Reset to false so other tests aren't surprised by the toggle.
-  await setCoreDistMode(false);
+  await setCoreInstall(CORE_DIR, false);
 });
 
 test('browser entry does not re-export server-only symbols', async () => {
@@ -250,14 +259,14 @@ test('browser entry does not re-export server-only symbols', async () => {
     'index-browser.js uses `export *`; that shape can drag server-only symbols in unnoticed. Use explicit named re-exports.');
 });
 
-test('setCoreDistMode: toggling invalidates importMapHash', async () => {
-  const { setCoreDistMode, importMapHash } = await import('../../src/importmap.js');
+test('setCoreInstall: toggling invalidates importMapHash', async () => {
+  const { importMapHash } = await import('../../src/importmap.js');
   await setVendorEntries({ 'a': 'https://cdn/a.js' });
-  await setCoreDistMode(false);
+  await setCoreInstall(CORE_DIR, false);
   const h1 = importMapHash();
-  await setCoreDistMode(true);
+  await setCoreInstall(CORE_DIR, true);
   const h2 = importMapHash();
-  await setCoreDistMode(false);
+  await setCoreInstall(CORE_DIR, false);
   const h3 = importMapHash();
   assert.notEqual(h1, h2, 'switching to dist must change the hash');
   assert.equal(h1, h3, 'switching back must restore the original hash');

@@ -46,11 +46,22 @@ import { createRequire } from 'node:module';
 import { digestBase64, digestHex } from './crypto-utils.js';
 
 /**
- * Set of package names known to be framework-internal (served per-file
- * via /__webjs/core/ handler in dev.js, not via the vendor pipeline).
- * These never enter the importmap as vendor entries.
+ * Set of package names whose importmap entries are populated by the
+ * framework, not by the vendor scanner. The scanner skips these to
+ * keep `@webjsdev/core` (and any future framework-internal package)
+ * off the jspm.io path: their bytes are served by the dev server's
+ * dedicated `/__webjs/core/*` route, and `buildCoreEntries()` in
+ * `importmap.js` derives one importmap line per exported subpath
+ * directly from the package's own `exports` field.
+ *
+ * The `'@webjsdev/core/'` prefix entry is here so that `extractPackageName`
+ * returning the bare name is enough to recognise core-subpath imports
+ * (`@webjsdev/core/directives`, `@webjsdev/core/task`, …) and skip
+ * them; the prefix form catches anything whose extractPackageName
+ * returns null but whose specifier starts with the prefix. Same
+ * mechanism, no special casing per subpath.
  */
-const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/', '@webjsdev/core/client-router']);
+const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/']);
 
 /**
  * Scan source files under `dir` for bare import specifiers reachable
