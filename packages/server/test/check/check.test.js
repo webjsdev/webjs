@@ -1239,3 +1239,192 @@ test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async ()
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+// --- Template-literal-aware scanner: docs-page false-positive regressions ---
+
+test('tag-name-has-hyphen: ignores register(\'tag\') inside a template literal (docs example)', async () => {
+  // A docs page renders example tag strings inside an `html\`...\``
+  // template body. Pre-fix, the scanner read those as real
+  // `register('tag')` calls and flagged unhyphenated names. Post-fix,
+  // the redactor blanks template-literal bodies before the rule
+  // scans, so example calls are invisible.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'docs-page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function Docs() {\n' +
+      '  return html`\n' +
+      '    <p>Example: <code>MyTag.register("tag")</code></p>\n' +
+      '  `;\n' +
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen');
+    assert.equal(v, undefined,
+      'register() call inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: still flags real register(\'tag\') at top level', async () => {
+  // Counterfactual: the redactor must NOT silence real violations.
+  // A real top-level register() call without a hyphen still fires.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'real.js'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class BadTag extends WebComponent {}\n' +
+      "BadTag.register('badtag');\n", // no hyphen, real call
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen');
+    assert.ok(v, 'real top-level register() must still be checked');
+    assert.ok(v.message.includes('badtag'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: ignores `enum`/`namespace` inside a template literal', async () => {
+  // Docs page teaches users which TS constructs the runtime stripper
+  // rejects. The example syntax lives inside an `html\`...\``
+  // template body. Pre-fix, the rule read those as real declarations.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'docs', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function TypeScript() {\n' +
+      '  return html`\n' +
+      '    <pre>enum Direction { Up, Down }</pre>\n' +
+      '    <pre>namespace Util { export const VERSION = "1.0"; }</pre>\n' +
+      '    <pre>class Foo { constructor(public x: number) {} }</pre>\n' +
+      '  `;\n' +
+      '}\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript');
+    assert.equal(v, undefined,
+      'non-erasable syntax inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: still flags real top-level enum', async () => {
+  // Counterfactual: real top-level enum still fires.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'real.ts'),
+      'export enum Real { A, B }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript');
+    assert.ok(v, 'real top-level enum must still be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: ignores fixture-style class strings inside template literals', async () => {
+  // Test files write fixture sources to disk as template-literal
+  // strings. Pre-fix, the scanner read those fixture strings as real
+  // class declarations in the test file itself, flagging the
+  // test-file as the violator.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'test-runner.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      '// This file writes a fixture string. The fixture LOOKS like a\n' +
+      '// reactive-props violation, but inside a template literal.\n' +
+      'export const fixture = `\n' +
+      '  class FixtureClass extends WebComponent {\n' +
+      '    static properties = { x: { type: Number } };\n' +
+      '    x = 0;\n' +
+      '  }\n' +
+      '`;\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined,
+      'class-field initializer inside a template literal must not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: still flags a real class-field initializer at top level', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'real.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class RealBad extends WebComponent {\n' +
+      '  static properties = { x: { type: Number } };\n' +
+      '  x = 0;\n' + // real top-level violation
+      '}\n' +
+      "RealBad.register('real-bad');\n",
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.ok(v, 'real top-level violation must still be flagged');
+    assert.equal(v.message.includes('x'), true);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: single- and double-quote strings are preserved verbatim', async () => {
+  // The redactor keeps single/double-quote string contents because
+  // rules like tag-name-has-hyphen need to read register('tag') to
+  // assert the hyphen. Verified end-to-end via the rule.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'good.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class GoodTag extends WebComponent {}\n' +
+      "GoodTag.register('good-tag');\n", // hyphenated, real call: must pass
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('good.ts'));
+    assert.equal(v, undefined,
+      'redactor must NOT blank single-quote string contents (rule needs them)');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: line and column positions are preserved across redaction', async () => {
+  // Indirect test: the no-non-erasable-typescript rule reports a line
+  // number. If the redactor shifted columns/lines, the reported line
+  // would be wrong. Plant a real enum after several blank-able
+  // constructs (string + template) and verify the line maps right.
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'lib', 'pos.ts'),
+      'const a = "string with many chars including the word enum {";\n' + // 1
+      'const b = `template with enum { Up }`;\n' +                          // 2
+      'const c = /* block comment with enum { A, B } */ 42;\n' +            // 3
+      'enum REAL { A, B }\n',                                               // 4 <- real
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('pos.ts'));
+    assert.ok(v);
+    assert.match(v.message, /line 4/,
+      'reported line must point at the real enum, not the redacted positions');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
