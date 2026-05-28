@@ -49,7 +49,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `check.js` | Convention validator backing `webjs check`. Rules include `no-json-data-files`, `no-non-erasable-typescript` |
 | `vendor.js` | Resolve bare-specifier npm deps via jspm.io. Reads `.webjs/vendor/importmap.json` if present (committed pin file), else calls `api.jspm.io/generate` at boot. Backs the `webjs vendor pin / unpin / list / audit / outdated / update` CLI surface plus the `--from <provider>` (jspm, jsdelivr, unpkg, skypack) and `--download` modes. `--download` mode also serves cached bundle files from `.webjs/vendor/`. |
 | `module-graph.js` | Dependency graph for transitive preload hints |
-| `importmap.js` | Browser import-map builder |
+| `importmap.js` | Browser import-map builder. `setCoreDistMode(on)` flips the `@webjsdev/core/*` subpath URLs between `/__webjs/core/dist/webjs-core-*.js` (npm-installed core, or workspace dev after `npm run build:dist`) and `/__webjs/core/src/*.js` (workspace dev without a built dist). `dev.js` calls it at boot based on `existsSync(coreDir/dist/webjs-core.js)`. |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
 | `fs-walk.js` | Async recursive directory walker |
 | `logger.js` | `defaultLogger` (JSON-shaped in prod, pretty in dev) |
