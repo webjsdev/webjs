@@ -38,7 +38,7 @@ const FEATURES = [
   { icon: '🛡️', title: 'Built-in Essentials', desc: 'Auth (OAuth + credentials + JWT), sessions (cookie or Redis-backed), cache() for queries, HTTP Cache-Control for pages, WebSocket broadcast, rate limiting: the building blocks every app needs, without third-party dependencies.' },
   { icon: '📝', title: 'TypeScript or JSDoc', desc: 'Full-stack type safety with .ts files or JSDoc annotations. Node 24+ strips types natively (whitespace replacement, no sourcemap overhead, byte-exact stack traces). Erasable TypeScript only: enums and parameter properties are rejected at compile time by erasableSyntaxOnly in tsconfig. The TypeScript compiler shows red squiggles before code ever runs, and the erasable-typescript-only convention check verifies the flag is on.' },
   { icon: '🧪', title: 'Testing Built In', desc: 'webjs test runs server + browser tests (WTR + Playwright). webjs check validates conventions. webjs create scaffolds test directories and example tests. AI agents auto-generate tests with every feature.' },
-  { icon: '🔀', title: 'Git Workflow Guardrails', desc: 'Branch checking before edits, merge approval with delete/keep prompt, no AI attribution in commits, auto-rebase before work. Enforced via hooks for Claude Code, config files for Cursor/Windsurf/Copilot.' },
+  { icon: '🔀', title: 'Git Workflow Guardrails', desc: 'Branch checking before edits, merge approval with delete/keep prompt, no AI attribution in commits, auto-rebase before work. Enforced via hooks for Claude Code, config files for Cursor/Antigravity/Copilot.' },
   { icon: '📐', title: 'Opinionated Conventions', desc: 'Modules architecture, one-function-per-file actions, CONVENTIONS.md with overridable rules, webjs check validator. AI agents produce consistent code across teams.' },
 ];
 
@@ -321,7 +321,7 @@ middleware.ts              → global auth</pre>
           <p>
             <code>webjs create</code> scaffolds config files for Claude Code
             (<code>.claude/settings.json</code> + hooks), Cursor (<code>.cursorrules</code>),
-            Windsurf (<code>.windsurfrules</code>), and GitHub Copilot
+            Antigravity (<code>.agents/rules/workflow.md</code>), and GitHub Copilot
             (<code>.github/copilot-instructions.md</code>). Every agent gets the same
             rules: auto-generate tests, auto-update docs, check branch before coding,
             ask before merging, no AI attribution in commits.
