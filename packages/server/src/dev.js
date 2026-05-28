@@ -182,8 +182,11 @@ export async function createRequestHandler(opts) {
 
   // Scan for component classes and prime their module URLs into the
   // core registry. SSR uses this for modulepreload hints without
-  // requiring authors to pass `import.meta.url` themselves.
-  await primeComponentRegistry(appDir);
+  // requiring authors to pass `import.meta.url` themselves. The same
+  // scan result feeds the browser-bound graph computation below,
+  // avoiding a duplicate appDir walk at boot.
+  const components = await scanComponents(appDir);
+  await primeComponentRegistry(appDir, components);
 
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
@@ -208,7 +211,7 @@ export async function createRequestHandler(opts) {
     logger,
     bareImports,
     moduleGraph,
-    browserBoundFiles: await computeBrowserBoundFiles(routeTable, moduleGraph, appDir),
+    browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
 
   // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
@@ -246,12 +249,15 @@ export async function createRequestHandler(opts) {
     }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
-    await primeComponentRegistry(appDir);
+    // Share the scan with the browser-bound graph computation so we
+    // don't walk appDir twice per rebuild.
+    const components = await scanComponents(appDir);
+    await primeComponentRegistry(appDir, components);
     // Recompute the browser-bound file set: the page / layout / error /
     // loading / not-found / component entries plus their transitive imports.
     // This drives the dev server's "is this file allowed to be served as
     // source?" gate at the file-extension catch-all branch below.
-    state.browserBoundFiles = await computeBrowserBoundFiles(state.routeTable, state.moduleGraph, appDir);
+    state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
     if (dev) {
       const orphans = await findOrphanComponents(appDir);
       for (const { className, file } of orphans) {
@@ -1097,12 +1103,17 @@ function debounce(fn, ms) {
  *   - metadata routes (sitemap.js, robots.js, manifest.js, …)
  *   - .server.{js,ts} files (browser gets a stub, not the source)
  *
+ * Components are passed in (rather than rescanned) so the caller can
+ * share one scan with `primeComponentRegistry`. Saves a full
+ * appDir walk at boot and on every rebuild.
+ *
  * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
  * @param {Awaited<ReturnType<typeof buildModuleGraph>>} moduleGraph
+ * @param {Awaited<ReturnType<typeof scanComponents>>} components
  * @param {string} appDir
- * @returns {Promise<Set<string>>}
+ * @returns {Set<string>}
  */
-async function computeBrowserBoundFiles(routeTable, moduleGraph, appDir) {
+function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
   /** @type {Set<string>} */
   const entries = new Set();
   for (const page of routeTable.pages) {
@@ -1119,7 +1130,6 @@ async function computeBrowserBoundFiles(routeTable, moduleGraph, appDir) {
   // class directly; the lazy-loader fetches their module URLs on
   // viewport entry. Add every discovered component file as an entry so
   // the graph walk covers both eager and lazy paths.
-  const components = await scanComponents(appDir);
   for (const c of components) entries.add(c.file);
   return reachableFromEntries(moduleGraph, [...entries], appDir);
 }

@@ -1415,3 +1415,26 @@ test('gate: newly-imported file becomes servable after rebuild', async () => {
   const after = await app.handle(new Request('http://x/lib/late.ts'));
   assert.equal(after.status, 200, 'file becomes servable after rebuild adds it to the graph');
 });
+
+test('gate: barrel file re-exports add the re-exported file to the graph', async () => {
+  // Regression for the `export * from './x'` / `export { y } from './x'`
+  // pattern. Without re-export tracking, a barrel file like
+  // lib/index.ts that consolidates lib/util-a.ts and lib/util-b.ts
+  // would leave util-a / util-b out of the graph and 404 when the
+  // browser fetches them on hydration.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { a, b } from '../lib/index.ts';\n` +
+      `export default () => a + b;\n`,
+    'lib/index.ts':
+      `export * from './util-a.ts';\n` +
+      `export { b } from './util-b.ts';\n`,
+    'lib/util-a.ts': `export const a = 'A';\n`,
+    'lib/util-b.ts': `export const b = 'B';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  for (const url of ['/lib/index.ts', '/lib/util-a.ts', '/lib/util-b.ts']) {
+    const resp = await app.handle(new Request(`http://x${url}`));
+    assert.equal(resp.status, 200, `${url} should be reachable via the barrel re-export`);
+  }
+});

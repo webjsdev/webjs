@@ -19,6 +19,19 @@ import { join, resolve, dirname, extname } from 'node:path';
 const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
 
 /**
+ * @type {RegExp} match `export … from '…'` re-exports.
+ * Examples:
+ *   export * from './bar';
+ *   export { x } from './bar';
+ *   export { x as y } from './bar';
+ *   export type { T } from './bar';
+ * Barrel files are common (`lib/index.ts` re-exports its siblings),
+ * and the graph must follow these edges or downstream consumers of
+ * the barrel see authorisation 404s on the underlying files.
+ */
+const EXPORT_FROM_RE = /\bexport\b[^'"\n]+?\sfrom\s+['"]([^'"]+)['"]/g;
+
+/**
  * @typedef {Map<string, Set<string>>} ModuleGraph
  * A map of absolute file path → Set of absolute file paths it imports.
  */
@@ -153,12 +166,14 @@ async function parseFile(file, appDir, graph) {
   catch { return; }
 
   const deps = new Set();
-  for (const m of src.matchAll(IMPORT_RE)) {
-    const spec = m[1];
-    // Only resolve relative imports within the project
-    if (!spec.startsWith('.') && !spec.startsWith('/')) continue;
-    const resolved = resolveImport(spec, file, appDir);
-    if (resolved) deps.add(resolved);
+  for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
+    for (const m of src.matchAll(re)) {
+      const spec = m[1];
+      // Only resolve relative imports within the project.
+      if (!spec.startsWith('.') && !spec.startsWith('/')) continue;
+      const resolved = resolveImport(spec, file, appDir);
+      if (resolved) deps.add(resolved);
+    }
   }
   if (deps.size) graph.set(file, deps);
 }

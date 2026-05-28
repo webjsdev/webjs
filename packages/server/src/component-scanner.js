@@ -94,11 +94,17 @@ export async function scanComponents(appDir) {
  * again (e.g. on dev-server rebuild after a file add), new discoveries
  * are added and existing tags are updated.
  *
+ * Pass `components` if you already have the scanned list (e.g. the
+ * dev server scans once and reuses for both the registry and the
+ * source-serving authorisation gate). Omitting it triggers a fresh
+ * scan, matching the original single-arg signature.
+ *
  * @param {string} appDir
+ * @param {Awaited<ReturnType<typeof scanComponents>>} [components]
  * @returns {Promise<{ count: number }>}
  */
-export async function primeComponentRegistry(appDir) {
-  const components = await scanComponents(appDir);
+export async function primeComponentRegistry(appDir, components) {
+  components = components ?? await scanComponents(appDir);
   for (const { tag, moduleUrl } of components) {
     primeModuleUrl(tag, moduleUrl);
   }
