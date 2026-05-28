@@ -58,8 +58,8 @@ import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
-import { buildModuleGraph, transitiveDeps } from './module-graph.js';
-import { primeComponentRegistry, findOrphanComponents } from './component-scanner.js';
+import { buildModuleGraph, transitiveDeps, reachableFromEntries } from './module-graph.js';
+import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 
 /** PascalCase → kebab-case for a helpful diagnostic example tag name. */
 function kebab(name) {
@@ -200,13 +200,15 @@ export async function createRequestHandler(opts) {
     }
   }
 
+  const routeTable = await buildRouteTable(appDir);
   const state = {
-    routeTable: await buildRouteTable(appDir),
+    routeTable,
     actionIndex: await buildActionIndex(appDir, dev),
     middleware: await loadMiddleware(appDir, dev, logger),
     logger,
     bareImports,
     moduleGraph,
+    browserBoundFiles: await computeBrowserBoundFiles(routeTable, moduleGraph, appDir),
   };
 
   // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
@@ -245,6 +247,11 @@ export async function createRequestHandler(opts) {
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     await primeComponentRegistry(appDir);
+    // Recompute the browser-bound file set: the page / layout / error /
+    // loading / not-found / component entries plus their transitive imports.
+    // This drives the dev server's "is this file allowed to be served as
+    // source?" gate at the file-extension catch-all branch below.
+    state.browserBoundFiles = await computeBrowserBoundFiles(state.routeTable, state.moduleGraph, appDir);
     if (dev) {
       const orphans = await findOrphanComponents(appDir);
       for (const { className, file } of orphans) {
@@ -586,7 +593,16 @@ async function handleCore(req, ctx) {
     if (await exists(abs)) return fileResponse(abs, { dev, immutable: false });
   }
 
-  // User source modules (served as ES modules, with action-file rewriting)
+  // User source modules (served as ES modules, with action-file rewriting).
+  //
+  // Authorization gate: only files reachable from a browser-bound entry
+  // (page, layout, error, loading, not-found, component) via the module
+  // graph are servable. Same posture as Next.js, where the bundler's
+  // manifest is the source of truth for what the browser may fetch.
+  // Anything not in the set (node_modules/, top-level package.json,
+  // scripts/, etc.) 404s here regardless of whether the file exists on
+  // disk. The `.server.{js,ts}` stub guardrail runs below as a
+  // defense-in-depth layer.
   if (method === 'GET' && /\.(js|mjs|ts|mts|css|svg|png|jpg|jpeg|gif|webp|json|ico|txt)$/.test(path)) {
     let abs = join(appDir, path);
     // When the browser asks for `.js`, allow falling through to a sibling
@@ -599,7 +615,12 @@ async function handleCore(req, ctx) {
         if (await exists(mtsAbs)) abs = mtsAbs;
       }
     }
-    if (abs.startsWith(appDir) && (await exists(abs))) {
+    // Gate: must be in the browser-bound module graph. Server-action
+    // files (.server.{js,ts}) get a stub via the guardrail below; they
+    // ARE included in browserBoundFiles because client code imports
+    // them by path (the import rewrites to an RPC stub at request time).
+    const inGraph = state.browserBoundFiles && state.browserBoundFiles.has(abs);
+    if (abs.startsWith(appDir) && inGraph && (await exists(abs))) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
       // the path-level boundary; we re-verify it on every request (not
@@ -1049,6 +1070,58 @@ function debounce(fn, ms) {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+}
+
+/**
+ * Walk the route table + component scanner to collect every file the
+ * browser may legitimately fetch as an ES module, then expand via the
+ * module graph into the full transitive closure.
+ *
+ * This is webjs's equivalent of Next.js's bundler-produced page
+ * manifest, applied at boot time (and on every rebuild) instead of
+ * compile time. The dev server's source-file branch uses the returned
+ * Set as an authorization gate: in-set → served (subject to the
+ * .server.{js,ts} stub guardrail); out-of-set → 404.
+ *
+ * Browser-bound entries:
+ *   - page.{js,ts,mjs,mts}        (re-runs on client for hydration)
+ *   - layout.{js,ts,mjs,mts}      (same)
+ *   - error.{js,ts,mjs,mts}       (same)
+ *   - loading.{js,ts,mjs,mts}     (same)
+ *   - not-found.{js,ts,mjs,mts}   (same)
+ *   - component files discovered by the scanner (eager + lazy)
+ *
+ * Server-only entries (NOT in the set):
+ *   - route.{js,ts}   (API handlers, never fetched as JS module)
+ *   - middleware.{js,ts}
+ *   - metadata routes (sitemap.js, robots.js, manifest.js, …)
+ *   - .server.{js,ts} files (browser gets a stub, not the source)
+ *
+ * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
+ * @param {Awaited<ReturnType<typeof buildModuleGraph>>} moduleGraph
+ * @param {string} appDir
+ * @returns {Promise<Set<string>>}
+ */
+async function computeBrowserBoundFiles(routeTable, moduleGraph, appDir) {
+  /** @type {Set<string>} */
+  const entries = new Set();
+  for (const page of routeTable.pages) {
+    if (page.file) entries.add(page.file);
+    for (const f of page.layouts || []) entries.add(f);
+    for (const f of page.errors || []) entries.add(f);
+    for (const f of page.loadings || []) entries.add(f);
+  }
+  if (routeTable.notFound) entries.add(routeTable.notFound);
+  if (routeTable.notFounds) {
+    for (const f of routeTable.notFounds.values()) entries.add(f);
+  }
+  // Lazy components live in the registry but no page imports their
+  // class directly; the lazy-loader fetches their module URLs on
+  // viewport entry. Add every discovered component file as an entry so
+  // the graph walk covers both eager and lazy paths.
+  const components = await scanComponents(appDir);
+  for (const c of components) entries.add(c.file);
+  return reachableFromEntries(moduleGraph, [...entries], appDir);
 }
 
 /**

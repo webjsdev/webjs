@@ -76,7 +76,9 @@ function assertNoSourceLeak(text) {
 
 test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { listPosts } from '../modules/posts/queries/list-posts.server.ts';\n` +
+      `export default function P() { return listPosts; }\n`,
     'modules/posts/queries/list-posts.server.ts':
       `'use server';\n` +
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
@@ -97,7 +99,9 @@ test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, a
 
 test(`guardrail: .server.ts without 'use server' returns throw-at-load stub`, async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { prisma } from '../lib/prisma.server.ts';\n` +
+      `export default function P() { return prisma; }\n`,
     'lib/prisma.server.ts':
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
       `const fakePrismaClient = () => ({ findMany: () => [] });\n` +
@@ -119,7 +123,9 @@ test(`guardrail: 'use server' WITHOUT .server.ts is NOT source-protected (lint r
   // to the browser as plain TS source. The `use-server-needs-extension`
   // lint rule flags it at check time.
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { greeting } from '../lib/loose.ts';\n` +
+      `export default function P() { return greeting; }\n`,
     'lib/loose.ts':
       `'use server';\n` +
       `export const greeting = 'hi from loose.ts';\n`,
@@ -139,7 +145,9 @@ test(`guardrail: 'use server' WITHOUT .server.ts is NOT source-protected (lint r
 
 test('guardrail: .server.js request returns throw-at-load stub when no directive', async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { doWork } from '../lib/util.server.js';\n` +
+      `export default function P() { return doWork; }\n`,
     'lib/util.server.js':
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
       `export function doWork() { return 1; }\n`,
@@ -154,7 +162,9 @@ test('guardrail: .server.js request returns throw-at-load stub when no directive
 
 test('guardrail: ordinary .ts files still serve source (negative control)', async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { hello } from '../components/widget.ts';\n` +
+      `export default function P() { return hello; }\n`,
     'components/widget.ts':
       `export function hello() { return 'hi'; }\n`,
   });
@@ -176,8 +186,16 @@ test('guardrail: file created AFTER boot is still caught (index race)', async ()
   // developer adds a new .server.ts during dev. The guardrail must catch
   // it on first request regardless of index state. The new file has
   // 'use server' so it's a server action; the response is the RPC stub.
+  //
+  // Page already imports the path so it's in the browser-bound graph
+  // (the module-graph resolver records the resolved path even when the
+  // file doesn't exist yet at boot time). The membership gate then
+  // passes through to the guardrail, which catches the late-created
+  // file by re-reading its `'use server'` directive at request time.
   const appDir = makeApp({
-    'app/page.ts': `export default function P() { return 'ok'; }`,
+    'app/page.ts':
+      `import { late } from '../modules/late.server.ts';\n` +
+      `export default function P() { return late; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
 

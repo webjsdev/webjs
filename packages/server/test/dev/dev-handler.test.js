@@ -195,7 +195,9 @@ test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
 
 test('handle: .ts source served as JS with types stripped', async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default () => 'ok';`,
+    'app/page.ts':
+      `import { greet } from '../components/widget.ts';\n` +
+      `export default () => greet('world');\n`,
     'components/widget.ts':
       `export const greet = (n: string): string => \`hi \${n}\`;\n`,
   });
@@ -215,7 +217,9 @@ test('handle: .ts source with non-erasable TS returns 500 pointing at the lint r
   // fallback. The dev server returns a clean 500 with the file path
   // and a pointer at the no-non-erasable-typescript lint rule.
   const appDir = makeApp({
-    'app/page.ts': `export default () => 'ok';`,
+    'app/page.ts':
+      `import { initial } from '../components/advanced.ts';\n` +
+      `export default () => initial;\n`,
     'components/advanced.ts': `
       enum Status { Active = 'active', Inactive = 'inactive' }
       export const initial: Status = Status.Active;
@@ -237,7 +241,9 @@ test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no file
   // misconfigured tsconfig and shipped. Operators get full detail in
   // server logs (via console.error).
   const appDir = makeApp({
-    'app/page.ts': `export default () => 'ok';`,
+    'app/page.ts':
+      `import { initial } from '../components/advanced.ts';\n` +
+      `export default () => initial;\n`,
     'components/advanced.ts': `
       enum Status { Active = 'active' }
       export const initial: Status = Status.Active;
@@ -260,7 +266,11 @@ test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no file
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default () => 'ok';`,
+    'app/page.ts':
+      // Import the sibling via `.js` to verify the gate covers both
+      // the .js name (browser asks for) and the .ts file on disk.
+      `import { greeting } from '../components/util.js';\n` +
+      `export default () => greeting;\n`,
     'components/util.ts':
       `export const greeting = 'hello';\n`,
   });
@@ -636,15 +646,19 @@ test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () 
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'actions.server.js':
+      // Import pulls actions.server.js into the browser-bound graph so
+      // the RPC stub is reachable. Client code normally writes this
+      // import to call the action.
+      `import { double } from '../modules/math/actions.server.js';\n` +
+      `export default function P() { return html\`<p>\${double}</p>\`; }\n`,
+    'modules/math/actions.server.js':
       `'use server';\n` +
       `export async function double(n) { return n * 2; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
 
   // Find the generated hash via the RPC stub.
-  const stub = await (await app.handle(new Request('http://x/actions.server.js'))).text();
+  const stub = await (await app.handle(new Request('http://x/modules/math/actions.server.js'))).text();
   const hashMatch = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub);
   assert.ok(hashMatch, `stub should reference action URL, got: ${stub.slice(0, 400)}`);
   const hash = hashMatch[1];
@@ -744,13 +758,14 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'actions.server.js':
+      `import { noop } from '../modules/x/actions.server.js';\n` +
+      `export default function P() { return html\`<p>\${noop}</p>\`; }\n`,
+    'modules/x/actions.server.js':
       `'use server';\n` +
       `export async function noop() { return 1; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const stub = await (await app.handle(new Request('http://x/actions.server.js'))).text();
+  const stub = await (await app.handle(new Request('http://x/modules/x/actions.server.js'))).text();
   const hash = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub)[1];
   const resp = await app.handle(new Request(`http://x/__webjs/action/${hash}/noop`, {
     method: 'POST',
@@ -764,7 +779,9 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
 
 test('handle: TS source responses share an mtime-keyed cache (second req is fast)', async () => {
   const appDir = makeApp({
-    'app/page.ts': `export default () => 'ok';`,
+    'app/page.ts':
+      `import { flag } from '../components/cached.ts';\n` +
+      `export default () => flag;\n`,
     'components/cached.ts': `export const flag = true;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -1260,4 +1277,118 @@ test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writ
   } finally {
     await close();
   }
+});
+
+/* ------------ asset-serving gate: only graph-reachable files are servable ------------ */
+
+test('gate: file under an allowed dir but NOT imported by any entry → 404', async () => {
+  // Mirrors Next.js's bundler-manifest model: only files reachable from
+  // a page / layout / etc. entry through the static import graph are
+  // servable. A dangling file at a conventional path is unreachable.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'components/dangling.ts': `export const x = 1;\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/components/dangling.ts'));
+  assert.equal(resp.status, 404,
+    'an unimported file at a conventional path must NOT be servable');
+});
+
+test('gate: /package.json at app root → 404', async () => {
+  // The top-level package.json is never imported by a page entry, so it
+  // never enters the graph. Pre-PR, the catch-all source branch served
+  // it (and exposed scripts / dep list to anyone fetching the URL).
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'package.json': JSON.stringify({ name: 'sample', version: '0.0.0' }),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/package.json'));
+  assert.equal(resp.status, 404,
+    'top-level package.json must NOT be browser-fetchable');
+});
+
+test('gate: /node_modules/<dep>/index.js → 404', async () => {
+  // node_modules is the largest source-disclosure surface and is never
+  // in any page's static import graph (bare imports resolve via the
+  // importmap to vendor URLs, not direct fs paths).
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'node_modules/some-dep/index.js': `module.exports = 'leaked';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/node_modules/some-dep/index.js'));
+  assert.equal(resp.status, 404,
+    'node_modules files must NOT be browser-fetchable');
+});
+
+test('gate: /scripts/build.js or similar utility file → 404', async () => {
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'scripts/build.js': `console.log('build');\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/scripts/build.js'));
+  assert.equal(resp.status, 404,
+    'top-level scripts/ files outside the import graph must NOT be servable');
+});
+
+test('gate: page-imported file under a NON-default dir (src/) IS servable', async () => {
+  // Confirms the auto-derived model honours the user's actual structure
+  // rather than a hardcoded dir list. If a page imports from `src/`,
+  // `src/` files become servable automatically. No webjs config needed.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { msg } from '../src/util.ts';\n` +
+      `export default () => msg;\n`,
+    'src/util.ts': `export const msg = 'from src';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/src/util.ts'));
+  assert.equal(resp.status, 200);
+  const code = await resp.text();
+  assert.ok(/from src/.test(code), 'src/util.ts content should be served');
+});
+
+test('gate: path traversal escaping appDir → 404', async () => {
+  // Even when a path looks like it might resolve to a graph member,
+  // a `..` segment that escapes appDir must NOT be allowed.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/../../etc/passwd'));
+  assert.equal(resp.status, 404);
+});
+
+test('gate: transitive import N levels deep is reachable', async () => {
+  // page → components/a → components/b → lib/c. All three should be
+  // servable.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { a } from '../components/a.ts';\n` +
+      `export default () => a;\n`,
+    'components/a.ts':
+      `import { b } from './b.ts';\n` +
+      `export const a = b;\n`,
+    'components/b.ts':
+      `import { c } from '../lib/c.ts';\n` +
+      `export const b = c;\n`,
+    'lib/c.ts': `export const c = 'deep';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  for (const url of ['/components/a.ts', '/components/b.ts', '/lib/c.ts']) {
+    const resp = await app.handle(new Request(`http://x${url}`));
+    assert.equal(resp.status, 200, `${url} should be reachable through transitive imports`);
+  }
+});
+
+test('gate: page entry itself is servable (browser fetches it for hydration)', async () => {
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  assert.equal(resp.status, 200, 'page entries must be servable');
 });

@@ -72,6 +72,53 @@ export function transitiveDeps(graph, entryFiles, appDir) {
 }
 
 /**
+ * Compute the set of files reachable from a set of browser-entry files.
+ *
+ * Same idea as Next.js's bundler-produced manifest: the static import
+ * graph from each page / layout / error / loading / not-found / component
+ * entry is the authoritative set of "files the browser may legitimately
+ * fetch as ES modules". Anything outside this set is server-only or
+ * unrelated and must not be served over HTTP.
+ *
+ * Result includes the entries themselves PLUS all transitive deps, all
+ * restricted to absolute paths under `appDir`. Files outside `appDir`
+ * (node_modules, @webjsdev/core, vendor URLs) are excluded; those have
+ * their own routing layers (`/__webjs/core/*`, `/__webjs/vendor/*`).
+ *
+ * The dev server uses this as a runtime authorization gate before
+ * serving any `.{js,mjs,ts,mts,css,svg,…}` URL: in-set → served (still
+ * subject to the `.server.{js,ts}` stub guardrail), out-of-set → 404.
+ *
+ * @param {ModuleGraph} graph
+ * @param {string[]} entryFiles absolute paths of browser-bound entries
+ * @param {string} appDir
+ * @returns {Set<string>}
+ */
+export function reachableFromEntries(graph, entryFiles, appDir) {
+  /** @type {Set<string>} */
+  const visited = new Set();
+  /** @type {string[]} */
+  const queue = [];
+  for (const entry of entryFiles) {
+    if (!entry || !entry.startsWith(appDir)) continue;
+    visited.add(entry);
+    queue.push(entry);
+  }
+  while (queue.length) {
+    const file = /** @type {string} */ (queue.shift());
+    const deps = graph.get(file);
+    if (!deps) continue;
+    for (const dep of deps) {
+      if (visited.has(dep)) continue;
+      if (!dep.startsWith(appDir)) continue;
+      visited.add(dep);
+      queue.push(dep);
+    }
+  }
+  return visited;
+}
+
+/**
  * Recursively walk a directory, parse imports, and populate the graph.
  * @param {string} dir
  * @param {string} appDir
@@ -150,6 +197,18 @@ function resolveImport(spec, fromFile, appDir) {
       const indexed = join(target, 'index' + ext);
       if (existsSync(indexed)) return indexed;
     }
+  }
+  // `.js` import maps to a `.ts` sibling: TypeScript's "rewrite to
+  // .js at runtime" convention. The browser asks for the `.js`
+  // path; the dev server's source branch falls through to the
+  // sibling. Mirror that here so the resolved path matches the
+  // file actually on disk (and the authorization gate sees the
+  // same path the request handler resolves to).
+  if (/\.js$/.test(target)) {
+    const tsAbs = target.replace(/\.js$/, '.ts');
+    if (existsSync(tsAbs)) return tsAbs;
+    const mtsAbs = target.replace(/\.js$/, '.mts');
+    if (existsSync(mtsAbs)) return mtsAbs;
   }
   // Optimistic fallback: return the original resolution so the graph
   // still has an entry, even though the path may 404 on the browser.
