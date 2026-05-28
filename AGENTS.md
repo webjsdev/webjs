@@ -210,8 +210,11 @@ Every file is a plain ES module.
 ## Public API of `@webjsdev/core`
 
 ```js
-import { html, css, WebComponent, render, renderToString } from '@webjsdev/core';
+import { html, css, WebComponent, render } from '@webjsdev/core';
+import { renderToString } from '@webjsdev/core/server';
 ```
+
+The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops server-only modules (the 1.1k-line `render-server.js`, `expose.js`, `setCspNonceProvider`). `renderToString` / `renderToStream` live at `@webjsdev/core/server`; Node-side consumers (SSR pipeline, unit tests) import them from there. The framework's own `packages/server/` keeps using the bare specifier where it only needs the isomorphic surface.
 
 | Export | Purpose |
 |---|---|

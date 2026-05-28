@@ -69,7 +69,17 @@ export.
    `dist/` is present (`scripts/build-framework-dist.js` is wired
    to the `prepare` lifecycle so `npm publish` always rebuilds).
    Only `@webjsdev/core` has this dual-layout. Other framework
-   packages stay source-only.
+   packages stay source-only. The package also ships an
+   `index-browser.js` (and `dist/webjs-core-browser.js`) that strip
+   `render-server.js`, `expose.js`, and `setCspNonceProvider` from
+   the public surface. `packages/server/src/importmap.js` routes the
+   bare specifier `@webjsdev/core` to that browser entry on the
+   client side; Node-side consumers (SSR pipeline, framework
+   internals, unit tests) keep landing on `index.js` via the
+   package.json `default` condition and still see the full surface.
+   `renderToString` / `renderToStream` are reachable from Node via
+   the canonical `@webjsdev/core/server` subpath when an explicit
+   import is desired.
 2. **`html\`\`` returns an inert `TemplateResult`.** Templates don't
    touch the DOM until a renderer (server or client) consumes them.
 3. **The renderer is the boundary between server and client.** Server

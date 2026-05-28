@@ -78,7 +78,8 @@ webjs test
 
     <pre>import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { html, renderToString } from '@webjsdev/core';
+import { html } from '@webjsdev/core';
+import { renderToString } from '@webjsdev/core/server';
 
 test('renders heading', async () =&gt; {
   const result = await renderToString(html\`&lt;h1&gt;Hello&lt;/h1&gt;\`);

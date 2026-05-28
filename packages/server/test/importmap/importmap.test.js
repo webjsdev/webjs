@@ -27,7 +27,7 @@ test('importMapTag: HTML-escapes embedded quotes in nonce', async () => {
 test('buildImportMap: framework entries always present', async () => {
   await setVendorEntries({});
   const map = buildImportMap();
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index-browser.js');
   assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/src/directives.js');
 });
 
@@ -35,7 +35,7 @@ test('buildImportMap: vendor entries merge alongside framework entries', async (
   await setVendorEntries({ 'dayjs': 'https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js' });
   const map = buildImportMap();
   assert.equal(map.imports['dayjs'], 'https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js');
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index-browser.js');
   await setVendorEntries({}); // reset for other tests
 });
 
@@ -181,7 +181,11 @@ test('setCoreDistMode(false): @webjsdev/core/* maps to /__webjs/core/src/*', asy
   await setVendorEntries({});
   await setCoreDistMode(false);
   const map = buildImportMap();
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
+  // Bare `@webjsdev/core` routes to the BROWSER entry (drops the
+  // server-only render-server / expose surface). Node-side
+  // consumers keep landing on `index.js` via the package.json
+  // exports field; this only affects what the browser fetches.
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index-browser.js');
   assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/src/directives.js');
   assert.equal(map.imports['@webjsdev/core/client-router'], '/__webjs/core/src/router-client.js');
   assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
@@ -192,7 +196,10 @@ test('setCoreDistMode(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-c
   await setVendorEntries({});
   await setCoreDistMode(true);
   const map = buildImportMap();
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/dist/webjs-core.js');
+  // Same browser-routing logic in dist mode: bare specifier lands
+  // on the slim `webjs-core-browser.js`, not the universal
+  // `webjs-core.js`.
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/dist/webjs-core-browser.js');
   assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/dist/webjs-core-directives.js');
   assert.equal(map.imports['@webjsdev/core/client-router'], '/__webjs/core/dist/webjs-core-client-router.js');
   // Catch-all prefix stays on src/ in BOTH modes so the unbundled
@@ -201,6 +208,34 @@ test('setCoreDistMode(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-c
   assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
   // Reset to false so other tests aren't surprised by the toggle.
   await setCoreDistMode(false);
+});
+
+test('browser entry does not re-export server-only symbols', async () => {
+  // Read the browser entry's source and confirm it does NOT
+  // re-export renderToString / renderToStream / setCspNonceProvider
+  // / expose / getExposed. Regression guard for #119: if a future
+  // edit to index-browser.js accidentally re-adds a server-only
+  // export, this assertion catches it before the browser bundle
+  // ships server bytes to every page.
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const { resolve, dirname } = await import('node:path');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const browserEntry = resolve(here, '../../../core/index-browser.js');
+  const source = await readFile(browserEntry, 'utf8');
+
+  const banned = ['renderToString', 'renderToStream', 'setCspNonceProvider', 'expose', 'getExposed'];
+  for (const symbol of banned) {
+    // Match export statements only (avoid matching the comment block
+    // that names them as deliberately-stripped).
+    const re = new RegExp(`export\\s*\\{[^}]*\\b${symbol}\\b`);
+    assert.equal(re.test(source), false, `index-browser.js re-exports server-only symbol "${symbol}"`);
+  }
+  // Sanity check: it DOES still re-export the browser-safe ones.
+  for (const symbol of ['html', 'WebComponent', 'render', 'cspNonce', 'signal']) {
+    const re = new RegExp(`export\\s*\\{[^}]*\\b${symbol}\\b`);
+    assert.equal(re.test(source), true, `index-browser.js missing browser-safe symbol "${symbol}"`);
+  }
 });
 
 test('setCoreDistMode: toggling invalidates importMapHash', async () => {

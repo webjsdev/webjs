@@ -25,8 +25,9 @@ test('listPosts returns an array', async () =&gt; {
 });</pre>
 
     <h2>Renderer Tests</h2>
-    <p>Test <code>renderToString</code> for SSR output:</p>
-    <pre>import { html, renderToString } from '@webjsdev/core';
+    <p>Test <code>renderToString</code> for SSR output. Import it from <code>@webjsdev/core/server</code>, not the root, so your test stays explicit about which side it runs on:</p>
+    <pre>import { html } from '@webjsdev/core';
+import { renderToString } from '@webjsdev/core/server';
 
 test('renders template with interpolation', async () =&gt; {
   const out = await renderToString(html\`&lt;p&gt;\${'hello'}&lt;/p&gt;\`);

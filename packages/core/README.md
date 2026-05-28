@@ -59,6 +59,16 @@ through 15+ source files. SSR imports the same bundles via the
 package `exports` field. The readable `src/` stays on disk so AI
 agents can grep it directly.
 
+The bare `@webjsdev/core` specifier resolves to a BROWSER-only
+entry (`dist/webjs-core-browser.js` in production, `index-browser.js`
+in source-mode dev). The browser entry drops the server-only
+`render-server.js` (~1.1k lines), `expose.js`, and the
+`setCspNonceProvider` setter so server bytes never ride the wire.
+Node-side consumers resolve via the package's `default` condition
+and land on `index.js`, which keeps the full surface for the SSR
+pipeline and unit tests. `renderToString` and `renderToStream` are
+also available at the explicit `@webjsdev/core/server` subpath.
+
 The bundle is built ONCE at `npm publish` time on the author's
 machine via esbuild as a publish-time devDependency. User installs
 never invoke a bundler. If you install the package via a git

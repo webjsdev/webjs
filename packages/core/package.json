@@ -46,6 +46,7 @@
   },
   "files": [
     "index.js",
+    "index-browser.js",
     "index.d.ts",
     "src",
     "dist",
