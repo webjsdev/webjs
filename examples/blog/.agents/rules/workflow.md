@@ -71,7 +71,7 @@ self-review loop.
 
 - COMMIT AND PUSH PER LOGICAL UNIT, NOT AT THE END. One feature, one fix, one
   rename, one doc rewrite per commit. Always `git push` after committing.
-  This is automatic.
+  The user should never have to ask for a commit.
 - HARD LIMIT: if you have 5+ unstaged files spanning different concerns,
   commit before continuing. The Claude Code hook at
   `.claude/hooks/nudge-uncommitted.sh` fires at threshold 4. Antigravity
@@ -132,18 +132,18 @@ self-review loop.
 - Use Context for cross-component data, Task for async data in components.
 - **Progressive enhancement is the default.** Pages AND every web component
   are SSR'd to real HTML. Write components so the first paint is the right
-  content (read SSR-meaningful defaults in `constructor()`, not
-  `connectedCallback`, since the server does not call lifecycle hooks).
-  Initial data for components comes from the page function (server-side fetch
-  plus pass as attribute/property), NOT from `fetch` calls in
-  `connectedCallback`. For write-paths, prefer `<form action=...>` plus
+  content. Read SSR-meaningful defaults in `constructor()`. `connectedCallback`
+  is never called on the server, so anything there only runs after
+  hydration. Initial data for components comes from the page function
+  (server-side fetch plus pass as attribute/property), NOT from `fetch` calls
+  in `connectedCallback`. For write-paths, prefer `<form action=...>` plus
   server action over `fetch` plus click handler. The framework upgrades plain
   forms to partial-swap submissions automatically.
 - **Client navigation is auto-magic.** Real `<a href>` and `<form action>`
-  get partial-swap behavior with no opt-in. Layouts persist across navigation.
-  Put shared chrome (sidenav, header) in `layout.ts`, page-specific content
-  in `page.ts`. For validation errors, return 4xx HTML from a `route.ts` POST
-  handler; the router renders it in place preserving the user's input. For
-  non-layout swap regions, wrap in `<webjs-frame id="...">`. See "Client
+  get partial-swap behavior with no opt-in. Because layouts persist across
+  navigation, put shared chrome (sidenav, header) in `layout.ts` and
+  page-specific content in `page.ts`. For validation errors, return 4xx HTML
+  from a `route.ts` POST handler; the router renders it in place preserving
+  the user's input. For non-layout swap regions, wrap in `<webjs-frame id="...">`. See "Client
   navigation patterns" in AGENTS.md.
 - Full API reference in AGENTS.md.
