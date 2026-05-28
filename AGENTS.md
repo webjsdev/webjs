@@ -226,7 +226,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `renderToString` | Server-side **async** render → HTML string with DSD. |
 | `notFound()` | Throw to return 404 rendered via `not-found.js`. |
 | `redirect(url)` | Throw to return 307 (default) or 308 redirect. |
-| `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. |
+| `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. **Server-side only**; import inside `.server.{js,ts}` files. The bare `@webjsdev/core` specifier resolves to the browser entry, which excludes `expose`; an import from a client-bound file silently reads `undefined`. |
 | `repeat(items, k, t)` | Keyed list directive. Preserves DOM identity on reorder. |
 | `Suspense({fallback, children})` | Streaming boundary. |
 | `connectWS(url, handlers)` | Client WebSocket: auto-reconnect, JSON, queued sends. |
