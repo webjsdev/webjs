@@ -1,3 +1,9 @@
+// webjs-disable-file tag-name-has-hyphen
+// This is the components-feature docs page. It renders example
+// custom-element tag strings like `<tag>` and `<my-card>` inside
+// prose code blocks; those are NOT real `Class.register(...)` calls
+// the scanner should flag. Real components in this app live in
+// `components/` and are checked normally.
 import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'Components | webjs' };

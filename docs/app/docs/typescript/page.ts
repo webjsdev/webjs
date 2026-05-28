@@ -1,3 +1,9 @@
+// webjs-disable-file no-non-erasable-typescript
+// This is the TypeScript-feature-support docs page. It renders
+// `enum`, `namespace`, and parameter-property syntax inside prose
+// code blocks specifically to teach users which constructs the
+// runtime stripper rejects. The scanner reads those examples as
+// real TS source; disable the rule for this file only.
 import { html } from '@webjsdev/core';
 
 export const metadata = { title: 'TypeScript | webjs' };
