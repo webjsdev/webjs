@@ -1,9 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
 import { register, isLazy, lookupModuleUrl } from '../../src/registry.js';
 import { WebComponent } from '../../src/component.js';
-import { setVendorEntries, buildImportMap } from '../../../server/src/importmap.js';
+import { setVendorEntries, buildImportMap, setCoreInstall } from '../../../server/src/importmap.js';
+
+// Bind the importmap to the workspace @webjsdev/core install so the
+// framework entries (e.g. `@webjsdev/core/lazy-loader`) populate.
+const CORE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+await setCoreInstall(CORE_DIR, false);
 
 // --- Lazy flag in registry ---
 

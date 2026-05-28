@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 
@@ -91,68 +93,151 @@ export function vendorIntegrityFor(url) {
 }
 
 /**
- * Whether the resolved `@webjsdev/core` install has a `dist/`
- * directory ready to serve. The dev server detects this at boot
- * (and on every rebuild) and calls `setCoreDistMode` accordingly.
+ * The `@webjsdev/core` install's importmap entries, derived from its
+ * own `package.json` `exports` field. Populated by `setCoreInstall`
+ * at boot.
  *
- * `true` (npm-installed package, or a workspace dev that already
- * ran `npm run build:dist`): the browser fetches the bundled
- * `dist/webjs-core-*.js` for each subpath. One HTTP request per
- * subpath instead of the per-file waterfall through `src/`.
+ * Initialized to the two minimum-safe defaults (the bare specifier
+ * pointing at the browser source-mode entry and the catch-all prefix
+ * pointing at `src/`) so any consumer that calls `buildImportMap()`
+ * before `setCoreInstall` runs still gets a usable map. Pre-#118 the
+ * legacy `coreMappings` were always derived from a boolean and so
+ * could not be empty; this keeps that fail-open posture for embedded
+ * SSR test helpers and one-shot tooling that imports `importmap.js`
+ * without booting `dev.js`.
  *
- * `false` (workspace dev with no built dist on disk): keep the
- * historical per-file `src/` URLs so dev iteration does not
- * require a build step.
+ * @type {Record<string, string>}
  */
-let _coreDistMode = false;
+let _coreEntries = {
+  '@webjsdev/core': '/__webjs/core/index-browser.js',
+  '@webjsdev/core/': '/__webjs/core/src/',
+};
 
 /**
- * Toggle whether `@webjsdev/core/*` subpaths resolve to bundled
- * `dist/` URLs or to per-file `src/` URLs. Like `setVendorEntries`,
- * the importmap-hash is recomputed eagerly so `importMapHash()`
- * stays synchronous on the per-request SSR hot path.
- * @param {boolean} on
+ * Bind the importmap to a specific `@webjsdev/core` install. The
+ * builder reads the package's `package.json` exports field once and
+ * derives one importmap entry per exported subpath, picking the
+ * `default` (bundled `dist/`) condition when `distMode` is true and
+ * the `source` (per-file `src/`) condition when it's false. The
+ * derivation lets the framework drop the 9-line hardcoded mapping
+ * table that used to live here, and means the importmap follows the
+ * shipped package whenever subpaths are renamed or added.
+ *
+ * The bare `@webjsdev/core` specifier still hardcodes its target
+ * (the browser-only entry shipped at `index-browser.js` /
+ * `dist/webjs-core-browser.js`) because that file is not declared
+ * in the exports field, by design: it is a server-stripped surface
+ * meant for the importmap-driven browser route, not Node resolution.
+ *
+ * Called once by `dev.js` at boot. Not re-called on file-watcher
+ * rebuilds today; if `@webjsdev/core/package.json` is edited in a
+ * long-running dev session (e.g. workspace dev that runs a fresh
+ * `npm run build:dist`), the derivation is refreshed on next server
+ * restart, not on the watcher tick. Pre-#118 the legacy
+ * `setCoreDistMode` had the same behaviour: only the dist-presence
+ * boolean was watched, not the package.json itself.
+ *
+ * Like `setVendorEntries`, the importmap-hash is recomputed eagerly
+ * so `importMapHash()` stays synchronous on the per-request SSR
+ * hot path.
+ *
+ * @param {string} coreDir   absolute path to the resolved `@webjsdev/core` install
+ * @param {boolean} distMode true when both `webjs-core.js` and `webjs-core-browser.js` exist in `dist/`
  * @returns {Promise<void>}
  */
-export async function setCoreDistMode(on) {
-  _coreDistMode = !!on;
+export async function setCoreInstall(coreDir, distMode) {
+  _coreEntries = buildCoreEntries(coreDir, !!distMode);
   _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
 }
 
+/**
+ * Read `<coreDir>/package.json` and derive importmap entries from
+ * its `exports` field. The function is pure (no side effects) and
+ * exported so tests can exercise the derivation directly.
+ *
+ * For each subpath in `exports` whose value is an object form, emit
+ * one entry. Pick the `default` value in dist mode (a bundled
+ * `dist/webjs-core-*.js`) and the `source` value in src mode (a
+ * per-file `src/*.js`). When `source` is absent (e.g. `./component`,
+ * whose shape is `{ types, default }` and whose `default` is itself
+ * a `src/` path), fall back to `default` in src mode so the import
+ * still resolves with a `.js` extension on the URL.
+ *
+ * Subpaths with a plain string value (`./client`, `./server`,
+ * `./registry`, `./signals`, `./package.json`) are not mapped
+ * explicitly; the catch-all `@webjsdev/core/` prefix routes them
+ * through `/__webjs/core/src/`. Future-added subpaths added in
+ * string form land on the catch-all the same way.
+ *
+ * Path-traversal guard: any `default` / `source` value that contains
+ * `..` is skipped. The trust boundary today is the framework's own
+ * `@webjsdev/core/package.json`, but the guard makes a future shift
+ * to user-controlled `coreDir` (e.g. via a `--core-dir` flag) safe
+ * by construction.
+ *
+ * @param {string} coreDir
+ * @param {boolean} distMode
+ * @returns {Record<string, string>}
+ */
+export function buildCoreEntries(coreDir, distMode) {
+  /** @type {Record<string, string>} */
+  const out = {
+    // Bare specifier: browser-only entry, slim by design (drops
+    // render-server, expose, setCspNonceProvider). Node-side
+    // consumers resolve via the package.json exports `default`
+    // condition and land on `index.js` instead.
+    '@webjsdev/core': distMode
+      ? '/__webjs/core/dist/webjs-core-browser.js'
+      : '/__webjs/core/index-browser.js',
+    // Catch-all: source-only subpaths (`./client`, `./server`,
+    // `./component`, `./registry`, `./signals`) and any future
+    // subpath not yet enumerated by exports still resolve.
+    '@webjsdev/core/': '/__webjs/core/src/',
+  };
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(join(coreDir, 'package.json'), 'utf8'));
+  } catch {
+    // Without a readable package.json the bare + catch-all entries
+    // above are the minimum useful map. Per-subpath entries stay
+    // missing; the catch-all picks them up at src/<name> (callers
+    // would need to include the .js extension in their import).
+    return out;
+  }
+  const exportsField = pkg && pkg.exports;
+  if (!exportsField || typeof exportsField !== 'object') return out;
+  for (const [subpath, entry] of Object.entries(exportsField)) {
+    // Skip the bare `.` (handled above) and any non-subpath key.
+    if (subpath === '.' || !subpath.startsWith('./') || subpath.endsWith('/')) continue;
+    // Only object-form entries with both default and source carry
+    // a dist mapping. String-form entries (`./client`,
+    // `./component` once it loses its types, …) stay on the
+    // catch-all.
+    if (!entry || typeof entry !== 'object') continue;
+    // Pick the condition for the requested mode. In src mode,
+    // entries that lack a `source` (e.g. `./component`, whose
+    // package.json shape is `{ types, default }`) fall back to
+    // `entry.default`. The fallback URL is still a `src/` path on
+    // those entries, so it resolves correctly without forcing users
+    // to add a `.js` extension to subpath imports.
+    let targetRel = distMode ? entry.default : entry.source;
+    if (typeof targetRel !== 'string') targetRel = entry.default;
+    if (typeof targetRel !== 'string' || !targetRel.startsWith('./')) continue;
+    // Reject paths containing `..` to guard against a malformed or
+    // adversarial `exports` field producing a path-traversal URL.
+    // The check is deliberately broad: `..` substring catches both
+    // `../etc/passwd` and `./foo/../bar`.
+    if (targetRel.includes('..')) continue;
+    // `./directives` → `@webjsdev/core/directives`,
+    // `./dist/webjs-core-directives.js` → `/__webjs/core/dist/webjs-core-directives.js`.
+    out['@webjsdev/core' + subpath.slice(1)] = '/__webjs/core/' + targetRel.slice(2);
+  }
+  return out;
+}
+
 export function buildImportMap() {
-  // Both maps share the catch-all `@webjsdev/core/` prefix for the
-  // unbundled subpaths (`./client`, `./server`, `./component`,
-  // `./registry`, `./signals`) that the framework keeps source-only;
-  // the prefix maps to /__webjs/core/src/ so anything not explicitly
-  // listed below still resolves.
-  // `@webjsdev/core` (no subpath) routes to the BROWSER entry so
-  // server-only modules (render-server, expose, setCspNonceProvider)
-  // don't ride the wire. Node-side consumers (the SSR pipeline,
-  // tests, anything resolving the package via Node's package.json
-  // exports) still land on `index.js` and get the full surface.
-  const coreMappings = _coreDistMode
-    ? {
-        '@webjsdev/core':               '/__webjs/core/dist/webjs-core-browser.js',
-        '@webjsdev/core/':              '/__webjs/core/src/',
-        '@webjsdev/core/client-router': '/__webjs/core/dist/webjs-core-client-router.js',
-        '@webjsdev/core/lazy-loader':   '/__webjs/core/dist/webjs-core-lazy-loader.js',
-        '@webjsdev/core/directives':    '/__webjs/core/dist/webjs-core-directives.js',
-        '@webjsdev/core/context':       '/__webjs/core/dist/webjs-core-context.js',
-        '@webjsdev/core/testing':       '/__webjs/core/dist/webjs-core-testing.js',
-        '@webjsdev/core/task':          '/__webjs/core/dist/webjs-core-task.js',
-      }
-    : {
-        '@webjsdev/core':               '/__webjs/core/index-browser.js',
-        '@webjsdev/core/':              '/__webjs/core/src/',
-        '@webjsdev/core/client-router': '/__webjs/core/src/router-client.js',
-        '@webjsdev/core/lazy-loader':   '/__webjs/core/src/lazy-loader.js',
-        '@webjsdev/core/directives':    '/__webjs/core/src/directives.js',
-        '@webjsdev/core/context':       '/__webjs/core/src/context.js',
-        '@webjsdev/core/testing':       '/__webjs/core/src/testing.js',
-        '@webjsdev/core/task':          '/__webjs/core/src/task.js',
-      };
   const merged = {
-    ...coreMappings,
+    ..._coreEntries,
     ..._extraEntries,
   };
   // Sort keys so logically-identical importmaps serialize byte-for-byte
