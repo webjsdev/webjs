@@ -53,7 +53,7 @@
   ],
   "scripts": {
     "build:dist": "node ../../scripts/build-framework-dist.js",
-    "prepare": "npm run build:dist"
+    "prepare": "node -e \"require('fs').existsSync('../../scripts/build-framework-dist.js') && require('fs').existsSync('./src/html.js') && require('child_process').execSync('npm run build:dist', {stdio:'inherit'})\""
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

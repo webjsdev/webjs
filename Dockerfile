@@ -63,6 +63,15 @@ COPY changelog ./changelog
 COPY blog ./blog
 
 # --- 3. Build-time work --------------------------------------------------
+# Core: build the dist/ bundles. The package.json `prepare` hook is a
+# self-guarded no-op during step 1 (manifests-only npm install, before
+# scripts/ and packages/core/src/ are copied in), so the bundle has to
+# be built explicitly here, after sources land. Without this step,
+# production images serve per-file from src/ via the workspace-dev
+# fallback, which is functional but waterfalls the browser through ~15
+# requests per page instead of one chunk per subpath.
+RUN npm run build:dist --workspace=@webjsdev/core
+
 # Blog: generate Prisma client (needs schema.prisma in context).
 RUN cd examples/blog && npx prisma generate
 
