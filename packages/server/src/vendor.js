@@ -43,7 +43,7 @@ import { readFile, readdir, writeFile, mkdir, unlink, stat, rename } from 'node:
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
-import { createHash } from 'node:crypto';
+import { digestBase64, digestHex } from './crypto-utils.js';
 
 /**
  * Set of package names known to be framework-internal (served per-file
@@ -466,15 +466,13 @@ function bundleFilenameWithSubpath(pkgName, version, subpath) {
  * Compute the SHA-384 SRI hash for a bundle body. Matches the format
  * the browser's importmap `integrity` field and the `integrity`
  * attribute on `<link rel="modulepreload">` expect. Accepts a string
- * or any ArrayBufferView (Uint8Array / Buffer / DataView): createHash
- * normalizes all of them to bytes.
+ * or any ArrayBufferView / ArrayBuffer.
  *
- * @param {string | ArrayBufferView} body
- * @returns {string}  e.g. `sha384-<base64>`
+ * @param {string | ArrayBufferView | ArrayBuffer} body
+ * @returns {Promise<string>}  e.g. `sha384-<base64>`
  */
-export function sha384Integrity(body) {
-  const digest = createHash('sha384').update(body).digest('base64');
-  return `sha384-${digest}`;
+export async function sha384Integrity(body) {
+  return `sha384-${await digestBase64('SHA-384', body)}`;
 }
 
 /**
@@ -627,7 +625,7 @@ async function downloadBundle(url, appDir, filename) {
     const buf = new Uint8Array(await response.arrayBuffer());
     await mkdir(pinDir(appDir), { recursive: true });
     await writeFile(join(pinDir(appDir), filename), buf);
-    return { bytes: buf.byteLength, integrity: sha384Integrity(buf) };
+    return { bytes: buf.byteLength, integrity: await sha384Integrity(buf) };
   } catch (e) {
     console.error(`[webjs] download ${url} failed: ${e && e.message}`);
     return null;
@@ -654,7 +652,7 @@ async function fetchIntegrity(url) {
     // browser computes when fetching the same URL. See the
     // matching comment in downloadBundle.
     const buf = new Uint8Array(await response.arrayBuffer());
-    return sha384Integrity(buf);
+    return await sha384Integrity(buf);
   } catch (e) {
     console.error(`[webjs] hash ${url} failed: ${e && e.message}`);
     return null;
@@ -1303,7 +1301,7 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
     // ETag for downstream caches that strip the `immutable` directive.
     // Bundle filenames already carry the version, so content + ETag
     // round-trip is deterministic per filename.
-    const etag = `"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+    const etag = `"${(await digestHex('SHA-1', body)).slice(0, 16)}"`;
     return new Response(body, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',

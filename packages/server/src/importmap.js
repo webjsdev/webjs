@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 
 // Local attribute escaper. Matches ssr.js's escapeAttr (the source
@@ -32,17 +32,19 @@ let _extraEntries = {};
 let _vendorIntegrity = {};
 
 /**
- * Merge additional vendor entries into the import map.
- * Called by the server after scanning for bare imports.
+ * Merge additional vendor entries into the import map and precompute
+ * the importmap-hash so `importMapHash()` can stay synchronous on the
+ * per-request SSR hot path. Called by the dev server at boot and on
+ * every vendor rebuild.
+ *
  * @param {Record<string, string>} entries
  * @param {Record<string, string>} [integrity]  SRI hashes keyed by URL
+ * @returns {Promise<void>}
  */
-export function setVendorEntries(entries, integrity) {
+export async function setVendorEntries(entries, integrity) {
   _extraEntries = entries;
   _vendorIntegrity = integrity || {};
-  // Bust the importmap-hash cache. Next call to importMapHash()
-  // recomputes against the new entries.
-  _importMapHash = '';
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
 }
 
 /**
@@ -59,18 +61,20 @@ export function setVendorEntries(entries, integrity) {
  * vendor URLs would never load. The header lets applySwap detect
  * the change and hard-reload before applying the swap.
  *
- * Cached because buildImportMap + JSON.stringify per request would
- * be wasteful; setVendorEntries invalidates the cache.
+ * Synchronous accessor. The hash is precomputed eagerly inside
+ * `setVendorEntries` (which the dev server `await`s during boot and
+ * on every rebuild) so the per-request SSR hot path can return the
+ * cached string without crossing a Promise boundary.
+ *
+ * Returns an empty string if `setVendorEntries` has never run; the
+ * client router treats an empty `X-Webjs-Build` as "version unknown"
+ * and skips the importmap drift check, which is the right behaviour
+ * for tests / embedding contexts that never set vendor entries.
  *
  * @returns {string}  e.g. `abc123…` (hex, 64 chars)
  */
 let _importMapHash = '';
 export function importMapHash() {
-  if (!_importMapHash) {
-    _importMapHash = createHash('sha256')
-      .update(JSON.stringify(buildImportMap()))
-      .digest('hex');
-  }
   return _importMapHash;
 }
 

@@ -1,6 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { digestHex } from './crypto-utils.js';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire, stripTypeScriptTypes } from 'node:module';
@@ -175,7 +175,7 @@ export async function createRequestHandler(opts) {
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
   const initialVendor = await resolveVendorImports(bareImports, appDir);
-  setVendorEntries(initialVendor.imports, initialVendor.integrity);
+  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -240,7 +240,7 @@ export async function createRequestHandler(opts) {
     // will overwrite anyway, but checking the token here avoids a
     // brief window of stale entries.
     if (token === latestRebuildToken) {
-      setVendorEntries(v.imports, v.integrity);
+      await setVendorEntries(v.imports, v.integrity);
     }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
@@ -611,7 +611,7 @@ async function handleCore(req, ctx) {
           // Lazily ensure the index knows about this file so serveActionStub
           // can mint a stable hash and function list.
           if (!state.actionIndex.fileToHash.has(abs)) {
-            const h = hashFile(abs);
+            const h = await hashFile(abs);
             state.actionIndex.fileToHash.set(abs, h);
             state.actionIndex.hashToFile.set(h, abs);
           }
@@ -927,7 +927,7 @@ async function fileResponse(abs, opts) {
     if (opts.dev) {
       headers['cache-control'] = 'no-cache';
     } else {
-      const etag = `"${createHash('sha1').update(data).digest('hex').slice(0, 16)}"`;
+      const etag = `"${(await digestHex('SHA-1', data)).slice(0, 16)}"`;
       headers['etag'] = etag;
       headers['cache-control'] = opts.immutable
         ? 'public, max-age=31536000, immutable'
