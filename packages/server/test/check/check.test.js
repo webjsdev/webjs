@@ -1428,3 +1428,95 @@ test('redactor: line and column positions are preserved across redaction', async
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+// --- Backtick-quoted register() arguments ---
+
+test('components-have-register: accepts backtick-quoted tag argument', async () => {
+  // Documented equivalence: register(`tag`) is treated the same as
+  // register('tag') / register("tag").
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'tick.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Tick extends WebComponent {}\n' +
+      'Tick.register(`tick-tock`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'components-have-register' && v.file.includes('tick.ts'));
+    assert.equal(v, undefined,
+      'backtick-quoted register() call must satisfy components-have-register');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: still validates the tag inside backticks', async () => {
+  // Counterfactual: backticks must not let an unhyphenated tag slip
+  // past tag-name-has-hyphen.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'bad.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Bad extends WebComponent {}\n' +
+      'Bad.register(`badtag`);\n', // backtick + no hyphen
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('bad.ts'));
+    assert.ok(v, 'unhyphenated backtick-quoted tag must still flag');
+    assert.ok(v.message.includes('badtag'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('tag-name-has-hyphen: accepts hyphenated backtick-quoted tag', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'ok.ts'),
+      "import { WebComponent } from '@webjsdev/core';\n" +
+      'class Ok extends WebComponent {}\n' +
+      'Ok.register(`ok-tag`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('ok.ts'));
+    assert.equal(v, undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('redactor: tagged template body is still blanked even when untagged backticks are preserved', async () => {
+  // The tag-detection heuristic must distinguish html`...` (tagged,
+  // body blanked) from `tag` (untagged, body preserved). Test by
+  // mixing both in the same file.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'mixed.ts'),
+      "import { WebComponent, html } from '@webjsdev/core';\n" +
+      'class Mixed extends WebComponent {\n' +
+      '  render() {\n' +
+      // Tagged: must be blanked, so the fake register inside is invisible.
+      '    return html`<p>Example: Fake.register("nohyphen")</p>`;\n' +
+      '  }\n' +
+      '}\n' +
+      // Untagged: must be visible, with hyphenated tag.
+      'Mixed.register(`mixed-tag`);\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.file.includes('mixed.ts'));
+    assert.equal(v, undefined,
+      'untagged backtick is preserved (hyphen check passes), tagged html template is blanked (no false positive)');
+    const v2 = violations.find((v) => v.rule === 'components-have-register' && v.file.includes('mixed.ts'));
+    assert.equal(v2, undefined, 'class is registered via backticks; rule must see it');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

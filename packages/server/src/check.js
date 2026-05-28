@@ -138,20 +138,28 @@ const RULE_NAMES = new Set(RULES.map((r) => r.name));
  * redaction the scanner reads them as real declarations and emits
  * false positives.
  *
- * Why template literals get FULL-body redaction (interpolations
- * included) while single/double quote strings keep their content:
- * template literals are the multi-line code-block carrier in docs
- * pages and JSDoc examples. Single/double quote strings are
- * typically short and meaningful (e.g. `register('tag')` carries
- * the tag name as a string; the tag-name-has-hyphen rule needs to
- * READ it). Blanking templates eliminates the false-positive class
- * without losing real-code coverage.
+ * Template literals split by tag + shape:
  *
- * A real `register('foo')` call inside a template-literal
- * interpolation (`html\`${X.register('foo')}\``) would be blanked
- * too. Accepted as a conservative trade-off: register() calls in
- * practice live at top-level in component files, not inside
- * template interpolations.
+ * Preserved verbatim only when ALL of: untagged, no newline in the
+ * body, no `${...}` interpolation. This is the "backticks as a
+ * quote-style alias" shape, e.g. `` register(`my-tag`) ``, where
+ * the backtick literal is morally a short string argument. Lint
+ * rules then read it the same way they read `register('my-tag')`.
+ *
+ * Blanked in every other case:
+ *   (a) TAGGED templates like `` html`...` ``, `` css`...` ``,
+ *       `` Class.method`...` ``, which carry multi-line code-shaped
+ *       strings in docs pages and JSDoc examples.
+ *   (b) Multi-line untagged literals, typically code-shaped
+ *       fixtures the linter should not read in place.
+ *   (c) Interpolated literals; the `${...}` body is dynamic and
+ *       cannot be statically validated anyway.
+ *
+ * A real `register('foo')` call inside a blanked region (e.g.
+ * inside a tagged interpolation `` html`${X.register('foo')}` ``)
+ * disappears from the lint surface. Accepted trade-off: register()
+ * calls in practice live at top-level in component files, not
+ * inside template interpolations.
  *
  * Regex literals are NOT specifically tracked. A `/.../` in source
  * that contains text resembling a comment-open or quote would be
@@ -229,26 +237,62 @@ function redactStringsAndTemplates(src) {
       continue;
     }
 
-    // Template literal: REDACT body to spaces (including any `${...}`
-    // interpolation). Delimiters stay so the surrounding structural
-    // scanners see the backticks.
+    // Template literal: see redactStringsAndTemplates JSDoc for the
+    // tag + shape classification. Delimiters always stay so
+    // structural scanners see them.
     if (c === '`') {
+      let j = out.length - 1;
+      while (j >= 0 && (out[j] === ' ' || out[j] === '\t')) j--;
+      const prev = j >= 0 ? out[j] : '';
+      const isTagged = /[A-Za-z0-9_$)\]]/.test(prev);
+
+      let endIdx = -1;
+      let hasInterp = false;
+      let hasNewline = false;
+      let k = i + 1;
+      while (k < n) {
+        if (src[k] === '\\' && k + 1 < n) { k += 2; continue; }
+        if (src[k] === '`') { endIdx = k; break; }
+        if (src[k] === '\n') hasNewline = true;
+        if (src[k] === '$' && src[k + 1] === '{') hasInterp = true;
+        k++;
+      }
+      const preserveVerbatim = !isTagged && endIdx !== -1 && !hasNewline && !hasInterp;
+
       out += '`';
       i++;
-      while (i < n) {
-        if (src[i] === '\\' && i + 1 < n) {
-          out += ' ';
-          out += src[i + 1] === '\n' ? '\n' : ' ';
-          i += 2;
-          continue;
-        }
-        if (src[i] === '`') {
-          out += '`';
+      if (preserveVerbatim) {
+        while (i < n) {
+          if (src[i] === '\\' && i + 1 < n) {
+            out += src[i];
+            out += src[i + 1];
+            i += 2;
+            continue;
+          }
+          if (src[i] === '`') {
+            out += '`';
+            i++;
+            break;
+          }
+          out += src[i];
           i++;
-          break;
         }
-        out += src[i] === '\n' ? '\n' : ' ';
-        i++;
+      } else {
+        while (i < n) {
+          if (src[i] === '\\' && i + 1 < n) {
+            out += ' ';
+            out += src[i + 1] === '\n' ? '\n' : ' ';
+            i += 2;
+            continue;
+          }
+          if (src[i] === '`') {
+            out += '`';
+            i++;
+            break;
+          }
+          out += src[i] === '\n' ? '\n' : ' ';
+          i++;
+        }
       }
       continue;
     }
@@ -718,7 +762,7 @@ export async function checkConventions(appDir, opts) {
       // Accept either registration pattern:
       //   Counter.register('tag')                    (webjs idiom)
       //   customElements.define('tag', Counter)      (native)
-      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"]/.test(content)) continue;
+      if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"`]/.test(content)) continue;
       if (/\bcustomElements\.define\s*\(/.test(content)) continue;
       violations.push({
         rule: 'components-have-register',
@@ -1104,16 +1148,17 @@ export async function checkConventions(appDir, opts) {
   if (isRuleEnabled('tag-name-has-hyphen', overrides)) {
     for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
-      // Use redacted source. A `register('tag')` call that appears
-      // INSIDE a template-literal body (docs-page code example) gets
-      // blanked entirely so we don't lint it. Real calls at top level
-      // keep their structure AND their string argument (single- and
-      // double-quote contents survive the redactor).
+      // Use redacted source. A `register('tag')` call inside a
+      // TAGGED template literal (docs-page code example) is blanked.
+      // Calls at top level keep their structure AND their string
+      // argument. Quote style can be ', ", or ` (untagged backtick
+      // literals survive the redactor, like single/double-quote
+      // strings).
       const patterns = [
-        // Class.register('tag')
-        /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"])([^'"]+)\1/g,
-        // customElements.define('tag', Class)
-        /\bcustomElements\.define\s*\(\s*(['"])([^'"]+)\1/g,
+        // Class.register('tag') / register("tag") / register(`tag`)
+        /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"`])([^'"`]+)\1/g,
+        // customElements.define('tag', Class) and quote variants
+        /\bcustomElements\.define\s*\(\s*(['"`])([^'"`]+)\1/g,
       ];
       for (const re of patterns) {
         let match;
