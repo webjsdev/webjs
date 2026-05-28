@@ -72,6 +72,13 @@ can load it without booting the full server.
    derived statically at boot instead of via a build step. The
    `module-graph.js` module exports `reachableFromEntries` as the
    reusable BFS helper.
+   The walk stops AT `.server.{js,ts,mjs,mts}` boundaries: the
+   server file itself stays in the Set (its URL yields the stub via
+   invariant 2), but its outgoing edges are not followed. Files
+   imported only by a server file are never legitimately fetched by
+   the browser; including them would be over-permissive. The walker
+   enters `_*` directories (the `_private` / `_components` /
+   `_lib` convention is a router-ignore, not a graph-ignore).
 2. **Server-file source is unreachable from the browser.** `dev.js`
    re-verifies every in-graph JS/TS request against the path-level
    server-file predicate (filename suffix `.server.{js,ts,mjs,mts}`)
