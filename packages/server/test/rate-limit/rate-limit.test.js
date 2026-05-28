@@ -1,9 +1,13 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { rateLimit, parseWindow, _resetRateLimits } from '../../src/rate-limit.js';
+import { rateLimit, parseWindow } from '../../src/rate-limit.js';
+import { memoryStore, setStore } from '../../src/cache.js';
 
-beforeEach(() => _resetRateLimits());
+// Swap in a fresh in-memory store before every test. Tests that bucket
+// under shared keys (`_anon_`, no-stamp default) would otherwise leak
+// state across the suite and 429 each other.
+beforeEach(() => setStore(memoryStore()));
 
 test('parseWindow handles ms/s/m/h suffixes', () => {
   assert.equal(parseWindow(500), 500);
@@ -16,7 +20,7 @@ test('parseWindow handles ms/s/m/h suffixes', () => {
 
 test('rateLimit allows up to max then 429s with Retry-After', async () => {
   const mw = rateLimit({ window: '1s', max: 2 });
-  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '9.9.9.9' } });
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '9.9.9.9' } });
   const ok1 = await mw(req, async () => new Response('ok'));
   const ok2 = await mw(req, async () => new Response('ok'));
   const no3 = await mw(req, async () => new Response('ok'));
@@ -29,8 +33,8 @@ test('rateLimit allows up to max then 429s with Retry-After', async () => {
 
 test('separate keys get separate buckets', async () => {
   const mw = rateLimit({ window: '1s', max: 1 });
-  const reqA = new Request('http://x/', { headers: { 'x-forwarded-for': '1.1.1.1' } });
-  const reqB = new Request('http://x/', { headers: { 'x-forwarded-for': '2.2.2.2' } });
+  const reqA = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '1.1.1.1' } });
+  const reqB = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '2.2.2.2' } });
   assert.equal((await mw(reqA, async () => new Response())).status, 200);
   assert.equal((await mw(reqB, async () => new Response())).status, 200);
   assert.equal((await mw(reqA, async () => new Response())).status, 429);
@@ -52,15 +56,18 @@ test('custom key function is honoured', async () => {
 
 test('passes through x-ratelimit-* headers on the success path', async () => {
   const mw = rateLimit({ window: '1s', max: 5 });
-  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '3.3.3.3' } });
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '3.3.3.3' } });
   const r = await mw(req, async () => new Response('ok'));
   assert.equal(r.headers.get('x-ratelimit-limit'), '5');
   assert.equal(r.headers.get('x-ratelimit-remaining'), '4');
   assert.ok(r.headers.get('x-ratelimit-reset'));
 });
 
-test('defaultKey falls back through cf-connecting-ip, x-real-ip, then `_anon_`', async () => {
-  const mw = rateLimit({ window: '1s', max: 1 });
+test('trustProxy:true falls back through cf-connecting-ip, x-real-ip, then `_anon_`', async () => {
+  // Behaviour only available when the deploy opts into trustProxy.
+  // Default trustProxy:false would bucket all three under `_anon_`
+  // (no `x-webjs-remote-ip` stamped on these synthetic requests).
+  const mw = rateLimit({ window: '1s', max: 1, trustProxy: true });
   const cf = new Request('http://x/', { headers: { 'cf-connecting-ip': '4.4.4.4' } });
   const real = new Request('http://x/', { headers: { 'x-real-ip': '5.5.5.5' } });
   const anon = new Request('http://x/');
@@ -77,7 +84,7 @@ test('immutable response headers do not throw (catch branch)', async () => {
   // A cross-realm Response can expose immutable headers. Simulate that
   // by returning a Response whose `headers.set` throws.
   const mw = rateLimit({ window: '1s', max: 5 });
-  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '8.8.8.8' } });
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '8.8.8.8' } });
   const frozenHeaders = new Headers({ 'content-type': 'text/plain' });
   frozenHeaders.set = () => { throw new TypeError('immutable'); };
   const resp = new Response('ok', { headers: {} });
@@ -92,7 +99,7 @@ test('static string key acts as a bucket prefix (namespaces IP buckets)', async 
   // collapse all callers into one bucket.
   const mwA = rateLimit({ window: '1s', max: 1, key: 'group-a:' });
   const mwB = rateLimit({ window: '1s', max: 1, key: 'group-b:' });
-  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '7.7.7.7' } });
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '7.7.7.7' } });
   // Same IP, different prefix → independent buckets.
   assert.equal((await mwA(req, async () => new Response())).status, 200);
   assert.equal((await mwB(req, async () => new Response())).status, 200);
@@ -102,8 +109,131 @@ test('static string key acts as a bucket prefix (namespaces IP buckets)', async 
 
 test('custom message is surfaced in the 429 body', async () => {
   const mw = rateLimit({ window: '1s', max: 0, message: 'chill out' });
-  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '10.10.10.10' } });
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '10.10.10.10' } });
   const resp = await mw(req, async () => new Response());
   assert.equal(resp.status, 429);
   assert.deepEqual(await resp.json(), { error: 'chill out' });
+});
+
+/* ------------------ trustProxy + clientIp security surface ------------------ */
+
+test('trustProxy:false (default): spoofed X-Forwarded-For does NOT escape the bucket', async () => {
+  // Regression coverage for #114. The vulnerability the trustProxy
+  // option closes: without it, an attacker rotates X-Forwarded-For
+  // per request and stays under the rate limit forever.
+  const mw = rateLimit({ window: '1s', max: 1 });
+  const ip = 'x-webjs-remote-ip'; // the framework-stamped client IP
+  // All three requests come from the same real client (same stamped
+  // IP) but rotate XFF. Under trustProxy:false, XFF is IGNORED;
+  // all three bucket together and the second + third return 429.
+  const r1 = new Request('http://x/', { headers: { [ip]: '1.2.3.4', 'x-forwarded-for': '10.0.0.1' } });
+  const r2 = new Request('http://x/', { headers: { [ip]: '1.2.3.4', 'x-forwarded-for': '10.0.0.2' } });
+  const r3 = new Request('http://x/', { headers: { [ip]: '1.2.3.4', 'x-forwarded-for': '10.0.0.3' } });
+  assert.equal((await mw(r1, async () => new Response())).status, 200);
+  assert.equal((await mw(r2, async () => new Response())).status, 429,
+    'second request from the same stamped IP must 429 even with rotated XFF');
+  assert.equal((await mw(r3, async () => new Response())).status, 429);
+});
+
+test('trustProxy:true: rotated X-Forwarded-For DOES escape the bucket (caller opted in)', async () => {
+  // Counterfactual: with trustProxy:true the deploy contract is
+  // "you have a trusted reverse proxy in front, and it strips
+  // inbound XFF before adding its own". If the contract is met,
+  // rotating XFF can only come from a misconfigured proxy, not
+  // from clients. This test verifies the trustProxy:true semantic
+  // is faithfully different from the default.
+  const mw = rateLimit({ window: '1s', max: 1, trustProxy: true });
+  const r1 = new Request('http://x/', { headers: { 'x-forwarded-for': '10.0.0.1' } });
+  const r2 = new Request('http://x/', { headers: { 'x-forwarded-for': '10.0.0.2' } });
+  assert.equal((await mw(r1, async () => new Response())).status, 200);
+  assert.equal((await mw(r2, async () => new Response())).status, 200,
+    'different XFFs map to different buckets under trustProxy:true');
+});
+
+test('trustProxy:false: no stamped IP → all requests collapse to `_anon_` and share a bucket', async () => {
+  // Embedded use (createRequestHandler under Express/Bun/Deno where
+  // the adapter does not stamp x-webjs-remote-ip). Requests share
+  // a bucket. Users wanting per-client buckets in that setup must
+  // either stamp the IP themselves or pass a custom `key` function.
+  const mw = rateLimit({ window: '1s', max: 1 });
+  const r1 = new Request('http://x/');
+  const r2 = new Request('http://x/', { headers: { 'x-forwarded-for': '1.1.1.1' } });
+  assert.equal((await mw(r1, async () => new Response())).status, 200);
+  assert.equal((await mw(r2, async () => new Response())).status, 429,
+    'both requests collapse to `_anon_` even with different XFF values');
+});
+
+test('clientIp(req, {trustProxy:true}) prefers x-forwarded-for leftmost entry', async () => {
+  const { clientIp } = await import('../../src/rate-limit.js');
+  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '1.1.1.1, 2.2.2.2, 3.3.3.3', 'x-webjs-remote-ip': '9.9.9.9' } });
+  assert.equal(clientIp(req, { trustProxy: true }), '1.1.1.1',
+    'trustProxy:true must return the leftmost XFF entry, NOT the stamped remote IP');
+});
+
+test('clientIp(req, {trustProxy:false}) ignores x-forwarded-for entirely', async () => {
+  const { clientIp } = await import('../../src/rate-limit.js');
+  const req = new Request('http://x/', { headers: { 'x-forwarded-for': '1.1.1.1', 'x-webjs-remote-ip': '9.9.9.9' } });
+  assert.equal(clientIp(req), '9.9.9.9',
+    'default trustProxy:false must return the stamped IP, ignoring XFF');
+  const reqNoStamp = new Request('http://x/', { headers: { 'x-forwarded-for': '1.1.1.1' } });
+  assert.equal(clientIp(reqNoStamp), '_anon_',
+    'default trustProxy:false must NOT fall back to XFF when stamped IP is missing');
+});
+
+test('stampRemoteIp: strips any inbound x-webjs-remote-ip and sets the new value', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const inbound = new Request('http://x/api', {
+    method: 'POST',
+    headers: {
+      'x-webjs-remote-ip': '6.6.6.6',   // forged on the wire
+      'x-other': 'kept',
+    },
+    body: 'payload',
+    duplex: 'half',
+  });
+  const safe = stampRemoteIp(inbound, '127.0.0.1');
+  assert.equal(safe.headers.get('x-webjs-remote-ip'), '127.0.0.1',
+    'forged header must be replaced by the trusted socket address');
+  assert.equal(safe.headers.get('x-other'), 'kept',
+    'other headers must survive the rewrite');
+  assert.equal(safe.method, 'POST');
+  assert.equal(await safe.text(), 'payload',
+    'body must round-trip through the new Request');
+});
+
+test('stampRemoteIp: missing remoteAddress just strips the inbound header (collapses to _anon_)', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const inbound = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  const safe = stampRemoteIp(inbound, undefined);
+  assert.equal(safe.headers.get('x-webjs-remote-ip'), null,
+    'no trusted address means the header must NOT be present');
+  // clientIp should fall back to _anon_, NOT the forged value.
+  const { clientIp } = await import('../../src/rate-limit.js');
+  assert.equal(clientIp(safe), '_anon_');
+});
+
+test('createRequestHandler WITHOUT stampRemoteIp trusts wire headers (documented boundary)', async () => {
+  // Counterfactual covering the embedded-use threat boundary: the
+  // built-in startServer path strips/stamps in toWebRequest, but
+  // createRequestHandler hands the user back a `handle(req)` that
+  // consumes whatever Request they construct. If the adapter copies
+  // wire headers verbatim, x-webjs-remote-ip is trusted. This test
+  // pins that boundary so a future refactor doesn't accidentally
+  // make embedded use "magically safe" without going through
+  // stampRemoteIp.
+  const { clientIp } = await import('../../src/rate-limit.js');
+  const forged = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  assert.equal(clientIp(forged), '6.6.6.6',
+    'without stampRemoteIp, forged header IS read; adapters MUST call the helper');
+});
+
+test('stampRemoteIp: preserves AbortSignal for host-side cancellation', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const ac = new AbortController();
+  const inbound = new Request('http://x/', { headers: {}, signal: ac.signal });
+  const safe = stampRemoteIp(inbound, '127.0.0.1');
+  assert.equal(safe.signal.aborted, false, 'signal must not be pre-aborted');
+  ac.abort();
+  assert.equal(safe.signal.aborted, true,
+    'aborting the source controller must propagate to the safe Request');
 });

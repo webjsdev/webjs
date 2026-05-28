@@ -1545,3 +1545,40 @@ test('gate: page imports from app/_components/ stay servable', async () => {
     assert.equal(resp.status, 200, `${url} should be reachable through _components imports`);
   }
 });
+
+/* ------------ x-webjs-remote-ip stamping + spoof-strip (rate-limit #114) ------------ */
+
+test('toWebRequest: x-webjs-remote-ip is set from the socket and inbound copies are dropped', async () => {
+  // Regression for #114. The wire is presumed hostile: any client can
+  // send `X-Webjs-Remote-IP: <fake>` to escape per-IP rate buckets if
+  // rate-limit's defaultKey (trustProxy:false) trusts it as-is. The
+  // dev server's IncomingMessage → Request wrapper must strip the
+  // inbound copy and replace it with `req.socket.remoteAddress`.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    'app/api/echo/route.js':
+      `export async function GET(req) {\n` +
+      `  return Response.json({ stamped: req.headers.get('x-webjs-remote-ip') });\n` +
+      `}\n`,
+  });
+  const logger = { info: () => {}, warn: () => {}, error: () => {} };
+  const { server, close } = await startServer({ appDir, dev: false, port: 0, logger, compress: false });
+  try {
+    const addr = server.address();
+    // Client tries to spoof the header. Expect the framework to ignore it
+    // and emit the actual socket address (127.0.0.1 over localhost loopback).
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/api/echo`, {
+      headers: { 'x-webjs-remote-ip': '6.6.6.6' },
+    });
+    assert.equal(resp.status, 200);
+    const { stamped } = await resp.json();
+    assert.notEqual(stamped, '6.6.6.6',
+      'inbound x-webjs-remote-ip must be stripped (spoof attempt rejected)');
+    assert.ok(/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(stamped),
+      `framework must stamp the real socket address; got: ${stamped}`);
+  } finally {
+    await close();
+  }
+});

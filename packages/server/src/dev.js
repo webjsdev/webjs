@@ -853,12 +853,23 @@ function toWebRequest(req, url) {
   /** @type {Record<string,string>} */
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
-    // Drop HTTP/2 pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`) -
-    // they're parsed separately into req.method / req.url and are rejected
+    // Drop HTTP/2 pseudo-headers (`:method`, `:path`, `:scheme`, `:authority`).
+    // They're parsed separately into req.method / req.url and are rejected
     // by the standard Headers class if we pass them through verbatim.
     if (k.startsWith(':')) continue;
+    // Strip any inbound `x-webjs-remote-ip` header so clients cannot
+    // spoof the framework-stamped client IP that rate-limit's
+    // `clientIp(req, { trustProxy: false })` reads. We rewrite it
+    // below from the actual TCP socket. Node's IncomingMessage
+    // always lowercases header keys, so a literal compare is enough.
+    if (k === 'x-webjs-remote-ip') continue;
     headers[k] = Array.isArray(v) ? v.join(',') : String(v ?? '');
   }
+  // Stamp the framework-trusted remote IP from the socket. Read by
+  // `clientIp(req)` (rate-limit.js) as the bucket key when
+  // `trustProxy: false` (the safe default).
+  const remoteIp = req.socket?.remoteAddress;
+  if (remoteIp) headers['x-webjs-remote-ip'] = remoteIp;
   let body;
   if (method !== 'GET' && method !== 'HEAD') {
     body = new ReadableStream({

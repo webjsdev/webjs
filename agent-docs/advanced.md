@@ -108,8 +108,71 @@ export default rateLimit({
 ```
 
 **Options:** `window` (`'10s'`, `'1m'`, `'1h'`, ms), `max` (default 60),
-`key` (string prefix or `(req) => string`, defaulting to client IP from
-`x-forwarded-for`/`cf-connecting-ip`/`x-real-ip`), `message`, `store`.
+`key` (string prefix or `(req) => string`, defaulting to the
+framework-stamped client IP from the TCP socket), `message`, `store`,
+`trustProxy` (default `false`).
+
+**`trustProxy`** controls how the default key is derived:
+
+- **`false` (default, safe):** key on the framework-stamped
+  `x-webjs-remote-ip` header, which `startServer` sets from the
+  underlying TCP socket on every request (and strips any inbound
+  copy of, so clients cannot spoof it). Forwarded-IP headers like
+  `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` are ignored.
+  Correct for direct deployments (bare Node, no proxy in front).
+- **`true`:** honour forwarded-IP headers, preferring the leftmost
+  entry of `x-forwarded-for`, then `cf-connecting-ip`, then
+  `x-real-ip`. Production deploys MUST run behind a reverse proxy
+  (nginx, Caddy, Cloudflare, Fly, Railway, Render edge) that STRIPS
+  inbound `x-forwarded-for` before adding its own. If the proxy
+  doesn't strip, the option reintroduces the per-request bucket
+  rotation it exists to defend against.
+
+```js
+// Direct deploy (default): safe, ignores spoofable forwarded headers.
+export default rateLimit({ window: '10s', max: 5 });
+
+// Behind a trusted reverse proxy: opt in, MUST strip inbound XFF.
+export default rateLimit({ window: '10s', max: 5, trustProxy: true });
+```
+
+The `clientIp(req, { trustProxy })` helper is exported separately so
+custom `key` functions can reuse the same resolution:
+
+```js
+import { rateLimit, clientIp } from '@webjsdev/server';
+export default rateLimit({
+  window: '1m', max: 30,
+  key: (req) => `${req.headers.get('x-tenant') || 'global'}:${clientIp(req, { trustProxy: true })}`,
+});
+```
+
+**Embedded use** (`createRequestHandler` running under Express / Bun /
+Deno / edge adapters): the host adapter is responsible for stripping
+any inbound `x-webjs-remote-ip` from the wire AND stamping its own
+from the trusted socket address, otherwise a malicious client forges
+the header and the framework trusts it. Call the exported helper:
+
+```js
+import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
+const handler = await createRequestHandler({ appDir });
+
+// Inside the host adapter's per-request callback. `nodeReq` is the
+// host's request object (Express req, Node IncomingMessage, etc.).
+// `webReq` is whatever Request you constructed from the wire (URL,
+// method, headers, body); building that is host-specific. The
+// security-relevant line is the one that wraps it in stampRemoteIp:
+const safe = stampRemoteIp(webReq, nodeReq.socket.remoteAddress);
+const webRes = await handler.handle(safe);
+// Pipe webRes back through the host's response API.
+```
+
+The host-specific Request construction has its own gotchas (Node `Readable` to WHATWG `ReadableStream` for bodies; coalescing array-valued raw headers into comma-joined strings; URL synthesis from host + path). The `stampRemoteIp` line is what makes the result safe to hand off to webjs's rate limit; it MUST come after the inbound headers land in `webReq` and before `handler.handle(safe)` is called.
+
+If the adapter cannot expose a trusted socket address, pass a custom
+`key` function to `rateLimit()` that reads whatever client identifier
+the host actually provides. The default rate-limit collapsing to
+`_anon_` is preferable to silently trusting wire-set headers.
 
 **Exceeded:** returns `429 Too Many Requests` with JSON `{ error: "Too Many Requests" }` and headers `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, `retry-after`.
 
