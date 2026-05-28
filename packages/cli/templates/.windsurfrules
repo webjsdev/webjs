@@ -46,7 +46,11 @@ Quality bar stays the same - no blocking on questions.
 Every code change must include:
 1. Server tests in test/<feature>/*.test.ts (node:test)
 2. Browser tests in test/<feature>/browser/*.test.js (WTR + Playwright, real Chromium)
-3. Documentation updates (AGENTS.md, docs/, website/ if they exist)
+3. Documentation updates. Walk every surface in the **Definition of
+   done** section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md,
+   README.md, docs/, website/, scaffold scripts) and either update it
+   or write "N/A because <reason>" in the PR body. Docs land on the
+   same PR as the code, never as a follow-up.
 4. Convention check: `webjs check` must pass
 
 The user should never have to ask for tests or documentation.
