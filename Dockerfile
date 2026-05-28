@@ -52,6 +52,10 @@ COPY packages  ./packages
 COPY examples  ./examples
 COPY website   ./website
 COPY docs      ./docs
+# scripts/build-framework-dist.js is invoked by the step-3
+# `npm run build:dist --workspace=@webjsdev/core` line, so the
+# scripts tree has to be in the image before that step runs.
+COPY scripts   ./scripts
 # website/app/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
 # SSR time. Without copying the changelog tree into the image, the
 # deployed page renders "No entries yet."
