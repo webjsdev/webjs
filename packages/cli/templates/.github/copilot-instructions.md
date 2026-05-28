@@ -40,6 +40,8 @@ If running without interactive approval (sandbox, auto-approve, etc.):
 - Parent behind? Auto-rebase. Merge? Auto-merge + delete feature branches.
 - Auto-generate meaningful commit messages. Fix tests and violations.
 
+Quality bar stays the same, no blocking on questions.
+
 ## Mandatory workflow (never skip)
 
 Every code change must include:
