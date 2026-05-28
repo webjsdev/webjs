@@ -118,29 +118,32 @@ checklist mirrors this list.
    user-facing behaviour. `webjs test` must pass; `webjs test --browser`
    for any DOM-touching change. See the "Testing" section below for the
    per-change matrix.
-2. **`AGENTS.md`.** The project contract for AI agents. Update when:
-   - A new API surface is exposed (a new server action / query module,
-     a new exposed REST endpoint, a new component tag in the public
-     catalogue).
-   - An invariant changes (file routing, persistence rules, security
-     posture).
-   - A new project-wide agent workflow rule applies.
-3. **`CONVENTIONS.md`** (this file). Update when:
-   - A new architectural convention is introduced (a new module split,
-     a new testing layout, a new git rule).
-   - An existing convention shifts. Do NOT enumerate lint rules in
-     prose; those live in `package.json` under
+2. **Every markdown file in the project.** Walk the whole tree, not a
+   closed list. Run `git ls-files '*.md'` (or `git ls-files '*.md'
+   '*.mdx'` if the project ships MDX) and for each path ask: does this
+   file describe behaviour, surface, or invariants that this PR changed?
+   If yes, update it on this PR. Common surfaces (non-exhaustive):
+   - `AGENTS.md` (root and every nested one) for API surface, invariants,
+     file-routing rules, project-wide agent workflow.
+   - `CONVENTIONS.md` (this file) for architectural conventions. Do NOT
+     enumerate lint rules in prose; those live in `package.json` under
      `"webjs": { "conventions": { … } }`.
-4. **`README.md`.** Update when install steps, the homepage example,
-   or the public surface description changes.
-5. **`docs/`** (if the project has one). Every user-visible change. Add
-   a new page if the surface is new and there's no obvious home.
-6. **`website/`** (if the project has one). Marketing copy on the
+   - `README.md` (root and any nested ones) for install / use / public
+     surface descriptions.
+   - `CHANGELOG.md` for any user-visible change, including the SHA / PR
+     reference. Keep it in chronological order; don't backdate.
+   - `docs/` (if the project has one). Every user-visible change. Add a
+     new page if the surface is new and there's no obvious home.
+   - Any `*.md` under `agent-docs/`, `docs-internal/`, `decisions/`, or
+     similar reference trees.
+   - `.github/*.md` (issue templates, PR templates, contributing) when
+     a workflow rule shifts.
+3. **`website/`** (if the project has one). Marketing copy on the
    landing page or pricing page when the change touches a claim made
    there.
-7. **Scaffold or codegen scripts** (if the project has any). Update
+4. **Scaffold or codegen scripts** (if the project has any). Update
    when the change affects what new instances generate.
-8. **PR body.** Summary, test plan checklist, and a per-row answer to
+5. **PR body.** Summary, test plan checklist, and a per-row answer to
    the Definition-of-done checklist (`Updated <path>` or `N/A because
    <reason>`).
 
@@ -150,26 +153,31 @@ one of:
 - **Updated**, with the file path in the commit and PR body.
 - **N/A because**, with a one-sentence reason.
 
+The "every markdown file" rule is generative, not enumerative. New
+markdown files appear over a project's lifetime, and this checklist
+must not silently exclude them. The git query above is the source of
+truth; the named files are just common cases.
+
 If you find yourself writing `N/A` for every surface except tests, that
-is a smell. Most user-visible code changes touch at least one doc page
-and either `AGENTS.md` or `CONVENTIONS.md`.
+is a smell. Most user-visible code changes touch at least one markdown
+file and either `AGENTS.md` or `CONVENTIONS.md`.
 
 **Worked examples:**
 
 - Add a new server action `modules/posts/actions/create-post.server.ts`.
-  Updated: test (`test/posts/posts.test.ts`), AGENTS.md (action listed
-  in the module map if the project keeps one), docs
-  (`/docs/server-actions` if the page lists shipped actions). N/A on
-  README / website / scaffold.
+  Updated: test (`test/posts/posts.test.ts`), `AGENTS.md` (action listed
+  in the module map if the project keeps one), `CHANGELOG.md` (one-line
+  entry), `docs/` (the page listing shipped actions if one exists). N/A
+  on website / scaffold scripts.
 - Rename a directory convention (e.g. `modules/` to `features/`).
-  Updated: existing tests still pass after renames, AGENTS.md (whole
-  modules section), CONVENTIONS.md (architecture section), scaffold
-  scripts (so new generations follow the new name), README if the
-  layout is documented there. N/A on website unless the layout appears
-  in a landing-page screenshot.
+  Updated: existing tests still pass after renames, every markdown file
+  that mentions the old name (run `git grep -l 'modules/' '*.md'`),
+  scaffold scripts, `CHANGELOG.md`. N/A on website unless the layout
+  appears in a landing-page screenshot.
 - Fix a bug in `rateLimit()` that doesn't change the surface. Updated:
-  test (regression). N/A on everything else (the public contract did
-  not change).
+  test (regression), `CHANGELOG.md` (one-line entry under fixes). N/A
+  on every other markdown file because the public contract did not
+  change.
 
 ### Autonomous mode (sandbox / bypass permissions)
 

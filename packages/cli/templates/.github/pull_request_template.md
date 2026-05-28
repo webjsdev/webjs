@@ -10,28 +10,25 @@
 
 ## Definition of done
 
-Documentation MUST land on the same PR as the code change. Drift is how a
-codebase rots. For each surface below, write `Updated <path>` or
-`N/A because <reason>`. If you find yourself writing `N/A` for every
-surface except tests, that is a smell. Reviewers should reject the PR if
-this section is left as the template default.
+Documentation MUST land on the same PR as the code change. Drift is how
+a codebase rots. Walk every markdown file in the project (`git ls-files
+'*.md'`) and ask whether this PR changed behaviour, surface, or
+invariants it describes. For each row below, write `Updated <path>` or
+`N/A because <reason>`. Reviewers should reject the PR if this section
+is left as the template default. See the **Definition of done** section
+in [`CONVENTIONS.md`](../CONVENTIONS.md) for the full guidance.
 
 - [ ] **Tests.** Unit coverage for logic. Real-browser coverage for
       user-facing behaviour.
-- [ ] **`AGENTS.md`.** Updated if any API surface, invariant, or
-      file-routing rule changed.
-- [ ] **`CONVENTIONS.md`.** Updated if a project-level convention
-      changed (e.g. a new architectural rule, a new agent workflow
-      step). Conventions go in CONVENTIONS.md; lint rules go in
-      `package.json` under `"webjs": { "conventions": { … } }`.
-- [ ] **`README.md`.** Updated if install / use / public surface
-      changed.
-- [ ] **`docs/`** (if the project has one). Updated for every
-      user-visible change.
-- [ ] **`website/`** (if the project has one). Updated when landing
-      copy or pricing-page claims touch the change.
-- [ ] **Scaffold scripts / templates** (if the project ships any).
-      Updated when the change affects what new instances generate.
-
-See the **Definition of done** section in
-[`CONVENTIONS.md`](../CONVENTIONS.md) for the full per-surface guidance.
+- [ ] **Every markdown file in the project** that describes the
+      changed surface. Common cases (non-exhaustive): `AGENTS.md` (root
+      + nested), `CONVENTIONS.md`, `README.md` (root + nested),
+      `CHANGELOG.md`, `docs/**/*.md`, `agent-docs/**/*.md`,
+      `.github/*.md`. The rule is generative: if a markdown file in
+      this project mentions a thing this PR changed, it gets touched
+      on this PR.
+- [ ] **`website/`** (if the project has one). Marketing copy on the
+      landing or pricing page when the change touches a claim made
+      there.
+- [ ] **Scaffold scripts / codegen** (if the project has any). Updated
+      when the change affects what new instances generate.
