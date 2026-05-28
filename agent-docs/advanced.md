@@ -108,8 +108,51 @@ export default rateLimit({
 ```
 
 **Options:** `window` (`'10s'`, `'1m'`, `'1h'`, ms), `max` (default 60),
-`key` (string prefix or `(req) => string`, defaulting to client IP from
-`x-forwarded-for`/`cf-connecting-ip`/`x-real-ip`), `message`, `store`.
+`key` (string prefix or `(req) => string`, defaulting to the
+framework-stamped client IP from the TCP socket), `message`, `store`,
+`trustProxy` (default `false`).
+
+**`trustProxy`** controls how the default key is derived:
+
+- **`false` (default, safe):** key on the framework-stamped
+  `x-webjs-remote-ip` header, which `startServer` sets from the
+  underlying TCP socket on every request (and strips any inbound
+  copy of, so clients cannot spoof it). Forwarded-IP headers like
+  `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` are ignored.
+  Correct for direct deployments (bare Node, no proxy in front).
+- **`true`:** honour forwarded-IP headers, preferring the leftmost
+  entry of `x-forwarded-for`, then `cf-connecting-ip`, then
+  `x-real-ip`. Production deploys MUST run behind a reverse proxy
+  (nginx, Caddy, Cloudflare, Fly, Railway, Render edge) that STRIPS
+  inbound `x-forwarded-for` before adding its own. If the proxy
+  doesn't strip, the option reintroduces the per-request bucket
+  rotation it exists to defend against.
+
+```js
+// Direct deploy (default): safe, ignores spoofable forwarded headers.
+export default rateLimit({ window: '10s', max: 5 });
+
+// Behind a trusted reverse proxy: opt in, MUST strip inbound XFF.
+export default rateLimit({ window: '10s', max: 5, trustProxy: true });
+```
+
+The `clientIp(req, { trustProxy })` helper is exported separately so
+custom `key` functions can reuse the same resolution:
+
+```js
+import { rateLimit, clientIp } from '@webjsdev/server';
+export default rateLimit({
+  window: '1m', max: 30,
+  key: (req) => `${req.headers.get('x-tenant') || 'global'}:${clientIp(req, { trustProxy: true })}`,
+});
+```
+
+**Embedded use:** in `createRequestHandler` setups (Express / Bun /
+Deno / edge adapters), the host adapter is responsible for stamping
+`x-webjs-remote-ip` from its own socket abstraction, or the rate
+limit collapses to a single `_anon_` bucket. Alternatively, pass a
+custom `key` function that reads whatever client identifier the host
+exposes.
 
 **Exceeded:** returns `429 Too Many Requests` with JSON `{ error: "Too Many Requests" }` and headers `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, `retry-after`.
 

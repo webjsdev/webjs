@@ -34,7 +34,7 @@ export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
 export { headers, cookies, getRequest, withRequest, cspNonce } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
-export { rateLimit, parseWindow } from './src/rate-limit.js';
+export { rateLimit, parseWindow, clientIp } from './src/rate-limit.js';
 export { memoryStore, redisStore, getStore, setStore } from './src/cache.js';
 export { cache } from './src/cache-fn.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';

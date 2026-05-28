@@ -31,22 +31,24 @@ import { getStore } from './cache.js';
  *   key?: string | ((req: Request) => string | Promise<string>),
  *   message?: string,
  *   store?: import('./cache.js').CacheStore,
+ *   trustProxy?: boolean,
  * }} opts
  * @returns {(req: Request, next: () => Promise<Response>) => Promise<Response>}
  */
 export function rateLimit(opts = {}) {
   const windowMs = parseWindow(opts.window ?? '1m');
   const max = opts.max ?? 60;
-  const keyFn = typeof opts.key === 'function' ? opts.key : defaultKey;
+  const keyFn = typeof opts.key === 'function' ? opts.key : null;
   const keyPrefix = typeof opts.key === 'string' ? opts.key : '';
   const message = opts.message ?? 'Too Many Requests';
-  // Use the provided store, or fall back to the global cache store -
-  // whatever was set via `setStore()` at app startup (in-memory by default).
+  const trustProxy = opts.trustProxy === true;
+  // Use the provided store, or fall back to the global cache store.
+  // Whatever was set via `setStore()` at app startup (in-memory by default).
   const store = opts.store || null;
 
   return async function rateLimitMiddleware(req, next) {
     const s = store || getStore();
-    const raw = typeof opts.key === 'function' ? await keyFn(req) : defaultKey(req);
+    const raw = keyFn ? await keyFn(req) : clientIp(req, { trustProxy });
     const key = `rl:${keyPrefix}${raw}`;
 
     const count = await s.increment(key, windowMs);
@@ -77,14 +79,50 @@ export function rateLimit(opts = {}) {
   };
 }
 
-/** @param {Request} req */
-function defaultKey(req) {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-    req.headers.get('cf-connecting-ip') ||
-    req.headers.get('x-real-ip') ||
-    '_anon_'
-  );
+/**
+ * Header name the framework stamps onto every incoming request with
+ * the TCP socket's remote address. Surfaces the socket IP through the
+ * Web `Request` boundary (which has no `.socket` property of its own).
+ *
+ * `dev.js`'s `toWebRequest` strips any inbound copy of this header
+ * BEFORE adding its own, so clients cannot spoof it from the wire.
+ */
+const REMOTE_IP_HEADER = 'x-webjs-remote-ip';
+
+/**
+ * Resolve the client IP for rate-limit bucket keying.
+ *
+ * `trustProxy: false` (default, safe everywhere): read ONLY the
+ * framework-stamped `x-webjs-remote-ip` header, which `dev.js`
+ * derives from the actual TCP socket and which clients cannot
+ * spoof. Forwarded-IP headers (`x-forwarded-for`, `cf-connecting-ip`,
+ * `x-real-ip`) are IGNORED. Fallback `_anon_` covers embedded use
+ * (`createRequestHandler`) where the host adapter never stamped a
+ * remote IP.
+ *
+ * `trustProxy: true`: honour forwarded-IP headers, preferring the
+ * leftmost entry of `X-Forwarded-For`, then `CF-Connecting-IP`,
+ * then `X-Real-IP`, then the framework-stamped remote IP, then
+ * `_anon_`. Production deploys MUST run behind a reverse proxy that
+ * STRIPS inbound `X-Forwarded-For` before adding its own, otherwise
+ * trust-proxy reintroduces the spoofability this option exists to
+ * defend against.
+ *
+ * @param {Request} req
+ * @param {{ trustProxy?: boolean }} [opts]
+ * @returns {string}
+ */
+export function clientIp(req, opts = {}) {
+  if (opts.trustProxy === true) {
+    return (
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      req.headers.get('cf-connecting-ip') ||
+      req.headers.get('x-real-ip') ||
+      req.headers.get(REMOTE_IP_HEADER) ||
+      '_anon_'
+    );
+  }
+  return req.headers.get(REMOTE_IP_HEADER) || '_anon_';
 }
 
 /** @param {number | string} w @returns {number} milliseconds */
