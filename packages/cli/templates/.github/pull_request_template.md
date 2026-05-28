@@ -32,9 +32,7 @@ in [`CONVENTIONS.md`](../CONVENTIONS.md) for the full guidance.
       there.
 - [ ] **Scaffold scripts / codegen** (if the project has any). Updated
       when the change affects what new instances generate.
-- [ ] **Pre-merge self-review loop ran N rounds; last round clean.**
-      See the **Pre-merge self-review loop** section in
-      [`CONVENTIONS.md`](../CONVENTIONS.md). Skipping the loop on a
-      change that touches logic / public surface / build / security
-      / multiple files is the exact failure mode the loop exists to
-      prevent.
+- [ ] **Pre-merge self-review loop.** Ran N rounds; last round clean.
+      Skip only for one-line trivial changes. See the **Pre-merge
+      self-review loop** section in [`CONVENTIONS.md`](../CONVENTIONS.md)
+      for the prompt template and reporting contract.

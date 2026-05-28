@@ -893,10 +893,14 @@ composition, so a nested shell ends up dropped by the HTML parser.
    ready. After committing the work, trigger a fresh-context review
    pass (a new chat / composer tab / subagent / Cascade thread
    depending on your tool) and iterate fix-then-review rounds until
-   one round finds zero issues. Minimum two rounds. The full rule,
-   prompt template, and reporting contract live in the **Pre-merge
-   self-review loop** section of `CONVENTIONS.md`. Skip the loop only
-   for one-line trivial changes.
+   one round finds zero issues. Minimum two rounds; rotate focus each
+   round so the reviewer does not rediscover the same surface twice.
+   Skip the loop only for one-line trivial changes; skipping on a
+   change that touches logic, public surface, build, security, or
+   multiple files is the exact failure mode the loop exists to
+   prevent. The full rule, prompt template, and reporting contract
+   live in the **Pre-merge self-review loop** section of
+   `CONVENTIONS.md`.
 5. When unsure how a framework feature works, `grep` or `cat` the
    relevant `node_modules/@webjsdev/*/src/` file before asking the user.
 

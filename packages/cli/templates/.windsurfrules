@@ -56,12 +56,12 @@ Every code change must include:
    merge, run fresh-context review rounds until one round finds zero
    issues. Windsurf primitive: open a NEW Cascade thread for each
    round so the reviewer has no prior context on the implementation
-   decisions. Minimum two rounds; rotate focus each round. The full
+   decisions. Minimum two rounds; rotate focus each round. Skip the
+   loop only for one-line trivial changes; skipping on a change that
+   touches logic, public surface, build, security, or multiple files
+   is the exact failure mode the loop exists to prevent. The full
    rule, prompt template, and reporting contract live in the
-   **Pre-merge self-review loop** section of CONVENTIONS.md. Skipping
-   the loop on a change that touches logic / public surface / build /
-   security / multiple files is the exact failure mode the loop
-   exists to prevent.
+   **Pre-merge self-review loop** section of CONVENTIONS.md.
 
 The user should never have to ask for tests, documentation, or the
 self-review loop.

@@ -62,11 +62,12 @@ Every code change must include:
    issues. Copilot primitive: open a NEW chat session (reset the
    side panel) for each round so the reviewer has no prior context
    on the implementation decisions. Minimum two rounds; rotate focus
-   each round. The full rule, prompt template, and reporting contract
-   live in the **Pre-merge self-review loop** section of
-   CONVENTIONS.md. Skipping the loop on a change that touches logic
-   / public surface / build / security / multiple files is the exact
-   failure mode the loop exists to prevent.
+   each round. Skip the loop only for one-line trivial changes;
+   skipping on a change that touches logic, public surface, build,
+   security, or multiple files is the exact failure mode the loop
+   exists to prevent. The full rule, prompt template, and reporting
+   contract live in the **Pre-merge self-review loop** section of
+   CONVENTIONS.md.
 
 ## Git rules
 

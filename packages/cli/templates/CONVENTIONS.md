@@ -181,22 +181,22 @@ file and either `AGENTS.md` or `CONVENTIONS.md`.
 
 ### Pre-merge self-review loop (MUST run before signaling the PR is ready)
 
-Saying "ready for merge" before a self-review loop converges is the single biggest source of low-quality PRs. The recurring pattern to avoid: agent claims ready-for-merge, user requests a code review, agent finds issues, fixes them, claims ready-for-merge again, repeat 4-5 cycles before a review comes back clean. The cure is to run that loop internally before the first "ready" signal, so the user only hears "ready to merge" after the loop has converged on a clean round.
+Saying "ready for merge" before a self-review loop converges is a recurring source of low-quality PRs. The pattern to avoid: agent claims ready-for-merge, user requests a code review, agent finds issues, fixes them, claims ready-for-merge again, repeat 4-5 cycles before a review comes back clean. The cure is to run that loop internally before the first "ready" signal, so the user only hears "ready to merge" after the loop has converged on a clean round.
 
 **How the loop works:**
 
 1. After committing the work and (if remote pushes are in use) pushing the branch, do NOT report "ready for merge" yet. Trigger a **fresh-context review pass**: an AI review with NO prior knowledge of the decisions you made during the implementation. Each AI tool exposes its own primitive for this:
 
-   - **Cursor**: open a new composer tab and prompt the review there.
+   - **Cursor**: open a new composer tab.
    - **Claude Code**: spawn a `general-purpose` subagent via the Agent tool.
-   - **GitHub Copilot**: open a fresh chat session (the side panel reset).
+   - **GitHub Copilot**: open a new chat (reset the side panel).
    - **Windsurf**: open a new Cascade thread.
-   - **Aider**: `/ask` mode in a separately-started session (`aider --ask`).
-   - **Gemini CLI**: launch a subagent.
-   - **OpenCode**: spawn a fresh agent via `tool.execute.after`.
+   - **Aider**: invoke a separately-started `aider` session (do NOT use `/ask` inside the same session; `/ask` only flips the mode for the next message and still sees the existing context).
+   - **Gemini CLI**: invoke a separately-started `gemini` session.
+   - **OpenCode**: open a new agent session (the `tool.execute.after` hook is a different surface and not a fresh-context primitive).
    - **Antigravity**: open a fresh side-panel session.
 
-   The shared property is that the reviewer does not see your decision log. That independence is what makes the review catch blind spots.
+   The shared property is that the reviewer does not see your decision log. That independence is what makes the review catch blind spots. If your tool does not expose a true fresh-context primitive, the canonical fallback is a separately-invoked CLI process; what matters is the reviewer starts with an empty context, not the specific UI affordance.
 
 2. Prompt the review for problems only. A working prompt template:
 
