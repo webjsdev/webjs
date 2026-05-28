@@ -860,8 +860,9 @@ function toWebRequest(req, url) {
     // Strip any inbound `x-webjs-remote-ip` header so clients cannot
     // spoof the framework-stamped client IP that rate-limit's
     // `clientIp(req, { trustProxy: false })` reads. We rewrite it
-    // below from the actual TCP socket.
-    if (k.toLowerCase() === 'x-webjs-remote-ip') continue;
+    // below from the actual TCP socket. Node's IncomingMessage
+    // always lowercases header keys, so a literal compare is enough.
+    if (k === 'x-webjs-remote-ip') continue;
     headers[k] = Array.isArray(v) ? v.join(',') : String(v ?? '');
   }
   // Stamp the framework-trusted remote IP from the socket. Read by

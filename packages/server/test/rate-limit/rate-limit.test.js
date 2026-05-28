@@ -179,3 +179,50 @@ test('clientIp(req, {trustProxy:false}) ignores x-forwarded-for entirely', async
   assert.equal(clientIp(reqNoStamp), '_anon_',
     'default trustProxy:false must NOT fall back to XFF when stamped IP is missing');
 });
+
+test('stampRemoteIp: strips any inbound x-webjs-remote-ip and sets the new value', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const inbound = new Request('http://x/api', {
+    method: 'POST',
+    headers: {
+      'x-webjs-remote-ip': '6.6.6.6',   // forged on the wire
+      'x-other': 'kept',
+    },
+    body: 'payload',
+    duplex: 'half',
+  });
+  const safe = stampRemoteIp(inbound, '127.0.0.1');
+  assert.equal(safe.headers.get('x-webjs-remote-ip'), '127.0.0.1',
+    'forged header must be replaced by the trusted socket address');
+  assert.equal(safe.headers.get('x-other'), 'kept',
+    'other headers must survive the rewrite');
+  assert.equal(safe.method, 'POST');
+  assert.equal(await safe.text(), 'payload',
+    'body must round-trip through the new Request');
+});
+
+test('stampRemoteIp: missing remoteAddress just strips the inbound header (collapses to _anon_)', async () => {
+  const { stampRemoteIp } = await import('../../src/rate-limit.js');
+  const inbound = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  const safe = stampRemoteIp(inbound, undefined);
+  assert.equal(safe.headers.get('x-webjs-remote-ip'), null,
+    'no trusted address means the header must NOT be present');
+  // clientIp should fall back to _anon_, NOT the forged value.
+  const { clientIp } = await import('../../src/rate-limit.js');
+  assert.equal(clientIp(safe), '_anon_');
+});
+
+test('createRequestHandler WITHOUT stampRemoteIp trusts wire headers (documented boundary)', async () => {
+  // Counterfactual covering the embedded-use threat boundary: the
+  // built-in startServer path strips/stamps in toWebRequest, but
+  // createRequestHandler hands the user back a `handle(req)` that
+  // consumes whatever Request they construct. If the adapter copies
+  // wire headers verbatim, x-webjs-remote-ip is trusted. This test
+  // pins that boundary so a future refactor doesn't accidentally
+  // make embedded use "magically safe" without going through
+  // stampRemoteIp.
+  const { clientIp } = await import('../../src/rate-limit.js');
+  const forged = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  assert.equal(clientIp(forged), '6.6.6.6',
+    'without stampRemoteIp, forged header IS read; adapters MUST call the helper');
+});

@@ -147,12 +147,29 @@ export default rateLimit({
 });
 ```
 
-**Embedded use:** in `createRequestHandler` setups (Express / Bun /
-Deno / edge adapters), the host adapter is responsible for stamping
-`x-webjs-remote-ip` from its own socket abstraction, or the rate
-limit collapses to a single `_anon_` bucket. Alternatively, pass a
-custom `key` function that reads whatever client identifier the host
-exposes.
+**Embedded use** (`createRequestHandler` running under Express / Bun /
+Deno / edge adapters): the host adapter is responsible for stripping
+any inbound `x-webjs-remote-ip` from the wire AND stamping its own
+from the trusted socket address, otherwise a malicious client forges
+the header and the framework trusts it. Call the exported helper:
+
+```js
+import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
+const handler = await createRequestHandler({ appDir });
+
+app.use(async (req, res) => {
+  const webReq = new Request(buildUrl(req), { method: req.method, headers: req.headers, body: ... });
+  // Strips any forged x-webjs-remote-ip, stamps the real socket address.
+  const safe = stampRemoteIp(webReq, req.socket.remoteAddress);
+  const webRes = await handler.handle(safe);
+  // write webRes back to res
+});
+```
+
+If the adapter cannot expose a trusted socket address, pass a custom
+`key` function to `rateLimit()` that reads whatever client identifier
+the host actually provides. The default rate-limit collapsing to
+`_anon_` is preferable to silently trusting wire-set headers.
 
 **Exceeded:** returns `429 Too Many Requests` with JSON `{ error: "Too Many Requests" }` and headers `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`, `retry-after`.
 

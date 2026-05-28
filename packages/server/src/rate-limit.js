@@ -125,6 +125,47 @@ export function clientIp(req, opts = {}) {
   return req.headers.get(REMOTE_IP_HEADER) || '_anon_';
 }
 
+/**
+ * Return a Request equivalent to `req` but with `x-webjs-remote-ip`
+ * stripped from inbound headers and re-set to `remoteAddress`.
+ *
+ * `startServer`'s built-in HTTP path does this internally via
+ * `toWebRequest`. Embedded adapters (`createRequestHandler` running
+ * under Express / Bun / Deno / edge runtimes) MUST call this helper
+ * before invoking `app.handle(req)`, otherwise a malicious client
+ * can include `x-webjs-remote-ip: <fake>` on the wire and webjs's
+ * rate-limit `clientIp(req)` will trust it.
+ *
+ * Body and method are preserved verbatim. The new Request consumes
+ * the original's body stream, so do not reuse the original afterwards.
+ *
+ * ```js
+ * // express adapter
+ * app.use(async (req, res) => {
+ *   const webReq = new Request(..., { headers: req.headers, ... });
+ *   const safe = stampRemoteIp(webReq, req.socket.remoteAddress);
+ *   const webRes = await handler.handle(safe);
+ *   // write webRes back to res
+ * });
+ * ```
+ *
+ * @param {Request} req
+ * @param {string | null | undefined} remoteAddress  trusted socket IP
+ * @returns {Request}
+ */
+export function stampRemoteIp(req, remoteAddress) {
+  const headers = new Headers(req.headers);
+  headers.delete(REMOTE_IP_HEADER);
+  if (remoteAddress) headers.set(REMOTE_IP_HEADER, remoteAddress);
+  /** @type {RequestInit & { duplex?: string }} */
+  const init = { method: req.method, headers };
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    init.body = req.body;
+    init.duplex = 'half';
+  }
+  return new Request(req.url, init);
+}
+
 /** @param {number | string} w @returns {number} milliseconds */
 export function parseWindow(w) {
   if (typeof w === 'number') return w;
