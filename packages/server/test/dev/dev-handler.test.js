@@ -1438,3 +1438,80 @@ test('gate: barrel file re-exports add the re-exported file to the graph', async
     assert.equal(resp.status, 200, `${url} should be reachable via the barrel re-export`);
   }
 });
+
+test('gate: multi-line barrel `export { a, b } from` registers re-export targets', async () => {
+  // Variant of the single-line barrel test covering the most common
+  // real-world shape: a multi-line { ... } before `from`. The EXPORT_FROM_RE
+  // gap class allows newlines so this pattern is caught.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { x, y } from '../lib/index.ts';\n` +
+      `export default () => x + y;\n`,
+    'lib/index.ts':
+      `export {\n` +
+      `  x,\n` +
+      `  y,\n` +
+      `} from './detail.ts';\n`,
+    'lib/detail.ts': `export const x = 'X';\nexport const y = 'Y';\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/lib/detail.ts'));
+  assert.equal(resp.status, 200, 'multi-line barrel should still seed graph edges');
+});
+
+test('gate: file imported ONLY by a .server.ts is NOT in the gate', async () => {
+  // The browser fetches a server-action URL and gets the RPC stub
+  // back; the stub imports `@webjsdev/core`, not the real source.
+  // The .server file's own imports are server-side only and the
+  // browser never legitimately requests them. Confirm the gate
+  // matches Next.js's behaviour: don't follow imports through
+  // .server boundaries.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { create } from '../modules/posts/actions/create.server.ts';\n` +
+      `export default () => create;\n`,
+    'modules/posts/actions/create.server.ts':
+      `'use server';\n` +
+      `import { dbCredentials } from '../../../lib/secrets.ts';\n` +
+      `export async function create() { return dbCredentials; }\n`,
+    // A file containing sensitive content, imported ONLY by the
+    // server action. The browser must NEVER be able to fetch it.
+    'lib/secrets.ts':
+      `export const dbCredentials = { password: 'hunter2' };\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  // The server-action URL itself is reachable (gate yields the
+  // RPC stub via the guardrail).
+  const stubResp = await app.handle(new Request(
+    'http://x/modules/posts/actions/create.server.ts'
+  ));
+  assert.equal(stubResp.status, 200);
+
+  // lib/secrets.ts is imported ONLY by the .server file. Browser
+  // never fetches it through the legitimate flow. Gate must 404.
+  const leakResp = await app.handle(new Request('http://x/lib/secrets.ts'));
+  assert.equal(leakResp.status, 404,
+    'file imported only by a .server.ts must NOT be servable');
+});
+
+test('gate: file imported by BOTH a page AND a .server.ts stays servable', async () => {
+  // Counterpart to the previous test. If the same file IS legitimately
+  // imported by a client-bound path (a page), the gate must include
+  // it even though a .server file also imports it. Otherwise legitimate
+  // shared utilities would 404.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { format } from '../lib/format.ts';\n` +
+      `import { listPosts } from '../modules/posts/queries/list.server.ts';\n` +
+      `export default () => format(listPosts);\n`,
+    'modules/posts/queries/list.server.ts':
+      `'use server';\n` +
+      `import { format } from '../../../lib/format.ts';\n` +
+      `export async function listPosts() { return format([]); }\n`,
+    'lib/format.ts': `export const format = (x) => String(x);\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/lib/format.ts'));
+  assert.equal(resp.status, 200, 'utility imported by both a page and a .server file stays servable');
+});

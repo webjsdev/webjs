@@ -25,11 +25,19 @@ const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
  *   export { x } from './bar';
  *   export { x as y } from './bar';
  *   export type { T } from './bar';
+ *   export {
+ *     a,
+ *     b,
+ *   } from './bar';     <-- multi-line, very common in real barrel files
+ *
  * Barrel files are common (`lib/index.ts` re-exports its siblings),
  * and the graph must follow these edges or downstream consumers of
- * the barrel see authorisation 404s on the underlying files.
+ * the barrel see authorisation 404s on the underlying files. The
+ * gap class excludes quotes and `;` (so the lazy match cannot cross
+ * a statement boundary) but DOES allow newlines, so multi-line
+ * brace lists are caught.
  */
-const EXPORT_FROM_RE = /\bexport\b[^'"\n]+?\sfrom\s+['"]([^'"]+)['"]/g;
+const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
 
 /**
  * @typedef {Map<string, Set<string>>} ModuleGraph
@@ -84,6 +92,11 @@ export function transitiveDeps(graph, entryFiles, appDir) {
   return result;
 }
 
+/** @type {RegExp} files the dev server NEVER serves as source: it
+ * returns a stub instead. We stop graph traversal at these boundaries
+ * because the browser never sees their transitive imports anyway. */
+const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
+
 /**
  * Compute the set of files reachable from a set of browser-entry files.
  *
@@ -97,6 +110,17 @@ export function transitiveDeps(graph, entryFiles, appDir) {
  * restricted to absolute paths under `appDir`. Files outside `appDir`
  * (node_modules, @webjsdev/core, vendor URLs) are excluded; those have
  * their own routing layers (`/__webjs/core/*`, `/__webjs/vendor/*`).
+ *
+ * Traversal stops at `.server.{js,ts,mjs,mts}` files. They ARE in the
+ * result (so a client import like `import { fn } from './x.server.ts'`
+ * resolves to the RPC stub and the gate lets the request through), but
+ * we do not walk INTO them. The browser only ever sees the RPC stub or
+ * the throw-at-load stub for those files, so a non-server file imported
+ * ONLY by a server file is never legitimately requested by the
+ * browser and should stay out of the authorisation set. Matches
+ * Next.js's behaviour, where the bundler emits server-component and
+ * server-action code into separate chunks that the client bundle
+ * never references.
  *
  * The dev server uses this as a runtime authorization gate before
  * serving any `.{js,mjs,ts,mts,css,svg,…}` URL: in-set → served (still
@@ -119,6 +143,11 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
   }
   while (queue.length) {
     const file = /** @type {string} */ (queue.shift());
+    // Stop at server-file boundaries. The file itself stays in the
+    // visited set so its URL is servable (yields a stub at request
+    // time), but we don't add its imports because the browser never
+    // sees them.
+    if (SERVER_FILE_RE.test(file)) continue;
     const deps = graph.get(file);
     if (!deps) continue;
     for (const dep of deps) {
