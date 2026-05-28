@@ -16,7 +16,7 @@ npm run dev -- --port 8080
 npm run start -- --port 8080</pre>
     <p>Key differences:</p>
     <ul>
-      <li><strong>Dev:</strong> chokidar watches your source tree and triggers live reload via SSE. TypeScript files are served with <code>Cache-Control: no-cache</code>. Errors include full stack traces. No compression.</li>
+      <li><strong>Dev:</strong> Node's built-in <code>fs.watch</code> watches your source tree and triggers live reload via SSE. TypeScript files are served with <code>Cache-Control: no-cache</code>. Errors include full stack traces. No compression.</li>
       <li><strong>Prod:</strong> no file watcher, no SSE endpoint. Static files get ETags and <code>Cache-Control: public, max-age=3600</code>. Auto-vendored npm packages get <code>max-age=31536000, immutable</code>. Gzip and Brotli compression are enabled. Error responses omit stack traces.</li>
     </ul>
 

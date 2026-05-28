@@ -1141,3 +1141,56 @@ test('createRequestHandler: missing .env file is silent (no error, server boots)
   const app = await createRequestHandler({ appDir, dev: false });
   assert.equal(typeof app.handle, 'function', 'handle() must exist even without a .env file');
 });
+
+/* ------------ dev mode: fs.watch drives SSE reload ------------ */
+
+test('startServer dev=true: fs.watch fires reload event on file change', async () => {
+  // End-to-end test for the chokidar → fs.watch migration. Boots the
+  // dev server, opens an SSE stream to /__webjs/events, edits a file
+  // inside the appDir, and asserts that a reload event reaches the
+  // client. fs.watch should pick up the change and the debounced
+  // rebuild() should push a reload frame.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>v1</p>\`; }\n`,
+  });
+  const logger = { info: () => {}, warn: () => {}, error: () => {} };
+  const { server, close } = await startServer({ appDir, dev: true, port: 0, logger, compress: false });
+  try {
+    const addr = server.address();
+    const baseUrl = `http://127.0.0.1:${addr.port}`;
+    const ac = new AbortController();
+    const resp = await fetch(`${baseUrl}/__webjs/events`, {
+      headers: { accept: 'text/event-stream' },
+      signal: ac.signal,
+    });
+    assert.equal(resp.status, 200);
+    assert.ok(resp.headers.get('content-type').includes('text/event-stream'));
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    const sawReload = (async () => {
+      const deadline = Date.now() + 5_000;
+      let buf = '';
+      while (Date.now() < deadline) {
+        const { value, done } = await reader.read();
+        if (done) return false;
+        buf += decoder.decode(value, { stream: true });
+        if (buf.includes('event: reload')) return true;
+      }
+      return false;
+    })();
+    // Trigger a change after a tick so the SSE response head is flushed.
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(
+      join(appDir, 'app/page.js'),
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>v2</p>\`; }\n`,
+    );
+    const ok = await sawReload;
+    ac.abort();
+    assert.equal(ok, true, 'fs.watch should drive an SSE reload event within 5s of a file write');
+  } finally {
+    await close();
+  }
+});

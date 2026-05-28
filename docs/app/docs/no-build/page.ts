@@ -161,7 +161,7 @@ $ webjs vendor update</pre>
       </thead>
       <tbody>
         <tr><td>TS stripping</td><td>Same: <code>module.stripTypeScriptTypes</code></td><td>Same</td></tr>
-        <tr><td>Mtime cache</td><td>Cleared on file change via chokidar</td><td>Persists for process lifetime</td></tr>
+        <tr><td>Mtime cache</td><td>Cleared on file change via <code>fs.watch</code></td><td>Persists for process lifetime</td></tr>
         <tr><td>Vendor resolution</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on boot and on rebuild</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> at boot once</td></tr>
         <tr><td>Cache-Control</td><td><code>no-cache</code></td><td><code>max-age=3600</code> (source), <code>immutable</code> (<code>--download</code> bundles); jspm.io controls headers for direct CDN fetches</td></tr>
         <tr><td>103 Early Hints</td><td>Disabled (stale URL risk)</td><td>Enabled</td></tr>
