@@ -179,6 +179,52 @@ file and either `AGENTS.md` or `CONVENTIONS.md`.
   on every other markdown file because the public contract did not
   change.
 
+### Pre-merge self-review loop (MUST run before signaling the PR is ready)
+
+Saying "ready for merge" before a self-review loop converges is a recurring source of low-quality PRs. The pattern to avoid: agent claims ready-for-merge, user requests a code review, agent finds issues, fixes them, claims ready-for-merge again, repeat 4-5 cycles before a review comes back clean. The cure is to run that loop internally before the first "ready" signal, so the user only hears "ready to merge" after the loop has converged on a clean round.
+
+**How the loop works:**
+
+1. After committing the work and (if remote pushes are in use) pushing the branch, do NOT report "ready for merge" yet. Trigger a **fresh-context review pass**: an AI review with NO prior knowledge of the decisions you made during the implementation. Each AI tool exposes its own primitive for this:
+
+   - **Cursor**: open a new composer tab.
+   - **Claude Code**: spawn a `general-purpose` subagent via the Agent tool.
+   - **GitHub Copilot**: open a new chat (reset the side panel).
+   - **Windsurf**: open a new Cascade thread.
+   - **Aider**: invoke a separately-started `aider` session (do NOT use `/ask` inside the same session; `/ask` only flips the mode for the next message and still sees the existing context).
+   - **Gemini CLI**: invoke a separately-started `gemini` session.
+   - **OpenCode**: open a new agent session (the `tool.execute.after` hook is a different surface and not a fresh-context primitive).
+   - **Antigravity**: open a fresh side-panel session.
+
+   The shared property is that the reviewer does not see your decision log. That independence is what makes the review catch blind spots. If your tool does not expose a true fresh-context primitive, the canonical fallback is a separately-invoked CLI process; what matters is the reviewer starts with an empty context, not the specific UI affordance.
+
+2. Prompt the review for problems only. A working prompt template:
+
+   > Review the changes on this branch against the project's `AGENTS.md` and `CONVENTIONS.md`. Look for bugs, regressions, security issues, missed edge cases, broken invariants, doc drift, test gaps, and style violations. Read every file the diff touches in its current state, not just the diff hunks. Specifically check: \<focus rotates per round\>. Report findings as a numbered list with file:line references. Problems only, no suggestions. If you find nothing genuinely wrong, reply exactly `CLEAN` on its own line and stop.
+
+3. For each finding the review reports, either:
+
+   - Fix it on the branch (commit + push), OR
+   - Reject it explicitly with a one-sentence reason. False positives are real, but rejection has to be defensible (e.g. "the reviewer flagged X as a security issue but X runs server-side only and never reaches user input"). Hand-waving doesn't count.
+
+4. If the round found any findings, run another round. The new round picks a slightly different focus: if round 1 was broad, round 2 zooms in on the file you most edited; if round 2 zoomed in, round 3 zooms out to cross-file consistency. Rotate focus to avoid the reviewer rediscovering the same surface twice.
+
+5. If the round reports `CLEAN`, the loop is done.
+
+The minimum is TWO rounds. A clean first round is rare and usually means the review was too shallow; if round 1 is clean, run a second one with a sharper focus before believing the result.
+
+**When to skip the loop:**
+
+Skip only for changes that touch a single line of trivially-correct content (a doc typo, a renamed local variable, a one-token config bump). Anything that touches logic, public surface, build, security, or multiple files goes through the loop without exception. A bias toward running the loop is correct; a bias toward skipping it is the exact failure mode this rule exists to prevent.
+
+**Reporting after the loop:**
+
+When the user is notified the PR is ready, the message should carry:
+
+> Ready for merge. Self-review loop ran \<K\> rounds; last round clean. Issues found and fixed during the loop: \<one-line list, or "none" if rounds 2+ kept finding nothing\>.
+
+If you cannot honestly say "last round clean", you cannot say "ready for merge". If a finding was rejected as a false positive, mention it so the user can second-guess the rejection.
+
 ### Autonomous mode (sandbox / bypass permissions)
 
 When running without interactive approval, agents must NOT ask questions.

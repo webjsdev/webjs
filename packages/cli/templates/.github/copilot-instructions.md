@@ -57,6 +57,17 @@ Every code change must include:
    write "N/A because <reason>" in the PR body. Docs land on the same
    PR as the code.
 5. Convention validation: `webjs check` must pass
+6. Pre-merge self-review loop. Before saying the PR is ready for
+   merge, run fresh-context review rounds until one round finds zero
+   issues. Copilot primitive: open a NEW chat session (reset the
+   side panel) for each round so the reviewer has no prior context
+   on the implementation decisions. Minimum two rounds; rotate focus
+   each round. Skip the loop only for one-line trivial changes;
+   skipping on a change that touches logic, public surface, build,
+   security, or multiple files is the exact failure mode the loop
+   exists to prevent. The full rule, prompt template, and reporting
+   contract live in the **Pre-merge self-review loop** section of
+   CONVENTIONS.md.
 
 ## Git rules
 

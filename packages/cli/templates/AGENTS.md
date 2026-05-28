@@ -889,7 +889,19 @@ composition, so a nested shell ends up dropped by the HTML parser.
    Tool-agnostic fallback: `.hooks/pre-commit` runs `webjs test` + `webjs check`
    on every commit, regardless of which agent (or human) made it. No AI
    attribution trailers in commit messages.
-4. When unsure how a framework feature works, `grep` or `cat` the
+4. Run the **pre-merge self-review loop** before signaling the PR is
+   ready. After committing the work, trigger a fresh-context review
+   pass (a new chat / composer tab / subagent / Cascade thread
+   depending on your tool) and iterate fix-then-review rounds until
+   one round finds zero issues. Minimum two rounds; rotate focus each
+   round so the reviewer does not rediscover the same surface twice.
+   Skip the loop only for one-line trivial changes; skipping on a
+   change that touches logic, public surface, build, security, or
+   multiple files is the exact failure mode the loop exists to
+   prevent. The full rule, prompt template, and reporting contract
+   live in the **Pre-merge self-review loop** section of
+   `CONVENTIONS.md`.
+5. When unsure how a framework feature works, `grep` or `cat` the
    relevant `node_modules/@webjsdev/*/src/` file before asking the user.
 
 Project-specific conventions and overrides live in

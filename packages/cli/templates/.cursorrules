@@ -61,6 +61,17 @@ Quality bar stays the same - just no blocking on questions.
 
 3. CONVENTIONS: Run `webjs check` and fix violations before committing.
 
+4. PRE-MERGE SELF-REVIEW LOOP: Before saying the PR is ready for
+   merge, run fresh-context review rounds until one round finds zero
+   issues. Cursor primitive: open a NEW composer tab and prompt the
+   review there so the reviewer has no prior context on your
+   decisions. Minimum two rounds; rotate focus each round. Skip the
+   loop only for one-line trivial changes; skipping on a change that
+   touches logic, public surface, build, security, or multiple files
+   is the exact failure mode the loop exists to prevent. The full
+   rule, prompt template, and reporting contract live in the
+   **Pre-merge self-review loop** section of CONVENTIONS.md.
+
 ## Git rules
 
 - COMMIT AND PUSH PER LOGICAL UNIT, NOT AT THE END. One feature, one fix,
