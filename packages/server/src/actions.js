@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { digestHex } from './crypto-utils.js';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
@@ -103,7 +103,7 @@ export async function buildActionIndex(appDir, dev) {
     // throw-at-load stub via `serveServerOnlyStub` instead.
     if (!(await hasUseServerDirective(file))) continue;
 
-    const h = hashFile(file);
+    const h = await hashFile(file);
     hashToFile.set(h, file);
     fileToHash.set(file, h);
     // Load module once at scan time to pick up any expose() tags.
@@ -132,9 +132,9 @@ export async function buildActionIndex(appDir, dev) {
   return { hashToFile, fileToHash, httpRoutes, appDir, dev };
 }
 
-/** @param {string} file */
-export function hashFile(file) {
-  return createHash('sha256').update(file).digest('hex').slice(0, 10);
+/** @param {string} file @returns {Promise<string>} */
+export async function hashFile(file) {
+  return (await digestHex('SHA-256', file)).slice(0, 10);
 }
 
 /**
@@ -222,7 +222,7 @@ throw new Error(${JSON.stringify(msg)});
  */
 export async function serveActionStub(idx, absFile) {
   const mod = await loadModule(absFile, idx.dev);
-  const hash = idx.fileToHash.get(absFile) || hashFile(absFile);
+  const hash = idx.fileToHash.get(absFile) || await hashFile(absFile);
   const fnNames = Object.keys(mod).filter((k) => typeof mod[k] === 'function');
   if (typeof mod.default === 'function' && !fnNames.includes('default')) {
     fnNames.push('default');

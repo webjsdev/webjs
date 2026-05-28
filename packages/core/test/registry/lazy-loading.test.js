@@ -27,28 +27,28 @@ test('registry: unknown tag returns false for isLazy', () => {
 
 // --- Dynamic import map entries ---
 
-test('setVendorEntries: adds entries to import map', () => {
-  setVendorEntries({ 'dayjs': '/__webjs/vendor/dayjs.js' });
+test('setVendorEntries: adds entries to import map', async () => {
+  await setVendorEntries({ 'dayjs': '/__webjs/vendor/dayjs.js' });
   const map = buildImportMap();
   assert.equal(map.imports['dayjs'], '/__webjs/vendor/dayjs.js');
   // Built-ins should still be there
   assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
   // Clean up
-  setVendorEntries({});
+  await setVendorEntries({});
 });
 
-test('setVendorEntries: overwrite replaces previous entries', () => {
-  setVendorEntries({ 'pkg-a': '/a.js', 'pkg-b': '/b.js' });
+test('setVendorEntries: overwrite replaces previous entries', async () => {
+  await setVendorEntries({ 'pkg-a': '/a.js', 'pkg-b': '/b.js' });
   let map = buildImportMap();
   assert.ok('pkg-a' in map.imports);
   assert.ok('pkg-b' in map.imports);
 
-  setVendorEntries({ 'pkg-c': '/c.js' });
+  await setVendorEntries({ 'pkg-c': '/c.js' });
   map = buildImportMap();
   assert.ok(!('pkg-a' in map.imports), 'old entries should be gone');
   assert.ok('pkg-c' in map.imports);
   // Clean up
-  setVendorEntries({});
+  await setVendorEntries({});
 });
 
 test('import map always includes lazy-loader entry', () => {

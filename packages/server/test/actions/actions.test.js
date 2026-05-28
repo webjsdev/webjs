@@ -137,3 +137,17 @@ test('stubs server module and invokes action by hash/fn', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('hashFile: returns a 10-char hex string, stable per input', async () => {
+  // Regression coverage for the createHash → crypto.subtle.digest
+  // migration. hashFile is the RPC-route key derivation: every
+  // server action's URL embeds this hash, so any drift in shape or
+  // determinism would break action routing across deploys.
+  const { hashFile } = await import('../../src/actions.js');
+  const a1 = await hashFile('/abs/path/to/some-action.server.ts');
+  const a2 = await hashFile('/abs/path/to/some-action.server.ts');
+  const b1 = await hashFile('/abs/path/to/other.server.ts');
+  assert.match(a1, /^[0-9a-f]{10}$/, `hashFile must produce 10 hex chars; got ${a1}`);
+  assert.equal(a1, a2, 'hashFile must be deterministic for the same input');
+  assert.notEqual(a1, b1, 'hashFile must differ for different inputs');
+});

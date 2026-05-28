@@ -12,7 +12,7 @@ export default function Configuration() {
     <pre>webjs dev [--port 8080]</pre>
     <ul>
       <li><code>--port</code>: dev server port (default: <code>8080</code>, or <code>PORT</code> env var)</li>
-      <li>File watching via chokidar (automatic)</li>
+      <li>File watching via Node's built-in <code>fs.watch</code> (automatic)</li>
       <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
       <li>TypeScript files transformed on the fly</li>
       <li>No cache-busting needed, since module loads are busted per request</li>

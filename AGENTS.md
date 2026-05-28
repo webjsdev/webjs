@@ -731,7 +731,7 @@ Not in v1. Do not implement as part of other tasks:
 
 - **Bundling.** webjs is a **no-build framework**. Same model as Rails 7+ (Hotwire + importmap-rails). Production perf comes from HTTP/2 multiplex + `<link rel="modulepreload">` hints at SSR time, not concatenation. **Do not propose a bundler or `webjs build` command.**
 - **Per-route code splitting.** Downstream of no-build. Browser fetches each module lazily; modulepreload hints emit per-route at SSR.
-- **Vite-grade HMR with state preservation.** Custom elements only `define` once, so full reload is necessary. Data reloads are near-instant via chokidar → SSE.
+- **Vite-grade HMR with state preservation.** Custom elements only `define` once, so full reload is necessary. Data reloads are near-instant via `fs.watch` → SSE.
 - **React Server Components Flight.** Server actions cover "call a server function from the client". Use `Suspense` + streaming.
 - **Edge-runtime bundling / full portability.** See `agent-docs/deployment.md`.
 - **i18n, image optimization.** Layer libraries on top.

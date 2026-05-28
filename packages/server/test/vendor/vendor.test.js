@@ -937,12 +937,12 @@ test('readPinFile: returns no integrity field on old pin format (backwards-compa
 
 test('sha384Integrity: returns a sha384-<base64> string', async () => {
   const { sha384Integrity } = await import('../../src/vendor.js');
-  const h = sha384Integrity('hello world');
+  const h = await sha384Integrity('hello world');
   assert.match(h, /^sha384-[A-Za-z0-9+/=]+$/);
   // Deterministic: same input always produces same output.
-  assert.equal(h, sha384Integrity('hello world'));
+  assert.equal(h, await sha384Integrity('hello world'));
   // Different input produces different output.
-  assert.notEqual(h, sha384Integrity('hello worl'));
+  assert.notEqual(h, await sha384Integrity('hello worl'));
 });
 
 test('readPinFile + resolveVendorImports: integrity keyed by FINAL URL (post-rewrite)', async () => {
@@ -1151,11 +1151,11 @@ test('readPinFile: tolerates extra fields in pin JSON (forward-compat)', async (
 test('importMapTag: integrity field omitted when empty, present when populated', async () => {
   const { setVendorEntries, importMapTag } = await import('../../src/importmap.js');
   // Empty integrity → no integrity field in JSON.
-  setVendorEntries({ 'a': 'https://cdn/a.js' }, {});
+  await setVendorEntries({ 'a': 'https://cdn/a.js' }, {});
   let tag = importMapTag();
   assert.ok(!tag.includes('"integrity"'), 'integrity omitted when empty');
   // Populated → integrity field present.
-  setVendorEntries(
+  await setVendorEntries(
     { 'a': 'https://cdn/a.js' },
     { 'https://cdn/a.js': 'sha384-xxxx' },
   );
@@ -1163,7 +1163,7 @@ test('importMapTag: integrity field omitted when empty, present when populated',
   assert.ok(tag.includes('"integrity"'), 'integrity present when populated');
   assert.ok(tag.includes('"sha384-xxxx"'), 'integrity value emitted');
   // Reset.
-  setVendorEntries({}, {});
+  await setVendorEntries({}, {});
 });
 
 test('pinAll default mode: writes integrity field alongside imports', { skip: !NETWORK_OK }, async () => {
@@ -1199,7 +1199,7 @@ test('pinAll --download: writes integrity matching the on-disk bytes', { skip: !
     const { sha384Integrity } = await import('../../src/vendor.js');
     const filename = localUrl.slice('/__webjs/vendor/'.length);
     const onDisk = await readFileFs(join(dir, '.webjs', 'vendor', filename), 'utf8');
-    assert.equal(file.integrity[localUrl], sha384Integrity(onDisk));
+    assert.equal(file.integrity[localUrl], await sha384Integrity(onDisk));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

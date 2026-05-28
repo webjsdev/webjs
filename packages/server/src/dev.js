@@ -1,6 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
-import { stat, readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
+import { digestHex } from './crypto-utils.js';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire, stripTypeScriptTypes } from 'node:module';
@@ -175,7 +175,7 @@ export async function createRequestHandler(opts) {
   // Scan for bare npm imports and register vendor import map entries.
   const bareImports = await scanBareImports(appDir);
   const initialVendor = await resolveVendorImports(bareImports, appDir);
-  setVendorEntries(initialVendor.imports, initialVendor.integrity);
+  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
@@ -212,7 +212,7 @@ export async function createRequestHandler(opts) {
   // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
   // jspm.io fetch) cannot overwrite a fresher rebuild #2's
   // setVendorEntries / route table when it finally finishes. Without
-  // this, two file edits inside one chokidar debounce window could
+  // this, two file edits inside one fs.watch debounce window could
   // produce a permanently-stale importmap until the next rebuild.
   // Each rebuild also gets a monotonic token; setVendorEntries is only
   // applied if its token still matches the latest scheduled rebuild.
@@ -240,7 +240,7 @@ export async function createRequestHandler(opts) {
     // will overwrite anyway, but checking the token here avoids a
     // brief window of stale entries.
     if (token === latestRebuildToken) {
-      setVendorEntries(v.imports, v.integrity);
+      await setVendorEntries(v.imports, v.integrity);
     }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
@@ -337,16 +337,41 @@ export async function startServer(opts) {
     },
   });
 
+  /** @type {AbortController | null} */
+  let watcherAbort = null;
   if (dev) {
-    const { watch } = await import('chokidar').catch(() => ({ watch: null }));
-    if (watch) {
-      const watcher = watch(app.appDir, {
-        ignored: [/node_modules/, /\.git/, /prisma\/(dev|migrations)/],
-        ignoreInitial: true,
-      });
-      const rebuild = debounce(() => app.rebuild(), 80);
-      watcher.on('all', rebuild);
-    }
+    // Watch the app root recursively via Node's built-in
+    // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
+    // Node 24. No external dep needed.
+    //
+    // fs.watch returns relative paths in event.filename. We apply
+    // the same ignore filter chokidar used before: skip
+    // node_modules, .git, and prisma's dev artefacts (dev.db,
+    // dev.db-journal, migrations/) which the dev server writes
+    // during db:migrate and would otherwise loop.
+    //
+    // The prisma branch uses prefix-only matching (no required
+    // trailing separator) so the SQLite sidecar files like
+    // `prisma/dev.db` and `prisma/dev.db-journal` are ignored too.
+    // node_modules / .git stay separator-anchored so unrelated
+    // names like `node_modules.bak/foo` don't get caught.
+    const IGNORE = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/;
+    const rebuild = debounce(() => app.rebuild(), 80);
+    watcherAbort = new AbortController();
+    (async () => {
+      try {
+        const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
+        for await (const event of events) {
+          const filename = event.filename || '';
+          if (IGNORE.test(filename)) continue;
+          rebuild();
+        }
+      } catch (err) {
+        if (err && /** @type any */(err).name !== 'AbortError') {
+          logger.warn({ err }, 'file watcher exited');
+        }
+      }
+    })();
   }
 
   // SSE keepalive: send a comment frame every 25s to defeat proxy idle timeouts.
@@ -424,7 +449,13 @@ export async function startServer(opts) {
   // corrupted, so log + start an orderly shutdown rather than continuing.
   installProcessHandlers(logger, () => shutdown('uncaughtException'));
 
-  return { server, close: () => new Promise((r) => server.close(() => r())) };
+  return {
+    server,
+    close: () => new Promise((r) => {
+      if (watcherAbort) watcherAbort.abort();
+      server.close(() => r());
+    }),
+  };
 }
 
 /**
@@ -586,7 +617,7 @@ async function handleCore(req, ctx) {
           // Lazily ensure the index knows about this file so serveActionStub
           // can mint a stable hash and function list.
           if (!state.actionIndex.fileToHash.has(abs)) {
-            const h = hashFile(abs);
+            const h = await hashFile(abs);
             state.actionIndex.fileToHash.set(abs, h);
             state.actionIndex.hashToFile.set(h, abs);
           }
@@ -902,7 +933,7 @@ async function fileResponse(abs, opts) {
     if (opts.dev) {
       headers['cache-control'] = 'no-cache';
     } else {
-      const etag = `"${createHash('sha1').update(data).digest('hex').slice(0, 16)}"`;
+      const etag = `"${(await digestHex('SHA-1', data)).slice(0, 16)}"`;
       headers['etag'] = etag;
       headers['cache-control'] = opts.immutable
         ? 'public, max-age=31536000, immutable'
