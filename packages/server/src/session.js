@@ -21,7 +21,41 @@
  */
 
 import { getStore } from './cache.js';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+
+// -- Web Crypto helpers ------------------------------------------------------
+// Same shape as auth.js. We duplicate here rather than share a module
+// because the helpers are small and the two consumers want different
+// import surfaces.
+
+const enc = new TextEncoder();
+
+/** @param {string} secret @returns {Promise<CryptoKey>} */
+async function hmacKey(secret) {
+  return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+
+/** @param {ArrayBuffer | ArrayBufferView} buf @returns {string} */
+function b64url(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer);
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** @param {string} str @returns {Uint8Array} */
+function unb64url(str) {
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Generate a fresh base64url-encoded random 24-byte ID. Sync via Web Crypto. */
+function randomId() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return b64url(bytes);
+}
 
 // ---------------------------------------------------------------------------
 // Session class
@@ -46,7 +80,7 @@ export class Session {
    * @param {{ data?: Record<string, unknown>, flash?: Record<string, unknown> }} [initial]
    */
   constructor(id, initial) {
-    this.#id = id || randomBytes(24).toString('base64url');
+    this.#id = id || randomId();
     this.#data = new Map(Object.entries(initial?.data || {}));
     this.#flash = new Map(Object.entries(initial?.flash || {}));
     if (this.#flash.size > 0) this.#dirty = true;
@@ -117,7 +151,7 @@ export class Session {
   regenerateId(deleteOld = false) {
     if (this.#destroyed) throw new Error('Session has been destroyed');
     if (deleteOld) this.#deleteId = this.#id;
-    this.#id = randomBytes(24).toString('base64url');
+    this.#id = randomId();
     this.#dirty = true;
   }
 }
@@ -204,20 +238,29 @@ export const storeSession = storeSessionStorage;
 // Cookie helpers
 // ---------------------------------------------------------------------------
 
-function sign(value, secret) {
-  return `${value}.${createHmac('sha256', secret).update(value).digest('base64url')}`;
+async function sign(value, secret) {
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(value));
+  return `${value}.${b64url(sig)}`;
 }
 
-function unsign(input, secret) {
+async function unsign(input, secret) {
   const idx = input.lastIndexOf('.');
   if (idx < 1) return null;
   const value = input.slice(0, idx);
-  const expected = createHmac('sha256', secret).update(value).digest('base64url');
-  const sigBuf = Buffer.from(input.slice(idx + 1));
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length) return null;
-  if (!timingSafeEqual(sigBuf, expBuf)) return null;
-  return value;
+  // crypto.subtle.verify is constant-time; replaces node:crypto's
+  // explicit timingSafeEqual. Wrap in try/catch because malformed
+  // base64 throws inside unb64url.
+  try {
+    const ok = await crypto.subtle.verify(
+      'HMAC',
+      await hmacKey(secret),
+      unb64url(input.slice(idx + 1)),
+      enc.encode(value),
+    );
+    return ok ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseCookies(header) {
@@ -284,7 +327,7 @@ export function session(opts = {}) {
   return async function sessionMiddleware(req, next) {
     const cookies = parseCookies(req.headers.get('cookie') || '');
     const rawCookie = cookies[cookieName] || '';
-    const unsigned = rawCookie ? unsign(rawCookie, secret) : null;
+    const unsigned = rawCookie ? await unsign(rawCookie, secret) : null;
 
     // Storage creates the Session
     const s = await storage.read(unsigned);
@@ -303,7 +346,7 @@ export function session(opts = {}) {
     } else if (cookieValue !== null) {
       // Changed: sign and set
       try {
-        resp.headers.append('set-cookie', serializeCookie(cookieName, sign(cookieValue, secret), cookieOpts));
+        resp.headers.append('set-cookie', serializeCookie(cookieName, await sign(cookieValue, secret), cookieOpts));
       } catch {}
     }
     // null = no change
