@@ -50,6 +50,22 @@ import { Task } from '@webjsdev/core/task';
 
 See the full framework docs at https://github.com/webjsdev/webjs.
 
+## Layout in the tarball
+
+The tarball ships both `src/` and `dist/`. The browser fetches the
+`dist/webjs-core-*.js` bundles (one per subpath, plus shared chunks)
+so a page does one request per subpath instead of waterfalling
+through 15+ source files. SSR imports the same bundles via the
+package `exports` field. The readable `src/` stays on disk so AI
+agents can grep it directly.
+
+The bundle is built ONCE at `npm publish` time on the author's
+machine via esbuild as a publish-time devDependency. User installs
+never invoke a bundler. If you install the package via a git
+dependency (`npm install github:webjsdev/webjs`), the `prepare`
+lifecycle runs on your machine to produce the bundle; esbuild is
+in `devDependencies` so it's available for that case.
+
 ## License
 
 MIT

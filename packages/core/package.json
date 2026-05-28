@@ -7,7 +7,32 @@
   "exports": {
     ".": {
       "types": "./index.d.ts",
-      "default": "./index.js"
+      "source": "./index.js",
+      "default": "./dist/webjs-core.js"
+    },
+    "./directives": {
+      "source": "./src/directives.js",
+      "default": "./dist/webjs-core-directives.js"
+    },
+    "./context": {
+      "source": "./src/context.js",
+      "default": "./dist/webjs-core-context.js"
+    },
+    "./task": {
+      "source": "./src/task.js",
+      "default": "./dist/webjs-core-task.js"
+    },
+    "./client-router": {
+      "source": "./src/router-client.js",
+      "default": "./dist/webjs-core-client-router.js"
+    },
+    "./lazy-loader": {
+      "source": "./src/lazy-loader.js",
+      "default": "./dist/webjs-core-lazy-loader.js"
+    },
+    "./testing": {
+      "source": "./src/testing.js",
+      "default": "./dist/webjs-core-testing.js"
     },
     "./client": "./src/render-client.js",
     "./server": "./src/render-server.js",
@@ -16,15 +41,23 @@
       "default": "./src/component.js"
     },
     "./registry": "./src/registry.js",
-    "./client-router": "./src/router-client.js",
-    "./signals": "./src/signal.js"
+    "./signals": "./src/signal.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
     "index.d.ts",
     "src",
+    "dist",
     "README.md"
   ],
+  "scripts": {
+    "build:dist": "node ../../scripts/build-framework-dist.js",
+    "prepare": "npm run build:dist"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
   "publishConfig": {
     "access": "public"
   },

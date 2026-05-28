@@ -173,3 +173,46 @@ test('importMapHash: hash available synchronously after await setVendorEntries',
     'hash must be a 64-char SHA-256 hex string immediately after await');
   await setVendorEntries({});
 });
+
+/* ---------- setCoreDistMode: dist vs src URL routing ---------- */
+
+test('setCoreDistMode(false): @webjsdev/core/* maps to /__webjs/core/src/*', async () => {
+  const { setCoreDistMode, buildImportMap } = await import('../../src/importmap.js');
+  await setVendorEntries({});
+  await setCoreDistMode(false);
+  const map = buildImportMap();
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/index.js');
+  assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/src/directives.js');
+  assert.equal(map.imports['@webjsdev/core/client-router'], '/__webjs/core/src/router-client.js');
+  assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
+});
+
+test('setCoreDistMode(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-core-*', async () => {
+  const { setCoreDistMode, buildImportMap } = await import('../../src/importmap.js');
+  await setVendorEntries({});
+  await setCoreDistMode(true);
+  const map = buildImportMap();
+  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/dist/webjs-core.js');
+  assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/dist/webjs-core-directives.js');
+  assert.equal(map.imports['@webjsdev/core/client-router'], '/__webjs/core/dist/webjs-core-client-router.js');
+  // Catch-all prefix stays on src/ in BOTH modes so the unbundled
+  // subpaths (./client, ./server, ./component, ./registry,
+  // ./signals) still resolve.
+  assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
+  // Reset to false so other tests aren't surprised by the toggle.
+  await setCoreDistMode(false);
+});
+
+test('setCoreDistMode: toggling invalidates importMapHash', async () => {
+  const { setCoreDistMode, importMapHash } = await import('../../src/importmap.js');
+  await setVendorEntries({ 'a': 'https://cdn/a.js' });
+  await setCoreDistMode(false);
+  const h1 = importMapHash();
+  await setCoreDistMode(true);
+  const h2 = importMapHash();
+  await setCoreDistMode(false);
+  const h3 = importMapHash();
+  assert.notEqual(h1, h2, 'switching to dist must change the hash');
+  assert.equal(h1, h3, 'switching back must restore the original hash');
+  await setVendorEntries({});
+});

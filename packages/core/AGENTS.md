@@ -58,8 +58,18 @@ export.
 
 ## Package-specific invariants
 
-1. **No build step.** `.js` only, plain JSDoc types. The source you
-   read in `node_modules/@webjsdev/core/src/` is what runs.
+1. **No build step in your edit-and-refresh loop.** `.js` only,
+   plain JSDoc types. What you grep in `node_modules/@webjsdev/core/
+   src/` is what served as source IS what runs when the browser
+   fetches per-file. Workspace dev (this monorepo) serves per-file
+   from `packages/core/src/` until you opt into the bundle by
+   running `npm run build:dist --workspace=@webjsdev/core`.
+   Published-to-npm copies ship pre-built `dist/webjs-core-*.js`
+   bundles alongside `src/`; the browser fetches the bundles when
+   `dist/` is present (`scripts/build-framework-dist.js` is wired
+   to the `prepare` lifecycle so `npm publish` always rebuilds).
+   Only `@webjsdev/core` has this dual-layout. Other framework
+   packages stay source-only.
 2. **`html\`\`` returns an inert `TemplateResult`.** Templates don't
    touch the DOM until a renderer (server or client) consumes them.
 3. **The renderer is the boundary between server and client.** Server
