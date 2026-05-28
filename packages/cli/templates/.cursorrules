@@ -52,8 +52,12 @@ Quality bar stays the same - just no blocking on questions.
    test/<feature>/browser/ (WTR + Playwright, real Chromium). Run `webjs test`
    after every change. Never deliver code without passing tests.
 
-2. DOCS: Update AGENTS.md for API changes. Update docs/ and website/ if
-   they exist. The user should never have to ask for tests or docs.
+2. DOCS: Documentation lands on the same PR as the code, never as a
+   follow-up. Walk every surface in the **Definition of done** section
+   of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md, README.md, docs/,
+   website/, scaffold scripts) and either update it or write
+   "N/A because <reason>" in the PR body. The user should never have to
+   ask for tests or docs.
 
 3. CONVENTIONS: Run `webjs check` and fix violations before committing.
 

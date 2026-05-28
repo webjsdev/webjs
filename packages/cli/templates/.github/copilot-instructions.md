@@ -51,7 +51,11 @@ Every code change must include:
    Claude users; Copilot users should self-enforce the same rule. Automatic.
 2. Server tests in test/<feature>/*.test.ts (node:test for actions, queries, utilities)
 3. Browser tests in test/<feature>/browser/*.test.js (WTR + Playwright, real Chromium)
-4. Documentation updates (AGENTS.md for API, docs/ for user guides)
+4. Documentation updates. Walk every surface in the **Definition of
+   done** section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md,
+   README.md, docs/, website/, scaffold scripts) and either update or
+   write "N/A because <reason>" in the PR body. Docs land on the same
+   PR as the code.
 5. Convention validation: `webjs check` must pass
 
 ## Git rules
