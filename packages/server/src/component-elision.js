@@ -216,13 +216,23 @@ function importsReactivePrimitive(src) {
  * @returns {boolean}
  */
 function hasNonStateReactiveProperty(classBody) {
-  if (/\bstatic\s+get\s+properties\b/.test(classBody)) return true;
-  const m = /\bstatic\s+properties\s*=\s*\{/.exec(classBody);
-  if (!m) return false;
+  // No reactive properties declared at all: nothing rides an attribute.
+  if (!/\bstatic\s+(?:get\s+)?properties\b/.test(classBody)) return false;
+  // Properties ARE declared. We can only clear a component as inert when
+  // the declaration is a brace literal whose every entry is { state: true }.
+  // A getter (`static get properties()`) or a non-literal assignment
+  // (`= buildProps()`, `= SHARED_PROPS`, `= Object.assign(...)`) cannot be
+  // parsed for state flags, so ship conservatively. `[^=]*` tolerates a TS
+  // type annotation between the name and `=` without crossing the `=`.
+  const m = /\bstatic\s+properties\b[^=]*=\s*\{/.exec(classBody);
+  if (!m) return true;
   const objStart = m.index + m[0].length;
   const objEnd = matchClosingBrace(classBody, objStart);
   if (objEnd === -1) return true;
   const obj = classBody.slice(objStart, objEnd);
+  // A spread (`...BASE_PROPS`) can inject reactive properties we cannot
+  // see; ship rather than guess they are all { state: true }.
+  if (/\.\.\./.test(obj)) return true;
   for (const entry of topLevelPropertyValues(obj)) {
     // Object-literal descriptor: inert only when it carries state: true.
     if (entry.startsWith('{')) {

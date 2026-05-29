@@ -223,6 +223,57 @@ test('only state properties stays display-only', () => {
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
+test('static properties assigned a function call ships (cannot parse state flags)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Built extends WebComponent {
+      static properties = buildProps();
+      render() { return html\`<p>x</p>\`; }
+    }
+    Built.register('built-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('static properties assigned an identifier ships', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { SHARED_PROPS } from './props.js';
+    class Shared extends WebComponent {
+      static properties = SHARED_PROPS;
+      render() { return html\`<p>x</p>\`; }
+    }
+    Shared.register('shared-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('static properties with a spread ships (spread can inject non-state props)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { BASE } from './base.js';
+    class Spread extends WebComponent {
+      static properties = { ...BASE, mode: { state: true } };
+      render() { return html\`<p>x</p>\`; }
+    }
+    Spread.register('spread-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('static properties with a TS type annotation is still parsed', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Typed extends WebComponent {
+      static properties: Record<string, object> = { count: { type: Number } };
+      render() { return html\`<p>x</p>\`; }
+    }
+    Typed.register('typed-el');
+  `;
+  // count is non-state, so it must ship even through the annotation.
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
 test('static get properties is conservative (ships)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
