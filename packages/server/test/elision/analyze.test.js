@@ -59,6 +59,24 @@ test('a side-effect npm import forces interactive (runs on module load)', () => 
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
+test('a side-effect import with no space or a trailing comment is still caught', () => {
+  const noSpace = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import"some-polyfill";
+    class A extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    A.register('a-el');
+  `;
+  assert.equal(analyzeComponentSource(noSpace).interactive, true);
+
+  const trailingComment = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import 'some-polyfill'; // bootstrap
+    class B extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    B.register('b-el');
+  `;
+  assert.equal(analyzeComponentSource(trailingComment).interactive, true);
+});
+
 test('a browser global at module scope forces interactive', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';

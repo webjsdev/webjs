@@ -136,8 +136,11 @@ const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionSto
  * `customElements.define(...)` legitimately uses it and must not force ship). */
 const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
 
-/** Match a whole-line SIDE-EFFECT import: `import 'pkg';` (no binding clause). */
-const SIDE_EFFECT_BARE_IMPORT_RE = /^\s*import\s+(['"])([^'"]+)\1\s*;?\s*$/gm;
+/** Match a whole-line SIDE-EFFECT import: `import 'pkg';` (no binding clause).
+ * `\s*` before the quote (not `\s+`) so `import"pkg"` (no space) is caught;
+ * a binding clause still fails because a non-quote follows `import`. A
+ * trailing line comment is tolerated. */
+const SIDE_EFFECT_BARE_IMPORT_RE = /^\s*import\s*(['"])([^'"]+)\1\s*;?\s*(?:\/\/[^\n]*)?$/gm;
 
 /**
  * True if `src` imports the client router (the `/client-router` subpath, or
@@ -179,9 +182,17 @@ function importsClientRouter(src) {
  * function never runs on the client and a display-only component's render
  * never runs on the client when elided, so a package used only as a value in
  * that code never executes client-side and rides away when the module is
- * dropped. (An unguarded top-level use would crash SSR; a guarded one carries
- * a client global that `CLIENT_GLOBAL_RE` catches.) This is what lets an
- * SSR-only dependency stay off the client without a `.server.{js,ts}` wrapper.
+ * dropped. This is what lets an SSR-only dependency stay off the client
+ * without a `.server.{js,ts}` wrapper.
+ *
+ * Residual edge: a package that self-registers on import (e.g. calls
+ * `customElements.define` at module top level) imported via a binding clause
+ * is NOT caught here, so eliding the importer drops that registration and the
+ * element silently does not upgrade. This is the cross-module-registration
+ * caveat documented in agent-docs/components.md and server AGENTS invariant 7;
+ * the fix is `.server.{js,ts}` for genuinely server-only deps, or an
+ * interactivity signal on the consumer. (It is not caught by an SSR crash:
+ * the SSR `customElements` shim makes `define` a no-op server-side.)
  * @param {string} src
  * @returns {boolean}
  */
