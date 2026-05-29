@@ -106,13 +106,19 @@ can load it without booting the full server.
    rules go there; tests in `test/check.test.js`.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
-7. **Display-only component elision is conservative and serve-time.**
-   `component-elision.js` computes, at boot and on every rebuild, the
-   set of component modules that are purely display-only (no
-   interactivity signal, and not rendered or imported by any shipping
-   component). The serving branch in `dev.js` strips side-effect imports
-   of those modules from the browser-served source, so their JS is never
-   downloaded; preload hints and importmap entries for them drop too.
+7. **Display-only component AND inert-route elision is conservative.**
+   `analyzeElision` in `component-elision.js` computes, at boot and on
+   every rebuild, (a) the set of component modules that are purely
+   display-only, and (b) the set of page/layout route modules that are
+   inert (do no client work even transitively). The serving branch in
+   `dev.js` strips side-effect imports of display-only components from the
+   browser-served source; `ssr.js` drops inert page/layout modules from
+   the boot script's `moduleUrls` entirely, so a fully-static route ships
+   zero application JS. Preload hints and importmap entries for elided
+   modules drop too. This is progressive-enhancement-safe by construction:
+   the SSR'd HTML is the baseline, swap markers are static comments, and
+   navigation/forms fall back to native browser behavior, so removing
+   inert JS never changes behavior.
    The analysis is a denylist that biases toward shipping: a false
    "display-only" verdict breaks the page, a false "interactive" verdict
    only misses an optimization, so anything ambiguous ships. The signal

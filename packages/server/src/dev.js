@@ -61,7 +61,7 @@ import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
-import { computeElidableComponents, elideImportsFromSource } from './component-elision.js';
+import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 
 /** PascalCase → kebab-case for a helpful diagnostic example tag name. */
 function kebab(name) {
@@ -203,11 +203,15 @@ export async function createRequestHandler(opts) {
   const components = await scanComponents(appDir);
   await primeComponentRegistry(appDir, components);
 
-  // Determine which component modules are display-only and can be elided
-  // from the browser entirely (no JS download). Static analysis only; the
-  // set biases conservatively toward shipping. See component-elision.js.
-  const elidableComponents = await computeElidableComponents(
+  const routeTable = await buildRouteTable(appDir);
+
+  // Determine which component modules are display-only and which page/layout
+  // route modules are inert, so both can be elided from the browser (no JS
+  // download). Static analysis only; the sets bias conservatively toward
+  // shipping. See component-elision.js.
+  const { elidableComponents, inertRouteModules } = await analyzeElision(
     components,
+    collectRouteModules(routeTable),
     moduleGraph,
     (f) => readFile(f, 'utf8'),
     appDir,
@@ -235,7 +239,6 @@ export async function createRequestHandler(opts) {
     }
   }
 
-  const routeTable = await buildRouteTable(appDir);
   const state = {
     routeTable,
     actionIndex: await buildActionIndex(appDir, dev),
@@ -244,6 +247,7 @@ export async function createRequestHandler(opts) {
     bareImports,
     moduleGraph,
     elidableComponents,
+    inertRouteModules,
     browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
 
@@ -276,16 +280,22 @@ export async function createRequestHandler(opts) {
     // don't walk appDir twice per rebuild.
     const components = await scanComponents(appDir);
     await primeComponentRegistry(appDir, components);
-    // Recompute which components are elidable. A dependency's edit can
-    // flip its elidability WITHOUT changing an importer's mtime, so the
-    // TS transform cache (keyed by mtime) must be dropped or it would
-    // serve a stale strip decision for the unchanged importer.
-    state.elidableComponents = await computeElidableComponents(
-      components,
-      state.moduleGraph,
-      (f) => readFile(f, 'utf8'),
-      appDir,
-    );
+    // Recompute which components are elidable and which route modules are
+    // inert. A dependency's edit can flip a verdict WITHOUT changing an
+    // importer's mtime, so the TS transform cache (keyed by mtime) must be
+    // dropped or it would serve a stale strip decision for the unchanged
+    // importer.
+    {
+      const r = await analyzeElision(
+        components,
+        collectRouteModules(state.routeTable),
+        state.moduleGraph,
+        (f) => readFile(f, 'utf8'),
+        appDir,
+      );
+      state.elidableComponents = r.elidableComponents;
+      state.inertRouteModules = r.inertRouteModules;
+    }
     TS_CACHE.clear();
     // Re-scan bare imports AFTER elision so the importmap drops vendor
     // deps reachable only through display-only components.
@@ -763,6 +773,7 @@ async function handleCore(req, ctx) {
         dev, appDir, req, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
         elidableComponents: state.elidableComponents,
+        inertRouteModules: state.inertRouteModules,
       });
       return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
     }
@@ -1215,6 +1226,25 @@ function debounce(fn, ms) {
  * @param {string} appDir
  * @returns {Set<string>}
  */
+/**
+ * Collect every page + layout file across the route table. These are the
+ * modules the client boot script imports, and thus the candidates for
+ * inert-route elision (dropping a module that does no client work).
+ * `route.{js,ts}` / middleware / metadata are excluded: they never ship.
+ *
+ * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
+ * @returns {string[]}
+ */
+function collectRouteModules(routeTable) {
+  /** @type {Set<string>} */
+  const mods = new Set();
+  for (const page of routeTable.pages || []) {
+    if (page.file) mods.add(page.file);
+    for (const f of page.layouts || []) mods.add(f);
+  }
+  return [...mods];
+}
+
 function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
   /** @type {Set<string>} */
   const entries = new Set();

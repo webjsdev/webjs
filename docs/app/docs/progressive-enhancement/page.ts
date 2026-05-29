@@ -70,7 +70,11 @@ export default function ProgressiveEnhancement() {
     </p>
 
     <p>
-      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model.
+      The same applies to whole routes. A <code>page</code> or <code>layout</code> that does no client work, even transitively (no event, signal, client router, npm import, client global, or interactive component anywhere in its subtree), is dropped from the boot script entirely, so a fully-static route ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms via native browser behavior, which is exactly the progressive-enhancement baseline. A layout that enables the client router does client work, so it keeps shipping; a static page rendered under it is still dropped on its own.
+    </p>
+
+    <p>
+      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model. (And it really is just an optimization on isomorphic modules, not an RSC-style server/client split, see <a href="/docs/architecture">Architecture</a>.)
     </p>
 
     <pre>// Elided: pure render, no interactivity. SSR'd HTML is the whole story,

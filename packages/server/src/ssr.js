@@ -52,7 +52,18 @@ export async function ssrPage(route, params, url, opts) {
     // import graph. Combined with the modulepreload hints below, this
     // is the Rails 7+ / Hotwire pattern: per-file ESM, no bundling,
     // HTTP/2 multiplex on the wire.
-    const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
+    //
+    // Inert route modules (a page or layout that does no client work, even
+    // transitively) are dropped from the boot script: the browser never
+    // downloads them. The SSR'd HTML is the complete output, and
+    // progressive enhancement is unaffected, so a fully-static route ships
+    // zero application JS. The analysis is conservative (anything that
+    // touches the client router, a signal, an event, an npm import, or a
+    // shipping component keeps shipping).
+    const inert = opts.inertRouteModules;
+    const moduleUrls = [route.file, ...route.layouts]
+      .filter((f) => !(inert && inert.has(f)))
+      .map((f) => toUrlPath(f, opts.appDir));
     // Emit <link rel="modulepreload"> for every custom element that
     // actually rendered PLUS their transitive dependencies (from the
     // module graph). URLs are deduplicated so the browser never sees

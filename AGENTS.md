@@ -144,6 +144,26 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 
 ---
 
+## Execution model (read this to avoid the RSC mental model)
+
+webjs has **no server/client component split**. Do not reason about it as React Server Components: there is no server-component render tree, no Flight protocol, no "use client" / "use server" component boundary, and no per-component server-versus-client identity.
+
+**Pages, layouts, and components are isomorphic modules.** Each one runs in two places, from the same source:
+1. On the **server**, to produce the SSR'd HTML of the response.
+2. In the **browser**, where the module loads to add interactivity (event listeners, signal reactivity, lifecycle hooks), register custom elements so SSR'd tags upgrade, and enable client-side routing.
+
+A component is not "a server component" or "a client component"; it is one module that renders on the server and then, if it does any client work, hydrates in the browser. `route.{js,ts}` is the one routing file that is **not** isomorphic: it is a **server-only HTTP handler** (named `GET` / `POST` / … exports), the webjs equivalent of a Next.js route handler. It never ships to the client.
+
+**`.server.{js,ts}` is the one server boundary, and it is an RPC + source-protection mechanism, NOT an RSC server component.** The file's source never reaches the browser:
+- With `'use server'`: its exports are **RPC-callable** from client code. The browser import is rewritten to a typed stub that POSTs to `/__webjs/action/<hash>/<fn>`. This is a server *action* (Rails/Next-style RPC), not a server-rendered component.
+- Without `'use server'`: it is a **server-only utility** (Prisma client, secrets, `node:*`, password hashing). The browser import resolves to a throw-at-load stub.
+
+So the way to keep a dependency off the client is the `.server.{js,ts}` boundary, not a component-level annotation. A server-only npm package (e.g. a date library used only to format during SSR) belongs inside a `.server.{js,ts}` file (`lib/format.server.ts` exporting `formatDate`), because pages/layouts are isomorphic and their top-level imports otherwise reach the browser.
+
+**Elision is a no-build dead-JS optimization layered on top of this model, not a boundary.** When an isomorphic module (a display-only component, or an inert page/layout) would do no client work, the framework statically detects that and skips shipping its JS, the SSR'd HTML being the complete output. The module stays isomorphic; only its dead client download is removed, and the importmap drops vendor packages reachable only through it. This never changes behaviour: progressive enhancement is the no-JS baseline, and elision only removes JS that would have done nothing. It is webjs's answer to the *outcome* RSC delivers (no dead JS on the wire), achieved by static analysis of isomorphic modules rather than a server/client split. See `agent-docs/components.md`.
+
+---
+
 ## Framework source: where to find it
 
 Plain JS with JSDoc lives in `node_modules/@webjsdev/`. What you read is what runs.
