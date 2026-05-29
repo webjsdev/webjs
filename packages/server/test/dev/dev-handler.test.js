@@ -1588,3 +1588,24 @@ test('toWebRequest: x-webjs-remote-ip is set from the socket and inbound copies 
     await close();
   }
 });
+
+test('runtime-first boot: a throwing server-action module does not break startup', async () => {
+  // Boot must do no whole-app analysis: it must not import server modules. A
+  // module that throws at load would crash boot under the old import-every-
+  // .server-at-boot behaviour; under runtime-first boot it loads only on first
+  // call, so createRequestHandler resolves cleanly.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>x</p>\`; }\n`,
+    'modules/x/boom.server.js':
+      `'use server';\n` +
+      `throw new Error('module-load side effect that must NOT run at boot');\n` +
+      `export async function f() { return 1; }\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  assert.ok(app && typeof app.handle === 'function', 'server boots without importing server modules');
+  // The page still renders (boot did the route table only; analysis is lazy).
+  const resp = await app.handle(new Request('http://x/'));
+  assert.equal(resp.status, 200);
+});

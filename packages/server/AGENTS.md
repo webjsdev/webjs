@@ -66,14 +66,17 @@ can load it without booting the full server.
 
 1. **Source-file branch is gated by the browser-bound module graph.**
    `dev.js` walks the import graph from every page / layout / error /
-   loading / not-found / component entry at boot (and on every
-   `fs.watch` rebuild), producing `state.browserBoundFiles`. The
-   source-file branch in `handle()` only serves paths whose resolved
-   absolute file is in that Set; everything else 404s before any
-   filesystem operation. Same model as Next.js's bundler manifest,
-   derived statically at boot instead of via a build step. The
-   `module-graph.js` module exports `reachableFromEntries` as the
-   reusable BFS helper.
+   loading / not-found / component entry to produce
+   `state.browserBoundFiles`. This is computed **lazily on the first
+   request** (in `ensureReady()`, memoized) rather than at boot, and
+   re-derived after each `fs.watch` rebuild; `handle()` awaits
+   `ensureReady()` before the source-file branch runs, so the Set is
+   always populated by the time it is read. The source-file branch only
+   serves paths whose resolved absolute file is in that Set; everything
+   else 404s before any filesystem operation. Same model as Next.js's
+   bundler manifest, derived statically (now on first request, not at
+   boot). The `module-graph.js` module exports `reachableFromEntries`
+   as the reusable BFS helper.
    The walk stops AT `.server.{js,ts,mjs,mts}` boundaries: the
    server file itself stays in the Set (its URL yields the stub via
    invariant 2), but its outgoing edges are not followed. Files
@@ -98,6 +101,11 @@ can load it without booting the full server.
    tests live at `test/guardrails/server-file-guardrail.test.js`.
 3. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
+   The route table is the ONLY eager boot artifact (a cheap directory
+   scan, no code reads). Everything else (module graph, browser-bound
+   gate, action index, middleware, elision, vendor map) is built lazily
+   on the first request via `ensureReady()` in `dev.js`, so boot reads no
+   app source, executes no server module, and makes no network call.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
@@ -107,8 +115,9 @@ can load it without booting the full server.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
 7. **Display-only component AND inert-route elision is conservative.**
-   `analyzeElision` in `component-elision.js` computes, at boot and on
-   every rebuild, (a) the set of component modules that are purely
+   `analyzeElision` in `component-elision.js` computes, lazily on the
+   first request (inside `ensureReady()`) and again after each rebuild,
+   (a) the set of component modules that are purely
    display-only, and (b) the set of page/layout route modules that are
    inert (do no client work even transitively). The serving branch in
    `dev.js` strips side-effect imports of display-only components from the
