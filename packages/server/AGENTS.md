@@ -51,6 +51,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder. `setCoreInstall(coreDir, distMode)` binds the importmap to the resolved `@webjsdev/core` install and runs `buildCoreEntries()`, which reads the package's `package.json` and derives one importmap line per exported subpath from its `exports` field, picking the `default` (`dist/webjs-core-*.js`) condition in dist mode and the `source` (`src/*.js`) condition otherwise. `dev.js` calls `setCoreInstall` at boot based on `existsSync(coreDir/dist/webjs-core.js) && existsSync(coreDir/dist/webjs-core-browser.js)`. The bare `@webjsdev/core` specifier always points at the BROWSER entry (`index-browser.js` or `dist/webjs-core-browser.js`); the slim entry drops `renderToString`, `renderToStream`, `expose`, `getExposed`, and `setCspNonceProvider` so server-only bytes do not ride the wire. Node-side consumers resolve via the package.json exports and still get the full `index.js`. |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
+| `component-elision.js` | Static analyser deciding which display-only component modules can be elided from the browser, plus the serve-time side-effect-import stripper. Conservative denylist of interactivity signals (single source of truth) |
+| `js-scan.js` | Shared lexical scanners (`redactStringsAndTemplates`, `extractWebComponentClassBodies`, `matchClosingBrace`) used by `check.js` and `component-elision.js` |
 | `fs-walk.js` | Async recursive directory walker |
 | `logger.js` | `defaultLogger` (JSON-shaped in prod, pretty in dev) |
 
@@ -104,6 +106,21 @@ can load it without booting the full server.
    rules go there; tests in `test/check.test.js`.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
+7. **Display-only component elision is conservative and serve-time.**
+   `component-elision.js` computes, at boot and on every rebuild, the
+   set of component modules that are purely display-only (no
+   interactivity signal, and not rendered or imported by any shipping
+   component). The serving branch in `dev.js` strips side-effect imports
+   of those modules from the browser-served source, so their JS is never
+   downloaded; preload hints and importmap entries for them drop too.
+   The analysis is a denylist that biases toward shipping: a false
+   "display-only" verdict breaks the page, a false "interactive" verdict
+   only misses an optimization, so anything ambiguous ships. The signal
+   lists in `component-elision.js` are the single source of truth and
+   must grow whenever core adds an interactivity surface (enforced by
+   `test/elision/lifecycle-coverage.test.js`). Only side-effect imports
+   are stripped; binding imports are always preserved. Tests live in
+   `test/elision/`.
 
 ## Tests
 
@@ -111,7 +128,7 @@ Tests for this package live in **`packages/server/test/`**,
 organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 `session/`, `cache/`, `rate-limit/`, `csrf/`, `cors/`,
 `broadcast/`, `websocket/`, `check/`, `guardrails/`,
-`module-graph/`, `scanner/`, `vendor/`, `env/`, `dev/`,
+`module-graph/`, `scanner/`, `elision/`, `vendor/`, `env/`, `dev/`,
 `forwarded/`.
 
 Cross-package tests that exercise the SSR pipeline, scaffolds,

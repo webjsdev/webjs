@@ -50,6 +50,35 @@ For component-local state, create an instance signal in the constructor and call
 
 See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
 
+## Display-only components are elided from the browser
+
+A component that does no client-side work renders the same SSR'd HTML
+whether or not its JavaScript ever reaches the browser. webjs detects
+these statically and strips their import from the served source, so the
+browser never downloads them (and their unique vendor dependencies drop
+from the importmap). This is automatic, with no opt-in keyword and no
+server/client split to reason about. A component stays elidable as long
+as it has none of the following.
+
+- An `@event` binding in a template (`@click=${...}`).
+- A reactive property in `static properties` that is not `{ state: true }`. Attribute-driven or `.prop`-driven values are the channel a parent uses to push client updates.
+- An overridden lifecycle hook (anything in the table above).
+- A `signal` / `computed` / `watch` / `Task` / streaming directive imported from `@webjsdev/core`.
+- An `addController(...)` or `requestUpdate()` call.
+- Being rendered or imported by a component that itself ships (an interactive parent can re-create the child on the client).
+
+The analysis is deliberately conservative: anything it cannot prove
+inert ships normally, so correctness never depends on it. The elidable
+case in practice is the purely presentational component (a slot wrapper,
+static markup, values seeded in the constructor).
+
+The detection lists live in `packages/server/src/component-elision.js`
+and are the single source of truth. They are kept in lockstep with the
+lifecycle table above by `packages/server/test/elision/lifecycle-coverage.test.js`,
+which fails if a new `WebComponent` hook is added without teaching the
+analyser about it. If you add an interactivity feature to the framework,
+update that file.
+
 ## ReactiveControllers: composable lifecycle
 
 ```js
