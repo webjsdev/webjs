@@ -813,3 +813,33 @@ test('a string body that looks like a call does not force shipping', () => {
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+test('a regex literal containing a quote does not hide a later top-level call', () => {
+  // A regex with a stray quote desyncs the upstream string redaction; the
+  // string-skip then hits a newline/EOF without closing, which must ship.
+  for (const re of ["/[']/", '/["]/', "/it's/"]) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      const RE = ${re};
+      fetch('/analytics');
+      class Q extends WebComponent { render() { return html\`<span></span>\`; } }
+      Q.register('x-q');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, re);
+  }
+});
+
+test('an ordinary multi-line component with normal strings stays elidable', () => {
+  // Counterfactual for the newline-in-string-skip fallback: normal one-line
+  // strings close on their line and must NOT force shipping.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const A = 'hello';
+    const B = "world";
+    class P extends WebComponent {
+      render() { return html\`<span>\${A} \${B}</span>\`; }
+    }
+    P.register('x-p2');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});

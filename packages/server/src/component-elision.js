@@ -156,9 +156,10 @@ const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|
  * prose and JSDoc / TS type annotations cannot trip it; quoted-string bodies,
  * which redaction keeps verbatim for other rules, are blanked here too so a
  * string like `"foo()"` or `"{"` is not read as a call and cannot unbalance
- * the brace scan. If the brace scan ends unbalanced (most often a regex
- * literal with a stray `{` or `}`, which redaction does not track), it ships
- * conservatively rather than risk hiding client work below it.
+ * the brace scan. Regex literals are not tracked by redaction, so a regex with
+ * a stray `{`/`}` leaves the brace scan unbalanced and a regex with a stray
+ * quote leaves a string-skip that never closes on its line; both ship
+ * conservatively rather than risk hiding client work below them.
  *
  * Over-detection is safe (a top-level arrow whose body calls something, or a
  * pure top-level helper call, only ships). The accepted residual misses, all
@@ -178,10 +179,19 @@ function hasModuleScopeSideEffect(src) {
     const c = redacted[i];
     if (c === "'" || c === '"') {
       i++;
-      while (i < redacted.length && redacted[i] !== c) {
-        if (redacted[i] === '\\') i++;
+      let closed = false;
+      while (i < redacted.length) {
+        const d = redacted[i];
+        if (d === '\\') { i += 2; continue; }
+        if (d === '\n') break;       // a real quoted string never spans a newline
+        if (d === c) { closed = true; break; }
         i++;
       }
+      // Not closed on its line is an unterminated string OR a regex literal
+      // containing a quote that desynced the upstream redaction (regex bodies
+      // are not tracked, so a stray quote shifts quote pairing). Either way the
+      // lexical state is unreliable below here, so ship conservatively.
+      if (!closed) return true;
       if (depth === 0) frame += "''";
       continue;
     }
