@@ -212,107 +212,73 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Build module dependency graph for transitive preload hints.
-  const moduleGraph = await buildModuleGraph(appDir);
-
-  // Scan for component classes and prime their module URLs into the
-  // core registry. SSR uses this for modulepreload hints without
-  // requiring authors to pass `import.meta.url` themselves. The same
-  // scan result feeds the browser-bound graph computation below,
-  // avoiding a duplicate appDir walk at boot.
-  const components = await scanComponents(appDir);
-  await primeComponentRegistry(appDir, components);
-
+  // Whole-app analysis (module graph, component scan, browser-bound gate,
+  // action index, middleware, elision, vendor) is NOT run at boot. It is
+  // computed on the first request via ensureReady() below and memoized, so the
+  // server starts without walking or reading the app's source, executing any
+  // server module, or hitting the network. Only the route table is built
+  // eagerly: it is a cheap directory scan (no code reads), and routing, Early
+  // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
-
-  // The elision analysis (which component modules are display-only and which
-  // page/layout routes are inert) is NOT run at boot. It is computed on the
-  // first request via ensureElision() below and memoized, so boot does no
-  // elision fixpoint. The sets start empty; ensureElision fills them (or leaves
-  // them empty when `webjs.elide: false`) before any SSR or module serve.
-
-  // Vendor import-map entries are NOT resolved at boot. The pin-file read
-  // (pinned) or the bare-import scan + jspm.io call (unpinned) is deferred to
-  // the first request via ensureVendor() below, so the server starts without
-  // any vendor work. Core importmap entries are already set by setCoreInstall.
-
-  // Dev-time guardrail: warn about any class extending WebComponent
-  // that isn't registered via customElements.define() in its own
-  // module. Without registration, <my-tag> elements silently stay as
-  // HTMLUnknownElement in the browser: a common early-stage footgun.
-  if (dev) {
-    const orphans = await findOrphanComponents(appDir);
-    for (const { className, file } of orphans) {
-      logger.warn?.(
-        `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
-          `Add \`customElements.define('<tag-name>', ${className});\` at the bottom of the file ` +
-          `or <${kebab(className)}> tags won't upgrade in the browser.`,
-      );
-    }
-  }
 
   const state = {
     routeTable,
-    actionIndex: await buildActionIndex(appDir, dev),
-    middleware: await loadMiddleware(appDir, dev, logger),
+    actionIndex: null,
+    middleware: null,
     logger,
-    moduleGraph,
-    components,
+    moduleGraph: null,
+    components: [],
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
-    browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
+    browserBoundFiles: null,
   };
 
-  // Elision analysis runs lazily on the first request, memoized and
-  // single-flighted. Boot does no elision fixpoint; the first request computes
-  // it (fast, in-memory over the module graph, no network or module execution)
-  // before any SSR or module serve reads the sets. Reset on rebuild. The
-  // `webjs.elide: false` switch leaves the sets empty (nothing elided).
-  let elisionReady = false;
+  // All whole-app analysis is built lazily on the first request, memoized and
+  // single-flighted so concurrent first requests build it once. Boot does none
+  // of it. Steps run in dependency order: module graph, component scan + prime,
+  // browser-bound gate, action index, middleware, elision (skipped to empty
+  // sets when `webjs.elide: false`), then vendor (the bare-import scan excludes
+  // deps reachable only through elided modules; a pinned app does only a file
+  // read). Dev-only orphan-component warnings run last. Reset on rebuild.
+  let readyDone = false;
   /** @type {Promise<void> | null} */
-  let elisionInFlight = null;
-  async function ensureElision() {
-    if (elisionReady) return;
-    if (!elisionInFlight) {
-      elisionInFlight = (async () => {
+  let readyInFlight = null;
+  async function ensureReady() {
+    if (readyDone) return;
+    if (!readyInFlight) {
+      readyInFlight = (async () => {
         try {
+          state.moduleGraph = await buildModuleGraph(appDir);
+          const components = await scanComponents(appDir);
+          await primeComponentRegistry(appDir, components);
+          state.components = components;
+          state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
+          state.actionIndex = await buildActionIndex(appDir, dev);
+          state.middleware = await loadMiddleware(appDir, dev, logger);
           const r = (await readElideEnabled(appDir))
-            ? await analyzeElision(state.components, collectRouteModules(state.routeTable),
+            ? await analyzeElision(components, collectRouteModules(state.routeTable),
                 state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
             : { elidableComponents: new Set(), inertRouteModules: new Set() };
           state.elidableComponents = r.elidableComponents;
           state.inertRouteModules = r.inertRouteModules;
-          elisionReady = true;
-        } finally {
-          elisionInFlight = null;
-        }
-      })();
-    }
-    await elisionInFlight;
-  }
-
-  // Vendor import map resolved lazily on the first request, memoized, and
-  // single-flighted so concurrent first requests resolve once. A pinned app
-  // pays only a file read here; an unpinned one pays the scan + jspm.io call,
-  // off the boot path. Reset on rebuild (see doRebuild) to re-resolve.
-  let vendorReady = false;
-  /** @type {Promise<void> | null} */
-  let vendorInFlight = null;
-  async function ensureVendor() {
-    if (vendorReady) return;
-    if (!vendorInFlight) {
-      vendorInFlight = (async () => {
-        try {
           const v = await resolveVendorImports(appDir,
             () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
           await setVendorEntries(v.imports, v.integrity);
-          vendorReady = true;
+          if (dev) {
+            for (const { className, file } of await findOrphanComponents(appDir)) {
+              logger.warn?.(
+                `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
+                  `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
+              );
+            }
+          }
+          readyDone = true;
         } finally {
-          vendorInFlight = null;
+          readyInFlight = null;
         }
       })();
     }
-    await vendorInFlight;
+    await readyInFlight;
   }
 
   // Rebuilds are serialized so a slow rebuild #1 cannot overwrite a fresher
@@ -329,55 +295,27 @@ export async function createRequestHandler(opts) {
   }
 
   async function doRebuild() {
+    // The route table is the only eager artifact (cheap directory scan); rebuild
+    // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
-    state.actionIndex = await buildActionIndex(appDir, dev);
-    state.middleware = await loadMiddleware(appDir, dev, logger);
     clearVendorCache();
-    state.moduleGraph = await buildModuleGraph(appDir);
-    // Re-scan components in case a new file was added or a tag renamed.
-    // Share the scan with the browser-bound graph computation so we
-    // don't walk appDir twice per rebuild.
-    const components = await scanComponents(appDir);
-    await primeComponentRegistry(appDir, components);
-    state.components = components;
-    // Invalidate the elision memo so the next request recomputes the verdicts.
-    // A dependency's edit can flip a verdict WITHOUT changing an importer's
-    // mtime, so the TS transform cache (keyed by mtime) must be dropped too or
-    // it would serve a stale strip decision for the unchanged importer.
-    if (elisionInFlight) { try { await elisionInFlight; } catch {} }
-    elisionReady = false;
     TS_CACHE.clear();
-    // Invalidate the vendor memo so the next request re-resolves the import
-    // map (drops deps reachable only through newly-elided components, picks up
-    // edits). Wait out any in-flight resolve first so it cannot commit stale
-    // entries after this reset.
-    if (vendorInFlight) { try { await vendorInFlight; } catch {} }
-    vendorReady = false;
-    // Recompute the browser-bound file set: the page / layout / error /
-    // loading / not-found / component entries plus their transitive imports.
-    // This drives the dev server's "is this file allowed to be served as
-    // source?" gate at the file-extension catch-all branch below.
-    state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
-    if (dev) {
-      const orphans = await findOrphanComponents(appDir);
-      for (const { className, file } of orphans) {
-        logger.warn?.(
-          `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
-            `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
-        );
-      }
-    }
+    // Invalidate the lazy analysis; the next request rebuilds the graph,
+    // component scan, gate, action index, middleware, elision, and vendor map.
+    // Wait out any in-flight build first so it cannot commit stale results
+    // after the reset. A dependency edit can flip an elision verdict without
+    // changing an importer's mtime, hence the TS_CACHE.clear above.
+    if (readyInFlight) { try { await readyInFlight; } catch {} }
+    readyDone = false;
     opts.onReload?.();
   }
 
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
-      // Compute elision then resolve the vendor import map on the first request
-      // (both memoized). Elision first: the vendor scan excludes deps reachable
-      // only through elided modules. Both run before any SSR or module serve.
-      await ensureElision();
-      await ensureVendor();
+      // Build all whole-app analysis on the first request (memoized), before
+      // any SSR, module serve, gate check, action dispatch, or middleware runs.
+      await ensureReady();
       const next = () => handleCore(req, { state, appDir, coreDir, dev });
       if (state.middleware) {
         try {

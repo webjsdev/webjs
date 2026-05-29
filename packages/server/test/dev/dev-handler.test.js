@@ -505,7 +505,10 @@ test('handle: orphan component warning fires in dev', async () => {
       `import { WebComponent } from '@webjsdev/core';\n` +
       `export class Orphan extends WebComponent {}\n`,
   });
-  await createRequestHandler({ appDir, dev: true, logger });
+  const app = await createRequestHandler({ appDir, dev: true, logger });
+  // Orphan detection runs in the lazy first-request analysis (boot does no
+  // whole-app scan), so drive one request before asserting.
+  await app.handle(new Request('http://x/'));
   assert.ok(
     warns.some(m => /Orphan/.test(m)),
     `expected orphan warning for class "Orphan"; got: ${warns.join('\n')}`,
@@ -1001,6 +1004,9 @@ test('rebuild: orphan warning fires when rebuilding after a new orphan is added'
     `import { WebComponent } from '@webjsdev/core';\n` +
     `export class LateOrphan extends WebComponent {}\n`);
   await app.rebuild();
+  // Rebuild invalidates the lazy analysis; the orphan re-scan runs on the next
+  // request, so drive one before asserting.
+  await app.handle(new Request('http://x/'));
   assert.ok(warns.slice(before).some(m => /LateOrphan/.test(m)),
     `expected LateOrphan warning after rebuild; got: ${warns.join('\n')}`);
 });
