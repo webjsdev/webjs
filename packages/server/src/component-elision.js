@@ -138,15 +138,22 @@ const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|
 
 /**
  * Additional browser globals (beyond CLIENT_GLOBAL_RE) whose bare use means
- * module-scope client work: network, timers, observers, workers, storage.
- * The not-a-dot lookbehind skips same-named object members (`this.fetch`,
- * `route.location`) so a property never forces shipping. These names are
- * common English words, so this is matched against REDACTED source (template
- * prose and comments blanked) to avoid tripping on rendered text; a residual
- * match inside a kept quoted string only over-ships, which is safe.
+ * module-scope client work: network, timers, observers, workers, storage,
+ * device APIs. `globalThis` and `self` are included so a namespace-qualified
+ * access (`globalThis.fetch`, `self.setTimeout`) is caught even though the
+ * not-a-dot lookbehind would skip the `.fetch` member token (`window.fetch`
+ * is already caught via the bare `window` in CLIENT_GLOBAL_RE). The lookbehind
+ * skips same-named members on user objects (`this.fetch`, `route.location`) so
+ * a property never forces shipping. These names are common English words, so
+ * this is matched against REDACTED source (template prose and comments
+ * blanked) to avoid tripping on rendered text; a residual match inside a kept
+ * quoted string only over-ships, which is safe. This is a best-effort denylist
+ * (like CLIENT_GLOBAL_RE): unknown globals are not caught here, but anything
+ * truly interactive almost always trips another signal, and the bias is always
+ * toward shipping.
  */
 const EXTRA_CLIENT_GLOBAL_RE =
-  /(?<!\.)\b(?:fetch|WebSocket|EventSource|location|history|setTimeout|setInterval|requestAnimationFrame|cancelAnimationFrame|requestIdleCallback|queueMicrotask|IntersectionObserver|ResizeObserver|MutationObserver|indexedDB|caches|BroadcastChannel|Worker|SharedWorker|Notification)\b/;
+  /(?<!\.)\b(?:globalThis|self|fetch|XMLHttpRequest|WebSocket|EventSource|location|history|setTimeout|setInterval|requestAnimationFrame|cancelAnimationFrame|requestIdleCallback|queueMicrotask|IntersectionObserver|ResizeObserver|MutationObserver|indexedDB|caches|BroadcastChannel|Worker|SharedWorker|Notification|performance|crypto|getComputedStyle|alert|confirm|prompt|scrollTo|scrollBy|Audio|FileReader)\b/;
 
 /**
  * A dynamic `import()` loads code on the client at runtime. It is real client

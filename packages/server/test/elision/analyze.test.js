@@ -674,3 +674,30 @@ test('import.meta and static imports are NOT mistaken for a dynamic import()', (
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+test('namespace-qualified global access (globalThis.fetch, self.setTimeout) forces interactive', () => {
+  // The not-a-dot lookbehind skips `.fetch`, so the global namespace object
+  // itself (globalThis/self) is what must be recognised; window.* is already
+  // caught via bare `window`.
+  for (const stmt of ['globalThis.fetch("/x");', 'self.setTimeout(() => {}, 0);']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      ${stmt}
+      class N extends WebComponent { render() { return html\`<span></span>\`; } }
+      N.register('x-n');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, stmt);
+  }
+});
+
+test('module-scope XMLHttpRequest / performance / crypto force interactive', () => {
+  for (const stmt of ['new XMLHttpRequest();', 'performance.now();', 'crypto.getRandomValues(new Uint8Array(1));']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      ${stmt}
+      class X extends WebComponent { render() { return html\`<span></span>\`; } }
+      X.register('x-x');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, stmt);
+  }
+});
