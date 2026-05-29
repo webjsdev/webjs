@@ -136,6 +136,40 @@ const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionSto
  * `customElements.define(...)` legitimately uses it and must not force ship). */
 const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
 
+/**
+ * Additional browser globals (beyond CLIENT_GLOBAL_RE) whose bare use means
+ * module-scope client work: network, timers, observers, workers, storage.
+ * The not-a-dot lookbehind skips same-named object members (`this.fetch`,
+ * `route.location`) so a property never forces shipping. These names are
+ * common English words, so this is matched against REDACTED source (template
+ * prose and comments blanked) to avoid tripping on rendered text; a residual
+ * match inside a kept quoted string only over-ships, which is safe.
+ */
+const EXTRA_CLIENT_GLOBAL_RE =
+  /(?<!\.)\b(?:fetch|WebSocket|EventSource|location|history|setTimeout|setInterval|requestAnimationFrame|cancelAnimationFrame|requestIdleCallback|queueMicrotask|IntersectionObserver|ResizeObserver|MutationObserver|indexedDB|caches|BroadcastChannel|Worker|SharedWorker|Notification)\b/;
+
+/**
+ * A dynamic `import()` loads code on the client at runtime. It is real client
+ * work AND the static module graph does not follow it, so a module containing
+ * one must ship (and its route is not inert) or the dynamically loaded code is
+ * silently lost. The not-a-dot lookbehind skips a `.import(` member call;
+ * `import.meta`, static `import x from`, and `import 'x'` do not match (no
+ * paren follows). Matched on redacted source so an `import(` in a template,
+ * comment, or JSDoc / TS type annotation does not count.
+ */
+const DYNAMIC_IMPORT_RE = /(?<!\.)\bimport\s*\(/;
+
+/**
+ * Module-scope client work the render / lifecycle / event checks miss: an
+ * extra browser global or a dynamic `import()`. Scans the redacted copy once.
+ * Over-detection is safe (only ships); under-detection would elide live code.
+ * @param {string} src raw module source
+ */
+function hasExtraClientWork(src) {
+  const redacted = redactStringsAndTemplates(src);
+  return EXTRA_CLIENT_GLOBAL_RE.test(redacted) || DYNAMIC_IMPORT_RE.test(redacted);
+}
+
 /** Match a whole-line SIDE-EFFECT import: `import 'pkg';` (no binding clause).
  * `\s*` before the quote (not `\s+`) so `import"pkg"` (no space) is caught;
  * a binding clause still fails because a non-quote follows `import`. A
@@ -256,6 +290,9 @@ export function analyzeComponentSource(src) {
   }
   if (COMPONENT_CLIENT_GLOBAL_RE.test(src)) {
     return { interactive: true, reason: 'references a browser global at module scope' };
+  }
+  if (hasExtraClientWork(src)) {
+    return { interactive: true, reason: 'module-scope client work (network/timer/observer global or dynamic import())' };
   }
 
   // The brace matcher counts depth reliably only on redacted source
@@ -538,7 +575,8 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (importsReactivePrimitive(src)) reactiveFiles.add(file);
     if (importsClientRouter(src)) clientRouterFiles.add(file);
     if (EVENT_BINDING_RE.test(src) || EVENT_PROP_RE.test(src) ||
-        importsSideEffectNonCorePackage(src) || CLIENT_GLOBAL_RE.test(src)) {
+        importsSideEffectNonCorePackage(src) || CLIENT_GLOBAL_RE.test(src) ||
+        hasExtraClientWork(src)) {
       clientGlobalOrBareFiles.add(file);
     }
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {

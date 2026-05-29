@@ -65,6 +65,8 @@ as it has none of the following.
 - An overridden lifecycle hook (anything in the table above), as a method or an arrow class field.
 - A `signal` / `computed` / `watch` / `Task` / `ref` / `live` / streaming directive imported from `@webjsdev/core`, OR a transitive import of a module that reads shared module-scope signal state.
 - An `addController(...)` or `requestUpdate()` call.
+- A module-scope browser global. Beyond `window` / `document` / `navigator` / storage / `matchMedia` / `addEventListener`, this covers network and scheduling and observer globals (`fetch`, `WebSocket`, `EventSource`, `location`, `history`, `setTimeout`, `setInterval`, `requestAnimationFrame`, `requestIdleCallback`, `queueMicrotask`, `IntersectionObserver`, `ResizeObserver`, `MutationObserver`, `indexedDB`, `caches`, `BroadcastChannel`, `Worker`, `Notification`). A same-named object member (`this.fetch`, `route.location`) does not count, and these words in rendered template text do not count.
+- A dynamic `import(...)`. It loads code on the client at runtime, which the static module graph does not follow, so a module containing one ships (and its route is not inert) or the loaded code would be silently lost.
 - A rendered `<slot>`. Light-DOM slots rely on the client projection runtime, and proving a slot is purely native (shadow DOM) is beyond static analysis, so any `<slot>` ships.
 - Being rendered or imported by a component that itself ships (an interactive parent can re-create the child on the client).
 

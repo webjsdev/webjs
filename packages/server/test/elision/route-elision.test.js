@@ -184,3 +184,49 @@ test('an inert importer of a server-only util stays inert (server stub never loa
   // the client, so the page is still inert.
   assert.ok(inertRouteModules.has('/app/page.js'), 'a .server dep does not force the page to ship');
 });
+
+test('a page with a top-level dynamic import() is NOT inert', async () => {
+  // The dynamically loaded module is real client work the static graph does
+  // not follow; dropping the page would silently lose it.
+  const page = `
+    import { html } from '@webjsdev/core';
+    import('./track.js');
+    export default () => html\`<p>hi</p>\`;
+  `;
+  const { inertRouteModules } = await run({
+    files: { '/app/page.js': page },
+    routeModules: ['/app/page.js'],
+  });
+  assert.ok(!inertRouteModules.has('/app/page.js'), 'page with dynamic import must ship');
+});
+
+test('a page doing module-scope fetch() / new WebSocket() is NOT inert', async () => {
+  for (const stmt of ["fetch('/track');", 'new WebSocket("/ws");']) {
+    const page = `
+      import { html } from '@webjsdev/core';
+      ${stmt}
+      export default () => html\`<p>hi</p>\`;
+    `;
+    const { inertRouteModules } = await run({
+      files: { '/app/page.js': page },
+      routeModules: ['/app/page.js'],
+    });
+    assert.ok(!inertRouteModules.has('/app/page.js'), stmt);
+  }
+});
+
+test('client work reached only through a helper module keeps the route shipping', async () => {
+  // The page itself is clean; a helper it imports does a dynamic import().
+  const page = `
+    import { html } from '@webjsdev/core';
+    import { boot } from './helper.js';
+    export default () => { boot(); return html\`<p>hi</p>\`; };
+  `;
+  const helper = `export function boot() {} import('./deferred.js');`;
+  const { inertRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/helper.js': helper },
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/helper.js'] },
+  });
+  assert.ok(!inertRouteModules.has('/app/page.js'), 'route reaching a dynamic import via a helper must ship');
+});

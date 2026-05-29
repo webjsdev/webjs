@@ -604,3 +604,73 @@ test('render rule: child emitted via an imported template helper still ships', a
   );
   assert.deepEqual([...elidable], [], 'grid-cell must ship because data-grid can emit it via the helper');
 });
+
+// --- module-scope client work beyond window/document (false-elision guard) ---
+
+test('module-scope fetch() forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    fetch('/track');
+    class Pixel extends WebComponent { render() { return html\`<span></span>\`; } }
+    Pixel.register('x-pixel');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('module-scope new WebSocket / setTimeout / IntersectionObserver force interactive', () => {
+  for (const stmt of ['new WebSocket("/ws");', 'setTimeout(() => {}, 0);', 'new IntersectionObserver(() => {});']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      ${stmt}
+      class W extends WebComponent { render() { return html\`<span></span>\`; } }
+      W.register('x-w');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, stmt);
+  }
+});
+
+test('a dynamic import() forces interactive (loads code on the client)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import('./analytics-boot.js');
+    class Widget extends WebComponent { render() { return html\`<span></span>\`; } }
+    Widget.register('x-widget');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a same-named member (this.fetch, route.location) does NOT force interactive', () => {
+  // The not-a-dot lookbehind must skip property/method names, or every
+  // component with a .fetch() helper or .location field would wrongly ship.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Card extends WebComponent {
+      render() { return html\`<p>\${this.route?.location ?? ''}</p>\`; }
+    }
+    Card.register('x-card');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('a global-looking WORD in rendered template text does NOT force interactive', () => {
+  // "location"/"history" as visible prose live in the html template, which
+  // redaction blanks, so they must not be read as the browser globals.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Notice extends WebComponent {
+      render() { return html\`<p>Update your location and view your history.</p>\`; }
+    }
+    Notice.register('x-notice');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('import.meta and static imports are NOT mistaken for a dynamic import()', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const base = import.meta.url;
+    class M extends WebComponent { render() { return html\`<a href=\${base}>x</a>\`; } }
+    M.register('x-m');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
