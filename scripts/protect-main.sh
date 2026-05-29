@@ -20,6 +20,7 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
   "required_status_checks": {
     "strict": true,
     "contexts": [
+      "Conventions (webjs check)",
       "Unit + integration (node --test)",
       "Browser (web-test-runner / Playwright)",
       "E2E (Puppeteer against the blog example)"
