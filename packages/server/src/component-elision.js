@@ -204,12 +204,21 @@ function importsReactivePrimitive(src) {
       }
     } else if (clause.startsWith('*')) {
       // Namespace import (`import * as core from '@webjsdev/core'`). We
-      // cannot see which members are used from the clause, so check for a
-      // reactive member access through the namespace identifier.
+      // cannot see which members are used from the clause, so look for a
+      // reactive member reached through the namespace identifier `ns`
+      // (which is a bare `\w+`, safe to interpolate into a RegExp).
       const ns = clause.replace(/^\*\s+as\s+/, '').trim();
-      if (!ns) continue;
+      if (!ns || !/^\w+$/.test(ns)) continue;
       for (const name of REACTIVE_IMPORTS) {
         if (new RegExp(`\\b${ns}\\.${name}\\b`).test(src)) return name;
+      }
+      // Destructuring the namespace (`const { signal } = core`) or computed
+      // access (`core['signal']`) hides which members are pulled. Ship.
+      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(src)) {
+        return `${ns} (destructured namespace)`;
+      }
+      if (new RegExp(`\\b${ns}\\s*\\[`).test(src)) {
+        return `${ns} (computed namespace access)`;
       }
     }
   }
@@ -249,7 +258,16 @@ function hasNonStateReactiveProperty(classBody) {
   for (const entry of topLevelPropertyValues(obj)) {
     // Object-literal descriptor: inert only when it carries state: true.
     if (entry.startsWith('{')) {
-      if (!/\bstate\s*:\s*true\b/.test(entry)) return true;
+      // Blank string / template bodies first. Redaction keeps quoted
+      // string contents verbatim (so register('tag') stays readable), so
+      // a descriptor like `{ attribute: 'data-state: true' }` would
+      // otherwise forge the state flag. The real `state: true` is code,
+      // not a string, so it survives this blanking.
+      const code = entry
+        .replace(/'[^'\n]*'/g, "''")
+        .replace(/"[^"\n]*"/g, '""')
+        .replace(/`[^`]*`/g, '``');
+      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
     } else {
       // Shorthand like `count: Number` rides an attribute, not state.
       return true;

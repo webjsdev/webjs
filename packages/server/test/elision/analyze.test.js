@@ -297,6 +297,47 @@ test('static properties with a TS type annotation is still parsed', () => {
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
+test('a string descriptor value containing "state: true" does not forge the flag', () => {
+  // `attribute` is a real descriptor option. The literal text inside the
+  // string must not be mistaken for the state flag.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Variant extends WebComponent {
+      static properties = { variant: { type: String, attribute: 'data-state: true' } };
+      render() { return html\`<p>x</p>\`; }
+    }
+    Variant.register('variant-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('namespace reactive primitive via destructuring forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import * as core from '@webjsdev/core';
+    const { signal } = core;
+    const n = signal(0);
+    class DThing extends WebComponent {
+      render() { return html\`<p>\${n.get()}</p>\`; }
+    }
+    DThing.register('d-thing');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('namespace reactive primitive via computed access forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import * as core from '@webjsdev/core';
+    const n = core['signal'](0);
+    class CThing extends WebComponent {
+      render() { return html\`<p>\${n.get()}</p>\`; }
+    }
+    CThing.register('c-thing');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
 test('static get properties is conservative (ships)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
