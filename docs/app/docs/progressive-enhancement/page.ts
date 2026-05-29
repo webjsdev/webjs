@@ -58,7 +58,7 @@ export default function ProgressiveEnhancement() {
     <h2>Display-only components ship zero JavaScript</h2>
 
     <p>
-      webjs takes the asymmetry one step further. A component whose <code>render()</code> is a pure function of its inputs, with no <code>@event</code> handler, no non-<code>state</code> reactive property, no overridden lifecycle hook, no signal or <code>Task</code>, no <code>&lt;slot&gt;</code>, produces identical HTML whether or not its module ever reaches the browser. So the framework detects these statically and <strong>strips their import from the served page</strong>. The module is never downloaded, and any npm dependency it alone pulled in (an icon set, a date formatter) drops out of the importmap.
+      webjs takes the asymmetry one step further. A component whose <code>render()</code> is a pure function of its inputs, with no <code>@event</code> handler, no non-<code>state</code> reactive property, no overridden lifecycle hook, no signal or <code>Task</code>, no <code>&lt;slot&gt;</code>, produces identical HTML whether or not its module ever reaches the browser. So the framework detects these statically and <strong>strips their import from the served page</strong>. The module is never downloaded, and any npm package imported only by display-only components (an icon set, a date formatter) drops out of the importmap.
     </p>
 
     <p>
