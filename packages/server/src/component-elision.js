@@ -122,6 +122,56 @@ const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
 /** Match a rendered `<slot>` / `<slot ` / `<slot/>`, but not `<slot-machine>`. */
 const SLOT_RE = /<slot[\s/>]/;
 
+/** A `.server.{js,ts,mjs,mts}` file: a stub on the client, inert there. */
+const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
+
+/** Side-effect or named import of the client router subpath. */
+const CLIENT_ROUTER_SUBPATH_RE = /['"]@webjsdev\/core\/client-router['"]/;
+/** Client-only named APIs from the `@webjsdev/core` main entry. */
+const CLIENT_ROUTER_IMPORTS = ['navigate', 'enableClientRouter', 'disableClientRouter', 'revalidate'];
+
+/** Identifiers that only exist in a browser; their presence means client work. */
+const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
+
+/** Match any import/dynamic-import specifier. */
+const ANY_IMPORT_RE = /\bimport\s*(?:\(\s*)?(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+
+/**
+ * True if `src` imports the client router (the `/client-router` subpath, or
+ * a router/nav API from the core main entry). A page or layout that does so
+ * is enabling client-side navigation and must ship.
+ * @param {string} src
+ * @returns {boolean}
+ */
+function importsClientRouter(src) {
+  if (CLIENT_ROUTER_SUBPATH_RE.test(src)) return true;
+  for (const m of src.matchAll(CORE_IMPORT_RE)) {
+    const clause = m[1];
+    if (!clause.startsWith('{')) continue;
+    const names = clause.slice(1, -1).split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim());
+    if (names.some((n) => CLIENT_ROUTER_IMPORTS.includes(n))) return true;
+  }
+  return false;
+}
+
+/**
+ * True if `src` imports a bare npm package other than the (inert) framework
+ * `@webjsdev/core` family. Such a package can have client-side side effects
+ * the analyser cannot inspect, so a route module that pulls one in must ship.
+ * @param {string} src
+ * @returns {boolean}
+ */
+function importsNonCoreBarePackage(src) {
+  for (const m of src.matchAll(ANY_IMPORT_RE)) {
+    const spec = m[1];
+    if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative / absolute
+    if (spec === '@webjsdev/core' || spec.startsWith('@webjsdev/core/')) continue; // inert framework
+    if (spec.startsWith('node:')) continue; // server-only builtins (a separate concern)
+    return true;
+  }
+  return false;
+}
+
 /** Match a named-import clause from a `@webjsdev/core` specifier. */
 const CORE_IMPORT_RE =
   /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](@webjsdev\/core[^'"]*|[^'"]*\/__webjs\/core\/[^'"]*)['"]/g;
@@ -368,6 +418,33 @@ export function extractRenderedTags(src) {
  * @returns {Promise<Set<string>>} absolute paths of elidable component files
  */
 export async function computeElidableComponents(components, moduleGraph, readFileFn, appDir) {
+  const { elidableComponents } = await analyzeElision(components, [], moduleGraph, readFileFn, appDir);
+  return elidableComponents;
+}
+
+/**
+ * Full elision analysis: which display-only COMPONENT modules can be elided,
+ * AND which page/layout ROUTE modules are inert (do no client work) and can
+ * therefore be dropped from the client boot script entirely. The second is
+ * the progressive-enhancement completion of the first: a route whose whole
+ * subtree is inert ships zero JavaScript.
+ *
+ * A route module is inert only when neither it nor its effective client
+ * closure (the import graph with elided components and `.server` stubs
+ * skipped, since those never run on the client) touches anything
+ * client-effecting: a reactive primitive, the client router, an `@event` /
+ * `.on*` binding, a non-core npm import (which may self-execute), a client
+ * global (`window`, `document`, …), or a shipping component. Anything
+ * ambiguous or unreadable keeps shipping.
+ *
+ * @param {Array<{ tag: string, file: string }>} components
+ * @param {string[]} routeModules  absolute paths of page + layout files
+ * @param {import('./module-graph.js').ModuleGraph} moduleGraph
+ * @param {(file: string) => Promise<string>} readFileFn
+ * @param {string} [appDir]
+ * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string> }>}
+ */
+export async function analyzeElision(components, routeModules, moduleGraph, readFileFn, appDir) {
   /** @type {Set<string>} */
   const componentFiles = new Set();
   /** @type {Map<string, string>} */
@@ -379,44 +456,49 @@ export async function computeElidableComponents(components, moduleGraph, readFil
 
   /** @type {Set<string>} */
   const mustShip = new Set();
-
-  // Rendered-tag index for every app-internal file in the graph (component
-  // files plus the helper modules they import). A component's own source is
-  // read here too, both for its tags and for its interactivity verdict.
   /** @type {Map<string, Set<string>>} */
   const fileTags = new Map();
-  // App-internal modules that import a reactive primitive from core. A
-  // component that transitively imports one of these reads cross-component
-  // state through it (the module-scope `export const x = signal(0)` shared
-  // state pattern), so its SignalWatcher re-renders on the client and it
-  // must ship even though it imports no primitive directly.
-  /** @type {Set<string>} */
+  /** @type {Set<string>} modules importing a reactive primitive from core */
   const reactiveFiles = new Set();
+  /** @type {Set<string>} modules enabling the client router */
+  const clientRouterFiles = new Set();
+  /** @type {Set<string>} modules with an @event/.on* binding, a non-core npm import, or a client global */
+  const clientGlobalOrBareFiles = new Set();
+  /** @type {Set<string>} */
+  const serverFiles = new Set();
+
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
+  for (const f of routeModules) allFiles.add(f);
   for (const [k, vs] of moduleGraph) {
     if (!appDir || k.startsWith(appDir)) allFiles.add(k);
     for (const v of vs) if (!appDir || v.startsWith(appDir)) allFiles.add(v);
   }
+
   for (const file of allFiles) {
+    if (SERVER_FILE_RE.test(file)) { serverFiles.add(file); continue; }
     let src;
     try { src = await readFileFn(file); }
     catch {
-      // A component file we cannot read is shipped conservatively; a
-      // helper we cannot read simply contributes no tags.
+      // A component file we cannot read ships conservatively; a helper we
+      // cannot read simply contributes no tags.
       if (componentFiles.has(file)) mustShip.add(file);
       continue;
     }
     if (typeof src !== 'string') continue;
     fileTags.set(file, extractRenderedTags(src));
     if (importsReactivePrimitive(src)) reactiveFiles.add(file);
+    if (importsClientRouter(src)) clientRouterFiles.add(file);
+    if (EVENT_BINDING_RE.test(src) || EVENT_PROP_RE.test(src) ||
+        importsNonCoreBarePackage(src) || CLIENT_GLOBAL_RE.test(src)) {
+      clientGlobalOrBareFiles.add(file);
+    }
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
       mustShip.add(file);
     }
   }
 
-  // Ship any component that transitively imports a reactive module (shared
-  // module-scope signal/computed read through an imported binding).
+  // Ship any component that transitively imports a reactive module.
   if (appDir) {
     for (const file of componentFiles) {
       if (mustShip.has(file)) continue;
@@ -425,9 +507,7 @@ export async function computeElidableComponents(components, moduleGraph, readFil
     }
   }
 
-  // Precompute, per component, the tags it can emit on a client re-render:
-  // its own tags unioned with those of every app-internal module it imports
-  // transitively. The graph is fixed during the fixpoint, so compute once.
+  // Tags each component can emit on a client re-render (own + helper closure).
   /** @type {Map<string, Set<string>>} */
   const emittableTags = new Map();
   for (const file of componentFiles) {
@@ -440,42 +520,59 @@ export async function computeElidableComponents(components, moduleGraph, readFil
     emittableTags.set(file, tags);
   }
 
+  // Fixpoint: render rule + import rule.
   let changed = true;
   while (changed) {
     changed = false;
-    // Render rule.
     for (const parent of mustShip) {
       const tags = emittableTags.get(parent);
       if (!tags) continue;
       for (const tag of tags) {
         const childFile = tagToFile.get(tag);
-        if (childFile && !mustShip.has(childFile)) {
-          mustShip.add(childFile);
-          changed = true;
-        }
+        if (childFile && !mustShip.has(childFile)) { mustShip.add(childFile); changed = true; }
       }
     }
-    // Import rule.
     for (const file of componentFiles) {
       if (mustShip.has(file)) continue;
       const deps = moduleGraph.get(file);
       if (!deps) continue;
       for (const dep of deps) {
-        if (componentFiles.has(dep) && mustShip.has(dep)) {
-          mustShip.add(file);
-          changed = true;
-          break;
-        }
+        if (componentFiles.has(dep) && mustShip.has(dep)) { mustShip.add(file); changed = true; break; }
       }
     }
   }
 
   /** @type {Set<string>} */
-  const elidable = new Set();
+  const elidableComponents = new Set();
   for (const file of componentFiles) {
-    if (!mustShip.has(file)) elidable.add(file);
+    if (!mustShip.has(file)) elidableComponents.add(file);
   }
-  return elidable;
+
+  // A file does client work if it ships as a component, or itself reaches a
+  // reactive primitive / client router / event binding / non-core npm import
+  // / client global.
+  const isClientEffecting = (file) =>
+    (componentFiles.has(file) && mustShip.has(file)) ||
+    reactiveFiles.has(file) ||
+    clientRouterFiles.has(file) ||
+    clientGlobalOrBareFiles.has(file);
+
+  // Route modules: inert iff neither the module nor its effective client
+  // closure (skipping elided components and server stubs, which never load)
+  // is client-effecting.
+  /** @type {Set<string>} */
+  const skip = new Set([...elidableComponents, ...serverFiles]);
+  /** @type {Set<string>} */
+  const inertRouteModules = new Set();
+  for (const file of routeModules) {
+    if (!fileTags.has(file)) continue; // unreadable / not analysed: ship (omit from inert set)
+    if (isClientEffecting(file)) continue;
+    const closure = appDir ? transitiveDeps(moduleGraph, [file], appDir, skip) : [];
+    if (closure.some(isClientEffecting)) continue;
+    inertRouteModules.add(file);
+  }
+
+  return { elidableComponents, inertRouteModules };
 }
 
 /** Match a whole-line side-effect import: `import './x.js';` (no bindings). */
