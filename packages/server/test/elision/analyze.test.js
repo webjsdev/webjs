@@ -701,3 +701,63 @@ test('module-scope XMLHttpRequest / performance / crypto force interactive', () 
     assert.equal(analyzeComponentSource(src).interactive, true, stmt);
   }
 });
+
+// --- allowlist of safe top-level forms (no-rot replacement for the global denylist) ---
+
+test('an UNKNOWN top-level global call still ships (allowlist does not rot)', () => {
+  // The whole point of the allowlist: a global the analyser has never heard
+  // of is caught because it is a top-level CALL, not because its name is on a
+  // list. A new browser API needs no code change here.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    someBrandNewBrowserApi.activate('x');
+    class Z extends WebComponent { render() { return html\`<span></span>\`; } }
+    Z.register('x-z');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a top-level new of an unknown constructor ships', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const t = new SomeFutureThing();
+    class Z extends WebComponent { render() { return html\`<span></span>\`; } }
+    Z.register('x-z2');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('registration via customElements.define keeps the component elidable', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Plain extends WebComponent { render() { return html\`<span>hi</span>\`; } }
+    customElements.define('x-plain', Plain);
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('pure top-level declarations (const literal, tagged css, object) stay elidable', () => {
+  const src = `
+    import { WebComponent, html, css } from '@webjsdev/core';
+    const LABEL = 'verified';
+    const STYLES = css\`span { color: red; }\`;
+    const OPTS = { a: 1, b: [2, 3] };
+    class Tag extends WebComponent {
+      static styles = STYLES;
+      render() { return html\`<span>\${LABEL}\${OPTS.a}</span>\`; }
+    }
+    Tag.register('x-tag');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('an async-arrow page default export is not mistaken for an async() call', () => {
+  // `export default async () => ...` must stay elidable; the `async (` is an
+  // arrow param list, not a call.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Box extends WebComponent { render() { return html\`<span></span>\`; } }
+    Box.register('x-box');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});

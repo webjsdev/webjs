@@ -137,44 +137,67 @@ const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionSto
 const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
 
 /**
- * Additional browser globals (beyond CLIENT_GLOBAL_RE) whose bare use means
- * module-scope client work: network, timers, observers, workers, storage,
- * device APIs. `globalThis` and `self` are included so a namespace-qualified
- * access (`globalThis.fetch`, `self.setTimeout`) is caught even though the
- * not-a-dot lookbehind would skip the `.fetch` member token (`window.fetch`
- * is already caught via the bare `window` in CLIENT_GLOBAL_RE). The lookbehind
- * skips same-named members on user objects (`this.fetch`, `route.location`) so
- * a property never forces shipping. These names are common English words, so
- * this is matched against REDACTED source (template prose and comments
- * blanked) to avoid tripping on rendered text; a residual match inside a kept
- * quoted string only over-ships, which is safe. This is a best-effort denylist
- * (like CLIENT_GLOBAL_RE): unknown globals are not caught here, but anything
- * truly interactive almost always trips another signal, and the bias is always
- * toward shipping.
- */
-const EXTRA_CLIENT_GLOBAL_RE =
-  /(?<!\.)\b(?:globalThis|self|fetch|XMLHttpRequest|WebSocket|EventSource|location|history|setTimeout|setInterval|requestAnimationFrame|cancelAnimationFrame|requestIdleCallback|queueMicrotask|IntersectionObserver|ResizeObserver|MutationObserver|indexedDB|caches|BroadcastChannel|Worker|SharedWorker|Notification|performance|crypto|getComputedStyle|alert|confirm|prompt|scrollTo|scrollBy|Audio|FileReader)\b/;
-
-/**
- * A dynamic `import()` loads code on the client at runtime. It is real client
- * work AND the static module graph does not follow it, so a module containing
- * one must ship (and its route is not inert) or the dynamically loaded code is
- * silently lost. The not-a-dot lookbehind skips a `.import(` member call;
- * `import.meta`, static `import x from`, and `import 'x'` do not match (no
- * paren follows). Matched on redacted source so an `import(` in a template,
- * comment, or JSDoc / TS type annotation does not count.
- */
-const DYNAMIC_IMPORT_RE = /(?<!\.)\bimport\s*\(/;
-
-/**
- * Module-scope client work the render / lifecycle / event checks miss: an
- * extra browser global or a dynamic `import()`. Scans the redacted copy once.
- * Over-detection is safe (only ships); under-detection would elide live code.
+ * Module-scope client work, detected by an ALLOWLIST of safe top-level forms
+ * rather than a denylist of browser globals. A module that runs ANY code when
+ * it loads (other than registering a component) does client work the render /
+ * lifecycle / event checks would miss, so it must ship. Unlike a global
+ * denylist this does not rot as browsers add APIs: a brand-new global trips it
+ * automatically, because it is the CALL (or `new`, or dynamic `import()`), not
+ * the global's name, that is recognised.
+ *
+ * Rule: at brace depth 0 (so code inside function / class / method bodies and
+ * template holes, which do not run at module load, is ignored), the only
+ * permitted forms are declarations (`import` / `export` / `function` / `class`
+ * / `const` / `let` / `var`) and the component registration call
+ * (`X.register(...)` / `customElements.define(...)`). Any other call, any
+ * `new`, any dynamic `import(...)`, or top-level `await` means client work.
+ *
+ * Scans the redacted copy (strings / templates / comments blanked) so template
+ * prose and JSDoc / TS type annotations cannot trip it. Over-detection is safe
+ * (a top-level arrow whose body calls something, or a pure top-level helper
+ * call, only ships); the one acceptable miss is a call buried inside a
+ * top-level object / array initializer, which is contrived and, being
+ * structural, does not rot.
+ *
  * @param {string} src raw module source
  */
-function hasExtraClientWork(src) {
+function hasModuleScopeSideEffect(src) {
   const redacted = redactStringsAndTemplates(src);
-  return EXTRA_CLIENT_GLOBAL_RE.test(redacted) || DYNAMIC_IMPORT_RE.test(redacted);
+  // Keep only depth-0 text (outside every `{}`): blanked templates/strings
+  // contribute no braces, so the remaining braces are real blocks/objects.
+  let depth = 0;
+  let frame = '';
+  for (let i = 0; i < redacted.length; i++) {
+    const c = redacted[i];
+    if (c === '{') { depth++; continue; }
+    if (c === '}') { if (depth > 0) depth--; continue; }
+    if (depth === 0) frame += c;
+  }
+  // Top-level `new` (a `new X()` constructor also trips the call check, but a
+  // `new X` without parens would not) and top-level `await`.
+  if (/(?<![.\w])(?:new|await)\s/.test(frame)) return true;
+  // A call: `(` preceded (ignoring whitespace) by an identifier, `)`, or `]`.
+  const CALL_RE = /(?:([A-Za-z_$][\w$]*)|[)\]])\s*\(/g;
+  // Identifiers that precede a `(` WITHOUT it being a call (keywords + a
+  // `function` declaration's parameter list).
+  const NOT_A_CALL = new Set([
+    'if', 'for', 'while', 'switch', 'catch', 'with', 'return', 'typeof',
+    'instanceof', 'void', 'delete', 'in', 'of', 'yield', 'do', 'else',
+    'case', 'default', 'function', 'await', 'new', 'async',
+  ]);
+  let m;
+  while ((m = CALL_RE.exec(frame)) !== null) {
+    const ident = m[1];
+    if (ident === 'import') return true;                 // dynamic import()
+    if (ident && NOT_A_CALL.has(ident)) continue;
+    // A `function`-declaration parameter list (`function name(` or
+    // `async function name(`) is not a call.
+    if (ident && /\bfunction\s*\*?\s*$/.test(frame.slice(0, m.index))) continue;
+    // The component registration call is the one permitted top-level call.
+    if (ident === 'register' || ident === 'define') continue;
+    return true;                                         // any other top-level call
+  }
+  return false;
 }
 
 /** Match a whole-line SIDE-EFFECT import: `import 'pkg';` (no binding clause).
@@ -298,8 +321,8 @@ export function analyzeComponentSource(src) {
   if (COMPONENT_CLIENT_GLOBAL_RE.test(src)) {
     return { interactive: true, reason: 'references a browser global at module scope' };
   }
-  if (hasExtraClientWork(src)) {
-    return { interactive: true, reason: 'module-scope client work (network/timer/observer global or dynamic import())' };
+  if (hasModuleScopeSideEffect(src)) {
+    return { interactive: true, reason: 'runs code at module scope (a top-level call, new, or dynamic import())' };
   }
 
   // The brace matcher counts depth reliably only on redacted source
@@ -583,7 +606,7 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (importsClientRouter(src)) clientRouterFiles.add(file);
     if (EVENT_BINDING_RE.test(src) || EVENT_PROP_RE.test(src) ||
         importsSideEffectNonCorePackage(src) || CLIENT_GLOBAL_RE.test(src) ||
-        hasExtraClientWork(src)) {
+        hasModuleScopeSideEffect(src)) {
       clientGlobalOrBareFiles.add(file);
     }
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
