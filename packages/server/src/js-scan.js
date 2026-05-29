@@ -80,9 +80,12 @@ export function redactStringsAndTemplates(src) {
   // identifier. Both drive regex-versus-division and tagged-template decisions.
   let lastSig = '';
   let lastWord = '';
+  // Whether `lastWord` was a property access (`.of`, `?.in`). A member named
+  // like a keyword is a value, never a regex-preceding keyword.
+  let lastWordIsProp = false;
   // After a literal (string/regex/template) the next `/` is division and the
   // next backtick is a tag, so mark a value-ender.
-  const markValue = () => { lastSig = 'x'; lastWord = ''; };
+  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; };
 
   // `/` opens a regex unless the previous token is a value (identifier that is
   // not a regex-preceding keyword, number, `)`, `]`, or a literal).
@@ -90,7 +93,7 @@ export function redactStringsAndTemplates(src) {
     if (lastSig === '') return true;
     if (lastSig === ')' || lastSig === ']') return false;
     if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
-    if (/[\w$]/.test(lastSig)) return REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
     return true;
   };
   // A template is tagged when the previous token is a value.
@@ -193,9 +196,10 @@ export function redactStringsAndTemplates(src) {
       if (c === '{') { brace++; lastSig = '{'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
       if (c === '}') { brace--; lastSig = '}'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
       if (/[A-Za-z_$]/.test(c)) {
+        const prop = lastSig === '.';   // member access -> a value, not a keyword
         let w = '';
         while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += blank ? ' ' : src[i]; i++; }
-        lastWord = w; lastSig = w[w.length - 1];
+        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop;
         continue;
       }
       if (/\s/.test(c)) { out += c === '\n' ? '\n' : (blank ? ' ' : c); i++; continue; }

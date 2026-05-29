@@ -891,3 +891,29 @@ test('a module-scope call after a nested-template assignment still ships', () =>
   `;
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
+
+test('division by a keyword-named property does NOT hide a later call', () => {
+  // `box.of / 2` is division (member access), not a regex. The lexer must not
+  // read `.of`/`.in`/`.return` as a regex-preceding keyword and blank the rest.
+  for (const kw of ['of', 'in', 'return']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      const aspect = box.${kw} / 2; beacon(123);
+      class K extends WebComponent { render() { return html\`<span></span>\`; } }
+      K.register('x-k');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, kw);
+  }
+});
+
+test('a real return-position regex is still treated as a regex (stays elidable)', () => {
+  // Counterfactual: `return /re/` IS a regex; the property fix must not break
+  // genuine keyword-preceded regexes. No side effect here, so elidable.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    function clean(s) { return /[^a-z]/g.test(s); }
+    class K2 extends WebComponent { render() { return html\`<span></span>\`; } }
+    K2.register('x-k2');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
