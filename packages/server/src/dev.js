@@ -59,8 +59,9 @@ import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
-import { buildModuleGraph, transitiveDeps, reachableFromEntries } from './module-graph.js';
+import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
+import { computeElidableComponents, elideImportsFromSource } from './component-elision.js';
 
 /** PascalCase → kebab-case for a helpful diagnostic example tag name. */
 function kebab(name) {
@@ -207,6 +208,15 @@ export async function createRequestHandler(opts) {
   const components = await scanComponents(appDir);
   await primeComponentRegistry(appDir, components);
 
+  // Determine which component modules are display-only and can be elided
+  // from the browser entirely (no JS download). Static analysis only; the
+  // set biases conservatively toward shipping. See component-elision.js.
+  const elidableComponents = await computeElidableComponents(
+    components,
+    moduleGraph,
+    (f) => readFile(f, 'utf8'),
+  );
+
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
   // module. Without registration, <my-tag> elements silently stay as
@@ -230,6 +240,7 @@ export async function createRequestHandler(opts) {
     logger,
     bareImports,
     moduleGraph,
+    elidableComponents,
     browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
 
@@ -272,6 +283,16 @@ export async function createRequestHandler(opts) {
     // don't walk appDir twice per rebuild.
     const components = await scanComponents(appDir);
     await primeComponentRegistry(appDir, components);
+    // Recompute which components are elidable. A dependency's edit can
+    // flip its elidability WITHOUT changing an importer's mtime, so the
+    // TS transform cache (keyed by mtime) must be dropped or it would
+    // serve a stale strip decision for the unchanged importer.
+    state.elidableComponents = await computeElidableComponents(
+      components,
+      state.moduleGraph,
+      (f) => readFile(f, 'utf8'),
+    );
+    TS_CACHE.clear();
     // Recompute the browser-bound file set: the page / layout / error /
     // loading / not-found / component entries plus their transitive imports.
     // This drives the dev server's "is this file allowed to be served as
@@ -679,8 +700,18 @@ async function handleCore(req, ctx) {
         });
       }
       // TypeScript source: strip types via Node 24+'s built-in, cache by mtime.
+      // Both module paths also strip side-effect imports of display-only
+      // components so the browser never downloads their JS.
+      const elideOpts = {
+        moduleGraph: state.moduleGraph,
+        elidableComponents: state.elidableComponents,
+        appDir,
+      };
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev);
+        return tsResponse(abs, dev, elideOpts);
+      }
+      if (/\.m?js$/.test(abs)) {
+        return jsModuleResponse(abs, dev, elideOpts);
       }
       return fileResponse(abs, { dev, immutable: false });
     }
@@ -1002,6 +1033,34 @@ async function fileResponse(abs, opts) {
   }
 }
 
+/**
+ * Serve a plain `.js` / `.mjs` browser module, stripping side-effect
+ * imports of display-only components. Mirrors {@link fileResponse}'s
+ * headers but reads as text so the source can be transformed. Used only
+ * for files that exist as `.js` on disk (TS apps usually hit
+ * {@link tsResponse} via the .js to .ts sibling rewrite instead).
+ *
+ * @param {string} abs
+ * @param {boolean} dev
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} elideOpts
+ */
+async function jsModuleResponse(abs, dev, elideOpts) {
+  let source;
+  try { source = await readFile(abs, 'utf8'); }
+  catch { return new Response('Not found', { status: 404 }); }
+  const code = elideImportsFromSource(
+    source, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
+  );
+  const headers = { 'content-type': 'application/javascript; charset=utf-8' };
+  if (dev) {
+    headers['cache-control'] = 'no-cache';
+  } else {
+    headers['etag'] = `"${(await digestHex('SHA-1', code)).slice(0, 16)}"`;
+    headers['cache-control'] = 'public, max-age=3600';
+  }
+  return new Response(code, { status: 200, headers });
+}
+
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
 }
@@ -1032,12 +1091,14 @@ async function stripTs(source, _abs) {
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
  * Result is cached by mtime so subsequent requests are instant; a
- * file edit invalidates naturally.
+ * file edit invalidates naturally. `elideOpts` additionally strips
+ * side-effect imports of display-only components from the served code.
  *
  * @param {string} abs
  * @param {boolean} dev
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
  */
-async function tsResponse(abs, dev) {
+async function tsResponse(abs, dev, elideOpts) {
   const st = await stat(abs);
   const cached = TS_CACHE.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
@@ -1085,6 +1146,11 @@ async function tsResponse(abs, dev) {
       });
     }
     throw err;
+  }
+  if (elideOpts) {
+    code = elideImportsFromSource(
+      code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
+    );
   }
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {

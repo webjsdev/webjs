@@ -347,3 +347,49 @@ export async function computeElidableComponents(components, moduleGraph, readFil
   }
   return elidable;
 }
+
+/** Match a whole-line side-effect import: `import './x.js';` (no bindings). */
+const SIDE_EFFECT_IMPORT_RE = /^([ \t]*)import\s+(['"])([^'"]+)\2\s*;?[ \t]*$/gm;
+
+/**
+ * Remove side-effect imports of elidable components from a browser
+ * module's served source, so the browser never downloads them. This is
+ * what actually elides the JS: a component is fetched because the page
+ * (or another component) statically imports it for registration, and
+ * the modulepreload hint only parallelises that fetch.
+ *
+ * ONLY side-effect imports (`import './x'`) are stripped. A binding
+ * import (`import { X } from './x'`) is left intact: its binding may be
+ * used as a value at runtime, so removing it would break the module.
+ * That is also why eliding stays correct, an elidable component is one
+ * used purely as an SSR'd tag, never as an imported value.
+ *
+ * Fast path: if the importer has no elidable dependency in the graph,
+ * the source is returned untouched without any regex work.
+ *
+ * @param {string} source             module source (already type-stripped if TS)
+ * @param {string} importerAbs        absolute path of the importing module
+ * @param {import('./module-graph.js').ModuleGraph | undefined} moduleGraph
+ * @param {Set<string> | undefined} elidableSet  absolute paths of elidable files
+ * @param {(spec: string, fromFile: string, appDir: string) => (string|null)} resolveImport
+ * @param {string} appDir
+ * @returns {string}
+ */
+export function elideImportsFromSource(source, importerAbs, moduleGraph, elidableSet, resolveImport, appDir) {
+  if (!elidableSet || elidableSet.size === 0) return source;
+  const deps = moduleGraph && moduleGraph.get(importerAbs);
+  if (!deps) return source;
+  let hasElidableDep = false;
+  for (const d of deps) {
+    if (elidableSet.has(d)) { hasElidableDep = true; break; }
+  }
+  if (!hasElidableDep) return source;
+
+  return source.replace(SIDE_EFFECT_IMPORT_RE, (full, indent, _q, spec) => {
+    const resolved = resolveImport(spec, importerAbs, appDir);
+    if (resolved && elidableSet.has(resolved)) {
+      return `${indent}/* webjs: elided display-only component */`;
+    }
+    return full;
+  });
+}

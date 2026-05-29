@@ -226,7 +226,7 @@ async function parseFile(file, appDir, graph) {
  * @param {string} appDir
  * @returns {string | null}
  */
-function resolveImport(spec, fromFile, appDir) {
+export function resolveImport(spec, fromFile, appDir) {
   const base = dirname(fromFile);
   let target;
   if (spec.startsWith('/')) {
