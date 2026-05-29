@@ -17,7 +17,7 @@
   "dependencies": {
     "@webjsdev/cli": "^0.8.0",
     "@webjsdev/core": "^0.7.0",
-    "@webjsdev/server": "^0.7.0",
+    "@webjsdev/server": "^0.8.0",
     "@webjsdev/ui-registry": "*"
   },
   "devDependencies": {
