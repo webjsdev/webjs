@@ -91,6 +91,9 @@ export const CLIENT_LIFECYCLE_HOOKS = [
   'connectedCallback',
   'disconnectedCallback',
   'attributeChangedCallback',
+  // Standard custom-element callback webjs does not itself define (so it
+  // is absent from the prototype guard's CLASSIFICATION), but an author
+  // can still override it to do client work. Kept for conservatism.
   'adoptedCallback',
   'shouldUpdate',
   'willUpdate',

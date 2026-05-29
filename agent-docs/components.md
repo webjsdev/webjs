@@ -74,6 +74,27 @@ case in practice is a component with no inputs and no behavior: static
 markup, or values seeded in the constructor. Note a slotted wrapper does
 NOT qualify (the `<slot>` itself forces shipping per the list above).
 
+**The one boundary the static model cannot see.** Elision proves a
+component's own `render()` is inert; it does NOT prove that no *other*
+client code observes the element's registration. An elided module never
+loads, so its `customElements.define` never runs in the browser and the
+tag stays an un-upgraded `HTMLElement`. That is invisible for a tag that
+exists only as SSR'd markup, but it changes behavior if shipping client
+code depends on the definition:
+
+- `customElements.whenDefined('the-tag')` never resolves.
+- reading an upgraded property or method off `document.querySelector('the-tag')` is `undefined` / throws.
+- `el instanceof TheClass` is `false`.
+- a CSS `the-tag:defined { … }` rule never matches.
+
+If a component is observed any of these ways, it is interactive in
+practice; add an interactivity signal (an `@event`, a non-`state`
+reactive property, or a lifecycle hook) so it ships. In idiomatic webjs
+this is rare: a display-only element is server-rendered to its final
+HTML and read as plain markup, and `:defined` FOUC-hiding works against
+progressive enhancement (it would hide content that already painted).
+But if you reach for those patterns, treat the component as interactive.
+
 The detection lists live in `packages/server/src/component-elision.js`
 and are the single source of truth. They are kept in lockstep with the
 lifecycle table above by `packages/server/test/elision/lifecycle-coverage.test.js`,

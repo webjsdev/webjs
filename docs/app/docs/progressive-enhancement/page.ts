@@ -66,6 +66,10 @@ export default function ProgressiveEnhancement() {
     </p>
 
     <p>
+      <strong>One boundary to know.</strong> Eliding a module means its <code>customElements.define</code> never runs in the browser, so the tag stays an un-upgraded element. That is invisible for a tag that exists only as server-rendered markup, but if shipping client code observes the registration, <code>customElements.whenDefined('the-tag')</code>, reading an upgraded property off <code>querySelector('the-tag')</code>, an <code>instanceof</code> check, or a CSS <code>the-tag:defined</code> rule, the component is interactive in practice. Give it an interactivity signal (an <code>@event</code>, a non-<code>state</code> reactive property, or a lifecycle hook) so it ships. This is rare in idiomatic webjs, where display-only elements are read as plain server-rendered markup.
+    </p>
+
+    <p>
       It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model.
     </p>
 
