@@ -102,6 +102,23 @@ which fails if a new `WebComponent` hook is added without teaching the
 analyser about it. If you add an interactivity feature to the framework,
 update that file.
 
+### Turning elision off
+
+Elision is on by default. To disable it app-wide, set `elide` to `false`
+under the `webjs` key in `package.json`:
+
+```jsonc
+{ "webjs": { "elide": false } }
+```
+
+With the switch off, every component and route module ships exactly as it
+did before the feature existed (no import stripping, no dropped preloads,
+the importmap keeps every vendor dep). The switch is pure opt-out, so any
+value other than the literal `false`, or an absent key, leaves elision on.
+Reach for it if the conservative analyser ever mis-elides a component, or
+to A/B the wire-byte difference. Because the analyser biases toward
+shipping, needing this should be rare.
+
 ## ReactiveControllers: composable lifecycle
 
 ```js

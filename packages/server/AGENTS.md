@@ -119,6 +119,12 @@ can load it without booting the full server.
    the SSR'd HTML is the baseline, swap markers are static comments, and
    navigation/forms fall back to native browser behavior, so removing
    inert JS never changes behavior.
+   The whole pass is gated by the project-level `webjs.elide` switch in
+   `package.json` (`readElideEnabled` in `dev.js`, re-read on every
+   rebuild). `{ "webjs": { "elide": false } }` skips `analyzeElision`
+   entirely, leaving both sets empty so nothing is stripped and the
+   importmap keeps every vendor dep. The switch is pure opt-out (default
+   enabled); any value other than the literal `false` keeps elision on.
    The analysis is a denylist that biases toward shipping: a false
    "display-only" verdict breaks the page, a false "interactive" verdict
    only misses an optimization, so anything ambiguous ships. The signal

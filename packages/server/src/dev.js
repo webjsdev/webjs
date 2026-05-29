@@ -148,6 +148,26 @@ function loadAppEnv(appDir) {
 }
 
 /**
+ * Read the project-level elision switch from `package.json`.
+ * `{ "webjs": { "elide": false } }` disables display-only and inert-route
+ * elision app-wide (everything ships, like before the feature existed).
+ * Any other value, or an absent key, leaves elision enabled (the default).
+ * Re-read on every rebuild so toggling the switch takes effect without a
+ * server restart.
+ * @param {string} appDir
+ * @returns {Promise<boolean>}
+ */
+async function readElideEnabled(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
+  } catch {
+    // No package.json, malformed JSON, or unreadable. Keep the default.
+  }
+  return true;
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -208,14 +228,19 @@ export async function createRequestHandler(opts) {
   // Determine which component modules are display-only and which page/layout
   // route modules are inert, so both can be elided from the browser (no JS
   // download). Static analysis only; the sets bias conservatively toward
-  // shipping. See component-elision.js.
-  const { elidableComponents, inertRouteModules } = await analyzeElision(
-    components,
-    collectRouteModules(routeTable),
-    moduleGraph,
-    (f) => readFile(f, 'utf8'),
-    appDir,
-  );
+  // shipping. See component-elision.js. The project-level `webjs.elide: false`
+  // switch in package.json skips the analysis entirely (empty sets, so nothing
+  // is stripped and the importmap keeps every vendor dep).
+  const elideEnabled = await readElideEnabled(appDir);
+  const { elidableComponents, inertRouteModules } = elideEnabled
+    ? await analyzeElision(
+        components,
+        collectRouteModules(routeTable),
+        moduleGraph,
+        (f) => readFile(f, 'utf8'),
+        appDir,
+      )
+    : { elidableComponents: new Set(), inertRouteModules: new Set() };
 
   // Scan for bare npm imports and register vendor import map entries.
   // Runs AFTER elision so vendor deps reachable only through display-only
@@ -286,13 +311,15 @@ export async function createRequestHandler(opts) {
     // dropped or it would serve a stale strip decision for the unchanged
     // importer.
     {
-      const r = await analyzeElision(
-        components,
-        collectRouteModules(state.routeTable),
-        state.moduleGraph,
-        (f) => readFile(f, 'utf8'),
-        appDir,
-      );
+      const r = (await readElideEnabled(appDir))
+        ? await analyzeElision(
+            components,
+            collectRouteModules(state.routeTable),
+            state.moduleGraph,
+            (f) => readFile(f, 'utf8'),
+            appDir,
+          )
+        : { elidableComponents: new Set(), inertRouteModules: new Set() };
       state.elidableComponents = r.elidableComponents;
       state.inertRouteModules = r.inertRouteModules;
     }

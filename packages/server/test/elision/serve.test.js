@@ -99,3 +99,36 @@ test('a single @click flips the verdict: counterpart import is NOT stripped', as
   const code = await resp.text();
   assert.match(code, /badge\.ts/, 'an interactive badge must keep its import');
 });
+
+test('webjs.elide: false disables elision app-wide (display-only import survives)', async () => {
+  // Project-level opt-out. With the switch off, the display-only badge that
+  // would normally be stripped keeps its import, like before the feature.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'opt-out-app', webjs: { elide: false } }),
+    'app/page.ts': PAGE,
+    'components/badge.ts': BADGE,
+    'components/counter.ts': COUNTER,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  assert.equal(resp.status, 200);
+  const code = await resp.text();
+  assert.match(code, /badge\.ts/, 'elision disabled: display-only import must survive');
+  assert.match(code, /counter\.ts/, 'interactive import survives regardless');
+  assert.doesNotMatch(code, /webjs: elided display-only component/, 'no strip marker when disabled');
+});
+
+test('webjs.elide omitted keeps elision on (default), proving the switch is opt-out only', async () => {
+  // Counterfactual: a package.json WITHOUT the key behaves exactly like no
+  // package.json at all. Guards against reading the key as a fail-closed flag.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'default-app' }),
+    'app/page.ts': PAGE,
+    'components/badge.ts': BADGE,
+    'components/counter.ts': COUNTER,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  const code = await resp.text();
+  assert.doesNotMatch(code, /badge\.ts/, 'default (no key): display-only import still elided');
+});
