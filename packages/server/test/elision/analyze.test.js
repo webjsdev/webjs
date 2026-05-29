@@ -99,6 +99,29 @@ test('Task import forces interactive', () => {
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
+test('namespace import using a reactive member forces interactive', () => {
+  const src = `
+    import * as core from '@webjsdev/core';
+    const n = core.signal(0);
+    class NsThing extends core.WebComponent {
+      render() { return core.html\`<p>\${n.get()}</p>\`; }
+    }
+    core.register('ns-thing', NsThing);
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('namespace import using only non-reactive members stays display-only', () => {
+  const src = `
+    import * as core from '@webjsdev/core';
+    class Pure extends WebComponent {
+      render() { return core.html\`<p>pure</p>\`; }
+    }
+    Pure.register('pure-ns');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
 test('each overridden lifecycle hook forces interactive', () => {
   for (const hook of ['connectedCallback', 'firstUpdated', 'updated', 'willUpdate']) {
     const src = DISPLAY_ONLY.replace(

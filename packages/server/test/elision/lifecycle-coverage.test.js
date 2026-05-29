@@ -18,10 +18,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { WebComponent } from '../../../core/src/component.js';
+import * as directives from '../../../core/src/directives.js';
+import * as taskMod from '../../../core/src/task.js';
+import * as contextMod from '../../../core/src/context.js';
+import * as core from '../../../core/index.js';
 import {
   analyzeComponentSource,
   CLIENT_LIFECYCLE_HOOKS,
   CLIENT_METHOD_CALLS,
+  REACTIVE_IMPORTS,
 } from '../../src/component-elision.js';
 
 /**
@@ -134,4 +139,47 @@ test('the inert method (render) alone does not force shipping', () => {
     Pure.register('pure-el');
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+// ── Imports half of the single source of truth ──────────────────────
+//
+// The lifecycle/method guards above cover signals that live on the
+// WebComponent prototype. Reactive primitives instead arrive as IMPORTS
+// from @webjsdev/core surfaces. The directives surface is where a new
+// client-only directive would most plausibly be added, so classify every
+// directive and fail when an unclassified one appears.
+
+/** Directives whose only effect runs on the client (must be in REACTIVE_IMPORTS). */
+const CLIENT_DIRECTIVES = ['asyncAppend', 'asyncReplace', 'createRef', 'live', 'ref', 'until', 'watch'];
+/** Directives that render at SSR time and are safe in display-only components. */
+const RENDER_TIME_DIRECTIVES = ['cache', 'guard', 'keyed', 'templateContent', 'unsafeHTML'];
+
+test('every @webjsdev/core/directives export is classified (forces SSOT update on a new directive)', () => {
+  // `is*` exports are internal type-guards, not directives an author applies.
+  const live = Object.keys(directives).filter((n) => !/^is[A-Z]/.test(n)).sort();
+  const classified = [...CLIENT_DIRECTIVES, ...RENDER_TIME_DIRECTIVES].sort();
+  assert.deepEqual(
+    live,
+    classified,
+    'A directive was added or removed. Classify it: client-only -> add to REACTIVE_IMPORTS ' +
+      'in component-elision.js AND to CLIENT_DIRECTIVES here; render-time -> add to RENDER_TIME_DIRECTIVES.',
+  );
+});
+
+test('every client directive is present in REACTIVE_IMPORTS', () => {
+  for (const name of CLIENT_DIRECTIVES) {
+    assert.ok(REACTIVE_IMPORTS.has(name), `${name} is client-only but missing from REACTIVE_IMPORTS`);
+  }
+});
+
+test('no REACTIVE_IMPORTS entry is stale (each is a real @webjsdev/core export)', () => {
+  const exported = new Set([
+    ...Object.keys(core),
+    ...Object.keys(directives),
+    ...Object.keys(taskMod),
+    ...Object.keys(contextMod),
+  ]);
+  for (const name of REACTIVE_IMPORTS) {
+    assert.ok(exported.has(name), `${name} is in REACTIVE_IMPORTS but no longer exported by core (rename/removal?)`);
+  }
 });

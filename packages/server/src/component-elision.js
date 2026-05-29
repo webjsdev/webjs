@@ -23,9 +23,13 @@
  *
  * This is enforced two ways:
  *   1. The guard test in test/elision/lifecycle-coverage.test.js
- *      enumerates every overridable WebComponent hook and asserts each
- *      flips a component to interactive. Adding a hook without updating
- *      this list fails that test.
+ *      introspects the live framework surface and fails on drift:
+ *      it enumerates every overridable WebComponent hook (each must flip
+ *      a component to interactive), classifies every @webjsdev/core/
+ *      directives export as client-only or render-time (a new directive
+ *      fails the test until classified), and checks that no
+ *      REACTIVE_IMPORTS entry is stale. Adding an interactivity surface
+ *      without updating these lists fails that test.
  *   2. agent-docs/framework-dev.md documents this file as a mandatory
  *      stop in the "adding an interactivity feature" checklist, since
  *      webjs development is largely AI-agent driven.
@@ -197,6 +201,15 @@ function importsReactivePrimitive(src) {
         .filter(Boolean);
       for (const name of names) {
         if (REACTIVE_IMPORTS.has(name)) return name;
+      }
+    } else if (clause.startsWith('*')) {
+      // Namespace import (`import * as core from '@webjsdev/core'`). We
+      // cannot see which members are used from the clause, so check for a
+      // reactive member access through the namespace identifier.
+      const ns = clause.replace(/^\*\s+as\s+/, '').trim();
+      if (!ns) continue;
+      for (const name of REACTIVE_IMPORTS) {
+        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(src)) return name;
       }
     }
   }
