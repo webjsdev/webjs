@@ -225,22 +225,11 @@ export async function createRequestHandler(opts) {
 
   const routeTable = await buildRouteTable(appDir);
 
-  // Determine which component modules are display-only and which page/layout
-  // route modules are inert, so both can be elided from the browser (no JS
-  // download). Static analysis only; the sets bias conservatively toward
-  // shipping. See component-elision.js. The project-level `webjs.elide: false`
-  // switch in package.json skips the analysis entirely (empty sets, so nothing
-  // is stripped and the importmap keeps every vendor dep).
-  const elideEnabled = await readElideEnabled(appDir);
-  const { elidableComponents, inertRouteModules } = elideEnabled
-    ? await analyzeElision(
-        components,
-        collectRouteModules(routeTable),
-        moduleGraph,
-        (f) => readFile(f, 'utf8'),
-        appDir,
-      )
-    : { elidableComponents: new Set(), inertRouteModules: new Set() };
+  // The elision analysis (which component modules are display-only and which
+  // page/layout routes are inert) is NOT run at boot. It is computed on the
+  // first request via ensureElision() below and memoized, so boot does no
+  // elision fixpoint. The sets start empty; ensureElision fills them (or leaves
+  // them empty when `webjs.elide: false`) before any SSR or module serve.
 
   // Vendor import-map entries are NOT resolved at boot. The pin-file read
   // (pinned) or the bare-import scan + jspm.io call (unpinned) is deferred to
@@ -268,10 +257,39 @@ export async function createRequestHandler(opts) {
     middleware: await loadMiddleware(appDir, dev, logger),
     logger,
     moduleGraph,
-    elidableComponents,
-    inertRouteModules,
+    components,
+    elidableComponents: new Set(),
+    inertRouteModules: new Set(),
     browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
+
+  // Elision analysis runs lazily on the first request, memoized and
+  // single-flighted. Boot does no elision fixpoint; the first request computes
+  // it (fast, in-memory over the module graph, no network or module execution)
+  // before any SSR or module serve reads the sets. Reset on rebuild. The
+  // `webjs.elide: false` switch leaves the sets empty (nothing elided).
+  let elisionReady = false;
+  /** @type {Promise<void> | null} */
+  let elisionInFlight = null;
+  async function ensureElision() {
+    if (elisionReady) return;
+    if (!elisionInFlight) {
+      elisionInFlight = (async () => {
+        try {
+          const r = (await readElideEnabled(appDir))
+            ? await analyzeElision(state.components, collectRouteModules(state.routeTable),
+                state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
+            : { elidableComponents: new Set(), inertRouteModules: new Set() };
+          state.elidableComponents = r.elidableComponents;
+          state.inertRouteModules = r.inertRouteModules;
+          elisionReady = true;
+        } finally {
+          elisionInFlight = null;
+        }
+      })();
+    }
+    await elisionInFlight;
+  }
 
   // Vendor import map resolved lazily on the first request, memoized, and
   // single-flighted so concurrent first requests resolve once. A pinned app
@@ -321,24 +339,13 @@ export async function createRequestHandler(opts) {
     // don't walk appDir twice per rebuild.
     const components = await scanComponents(appDir);
     await primeComponentRegistry(appDir, components);
-    // Recompute which components are elidable and which route modules are
-    // inert. A dependency's edit can flip a verdict WITHOUT changing an
-    // importer's mtime, so the TS transform cache (keyed by mtime) must be
-    // dropped or it would serve a stale strip decision for the unchanged
-    // importer.
-    {
-      const r = (await readElideEnabled(appDir))
-        ? await analyzeElision(
-            components,
-            collectRouteModules(state.routeTable),
-            state.moduleGraph,
-            (f) => readFile(f, 'utf8'),
-            appDir,
-          )
-        : { elidableComponents: new Set(), inertRouteModules: new Set() };
-      state.elidableComponents = r.elidableComponents;
-      state.inertRouteModules = r.inertRouteModules;
-    }
+    state.components = components;
+    // Invalidate the elision memo so the next request recomputes the verdicts.
+    // A dependency's edit can flip a verdict WITHOUT changing an importer's
+    // mtime, so the TS transform cache (keyed by mtime) must be dropped too or
+    // it would serve a stale strip decision for the unchanged importer.
+    if (elisionInFlight) { try { await elisionInFlight; } catch {} }
+    elisionReady = false;
     TS_CACHE.clear();
     // Invalidate the vendor memo so the next request re-resolves the import
     // map (drops deps reachable only through newly-elided components, picks up
@@ -366,8 +373,10 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
-      // Resolve the vendor import map on the first request (memoized), before
-      // any SSR head emits the <script type="importmap"> or its build hash.
+      // Compute elision then resolve the vendor import map on the first request
+      // (both memoized). Elision first: the vendor scan excludes deps reachable
+      // only through elided modules. Both run before any SSR or module serve.
+      await ensureElision();
       await ensureVendor();
       const next = () => handleCore(req, { state, appDir, coreDir, dev });
       if (state.middleware) {
