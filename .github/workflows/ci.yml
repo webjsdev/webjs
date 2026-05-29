@@ -41,6 +41,24 @@ jobs:
             ( cd "$app" && node "$GITHUB_WORKSPACE/packages/cli/bin/webjs.js" check )
             echo "::endgroup::"
           done
+      - name: Framework runtime packages are buildless (no .ts source)
+        run: |
+          # Invariant: packages/{core,server,cli,ts-plugin} are plain .js +
+          # JSDoc. .ts is allowed in examples/docs/website and in scaffold
+          # templates / the ui registry (those ship to user apps).
+          hits=$(git ls-files 'packages/core/**/*.ts' 'packages/server/**/*.ts' 'packages/cli/**/*.ts' 'packages/ts-plugin/**/*.ts' \
+            | grep -vE '\.d\.ts$|/templates/' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::TypeScript source in a buildless framework package (invariant violated):"; echo "$hits"; exit 1
+          fi
+      - name: No em-dash in source (invariant 11)
+        run: |
+          # U+2014 is banned repo-wide. changelog/ is generated from commit
+          # history (pre-rule entries) so it is excluded.
+          hits=$(git grep -lP "\x{2014}" -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::em-dash (U+2014) found; replace per AGENTS.md invariant 11:"; echo "$hits"; exit 1
+          fi
 
   unit:
     name: Unit + integration (node --test)
@@ -93,3 +111,18 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/e2e.test.mjs
+
+  dist:
+    name: Build (@webjsdev/core dist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # The published @webjsdev/core ships pre-built dist/ bundles (built
+      # by the prepare hook at publish). Build them in CI so a bundling
+      # break is caught on the PR, not at release time.
+      - run: npm run build:dist --workspace=@webjsdev/core

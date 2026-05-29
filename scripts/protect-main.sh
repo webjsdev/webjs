@@ -23,7 +23,8 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
       "Conventions (webjs check)",
       "Unit + integration (node --test)",
       "Browser (web-test-runner / Playwright)",
-      "E2E (Puppeteer against the blog example)"
+      "E2E (Puppeteer against the blog example)",
+      "Build (@webjsdev/core dist)"
     ]
   },
   "enforce_admins": false,
