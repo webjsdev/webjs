@@ -55,6 +55,33 @@ export default function ProgressiveEnhancement() {
       Notice the asymmetry: <em>showing</em> things works without JS, while <em>reacting</em> to user input or external events requires it. This is the right asymmetry for the web platform.
     </p>
 
+    <h2>Display-only components ship zero JavaScript</h2>
+
+    <p>
+      webjs takes the asymmetry one step further. A component whose <code>render()</code> is a pure function of its inputs, with no <code>@event</code> handler, no non-<code>state</code> reactive property, no overridden lifecycle hook, no signal or <code>Task</code>, no <code>&lt;slot&gt;</code>, produces identical HTML whether or not its module ever reaches the browser. So the framework detects these statically and <strong>strips their import from the served page</strong>. The module is never downloaded, and any npm dependency it alone pulled in (an icon set, a date formatter) drops out of the importmap.
+    </p>
+
+    <p>
+      This is automatic. There is no opt-in keyword and no server-versus-client split to reason about: the same component file is isomorphic, the framework just notices that its browser half would be dead weight. The analysis is deliberately conservative, so anything it cannot prove inert keeps shipping normally. A false "ship" only costs a few bytes; it never breaks behavior.
+    </p>
+
+    <p>
+      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model.
+    </p>
+
+    <pre>// Elided: pure render, no interactivity. SSR'd HTML is the whole story,
+// the browser never downloads this module.
+class Badge extends WebComponent {
+  render() { return html\`&lt;span class="badge"&gt;verified&lt;/span&gt;\`; }
+}
+Badge.register('status-badge');
+
+// Shipped: a single @click makes it interactive, so its JS is fetched.
+class Counter extends WebComponent {
+  render() { return html\`&lt;button @click=\${'${() => this.inc()}'}&gt;+&lt;/button&gt;\`; }
+}
+Counter.register('my-counter');</pre>
+
     <h2>The design rules</h2>
 
     <p>
