@@ -33,7 +33,7 @@
  * Events:
  *   `ui-pressed-change` on <ui-toggle>: `{ detail: { pressed } }` after a click.
  *
- * Keyboard: native button — Enter / Space activates (via the inner <button>).
+ * Keyboard: native button. Enter / Space activates (via the inner <button>).
  *
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.

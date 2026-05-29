@@ -1,0 +1,128 @@
+name: CI
+
+# Runs the full test pyramid on every PR into main and on every push to
+# main. The three layers run as separate jobs so a failure names the
+# layer that broke. Mark all three as required status checks in the
+# branch-protection rule for main so a PR can only merge when unit,
+# browser, AND e2e are green (not just unit). See the repo's branch
+# protection settings, or run scripts/protect-main.sh.
+#
+# Free on public repos (ubuntu-latest has unlimited Actions minutes).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels the older in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: Conventions (webjs check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # Dogfood the framework's own convention validator on the example
+      # apps. These three pass clean; website is intentionally omitted (it
+      # carries a pre-existing tests-exist deviation tracked separately).
+      - name: webjs check (blog, docs, ui website)
+        run: |
+          for app in examples/blog docs packages/ui/packages/website; do
+            echo "::group::webjs check $app"
+            ( cd "$app" && node "$GITHUB_WORKSPACE/packages/cli/bin/webjs.js" check )
+            echo "::endgroup::"
+          done
+      - name: Framework runtime packages are buildless (no .ts source)
+        run: |
+          # Invariant: packages/{core,server,cli,ts-plugin} are plain .js +
+          # JSDoc. .ts is allowed in examples/docs/website and in scaffold
+          # templates / the ui registry (those ship to user apps).
+          hits=$(git ls-files 'packages/core/**/*.ts' 'packages/server/**/*.ts' 'packages/cli/**/*.ts' 'packages/ts-plugin/**/*.ts' \
+            | grep -vE '\.d\.ts$|/templates/' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::TypeScript source in a buildless framework package (invariant violated):"; echo "$hits"; exit 1
+          fi
+      - name: No em-dash in source (invariant 11)
+        run: |
+          # U+2014 is banned repo-wide. changelog/ is generated from commit
+          # history (pre-rule entries) so it is excluded.
+          hits=$(git grep -lP "\x{2014}" -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::em-dash (U+2014) found; replace per AGENTS.md invariant 11:"; echo "$hits"; exit 1
+          fi
+
+  unit:
+    name: Unit + integration (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  browser:
+    name: Browser (web-test-runner / Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+  e2e:
+    name: E2E (Puppeteer against the blog example)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium for Puppeteer
+        run: npx playwright install --with-deps chromium
+      - name: Resolve the Chromium binary path
+        run: echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: Prepare the blog example database
+        working-directory: examples/blog
+        run: |
+          cp .env.example .env
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma db seed
+      - name: Run e2e
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/e2e.test.mjs
+
+  dist:
+    name: Build (@webjsdev/core dist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # The published @webjsdev/core ships pre-built dist/ bundles (built
+      # by the prepare hook at publish). Build them in CI so a bundling
+      # break is caught on the PR, not at release time.
+      - run: npm run build:dist --workspace=@webjsdev/core

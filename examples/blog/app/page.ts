@@ -1,6 +1,7 @@
 import { html, repeat, Suspense } from '@webjsdev/core';
 import '../components/counter.ts';
 import '../components/muted-text.ts';
+import '../components/build-stamp.ts';
 import '../modules/chat/components/chat-box.ts';
 
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
@@ -80,5 +81,9 @@ export default async function HomePage() {
       <p class="text-fg-muted m-0 mb-4 text-sm">Open this page in two windows. Messages broadcast across every connected client.</p>
       <chat-box></chat-box>
     </section>
+
+    <footer class="mt-18 pt-6 border-t border-border">
+      <build-stamp></build-stamp>
+    </footer>
   `;
 }

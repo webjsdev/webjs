@@ -7,6 +7,8 @@ export default function Architecture() {
     <h1>Architecture</h1>
     <p>webjs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed webjs into another runtime.</p>
 
+    <p><strong>Mental model, especially if you come from React Server Components:</strong> webjs has no server/client component split. Pages, layouts, and components are <em>isomorphic</em> modules, the same source runs on the server to produce SSR'd HTML and then loads in the browser to add interactivity. There is no Flight protocol and no "server component" identity. The one server boundary is the <code>.server.{js,ts}</code> file, which is an RPC + source-protection mechanism (server actions and server-only utilities), not a server-rendered component. <code>route.{js,ts}</code> is a server-only HTTP handler. And elision (skipping the JS download of a module that does no client work) is a build-free optimization on those isomorphic modules, not a boundary, it never changes behaviour because progressive enhancement is the no-JS baseline.</p>
+
     <h2>Package Overview</h2>
     <pre>webjs/
 ├── packages/

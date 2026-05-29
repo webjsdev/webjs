@@ -51,6 +51,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder. `setCoreInstall(coreDir, distMode)` binds the importmap to the resolved `@webjsdev/core` install and runs `buildCoreEntries()`, which reads the package's `package.json` and derives one importmap line per exported subpath from its `exports` field, picking the `default` (`dist/webjs-core-*.js`) condition in dist mode and the `source` (`src/*.js`) condition otherwise. `dev.js` calls `setCoreInstall` at boot based on `existsSync(coreDir/dist/webjs-core.js) && existsSync(coreDir/dist/webjs-core-browser.js)`. The bare `@webjsdev/core` specifier always points at the BROWSER entry (`index-browser.js` or `dist/webjs-core-browser.js`); the slim entry drops `renderToString`, `renderToStream`, `expose`, `getExposed`, and `setCspNonceProvider` so server-only bytes do not ride the wire. Node-side consumers resolve via the package.json exports and still get the full `index.js`. |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
+| `component-elision.js` | Static analyser deciding which display-only component modules can be elided from the browser, plus the serve-time side-effect-import stripper. Conservative denylist of interactivity signals (single source of truth) |
+| `js-scan.js` | Shared lexical scanners (`redactStringsAndTemplates`, `extractWebComponentClassBodies`, `matchClosingBrace`) used by `check.js` and `component-elision.js` |
 | `fs-walk.js` | Async recursive directory walker |
 | `logger.js` | `defaultLogger` (JSON-shaped in prod, pretty in dev) |
 
@@ -104,6 +106,43 @@ can load it without booting the full server.
    rules go there; tests in `test/check.test.js`.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
+7. **Display-only component AND inert-route elision is conservative.**
+   `analyzeElision` in `component-elision.js` computes, at boot and on
+   every rebuild, (a) the set of component modules that are purely
+   display-only, and (b) the set of page/layout route modules that are
+   inert (do no client work even transitively). The serving branch in
+   `dev.js` strips side-effect imports of display-only components from the
+   browser-served source; `ssr.js` drops inert page/layout modules from
+   the boot script's `moduleUrls` entirely, so a fully-static route ships
+   zero application JS. Preload hints for elided modules drop too, and their
+   importmap entries drop when the map is resolved live via `vendorImportMapEntries`;
+   a committed `.webjs/vendor/importmap.json` pin file is served as-is, so an
+   elided dep keeps its (harmless, never-fetched) importmap line in that mode.
+   This is progressive-enhancement-safe by construction:
+   the SSR'd HTML is the baseline, swap markers are static comments, and
+   navigation/forms fall back to native browser behavior, so removing
+   inert JS never changes behavior.
+   The whole pass is gated by the project-level `webjs.elide` switch in
+   `package.json` (`readElideEnabled` in `dev.js`, re-read on every
+   rebuild). `{ "webjs": { "elide": false } }` skips `analyzeElision`
+   entirely, leaving both sets empty so nothing is stripped and the
+   importmap keeps every vendor dep. The switch is pure opt-out (default
+   enabled); any value other than the literal `false` keeps elision on.
+   The analysis is a denylist that biases toward shipping: a false
+   "display-only" verdict breaks the page, a false "interactive" verdict
+   only misses an optimization, so anything ambiguous ships. The signal
+   lists in `component-elision.js` are the single source of truth and
+   must grow whenever core adds an interactivity surface (enforced by
+   `test/elision/lifecycle-coverage.test.js`). Only side-effect imports
+   are stripped; binding imports are always preserved. Tests live in
+   `test/elision/`. The model's one blind spot is cross-module
+   observation of an elided element's registration (a shipping
+   `whenDefined('tag')`, an upgraded-member read off `querySelector`, an
+   `instanceof`, or a CSS `tag:defined` rule), since elision skips the
+   `customElements.define`. Static analysis cannot see these (dynamic tag
+   strings, external CSS), so it is documented as an author-facing caveat
+   in `agent-docs/components.md` rather than detected: such a component is
+   interactive in practice and needs an interactivity signal.
 
 ## Tests
 
@@ -111,7 +150,7 @@ Tests for this package live in **`packages/server/test/`**,
 organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 `session/`, `cache/`, `rate-limit/`, `csrf/`, `cors/`,
 `broadcast/`, `websocket/`, `check/`, `guardrails/`,
-`module-graph/`, `scanner/`, `vendor/`, `env/`, `dev/`,
+`module-graph/`, `scanner/`, `elision/`, `vendor/`, `env/`, `dev/`,
 `forwarded/`.
 
 Cross-package tests that exercise the SSR pipeline, scaffolds,

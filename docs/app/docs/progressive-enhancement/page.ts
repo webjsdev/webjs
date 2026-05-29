@@ -55,6 +55,49 @@ export default function ProgressiveEnhancement() {
       Notice the asymmetry: <em>showing</em> things works without JS, while <em>reacting</em> to user input or external events requires it. This is the right asymmetry for the web platform.
     </p>
 
+    <h2>Display-only components ship zero JavaScript</h2>
+
+    <p>
+      webjs takes the asymmetry one step further. A component whose <code>render()</code> is a pure function of its inputs, with no <code>@event</code> handler, no non-<code>state</code> reactive property, no overridden lifecycle hook, no signal or <code>Task</code>, no <code>&lt;slot&gt;</code>, produces identical HTML whether or not its module ever reaches the browser. So the framework detects these statically and <strong>strips their import from the served page</strong>. The module is never downloaded, and any npm package imported only by display-only components (an icon set, a date formatter) drops out of the importmap.
+    </p>
+
+    <p>
+      This is automatic. There is no opt-in keyword and no server-versus-client split to reason about: the same component file is isomorphic, the framework just notices that its browser half would be dead weight. The analysis is deliberately conservative, so anything it cannot prove inert keeps shipping normally. A false "ship" only costs a few bytes; it never breaks behavior.
+    </p>
+
+    <p>
+      <strong>One boundary to know.</strong> Eliding a module means its <code>customElements.define</code> never runs in the browser, so the tag stays an un-upgraded element. That is invisible for a tag that exists only as server-rendered markup, but if shipping client code observes the registration, <code>customElements.whenDefined('the-tag')</code>, reading an upgraded property off <code>querySelector('the-tag')</code>, an <code>instanceof</code> check, or a CSS <code>the-tag:defined</code> rule, the component is interactive in practice. Give it an interactivity signal (an <code>@event</code>, a non-<code>state</code> reactive property, or a lifecycle hook) so it ships. This is rare in idiomatic webjs, where display-only elements are read as plain server-rendered markup.
+    </p>
+
+    <p>
+      The same applies to whole routes. A <code>page</code> or <code>layout</code> that does no client work, even transitively (no event, signal, client router, npm import, client global, or interactive component anywhere in its subtree), is dropped from the boot script entirely, so a fully-static route ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms via native browser behavior, which is exactly the progressive-enhancement baseline. A layout that enables the client router does client work, so it keeps shipping; a static page rendered under it is still dropped on its own.
+    </p>
+
+    <p>
+      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model. (And it really is just an optimization on isomorphic modules, not an RSC-style server/client split, see <a href="/docs/architecture">Architecture</a>.)
+    </p>
+
+    <pre>// Elided: pure render, no interactivity. SSR'd HTML is the whole story,
+// the browser never downloads this module.
+class Badge extends WebComponent {
+  render() { return html\`&lt;span class="badge"&gt;verified&lt;/span&gt;\`; }
+}
+Badge.register('status-badge');
+
+// Shipped: a single @click makes it interactive, so its JS is fetched.
+class Counter extends WebComponent {
+  render() { return html\`&lt;button @click=\${'${() => this.inc()}'}&gt;+&lt;/button&gt;\`; }
+}
+Counter.register('my-counter');</pre>
+
+    <h3>Where your npm packages run</h3>
+    <p>An npm package reaches the browser when a module that loads on the client imports it (the boot script loads page/layout modules and the components they register; loading a module runs its <code>import</code> statements). So:</p>
+    <ul>
+      <li><strong>Server-only dependency</strong> (a date library you only use during SSR): put it behind <code>.server.{js,ts}</code> for a guaranteed-off-the-client result. It also drops automatically if it's used only inside a fully static page/component that gets elided, but the <code>.server</code> boundary is the explicit, always-correct choice.</li>
+      <li><strong>Client-only package</strong> (analytics, a polyfill) on a page with no other interactivity: just import it. A <em>side-effect</em> import (<code>import 'analytics'</code>) or a guarded <code>window</code> init counts as client work, so the page keeps shipping and the package loads. You do not need a <code>'use client'</code>-style annotation, the import itself is the signal.</li>
+    </ul>
+    <p>The distinction the framework draws is "does this module do top-level client work?", not "does it import an npm package." A package used only as a value inside a page's body or a display-only component's <code>render</code> never executes on the client, so it rides away when that inert module is elided.</p>
+
     <h2>The design rules</h2>
 
     <p>

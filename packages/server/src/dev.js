@@ -59,8 +59,9 @@ import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
-import { buildModuleGraph, transitiveDeps, reachableFromEntries } from './module-graph.js';
+import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
+import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 
 /** PascalCase → kebab-case for a helpful diagnostic example tag name. */
 function kebab(name) {
@@ -147,6 +148,26 @@ function loadAppEnv(appDir) {
 }
 
 /**
+ * Read the project-level elision switch from `package.json`.
+ * `{ "webjs": { "elide": false } }` disables display-only and inert-route
+ * elision app-wide (everything ships, like before the feature existed).
+ * Any other value, or an absent key, leaves elision enabled (the default).
+ * Re-read on every rebuild so toggling the switch takes effect without a
+ * server restart.
+ * @param {string} appDir
+ * @returns {Promise<boolean>}
+ */
+async function readElideEnabled(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
+  } catch {
+    // No package.json, malformed JSON, or unreadable. Keep the default.
+  }
+  return true;
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -191,11 +212,6 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Scan for bare npm imports and register vendor import map entries.
-  const bareImports = await scanBareImports(appDir);
-  const initialVendor = await resolveVendorImports(bareImports, appDir);
-  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
-
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
 
@@ -206,6 +222,32 @@ export async function createRequestHandler(opts) {
   // avoiding a duplicate appDir walk at boot.
   const components = await scanComponents(appDir);
   await primeComponentRegistry(appDir, components);
+
+  const routeTable = await buildRouteTable(appDir);
+
+  // Determine which component modules are display-only and which page/layout
+  // route modules are inert, so both can be elided from the browser (no JS
+  // download). Static analysis only; the sets bias conservatively toward
+  // shipping. See component-elision.js. The project-level `webjs.elide: false`
+  // switch in package.json skips the analysis entirely (empty sets, so nothing
+  // is stripped and the importmap keeps every vendor dep).
+  const elideEnabled = await readElideEnabled(appDir);
+  const { elidableComponents, inertRouteModules } = elideEnabled
+    ? await analyzeElision(
+        components,
+        collectRouteModules(routeTable),
+        moduleGraph,
+        (f) => readFile(f, 'utf8'),
+        appDir,
+      )
+    : { elidableComponents: new Set(), inertRouteModules: new Set() };
+
+  // Scan for bare npm imports and register vendor import map entries.
+  // Runs AFTER elision so vendor deps reachable only through display-only
+  // components are excluded from the importmap.
+  const bareImports = await scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules]));
+  const initialVendor = await resolveVendorImports(bareImports, appDir);
+  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
@@ -222,7 +264,6 @@ export async function createRequestHandler(opts) {
     }
   }
 
-  const routeTable = await buildRouteTable(appDir);
   const state = {
     routeTable,
     actionIndex: await buildActionIndex(appDir, dev),
@@ -230,6 +271,8 @@ export async function createRequestHandler(opts) {
     logger,
     bareImports,
     moduleGraph,
+    elidableComponents,
+    inertRouteModules,
     browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
 
@@ -255,9 +298,35 @@ export async function createRequestHandler(opts) {
     state.routeTable = await buildRouteTable(appDir);
     state.actionIndex = await buildActionIndex(appDir, dev);
     state.middleware = await loadMiddleware(appDir, dev, logger);
-    // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
-    state.bareImports = await scanBareImports(appDir);
+    state.moduleGraph = await buildModuleGraph(appDir);
+    // Re-scan components in case a new file was added or a tag renamed.
+    // Share the scan with the browser-bound graph computation so we
+    // don't walk appDir twice per rebuild.
+    const components = await scanComponents(appDir);
+    await primeComponentRegistry(appDir, components);
+    // Recompute which components are elidable and which route modules are
+    // inert. A dependency's edit can flip a verdict WITHOUT changing an
+    // importer's mtime, so the TS transform cache (keyed by mtime) must be
+    // dropped or it would serve a stale strip decision for the unchanged
+    // importer.
+    {
+      const r = (await readElideEnabled(appDir))
+        ? await analyzeElision(
+            components,
+            collectRouteModules(state.routeTable),
+            state.moduleGraph,
+            (f) => readFile(f, 'utf8'),
+            appDir,
+          )
+        : { elidableComponents: new Set(), inertRouteModules: new Set() };
+      state.elidableComponents = r.elidableComponents;
+      state.inertRouteModules = r.inertRouteModules;
+    }
+    TS_CACHE.clear();
+    // Re-scan bare imports AFTER elision so the importmap drops vendor
+    // deps reachable only through display-only components.
+    state.bareImports = await scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
     const v = await resolveVendorImports(state.bareImports, appDir);
     // Defensive: if a newer rebuild has been queued while we were
     // awaiting resolveVendorImports, drop our result. The newer one
@@ -266,12 +335,6 @@ export async function createRequestHandler(opts) {
     if (token === latestRebuildToken) {
       await setVendorEntries(v.imports, v.integrity);
     }
-    state.moduleGraph = await buildModuleGraph(appDir);
-    // Re-scan components in case a new file was added or a tag renamed.
-    // Share the scan with the browser-bound graph computation so we
-    // don't walk appDir twice per rebuild.
-    const components = await scanComponents(appDir);
-    await primeComponentRegistry(appDir, components);
     // Recompute the browser-bound file set: the page / layout / error /
     // loading / not-found / component entries plus their transitive imports.
     // This drives the dev server's "is this file allowed to be served as
@@ -679,8 +742,18 @@ async function handleCore(req, ctx) {
         });
       }
       // TypeScript source: strip types via Node 24+'s built-in, cache by mtime.
+      // Both module paths also strip side-effect imports of display-only
+      // components so the browser never downloads their JS.
+      const elideOpts = {
+        moduleGraph: state.moduleGraph,
+        elidableComponents: state.elidableComponents,
+        appDir,
+      };
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev);
+        return tsResponse(abs, dev, elideOpts);
+      }
+      if (/\.m?js$/.test(abs)) {
+        return jsModuleResponse(abs, dev, elideOpts);
       }
       return fileResponse(abs, { dev, immutable: false });
     }
@@ -726,6 +799,8 @@ async function handleCore(req, ctx) {
       const handler = () => ssrPage(page.route, page.params, url, {
         dev, appDir, req, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
+        elidableComponents: state.elidableComponents,
+        inertRouteModules: state.inertRouteModules,
       });
       return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
     }
@@ -1002,6 +1077,34 @@ async function fileResponse(abs, opts) {
   }
 }
 
+/**
+ * Serve a plain `.js` / `.mjs` browser module, stripping side-effect
+ * imports of display-only components. Mirrors {@link fileResponse}'s
+ * headers but reads as text so the source can be transformed. Used only
+ * for files that exist as `.js` on disk (TS apps usually hit
+ * {@link tsResponse} via the .js to .ts sibling rewrite instead).
+ *
+ * @param {string} abs
+ * @param {boolean} dev
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} elideOpts
+ */
+async function jsModuleResponse(abs, dev, elideOpts) {
+  let source;
+  try { source = await readFile(abs, 'utf8'); }
+  catch { return new Response('Not found', { status: 404 }); }
+  const code = elideImportsFromSource(
+    source, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
+  );
+  const headers = { 'content-type': 'application/javascript; charset=utf-8' };
+  if (dev) {
+    headers['cache-control'] = 'no-cache';
+  } else {
+    headers['etag'] = `"${(await digestHex('SHA-1', code)).slice(0, 16)}"`;
+    headers['cache-control'] = 'public, max-age=3600';
+  }
+  return new Response(code, { status: 200, headers });
+}
+
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
 }
@@ -1032,12 +1135,14 @@ async function stripTs(source, _abs) {
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
  * Result is cached by mtime so subsequent requests are instant; a
- * file edit invalidates naturally.
+ * file edit invalidates naturally. `elideOpts` additionally strips
+ * side-effect imports of display-only components from the served code.
  *
  * @param {string} abs
  * @param {boolean} dev
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
  */
-async function tsResponse(abs, dev) {
+async function tsResponse(abs, dev, elideOpts) {
   const st = await stat(abs);
   const cached = TS_CACHE.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
@@ -1085,6 +1190,11 @@ async function tsResponse(abs, dev) {
       });
     }
     throw err;
+  }
+  if (elideOpts) {
+    code = elideImportsFromSource(
+      code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
+    );
   }
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (TS_CACHE.size >= TS_CACHE_MAX) {
@@ -1143,6 +1253,25 @@ function debounce(fn, ms) {
  * @param {string} appDir
  * @returns {Set<string>}
  */
+/**
+ * Collect every page + layout file across the route table. These are the
+ * modules the client boot script imports, and thus the candidates for
+ * inert-route elision (dropping a module that does no client work).
+ * `route.{js,ts}` / middleware / metadata are excluded: they never ship.
+ *
+ * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
+ * @returns {string[]}
+ */
+function collectRouteModules(routeTable) {
+  /** @type {Set<string>} */
+  const mods = new Set();
+  for (const page of routeTable.pages || []) {
+    if (page.file) mods.add(page.file);
+    for (const f of page.layouts || []) mods.add(f);
+  }
+  return [...mods];
+}
+
 function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
   /** @type {Set<string>} */
   const entries = new Set();

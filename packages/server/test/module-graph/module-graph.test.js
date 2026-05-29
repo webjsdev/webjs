@@ -116,6 +116,29 @@ test('transitiveDeps: deduplicates shared deps', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+test('transitiveDeps: skip set excludes a node and its unique subtree', async () => {
+  const dir = join(tmpdir(), `webjs-test-skip-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  // page -> badge -> dayjs-shim (reachable only via badge)
+  // page -> counter (kept)
+  await writeFile(join(dir, 'page.js'), `import './badge.js';\nimport './counter.js';`);
+  await writeFile(join(dir, 'badge.js'), `import './dayjs-shim.js';`);
+  await writeFile(join(dir, 'dayjs-shim.js'), `export const d = 1;`);
+  await writeFile(join(dir, 'counter.js'), `export const c = 1;`);
+
+  const graph = await buildModuleGraph(dir);
+  const skip = new Set([join(dir, 'badge.js')]);
+  const deps = transitiveDeps(graph, [join(dir, 'page.js')], dir, skip);
+
+  // badge and its unique subtree (dayjs-shim) are gone; counter stays.
+  assert.ok(!deps.some((d) => d.endsWith('badge.js')));
+  assert.ok(!deps.some((d) => d.endsWith('dayjs-shim.js')));
+  assert.ok(deps.some((d) => d.endsWith('counter.js')));
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('buildModuleGraph: skips node_modules and _private', async () => {
   const dir = join(tmpdir(), `webjs-test-graph-skip-${Date.now()}`);
   await mkdir(join(dir, 'node_modules'), { recursive: true });

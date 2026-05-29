@@ -62,12 +62,18 @@ export async function buildModuleGraph(appDir) {
  * Entry files themselves are NOT included (they're already preloaded by the
  * boot script).
  *
+ * `skip` files are neither included nor traversed into: used to prune
+ * display-only components (and the subtree reachable only through them)
+ * from preload hints, since their imports are stripped from the served
+ * source and the browser never fetches them.
+ *
  * @param {ModuleGraph} graph
  * @param {string[]} entryFiles  absolute paths
  * @param {string} appDir
+ * @param {Set<string>} [skip]  absolute paths to exclude and not traverse
  * @returns {string[]}  absolute paths of transitive deps
  */
-export function transitiveDeps(graph, entryFiles, appDir) {
+export function transitiveDeps(graph, entryFiles, appDir, skip) {
   /** @type {Set<string>} */
   const visited = new Set(entryFiles);
   /** @type {string[]} */
@@ -81,6 +87,7 @@ export function transitiveDeps(graph, entryFiles, appDir) {
     if (!deps) continue;
     for (const dep of deps) {
       if (visited.has(dep)) continue;
+      if (skip && skip.has(dep)) continue;
       visited.add(dep);
       // Only include files within the app dir (skip node_modules, core, etc.)
       if (dep.startsWith(appDir)) {
@@ -226,7 +233,7 @@ async function parseFile(file, appDir, graph) {
  * @param {string} appDir
  * @returns {string | null}
  */
-function resolveImport(spec, fromFile, appDir) {
+export function resolveImport(spec, fromFile, appDir) {
   const base = dirname(fromFile);
   let target;
   if (spec.startsWith('/')) {

@@ -124,6 +124,14 @@ function defaultHasChanged(a, b) {
  * `changedProperties` is a `Map<string, unknown>` where each entry maps
  * a property name to its previous value.
  *
+ * MAINTAINER NOTE. Adding a new overridable lifecycle hook here means
+ * the display-only component elision analyser must learn about it too,
+ * or it will wrongly elide a component that now does client work. Add
+ * the hook name to `CLIENT_LIFECYCLE_HOOKS` in
+ * `packages/server/src/component-elision.js`. The guard test at
+ * `packages/server/test/elision/lifecycle-coverage.test.js` introspects
+ * this prototype and fails until you do.
+ *
  * Usage:
  * ```js
  * import { signal } from '@webjsdev/core';

@@ -92,7 +92,20 @@ export.
    defaults**, never class-field initializers (those clobber the
    framework's accessor under modern class-field semantics).
    See `component.js` and the `reactive-props-use-declare` rule.
-6. **`<slot>` works identically in light and shadow DOM.** Light-DOM
+6. **New interactivity surfaces must update the elision analyser.**
+   webjs elides display-only component modules from the browser by
+   static analysis (`packages/server/src/component-elision.js`). It is a
+   conservative denylist of interactivity signals. When you add a new
+   overridable lifecycle hook, reactive primitive, client-only
+   directive, or event-binding syntax to core, add its marker to the
+   matching exported list in `component-elision.js`
+   (`CLIENT_LIFECYCLE_HOOKS`, `CLIENT_METHOD_CALLS`, or
+   `REACTIVE_IMPORTS`). Skipping this lets the analyser wrongly elide a
+   component that now does client work. The guard test
+   (`packages/server/test/elision/lifecycle-coverage.test.js`) fails on
+   any new prototype method until it is classified.
+
+7. **`<slot>` works identically in light and shadow DOM.** Light-DOM
    slots get the same `assignedNodes` / `assignedElements` /
    `assignedSlot` / `slotchange` surface, named slots, fallback content,
    and first-wins resolution as shadow-DOM slots. The light-DOM runtime

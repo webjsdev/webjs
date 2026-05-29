@@ -7,8 +7,9 @@
  *
  * Requires: chromium + puppeteer-core (devDependencies of the monorepo).
  *
- * Run:   node --test test/e2e.test.js
- * Or:    npm test  (runs alongside all other tests)
+ * Run:   WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs
+ * (gated behind WEBJS_E2E so the default `npm test` run skips it; CI runs
+ * it as its own job, see .github/workflows/ci.yml)
  */
 
 import { test, describe, before, after } from 'node:test';
@@ -1242,6 +1243,73 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(observed.shadow.header, 'Shadow full card');
     assert.ok(observed.light.footer.includes('Footer action'));
     assert.ok(observed.shadow.footer.includes('Shadow footer'));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Display-only component elision (the network probe)
+  //
+  //   <build-stamp> is purely presentational (static markup, no events,
+  //   props, hooks, or slot), so its import is stripped from the served
+  //   page source and the browser must never download its module. The
+  //   interactive <my-counter> on the same page must still be fetched.
+  // ---------------------------------------------------------------------------
+
+  test('display-only component module is never downloaded; interactive one is', async () => {
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      // Cache disabled so module fetches actually hit the network and
+      // show up in the log. networkidle is unusable here: the chat-box
+      // WebSocket keeps the connection open, so settle on a fixed delay
+      // after domcontentloaded, long enough for the boot script to walk
+      // the page's import graph.
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(3000);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+
+    const built = requested.some((u) => /\/components\/build-stamp\.(ts|js)/.test(u));
+    const counter = requested.some((u) => /\/components\/counter\.(ts|js)/.test(u));
+
+    // The home page renders <build-stamp> correctly without its JS.
+    const stampText = await page.evaluate(
+      () => document.querySelector('build-stamp')?.textContent?.trim() || '',
+    );
+    assert.ok(stampText.includes('no-build'), 'build-stamp SSR content is present');
+
+    assert.equal(built, false, 'display-only build-stamp module must NOT be downloaded');
+    assert.equal(counter, true, 'interactive counter module must be downloaded');
+  });
+
+  test('a fully-static route (/about) drops its page module from the boot', async () => {
+    // /about renders only static markup (no events, signals, or custom
+    // elements), so its page module is inert and dropped from the boot
+    // script. The page still renders, and the router-enabling layout still
+    // ships (so SPA nav keeps working).
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/about`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2500);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+    const aboutPageFetched = requested.some((u) => /about\/page\.(ts|js)/.test(u));
+    const aLayoutFetched = requested.some((u) => /\/layout\.(ts|js)/.test(u));
+    const rendered = await page.evaluate(() => document.body.textContent || '');
+
+    assert.match(rendered, /full-stack demo/i, '/about content is server-rendered');
+    assert.equal(aboutPageFetched, false, 'inert /about page module must NOT be downloaded');
+    assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
 });
 

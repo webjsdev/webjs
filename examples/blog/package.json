@@ -12,13 +12,17 @@
     "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
     "db:generate": "webjs db generate",
-    "db:migrate": "webjs db migrate"
+    "db:migrate": "webjs db migrate",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "@webjsdev/cli": "^0.8.0",
     "@webjsdev/core": "^0.7.0",
-    "@webjsdev/server": "^0.7.0"
+    "@webjsdev/server": "^0.8.0"
   },
   "devDependencies": {
     "prisma": "^5.22.0",

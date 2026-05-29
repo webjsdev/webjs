@@ -50,6 +50,76 @@ For component-local state, create an instance signal in the constructor and call
 
 See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
 
+## Display-only components are elided from the browser
+
+A component that does no client-side work renders the same SSR'd HTML
+whether or not its JavaScript ever reaches the browser. webjs detects
+these statically and strips their import from the served source, so the
+browser never downloads them (and their unique vendor dependencies drop
+from the importmap). This is automatic, with no opt-in keyword and no
+server/client split to reason about. A component stays elidable as long
+as it has none of the following.
+
+- An `@event` binding in a template (`@click=${...}`), or a native event-handler property (`.onclick=${...}`).
+- A reactive property in `static properties` that is not `{ state: true }`. Attribute-driven or `.prop`-driven values are the channel a parent uses to push client updates.
+- An overridden lifecycle hook (anything in the table above), as a method or an arrow class field.
+- A `signal` / `computed` / `watch` / `Task` / `ref` / `live` / streaming directive imported from `@webjsdev/core`, OR a transitive import of a module that reads shared module-scope signal state.
+- An `addController(...)` or `requestUpdate()` call.
+- Any code that runs at module load. A display-only module's top level may only *declare* things (imports, the `WebComponent` class, `const` / `let` / `var`, pure initializers like `css\`...\``) and *register* the component (`X.register(...)` / `customElements.define(...)`). Any other top-level call, `new`, dynamic `import(...)`, or top-level `await` is client work and ships (a top-level `fetch('/track')`, `new WebSocket(...)`, `setTimeout(...)`, `someInit()`). This is checked structurally as an allowlist of safe top-level forms, not a denylist of global names, so a brand-new browser API is caught automatically with no code change. Code inside a method, `render()`, or an uninvoked function does not count (it does not run at load), nor do these words in rendered template text or a `.fetch` / `.location` member access.
+- A rendered `<slot>`. Light-DOM slots rely on the client projection runtime, and proving a slot is purely native (shadow DOM) is beyond static analysis, so any `<slot>` ships.
+- Being rendered or imported by a component that itself ships (an interactive parent can re-create the child on the client).
+
+The analysis is deliberately conservative: anything it cannot prove
+inert ships normally, so correctness never depends on it. The elidable
+case in practice is a component with no inputs and no behavior: static
+markup, or values seeded in the constructor. Note a slotted wrapper does
+NOT qualify (the `<slot>` itself forces shipping per the list above).
+
+**The one boundary the static model cannot see.** Elision proves a
+component's own `render()` is inert; it does NOT prove that no *other*
+client code observes the element's registration. An elided module never
+loads, so its `customElements.define` never runs in the browser and the
+tag stays an un-upgraded `HTMLElement`. That is invisible for a tag that
+exists only as SSR'd markup, but it changes behavior if shipping client
+code depends on the definition:
+
+- `customElements.whenDefined('the-tag')` never resolves.
+- reading an upgraded property or method off `document.querySelector('the-tag')` is `undefined` / throws.
+- `el instanceof TheClass` is `false`.
+- a CSS `the-tag:defined { … }` rule never matches.
+
+If a component is observed any of these ways, it is interactive in
+practice; add an interactivity signal (an `@event`, a non-`state`
+reactive property, or a lifecycle hook) so it ships. In idiomatic webjs
+this is rare: a display-only element is server-rendered to its final
+HTML and read as plain markup, and `:defined` FOUC-hiding works against
+progressive enhancement (it would hide content that already painted).
+But if you reach for those patterns, treat the component as interactive.
+
+The detection lists live in `packages/server/src/component-elision.js`
+and are the single source of truth. They are kept in lockstep with the
+lifecycle table above by `packages/server/test/elision/lifecycle-coverage.test.js`,
+which fails if a new `WebComponent` hook is added without teaching the
+analyser about it. If you add an interactivity feature to the framework,
+update that file.
+
+### Turning elision off
+
+Elision is on by default. To disable it app-wide, set `elide` to `false`
+under the `webjs` key in `package.json`:
+
+```jsonc
+{ "webjs": { "elide": false } }
+```
+
+With the switch off, every component and route module ships exactly as it
+did before the feature existed (no import stripping, no dropped preloads,
+the importmap keeps every vendor dep). The switch is pure opt-out, so any
+value other than the literal `false`, or an absent key, leaves elision on.
+Reach for it if the conservative analyser ever mis-elides a component, or
+to A/B the wire-byte difference. Because the analyser biases toward
+shipping, needing this should be rare.
+
 ## ReactiveControllers: composable lifecycle
 
 ```js
