@@ -192,11 +192,6 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Scan for bare npm imports and register vendor import map entries.
-  const bareImports = await scanBareImports(appDir);
-  const initialVendor = await resolveVendorImports(bareImports, appDir);
-  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
-
   // Build module dependency graph for transitive preload hints.
   const moduleGraph = await buildModuleGraph(appDir);
 
@@ -216,6 +211,13 @@ export async function createRequestHandler(opts) {
     moduleGraph,
     (f) => readFile(f, 'utf8'),
   );
+
+  // Scan for bare npm imports and register vendor import map entries.
+  // Runs AFTER elision so vendor deps reachable only through display-only
+  // components are excluded from the importmap.
+  const bareImports = await scanBareImports(appDir, elidableComponents);
+  const initialVendor = await resolveVendorImports(bareImports, appDir);
+  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
@@ -266,17 +268,7 @@ export async function createRequestHandler(opts) {
     state.routeTable = await buildRouteTable(appDir);
     state.actionIndex = await buildActionIndex(appDir, dev);
     state.middleware = await loadMiddleware(appDir, dev, logger);
-    // Re-scan bare imports and module graph on rebuild
     clearVendorCache();
-    state.bareImports = await scanBareImports(appDir);
-    const v = await resolveVendorImports(state.bareImports, appDir);
-    // Defensive: if a newer rebuild has been queued while we were
-    // awaiting resolveVendorImports, drop our result. The newer one
-    // will overwrite anyway, but checking the token here avoids a
-    // brief window of stale entries.
-    if (token === latestRebuildToken) {
-      await setVendorEntries(v.imports, v.integrity);
-    }
     state.moduleGraph = await buildModuleGraph(appDir);
     // Re-scan components in case a new file was added or a tag renamed.
     // Share the scan with the browser-bound graph computation so we
@@ -293,6 +285,17 @@ export async function createRequestHandler(opts) {
       (f) => readFile(f, 'utf8'),
     );
     TS_CACHE.clear();
+    // Re-scan bare imports AFTER elision so the importmap drops vendor
+    // deps reachable only through display-only components.
+    state.bareImports = await scanBareImports(appDir, state.elidableComponents);
+    const v = await resolveVendorImports(state.bareImports, appDir);
+    // Defensive: if a newer rebuild has been queued while we were
+    // awaiting resolveVendorImports, drop our result. The newer one
+    // will overwrite anyway, but checking the token here avoids a
+    // brief window of stale entries.
+    if (token === latestRebuildToken) {
+      await setVendorEntries(v.imports, v.integrity);
+    }
     // Recompute the browser-bound file set: the page / layout / error /
     // loading / not-found / component entries plus their transitive imports.
     // This drives the dev server's "is this file allowed to be served as
@@ -757,6 +760,7 @@ async function handleCore(req, ctx) {
       const handler = () => ssrPage(page.route, page.params, url, {
         dev, appDir, req, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
+        elidableComponents: state.elidableComponents,
       });
       return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
     }

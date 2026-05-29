@@ -60,7 +60,7 @@ export async function ssrPage(route, params, url, opts) {
     // preloads and instead loaded via IntersectionObserver when they
     // enter the viewport.
     const { eager: eagerComponents, lazy: lazyComponents } =
-      componentPreloads(suspenseCtx.usedComponents, opts.appDir);
+      componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents);
     const preloads = deduplicatedPreloads(
       eagerComponents,
       moduleUrls,
@@ -68,6 +68,7 @@ export async function ssrPage(route, params, url, opts) {
       [route.file, ...route.layouts],
       opts.appDir,
       opts.serverFiles,
+      opts.elidableComponents,
     );
     // Extract CSP nonce from request headers (if present).
     const nonce = opts.req ? getNonce(opts.req) : undefined;
@@ -1067,11 +1068,16 @@ ${suspenseBoot}
  * are NOT preloaded: they're loaded by the IntersectionObserver-based
  * lazy-loader when the element enters the viewport.
  *
+ * Elidable (display-only) components are skipped entirely: their imports
+ * are stripped from the served source, so preloading their module would
+ * fetch JS the browser never executes.
+ *
  * @param {Set<string>} usedTags
  * @param {string} appDir
+ * @param {Set<string>} [elidable]  absolute paths of elidable component files
  * @returns {{ eager: string[], lazy: Record<string, string> }}
  */
-function componentPreloads(usedTags, appDir) {
+function componentPreloads(usedTags, appDir, elidable) {
   const eager = [];
   /** @type {Record<string, string>} */
   const lazy = {};
@@ -1081,6 +1087,7 @@ function componentPreloads(usedTags, appDir) {
     try {
       const abs = fileURLToPath(fileUrl);
       if (!abs.startsWith(appDir)) continue;
+      if (elidable && elidable.has(abs)) continue;
       const url = toUrlPath(abs, appDir);
       if (isLazy(tag)) {
         lazy[tag] = url;
@@ -1101,9 +1108,10 @@ function componentPreloads(usedTags, appDir) {
  * @param {import('./module-graph.js').ModuleGraph | undefined} graph
  * @param {string[]} entryFiles     absolute paths of page + layout files
  * @param {string} appDir
+ * @param {Set<string>} [elidableComponents]  absolute paths to skip in the walk
  * @returns {string[]}
  */
-function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles) {
+function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, elidableComponents) {
   const seen = new Set(moduleUrls);
   const result = [];
 
@@ -1136,7 +1144,10 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
       const abs = resolve(appDir, url.startsWith('/') ? url.slice(1) : url);
       allEntries.push(abs);
     }
-    const deps = transitiveDeps(graph, allEntries, appDir);
+    // Skip elidable components and any subtree reachable only through
+    // them: their imports are stripped from served source, so the
+    // browser never fetches these modules.
+    const deps = transitiveDeps(graph, allEntries, appDir, elidableComponents);
     for (const dep of deps) {
       if (byIndex(dep)) continue;
       const url = toUrlPath(dep, appDir);

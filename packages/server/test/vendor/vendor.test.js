@@ -100,6 +100,25 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: skipFiles excludes specifiers reachable only via elided components', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-skip-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  // badge (elided) imports dayjs; shared is imported by both badge and a
+  // shipping file; counter (shipping) imports zod.
+  await writeFile(join(dir, 'badge.ts'), `import dayjs from 'dayjs';\nimport sh from 'shared-pkg';`);
+  await writeFile(join(dir, 'counter.ts'), `import { z } from 'zod';\nimport sh from 'shared-pkg';`);
+
+  const skip = new Set([join(dir, 'badge.ts')]);
+  const found = await scanBareImports(dir, skip);
+
+  assert.ok(!found.has('dayjs'), 'dayjs is only in the elided component, should drop');
+  assert.ok(found.has('zod'), 'zod is in a shipping component, should stay');
+  assert.ok(found.has('shared-pkg'), 'a dep shared with a shipping file is retained');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('scanBareImports: skips route.ts and middleware.ts (file-router server-only convention)', async () => {
   const dir = join(tmpdir(), `webjs-test-vendor-router-skip-${Date.now()}`);
   await mkdir(join(dir, 'app', 'api', 'posts'), { recursive: true });

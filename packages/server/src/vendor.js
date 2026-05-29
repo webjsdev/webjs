@@ -82,10 +82,10 @@ const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/']);
  * @param {string} dir
  * @returns {Promise<Set<string>>}
  */
-export async function scanBareImports(dir) {
+export async function scanBareImports(dir, skipFiles) {
   /** @type {Set<string>} */
   const found = new Set();
-  await walk(dir, found);
+  await walk(dir, found, skipFiles);
   for (const b of BUILTIN) found.delete(b);
   return found;
 }
@@ -149,7 +149,7 @@ const CONFIG_FILE_RE = /\.config\.(js|ts|mjs|mts|cjs|cts)$/;
  * @param {string} dir
  * @param {Set<string>} found
  */
-async function walk(dir, found) {
+async function walk(dir, found, skipFiles) {
   let entries;
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
@@ -172,7 +172,14 @@ async function walk(dir, found) {
     ) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      await walk(full, found);
+      await walk(full, found, skipFiles);
+    } else if (skipFiles && skipFiles.has(full)) {
+      // Display-only component file: its imports are stripped from the
+      // served source, so a vendor specifier reachable ONLY through it
+      // never loads in the browser and must not enter the importmap. A
+      // specifier also imported by a shipping file still appears via that
+      // file's scan, so shared deps are retained.
+      continue;
     } else if (/\.(js|ts|mjs|mts)$/.test(e.name) && !isServerOnlyFile(e.name) && !CONFIG_FILE_RE.test(e.name)) {
       try {
         const raw = await readFile(full, 'utf8');
