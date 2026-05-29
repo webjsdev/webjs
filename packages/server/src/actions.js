@@ -106,7 +106,17 @@ export async function buildActionIndex(appDir, dev) {
     const h = await hashFile(file);
     hashToFile.set(h, file);
     fileToHash.set(file, h);
-    // Load module once at scan time to pick up any expose() tags.
+    // Pure-RPC actions are NOT executed at boot: invokeAction and
+    // serveActionStub import the module on demand (first RPC call / first stub
+    // fetch), so the hash index above is all that boot needs. Running every
+    // server module at boot (and its transitive Prisma init, DB connects, etc.)
+    // is wasted work. The one thing that DOES need eager loading is expose(),
+    // which registers a REST route the router must know before any request can
+    // hit it. So load only files that call expose(); the common case (no
+    // expose) defers its module entirely to first use.
+    let src = '';
+    try { src = await readFile(file, 'utf8'); } catch {}
+    if (!/\bexpose\s*\(/.test(src)) continue;
     try {
       const mod = await loadModule(file, dev);
       for (const [name, fn] of Object.entries(mod)) {
