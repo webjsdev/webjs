@@ -1270,15 +1270,21 @@ function maxSemverVersion(versions) {
  * hash, defeating the live-mode speed advantage. Users who want SRI
  * run `webjs vendor pin`).
  *
- * @param {Set<string>} bareImports
  * @param {string} appDir
+ * @param {() => Promise<Set<string>>} getBareImports lazy scan, invoked ONLY
+ *   on the unpinned path (so a pinned app never pays the whole-app walk).
  * @returns {Promise<{ imports: Record<string, string>, integrity: Record<string, string> }>}
  */
-export async function resolveVendorImports(bareImports, appDir) {
+export async function resolveVendorImports(appDir, getBareImports) {
   const file = await readPinFile(appDir);
+  // A committed pin file IS the import map. The whole-app bare-import scan is
+  // discarded in that case, so it must never run (runtime-first boot: no
+  // static analysis when pinned). The scan is supplied as a thunk and invoked
+  // solely here, only when there is no pin file.
   if (file) {
     return { imports: file.imports, integrity: file.integrity || {} };
   }
+  const bareImports = await getBareImports();
   const imports = await vendorImportMapEntries(bareImports, appDir);
   return { imports, integrity: {} };
 }

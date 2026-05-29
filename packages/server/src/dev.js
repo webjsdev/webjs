@@ -242,11 +242,13 @@ export async function createRequestHandler(opts) {
       )
     : { elidableComponents: new Set(), inertRouteModules: new Set() };
 
-  // Scan for bare npm imports and register vendor import map entries.
-  // Runs AFTER elision so vendor deps reachable only through display-only
-  // components are excluded from the importmap.
-  const bareImports = await scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules]));
-  const initialVendor = await resolveVendorImports(bareImports, appDir);
+  // Register vendor import map entries. With a committed pin file this is a
+  // single file read (no whole-app scan); without one, the bare-import scan
+  // runs lazily inside resolveVendorImports. The scan, when it runs, is AFTER
+  // elision so vendor deps reachable only through display-only components are
+  // excluded from the live-resolved importmap.
+  const initialVendor = await resolveVendorImports(appDir,
+    () => scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules])));
   await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
   // Dev-time guardrail: warn about any class extending WebComponent
@@ -269,7 +271,6 @@ export async function createRequestHandler(opts) {
     actionIndex: await buildActionIndex(appDir, dev),
     middleware: await loadMiddleware(appDir, dev, logger),
     logger,
-    bareImports,
     moduleGraph,
     elidableComponents,
     inertRouteModules,
@@ -324,10 +325,11 @@ export async function createRequestHandler(opts) {
       state.inertRouteModules = r.inertRouteModules;
     }
     TS_CACHE.clear();
-    // Re-scan bare imports AFTER elision so the importmap drops vendor
-    // deps reachable only through display-only components.
-    state.bareImports = await scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
-    const v = await resolveVendorImports(state.bareImports, appDir);
+    // Re-resolve the vendor import map. A pin file short-circuits to a file
+    // read; otherwise the bare-import scan runs lazily AFTER elision so the
+    // importmap drops vendor deps reachable only through display-only components.
+    const v = await resolveVendorImports(appDir,
+      () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
     // Defensive: if a newer rebuild has been queued while we were
     // awaiting resolveVendorImports, drop our result. The newer one
     // will overwrite anyway, but checking the token here avoids a

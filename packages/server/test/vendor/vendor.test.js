@@ -912,9 +912,22 @@ test('resolveVendorImports: prefers committed pin file over live API call', asyn
     await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
       imports: { 'fake-pkg': 'https://example.com/fake.js' },
     }));
-    const result = await resolveVendorImports(new Set(['unrelated']), dir);
+    let scanned = false;
+    const result = await resolveVendorImports(dir, async () => { scanned = true; return new Set(['unrelated']); });
     assert.equal(result.imports['fake-pkg'], 'https://example.com/fake.js');
     assert.deepEqual(result.integrity, {}, 'no integrity field in pin -> empty map');
+    assert.equal(scanned, false, 'a pin file must short-circuit BEFORE the bare-import scan (no whole-app walk)');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: runs the scan thunk only when there is no pin file', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    let scanned = false;
+    await resolveVendorImports(dir, async () => { scanned = true; return new Set(); });
+    assert.equal(scanned, true, 'unpinned: the scan thunk is invoked to discover bare specifiers');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -947,7 +960,7 @@ test('readPinFile: returns no integrity field on old pin format (backwards-compa
     assert.deepEqual(file.imports, { 'foo': 'https://cdn.example/foo.js' });
     assert.equal(file.integrity, undefined);
     // resolveVendorImports normalises the missing field to {}.
-    const r = await resolveVendorImports(new Set(), dir);
+    const r = await resolveVendorImports(dir, async () => new Set());
     assert.deepEqual(r.integrity, {});
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -983,7 +996,7 @@ test('readPinFile + resolveVendorImports: integrity keyed by FINAL URL (post-rew
       },
     };
     await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify(pinJson));
-    const r = await resolveVendorImports(new Set(['dayjs', 'dayjs/plugin/relativeTime.js']), dir);
+    const r = await resolveVendorImports(dir, async () => new Set(['dayjs', 'dayjs/plugin/relativeTime.js']));
     assert.equal(r.imports['dayjs'], '/__webjs/vendor/dayjs@1.11.20.js');
     assert.equal(r.integrity['/__webjs/vendor/dayjs@1.11.20.js'], 'sha384-aaaa');
     // Subpath import: integrity keyed by its OWN final URL, not by dayjs's.
