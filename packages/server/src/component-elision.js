@@ -30,9 +30,11 @@
  *      fails the test until classified), and checks that no
  *      REACTIVE_IMPORTS entry is stale. Adding an interactivity surface
  *      without updating these lists fails that test.
- *   2. agent-docs/framework-dev.md documents this file as a mandatory
- *      stop in the "adding an interactivity feature" checklist, since
- *      webjs development is largely AI-agent driven.
+ *   2. Maintainer pointers route changes back here: invariant 6 in
+ *      packages/core/AGENTS.md and the MAINTAINER NOTE on the
+ *      WebComponent lifecycle in packages/core/src/component.js both
+ *      direct anyone adding an interactivity surface to update these
+ *      lists, since webjs development is largely AI-agent driven.
  */
 
 import {

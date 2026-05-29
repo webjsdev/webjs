@@ -7,8 +7,9 @@
  *
  * Requires: chromium + puppeteer-core (devDependencies of the monorepo).
  *
- * Run:   node --test test/e2e.test.js
- * Or:    npm test  (runs alongside all other tests)
+ * Run:   WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs
+ * (gated behind WEBJS_E2E so the default `npm test` run skips it; CI runs
+ * it as its own job, see .github/workflows/ci.yml)
  */
 
 import { test, describe, before, after } from 'node:test';

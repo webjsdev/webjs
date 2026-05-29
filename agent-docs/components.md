@@ -60,17 +60,19 @@ from the importmap). This is automatic, with no opt-in keyword and no
 server/client split to reason about. A component stays elidable as long
 as it has none of the following.
 
-- An `@event` binding in a template (`@click=${...}`).
+- An `@event` binding in a template (`@click=${...}`), or a native event-handler property (`.onclick=${...}`).
 - A reactive property in `static properties` that is not `{ state: true }`. Attribute-driven or `.prop`-driven values are the channel a parent uses to push client updates.
-- An overridden lifecycle hook (anything in the table above).
-- A `signal` / `computed` / `watch` / `Task` / streaming directive imported from `@webjsdev/core`.
+- An overridden lifecycle hook (anything in the table above), as a method or an arrow class field.
+- A `signal` / `computed` / `watch` / `Task` / `ref` / `live` / streaming directive imported from `@webjsdev/core`, OR a transitive import of a module that reads shared module-scope signal state.
 - An `addController(...)` or `requestUpdate()` call.
+- A rendered `<slot>`. Light-DOM slots rely on the client projection runtime, and proving a slot is purely native (shadow DOM) is beyond static analysis, so any `<slot>` ships.
 - Being rendered or imported by a component that itself ships (an interactive parent can re-create the child on the client).
 
 The analysis is deliberately conservative: anything it cannot prove
 inert ships normally, so correctness never depends on it. The elidable
-case in practice is the purely presentational component (a slot wrapper,
-static markup, values seeded in the constructor).
+case in practice is a component with no inputs and no behavior: static
+markup, or values seeded in the constructor. Note a slotted wrapper does
+NOT qualify (the `<slot>` itself forces shipping per the list above).
 
 The detection lists live in `packages/server/src/component-elision.js`
 and are the single source of truth. They are kept in lockstep with the
