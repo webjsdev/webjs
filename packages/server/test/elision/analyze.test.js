@@ -49,6 +49,47 @@ test('@event binding forces interactive', () => {
   assert.match(r.reason, /@event/);
 });
 
+test('a side-effect npm import forces interactive (runs on module load)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import 'some-polyfill';
+    class P extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    P.register('poly-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a browser global at module scope forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    if (typeof window !== 'undefined') window.__init = 1;
+    class G extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    G.register('glob-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a BINDING npm import used only in render stays display-only (elidable)', () => {
+  // dayjs is only used in render(), which never runs on the client when the
+  // component is elided, so it rides away with the module. Must NOT ship.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import dayjs from 'dayjs';
+    class D extends WebComponent { render() { return html\`<time>\${dayjs().format()}</time>\`; } }
+    D.register('date-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('registration via customElements.define is not mistaken for a client global', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class R extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    customElements.define('reg-el', R);
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
 test('a rendered <slot> forces interactive (light-DOM projection runtime)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
@@ -149,7 +190,7 @@ test('lifecycle hook written as an arrow class field forces interactive', () => 
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Widget extends WebComponent {
-      connectedCallback = () => { localStorage.getItem('x'); };
+      connectedCallback = () => { this.ready = true; };
       render() { return html\`<p>x</p>\`; }
     }
     Widget.register('widget-el');

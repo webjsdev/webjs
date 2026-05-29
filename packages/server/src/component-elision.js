@@ -132,9 +132,12 @@ const CLIENT_ROUTER_IMPORTS = ['navigate', 'enableClientRouter', 'disableClientR
 
 /** Identifiers that only exist in a browser; their presence means client work. */
 const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
+/** Same, for component source, minus `customElements` (the registration call
+ * `customElements.define(...)` legitimately uses it and must not force ship). */
+const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
 
-/** Match any import/dynamic-import specifier. */
-const ANY_IMPORT_RE = /\bimport\s*(?:\(\s*)?(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+/** Match a whole-line SIDE-EFFECT import: `import 'pkg';` (no binding clause). */
+const SIDE_EFFECT_BARE_IMPORT_RE = /^\s*import\s+(['"])([^'"]+)\1\s*;?\s*$/gm;
 
 /**
  * True if `src` imports the client router (the `/client-router` subpath, or
@@ -167,18 +170,27 @@ function importsClientRouter(src) {
 }
 
 /**
- * True if `src` imports a bare npm package other than the (inert) framework
- * `@webjsdev/core` family. Such a package can have client-side side effects
- * the analyser cannot inspect, so a route module that pulls one in must ship.
+ * True if `src` SIDE-EFFECT imports a bare npm package other than the (inert)
+ * `@webjsdev/core` family (`import 'pkg'`, no binding). A side-effect import
+ * runs the package's top-level code when the module loads, which is real
+ * client work, so a module that has one must ship.
+ *
+ * A BINDING import (`import x from 'pkg'`) is deliberately NOT flagged: a page
+ * function never runs on the client and a display-only component's render
+ * never runs on the client when elided, so a package used only as a value in
+ * that code never executes client-side and rides away when the module is
+ * dropped. (An unguarded top-level use would crash SSR; a guarded one carries
+ * a client global that `CLIENT_GLOBAL_RE` catches.) This is what lets an
+ * SSR-only dependency stay off the client without a `.server.{js,ts}` wrapper.
  * @param {string} src
  * @returns {boolean}
  */
-function importsNonCoreBarePackage(src) {
-  for (const m of src.matchAll(ANY_IMPORT_RE)) {
-    const spec = m[1];
+function importsSideEffectNonCorePackage(src) {
+  for (const m of src.matchAll(SIDE_EFFECT_BARE_IMPORT_RE)) {
+    const spec = m[2];
     if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative / absolute
-    if (spec === '@webjsdev/core' || spec.startsWith('@webjsdev/core/')) continue; // inert framework
-    if (spec.startsWith('node:')) continue; // server-only builtins (a separate concern)
+    if (spec === '@webjsdev/core' || spec.startsWith('@webjsdev/core/')) continue; // inert framework / router handled separately
+    if (spec.startsWith('node:')) continue; // server-only builtins
     return true;
   }
   return false;
@@ -220,6 +232,19 @@ export function analyzeComponentSource(src) {
   // excluded by requiring a slot-closing character.
   if (SLOT_RE.test(src)) {
     return { interactive: true, reason: 'renders a <slot> (needs the projection runtime)' };
+  }
+
+  // Top-level client work the render/lifecycle checks would miss: a
+  // side-effect import of an npm package runs its code when the module
+  // loads, and a browser global (window/document/…, excluding the
+  // registration's customElements) means the module does client work even
+  // if its render is otherwise pure. Eliding such a component would drop
+  // that effect, so ship. (Mirrors the route-module analysis.)
+  if (importsSideEffectNonCorePackage(src)) {
+    return { interactive: true, reason: 'side-effect imports an npm package' };
+  }
+  if (COMPONENT_CLIENT_GLOBAL_RE.test(src)) {
+    return { interactive: true, reason: 'references a browser global at module scope' };
   }
 
   // The brace matcher counts depth reliably only on redacted source
@@ -502,7 +527,7 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (importsReactivePrimitive(src)) reactiveFiles.add(file);
     if (importsClientRouter(src)) clientRouterFiles.add(file);
     if (EVENT_BINDING_RE.test(src) || EVENT_PROP_RE.test(src) ||
-        importsNonCoreBarePackage(src) || CLIENT_GLOBAL_RE.test(src)) {
+        importsSideEffectNonCorePackage(src) || CLIENT_GLOBAL_RE.test(src)) {
       clientGlobalOrBareFiles.add(file);
     }
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {

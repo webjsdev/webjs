@@ -220,7 +220,7 @@ export async function createRequestHandler(opts) {
   // Scan for bare npm imports and register vendor import map entries.
   // Runs AFTER elision so vendor deps reachable only through display-only
   // components are excluded from the importmap.
-  const bareImports = await scanBareImports(appDir, elidableComponents);
+  const bareImports = await scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules]));
   const initialVendor = await resolveVendorImports(bareImports, appDir);
   await setVendorEntries(initialVendor.imports, initialVendor.integrity);
 
@@ -299,7 +299,7 @@ export async function createRequestHandler(opts) {
     TS_CACHE.clear();
     // Re-scan bare imports AFTER elision so the importmap drops vendor
     // deps reachable only through display-only components.
-    state.bareImports = await scanBareImports(appDir, state.elidableComponents);
+    state.bareImports = await scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
     const v = await resolveVendorImports(state.bareImports, appDir);
     // Defensive: if a newer rebuild has been queued while we were
     // awaiting resolveVendorImports, drop our result. The newer one

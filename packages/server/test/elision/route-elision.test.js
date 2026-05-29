@@ -106,7 +106,10 @@ test('a page importing a reactive primitive is NOT inert', async () => {
   assert.ok(!inertRouteModules.has('/app/page.js'));
 });
 
-test('a page importing a non-core npm package is NOT inert (it may self-execute)', async () => {
+test('a page using an npm package ONLY in its (server-only) body IS inert (SSR-only dep not shipped)', async () => {
+  // The page function never runs on the client, so dayjs() is never called
+  // there. A binding import used only in the body rides away when the inert
+  // page is dropped, so dayjs is not sent to the client.
   const page = `
     import { html } from '@webjsdev/core';
     import dayjs from 'dayjs';
@@ -116,7 +119,20 @@ test('a page importing a non-core npm package is NOT inert (it may self-execute)
     files: { '/app/page.js': page },
     routeModules: ['/app/page.js'],
   });
-  assert.ok(!inertRouteModules.has('/app/page.js'), 'a top-level npm import keeps the page shipping');
+  assert.ok(inertRouteModules.has('/app/page.js'), 'SSR-only npm binding does not force shipping');
+});
+
+test('a page with a SIDE-EFFECT npm import is NOT inert (it runs on load)', async () => {
+  const page = `
+    import { html } from '@webjsdev/core';
+    import 'analytics-lib';
+    export default () => html\`<p>hi</p>\`;
+  `;
+  const { inertRouteModules } = await run({
+    files: { '/app/page.js': page },
+    routeModules: ['/app/page.js'],
+  });
+  assert.ok(!inertRouteModules.has('/app/page.js'), 'a side-effect npm import keeps the page shipping');
 });
 
 test('a page touching a client global is NOT inert', async () => {
