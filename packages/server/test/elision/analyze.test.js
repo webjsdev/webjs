@@ -49,6 +49,30 @@ test('@event binding forces interactive', () => {
   assert.match(r.reason, /@event/);
 });
 
+test('a rendered <slot> forces interactive (light-DOM projection runtime)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Card extends WebComponent {
+      render() { return html\`<div class="card"><slot></slot></div>\`; }
+    }
+    Card.register('slot-card');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /slot/);
+});
+
+test('a custom tag named <slot-machine> is NOT mistaken for a slot', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Reels extends WebComponent {
+      render() { return html\`<slot-machine></slot-machine>\`; }
+    }
+    Reels.register('reels-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
 test('signal import forces interactive', () => {
   const src = `
     import { WebComponent, html, signal } from '@webjsdev/core';

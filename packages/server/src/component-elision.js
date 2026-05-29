@@ -97,6 +97,9 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
 /** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
 const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
 
+/** Match a rendered `<slot>` / `<slot ` / `<slot/>`, but not `<slot-machine>`. */
+const SLOT_RE = /<slot[\s/>]/;
+
 /** Match a named-import clause from a `@webjsdev/core` specifier. */
 const CORE_IMPORT_RE =
   /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](@webjsdev\/core[^'"]*|[^'"]*\/__webjs\/core\/[^'"]*)['"]/g;
@@ -120,6 +123,16 @@ export function analyzeComponentSource(src) {
   // blanks. Scan the RAW source for them (over-detection is safe).
   if (EVENT_BINDING_RE.test(src)) {
     return { interactive: true, reason: 'template has an @event binding' };
+  }
+
+  // A rendered `<slot>` relies on webjs's client slot-projection runtime
+  // for the slot API (assignedNodes, slotchange) and dynamic re-
+  // projection. Shadow DOM slots are native via Declarative Shadow DOM,
+  // but proving a given slot is purely native is beyond static analysis,
+  // so any rendered slot ships. Tag names like `<slot-machine>` are
+  // excluded by requiring a slot-closing character.
+  if (SLOT_RE.test(src)) {
+    return { interactive: true, reason: 'renders a <slot> (needs the projection runtime)' };
   }
 
   // The brace matcher counts depth reliably only on redacted source

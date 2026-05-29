@@ -27,12 +27,12 @@ function makeApp(files) {
   return appDir;
 }
 
-// A purely presentational component: renders a slot, no reactive props,
-// no events, no lifecycle hooks. Elidable.
+// A purely presentational component: static markup, no reactive props,
+// no events, no lifecycle hooks, no slot. Elidable.
 const BADGE = `
 import { WebComponent, html } from '@webjsdev/core';
 class Badge extends WebComponent {
-  render() { return html\`<span class="badge"><slot></slot></span>\`; }
+  render() { return html\`<span class="badge">verified</span>\`; }
 }
 Badge.register('x-badge');
 `;
@@ -86,8 +86,8 @@ test('the elidable component module is still servable if requested directly', as
 test('a single @click flips the verdict: counterpart import is NOT stripped', async () => {
   // Counterfactual guard. Make badge interactive and confirm it ships.
   const interactiveBadge = BADGE.replace(
-    '<span class="badge"><slot></slot></span>',
-    '<span @click=${() => {}}><slot></slot></span>',
+    '<span class="badge">verified</span>',
+    '<span @click=${() => {}}>verified</span>',
   );
   const appDir = makeApp({
     'app/page.ts': PAGE,
