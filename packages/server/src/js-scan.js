@@ -83,9 +83,14 @@ export function redactStringsAndTemplates(src) {
   // Whether `lastWord` was a property access (`.of`, `?.in`). A member named
   // like a keyword is a value, never a regex-preceding keyword.
   let lastWordIsProp = false;
+  // Whether the last two significant chars formed a postfix `++` / `--`. A
+  // postfix increment/decrement yields a value, so a following `/` is division
+  // (`a++ / 2`), not a regex start. Without this the `/` opens a phantom regex
+  // that blanks to the next `/`, swallowing a following module-scope call.
+  let lastWasIncDec = false;
   // After a literal (string/regex/template) the next `/` is division and the
   // next backtick is a tag, so mark a value-ender.
-  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; };
+  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; };
 
   // `/` opens a regex unless the previous token is a value (identifier that is
   // not a regex-preceding keyword, number, `)`, `]`, or a literal).
@@ -93,6 +98,7 @@ export function redactStringsAndTemplates(src) {
     if (lastSig === '') return true;
     if (lastSig === ')' || lastSig === ']') return false;
     if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+    if (lastWasIncDec) return false;   // postfix `a++` / `a--` is a value
     if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
     return true;
   };
@@ -193,16 +199,20 @@ export function redactStringsAndTemplates(src) {
       if (c === '/' && isRegex()) { scanRegex(); continue; }
       if (c === "'" || c === '"') { scanString(c, blank); continue; }
       if (c === '`') { scanTemplate(blank); continue; }
-      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
-      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
+      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; out += blank ? ' ' : c; i++; continue; }
+      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; out += blank ? ' ' : c; i++; continue; }
       if (/[A-Za-z_$]/.test(c)) {
         const prop = lastSig === '.';   // member access -> a value, not a keyword
         let w = '';
         while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += blank ? ' ' : src[i]; i++; }
-        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop;
+        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop; lastWasIncDec = false;
         continue;
       }
       if (/\s/.test(c)) { out += c === '\n' ? '\n' : (blank ? ' ' : c); i++; continue; }
+      // A `++` / `--` repeats the operator char; the second one forms a postfix
+      // op when it followed a value (identifier / `)` / `]`), the only case that
+      // matters for the regex-vs-division decision here.
+      lastWasIncDec = (c === '+' || c === '-') && c === lastSig;
       lastSig = c; lastWord = ''; out += blank ? ' ' : c; i++;
     }
   }

@@ -906,6 +906,21 @@ test('division by a keyword-named property does NOT hide a later call', () => {
   }
 });
 
+test('division after a postfix ++/-- does NOT hide a later call', () => {
+  // `a++ / 2` is division: postfix increment yields a value. The lexer must not
+  // read the `/` after `++`/`--` as a regex start and blank the rest of the
+  // line, which would swallow the following module-scope call (false elide).
+  for (const op of ['++', '--']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      let n = 4; const aspect = n${op} / 2; beacon(123);
+      class K extends WebComponent { render() { return html\`<span></span>\`; } }
+      K.register('x-k');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, op);
+  }
+});
+
 test('a real return-position regex is still treated as a regex (stays elidable)', () => {
   // Counterfactual: `return /re/` IS a regex; the property fix must not break
   // genuine keyword-preceded regexes. No side effect here, so elidable.
