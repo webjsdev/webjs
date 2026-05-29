@@ -90,6 +90,14 @@ class Counter extends WebComponent {
 }
 Counter.register('my-counter');</pre>
 
+    <h3>Where your npm packages run</h3>
+    <p>An npm package reaches the browser when a module that loads on the client imports it (the boot script loads page/layout modules and the components they register; loading a module runs its <code>import</code> statements). So:</p>
+    <ul>
+      <li><strong>Server-only dependency</strong> (a date library you only use during SSR): put it behind <code>.server.{js,ts}</code> for a guaranteed-off-the-client result. It also drops automatically if it's used only inside a fully static page/component that gets elided, but the <code>.server</code> boundary is the explicit, always-correct choice.</li>
+      <li><strong>Client-only package</strong> (analytics, a polyfill) on a page with no other interactivity: just import it. A <em>side-effect</em> import (<code>import 'analytics'</code>) or a guarded <code>window</code> init counts as client work, so the page keeps shipping and the package loads. You do not need a <code>'use client'</code>-style annotation, the import itself is the signal.</li>
+    </ul>
+    <p>The distinction the framework draws is "does this module do top-level client work?", not "does it import an npm package." A package used only as a value inside a page's body or a display-only component's <code>render</code> never executes on the client, so it rides away when that inert module is elided.</p>
+
     <h2>The design rules</h2>
 
     <p>

@@ -49,6 +49,8 @@ declare global { var __prisma: PrismaClient | undefined; }
 export const prisma = globalThis.__prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== 'production') globalThis.__prisma = prisma;</pre>
 
+    <p><strong>Do not import a server-only utility directly into a page, layout, or component.</strong> The stub throws when the module <em>loads</em> (not when called), so it works during SSR but crashes when a component hydrates or a page/layout module loads in the browser. Use server-only utilities <em>inside</em> server actions, <code>route.{js,ts}</code> handlers, or <code>middleware</code> (which only ever run on the server). A page reaches server logic by importing a <code>'use server'</code> <strong>action</strong> instead: its RPC stub loads safely on the client and isn't even called there.</p>
+
     <h2>How the Import Rewrite Works</h2>
     <p>When the browser requests a server module's URL (e.g. <code>/actions/posts.server.ts</code>), the dev server intercepts the request. Instead of serving the real file (which contains database calls, secrets, etc.), it generates and serves a <strong>client stub</strong>:</p>
 

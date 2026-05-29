@@ -148,15 +148,20 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 
 webjs has **no server/client component split**. Do not reason about it as React Server Components: there is no server-component render tree, no Flight protocol, no "use client" / "use server" component boundary, and no per-component server-versus-client identity.
 
-**Pages, layouts, and components are isomorphic modules.** Each one runs in two places, from the same source:
-1. On the **server**, to produce the SSR'd HTML of the response.
-2. In the **browser**, where the module loads to add interactivity (event listeners, signal reactivity, lifecycle hooks), register custom elements so SSR'd tags upgrade, and enable client-side routing.
+**Pages, layouts, and components are isomorphic modules** (same source on server and client), but they hydrate differently, and this distinction matters:
 
-A component is not "a server component" or "a client component"; it is one module that renders on the server and then, if it does any client work, hydrates in the browser. `route.{js,ts}` is the one routing file that is **not** isomorphic: it is a **server-only HTTP handler** (named `GET` / `POST` / … exports), the webjs equivalent of a Next.js route handler. It never ships to the client.
+- **Components hydrate.** A component's module loads in the browser, registers the custom element, the browser upgrades the SSR'd tag, and its `render()` / lifecycle / `@event` / signals run on the client. Per-element, islands-style. **This is where all interactivity lives.**
+- **Pages and layouts do NOT hydrate.** Their function runs **only on the server** to produce HTML; it is never re-invoked in the browser (the boot script `import`s the module but never calls its default export, and client navigation swaps server-rendered HTML rather than re-running the page function). So **a page/layout cannot be interactive in its own markup**. An `@click` in a page template is dropped at SSR and never wired up, and a signal read in a page body never re-renders. To make something interactive, put it in a component and render that component's tag.
+
+A page/layout module still **loads** in the browser, but only for its **top-level side effects**: registering the components it imports (so their SSR'd tags upgrade) and, for a layout, enabling the client router via `import '@webjsdev/core/client-router'`. That module load is also **how its imports reach the client**. Evaluating `import dayjs from 'dayjs'` at the top of a page fetches dayjs when the page module loads, *not* via hydration. So if a page/layout has no components to register and no client behavior, loading it is dead weight, which is exactly when elision drops it (and its imports never reach the client).
+
+`route.{js,ts}` is the one routing file that is **not** isomorphic: a **server-only HTTP handler** (named `GET` / `POST` / … exports), the webjs equivalent of a Next.js route handler. It never ships to the client.
 
 **`.server.{js,ts}` is the one server boundary, and it is an RPC + source-protection mechanism, NOT an RSC server component.** The file's source never reaches the browser:
 - With `'use server'`: its exports are **RPC-callable** from client code. The browser import is rewritten to a typed stub that POSTs to `/__webjs/action/<hash>/<fn>`. This is a server *action* (Rails/Next-style RPC), not a server-rendered component.
-- Without `'use server'`: it is a **server-only utility** (Prisma client, secrets, `node:*`, password hashing). The browser import resolves to a throw-at-load stub.
+- Without `'use server'`: it is a **server-only utility** (Prisma client, secrets, `node:*`, password hashing). The browser import resolves to a stub whose body is `throw new Error(...)` at module top level, so it **throws when loaded, not when called**.
+
+That throw-at-load behavior has a practical consequence: **do not import a no-`'use server'` server-only util directly into a page, layout, or component.** It works during SSR (the real module runs server-side), but a component hydrating, or a page/layout module loading, will evaluate the stub and crash. Server-only utils are meant to be used *inside* server actions (`'use server'` files), `route.{js,ts}` handlers, or `middleware`, all of which run only on the server. A page reaches server logic by importing a `'use server'` **action**, whose RPC stub loads safely on the client (and isn't even called there). This is why the recipes say a page should call a server action and never import the DB directly.
 
 So the way to keep a dependency off the client is the `.server.{js,ts}` boundary, not a component-level annotation. A server-only npm package (e.g. a date library used only to format during SSR) belongs inside a `.server.{js,ts}` file (`lib/format.server.ts` exporting `formatDate`), because pages/layouts are isomorphic and their top-level imports otherwise reach the browser.
 
