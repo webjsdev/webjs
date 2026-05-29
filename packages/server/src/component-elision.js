@@ -535,12 +535,19 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     }
   }
 
-  // Ship any component that transitively imports a reactive module.
+  // Ship any component whose transitive import closure does client work,
+  // through ANY import (not just npm): a relative helper that imports a
+  // reactive primitive (shared module-scope signal), enables the client
+  // router, references a browser global, or side-effect imports a package.
+  // Same closure rule the route analysis applies, so a display-only
+  // component that pulls in a client-effecting helper still ships.
+  const closureIsClientEffecting = (d) =>
+    reactiveFiles.has(d) || clientRouterFiles.has(d) || clientGlobalOrBareFiles.has(d);
   if (appDir) {
     for (const file of componentFiles) {
       if (mustShip.has(file)) continue;
-      const deps = transitiveDeps(moduleGraph, [file], appDir);
-      if (deps.some((d) => reactiveFiles.has(d))) mustShip.add(file);
+      const deps = transitiveDeps(moduleGraph, [file], appDir, serverFiles);
+      if (deps.some(closureIsClientEffecting)) mustShip.add(file);
     }
   }
 

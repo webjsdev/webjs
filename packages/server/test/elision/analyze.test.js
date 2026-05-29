@@ -504,6 +504,27 @@ test('unreadable component file is conservatively kept (ships)', async () => {
   assert.deepEqual([...elidable], []);
 });
 
+test('component importing a relative helper that does client work ships (any import, not just npm)', async () => {
+  // The component itself is display-only, but it imports a plain helper
+  // that touches a browser global at module scope. Eliding the component
+  // would drop that helper's client effect, so it must ship.
+  const comp = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import './setup.js';
+    class Inert extends WebComponent { render() { return html\`<p>x</p>\`; } }
+    Inert.register('inert-el');
+  `;
+  const setup = `if (typeof window !== 'undefined') window.__did = 1;`;
+  const files = { '/app/inert.js': comp, '/app/setup.js': setup };
+  const elidable = await computeElidableComponents(
+    [{ tag: 'inert-el', file: '/app/inert.js' }],
+    graphOf({ '/app/inert.js': ['/app/setup.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  assert.deepEqual([...elidable], [], 'a client-effecting helper forces the component to ship');
+});
+
 test('component reading an imported shared module-scope signal ships', async () => {
   // The canonical shared-state pattern: a state module exports a signal,
   // a read-only consumer renders signal.get(). The consumer imports no
