@@ -88,6 +88,7 @@ jobs:
           cp .env.example .env
           npx prisma generate
           npx prisma migrate deploy
+          npx prisma db seed
       - name: Run e2e
         env:
           WEBJS_E2E: '1'
