@@ -843,3 +843,51 @@ test('an ordinary multi-line component with normal strings stays elidable', () =
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+// --- proper-lexer cases: regex literals and nested templates no longer desync ---
+
+test('two same-line quote-bearing regexes do NOT hide a call between them', () => {
+  // The even-quote / same-line case that defeated the earlier parity patch.
+  // The lexer blanks regex bodies, so the quotes never reach the quote pairing.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const A = /'/; track(); const B = /'/;
+    class T extends WebComponent { render() { return html\`<span></span>\`; } }
+    T.register('x-t3');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a regex with a brace then a top-level call ships (no brace desync)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const RE = /^[a-z{]+$/; sendBeacon('/x');
+    class T extends WebComponent { render() { return html\`<span></span>\`; } }
+    T.register('x-t4');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a nested template does not spill, so a clean component stays elidable', () => {
+  // The inner backtick must not be read as the outer template close; the
+  // module scope after it is just the register call, so this elides.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Grid extends WebComponent {
+      render() { return html\`<ul>\${[1,2].map((x) => html\`<li>\${x}</li>\`)}</ul>\`; }
+    }
+    Grid.register('x-grid2');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('a module-scope call after a nested-template assignment still ships', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const TPL = html\`<a>\${html\`<b></b>\`}</a>\`;
+    ping('/beacon');
+    class T extends WebComponent { render() { return html\`<span></span>\`; } }
+    T.register('x-t5');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});

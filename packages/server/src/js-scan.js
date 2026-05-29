@@ -2,11 +2,22 @@
  * Low-level lexical scanning helpers shared by the convention validator
  * (`check.js`) and the component-elision analyser (`component-elision.js`).
  *
- * These are deliberately regex + hand-rolled-walker based, NOT a full TS
- * parse. The framework prioritises fast dev-time rebuilds; a real parser
- * would be ~50x slower for patterns this shallow. Each helper documents
- * the trade-offs it accepts.
+ * These are deliberately a hand-rolled lexer, NOT a full TS parse. The
+ * framework prioritises fast dev-time rebuilds; a real parser would be ~50x
+ * slower for patterns this shallow. The lexer tracks the JS lexical grammar
+ * (strings, regex literals, comments, and templates with nested `${...}`
+ * interpolation) so structural scanners never trip on a literal's contents.
  */
+
+/**
+ * Keywords after which a `/` opens a regex literal rather than dividing
+ * (`return /re/`, `typeof /re/`). After a plain identifier or number a `/` is
+ * division. Used by the lexer's regex-versus-division decision.
+ */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+  'do', 'else', 'case', 'yield', 'await', 'throw',
+]);
 
 /**
  * Return `src` with the BODY of every comment, single-quoted string,
@@ -48,149 +59,151 @@
  * calls in practice live at top-level in component files, not
  * inside template interpolations.
  *
- * Regex literals are NOT specifically tracked. A `/.../` in source
- * that contains text resembling a comment-open or quote would be
- * misread by this walker, but the lint rules don't look for
- * patterns that would collide with regex bodies (`class extends`,
- * `enum`, etc. are not valid regex syntax). Acceptable until
- * proven otherwise.
+ * Regex literals ARE tracked. A `/.../` in expression position (decided by
+ * the previous significant token, the standard regex-versus-division rule)
+ * has its body blanked with the `/` delimiters kept, so a quote, brace, or
+ * comment-like sequence inside a regex cannot desync the walker. Template
+ * literals are tracked with full `${...}` interpolation and arbitrary
+ * nesting, so a nested `` html`...${html`...`}...` `` is delimited correctly
+ * (the inner backtick is not mistaken for the outer close).
  *
  * @param {string} src
  * @returns {string}
  */
 export function redactStringsAndTemplates(src) {
-  let out = '';
   const n = src.length;
+  let out = '';
   let i = 0;
-  while (i < n) {
-    const c = src[i];
-    const next = src[i + 1];
+  // Previous significant token in code position, tracked as we walk (more
+  // robust than scanning `out`, whose tail is blanked spaces inside a hole).
+  // `lastSig` is the last non-whitespace source char; `lastWord` is the last
+  // identifier. Both drive regex-versus-division and tagged-template decisions.
+  let lastSig = '';
+  let lastWord = '';
+  // After a literal (string/regex/template) the next `/` is division and the
+  // next backtick is a tag, so mark a value-ender.
+  const markValue = () => { lastSig = 'x'; lastWord = ''; };
 
-    // Line comment: //...\n
-    if (c === '/' && next === '/') {
-      out += '//';
-      i += 2;
-      while (i < n && src[i] !== '\n') {
-        out += ' ';
-        i++;
-      }
-      // Newline handled by outer loop on next iteration.
-      continue;
+  // `/` opens a regex unless the previous token is a value (identifier that is
+  // not a regex-preceding keyword, number, `)`, `]`, or a literal).
+  const isRegex = () => {
+    if (lastSig === '') return true;
+    if (lastSig === ')' || lastSig === ']') return false;
+    if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+    if (/[\w$]/.test(lastSig)) return REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    return true;
+  };
+  // A template is tagged when the previous token is a value.
+  const isTagged = () => /[\w$)\]'"`]/.test(lastSig);
+
+  const scanLineComment = () => {
+    out += '//'; i += 2;
+    while (i < n && src[i] !== '\n') { out += ' '; i++; }
+  };
+  const scanBlockComment = () => {
+    out += '/*'; i += 2;
+    while (i < n) {
+      if (src[i] === '*' && src[i + 1] === '/') { out += '*/'; i += 2; return; }
+      out += src[i] === '\n' ? '\n' : ' '; i++;
     }
-
-    // Block comment: /* ... */
-    if (c === '/' && next === '*') {
-      out += '/*';
-      i += 2;
+  };
+  const scanRegex = () => {
+    out += '/'; i++;
+    let inClass = false;
+    while (i < n) {
+      const d = src[i];
+      if (d === '\\' && i + 1 < n) { out += '  '; i += 2; continue; }
+      if (d === '\n') break;                 // unterminated regex
+      if (d === '[') inClass = true;
+      else if (d === ']') inClass = false;
+      else if (d === '/' && !inClass) { out += '/'; i++; break; }
+      out += ' '; i++;
+    }
+    markValue();
+  };
+  // Strings: KEEP the body verbatim at top level (so tag-name-has-hyphen can
+  // read register('foo')); blank it when inside an already-blanked hole.
+  const scanString = (q, blank) => {
+    out += q; i++;
+    while (i < n) {
+      if (src[i] === '\\' && i + 1 < n) { out += blank ? '  ' : src[i] + src[i + 1]; i += 2; continue; }
+      if (src[i] === q) { out += q; i++; break; }
+      if (src[i] === '\n') { out += '\n'; i++; break; }   // unterminated
+      out += blank ? ' ' : src[i]; i++;
+    }
+    markValue();
+  };
+  // Template literal. `forceBlank` is set when already inside a blanked hole
+  // (everything nested blanks regardless of tag/shape).
+  const scanTemplate = (forceBlank) => {
+    const tagged = isTagged();
+    let hasInterp = false, hasNewline = false, closed = false, depth = 0, k = i + 1;
+    while (k < n) {
+      const ch = src[k];
+      if (ch === '\\') { k += 2; continue; }
+      if (depth === 0 && ch === '`') { closed = true; break; }
+      if (ch === '$' && src[k + 1] === '{') { hasInterp = true; depth++; k += 2; continue; }
+      else if (ch === '{' && depth > 0) depth++;
+      else if (ch === '}' && depth > 0) depth--;
+      if (ch === '\n') hasNewline = true;
+      k++;
+    }
+    const verbatim = !forceBlank && !tagged && closed && !hasNewline && !hasInterp;
+    out += '`'; i++;
+    if (verbatim) {
       while (i < n) {
-        if (src[i] === '*' && src[i + 1] === '/') {
-          out += '*/';
-          i += 2;
-          break;
-        }
-        out += src[i] === '\n' ? '\n' : ' ';
-        i++;
+        if (src[i] === '\\' && i + 1 < n) { out += src[i] + src[i + 1]; i += 2; continue; }
+        if (src[i] === '`') { out += '`'; i++; break; }
+        out += src[i]; i++;
       }
-      continue;
+      markValue();
+      return;
     }
-
-    // Single- or double-quoted string: KEEP the body verbatim so
-    // rules like tag-name-has-hyphen can read register('foo').
-    if (c === "'" || c === '"') {
-      const quote = c;
-      out += quote;
-      i++;
-      while (i < n) {
-        if (src[i] === '\\' && i + 1 < n) {
-          out += src[i];
-          out += src[i + 1];
-          i += 2;
-          continue;
-        }
-        if (src[i] === quote) {
-          out += quote;
-          i++;
-          break;
-        }
-        if (src[i] === '\n') {
-          // Unterminated; emit and continue.
-          out += '\n';
-          i++;
-          break;
-        }
-        out += src[i];
-        i++;
+    // Blanked template: blank the literal text, recurse through `${...}` holes
+    // (scanned as blanked code, so nested templates/strings/regexes inside a
+    // hole are delimited correctly and never desync the outer scan).
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < n) { out += ' '; out += src[i + 1] === '\n' ? '\n' : ' '; i += 2; continue; }
+      if (c === '`') { out += '`'; i++; break; }
+      if (c === '$' && src[i + 1] === '{') {
+        out += '  '; i += 2;
+        scanCode(true, true);
+        if (i < n && src[i] === '}') { out += ' '; i++; }
+        continue;
       }
-      continue;
+      out += c === '\n' ? '\n' : ' '; i++;
     }
+    markValue();
+  };
 
-    // Template literal: see the JSDoc above for the tag + shape
-    // classification. Delimiters always stay so structural scanners
-    // see them.
-    if (c === '`') {
-      // Walk back through whitespace to find the previous
-      // significant character. Newlines count as whitespace so
-      // `const x = html\n  ` ... `` `(ASI-style line break between tag
-      // and backtick) is still recognized as tagged.
-      let j = out.length - 1;
-      while (j >= 0 && /\s/.test(out[j])) j--;
-      const prev = j >= 0 ? out[j] : '';
-      const isTagged = /[A-Za-z0-9_$)\]]/.test(prev);
-
-      let endIdx = -1;
-      let hasInterp = false;
-      let hasNewline = false;
-      let k = i + 1;
-      while (k < n) {
-        if (src[k] === '\\' && k + 1 < n) { k += 2; continue; }
-        if (src[k] === '`') { endIdx = k; break; }
-        if (src[k] === '\n') hasNewline = true;
-        if (src[k] === '$' && src[k + 1] === '{') hasInterp = true;
-        k++;
+  // Scan code. `stopHole`: return at the `}` that closes the enclosing template
+  // hole (the caller emits it). `blank`: emit spaces for code (inside a blanked
+  // hole). Literals are always lexed so braces/quotes inside them never count.
+  function scanCode(stopHole, blank) {
+    let brace = 0;
+    while (i < n) {
+      const c = src[i], next = src[i + 1];
+      if (stopHole && c === '}' && brace === 0) return;
+      if (c === '/' && next === '/') { scanLineComment(); continue; }
+      if (c === '/' && next === '*') { scanBlockComment(); continue; }
+      if (c === '/' && isRegex()) { scanRegex(); continue; }
+      if (c === "'" || c === '"') { scanString(c, blank); continue; }
+      if (c === '`') { scanTemplate(blank); continue; }
+      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
+      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; out += blank ? ' ' : c; i++; continue; }
+      if (/[A-Za-z_$]/.test(c)) {
+        let w = '';
+        while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += blank ? ' ' : src[i]; i++; }
+        lastWord = w; lastSig = w[w.length - 1];
+        continue;
       }
-      const preserveVerbatim = !isTagged && endIdx !== -1 && !hasNewline && !hasInterp;
-
-      out += '`';
-      i++;
-      if (preserveVerbatim) {
-        while (i < n) {
-          if (src[i] === '\\' && i + 1 < n) {
-            out += src[i];
-            out += src[i + 1];
-            i += 2;
-            continue;
-          }
-          if (src[i] === '`') {
-            out += '`';
-            i++;
-            break;
-          }
-          out += src[i];
-          i++;
-        }
-      } else {
-        while (i < n) {
-          if (src[i] === '\\' && i + 1 < n) {
-            out += ' ';
-            out += src[i + 1] === '\n' ? '\n' : ' ';
-            i += 2;
-            continue;
-          }
-          if (src[i] === '`') {
-            out += '`';
-            i++;
-            break;
-          }
-          out += src[i] === '\n' ? '\n' : ' ';
-          i++;
-        }
-      }
-      continue;
+      if (/\s/.test(c)) { out += c === '\n' ? '\n' : (blank ? ' ' : c); i++; continue; }
+      lastSig = c; lastWord = ''; out += blank ? ' ' : c; i++;
     }
-
-    out += c;
-    i++;
   }
+
+  scanCode(false, false);
   return out;
 }
 

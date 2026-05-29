@@ -152,14 +152,15 @@ const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|
  * (`X.register(...)` / `customElements.define(...)`). Any other call, any
  * `new`, any dynamic `import(...)`, or top-level `await` means client work.
  *
- * Scans the redacted copy (strings / templates / comments blanked) so template
+ * Scans the redacted copy (strings / templates / comments blanked, regex
+ * literals and nested `${...}` interpolation tracked by the lexer) so template
  * prose and JSDoc / TS type annotations cannot trip it; quoted-string bodies,
  * which redaction keeps verbatim for other rules, are blanked here too so a
  * string like `"foo()"` or `"{"` is not read as a call and cannot unbalance
- * the brace scan. Regex literals are not tracked by redaction, so a regex with
- * a stray `{`/`}` leaves the brace scan unbalanced and a regex with a stray
- * quote leaves a string-skip that never closes on its line; both ship
- * conservatively rather than risk hiding client work below them.
+ * the brace scan. The unbalanced-brace and unterminated-string fallbacks below
+ * are defense in depth: with the lexer tracking regex literals, neither should
+ * trigger on valid code, but if either does the module ships rather than risk
+ * hiding client work.
  *
  * Over-detection is safe (a top-level arrow whose body calls something, or a
  * pure top-level helper call, only ships). The accepted residual misses, all
