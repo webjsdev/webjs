@@ -73,6 +73,17 @@ test('a custom tag named <slot-machine> is NOT mistaken for a slot', () => {
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
+test('.onclick native event-handler property forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Btn extends WebComponent {
+      render() { return html\`<button .onclick=\${() => {}}>x</button>\`; }
+    }
+    Btn.register('btn-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
 test('signal import forces interactive', () => {
   const src = `
     import { WebComponent, html, signal } from '@webjsdev/core';
@@ -450,6 +461,33 @@ test('unreadable component file is conservatively kept (ships)', async () => {
     '/app',
   );
   assert.deepEqual([...elidable], []);
+});
+
+test('component reading an imported shared module-scope signal ships', async () => {
+  // The canonical shared-state pattern: a state module exports a signal,
+  // a read-only consumer renders signal.get(). The consumer imports no
+  // primitive itself but its SignalWatcher re-renders on change, so it
+  // must ship.
+  const consumer = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { count } from './state.js';
+    class Badge extends WebComponent {
+      render() { return html\`<span>\${count.get()}</span>\`; }
+    }
+    Badge.register('count-badge');
+  `;
+  const state = `
+    import { signal } from '@webjsdev/core';
+    export const count = signal(0);
+  `;
+  const files = { '/app/badge.js': consumer, '/app/state.js': state };
+  const elidable = await computeElidableComponents(
+    [{ tag: 'count-badge', file: '/app/badge.js' }],
+    graphOf({ '/app/badge.js': ['/app/state.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  assert.deepEqual([...elidable], [], 'count-badge reads a shared signal, must ship');
 });
 
 test('render rule: child emitted via an imported template helper still ships', async () => {

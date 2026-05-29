@@ -111,6 +111,9 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
 /** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
 const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
 
+/** Match a `.onclick=${...}` (native event-handler property) binding. */
+const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
+
 /** Match a rendered `<slot>` / `<slot ` / `<slot/>`, but not `<slot-machine>`. */
 const SLOT_RE = /<slot[\s/>]/;
 
@@ -137,6 +140,9 @@ export function analyzeComponentSource(src) {
   // blanks. Scan the RAW source for them (over-detection is safe).
   if (EVENT_BINDING_RE.test(src)) {
     return { interactive: true, reason: 'template has an @event binding' };
+  }
+  if (EVENT_PROP_RE.test(src)) {
+    return { interactive: true, reason: 'template sets a native event-handler property' };
   }
 
   // A rendered `<slot>` relies on webjs's client slot-projection runtime
@@ -374,6 +380,13 @@ export async function computeElidableComponents(components, moduleGraph, readFil
   // read here too, both for its tags and for its interactivity verdict.
   /** @type {Map<string, Set<string>>} */
   const fileTags = new Map();
+  // App-internal modules that import a reactive primitive from core. A
+  // component that transitively imports one of these reads cross-component
+  // state through it (the module-scope `export const x = signal(0)` shared
+  // state pattern), so its SignalWatcher re-renders on the client and it
+  // must ship even though it imports no primitive directly.
+  /** @type {Set<string>} */
+  const reactiveFiles = new Set();
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
   for (const [k, vs] of moduleGraph) {
@@ -391,8 +404,19 @@ export async function computeElidableComponents(components, moduleGraph, readFil
     }
     if (typeof src !== 'string') continue;
     fileTags.set(file, extractRenderedTags(src));
+    if (importsReactivePrimitive(src)) reactiveFiles.add(file);
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
       mustShip.add(file);
+    }
+  }
+
+  // Ship any component that transitively imports a reactive module (shared
+  // module-scope signal/computed read through an imported binding).
+  if (appDir) {
+    for (const file of componentFiles) {
+      if (mustShip.has(file)) continue;
+      const deps = transitiveDeps(moduleGraph, [file], appDir);
+      if (deps.some((d) => reactiveFiles.has(d))) mustShip.add(file);
     }
   }
 
