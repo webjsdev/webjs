@@ -761,3 +761,55 @@ test('an async-arrow page default export is not mistaken for an async() call', (
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+// --- lexical robustness of the module-scope allowlist ---
+
+test('an unbalanced-brace regex literal does NOT hide a later top-level side effect', () => {
+  // redactStringsAndTemplates does not track regex literals, so /[{]/ would
+  // desync the brace scan. The unbalanced-brace fallback must ship.
+  for (const re of ['/[{]/', '/\\$\\{/', '/^[a-z{]+$/']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      const OPEN = ${re};
+      fetch('/analytics/pageview');
+      class R extends WebComponent { render() { return html\`<span></span>\`; } }
+      R.register('x-r');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, re);
+  }
+});
+
+test('optional-chaining calls at module scope ship (foo?.(), globalThis.x?.())', () => {
+  for (const stmt of ['boot?.();', 'globalThis.analytics?.track?.();']) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      ${stmt}
+      class O extends WebComponent { render() { return html\`<span></span>\`; } }
+      O.register('x-o');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, stmt);
+  }
+});
+
+test('a balanced or brace-free regex with no side effect stays elidable', () => {
+  // Guards against the fallback over-firing: /\d{4}/ braces net out, and a
+  // char-class regex with no { stays balanced, so neither forces shipping.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const YEAR = /\\d{4}/;
+    const SLUG = /^[a-z0-9-]+$/;
+    class G extends WebComponent { render() { return html\`<span>\${YEAR.test('2026')}</span>\`; } }
+    G.register('x-g');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('a string body that looks like a call does not force shipping', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    const MSG = 'please fetch() and call support() later';
+    class S extends WebComponent { render() { return html\`<span>\${MSG}</span>\`; } }
+    S.register('x-s2');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});

@@ -153,26 +153,49 @@ const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|
  * `new`, any dynamic `import(...)`, or top-level `await` means client work.
  *
  * Scans the redacted copy (strings / templates / comments blanked) so template
- * prose and JSDoc / TS type annotations cannot trip it. Over-detection is safe
- * (a top-level arrow whose body calls something, or a pure top-level helper
- * call, only ships); the one acceptable miss is a call buried inside a
- * top-level object / array initializer, which is contrived and, being
- * structural, does not rot.
+ * prose and JSDoc / TS type annotations cannot trip it; quoted-string bodies,
+ * which redaction keeps verbatim for other rules, are blanked here too so a
+ * string like `"foo()"` or `"{"` is not read as a call and cannot unbalance
+ * the brace scan. If the brace scan ends unbalanced (most often a regex
+ * literal with a stray `{` or `}`, which redaction does not track), it ships
+ * conservatively rather than risk hiding client work below it.
+ *
+ * Over-detection is safe (a top-level arrow whose body calls something, or a
+ * pure top-level helper call, only ships). The accepted residual misses, all
+ * contrived and structural (so they do not rot), are a call buried inside a
+ * top-level object / array initializer or a destructuring default, and a
+ * side-effecting tagged-template hole evaluated at module scope.
  *
  * @param {string} src raw module source
  */
 function hasModuleScopeSideEffect(src) {
   const redacted = redactStringsAndTemplates(src);
-  // Keep only depth-0 text (outside every `{}`): blanked templates/strings
-  // contribute no braces, so the remaining braces are real blocks/objects.
+  // Keep only depth-0 text (outside every `{}`). Skip quoted-string bodies so
+  // braces/parens inside a string neither desync the depth nor read as a call.
   let depth = 0;
   let frame = '';
   for (let i = 0; i < redacted.length; i++) {
     const c = redacted[i];
+    if (c === "'" || c === '"') {
+      i++;
+      while (i < redacted.length && redacted[i] !== c) {
+        if (redacted[i] === '\\') i++;
+        i++;
+      }
+      if (depth === 0) frame += "''";
+      continue;
+    }
     if (c === '{') { depth++; continue; }
     if (c === '}') { if (depth > 0) depth--; continue; }
     if (depth === 0) frame += c;
   }
+  // Unbalanced braces mean a construct we could not lexically resolve (a regex
+  // literal with a stray brace is the common case). Ship rather than risk a
+  // hidden top-level statement.
+  if (depth !== 0) return true;
+  // Optional-chaining call/index: `foo?.()`, `x?.[i]()` (the `?.` defeats the
+  // identifier-before-paren match below).
+  if (/\?\.\s*[([]/.test(frame)) return true;
   // Top-level `new` (a `new X()` constructor also trips the call check, but a
   // `new X` without parens would not) and top-level `await`.
   if (/(?<![.\w])(?:new|await)\s/.test(frame)) return true;
