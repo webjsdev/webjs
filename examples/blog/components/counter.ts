@@ -1,20 +1,31 @@
-import { WebComponent, html, signal } from '@webjsdev/core';
+import { WebComponent, html } from '@webjsdev/core';
 
 /**
  * `<my-counter>`: demo counter with the current design system.
  * Tabular monospace output; warm-accent focus ring.
  *
- * Component-local state lives in an instance signal. The built-in
- * SignalWatcher auto-tracks `.get()` reads inside render() and
- * re-renders on `.set()`. This matches AGENTS.md invariant 4.
+ * `count` is a reactive property because the value rides the `count`
+ * attribute (`<my-counter count="3">`). The SSR pipeline applies the
+ * attribute before first paint, so the server-rendered output already
+ * shows the seeded value; click handlers re-render by assigning to the
+ * property. Per AGENTS.md, attribute-backed values use `static
+ * properties` + a `declare` field with the default set in the
+ * constructor (not a class-field initializer, which would clobber the
+ * reactive accessor).
  */
 export class Counter extends WebComponent {
-  count = signal(0);
+  static properties = { count: { type: Number } };
+  declare count: number;
 
-  _bump(d: number) { this.count.set(this.count.get() + d); }
+  constructor() {
+    super();
+    this.count = 0;
+  }
+
+  _bump(d: number) { this.count += d; }
 
   render() {
-    const v = this.count.get();
+    const v = this.count;
     return html`
       <button
         class="w-8 h-8 rounded-full border-0 bg-transparent text-fg-muted font-sans font-semibold text-base leading-none cursor-pointer transition-all duration-150 hover:bg-bg-subtle hover:text-fg active:scale-[0.92] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent-tint"
