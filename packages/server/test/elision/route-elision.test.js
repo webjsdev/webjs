@@ -81,6 +81,18 @@ test('a page importing the client router is NOT inert', async () => {
   assert.ok(!inertRouteModules.has('/app/page.js'));
 });
 
+test('a page reaching the router via a namespace import is NOT inert', async () => {
+  const page = `
+    import * as core from '@webjsdev/core';
+    export default () => { core.navigate('/x'); return core.html\`<p>hi</p>\`; };
+  `;
+  const { inertRouteModules } = await run({
+    files: { '/app/page.js': page },
+    routeModules: ['/app/page.js'],
+  });
+  assert.ok(!inertRouteModules.has('/app/page.js'));
+});
+
 test('a page importing a reactive primitive is NOT inert', async () => {
   const page = `
     import { html, signal } from '@webjsdev/core';

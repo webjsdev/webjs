@@ -1285,6 +1285,32 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(built, false, 'display-only build-stamp module must NOT be downloaded');
     assert.equal(counter, true, 'interactive counter module must be downloaded');
   });
+
+  test('a fully-static route (/about) drops its page module from the boot', async () => {
+    // /about renders only static markup (no events, signals, or custom
+    // elements), so its page module is inert and dropped from the boot
+    // script. The page still renders, and the router-enabling layout still
+    // ships (so SPA nav keeps working).
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/about`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2500);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+    const aboutPageFetched = requested.some((u) => /about\/page\.(ts|js)/.test(u));
+    const aLayoutFetched = requested.some((u) => /\/layout\.(ts|js)/.test(u));
+    const rendered = await page.evaluate(() => document.body.textContent || '');
+
+    assert.match(rendered, /full-stack demo/i, '/about content is server-rendered');
+    assert.equal(aboutPageFetched, false, 'inert /about page module must NOT be downloaded');
+    assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
+  });
 });
 
 // ---------------------------------------------------------------------------

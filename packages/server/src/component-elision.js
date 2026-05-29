@@ -147,9 +147,21 @@ function importsClientRouter(src) {
   if (CLIENT_ROUTER_SUBPATH_RE.test(src)) return true;
   for (const m of src.matchAll(CORE_IMPORT_RE)) {
     const clause = m[1];
-    if (!clause.startsWith('{')) continue;
-    const names = clause.slice(1, -1).split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim());
-    if (names.some((n) => CLIENT_ROUTER_IMPORTS.includes(n))) return true;
+    if (clause.startsWith('{')) {
+      const names = clause.slice(1, -1).split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim());
+      if (names.some((n) => CLIENT_ROUTER_IMPORTS.includes(n))) return true;
+    } else if (clause.startsWith('*')) {
+      // Namespace import: a router/nav member reached through `ns.member`,
+      // a destructure of `ns`, or computed access. Mirrors the reactive
+      // primitive detection so the two stay symmetric.
+      const ns = clause.replace(/^\*\s+as\s+/, '').trim();
+      if (!ns || !/^\w+$/.test(ns)) continue;
+      for (const name of CLIENT_ROUTER_IMPORTS) {
+        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(src)) return true;
+      }
+      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(src)) return true;
+      if (new RegExp(`\\b${ns}\\s*\\[`).test(src)) return true;
+    }
   }
   return false;
 }
