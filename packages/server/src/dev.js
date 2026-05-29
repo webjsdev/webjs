@@ -242,14 +242,10 @@ export async function createRequestHandler(opts) {
       )
     : { elidableComponents: new Set(), inertRouteModules: new Set() };
 
-  // Register vendor import map entries. With a committed pin file this is a
-  // single file read (no whole-app scan); without one, the bare-import scan
-  // runs lazily inside resolveVendorImports. The scan, when it runs, is AFTER
-  // elision so vendor deps reachable only through display-only components are
-  // excluded from the live-resolved importmap.
-  const initialVendor = await resolveVendorImports(appDir,
-    () => scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules])));
-  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
+  // Vendor import-map entries are NOT resolved at boot. The pin-file read
+  // (pinned) or the bare-import scan + jspm.io call (unpinned) is deferred to
+  // the first request via ensureVendor() below, so the server starts without
+  // any vendor work. Core importmap entries are already set by setCoreInstall.
 
   // Dev-time guardrail: warn about any class extending WebComponent
   // that isn't registered via customElements.define() in its own
@@ -277,25 +273,44 @@ export async function createRequestHandler(opts) {
     browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
   };
 
-  // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
-  // jspm.io fetch) cannot overwrite a fresher rebuild #2's
-  // setVendorEntries / route table when it finally finishes. Without
-  // this, two file edits inside one fs.watch debounce window could
-  // produce a permanently-stale importmap until the next rebuild.
-  // Each rebuild also gets a monotonic token; setVendorEntries is only
-  // applied if its token still matches the latest scheduled rebuild.
+  // Vendor import map resolved lazily on the first request, memoized, and
+  // single-flighted so concurrent first requests resolve once. A pinned app
+  // pays only a file read here; an unpinned one pays the scan + jspm.io call,
+  // off the boot path. Reset on rebuild (see doRebuild) to re-resolve.
+  let vendorReady = false;
+  /** @type {Promise<void> | null} */
+  let vendorInFlight = null;
+  async function ensureVendor() {
+    if (vendorReady) return;
+    if (!vendorInFlight) {
+      vendorInFlight = (async () => {
+        try {
+          const v = await resolveVendorImports(appDir,
+            () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
+          await setVendorEntries(v.imports, v.integrity);
+          vendorReady = true;
+        } finally {
+          vendorInFlight = null;
+        }
+      })();
+    }
+    await vendorInFlight;
+  }
+
+  // Rebuilds are serialized so a slow rebuild #1 cannot overwrite a fresher
+  // rebuild #2's route table when it finally finishes. Without this, two file
+  // edits inside one fs.watch debounce window could produce a permanently
+  // stale state until the next rebuild.
   let rebuildInFlight = Promise.resolve();
-  let latestRebuildToken = 0;
 
   async function rebuild() {
-    const token = ++latestRebuildToken;
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(token)).catch((e) => {
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild()).catch((e) => {
       logger.error?.(`[webjs] rebuild failed:`, e);
     });
     return rebuildInFlight;
   }
 
-  async function doRebuild(token) {
+  async function doRebuild() {
     state.routeTable = await buildRouteTable(appDir);
     state.actionIndex = await buildActionIndex(appDir, dev);
     state.middleware = await loadMiddleware(appDir, dev, logger);
@@ -325,18 +340,12 @@ export async function createRequestHandler(opts) {
       state.inertRouteModules = r.inertRouteModules;
     }
     TS_CACHE.clear();
-    // Re-resolve the vendor import map. A pin file short-circuits to a file
-    // read; otherwise the bare-import scan runs lazily AFTER elision so the
-    // importmap drops vendor deps reachable only through display-only components.
-    const v = await resolveVendorImports(appDir,
-      () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
-    // Defensive: if a newer rebuild has been queued while we were
-    // awaiting resolveVendorImports, drop our result. The newer one
-    // will overwrite anyway, but checking the token here avoids a
-    // brief window of stale entries.
-    if (token === latestRebuildToken) {
-      await setVendorEntries(v.imports, v.integrity);
-    }
+    // Invalidate the vendor memo so the next request re-resolves the import
+    // map (drops deps reachable only through newly-elided components, picks up
+    // edits). Wait out any in-flight resolve first so it cannot commit stale
+    // entries after this reset.
+    if (vendorInFlight) { try { await vendorInFlight; } catch {} }
+    vendorReady = false;
     // Recompute the browser-bound file set: the page / layout / error /
     // loading / not-found / component entries plus their transitive imports.
     // This drives the dev server's "is this file allowed to be served as
@@ -357,6 +366,9 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      // Resolve the vendor import map on the first request (memoized), before
+      // any SSR head emits the <script type="importmap"> or its build hash.
+      await ensureVendor();
       const next = () => handleCore(req, { state, appDir, coreDir, dev });
       if (state.middleware) {
         try {
