@@ -36,6 +36,7 @@ import {
   matchClosingBrace,
   redactStringsAndTemplates,
 } from './js-scan.js';
+import { transitiveDeps } from './module-graph.js';
 
 /**
  * Named imports from a `@webjsdev/core` specifier that imply the
@@ -58,6 +59,15 @@ export const REACTIVE_IMPORTS = new Set([
   'ContextProvider',
   'ContextConsumer',
   'connectWS',
+  // Client-only directives. `ref` / `createRef` fire a callback against the
+  // live element (focus, measure, third-party mount); `live` syncs an input
+  // value against the DOM. All produce identical SSR HTML but do real work
+  // only after upgrade, so a component using them must ship. Render-time
+  // directives (repeat, unsafeHTML, keyed, guard, cache, map) are NOT here:
+  // they are SSR-renderable and common in display-only components.
+  'ref',
+  'createRef',
+  'live',
 ]);
 
 /**
@@ -149,8 +159,10 @@ export function analyzeComponentSource(src) {
 
   for (const body of bodies) {
     for (const hook of CLIENT_LIFECYCLE_HOOKS) {
-      // Method definition or call of a client lifecycle hook.
-      if (new RegExp(`\\b${hook}\\s*\\(`).test(body)) {
+      // A client lifecycle hook as a method (`hook(`) OR as an arrow class
+      // field (`hook = () =>`), which shadows the prototype method and still
+      // runs. Either way the component is not inert.
+      if (new RegExp(`\\b${hook}\\s*[=(]`).test(body)) {
         return { interactive: true, reason: `overrides lifecycle hook '${hook}'` };
       }
     }
@@ -288,18 +300,22 @@ export function extractRenderedTags(src) {
  * component (rendered by, or imported by, a shipping module).
  *
  * Two propagation rules iterate to a fixpoint:
- *   - render rule:  a shipping component that renders `<child-tag>` can
- *     instantiate that child on a client re-render, so the child must
- *     ship too.
+ *   - render rule:  a shipping component that can emit `<child-tag>` on a
+ *     client re-render forces the child to ship. The tags a component can
+ *     emit are not only those in its own template but also those returned
+ *     by the template helpers it imports (the documented `lib/utils/ui.ts`
+ *     pattern), so the rule scans the component's transitive app-internal
+ *     import closure, not just its own source.
  *   - import rule:  a component that imports a shipping component module
  *     ships too (matches the issue's transitive criterion; conservative).
  *
  * @param {Array<{ tag: string, file: string }>} components
  * @param {import('./module-graph.js').ModuleGraph} moduleGraph
  * @param {(file: string) => Promise<string>} readFileFn
+ * @param {string} [appDir]  app root; enables the helper-closure render rule
  * @returns {Promise<Set<string>>} absolute paths of elidable component files
  */
-export async function computeElidableComponents(components, moduleGraph, readFileFn) {
+export async function computeElidableComponents(components, moduleGraph, readFileFn, appDir) {
   /** @type {Set<string>} */
   const componentFiles = new Set();
   /** @type {Map<string, string>} */
@@ -311,16 +327,47 @@ export async function computeElidableComponents(components, moduleGraph, readFil
 
   /** @type {Set<string>} */
   const mustShip = new Set();
-  /** @type {Map<string, Set<string>>} */
-  const rendersTags = new Map();
 
-  for (const file of componentFiles) {
+  // Rendered-tag index for every app-internal file in the graph (component
+  // files plus the helper modules they import). A component's own source is
+  // read here too, both for its tags and for its interactivity verdict.
+  /** @type {Map<string, Set<string>>} */
+  const fileTags = new Map();
+  /** @type {Set<string>} */
+  const allFiles = new Set(componentFiles);
+  for (const [k, vs] of moduleGraph) {
+    if (!appDir || k.startsWith(appDir)) allFiles.add(k);
+    for (const v of vs) if (!appDir || v.startsWith(appDir)) allFiles.add(v);
+  }
+  for (const file of allFiles) {
     let src;
     try { src = await readFileFn(file); }
-    catch { mustShip.add(file); continue; }
-    const { interactive } = analyzeComponentSource(src);
-    if (interactive) mustShip.add(file);
-    rendersTags.set(file, extractRenderedTags(src));
+    catch {
+      // A component file we cannot read is shipped conservatively; a
+      // helper we cannot read simply contributes no tags.
+      if (componentFiles.has(file)) mustShip.add(file);
+      continue;
+    }
+    if (typeof src !== 'string') continue;
+    fileTags.set(file, extractRenderedTags(src));
+    if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
+      mustShip.add(file);
+    }
+  }
+
+  // Precompute, per component, the tags it can emit on a client re-render:
+  // its own tags unioned with those of every app-internal module it imports
+  // transitively. The graph is fixed during the fixpoint, so compute once.
+  /** @type {Map<string, Set<string>>} */
+  const emittableTags = new Map();
+  for (const file of componentFiles) {
+    const tags = new Set(fileTags.get(file));
+    const deps = appDir ? transitiveDeps(moduleGraph, [file], appDir) : [];
+    for (const dep of deps) {
+      const dt = fileTags.get(dep);
+      if (dt) for (const t of dt) tags.add(t);
+    }
+    emittableTags.set(file, tags);
   }
 
   let changed = true;
@@ -328,7 +375,7 @@ export async function computeElidableComponents(components, moduleGraph, readFil
     changed = false;
     // Render rule.
     for (const parent of mustShip) {
-      const tags = rendersTags.get(parent);
+      const tags = emittableTags.get(parent);
       if (!tags) continue;
       for (const tag of tags) {
         const childFile = tagToFile.get(tag);
@@ -380,6 +427,14 @@ const SIDE_EFFECT_IMPORT_RE = /^([ \t]*)import\s+(['"])([^'"]+)\2\s*;?[ \t]*$/gm
  * Fast path: if the importer has no elidable dependency in the graph,
  * the source is returned untouched without any regex work.
  *
+ * Matching runs over a REDACTED copy (comment / string / template bodies
+ * blanked, positions preserved) so a line that merely reads like an
+ * import inside an `html\`...\`` template or a comment is never rewritten.
+ * Real top-level import statements survive redaction; the quoted
+ * specifier survives too (redaction keeps string bodies verbatim), so it
+ * is read from the redacted match and the original source is spliced at
+ * the matched range.
+ *
  * @param {string} source             module source (already type-stripped if TS)
  * @param {string} importerAbs        absolute path of the importing module
  * @param {import('./module-graph.js').ModuleGraph | undefined} moduleGraph
@@ -398,11 +453,21 @@ export function elideImportsFromSource(source, importerAbs, moduleGraph, elidabl
   }
   if (!hasElidableDep) return source;
 
-  return source.replace(SIDE_EFFECT_IMPORT_RE, (full, indent, _q, spec) => {
-    const resolved = resolveImport(spec, importerAbs, appDir);
+  const redacted = redactStringsAndTemplates(source);
+  let out = '';
+  let last = 0;
+  for (const m of redacted.matchAll(SIDE_EFFECT_IMPORT_RE)) {
+    const start = /** @type {number} */ (m.index);
+    const end = start + m[0].length;
+    const resolved = resolveImport(m[3], importerAbs, appDir);
+    out += source.slice(last, start);
     if (resolved && elidableSet.has(resolved)) {
-      return `${indent}/* webjs: elided display-only component */`;
+      out += `${m[1]}/* webjs: elided display-only component */`;
+    } else {
+      out += source.slice(start, end);
     }
-    return full;
-  });
+    last = end;
+  }
+  out += source.slice(last);
+  return out;
 }

@@ -210,6 +210,7 @@ export async function createRequestHandler(opts) {
     components,
     moduleGraph,
     (f) => readFile(f, 'utf8'),
+    appDir,
   );
 
   // Scan for bare npm imports and register vendor import map entries.
@@ -283,6 +284,7 @@ export async function createRequestHandler(opts) {
       components,
       state.moduleGraph,
       (f) => readFile(f, 'utf8'),
+      appDir,
     );
     TS_CACHE.clear();
     // Re-scan bare imports AFTER elision so the importmap drops vendor

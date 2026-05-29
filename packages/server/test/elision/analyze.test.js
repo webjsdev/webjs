@@ -111,6 +111,59 @@ test('each overridden lifecycle hook forces interactive', () => {
   }
 });
 
+test('lifecycle hook written as an arrow class field forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Widget extends WebComponent {
+      connectedCallback = () => { localStorage.getItem('x'); };
+      render() { return html\`<p>x</p>\`; }
+    }
+    Widget.register('widget-el');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /connectedCallback/);
+});
+
+test('ref / createRef directive import forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { ref, createRef } from '@webjsdev/core/directives';
+    class Focusable extends WebComponent {
+      _r = createRef();
+      render() { return html\`<input \${ref(this._r)}>\`; }
+    }
+    Focusable.register('focus-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('live directive import forces interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { live } from '@webjsdev/core/directives';
+    class Field extends WebComponent {
+      static properties = { v: { state: true } };
+      render() { return html\`<input .value=\${live('x')}>\`; }
+    }
+    Field.register('field-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a render-time directive (repeat) does NOT force interactive', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { repeat } from '@webjsdev/core/directives';
+    class List extends WebComponent {
+      static properties = { items: { state: true } };
+      render() { return html\`<ul>\${repeat([], (x) => x, (x) => html\`<li>\${x}</li>\`)}</ul>\`; }
+    }
+    List.register('list-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
 test('addController forces interactive', () => {
   const src = DISPLAY_ONLY.replace(
     'constructor() { super();',
@@ -227,6 +280,7 @@ test('two display-only components, both elidable', async () => {
     ],
     graphOf({}),
     async (f) => files[f],
+    '/app',
   );
   assert.deepEqual([...elidable].sort(), ['/app/components/a.js', '/app/components/b.js']);
 });
@@ -249,6 +303,7 @@ test('interactive parent rendering a display-only child forces the child to ship
     ],
     graphOf({}),
     async (f) => files[f],
+    '/app',
   );
   assert.deepEqual([...elidable], []);
 });
@@ -267,6 +322,7 @@ test('import rule: display-only importer of a shipping component ships', async (
     ],
     graphOf({ '/app/plain.js': ['/app/ship.js'] }),
     async (f) => files[f],
+    '/app',
   );
   assert.deepEqual([...elidable], []);
 });
@@ -276,6 +332,42 @@ test('unreadable component file is conservatively kept (ships)', async () => {
     [{ tag: 'gone-el', file: '/app/gone.js' }],
     graphOf({}),
     async () => { throw new Error('ENOENT'); },
+    '/app',
   );
   assert.deepEqual([...elidable], []);
+});
+
+test('render rule: child emitted via an imported template helper still ships', async () => {
+  // The interactive parent does NOT name <grid-cell> in its own source; it
+  // emits it through a helper module (the lib/utils/ui.ts pattern). The
+  // child must still be forced to ship.
+  const parent = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { cell } from './ui.js';
+    class Grid extends WebComponent {
+      static properties = { rows: { type: Array } };
+      render() { return html\`<div>\${cell()}</div>\`; }
+    }
+    Grid.register('data-grid');
+  `;
+  const ui = `
+    import { html } from '@webjsdev/core';
+    export const cell = () => html\`<grid-cell></grid-cell>\`;
+  `;
+  const child = DISPLAY_ONLY.replace(/student-card/g, 'grid-cell');
+  const files = {
+    '/app/grid.js': parent,
+    '/app/ui.js': ui,
+    '/app/cell.js': child,
+  };
+  const elidable = await computeElidableComponents(
+    [
+      { tag: 'data-grid', file: '/app/grid.js' },
+      { tag: 'grid-cell', file: '/app/cell.js' },
+    ],
+    graphOf({ '/app/grid.js': ['/app/ui.js', '/app/cell.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  assert.deepEqual([...elidable], [], 'grid-cell must ship because data-grid can emit it via the helper');
 });

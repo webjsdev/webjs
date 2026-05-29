@@ -61,6 +61,34 @@ test('importer with no elidable dependency skips the rewrite', () => {
   assert.equal(out, src);
 });
 
+test('an import-looking line inside a template literal is NOT stripped', () => {
+  // A docs page demonstrating the feature might render the literal text
+  // `import './components/badge.js';` inside an html`` template. The
+  // stripper must not rewrite it, even though the specifier resolves to
+  // an elidable file. Only the real top-level import is removed.
+  const src = [
+    `import './components/badge.js';`,
+    'export default () => html`',
+    `  <pre>import './components/badge.js';</pre>`,
+    '`;',
+  ].join('\n');
+  const out = elideImportsFromSource(src, '/app/page.js', graph, elidable, resolver, appDir);
+  // The real top-level import is gone.
+  assert.match(out, /webjs: elided display-only component/);
+  // The text inside the template survives verbatim.
+  assert.match(out, /<pre>import '\.\/components\/badge\.js';<\/pre>/);
+});
+
+test('an import-looking line inside a comment is NOT stripped', () => {
+  const src = [
+    `// import './components/badge.js';`,
+    `import './components/counter.js';`,
+  ].join('\n');
+  const out = elideImportsFromSource(src, '/app/page.js', graph, elidable, resolver, appDir);
+  assert.match(out, /\/\/ import '\.\/components\/badge\.js';/);
+  assert.match(out, /import '\.\/components\/counter\.js';/);
+});
+
 test('double-quoted and semicolon-less side-effect imports are handled', () => {
   const src = `import "./components/badge.js"\nimport './components/counter.js';`;
   const out = elideImportsFromSource(src, '/app/page.js', graph, elidable, resolver, appDir);
