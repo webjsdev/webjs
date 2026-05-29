@@ -1,0 +1,73 @@
+name: CI
+
+# Runs the full test pyramid on every PR into main and on every push to
+# main. The three layers run as separate jobs so a failure names the
+# layer that broke. Mark all three as required status checks in the
+# branch-protection rule for main so a PR can only merge when unit,
+# browser, AND e2e are green (not just unit). See the repo's branch
+# protection settings, or run scripts/protect-main.sh.
+#
+# Free on public repos (ubuntu-latest has unlimited Actions minutes).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels the older in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit + integration (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  browser:
+    name: Browser (web-test-runner / Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+  e2e:
+    name: E2E (Puppeteer against the blog example)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium for Puppeteer
+        run: npx playwright install --with-deps chromium
+      - name: Resolve the Chromium binary path
+        run: echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: Prepare the blog example database
+        working-directory: examples/blog
+        run: |
+          cp .env.example .env
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Run e2e
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/e2e.test.mjs
