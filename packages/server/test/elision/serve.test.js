@@ -132,3 +132,42 @@ test('webjs.elide omitted keeps elision on (default), proving the switch is opt-
   const code = await resp.text();
   assert.doesNotMatch(code, /badge\.ts/, 'default (no key): display-only import still elided');
 });
+
+test('rebuild re-applies elision after a component becomes interactive', async () => {
+  // doRebuild re-runs analyzeElision; a file edit that adds interactivity must
+  // flip the verdict so the now-interactive component ships.
+  const appDir = makeApp({
+    'app/page.ts': PAGE,
+    'components/badge.ts': BADGE,
+    'components/counter.ts': COUNTER,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  let code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  assert.doesNotMatch(code, /badge\.ts/, 'badge elided at boot');
+
+  writeFileSync(
+    join(appDir, 'components/badge.ts'),
+    BADGE.replace('<span class="badge">verified</span>', '<span @click=${() => {}}>verified</span>'),
+  );
+  await app.rebuild();
+
+  code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  assert.match(code, /badge\.ts/, 'badge ships after rebuild picks up the @click');
+});
+
+test('rebuild picks up webjs.elide: false toggled on after boot', async () => {
+  const appDir = makeApp({
+    'app/page.ts': PAGE,
+    'components/badge.ts': BADGE,
+    'components/counter.ts': COUNTER,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  let code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  assert.doesNotMatch(code, /badge\.ts/, 'badge elided while elision is on');
+
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', webjs: { elide: false } }));
+  await app.rebuild();
+
+  code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  assert.match(code, /badge\.ts/, 'rebuild re-reads the switch and disables elision');
+});

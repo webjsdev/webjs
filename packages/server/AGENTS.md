@@ -114,8 +114,11 @@ can load it without booting the full server.
    `dev.js` strips side-effect imports of display-only components from the
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely, so a fully-static route ships
-   zero application JS. Preload hints and importmap entries for elided
-   modules drop too. This is progressive-enhancement-safe by construction:
+   zero application JS. Preload hints for elided modules drop too, and their
+   importmap entries drop when the map is resolved live via `vendorImportMapEntries`;
+   a committed `.webjs/vendor/importmap.json` pin file is served as-is, so an
+   elided dep keeps its (harmless, never-fetched) importmap line in that mode.
+   This is progressive-enhancement-safe by construction:
    the SSR'd HTML is the baseline, swap markers are static comments, and
    navigation/forms fall back to native browser behavior, so removing
    inert JS never changes behavior.
