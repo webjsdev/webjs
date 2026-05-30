@@ -46,8 +46,9 @@ async function rpcResponse(payload, init = {}) {
  * ignored.
  *
  * The server:
- *   1. Scans the app tree on boot, classifying server files into
- *      RPC-callable actions vs. server-only utilities.
+ *   1. Scans the app tree lazily on the first request (in `ensureReady`),
+ *      classifying server files into RPC-callable actions vs. server-only
+ *      utilities. Hashing is eager-per-file; only `expose()` files load.
  *   2. Serves a generated ES-module stub when the browser imports
  *      the file URL (an RPC stub for actions, a throw-at-load stub
  *      for server-only utilities).
@@ -112,11 +113,16 @@ export async function buildActionIndex(appDir, dev) {
     // server module at boot (and its transitive Prisma init, DB connects, etc.)
     // is wasted work. The one thing that DOES need eager loading is expose(),
     // which registers a REST route the router must know before any request can
-    // hit it. So load only files that call expose(); the common case (no
-    // expose) defers its module entirely to first use.
+    // hit it. So load only files that REFERENCE expose. We match the bare
+    // `expose` identifier (not `expose(`) so an aliased import
+    // (`import { expose as exp }`, whose import clause still names `expose`) is
+    // not missed: missing it would silently 404 that file's REST route. A stray
+    // mention in a comment or string only over-matches, costing one harmless
+    // extra module load; the common pure-RPC file never names `expose` and so
+    // still defers entirely.
     let src = '';
     try { src = await readFile(file, 'utf8'); } catch {}
-    if (!/\bexpose\s*\(/.test(src)) continue;
+    if (!/\bexpose\b/.test(src)) continue;
     try {
       const mod = await loadModule(file, dev);
       for (const [name, fn] of Object.entries(mod)) {

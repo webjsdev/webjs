@@ -714,6 +714,27 @@ test('handle: expose()d action is reachable by method+path', async () => {
   assert.deepEqual(await resp.json(), { ok: true });
 });
 
+test('handle: expose() via an ALIASED import still registers its REST route (lazy index)', async () => {
+  // Guards the lazy action index: a module that aliases the import
+  // (`import { expose as exp }`) must still be eagerly loaded so its route
+  // registers. Matching only `expose(` would miss `exp(` and silently 404.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    'api.server.js':
+      `'use server';\n` +
+      `import { expose as exp } from ${JSON.stringify(pathToFileURL(
+        resolve(__dirname, '../../../core/index.js'),
+      ).toString())};\n` +
+      `export const hi = exp('GET /api/aliased', async () => ({ ok: true }));\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/api/aliased'));
+  assert.equal(resp.status, 200);
+  assert.deepEqual(await resp.json(), { ok: true });
+});
+
 test('handle: OPTIONS preflight on expose()d action with cors returns CORS headers', async () => {
   const appDir = makeApp({
     'app/page.js':
