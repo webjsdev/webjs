@@ -18,10 +18,18 @@
  * we only need `{ tag, className, moduleUrl }` tuples.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { sep } from 'node:path';
 import { walk } from './fs-walk.js';
 import { primeModuleUrl } from '@webjsdev/core';
+
+/**
+ * mtime-keyed cache of extracted components per file, so a rebuild re-reads
+ * only files that changed (an unchanged file reuses its cached component list
+ * after a single `stat`). Makes the component scan incremental for large apps.
+ * @type {Map<string, { mtimeMs: number, comps: Array<{ tag: string, className: string }> }>}
+ */
+const SCAN_CACHE = new Map();
 
 /**
  * Recognise either registration pattern:
@@ -76,9 +84,18 @@ export async function scanComponents(appDir) {
     !/\.server\.m?[jt]s$/.test(p);
 
   for await (const file of walk(appDir, filter)) {
-    let src;
-    try { src = await readFile(file, 'utf8'); } catch { continue; }
-    const comps = extractComponents(src);
+    let mtimeMs;
+    try { mtimeMs = (await stat(file)).mtimeMs; } catch { continue; }
+    let comps;
+    const cached = SCAN_CACHE.get(file);
+    if (cached && cached.mtimeMs === mtimeMs) {
+      comps = cached.comps;
+    } else {
+      let src;
+      try { src = await readFile(file, 'utf8'); } catch { continue; }
+      comps = extractComponents(src);
+      SCAN_CACHE.set(file, { mtimeMs, comps });
+    }
     if (!comps.length) continue;
     const moduleUrl = toUrlPath(file, appDir);
     for (const c of comps) {

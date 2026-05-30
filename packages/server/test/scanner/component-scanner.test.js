@@ -164,3 +164,28 @@ test('primeComponentRegistry: lookupModuleUrl returns URL after priming', async 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('scanComponents mtime cache: unchanged scan is stable, a file edit is picked up', async () => {
+  // Incremental rebuild (#141): the scan reuses an mtime-keyed cache so a
+  // rebuild re-reads only changed files. Correctness guard: an edit that adds
+  // a component must still be discovered (cache invalidated by mtime), and an
+  // unchanged re-scan returns the same set.
+  const dir = await scaffold({
+    'components/a.ts': `import { WebComponent } from '@webjsdev/core';\nexport class A extends WebComponent {}\nA.register('comp-a');\n`,
+    'components/plain.ts': `export const x = 1;\n`,
+  });
+  try {
+    const first = await scanComponents(dir);
+    assert.deepEqual(first.map(c => c.tag).sort(), ['comp-a']);
+    const again = await scanComponents(dir);
+    assert.deepEqual(again.map(c => c.tag).sort(), ['comp-a'], 'unchanged re-scan is stable');
+
+    await new Promise(r => setTimeout(r, 12)); // ensure a distinct mtime
+    await writeFile(join(dir, 'components/plain.ts'),
+      `import { WebComponent } from '@webjsdev/core';\nexport class P extends WebComponent {}\nP.register('comp-p');\n`);
+    const third = await scanComponents(dir);
+    assert.deepEqual(third.map(c => c.tag).sort(), ['comp-a', 'comp-p'], 'edited file is re-scanned');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

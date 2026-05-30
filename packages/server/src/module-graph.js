@@ -199,6 +199,16 @@ async function walk(dir, appDir, graph) {
 }
 
 /**
+ * mtime-keyed parse cache so a rebuild re-reads only files that actually
+ * changed. `buildModuleGraph` re-walks the (cheap) directory tree on every
+ * rebuild, but reading + regex-parsing each file is the cost; on an unchanged
+ * file the cached import set is reused after a single `stat`. This makes
+ * rebuilds incremental for large apps without restructuring the caller.
+ * @type {Map<string, { mtimeMs: number, deps: Set<string> }>}
+ */
+const PARSE_CACHE = new Map();
+
+/**
  * Parse a single file's imports and add them to the graph.
  * Only resolves relative imports (bare specifiers are npm deps, not in the graph).
  *
@@ -207,6 +217,15 @@ async function walk(dir, appDir, graph) {
  * @param {ModuleGraph} graph
  */
 async function parseFile(file, appDir, graph) {
+  let mtimeMs;
+  try { mtimeMs = (await stat(file)).mtimeMs; }
+  catch { return; }
+  const cached = PARSE_CACHE.get(file);
+  if (cached && cached.mtimeMs === mtimeMs) {
+    if (cached.deps.size) graph.set(file, cached.deps);
+    return;
+  }
+
   let src;
   try { src = await readFile(file, 'utf8'); }
   catch { return; }
@@ -221,6 +240,7 @@ async function parseFile(file, appDir, graph) {
       if (resolved) deps.add(resolved);
     }
   }
+  PARSE_CACHE.set(file, { mtimeMs, deps });
   if (deps.size) graph.set(file, deps);
 }
 
