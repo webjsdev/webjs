@@ -110,18 +110,20 @@ can load it without booting the full server.
    `warmup()` (which calls it), and `startServer` fires `warmup()`
    fire-and-forget once the HTTP server is listening, so the analysis runs
    in the background ahead of a real first request without delaying
-   readiness. A warm-up failure is caught and logged, not thrown; whatever
-   failed re-runs on the request that needs it, so resilience is preserved.
-   `warmup()` retries with bounded backoff on a propagating failure (and a
-   request / readiness probe still retries as a backstop). The analysis is
-   split into a deterministic stage (graph, scan, gate, action index,
-   middleware, elision) and a separate vendor stage: readiness depends only
-   on the deterministic stage, so an offline or partially-unresolvable app
-   still boots, and a TRANSIENT vendor failure (network / timeout / jspm 5xx)
-   self-heals via a background backoff re-resolve rather than blocking. A
-   permanent unresolvable (jspm 401 for a private / workspace / server-only
-   dep) is tolerated as before. `ensureReady()` logs a one-line per-pass
-   timing breakdown so a slow first request is diagnosable.
+   readiness. `warmup()` is a single best-effort kick: a failure is caught and
+   logged, not thrown, and whatever failed simply re-runs on the next request
+   or readiness probe. There is NO internal retry timer or backoff; the
+   platform's traffic and probes are the retry loop. Analysis runs in two
+   stages: a deterministic stage (graph, scan, gate, action index, middleware,
+   elision) that readiness gates on, and a best-effort vendor stage (a pinned
+   app reads the committed importmap; an unpinned app auto-fetches jspm).
+   Readiness does NOT depend on vendor, so an offline or partially-unresolvable
+   app still boots; a TRANSIENT vendor failure (network / timeout / jspm 5xx)
+   is re-attempted on the next `ensureReady` call, non-blocking, with a
+   `vendorGen` guard so a rebuild cannot let a stale resolve win. A permanent
+   unresolvable (jspm 401 for a private / workspace / server-only dep) reports
+   ok and is tolerated. `ensureReady()` logs a one-line per-pass timing
+   breakdown so a slow first request is diagnosable.
    **Probes:** `/__webjs/health` is liveness (always 200 once listening);
    `/__webjs/ready` is readiness (503 until the analysis is warm, then 200).
    An optional `readiness.{js,ts}` at the app root default-exports an async

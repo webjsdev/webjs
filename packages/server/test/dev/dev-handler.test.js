@@ -67,6 +67,31 @@ test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', asyn
   assert.deepEqual(await ready.json(), { status: 'ok' });
 });
 
+test('handle: a transient vendor failure does not block readiness', async () => {
+  // Vendor resolution is best-effort and decoupled from readiness: a transient
+  // jspm failure (here a mocked network reject) must leave the app READY (the
+  // deterministic analysis is what readiness gates on), so an offline or
+  // CDN-degraded instance still serves. The failed resolve is re-attempted on
+  // the next request, not via a background timer.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+  });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup(); // analysis succeeds; the jspm fetch for testpkg fails
+    const ready = await app.handle(new Request('http://x/__webjs/ready'));
+    assert.equal(ready.status, 200, 'a transient vendor failure must not block readiness');
+    assert.equal((await ready.json()).status, 'ok');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('handle: /__webjs/ready runs an optional readiness.{js,ts} check once warm', async () => {
   // An app can gate readiness on live dependency health (e.g. a DB ping) by
   // default-exporting an async check from readiness.js. Returning false or
