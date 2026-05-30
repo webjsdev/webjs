@@ -1364,8 +1364,8 @@ function debounce(fn, ms) {
  * module graph into the full transitive closure.
  *
  * This is webjs's equivalent of Next.js's bundler-produced page
- * manifest, applied at boot time (and on every rebuild) instead of
- * compile time. The dev server's source-file branch uses the returned
+ * manifest, derived lazily on the first request (and re-derived on every
+ * rebuild) instead of at compile time. The dev server's source-file branch uses the returned
  * Set as an authorization gate: in-set → served (subject to the
  * .server.{js,ts} stub guardrail); out-of-set → 404.
  *
@@ -1385,7 +1385,7 @@ function debounce(fn, ms) {
  *
  * Components are passed in (rather than rescanned) so the caller can
  * share one scan with `primeComponentRegistry`. Saves a full
- * appDir walk at boot and on every rebuild.
+ * appDir walk on each analysis (the first request and every rebuild).
  *
  * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
  * @param {Awaited<ReturnType<typeof buildModuleGraph>>} moduleGraph

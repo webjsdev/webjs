@@ -1,7 +1,7 @@
 /**
  * Lightweight module dependency graph.
  *
- * At startup, scans the app directory and builds an in-memory map of
+ * On the first request (lazily, via `ensureReady`), scans the app directory and builds an in-memory map of
  * `file → Set<imported files>`. The SSR pipeline queries this graph to
  * emit *complete* modulepreload hints: including transitive dependencies
  * of components: so the browser can fetch the entire tree in parallel

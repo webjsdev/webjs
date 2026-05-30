@@ -25,11 +25,12 @@
  * returns metadata, not JavaScript. The correct entry file (e.g.,
  * `/dayjs.min.js`, `/index.js`) varies per package and must be
  * resolved from the JSPM Generator API. The Generator is called once
- * per server boot for the full set of bare imports; results are
+ * on the first request for the full set of bare imports; results are
  * cached in-memory for the process lifetime.
  *
- * Server boot connectivity: the Generator API call happens during
- * `setVendorEntries` at boot. If api.jspm.io is unreachable, the
+ * Connectivity: the Generator API call happens on the first request,
+ * inside `ensureReady` via `setVendorEntries`, never at boot. If
+ * api.jspm.io is unreachable, the
  * importmap will be missing vendor entries and the browser will
  * report "unresolved bare specifier" errors. The server itself still
  * boots and serves user routes; only vendor-importing pages break
@@ -1273,8 +1274,8 @@ function maxSemverVersion(versions) {
 
 /**
  * Resolve the vendor importmap fragment for runtime use. Prefers the
- * committed pin file over a live api.jspm.io call. Called by dev.js
- * at server boot.
+ * committed pin file over a live api.jspm.io call. Called from
+ * `ensureReady()` in dev.js on the first request, never at boot.
  *
  * Order of preference:
  *   1. `.webjs/vendor/importmap.json` (committed; no network needed)

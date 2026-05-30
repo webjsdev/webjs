@@ -143,7 +143,7 @@ export function register(tag, cls) {
 
 /**
  * Server-side: record the browser-visible URL for a component's module
- * BEFORE the module is imported. Populated at server boot by the
+ * BEFORE the module is imported. Populated on the first request by the
  * component scanner so `lookupModuleUrl` works for modulepreload hints
  * without forcing every component file to be eagerly imported.
  *

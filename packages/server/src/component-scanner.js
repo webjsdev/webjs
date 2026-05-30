@@ -2,7 +2,7 @@
  * Server-side scanner that walks the app tree and records the
  * browser-visible URL for every webjs component module.
  *
- * Called once at server boot. Results are used to prime the core
+ * Called once on the first request (lazily, via `ensureReady`), then memoized. Results are used to prime the core
  * registry (`primeModuleUrl`) BEFORE any SSR render: so when a page
  * renders a component tag, `lookupModuleUrl(tag)` already has the URL
  * ready for `<link rel="modulepreload">` hints.
