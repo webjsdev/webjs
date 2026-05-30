@@ -62,7 +62,7 @@ export const RULES = [
   {
     name: 'components-have-register',
     description:
-      'Component files that define a class extending WebComponent must register the class with ClassName.register(\'tag\') (or customElements.define). The server-side scanner derives the module URL from the file path at boot.',
+      'Component files that define a class extending WebComponent must register the class with ClassName.register(\'tag\') (or customElements.define). The server-side scanner derives the module URL from the file path.',
   },
   {
     name: 'no-server-env-in-components',

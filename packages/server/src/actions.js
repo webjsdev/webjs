@@ -109,9 +109,9 @@ export async function buildActionIndex(appDir, dev) {
     fileToHash.set(file, h);
     // Pure-RPC actions are NOT executed at boot: invokeAction and
     // serveActionStub import the module on demand (first RPC call / first stub
-    // fetch), so the hash index above is all that boot needs. Running every
-    // server module at boot (and its transitive Prisma init, DB connects, etc.)
-    // is wasted work. The one thing that DOES need eager loading is expose(),
+    // fetch), so the hash index above is all the analysis needs. Eagerly
+    // running every server module (and its transitive Prisma init, DB
+    // connects, etc.) would be wasted work. The one thing that DOES need eager loading is expose(),
     // which registers a REST route the router must know before any request can
     // hit it. So load only files that REFERENCE expose. We match the bare
     // `expose` identifier (not `expose(`) so an aliased import

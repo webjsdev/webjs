@@ -428,7 +428,8 @@ export async function jspmGenerate(installs, provider = 'jspm') {
  * api.jspm.io/generate for the full importmap fragment.
  *
  * Async because the Generator API call is networked. Called from
- * `setVendorEntries` during server boot and rebuild; not per request.
+ * `resolveVendorImports` on the first request (and after a rebuild),
+ * inside `ensureReady`; never at boot, and not on every request.
  *
  * @param {Set<string>} bareImports  from scanBareImports()
  * @param {string} appDir

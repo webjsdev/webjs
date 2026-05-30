@@ -852,8 +852,9 @@ async function handleCore(req, ctx) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
       // the path-level boundary; we re-verify it on every request (not
-      // just the action-index snapshot taken at boot) so files created
-      // after boot, FS races, or developer error never punch through.
+      // just rely on the action-index snapshot, which is built on the first
+      // request and refreshed on rebuild) so files created later, FS races,
+      // or developer error never punch through.
       //
       // What the browser gets depends on the file's `'use server'` status:
       //   - With `'use server'` => server action: a generated RPC stub
