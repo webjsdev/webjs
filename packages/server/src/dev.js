@@ -227,7 +227,6 @@ export async function createRequestHandler(opts) {
     middleware: null,
     logger,
     moduleGraph: null,
-    components: [],
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
     browserBoundFiles: null,
@@ -280,7 +279,6 @@ export async function createRequestHandler(opts) {
             t.graph = now() - m; m = now();
             const components = await scanComponents(appDir);
             await primeComponentRegistry(appDir, components);
-            state.components = components;
             t.scan = now() - m; m = now();
             state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
             t.gate = now() - m; m = now();

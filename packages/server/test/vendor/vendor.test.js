@@ -1685,9 +1685,9 @@ test('resolveVendorImports: ok=true for a pin file (deterministic disk read)', a
 
 test('resolveVendorImports: ok=false on a transient failure, ok=true on a permanent 401', async () => {
   // The unpinned path distinguishes a transient CDN problem (network/timeout/5xx
-  // -> ok false, worth a self-heal retry) from a permanent unresolvable install
-  // (jspm 401 for a private/workspace/server-only dep -> ok true, tolerated so
-  // the app still boots). ensureReady keys its self-heal off this flag.
+  // -> ok false, retried on the next request) from a permanent unresolvable
+  // install (jspm 401 for a private/workspace/server-only dep -> ok true,
+  // tolerated so the app still boots). ensureReady keys its retry off this flag.
   const dir = join(tmpdir(), `webjs-vok2-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(join(dir, 'node_modules', 'testpkg'), { recursive: true });
   try {
