@@ -33,6 +33,9 @@ import { primeModuleUrl } from '@webjsdev/core';
  */
 const SCAN_CACHE = new Map();
 
+/** Introspection for tests/ops: is `file` currently in the scan cache? */
+export function _scanCacheHas(file) { return SCAN_CACHE.has(file); }
+
 /**
  * Recognise either registration pattern:
  *
@@ -80,6 +83,8 @@ export function extractComponents(src) {
 export async function scanComponents(appDir) {
   /** @type {Array<{ tag: string, className: string, moduleUrl: string, file: string }>} */
   const components = [];
+  /** @type {Set<string>} live component files this scan, for cache eviction */
+  const seen = new Set();
   const filter = (p) =>
     /\.m?[jt]sx?$/.test(p) &&
     !/\.(test|spec)\.m?[jt]sx?$/.test(p) &&
@@ -88,6 +93,7 @@ export async function scanComponents(appDir) {
   for await (const file of walk(appDir, filter)) {
     let mtimeMs, size;
     try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; } catch { continue; }
+    seen.add(file); // mark live (hit and miss) for cache eviction
     let comps;
     const cached = SCAN_CACHE.get(file);
     if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
@@ -103,6 +109,12 @@ export async function scanComponents(appDir) {
     for (const c of comps) {
       components.push({ ...c, moduleUrl, file });
     }
+  }
+  // Evict scan-cache entries for files no longer walked (renamed/deleted),
+  // scoped to this app so a multi-app process keeps other apps' entries.
+  const prefix = appDir.endsWith(sep) ? appDir : appDir + sep;
+  for (const key of SCAN_CACHE.keys()) {
+    if ((key === appDir || key.startsWith(prefix)) && !seen.has(key)) SCAN_CACHE.delete(key);
   }
   return components;
 }

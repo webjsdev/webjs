@@ -4,7 +4,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { buildModuleGraph, transitiveDeps } from '../../src/module-graph.js';
+import { buildModuleGraph, transitiveDeps, _parseCacheHas } from '../../src/module-graph.js';
 
 test('buildModuleGraph: builds graph from source files', async () => {
   const dir = join(tmpdir(), `webjs-test-graph-${Date.now()}`);
@@ -187,6 +187,33 @@ test('buildModuleGraph: PARSE_CACHE reuses unchanged files and a size-changing e
     const g2 = await buildModuleGraph(dir);
     assert.deepEqual([...(g2.get(page) || [])].map((f) => f.split('/').pop()), ['b.ts'],
       'size-changing edit must invalidate the parse cache even at the same mtime');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('buildModuleGraph: evicts the parse-cache entry for a deleted file on rebuild', async () => {
+  // Incremental rebuild keeps a parse cache keyed by path. Over a long dev
+  // session, renamed/deleted files would otherwise leave dead entries forever.
+  // A rebuild walks only live files, so any cache key under appDir not seen
+  // this walk is evicted.
+  const { mkdtemp } = await import('node:fs/promises');
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-graph-evict-'));
+  try {
+    const page = join(dir, 'page.ts');
+    const gone = join(dir, 'gone.ts');
+    await writeFile(page, `import './gone.ts';\n`);
+    await writeFile(gone, `export const g = 1;\n`);
+    await buildModuleGraph(dir);
+    assert.ok(_parseCacheHas(page), 'page cached after first build');
+    assert.ok(_parseCacheHas(gone), 'gone cached after first build');
+
+    // Delete gone.ts and drop its import, then rebuild.
+    await rm(gone);
+    await writeFile(page, `export const p = 1;\n`);
+    await buildModuleGraph(dir);
+    assert.ok(_parseCacheHas(page), 'live file stays cached');
+    assert.ok(!_parseCacheHas(gone), 'deleted file is evicted from the parse cache');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
