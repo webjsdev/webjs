@@ -160,26 +160,29 @@ test('buildModuleGraph: skips node_modules and _private', async () => {
 test('buildModuleGraph: PARSE_CACHE reuses unchanged files and a size-changing edit at the SAME mtime is still picked up', async () => {
   // Incremental rebuild (#141): the parse cache is keyed by mtime AND size, so
   // an edit that changes the file length is caught even if the filesystem
-  // reports an identical mtime (coarse-resolution / sub-tick edits). We force
-  // the same mtime with utimes to isolate the size discriminator.
+  // reports an identical mtime (coarse-resolution / sub-tick edits). To isolate
+  // the `size` half of the key, page.ts is stamped to a FIXED mtime BEFORE the
+  // first build (so the cache records that mtime), then re-stamped to the SAME
+  // mtime after the edit, leaving size as the only thing that differs. With a
+  // mtime-only key the second build would hit the cache and return the stale
+  // ['a.ts'] deps, so this assertion fails without the size discriminator.
   const { utimes, mkdtemp } = await import('node:fs/promises');
   const dir = await mkdtemp(join(tmpdir(), 'webjs-parsecache-'));
   try {
     const page = join(dir, 'page.ts');
+    const fixed = new Date(2020, 0, 1);
     await writeFile(page, `import './a.ts';\n`);
     await writeFile(join(dir, 'a.ts'), `export const a = 1;\n`);
     await writeFile(join(dir, 'b.ts'), `export const b = 2;\n`);
+    await utimes(page, fixed, fixed); // pin the mtime BEFORE the cache records it
 
     const g1 = await buildModuleGraph(dir);
     assert.deepEqual([...(g1.get(page) || [])].map((f) => f.split('/').pop()), ['a.ts']);
 
-    // Rewrite page.ts to import b.ts instead (DIFFERENT length), then stamp it
-    // back to a fixed, identical mtime so only `size` can distinguish it.
-    const fixed = new Date(2020, 0, 1);
+    // Rewrite page.ts to import b.ts (DIFFERENT length) and re-stamp the SAME
+    // mtime, so only `size` distinguishes this version from the cached one.
     await writeFile(page, `import './b.ts'; // now imports b, a longer line\n`);
     await utimes(page, fixed, fixed);
-    await utimes(join(dir, 'a.ts'), fixed, fixed);
-    await utimes(join(dir, 'b.ts'), fixed, fixed);
 
     const g2 = await buildModuleGraph(dir);
     assert.deepEqual([...(g2.get(page) || [])].map((f) => f.split('/').pop()), ['b.ts'],
