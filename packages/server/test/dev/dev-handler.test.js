@@ -67,6 +67,29 @@ test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', asyn
   assert.deepEqual(await ready.json(), { status: 'ok' });
 });
 
+test('handle: /__webjs/ready runs an optional readiness.{js,ts} check once warm', async () => {
+  // An app can gate readiness on live dependency health (e.g. a DB ping) by
+  // default-exporting an async check from readiness.js. Returning false or
+  // throwing reports 503 unready even though the analysis is warm, so a
+  // readinessProbe holds traffic off an instance whose deps are down.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'readiness.js': `let n = 0; export default async () => (n++ > 0);`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  // first probe: check returns false -> 503 unready
+  const down = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(down.status, 503);
+  assert.equal((await down.json()).status, 'unready');
+
+  // second probe: check returns true -> 200 ok (analysis was already warm)
+  const up = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(up.status, 200);
+  assert.deepEqual(await up.json(), { status: 'ok' });
+});
+
 
 test('handle: /__webjs/reload.js in dev returns the client JS', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });

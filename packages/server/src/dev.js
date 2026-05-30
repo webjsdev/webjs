@@ -394,6 +394,35 @@ export async function createRequestHandler(opts) {
     );
   }
 
+  // Optional app-level readiness check. A `readiness.{js,ts}` file at the app
+  // root may default-export an async function; /__webjs/ready runs it once the
+  // analysis is warm, so readiness can reflect LIVE dependency health (a DB
+  // ping, a queue connection) that the static analysis cannot see. Returning
+  // false or throwing reports the instance not ready (503), so a readinessProbe
+  // holds traffic off an instance whose deps are down. Absent file => analysis-
+  // warm is the only gate. The module is cached per build (cleared on rebuild);
+  // the function itself runs on every probe so it reflects current state.
+  let readinessFn; // undefined = unloaded, null = no file, function = loaded
+  async function getReadinessCheck() {
+    if (readinessFn !== undefined) return readinessFn;
+    let file = null;
+    for (const name of ['readiness.ts', 'readiness.js', 'readiness.mts', 'readiness.mjs']) {
+      const p = join(appDir, name);
+      if (await exists(p)) { file = p; break; }
+    }
+    if (!file) { readinessFn = null; return null; }
+    try {
+      const url = pathToFileURL(file).toString();
+      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
+      const mod = await import(url + bust);
+      readinessFn = typeof mod.default === 'function' ? mod.default : null;
+    } catch (e) {
+      logger.error?.(`[webjs] failed to load readiness.{js,ts}`, { err: String(e) });
+      readinessFn = null;
+    }
+    return readinessFn;
+  }
+
   // Rebuilds are serialized so a slow rebuild #1 cannot overwrite a fresher
   // rebuild #2's route table when it finally finishes. Without this, two file
   // edits inside one fs.watch debounce window could produce a permanently
@@ -424,6 +453,7 @@ export async function createRequestHandler(opts) {
     vendorRetrying = false;
     readyDone = false;
     readyError = null;
+    readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
     opts.onReload?.();
   }
 
@@ -432,24 +462,43 @@ export async function createRequestHandler(opts) {
     return withRequest(req, async () => {
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
-      // process is up and accepting connections). `/__webjs/ready` is true only
-      // once ensureReady has FULLY completed, so a broken app (a build that
-      // throws, an unreachable vendor CDN) stays 503 and a Kubernetes
-      // readinessProbe gates the rollout instead of routing traffic to a broken
-      // instance. Probing `/__webjs/ready` also kicks off the warm in the
-      // background, so an embedder that never called warmup() still warms.
+      // process is up and accepting connections). `/__webjs/ready` is 503 until
+      // the analysis is warm, then 200 unless an optional app readiness check
+      // (readiness.{js,ts}) reports a dependency down. So a readinessProbe holds
+      // traffic off a not-yet-warm or dependency-unhealthy instance. Probing
+      // `/__webjs/ready` also kicks off the warm in the background, so an
+      // embedder that never called warmup() still warms. A vendor CDN failure
+      // does NOT block readiness (it self-heals in the background).
       let probePath;
       try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
       if (probePath === '/__webjs/health') {
         return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
       }
       if (probePath === '/__webjs/ready') {
-        if (readyDone) return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
-        ensureReady().catch(() => {}); // drive the warm; never block the probe
-        const body = readyError
-          ? { status: 'error', error: String((readyError && readyError.message) || readyError) }
-          : { status: 'pending' };
-        return Response.json(body, { status: 503, headers: { 'cache-control': 'no-store' } });
+        const noStore = { 'cache-control': 'no-store' };
+        if (!readyDone) {
+          ensureReady().catch(() => {}); // drive the warm; never block the probe
+          const body = readyError
+            ? { status: 'error', error: String((readyError && readyError.message) || readyError) }
+            : { status: 'pending' };
+          return Response.json(body, { status: 503, headers: noStore });
+        }
+        // Analysis is warm. Consult the optional app readiness check (live
+        // dependency health, e.g. a DB ping) if the app provides one.
+        const check = await getReadinessCheck();
+        if (check) {
+          try {
+            if ((await check()) === false) {
+              return Response.json({ status: 'unready' }, { status: 503, headers: noStore });
+            }
+          } catch (e) {
+            return Response.json(
+              { status: 'unready', error: String((e && e.message) || e) },
+              { status: 503, headers: noStore },
+            );
+          }
+        }
+        return Response.json({ status: 'ok' }, { headers: noStore });
       }
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
