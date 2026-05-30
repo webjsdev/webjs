@@ -332,9 +332,10 @@ npm install dayjs                 # standard npm install
 
 Now write `import dayjs from 'dayjs'` in any component or page. The
 import works in dev immediately. webjs's scanner discovers bare
-imports on each server boot and asks `api.jspm.io` to resolve them to
-CDN URLs (jspm.io serves pre-bundled ESM for every npm package). The
-browser fetches the bundle directly from `https://ga.jspm.io`.
+imports on the first request (memoized for the process) and asks
+`api.jspm.io` to resolve them to CDN URLs (jspm.io serves pre-bundled
+ESM for every npm package). The browser fetches the bundle directly
+from `https://ga.jspm.io`.
 
 **For production deploys**, run `webjs vendor pin` once and commit
 the result:
@@ -345,9 +346,9 @@ git add .webjs/vendor/
 git commit -m "vendor dayjs"
 ```
 
-The pin file holds the resolved jspm.io URLs. Server reads from disk
-on boot; no `api.jspm.io` call needed in production. Deterministic
-across deploys.
+The pin file holds the resolved jspm.io URLs. Server reads it from
+disk on the first request (memoized); no `api.jspm.io` call needed in
+production. Deterministic across deploys.
 
 **For offline-capable / strict-CSP production**, use `--download`:
 
