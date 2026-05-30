@@ -932,3 +932,35 @@ test('a real return-position regex is still treated as a regex (stays elidable)'
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+test('a deep render chain analyses in linear time with correct verdicts (no O(N^2) cliff)', async () => {
+  // Regression for the elision fixpoint blowup (#141 benchmarking): a chain
+  // c0 -> c1 -> ... where each renders and imports the next. At N this size the
+  // old iterate-to-fixpoint + per-component closure walk was multi-second and
+  // OOM'd at ~20k; the worklist + reverse-BFS rewrite is linear.
+  const N = 600;
+  const interactiveFiles = {}, displayFiles = {};
+  const components = [], edges = {};
+  for (let i = 0; i < N; i++) {
+    const file = `/app/c${i}.js`;
+    components.push({ tag: `c-${i}`, file });
+    if (i < N - 1) edges[file] = [`/app/c${i + 1}.js`];
+    const child = i < N - 1 ? `<c-${i + 1}></c-${i + 1}>` : '';
+    const importNext = i < N - 1 ? `import './c${i + 1}.js';\n` : '';
+    // Interactive variant: only the HEAD has @click (forces the whole chain).
+    const headClick = i === 0 ? '@click=${() => {}}' : '';
+    interactiveFiles[file] =
+      `import { WebComponent, html } from '@webjsdev/core';\n${importNext}` +
+      `class C${i} extends WebComponent { render() { return html\`<button ${headClick}>${child}</button>\`; } }\nC${i}.register('c-${i}');\n`;
+    // Display-only variant: nobody is interactive.
+    displayFiles[file] =
+      `import { WebComponent, html } from '@webjsdev/core';\n${importNext}` +
+      `class C${i} extends WebComponent { render() { return html\`<span>${child}</span>\`; } }\nC${i}.register('c-${i}');\n`;
+  }
+  const g = graphOf(edges);
+  const shipAll = await computeElidableComponents(components, g, async (f) => interactiveFiles[f], '/app');
+  assert.equal(shipAll.size, 0, 'interactive head renders the chain -> every component must ship');
+
+  const elideAll = await computeElidableComponents(components, g, async (f) => displayFiles[f], '/app');
+  assert.equal(elideAll.size, N, 'a fully display-only chain elides entirely');
+});
