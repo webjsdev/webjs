@@ -112,6 +112,23 @@ can load it without booting the full server.
    in the background ahead of a real first request without delaying
    readiness. A warm-up failure is caught and logged, not thrown; whatever
    failed re-runs on the request that needs it, so resilience is preserved.
+   `warmup()` retries with bounded backoff on a propagating failure (and a
+   request / readiness probe still retries as a backstop). The analysis is
+   split into a deterministic stage (graph, scan, gate, action index,
+   middleware, elision) and a separate vendor stage: readiness depends only
+   on the deterministic stage, so an offline or partially-unresolvable app
+   still boots, and a TRANSIENT vendor failure (network / timeout / jspm 5xx)
+   self-heals via a background backoff re-resolve rather than blocking. A
+   permanent unresolvable (jspm 401 for a private / workspace / server-only
+   dep) is tolerated as before. `ensureReady()` logs a one-line per-pass
+   timing breakdown so a slow first request is diagnosable.
+   **Probes:** `/__webjs/health` is liveness (always 200 once listening);
+   `/__webjs/ready` is readiness (503 until the analysis is warm, then 200).
+   An optional `readiness.{js,ts}` at the app root default-exports an async
+   check that `/ready` runs once warm (returning `false` or throwing yields
+   503), so readiness can gate on live dependency health (e.g. a DB ping)
+   that the static analysis cannot see. Both are answered in `handle()`
+   BEFORE `ensureReady`, so a probe never blocks on the analysis.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at

@@ -210,6 +210,9 @@ app/                        ROUTING ONLY. Thin route adapters (import from modul
   <segment>/not-found.js    nested 404 (nearest wins)
   <segment>/loading.js      auto Suspense boundary
 middleware.js               root-level middleware (runs on every request)
+readiness.js                optional readiness check; default-exports an async
+                            fn that /__webjs/ready runs once warm (return false
+                            or throw = 503, to gate on live DB/dependency health)
 sitemap.js                  metadata route → /sitemap.xml
 robots.js                   metadata route → /robots.txt
 manifest.js                 metadata route → /manifest.json
