@@ -1609,3 +1609,32 @@ test('runtime-first boot: a throwing server-action module does not break startup
   const resp = await app.handle(new Request('http://x/'));
   assert.equal(resp.status, 200);
 });
+
+test('warmup() runs the first-request analysis in the background, ahead of any request', async () => {
+  // Self-warming (#141): the server boots clean, then warmup() primes the lazy
+  // analysis so a real first request finds it memoized. The orphan-component
+  // scan is a side effect of ensureReady, so it firing after warmup() (with NO
+  // handle() call) proves the analysis ran ahead of any request.
+  const warns = [];
+  const logger = { info: () => {}, warn: (m) => warns.push(m), error: () => {} };
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>x</p>\`; }\n`,
+    'components/orphan.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Orphan extends WebComponent {}\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger });
+  assert.equal(warns.length, 0, 'boot does no analysis');
+  await app.warmup();
+  assert.ok(warns.some((m) => /Orphan/.test(m)), 'warmup ran the analysis with no request made');
+
+  // Idempotent + single-flight: a second warmup and a real request are no-ops
+  // for the analysis and still serve correctly.
+  const before = warns.length;
+  await app.warmup();
+  assert.equal(warns.length, before, 'second warmup does not re-run the analysis');
+  const resp = await app.handle(new Request('http://x/'));
+  assert.equal(resp.status, 200);
+});

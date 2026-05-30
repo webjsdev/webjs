@@ -350,6 +350,20 @@ export async function createRequestHandler(opts) {
     handle,
     rebuild,
     routeFor,
+    /**
+     * Proactively run the first-request analysis (module graph, component
+     * scan, gate, action index, middleware, elision, vendor map) in the
+     * background, so a real first request finds it already memoized. Safe to
+     * call any number of times and concurrently: the work is single-flighted,
+     * so this never duplicates it or races a real request. Errors are caught
+     * and logged rather than thrown (a background warm-up must not crash the
+     * process); whatever failed simply re-runs on the request that needs it,
+     * preserving the resilience of lazy boot. `startServer` calls this once the
+     * HTTP server is listening; embedders can call it after their own listen.
+     * @returns {Promise<void>}
+     */
+    warmup: () =>
+      ensureReady().catch((e) => logger.error?.(`[webjs] background warm-up failed (will retry on first request):`, e)),
     /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
     appDir,
@@ -494,6 +508,11 @@ export async function startServer(opts) {
 
   server.listen(port, () => {
     logger.info(`webjs ${dev ? 'dev' : 'prod'} server ready on http://localhost:${port}`);
+    // The server is now accepting connections; warm the first-request analysis
+    // in the background so a real first request finds it memoized. Fire-and-
+    // forget: listening (and thus readiness probes / load-balancer health) does
+    // not wait on it, and a failure here does not bring the process down.
+    app.warmup();
   });
 
   const shutdown = gracefulShutdown(server, sseClients, logger);

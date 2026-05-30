@@ -106,6 +106,12 @@ can load it without booting the full server.
    gate, action index, middleware, elision, vendor map) is built lazily
    on the first request via `ensureReady()` in `dev.js`, so boot reads no
    app source, executes no server module, and makes no network call.
+   `ensureReady()` is single-flighted and memoized; the handler exposes
+   `warmup()` (which calls it), and `startServer` fires `warmup()`
+   fire-and-forget once the HTTP server is listening, so the analysis runs
+   in the background ahead of a real first request without delaying
+   readiness. A warm-up failure is caught and logged, not thrown; whatever
+   failed re-runs on the request that needs it, so resilience is preserved.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
