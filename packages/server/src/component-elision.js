@@ -711,7 +711,11 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   // server file renders nothing client-side. Following component edges here
   // makes the closure O(N^2) in time AND memory on a deep component chain
   // (every component would accumulate every downstream tag); helper-only
-  // closures keep it linear without changing the verdict.
+  // closures keep it linear. This is verdict-SAFE: it never elides a component
+  // that the render rule requires to ship (so it can never break a page), and
+  // it actually elides strictly MORE in some shapes, because following
+  // component edges made the old version over-ship components whose tags
+  // nothing actually renders client-side.
   const tagClosureSkip = new Set([...componentFiles, ...serverFiles]);
   /** @type {Map<string, Set<string>>} */
   const emittableTags = new Map();
