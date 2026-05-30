@@ -301,6 +301,17 @@ In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
 start`) as the CMD over `node ... webjs.js start ...`. The npm form
 fires `prestart`; the direct binary form skips it.
 
+**Health and readiness probes.** Every webjs server answers two endpoints:
+`/__webjs/health` (liveness, 200 once the process is listening) and
+`/__webjs/ready` (readiness, 503 until the first-request analysis is warm,
+then 200). Point your platform's readiness check at `/__webjs/ready` so it
+holds traffic off a not-yet-warmed instance instead of routing the first user
+request into the cold analysis. On Railway, set `"healthcheckPath":
+"/__webjs/ready"` under `deploy` in `railway.json`. For dependency-aware
+readiness (gate on a live DB ping), add an optional `readiness.{js,ts}` at the
+app root that default-exports an async check; `/__webjs/ready` runs it once warm
+and reports 503 if it returns `false` or throws.
+
 Scripts:
 
 - `npm run db:migrate`: `prisma migrate dev` (dev-time schema changes + migration + generate)
