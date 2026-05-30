@@ -107,7 +107,7 @@ Pinning vendor packages from /home/me/my-app...
   dayjs@1.11.13
   zod@3.23.8
 Pinned 2 packages, wrote .webjs/vendor/importmap.json.</pre>
-    <p>This writes <code>.webjs/vendor/importmap.json</code> with the resolved jspm.io URLs. Commit the file to source control. On boot the server reads from disk; no <code>api.jspm.io</code> call needed.</p>
+    <p>This writes <code>.webjs/vendor/importmap.json</code> with the resolved jspm.io URLs. Commit the file to source control. The server reads it from disk on the first request (memoized for the process), never at boot; no <code>api.jspm.io</code> call needed.</p>
     <p>For offline-capable production (compliance, air-gapped, strict CSP), add <code>--download</code>:</p>
     <pre>$ webjs vendor pin --download
 Pinning vendor packages from /home/me/my-app (downloading bundles)...
