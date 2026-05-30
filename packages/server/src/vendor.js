@@ -269,6 +269,14 @@ export function getPackageVersion(pkgName, appDir) {
  */
 const jspmCache = new Map();
 
+// Set by jspmResolveOne whenever a LIVE resolution attempt fails (network
+// error, timeout, or a non-ok jspm response). resolveVendorImports resets it
+// before a scan and reads it after, so a caller can tell "resolved cleanly"
+// from "served a partial map because the CDN was unreachable" and avoid
+// memoizing the failure as done. Safe under the single-flighted ensureReady
+// (one live resolve at a time); the vendor CLI does not run alongside a server.
+let lastLiveResolveFailed = false;
+
 const JSPM_GENERATE_ENDPOINT = 'https://api.jspm.io/generate';
 const JSPM_GENERATE_TIMEOUT_MS = 10_000;
 
@@ -362,6 +370,13 @@ async function jspmResolveOne(install, provider = 'jspm') {
           `[webjs] could not vendor '${install}' via ${provider} (status ${response.status})${detail}`,
         );
         jspmCache.delete(cacheKey);
+        // A 5xx/429 is a transient jspm problem worth retrying. A 401/4xx means
+        // the install is genuinely unresolvable (jspm uses 401 for that): a
+        // private / workspace / server-only package (e.g. @webjsdev/server,
+        // @prisma/client) the browser never fetches anyway. That is tolerated
+        // exactly as before and must NOT block readiness, or an app with any
+        // such dep would never become ready.
+        if (response.status >= 500 || response.status === 429) lastLiveResolveFailed = true;
         return {};
       }
       const result = await response.json();
@@ -372,6 +387,7 @@ async function jspmResolveOne(install, provider = 'jspm') {
         : `${e && e.message}`;
       console.error(`[webjs] could not vendor '${install}' via ${provider}: ${msg}`);
       jspmCache.delete(cacheKey);
+      lastLiveResolveFailed = true;
       return {};
     } finally {
       clearTimeout(timer);
@@ -1282,11 +1298,17 @@ export async function resolveVendorImports(appDir, getBareImports) {
   // static analysis when pinned). The scan is supplied as a thunk and invoked
   // solely here, only when there is no pin file.
   if (file) {
-    return { imports: file.imports, integrity: file.integrity || {} };
+    // A pin file is a deterministic disk read: always "ok" (no live CDN call
+    // that could partially fail). This is the recommended prod posture.
+    return { imports: file.imports, integrity: file.integrity || {}, ok: true };
   }
+  lastLiveResolveFailed = false;
   const bareImports = await getBareImports();
   const imports = await vendorImportMapEntries(bareImports, appDir);
-  return { imports, integrity: {} };
+  // ok=false means at least one install could not be resolved (CDN unreachable
+  // / timeout / non-ok), so `imports` is partial. The caller must not memoize
+  // this as done; it should retry once the CDN recovers.
+  return { imports, integrity: {}, ok: !lastLiveResolveFailed };
 }
 
 /**

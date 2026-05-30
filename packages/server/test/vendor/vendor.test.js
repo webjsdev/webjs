@@ -1669,3 +1669,54 @@ test('listPinned: short package names do not false-match inside other package UR
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('resolveVendorImports: ok=true for a pin file (deterministic disk read)', async () => {
+  const dir = join(tmpdir(), `webjs-vok-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  try {
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'),
+      JSON.stringify({ imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1/index.js' }, integrity: {} }));
+    const r = await resolveVendorImports(dir, async () => new Set(['ignored']));
+    assert.equal(r.ok, true, 'a pin-file read never partially fails');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: ok=false on a transient failure, ok=true on a permanent 401', async () => {
+  // The unpinned path distinguishes a transient CDN problem (network/timeout/5xx
+  // -> ok false, worth a self-heal retry) from a permanent unresolvable install
+  // (jspm 401 for a private/workspace/server-only dep -> ok true, tolerated so
+  // the app still boots). ensureReady keys its self-heal off this flag.
+  const dir = join(tmpdir(), `webjs-vok2-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, 'node_modules', 'testpkg'), { recursive: true });
+  try {
+    // resolvePackageDir uses createRequire(appDir).resolve, so the host needs a
+    // package.json and the dep needs a real resolvable entry point.
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'host' }));
+    await writeFile(join(dir, 'node_modules', 'testpkg', 'package.json'),
+      JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }));
+    await writeFile(join(dir, 'node_modules', 'testpkg', 'index.js'), 'export const x = 1;\n');
+    const thunk = async () => new Set(['testpkg']);
+
+    clearVendorCache();
+    await withMockedFetch(async () => { throw new Error('ECONNREFUSED'); }, async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, false, 'a network failure is transient -> ok false');
+    });
+
+    clearVendorCache();
+    await withMockedFetch(async () => ({ ok: false, status: 401, json: async () => ({ error: 'Unable to resolve' }) }), async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, true, 'a 401 unresolvable is permanent -> tolerated, ok true');
+    });
+
+    clearVendorCache();
+    await withMockedFetch(async () => ({ ok: false, status: 503, json: async () => ({}) }), async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, false, 'a 5xx is transient -> ok false');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

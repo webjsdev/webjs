@@ -249,7 +249,8 @@ export async function createRequestHandler(opts) {
   // analysis. Both stages must complete for `readyDone`. `readyError` holds the
   // last failure so the `/__webjs/ready` probe can report it.
   let analysisDone = false;
-  let vendorDone = false;
+  let vendorAttempted = false;
+  let vendorRetrying = false;
   let readyDone = false;
   /** @type {unknown} */
   let readyError = null;
@@ -296,14 +297,22 @@ export async function createRequestHandler(opts) {
             analysisDone = true;
             ranAnalysis = true;
           }
-          if (!vendorDone) {
+          if (!vendorAttempted) {
             const m = now();
             const v = await resolveVendorImports(appDir,
               () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
             await setVendorEntries(v.imports, v.integrity);
             t.vendor = now() - m;
-            vendorDone = true;
             ranVendor = true;
+            vendorAttempted = true;
+            // A transient failure (network error, timeout, jspm 5xx) leaves the
+            // map partial. Do NOT block readiness on it: an offline or
+            // partially-unresolvable app must still boot. Self-heal in the
+            // background instead, so the map is corrected once the CDN recovers.
+            // Permanent unresolvables (jspm 401 for private / workspace /
+            // server-only deps the browser never fetches) report ok and are
+            // tolerated exactly as before.
+            if (!v.ok) scheduleVendorRetry();
           }
           readyDone = true;
           readyError = null;
@@ -327,6 +336,62 @@ export async function createRequestHandler(opts) {
       })();
     }
     await readyInFlight;
+  }
+
+  // Background self-heal for a TRANSIENT vendor failure (network error, timeout,
+  // jspm 5xx). ensureReady applies whatever map resolved and marks the app ready
+  // (readiness never depends on vendor, so an offline or partially-unresolvable
+  // app still boots), then schedules this to re-resolve with backoff until it
+  // succeeds, correcting the import map without blocking traffic. Never throws;
+  // its timer is unref'd so it cannot keep the process alive. A pinned app and
+  // permanent unresolvables (jspm 401) report ok, so this never fires for them.
+  const VENDOR_RETRY_DELAYS_MS = [2000, 5000, 15000, 30000, 60000];
+  function scheduleVendorRetry(attempt = 1) {
+    if (attempt === 1 && vendorRetrying) return; // one retry chain at a time
+    vendorRetrying = true;
+    if (attempt > VENDOR_RETRY_DELAYS_MS.length) {
+      vendorRetrying = false;
+      logger.error?.(`[webjs] vendor self-heal gave up after ${attempt - 1} attempts; the import map stays partial until a rebuild or restart`);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const v = await resolveVendorImports(appDir,
+          () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
+        await setVendorEntries(v.imports, v.integrity);
+        if (v.ok) {
+          vendorRetrying = false;
+          logger.info?.(`[webjs] vendor import map self-healed on retry ${attempt}`);
+          return;
+        }
+      } catch { /* keep retrying */ }
+      scheduleVendorRetry(attempt + 1);
+    }, VENDOR_RETRY_DELAYS_MS[attempt - 1]);
+    timer.unref?.();
+  }
+
+  // Bounded backoff retry for the background warm-up. warmup() is called once
+  // after listen; if ensureReady rejects (a rare propagating analysis failure,
+  // e.g. a file mid-write at boot), retry in the background rather than wait for
+  // the first request. Resolves after the FIRST attempt so the listen callback
+  // never blocks; later attempts ride unref'd timers and stop as soon as
+  // readyDone (a real request may warm it first). Vendor transients self-heal
+  // separately via scheduleVendorRetry, so this is only for the analysis stage.
+  const WARM_RETRY_DELAYS_MS = [1000, 3000, 8000, 20000];
+  function warmOnce(attempt) {
+    return ensureReady().then(
+      () => {},
+      (e) => {
+        if (readyDone) return;
+        logger.error?.(`[webjs] background warm-up failed (attempt ${attempt}):`, e);
+        if (attempt <= WARM_RETRY_DELAYS_MS.length) {
+          const timer = setTimeout(() => { warmOnce(attempt + 1); }, WARM_RETRY_DELAYS_MS[attempt - 1]);
+          timer.unref?.();
+        } else {
+          logger.error?.(`[webjs] background warm-up giving up after ${attempt} attempts; the next request or readiness probe will retry`);
+        }
+      },
+    );
   }
 
   // Rebuilds are serialized so a slow rebuild #1 cannot overwrite a fresher
@@ -355,7 +420,8 @@ export async function createRequestHandler(opts) {
     // changing an importer's mtime, hence the TS_CACHE.clear above.
     if (readyInFlight) { try { await readyInFlight; } catch {} }
     analysisDone = false;
-    vendorDone = false;
+    vendorAttempted = false;
+    vendorRetrying = false;
     readyDone = false;
     readyError = null;
     opts.onReload?.();
@@ -429,13 +495,14 @@ export async function createRequestHandler(opts) {
      * call any number of times and concurrently: the work is single-flighted,
      * so this never duplicates it or races a real request. Errors are caught
      * and logged rather than thrown (a background warm-up must not crash the
-     * process); whatever failed simply re-runs on the request that needs it,
-     * preserving the resilience of lazy boot. `startServer` calls this once the
-     * HTTP server is listening; embedders can call it after their own listen.
+     * process). On failure it retries in the background with bounded backoff,
+     * and whatever still failed re-runs on the request that needs it, preserving
+     * the resilience of lazy boot. The returned promise resolves after the FIRST
+     * attempt, so a caller (the `startServer` listen callback, or an embedder
+     * after their own listen) never blocks on the analysis.
      * @returns {Promise<void>}
      */
-    warmup: () =>
-      ensureReady().catch((e) => logger.error?.(`[webjs] background warm-up failed (will retry on first request):`, e)),
+    warmup: () => warmOnce(1),
     /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
     appDir,
