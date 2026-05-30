@@ -95,13 +95,13 @@ Content-Type: text/html
     <ol>
       <li>Scan every <code>.js</code> / <code>.ts</code> file under the app for bare import specifiers (skipping <code>node_modules</code>, <code>.server.{js,ts}</code> files, <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code>, <code>test/</code>, <code>'use server'</code> modules, type-only imports, and imports inside comments).</li>
       <li>For each discovered package, resolve the installed version from <code>node_modules/&lt;pkg&gt;/package.json</code>.</li>
-      <li>Call <code>api.jspm.io/generate</code> once at server boot with the full install list (e.g. <code>['dayjs@1.11.13', 'zod@3.23.8']</code>). jspm.io returns a fully-resolved importmap fragment with correct entry paths.</li>
+      <li>Call <code>api.jspm.io/generate</code> once on the first request with the full install list (e.g. <code>['dayjs@1.11.13', 'zod@3.23.8']</code>). jspm.io returns a fully-resolved importmap fragment with correct entry paths.</li>
       <li>Emit those URLs verbatim in the page's <code>&lt;script type="importmap"&gt;</code>. Browser fetches directly from <code>ga.jspm.io</code>; webjs's server is never on the vendor-bytes path.</li>
     </ol>
     <p>Native modules and server-only packages (<code>node:*</code>, <code>@prisma/client</code>) are filtered out by the scanner (they're imported only from <code>.server.{js,ts}</code> / <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code> files, which the scanner skips). Server packages never reach the browser.</p>
 
     <h2>Optional: commit resolved URLs via <code>webjs vendor pin</code></h2>
-    <p>By default the boot-time <code>api.jspm.io/generate</code> call happens on every server start. To skip it (faster boot, no runtime dependency on jspm.io's API), run <code>webjs vendor pin</code>:</p>
+    <p>By default the <code>api.jspm.io/generate</code> call happens once on the first request (memoized for the process), never at boot. To skip it entirely (no runtime dependency on jspm.io's API), run <code>webjs vendor pin</code>:</p>
     <pre>$ webjs vendor pin
 Pinning vendor packages from /home/me/my-app...
   dayjs@1.11.13
