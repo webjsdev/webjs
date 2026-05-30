@@ -584,7 +584,7 @@ render() {
       <li><strong>Server</strong>: stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
     </ul>
 
-    <p>Module URLs for <code>&lt;link rel="modulepreload"&gt;</code> hints are discovered separately, by a server-side scanner that walks the app tree at boot and derives the file path for each discovered tag. No per-component <code>import.meta.url</code> argument needed.</p>
+    <p>Module URLs for <code>&lt;link rel="modulepreload"&gt;</code> hints are discovered separately, by a server-side scanner that walks the app tree on the first request (memoized, and re-run after each rebuild) and derives the file path for each discovered tag. No per-component <code>import.meta.url</code> argument needed.</p>
 
     <blockquote>Always call <code>Class.register</code> at the module's top level, outside the class body. The component registers as soon as the module is imported, both on server and client.</blockquote>
 
