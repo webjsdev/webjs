@@ -88,7 +88,7 @@ async function __rpc(fn, args) {
 export const createPost = (...args) => __rpc('createPost', args);
 export const deletePost = (...args) => __rpc('deletePost', args);</pre>
 
-    <p>The hash (<code>a1b2c3d4e5</code>) is a SHA-256 digest of the file's absolute path, computed at startup. The stub's function signatures match the original exports, so TypeScript sees the real types through the import.</p>
+    <p>The hash (<code>a1b2c3d4e5</code>) is a SHA-256 digest of the file's absolute path, computed when the action index is first built (lazily, on the first request, not at boot). The stub's function signatures match the original exports, so TypeScript sees the real types through the import.</p>
 
     <h2>Full-Stack Type Safety</h2>
     <p>Because the browser's import statement points at the real <code>.server.ts</code> file, TypeScript's language server resolves types from the original source. Your editor shows the correct parameter types, return types, and JSDoc comments. The rewrite happens only at runtime in the browser, so the type checker never sees the stub.</p>
