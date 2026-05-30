@@ -240,39 +240,87 @@ export async function createRequestHandler(opts) {
   // sets when `webjs.elide: false`), then vendor (the bare-import scan excludes
   // deps reachable only through elided modules; a pinned app does only a file
   // read). Dev-only orphan-component warnings run last. Reset on rebuild.
+  // Readiness is two memoized stages. The deterministic analysis (module graph,
+  // component scan, gate, action index, middleware, elision) is network-free
+  // and, once built, never re-runs unless a rebuild invalidates it. Vendor
+  // resolution is a SEPARATE stage because it can hit the network (jspm for an
+  // unpinned app): keeping it separate means a transient CDN failure retries
+  // only the vendor step on the next request instead of re-running the whole
+  // analysis. Both stages must complete for `readyDone`. `readyError` holds the
+  // last failure so the `/__webjs/ready` probe can report it.
+  let analysisDone = false;
+  let vendorDone = false;
   let readyDone = false;
+  /** @type {unknown} */
+  let readyError = null;
   /** @type {Promise<void> | null} */
   let readyInFlight = null;
   async function ensureReady() {
     if (readyDone) return;
     if (!readyInFlight) {
       readyInFlight = (async () => {
+        /** @type {Record<string, number>} */
+        const t = {};
+        let ranAnalysis = false, ranVendor = false;
+        const now = () => performance.now();
         try {
-          state.moduleGraph = await buildModuleGraph(appDir);
-          const components = await scanComponents(appDir);
-          await primeComponentRegistry(appDir, components);
-          state.components = components;
-          state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
-          state.actionIndex = await buildActionIndex(appDir, dev);
-          state.middleware = await loadMiddleware(appDir, dev, logger);
-          const r = (await readElideEnabled(appDir))
-            ? await analyzeElision(components, collectRouteModules(state.routeTable),
-                state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-            : { elidableComponents: new Set(), inertRouteModules: new Set() };
-          state.elidableComponents = r.elidableComponents;
-          state.inertRouteModules = r.inertRouteModules;
-          const v = await resolveVendorImports(appDir,
-            () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
-          await setVendorEntries(v.imports, v.integrity);
-          if (dev) {
-            for (const { className, file } of await findOrphanComponents(appDir)) {
-              logger.warn?.(
-                `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
-                  `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
-              );
+          if (!analysisDone) {
+            let m = now();
+            state.moduleGraph = await buildModuleGraph(appDir);
+            t.graph = now() - m; m = now();
+            const components = await scanComponents(appDir);
+            await primeComponentRegistry(appDir, components);
+            state.components = components;
+            t.scan = now() - m; m = now();
+            state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
+            t.gate = now() - m; m = now();
+            state.actionIndex = await buildActionIndex(appDir, dev);
+            t.actions = now() - m; m = now();
+            state.middleware = await loadMiddleware(appDir, dev, logger);
+            t.middleware = now() - m; m = now();
+            const r = (await readElideEnabled(appDir))
+              ? await analyzeElision(components, collectRouteModules(state.routeTable),
+                  state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
+              : { elidableComponents: new Set(), inertRouteModules: new Set() };
+            state.elidableComponents = r.elidableComponents;
+            state.inertRouteModules = r.inertRouteModules;
+            t.elision = now() - m;
+            if (dev) {
+              for (const { className, file } of await findOrphanComponents(appDir)) {
+                logger.warn?.(
+                  `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
+                    `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
+                );
+              }
             }
+            analysisDone = true;
+            ranAnalysis = true;
+          }
+          if (!vendorDone) {
+            const m = now();
+            const v = await resolveVendorImports(appDir,
+              () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
+            await setVendorEntries(v.imports, v.integrity);
+            t.vendor = now() - m;
+            vendorDone = true;
+            ranVendor = true;
           }
           readyDone = true;
+          readyError = null;
+          if (ranAnalysis) {
+            const ms = (x) => Math.round(x || 0);
+            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
+            logger.info?.(
+              `[webjs] analysis warm in ${total}ms (graph ${ms(t.graph)}, scan ${ms(t.scan)}, ` +
+                `gate ${ms(t.gate)}, actions ${ms(t.actions)}, middleware ${ms(t.middleware)}, ` +
+                `elision ${ms(t.elision)}, vendor ${ms(t.vendor)})`,
+            );
+          } else if (ranVendor) {
+            logger.info?.(`[webjs] vendor resolved in ${Math.round(t.vendor || 0)}ms`);
+          }
+        } catch (e) {
+          readyError = e;
+          throw e;
         } finally {
           readyInFlight = null;
         }
@@ -306,13 +354,37 @@ export async function createRequestHandler(opts) {
     // after the reset. A dependency edit can flip an elision verdict without
     // changing an importer's mtime, hence the TS_CACHE.clear above.
     if (readyInFlight) { try { await readyInFlight; } catch {} }
+    analysisDone = false;
+    vendorDone = false;
     readyDone = false;
+    readyError = null;
     opts.onReload?.();
   }
 
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      // Health and readiness probes are answered BEFORE ensureReady so a probe
+      // never blocks on the analysis. `/__webjs/health` is liveness (the
+      // process is up and accepting connections). `/__webjs/ready` is true only
+      // once ensureReady has FULLY completed, so a broken app (a build that
+      // throws, an unreachable vendor CDN) stays 503 and a Kubernetes
+      // readinessProbe gates the rollout instead of routing traffic to a broken
+      // instance. Probing `/__webjs/ready` also kicks off the warm in the
+      // background, so an embedder that never called warmup() still warms.
+      let probePath;
+      try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
+      if (probePath === '/__webjs/health') {
+        return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
+      }
+      if (probePath === '/__webjs/ready') {
+        if (readyDone) return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
+        ensureReady().catch(() => {}); // drive the warm; never block the probe
+        const body = readyError
+          ? { status: 'error', error: String((readyError && readyError.message) || readyError) }
+          : { status: 'pending' };
+        return Response.json(body, { status: 503, headers: { 'cache-control': 'no-store' } });
+      }
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
@@ -551,10 +623,8 @@ async function handleCore(req, ctx) {
   try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
   const method = req.method.toUpperCase();
 
-  // Health / readiness probes for orchestrators (k8s, fly, etc.)
-  if (path === '/__webjs/health' || path === '/__webjs/ready') {
-    return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
-  }
+  // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) are handled
+  // in `handle()` BEFORE ensureReady, so they are not repeated here.
 
   // Dev live-reload client
   if (path === '/__webjs/reload.js') {

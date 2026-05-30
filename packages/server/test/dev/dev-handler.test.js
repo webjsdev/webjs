@@ -48,12 +48,25 @@ test('handle: /__webjs/health returns 200 JSON', async () => {
   assert.deepEqual(await resp.json(), { status: 'ok' });
 });
 
-test('handle: /__webjs/ready returns 200 JSON', async () => {
+test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', async () => {
+  // Runtime-first boot makes /ready a REAL readiness gate: 503 while the lazy
+  // analysis has not finished (so a k8s readinessProbe holds traffic off an
+  // un-analysed instance), 200 once it has. The probe itself does not block on
+  // the analysis; it kicks off the warm in the background and reports current state.
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/ready'));
-  assert.equal(resp.status, 200);
+
+  const pending = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(pending.status, 503);
+  assert.equal(pending.headers.get('cache-control'), 'no-store');
+  assert.equal((await pending.json()).status, 'pending');
+
+  await app.warmup(); // drives ensureReady to completion
+  const ready = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), { status: 'ok' });
 });
+
 
 test('handle: /__webjs/reload.js in dev returns the client JS', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
