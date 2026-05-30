@@ -251,6 +251,7 @@ export async function createRequestHandler(opts) {
   let analysisDone = false;
   let vendorAttempted = false;
   let vendorRetrying = false;
+  let buildEpoch = 0; // bumped on each rebuild; stale vendor self-heal chains bail
   let readyDone = false;
   /** @type {unknown} */
   let readyError = null;
@@ -299,9 +300,7 @@ export async function createRequestHandler(opts) {
           }
           if (!vendorAttempted) {
             const m = now();
-            const v = await resolveVendorImports(appDir,
-              () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
-            await setVendorEntries(v.imports, v.integrity);
+            const ok = await resolveAndApplyVendor();
             t.vendor = now() - m;
             ranVendor = true;
             vendorAttempted = true;
@@ -312,7 +311,7 @@ export async function createRequestHandler(opts) {
             // Permanent unresolvables (jspm 401 for private / workspace /
             // server-only deps the browser never fetches) report ok and are
             // tolerated exactly as before.
-            if (!v.ok) scheduleVendorRetry();
+            if (!ok) scheduleVendorRetry();
           }
           readyDone = true;
           readyError = null;
@@ -345,8 +344,30 @@ export async function createRequestHandler(opts) {
   // succeeds, correcting the import map without blocking traffic. Never throws;
   // its timer is unref'd so it cannot keep the process alive. A pinned app and
   // permanent unresolvables (jspm 401) report ok, so this never fires for them.
+  // All vendor resolves (the initial one in ensureReady AND every self-heal
+  // retry) funnel through this single-flight, so two never run concurrently.
+  // resolveVendorImports reports failure via a module-global flag in vendor.js
+  // that only one in-flight resolve may safely touch; serializing here also
+  // stops a stale self-heal from clobbering a freshly-resolved import map.
+  // Returns the resolve's ok flag.
+  /** @type {Promise<boolean> | null} */
+  let vendorResolveInFlight = null;
+  function resolveAndApplyVendor() {
+    if (vendorResolveInFlight) return vendorResolveInFlight;
+    vendorResolveInFlight = (async () => {
+      const v = await resolveVendorImports(appDir,
+        () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
+      await setVendorEntries(v.imports, v.integrity);
+      return v.ok;
+    })().finally(() => { vendorResolveInFlight = null; });
+    return vendorResolveInFlight;
+  }
+
   const VENDOR_RETRY_DELAYS_MS = [2000, 5000, 15000, 30000, 60000];
-  function scheduleVendorRetry(attempt = 1) {
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let vendorRetryTimer = null;
+  function scheduleVendorRetry(attempt = 1, epoch = buildEpoch) {
+    if (epoch !== buildEpoch) return;            // a rebuild invalidated this chain
     if (attempt === 1 && vendorRetrying) return; // one retry chain at a time
     vendorRetrying = true;
     if (attempt > VENDOR_RETRY_DELAYS_MS.length) {
@@ -354,20 +375,20 @@ export async function createRequestHandler(opts) {
       logger.error?.(`[webjs] vendor self-heal gave up after ${attempt - 1} attempts; the import map stays partial until a rebuild or restart`);
       return;
     }
-    const timer = setTimeout(async () => {
-      try {
-        const v = await resolveVendorImports(appDir,
-          () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
-        await setVendorEntries(v.imports, v.integrity);
-        if (v.ok) {
-          vendorRetrying = false;
-          logger.info?.(`[webjs] vendor import map self-healed on retry ${attempt}`);
-          return;
-        }
-      } catch { /* keep retrying */ }
-      scheduleVendorRetry(attempt + 1);
+    vendorRetryTimer = setTimeout(async () => {
+      vendorRetryTimer = null;
+      if (epoch !== buildEpoch) { vendorRetrying = false; return; } // rebuilt while waiting
+      let ok = false;
+      try { ok = await resolveAndApplyVendor(); } catch { /* keep retrying */ }
+      if (epoch !== buildEpoch) { vendorRetrying = false; return; } // rebuilt mid-resolve
+      if (ok) {
+        vendorRetrying = false;
+        logger.info?.(`[webjs] vendor import map self-healed on retry ${attempt}`);
+        return;
+      }
+      scheduleVendorRetry(attempt + 1, epoch);
     }, VENDOR_RETRY_DELAYS_MS[attempt - 1]);
-    timer.unref?.();
+    vendorRetryTimer.unref?.();
   }
 
   // Bounded backoff retry for the background warm-up. warmup() is called once
@@ -448,6 +469,11 @@ export async function createRequestHandler(opts) {
     // after the reset. A dependency edit can flip an elision verdict without
     // changing an importer's mtime, hence the TS_CACHE.clear above.
     if (readyInFlight) { try { await readyInFlight; } catch {} }
+    // Bump the epoch and cancel any pending vendor self-heal so a stale retry
+    // chain from the previous build cannot fire against (or resolve into) the
+    // fresh state. A retry already mid-flight checks the epoch and bails.
+    buildEpoch++;
+    if (vendorRetryTimer) { clearTimeout(vendorRetryTimer); vendorRetryTimer = null; }
     analysisDone = false;
     vendorAttempted = false;
     vendorRetrying = false;
