@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# Make all three CI test layers required before a PR can merge into main.
+# Require an approving review + all CI checks before a PR can merge into main.
 #
 # This is the enforcement half of .github/workflows/ci.yml: the workflow
-# RUNS the tests, this rule BLOCKS merge until unit, browser, and e2e are
-# all green. Run once (needs repo admin). Re-running is idempotent.
+# RUNS the tests, this rule BLOCKS merge until every required check is green
+# AND the PR has at least one approving review. Run once (needs repo admin).
+# Re-running is idempotent.
+#
+# NOTE on the review requirement: GitHub does not let a PR author approve
+# their own PR, and this repo is effectively a solo org. enforce_admins is
+# left false so the org owner can still merge via the admin bypass (a
+# confirm step), which keeps the approval as a visible speed-bump without
+# locking solo PRs. Flip enforce_admins to true only once a second reviewer
+# (a human or a bot account) exists to provide the non-author approval.
 #
 #   bash scripts/protect-main.sh
 #
@@ -28,9 +36,13 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
     ]
   },
   "enforce_admins": false,
-  "required_pull_request_reviews": null,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false
+  },
   "restrictions": null
 }
 JSON
 
-echo "main is now protected: unit, browser, and e2e must pass before merge."
+echo "main is now protected: 1 approving review + all CI checks required before merge."
