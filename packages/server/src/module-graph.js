@@ -204,7 +204,9 @@ async function walk(dir, appDir, graph) {
  * rebuild, but reading + regex-parsing each file is the cost; on an unchanged
  * file the cached import set is reused after a single `stat`. This makes
  * rebuilds incremental for large apps without restructuring the caller.
- * @type {Map<string, { mtimeMs: number, deps: Set<string> }>}
+ * Keyed by mtime AND size: a same-tick edit that also changes the file length
+ * is caught even on coarse-resolution filesystems where mtime alone could miss.
+ * @type {Map<string, { mtimeMs: number, size: number, deps: Set<string> }>}
  */
 const PARSE_CACHE = new Map();
 
@@ -217,11 +219,11 @@ const PARSE_CACHE = new Map();
  * @param {ModuleGraph} graph
  */
 async function parseFile(file, appDir, graph) {
-  let mtimeMs;
-  try { mtimeMs = (await stat(file)).mtimeMs; }
+  let mtimeMs, size;
+  try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; }
   catch { return; }
   const cached = PARSE_CACHE.get(file);
-  if (cached && cached.mtimeMs === mtimeMs) {
+  if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
     if (cached.deps.size) graph.set(file, cached.deps);
     return;
   }
@@ -240,7 +242,7 @@ async function parseFile(file, appDir, graph) {
       if (resolved) deps.add(resolved);
     }
   }
-  PARSE_CACHE.set(file, { mtimeMs, deps });
+  PARSE_CACHE.set(file, { mtimeMs, size, deps });
   if (deps.size) graph.set(file, deps);
 }
 
