@@ -1311,6 +1311,39 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(aboutPageFetched, false, 'inert /about page module must NOT be downloaded');
     assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
+
+  test('chat: sending a message keeps you on the page and the message survives (#150)', async () => {
+    // The chat form calls e.preventDefault() and sends over WebSocket, so the
+    // client router must NOT intercept it (its submit listener is bubble, so the
+    // component's preventDefault is honored). Before the fix, the router's
+    // capture-phase submit listener navigated the page on send: it scrolled to
+    // the top and the just-sent message vanished (the chat-box re-rendered from
+    // its empty SSR state and the WebSocket reconnected fresh).
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    // Wait for the chat WebSocket to connect (the input enables once 'live').
+    await page.waitForFunction(
+      () => { const i = document.querySelector('chat-box input'); return !!i && !i.disabled; },
+      { timeout: 12000 },
+    );
+    const msg = 'e2e-chat-stays-onpage';
+    await page.type('chat-box input', msg);
+    await page.keyboard.press('Enter');
+    // Poll (not a fixed sleep) for the message to land in the chat-box via the
+    // WS round-trip: send -> server broadcast -> onMessage -> re-render. On the
+    // buggy (capture) code the page swaps and the message never appears, so this
+    // times out and `present` stays false, failing the assertion below.
+    let present = false;
+    try {
+      await page.waitForFunction(
+        (m) => { const box = document.querySelector('chat-box'); return !!box && (box.textContent || '').includes(m); },
+        { timeout: 6000 }, msg,
+      );
+      present = true;
+    } catch { present = false; }
+    assert.ok(present, 'the sent chat message must remain visible (the page must not have navigated/swapped)');
+    const path = await page.evaluate(() => location.pathname);
+    assert.equal(path, '/', 'must stay on the home page after sending a chat message');
+  });
 });
 
 // ---------------------------------------------------------------------------
