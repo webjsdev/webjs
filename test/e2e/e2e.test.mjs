@@ -1312,7 +1312,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
 
-  test('prefetch: hovering an internal link warms the cache; the click consumes it (no second fetch)', async () => {
+  test('prefetch: hovering an internal link warms the cache; the click consumes it via SPA swap (no second fetch)', async () => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await sleep(2000);
 
@@ -1320,6 +1320,11 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // is independent of DB state and the layout's nav markup. The router
     // intercepts document-level clicks on any same-origin <a>, so an
     // injected light-DOM link exercises the exact prefetch + click path.
+    // Stamp a sentinel on window: a full-page reload discards it, a
+    // client-router SPA swap keeps it. The sentinel is what proves the
+    // click was a cache-consuming swap and not a full navigation, which
+    // would ALSO issue zero x-webjs-router requests and pass the
+    // "no second fetch" assertion for the wrong reason.
     const href = '/about';
     await page.evaluate(() => {
       const a = document.createElement('a');
@@ -1327,6 +1332,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       a.id = 'e2e-prefetch-link';
       a.textContent = 'about (e2e)';
       (document.querySelector('main') || document.body).appendChild(a);
+      window.__e2ePrefetchSentinel = 'alive';
     });
 
     // Count document requests to that pathname, split by the prefetch
@@ -1342,62 +1348,91 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     };
     page.on('request', onRequest);
     try {
-      // Hover; wait past the ~100ms intent dwell so the prefetch fires.
+      // Hover, then poll for the prefetch (past the ~100ms intent dwell +
+      // the fetch round-trip) instead of a single fixed sleep, so a slow
+      // CI box does not flake.
       await page.evaluate(() => {
         document.getElementById('e2e-prefetch-link')
           ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
       });
-      await sleep(700);
-      assert.ok(hits.prefetch >= 1, `hover should issue a speculative prefetch GET for ${href}`);
+      await waitFor(() => hits.prefetch >= 1, 4000,
+        () => `hover should issue a speculative prefetch GET for ${href} (got ${hits.prefetch})`);
       const afterHover = hits.prefetch;
 
-      // Click: should resolve from the warm cache with NO extra document fetch.
+      // Click; poll until the URL reflects the navigation.
       await page.evaluate(() => {
         document.getElementById('e2e-prefetch-link')?.click();
       });
-      await sleep(1500);
+      await waitFor(() => page.url().includes(href), 4000,
+        () => `should have navigated to ${href}, got ${page.url()}`);
+      await sleep(300); // let any (erroneous) second fetch land before asserting absence
 
-      assert.ok(page.url().includes(href), `should have navigated to ${href}, got ${page.url()}`);
-      assert.equal(hits.nav, 0, 'click should consume the prefetch cache, not issue a second fetch');
+      // The sentinel survives ONLY if the click was a client-router swap.
+      // If the router were disabled, the click would full-page navigate,
+      // discard the sentinel, AND issue no x-webjs-router request, so this
+      // assertion is what stops the "no second fetch" check from passing
+      // vacuously.
+      const sentinel = await page.evaluate(() => window.__e2ePrefetchSentinel);
+      assert.equal(sentinel, 'alive',
+        'click must be a client-router SPA swap (sentinel survived), not a full-page reload');
+      assert.equal(hits.nav, 0, 'click consumed the prefetch cache, no second document fetch');
       assert.equal(hits.prefetch, afterHover, 'no extra prefetch fired during the click');
     } finally {
       page.off('request', onRequest);
     }
   });
 
-  test('prefetch: cross-origin and data-prefetch="none" links are never prefetched', async () => {
+  test('prefetch: a normal link prefetches on hover, but cross-origin and data-prefetch="none" do not', async () => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await sleep(1000);
+    await sleep(2000);
 
     await page.evaluate(() => {
       const main = document.querySelector('main') || document.body;
+      // Positive control: a plain same-origin link MUST prefetch on hover.
+      // Without it, the negative assertions below could pass simply because
+      // the hover listener never attached.
+      const ok = document.createElement('a');
+      ok.href = '/about';
+      ok.id = 'e2e-ctrl-link';
+      ok.textContent = 'control';
       const ext = document.createElement('a');
       ext.href = 'https://example.com/somewhere';
       ext.id = 'e2e-ext-link';
       ext.textContent = 'external';
       const opt = document.createElement('a');
-      opt.href = '/about';
+      opt.href = '/dashboard';
       opt.setAttribute('data-prefetch', 'none');
       opt.id = 'e2e-optout-link';
       opt.textContent = 'opted-out';
-      main.append(ext, opt);
+      main.append(ok, ext, opt);
     });
 
-    let webjsPrefetches = 0;
+    // Track prefetch requests by destination origin / pathname.
+    const pf = { control: 0, ext: 0, optout: 0 };
+    const origin = new URL(baseUrl).origin;
     const onRequest = (req) => {
-      if (req.headers()['x-webjs-prefetch']) webjsPrefetches++;
+      if (!req.headers()['x-webjs-prefetch']) return;
+      let u;
+      try { u = new URL(req.url()); } catch { return; }
+      if (u.origin !== origin) { pf.ext++; return; }
+      if (u.pathname === '/about') pf.control++;
+      else if (u.pathname === '/dashboard') pf.optout++;
     };
     page.on('request', onRequest);
     try {
       await page.evaluate(() => {
-        for (const id of ['e2e-ext-link', 'e2e-optout-link']) {
+        for (const id of ['e2e-ctrl-link', 'e2e-ext-link', 'e2e-optout-link']) {
           document.getElementById(id)
             ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
         }
       });
-      await sleep(600);
-      assert.equal(webjsPrefetches, 0,
-        'cross-origin and data-prefetch="none" links must not trigger a webjs prefetch');
+      // The positive control proves the listener is live; only then do the
+      // negative assertions carry meaning.
+      await waitFor(() => pf.control >= 1, 4000,
+        () => `the control link should prefetch on hover (got ${pf.control})`);
+      await sleep(300);
+      assert.equal(pf.ext, 0, 'cross-origin link must not trigger a webjs prefetch');
+      assert.equal(pf.optout, 0, 'data-prefetch="none" link must not trigger a webjs prefetch');
     } finally {
       page.off('request', onRequest);
     }
@@ -1497,3 +1532,22 @@ async function clickBrandLink(p) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/**
+ * Poll `cond` until it returns truthy or `timeoutMs` elapses. Replaces a
+ * fixed sleep where the wait is for an async signal (a prefetch landing,
+ * a URL changing), so a slow CI box does not flake. Throws with `msg()`
+ * on timeout so the assertion reads like a normal failure.
+ *
+ * @param {() => boolean} cond
+ * @param {number} timeoutMs
+ * @param {() => string} msg
+ */
+async function waitFor(cond, timeoutMs, msg) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (cond()) return;
+    await sleep(50);
+  }
+  throw new Error(msg());
+}
