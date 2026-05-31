@@ -31,7 +31,7 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
   _currentPageUrl, _setCurrentPageUrl,
-  _eligibleAnchorHref, _prefetchSuppressed, _prefetch, _prefetchTake,
+  _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetch, _prefetchTake,
   _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
   enableClientRouter, disableClientRouter, revalidate,
   WebComponent, html;
@@ -97,6 +97,7 @@ before(async () => {
     _setCurrentPageUrl,
     _eligibleAnchorHref,
     _prefetchSuppressed,
+    _prefetchMode,
     _prefetch,
     _prefetchTake,
     _prefetchSaysSaveData,
@@ -2451,6 +2452,31 @@ test('prefetchSuppressed: rel=external, rel=no-prefetch, data-no-prefetch', asyn
     assert.equal(_prefetchSuppressed(mkAnchor('/a', { 'data-no-prefetch': '' })), true);
     assert.equal(_prefetchSuppressed(mkAnchor('/a', { rel: 'prefetch' })), false);
     assert.equal(_prefetchSuppressed(mkAnchor('/a')), false);
+  });
+});
+
+test('prefetchMode: data-prefetch attribute resolves to a strategy (intent default)', async () => {
+  await withPrefetchEnv(() => {
+    // Absent or unrecognised: the fast default.
+    assert.equal(_prefetchMode(mkAnchor('/a')), 'intent');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'bogus' })), 'intent');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'intent' })), 'intent');
+    // Next-style aliases + explicit strategy names.
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render' })), 'render');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'true' })), 'render');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'viewport' })), 'viewport');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'auto' })), 'viewport');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'none' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'false' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'VIEWPORT' })), 'viewport', 'case-insensitive');
+  });
+});
+
+test('prefetchMode: suppression wins over data-prefetch', async () => {
+  await withPrefetchEnv(() => {
+    // Even an explicit eager request is overridden by an opt-out.
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'viewport', 'data-no-prefetch': '' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render', rel: 'external' })), 'none');
   });
 });
 
