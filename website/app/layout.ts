@@ -290,3 +290,5 @@ export default function RootLayout({ children }: { children: unknown }) {
     ${children}
   `;
 }
+
+// Touch to force a Railway redeploy of this app for the workspace router fixes in #151 and #157 (the watch path skips framework-only changes in packages/core).
