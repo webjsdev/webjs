@@ -178,12 +178,12 @@ export function enableClientRouter() {
   document.addEventListener('touchstart', onPrefetchIntent, { capture: true, passive: true });
   document.addEventListener('pointerout', onPrefetchOut, true);
   // After every client navigation the swapped-in DOM may carry new
-  // rel="prefetch" anchors, so re-scan. webjs:navigate fires at the end
-  // of fetchAndApply for both link and frame swaps.
-  document.addEventListener('webjs:navigate', refreshEagerPrefetch);
+  // anchors, so re-scan for render/viewport modes. webjs:navigate fires
+  // at the end of fetchAndApply for both link and frame swaps.
+  document.addEventListener('webjs:navigate', refreshPrefetchObservers);
   ensureUpgradeObserver();
-  // Eager prefetch for author-marked rel="prefetch" anchors (viewport).
-  refreshEagerPrefetch();
+  // Apply render/viewport prefetch modes to the initial document.
+  refreshPrefetchObservers();
   // Take control of scroll restoration so the browser doesn't fight
   // the SPA's own snapshot-based restore on popstate.
   if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
@@ -206,7 +206,7 @@ export function disableClientRouter() {
   document.removeEventListener('focusin', onPrefetchIntent, true);
   document.removeEventListener('touchstart', onPrefetchIntent, /** @type any */ ({ capture: true }));
   document.removeEventListener('pointerout', onPrefetchOut, true);
-  document.removeEventListener('webjs:navigate', refreshEagerPrefetch);
+  document.removeEventListener('webjs:navigate', refreshPrefetchObservers);
   clearPrefetchHover();
   if (prefetchViewObserver) { prefetchViewObserver.disconnect(); prefetchViewObserver = null; }
   if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
@@ -759,11 +759,20 @@ function buildHaveHeader() {
 }
 
 /* ====================================================================
- * Intent prefetch (hover / focus / touch, plus rel="prefetch" eager)
+ * Link prefetch (Remix-style strategies, fast-by-default)
  *
  * A link click already resolves through fetchAndApply, but the fetch
  * only STARTS on click, so the user waits a full round-trip. Prefetch
  * warms a dedicated cache speculatively so the click reads it instantly.
+ *
+ * Strategy per anchor via a `data-prefetch` attribute (valid-HTML data-*,
+ * like SvelteKit / Astro), defaulting to `intent` so the common case is
+ * fast without per-link opt-in, the way Next / Nuxt / SvelteKit ship
+ * auto-prefetch. Value vocabulary borrows Next's true/false/auto aliases:
+ *   - intent    (default)    : hover / focus / touch, after a short dwell
+ *   - true / render          : eager, as soon as a document scan sees it
+ *   - auto / viewport        : on viewport entry (IntersectionObserver, 0.5)
+ *   - false / none           : never (also data-no-prefetch / rel="external")
  *
  * Why a separate cache, not snapshotCache: snapshotCache is keyed to the
  * back/forward restore path (popstate), which holds the FULL serialized
@@ -772,11 +781,15 @@ function buildHaveHeader() {
  * partial body a real nav would receive). fetchAndApply consumes it via
  * prefetchTake() before falling back to the network.
  *
+ * Only same-origin in-app links are prefetched (the same eligibility as
+ * a click), and never under Save-Data / prefers-reduced-data. There is no
+ * logout-style heuristic: prefetch issues a real GET, so as everywhere in
+ * the ecosystem (Next / Nuxt / Remix), a non-idempotent action must be a
+ * POST or a `<form>`, and `data-no-prefetch` / `rel="external"` opt out.
+ *
  * What we do NOT touch: a native `<link rel="prefetch">` in the document
  * head is the browser's own mechanism and warms the HTTP cache; we never
- * interfere with it. A `rel="prefetch"` ON AN ANCHOR is not honored by
- * browsers (resource-hint rel tokens are <link>-only), so webjs reads it
- * itself and treats it as an eager opt-in.
+ * interfere with it.
  * ==================================================================== */
 
 /** Max speculative responses held at once (LRU). */
@@ -785,8 +798,8 @@ const PREFETCH_CAP = 8;
 const PREFETCH_TTL = 30_000;
 /** Max concurrent in-flight prefetch requests. */
 const PREFETCH_CONCURRENCY = 3;
-/** Hover dwell before a prefetch fires (ms): filter drive-by pointer moves. */
-const PREFETCH_HOVER_DELAY = 65;
+/** Hover dwell before a prefetch fires (ms): filter drive-by pointer moves. Matches Remix's intent timeout. */
+const PREFETCH_HOVER_DELAY = 100;
 
 /** @typedef {{ html: string, build: string | null, finalUrl: string, at: number }} PrefetchEntry */
 /** @type {Map<string, PrefetchEntry>} */
@@ -797,7 +810,7 @@ const prefetchInflight = new Set();
 let prefetchHoverTimer = null;
 /** Last anchor a hover timer was armed for (so pointerout can match). */
 let prefetchHoverAnchor = null;
-/** IntersectionObserver for rel="prefetch" eager anchors, or null. */
+/** IntersectionObserver for data-prefetch="viewport" anchors, or null. */
 let prefetchViewObserver = null;
 
 /**
@@ -865,6 +878,50 @@ function prefetchSuppressed(anchor) {
   if (anchor.hasAttribute('data-no-prefetch')) return true;
   const rel = relTokens(anchor);
   return rel.includes('external') || rel.includes('no-prefetch');
+}
+
+/**
+ * Resolve the prefetch strategy for an anchor from a `data-prefetch`
+ * attribute. webjs has no Link component (links are plain `<a href>`), so
+ * the knob is a valid-HTML `data-*` attribute, the same shape SvelteKit
+ * (`data-sveltekit-preload-data`) and Astro (`data-astro-prefetch`) use.
+ * Next.js / Nuxt / Remix express the same choice as a component PROP
+ * (`<Link prefetch>`) that never reaches the DOM, so there is nothing to
+ * mirror attribute-wise; we reuse their value vocabulary (true/false/auto)
+ * as aliases. Default is `intent` (fast-by-default) when the attribute is
+ * absent or unrecognised.
+ *
+ * Value mapping (case-insensitive):
+ *   - absent / unknown   : `intent`  (the default)
+ *   - `intent`           : hover / focus / touch, after a short dwell
+ *   - `true` / `render`  : eager, as soon as a document scan sees the link
+ *   - `auto` / `viewport`: on viewport entry (IntersectionObserver)
+ *   - `false` / `none`   : never (also via data-no-prefetch / rel="external")
+ *
+ * Returns `none` for suppressed anchors so callers have a single check.
+ *
+ * @param {Element} anchor
+ * @returns {'intent' | 'render' | 'viewport' | 'none'}
+ */
+function prefetchMode(anchor) {
+  if (prefetchSuppressed(anchor)) return 'none';
+  const raw = (anchor.getAttribute('data-prefetch') || '').toLowerCase().trim();
+  switch (raw) {
+    case 'false':
+    case 'none':
+      return 'none';
+    case 'true':
+    case 'render':
+      return 'render';
+    case 'auto':
+    case 'viewport':
+      return 'viewport';
+    case 'intent':
+      return 'intent';
+    default:
+      // Unset or unrecognised value: the fast default.
+      return 'intent';
+  }
 }
 
 /**
@@ -948,9 +1005,12 @@ function onPrefetchIntent(e) {
   if (!enabled) return;
   const anchor = closestAnchor(/** @type any */ (e.target));
   if (!anchor) return;
+  // Only `intent` links prefetch on hover/focus/touch. `render` and
+  // `viewport` links are handled by the document scan / observer, and
+  // `none` is suppressed.
+  if (prefetchMode(anchor) !== 'intent') return;
   const href = eligibleAnchorHref(anchor);
   if (!href) return;
-  if (prefetchSuppressed(anchor)) return;
   // pointerover/focusin bubble, so re-entering a child of the same anchor
   // would re-arm; collapse to one timer per anchor.
   if (prefetchHoverAnchor === anchor && prefetchHoverTimer) return;
@@ -997,29 +1057,42 @@ function closestAnchor(target) {
 }
 
 /**
- * (Re)scan the document for anchors the author marked `rel="prefetch"`
- * and observe them for viewport entry, the eager opt-in. Stronger than
- * hover: these prefetch as soon as they scroll into view. Called on
- * enable and after each navigation (the DOM changed).
+ * (Re)scan the document and apply the non-hover prefetch modes:
+ *   - `render`   anchors prefetch immediately (they are now in the DOM).
+ *   - `viewport` anchors are observed and prefetch on intersection.
+ * `intent` (the default) is handled by the hover/focus/touch listeners,
+ * and `none` is skipped. Called on enable and after each navigation,
+ * since the swapped-in DOM may carry new links.
+ *
+ * The viewport threshold (0.5) matches Remix's IntersectionObserver.
  */
-function refreshEagerPrefetch() {
-  if (typeof IntersectionObserver === 'undefined' || typeof document === 'undefined') return;
+function refreshPrefetchObservers() {
+  if (typeof document === 'undefined') return;
   if (prefetchSaysSaveData()) return;
-  if (!prefetchViewObserver) {
-    prefetchViewObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const anchor = /** @type {Element} */ (entry.target);
-        prefetchViewObserver.unobserve(anchor);
-        const href = eligibleAnchorHref(anchor);
-        if (href && !prefetchSuppressed(anchor)) prefetch(href);
-      }
-    });
-  } else {
-    prefetchViewObserver.disconnect();
+  const hasIO = typeof IntersectionObserver !== 'undefined';
+  if (hasIO) {
+    if (!prefetchViewObserver) {
+      prefetchViewObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const anchor = /** @type {Element} */ (entry.target);
+          prefetchViewObserver.unobserve(anchor);
+          const href = eligibleAnchorHref(anchor);
+          if (href && prefetchMode(anchor) === 'viewport') prefetch(href);
+        }
+      }, { threshold: 0.5 });
+    } else {
+      prefetchViewObserver.disconnect();
+    }
   }
-  for (const anchor of document.querySelectorAll('a[rel~="prefetch"]')) {
-    prefetchViewObserver.observe(anchor);
+  for (const anchor of document.querySelectorAll('a[href]')) {
+    const mode = prefetchMode(anchor);
+    if (mode === 'render') {
+      const href = eligibleAnchorHref(anchor);
+      if (href) prefetch(href);
+    } else if (mode === 'viewport' && hasIO) {
+      prefetchViewObserver.observe(anchor);
+    }
   }
 }
 
@@ -2001,6 +2074,7 @@ export {
   restoreOptimistic as _restoreOptimistic,
   eligibleAnchorHref as _eligibleAnchorHref,
   prefetchSuppressed as _prefetchSuppressed,
+  prefetchMode as _prefetchMode,
   prefetch as _prefetch,
   prefetchTake as _prefetchTake,
   prefetchSaysSaveData as _prefetchSaysSaveData,
