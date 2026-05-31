@@ -7,25 +7,33 @@
  * `index-browser.js` already re-exports them and the package.json `exports`
  * point those subpaths at the one bundle).
  *
- * Runs the actual build (esbuild, ~15ms) into `packages/core/dist` (gitignored,
- * regenerated at prepublish) and asserts the output shape. Guards against a
- * regression that re-enables `splitting` or re-adds a per-subpath entry.
+ * Builds into a throwaway temp dir (the build script takes an optional outdir
+ * arg) so the suite never clobbers the shared `packages/core/dist` that other
+ * tests' dist-mode detection may read. Guards against a regression that
+ * re-enables `splitting` or re-adds a per-subpath entry.
  */
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { readdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const DIST = join(ROOT, 'packages/core/dist');
+let DIST;
+
+before(() => {
+  DIST = mkdtempSync(join(tmpdir(), 'webjs-coredist-'));
+  // Build into the temp dir, NOT packages/core/dist, so concurrent tests that
+  // probe the shared dist for dist-mode detection are never disturbed.
+  execFileSync('node', [join(ROOT, 'scripts/build-framework-dist.js'), DIST], { cwd: ROOT, stdio: 'pipe' });
+});
+after(() => {
+  if (DIST) rmSync(DIST, { recursive: true, force: true });
+});
 
 test('core dist build: one chunkless browser bundle, browser subpaths folded in', () => {
-  // Build fresh so the assertions reflect the current build script, not a
-  // stale dist left over from a prior run.
-  execFileSync('node', [join(ROOT, 'scripts/build-framework-dist.js')], { cwd: ROOT, stdio: 'pipe' });
-
   const files = readdirSync(DIST).filter((f) => f.endsWith('.js'));
 
   // No code-split chunks: splitting must stay off.
@@ -55,7 +63,7 @@ test('core dist build: the browser bundle actually exports the folded surface', 
   // index-browser.js re-exports directives, context, task, and the client
   // router, so each `import { ... } from '@webjsdev/core/<subpath>'` can pick
   // its named exports from the one bundle. Confirm they are present.
-  const mod = await import(join(DIST, 'webjs-core-browser.js'));
+  const mod = await import(pathToFileURL(join(DIST, 'webjs-core-browser.js')).href);
   for (const name of ['html', 'render', 'WebComponent', 'enableClientRouter', 'navigate', 'repeat', 'unsafeHTML', 'createContext', 'Task', 'signal']) {
     assert.ok(name in mod, `webjs-core-browser.js must export ${name}`);
   }

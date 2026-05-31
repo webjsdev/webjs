@@ -58,7 +58,11 @@ const ENTRIES = [
 ];
 
 async function main() {
-  const dist = join(CORE, 'dist');
+  // Output dir defaults to the package's own `dist/` (what `prepare` /
+  // `build:dist` produce for publish). An optional first CLI arg overrides it,
+  // so a test can build into a throwaway temp dir without clobbering the shared
+  // `packages/core/dist` that other tests may read.
+  const dist = process.argv[2] ? resolve(process.argv[2]) : join(CORE, 'dist');
   await rm(dist, { recursive: true, force: true });
   await mkdir(dist, { recursive: true });
 
