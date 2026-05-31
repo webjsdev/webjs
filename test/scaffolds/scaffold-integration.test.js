@@ -79,6 +79,26 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');
 
+    // require-tests gate reaches the scaffolded app three ways: the hook
+    // file is copied, the Claude settings wire it into PreToolUse, and the
+    // tool-agnostic pre-commit floor carries the block. All three must be
+    // present so an app-code commit with no test is blocked regardless of
+    // which agent (or human) commits.
+    assert.ok(existsSync(join(appDir, '.claude/hooks/require-tests-with-src.sh')),
+      'require-tests hook is scaffolded');
+    const claudeSettings = JSON.parse(
+      readFileSync(join(appDir, '.claude/settings.json'), 'utf8'),
+    );
+    const preCommands = (claudeSettings.hooks?.PreToolUse ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(
+      preCommands.includes('.claude/hooks/require-tests-with-src.sh'),
+      'settings.json wires the require-tests hook into PreToolUse',
+    );
+    const preCommit = readFileSync(join(appDir, '.hooks/pre-commit'), 'utf8');
+    assert.match(preCommit, /no test is staged/,
+      'pre-commit carries the tool-agnostic require-tests floor');
+
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
     assert.equal(pkg.name, 'my-app');

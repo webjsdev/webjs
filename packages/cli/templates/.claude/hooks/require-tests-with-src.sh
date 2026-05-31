@@ -31,10 +31,11 @@ fi
 payload=$(cat)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
 if [ -z "$cmd" ]; then exit 0; fi
-case "$cmd" in
-  *"git commit"*) : ;;
-  *) exit 0 ;;
-esac
+# Match `git commit` as a whole word so sibling subcommands
+# (git commit-graph, git commit-tree) and string mentions do not trip it.
+if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)'; then
+  exit 0
+fi
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 
