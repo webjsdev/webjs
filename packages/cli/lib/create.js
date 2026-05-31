@@ -373,6 +373,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/block-prose-punctuation.sh',
     '.claude/hooks/guard-branch-context.sh',
     '.claude/hooks/nudge-uncommitted.sh',
+    '.claude/hooks/require-tests-with-src.sh',
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
@@ -405,7 +406,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'require-tests-with-src.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
