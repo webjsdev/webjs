@@ -21,6 +21,31 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   exit 1
 fi
 
+# Require a test to accompany app-code changes. Tool-agnostic floor: a
+# commit that stages app code (app/, modules/, components/, lib/) with no
+# test (test/** or *.test.* / *.spec.*) is blocked. The full suite below
+# proves tests PASS; this proves a test was WRITTEN. Bypass for a genuine
+# non-code commit with WEBJS_NO_TEST_GATE=1, or --no-verify in emergencies.
+if [ "${WEBJS_NO_TEST_GATE:-}" != "1" ]; then
+  STAGED=$(git diff --cached --name-only 2>/dev/null)
+  APP_CODE=$(printf '%s\n' "$STAGED" | grep -E '^(app|modules|components|lib)/.*\.([mc]?[jt]sx?)$' || true)
+  if [ -n "$APP_CODE" ]; then
+    TESTS=$(printf '%s\n' "$STAGED" | grep -E '(^|/)test/|\.test\.[mc]?[jt]sx?$|\.spec\.[mc]?[jt]sx?$' || true)
+    if [ -z "$TESTS" ]; then
+      echo ""
+      echo "ERROR: app code changed but no test is staged."
+      echo "Every change ships with a test. Add or update the test that"
+      echo "proves the new behaviour (a browser/e2e test for interactive"
+      echo "or component code), then git add it."
+      echo ""
+      echo "Genuine non-code commit? WEBJS_NO_TEST_GATE=1 git commit ..."
+      echo "Emergency bypass: git commit --no-verify"
+      echo ""
+      exit 1
+    fi
+  fi
+fi
+
 # webjs test + webjs check on every commit. Tool-agnostic enforcement:
 # fires regardless of which agent (Claude, Cursor, Antigravity, Copilot,
 # human) is making the commit. Skipped if the CLI is not yet installed
