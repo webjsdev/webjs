@@ -451,6 +451,15 @@ test/
 - `webjs test --browser` (or `npx wtr`) runs the browser tests.
 - `WEBJS_E2E=1 webjs test` adds the e2e tests.
 
+**Every change ships with a test, enforced at commit time.** A commit
+that stages app code (`app/`, `modules/`, `components/`, `lib/`) without
+staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`
+(Claude Code) and the universal `.hooks/pre-commit` (any agent or human).
+A unit test alone is not enough for interactive or component code: add
+the browser test that asserts the rendered/hydrated behaviour. Bypass a
+genuine non-code commit with `WEBJS_NO_TEST_GATE=1`, or `--no-verify` in
+an emergency.
+
 ### Choosing a feature folder
 
 Use the same name as the matching module folder when one exists:
