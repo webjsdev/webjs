@@ -212,149 +212,271 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Build module dependency graph for transitive preload hints.
-  const moduleGraph = await buildModuleGraph(appDir);
-
-  // Scan for component classes and prime their module URLs into the
-  // core registry. SSR uses this for modulepreload hints without
-  // requiring authors to pass `import.meta.url` themselves. The same
-  // scan result feeds the browser-bound graph computation below,
-  // avoiding a duplicate appDir walk at boot.
-  const components = await scanComponents(appDir);
-  await primeComponentRegistry(appDir, components);
-
+  // Whole-app analysis (module graph, component scan, browser-bound gate,
+  // action index, middleware, elision, vendor) is NOT run at boot. It is
+  // computed on the first request via ensureReady() below and memoized, so the
+  // server starts without walking or reading the app's source, executing any
+  // server module, or hitting the network. Only the route table is built
+  // eagerly: it is a cheap directory scan (no code reads), and routing, Early
+  // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
-
-  // Determine which component modules are display-only and which page/layout
-  // route modules are inert, so both can be elided from the browser (no JS
-  // download). Static analysis only; the sets bias conservatively toward
-  // shipping. See component-elision.js. The project-level `webjs.elide: false`
-  // switch in package.json skips the analysis entirely (empty sets, so nothing
-  // is stripped and the importmap keeps every vendor dep).
-  const elideEnabled = await readElideEnabled(appDir);
-  const { elidableComponents, inertRouteModules } = elideEnabled
-    ? await analyzeElision(
-        components,
-        collectRouteModules(routeTable),
-        moduleGraph,
-        (f) => readFile(f, 'utf8'),
-        appDir,
-      )
-    : { elidableComponents: new Set(), inertRouteModules: new Set() };
-
-  // Scan for bare npm imports and register vendor import map entries.
-  // Runs AFTER elision so vendor deps reachable only through display-only
-  // components are excluded from the importmap.
-  const bareImports = await scanBareImports(appDir, new Set([...elidableComponents, ...inertRouteModules]));
-  const initialVendor = await resolveVendorImports(bareImports, appDir);
-  await setVendorEntries(initialVendor.imports, initialVendor.integrity);
-
-  // Dev-time guardrail: warn about any class extending WebComponent
-  // that isn't registered via customElements.define() in its own
-  // module. Without registration, <my-tag> elements silently stay as
-  // HTMLUnknownElement in the browser: a common early-stage footgun.
-  if (dev) {
-    const orphans = await findOrphanComponents(appDir);
-    for (const { className, file } of orphans) {
-      logger.warn?.(
-        `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
-          `Add \`customElements.define('<tag-name>', ${className});\` at the bottom of the file ` +
-          `or <${kebab(className)}> tags won't upgrade in the browser.`,
-      );
-    }
-  }
 
   const state = {
     routeTable,
-    actionIndex: await buildActionIndex(appDir, dev),
-    middleware: await loadMiddleware(appDir, dev, logger),
+    actionIndex: null,
+    middleware: null,
     logger,
-    bareImports,
-    moduleGraph,
-    elidableComponents,
-    inertRouteModules,
-    browserBoundFiles: computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir),
+    moduleGraph: null,
+    elidableComponents: new Set(),
+    inertRouteModules: new Set(),
+    browserBoundFiles: null,
   };
 
-  // Rebuilds are serialized so a slow rebuild #1 (e.g. waiting on a
-  // jspm.io fetch) cannot overwrite a fresher rebuild #2's
-  // setVendorEntries / route table when it finally finishes. Without
-  // this, two file edits inside one fs.watch debounce window could
-  // produce a permanently-stale importmap until the next rebuild.
-  // Each rebuild also gets a monotonic token; setVendorEntries is only
-  // applied if its token still matches the latest scheduled rebuild.
+  // All whole-app analysis is built lazily on the first request, memoized so
+  // boot does none of it. It runs in two stages. The deterministic analysis
+  // (module graph, component scan + prime, browser-bound gate, action index,
+  // middleware, elision) is network-free and, once built, never re-runs unless
+  // a rebuild invalidates it; readiness gates on it. Vendor resolution is a
+  // SEPARATE, best-effort stage: a pinned app reads a committed importmap file,
+  // an unpinned app auto-fetches from jspm. It does NOT gate readiness, so an
+  // offline or partially-unresolvable app still boots. A transient vendor
+  // failure is re-attempted on the NEXT ensureReady call (driven by an incoming
+  // request, a readiness probe, or the warm-up), with no background timer: the
+  // platform's traffic and probes are the retry loop. `readyError` holds a
+  // propagating analysis failure so /__webjs/ready can report it.
+  let analysisDone = false;        // deterministic analysis complete (readiness gate)
+  let vendorResolved = false;      // vendor map fully resolved (or permanently tolerated)
+  let vendorAttemptedOnce = false; // the first (blocking) vendor attempt has run
+  let vendorGen = 0;               // bumped on rebuild; a stale resolve cannot flip vendorResolved
+  let readyDone = false;           // mirrors analysisDone; the /__webjs/ready gate
+  /** @type {unknown} */
+  let readyError = null;
+  /** @type {Promise<void> | null} */
+  let readyInFlight = null;
+  async function ensureReady() {
+    // Fully warm: analysis done and vendor resolved. Nothing to do.
+    if (analysisDone && vendorResolved) return;
+    // Analysis warm but a prior vendor attempt failed: re-attempt WITHOUT
+    // blocking this request. The single-flight dedupes concurrent attempts;
+    // success flips the flag. This is the request/probe-driven retry (no timer).
+    if (analysisDone && vendorAttemptedOnce) {
+      const gen = vendorGen;
+      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) vendorResolved = true; }).catch(() => {});
+      return;
+    }
+    // Otherwise run the (single-flighted) full warm: the analysis, then the
+    // first vendor attempt, awaited so the first response carries the import map.
+    if (!readyInFlight) {
+      readyInFlight = (async () => {
+        /** @type {Record<string, number>} */
+        const t = {};
+        let ranAnalysis = false, ranVendor = false;
+        const now = () => performance.now();
+        try {
+          if (!analysisDone) {
+            let m = now();
+            state.moduleGraph = await buildModuleGraph(appDir);
+            t.graph = now() - m; m = now();
+            const components = await scanComponents(appDir);
+            await primeComponentRegistry(appDir, components);
+            t.scan = now() - m; m = now();
+            state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
+            t.gate = now() - m; m = now();
+            state.actionIndex = await buildActionIndex(appDir, dev);
+            t.actions = now() - m; m = now();
+            state.middleware = await loadMiddleware(appDir, dev, logger);
+            t.middleware = now() - m; m = now();
+            const r = (await readElideEnabled(appDir))
+              ? await analyzeElision(components, collectRouteModules(state.routeTable),
+                  state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
+              : { elidableComponents: new Set(), inertRouteModules: new Set() };
+            state.elidableComponents = r.elidableComponents;
+            state.inertRouteModules = r.inertRouteModules;
+            t.elision = now() - m;
+            if (dev) {
+              for (const { className, file } of await findOrphanComponents(appDir)) {
+                logger.warn?.(
+                  `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
+                    `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
+                );
+              }
+            }
+            analysisDone = true;
+            ranAnalysis = true;
+          }
+          // Readiness gates on the analysis only; vendor is best-effort below.
+          readyDone = true;
+          readyError = null;
+          if (!vendorResolved) {
+            const m = now();
+            const gen = vendorGen;
+            vendorAttemptedOnce = true;
+            const ok = await resolveAndApplyVendor();
+            t.vendor = now() - m;
+            ranVendor = true;
+            // Only memoize success (and only if a rebuild didn't intervene). A
+            // transient failure leaves vendorResolved false; the next ensureReady
+            // call re-attempts it non-blocking. A permanent unresolvable (jspm
+            // 401) reports ok and is tolerated, so it does not loop.
+            if (ok && gen === vendorGen) vendorResolved = true;
+          }
+          if (ranAnalysis) {
+            const ms = (x) => Math.round(x || 0);
+            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
+            logger.info?.(
+              `[webjs] analysis warm in ${total}ms (graph ${ms(t.graph)}, scan ${ms(t.scan)}, ` +
+                `gate ${ms(t.gate)}, actions ${ms(t.actions)}, middleware ${ms(t.middleware)}, ` +
+                `elision ${ms(t.elision)}, vendor ${ms(t.vendor)})`,
+            );
+          } else if (ranVendor && vendorResolved) {
+            logger.info?.(`[webjs] vendor resolved in ${Math.round(t.vendor || 0)}ms`);
+          }
+        } catch (e) {
+          readyError = e;
+          throw e;
+        } finally {
+          readyInFlight = null;
+        }
+      })();
+    }
+    await readyInFlight;
+  }
+
+  // All vendor resolves funnel through one single-flight so two never overlap
+  // (resolveVendorImports reports a transient failure via a module-global flag
+  // that only one in-flight resolve may safely touch). Never rejects; returns
+  // the resolve's ok flag (false on a transient failure, applying whatever
+  // partial map resolved so the app is no worse off).
+  /** @type {Promise<boolean> | null} */
+  let vendorResolveInFlight = null;
+  function resolveAndApplyVendor() {
+    if (vendorResolveInFlight) return vendorResolveInFlight;
+    vendorResolveInFlight = (async () => {
+      try {
+        const v = await resolveVendorImports(appDir,
+          () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
+        await setVendorEntries(v.imports, v.integrity);
+        return v.ok;
+      } catch (e) {
+        logger.error?.(`[webjs] vendor resolve failed (will retry on the next request):`, e);
+        return false;
+      }
+    })().finally(() => { vendorResolveInFlight = null; });
+    return vendorResolveInFlight;
+  }
+
+  // Optional app-level readiness check. A `readiness.{js,ts}` file at the app
+  // root may default-export an async function; /__webjs/ready runs it once the
+  // analysis is warm, so readiness can reflect LIVE dependency health (a DB
+  // ping, a queue connection) that the static analysis cannot see. Returning
+  // false or throwing reports the instance not ready (503), so a readinessProbe
+  // holds traffic off an instance whose deps are down. Absent file => analysis-
+  // warm is the only gate. The module is cached per build (cleared on rebuild);
+  // the function itself runs on every probe so it reflects current state.
+  let readinessFn; // undefined = unloaded, null = no file, function = loaded
+  async function getReadinessCheck() {
+    if (readinessFn !== undefined) return readinessFn;
+    let file = null;
+    for (const name of ['readiness.ts', 'readiness.js', 'readiness.mts', 'readiness.mjs']) {
+      const p = join(appDir, name);
+      if (await exists(p)) { file = p; break; }
+    }
+    if (!file) { readinessFn = null; return null; }
+    try {
+      const url = pathToFileURL(file).toString();
+      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
+      const mod = await import(url + bust);
+      readinessFn = typeof mod.default === 'function' ? mod.default : null;
+    } catch (e) {
+      logger.error?.(`[webjs] failed to load readiness.{js,ts}`, { err: String(e) });
+      readinessFn = null;
+    }
+    return readinessFn;
+  }
+
+  // Rebuilds are serialized so a slow rebuild #1 cannot overwrite a fresher
+  // rebuild #2's route table when it finally finishes. Without this, two file
+  // edits inside one fs.watch debounce window could produce a permanently
+  // stale state until the next rebuild.
   let rebuildInFlight = Promise.resolve();
-  let latestRebuildToken = 0;
 
   async function rebuild() {
-    const token = ++latestRebuildToken;
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(token)).catch((e) => {
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild()).catch((e) => {
       logger.error?.(`[webjs] rebuild failed:`, e);
     });
     return rebuildInFlight;
   }
 
-  async function doRebuild(token) {
+  async function doRebuild() {
+    // The route table is the only eager artifact (cheap directory scan); rebuild
+    // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
-    state.actionIndex = await buildActionIndex(appDir, dev);
-    state.middleware = await loadMiddleware(appDir, dev, logger);
     clearVendorCache();
-    state.moduleGraph = await buildModuleGraph(appDir);
-    // Re-scan components in case a new file was added or a tag renamed.
-    // Share the scan with the browser-bound graph computation so we
-    // don't walk appDir twice per rebuild.
-    const components = await scanComponents(appDir);
-    await primeComponentRegistry(appDir, components);
-    // Recompute which components are elidable and which route modules are
-    // inert. A dependency's edit can flip a verdict WITHOUT changing an
-    // importer's mtime, so the TS transform cache (keyed by mtime) must be
-    // dropped or it would serve a stale strip decision for the unchanged
-    // importer.
-    {
-      const r = (await readElideEnabled(appDir))
-        ? await analyzeElision(
-            components,
-            collectRouteModules(state.routeTable),
-            state.moduleGraph,
-            (f) => readFile(f, 'utf8'),
-            appDir,
-          )
-        : { elidableComponents: new Set(), inertRouteModules: new Set() };
-      state.elidableComponents = r.elidableComponents;
-      state.inertRouteModules = r.inertRouteModules;
-    }
     TS_CACHE.clear();
-    // Re-scan bare imports AFTER elision so the importmap drops vendor
-    // deps reachable only through display-only components.
-    state.bareImports = await scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
-    const v = await resolveVendorImports(state.bareImports, appDir);
-    // Defensive: if a newer rebuild has been queued while we were
-    // awaiting resolveVendorImports, drop our result. The newer one
-    // will overwrite anyway, but checking the token here avoids a
-    // brief window of stale entries.
-    if (token === latestRebuildToken) {
-      await setVendorEntries(v.imports, v.integrity);
-    }
-    // Recompute the browser-bound file set: the page / layout / error /
-    // loading / not-found / component entries plus their transitive imports.
-    // This drives the dev server's "is this file allowed to be served as
-    // source?" gate at the file-extension catch-all branch below.
-    state.browserBoundFiles = computeBrowserBoundFiles(state.routeTable, state.moduleGraph, components, appDir);
-    if (dev) {
-      const orphans = await findOrphanComponents(appDir);
-      for (const { className, file } of orphans) {
-        logger.warn?.(
-          `[webjs] ${className} extends WebComponent but has no customElements.define(...) call in ${file}. ` +
-            `Add \`customElements.define('<tag-name>', ${className});\` or <${kebab(className)}> tags won't upgrade.`,
-        );
-      }
-    }
+    // Invalidate the lazy analysis; the next request rebuilds the graph,
+    // component scan, gate, action index, middleware, elision, and vendor map.
+    // Wait out any in-flight build first so it cannot commit stale results
+    // after the reset. A dependency edit can flip an elision verdict without
+    // changing an importer's mtime, hence the TS_CACHE.clear above.
+    if (readyInFlight) { try { await readyInFlight; } catch {} }
+    // Bump the vendor generation so a vendor resolve still in flight from the
+    // previous build cannot flip vendorResolved against the fresh state.
+    vendorGen++;
+    analysisDone = false;
+    vendorResolved = false;
+    vendorAttemptedOnce = false;
+    readyDone = false;
+    readyError = null;
+    readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
     opts.onReload?.();
   }
 
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      // Health and readiness probes are answered BEFORE ensureReady so a probe
+      // never blocks on the analysis. `/__webjs/health` is liveness (the
+      // process is up and accepting connections). `/__webjs/ready` is 503 until
+      // the analysis is warm, then 200 unless an optional app readiness check
+      // (readiness.{js,ts}) reports a dependency down. So a readinessProbe holds
+      // traffic off a not-yet-warm or dependency-unhealthy instance. Probing
+      // `/__webjs/ready` also kicks off the warm in the background, so an
+      // embedder that never called warmup() still warms. A vendor CDN failure
+      // does NOT block readiness (vendor is best-effort, retried on the next request).
+      let probePath;
+      try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
+      if (probePath === '/__webjs/health') {
+        return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
+      }
+      if (probePath === '/__webjs/ready') {
+        const noStore = { 'cache-control': 'no-store' };
+        if (!readyDone) {
+          ensureReady().catch(() => {}); // drive the warm; never block the probe
+          const body = readyError
+            ? { status: 'error', error: String((readyError && readyError.message) || readyError) }
+            : { status: 'pending' };
+          return Response.json(body, { status: 503, headers: noStore });
+        }
+        // Analysis is warm. Consult the optional app readiness check (live
+        // dependency health, e.g. a DB ping) if the app provides one.
+        const check = await getReadinessCheck();
+        if (check) {
+          try {
+            if ((await check()) === false) {
+              return Response.json({ status: 'unready' }, { status: 503, headers: noStore });
+            }
+          } catch (e) {
+            return Response.json(
+              { status: 'unready', error: String((e && e.message) || e) },
+              { status: 503, headers: noStore },
+            );
+          }
+        }
+        return Response.json({ status: 'ok' }, { headers: noStore });
+      }
+      // Build all whole-app analysis on the first request (memoized), before
+      // any SSR, module serve, gate check, action dispatch, or middleware runs.
+      await ensureReady();
       const next = () => handleCore(req, { state, appDir, coreDir, dev });
       if (state.middleware) {
         try {
@@ -389,6 +511,21 @@ export async function createRequestHandler(opts) {
     handle,
     rebuild,
     routeFor,
+    /**
+     * Proactively run the first-request analysis (module graph, component
+     * scan, gate, action index, middleware, elision, vendor map) in the
+     * background, so a real first request finds it already memoized. Safe to
+     * call any number of times and concurrently: the work is single-flighted,
+     * so this never duplicates it or races a real request. It is a single
+     * best-effort kick: errors are caught and logged rather than thrown (a
+     * background warm-up must not crash the process), and whatever failed simply
+     * re-runs on the next request or readiness probe (the platform's traffic and
+     * probes are the retry loop, so there is no internal backoff). `startServer`
+     * calls this once the HTTP server is listening; embedders can call it after
+     * their own listen.
+     * @returns {Promise<void>}
+     */
+    warmup: () => ensureReady().catch((e) => logger.error?.(`[webjs] background warm-up failed (will retry on the next request):`, e)),
     /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
     appDir,
@@ -533,6 +670,11 @@ export async function startServer(opts) {
 
   server.listen(port, () => {
     logger.info(`webjs ${dev ? 'dev' : 'prod'} server ready on http://localhost:${port}`);
+    // The server is now accepting connections; warm the first-request analysis
+    // in the background so a real first request finds it memoized. Fire-and-
+    // forget: listening (and thus readiness probes / load-balancer health) does
+    // not wait on it, and a failure here does not bring the process down.
+    app.warmup();
   });
 
   const shutdown = gracefulShutdown(server, sseClients, logger);
@@ -571,10 +713,8 @@ async function handleCore(req, ctx) {
   try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
   const method = req.method.toUpperCase();
 
-  // Health / readiness probes for orchestrators (k8s, fly, etc.)
-  if (path === '/__webjs/health' || path === '/__webjs/ready') {
-    return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
-  }
+  // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) are handled
+  // in `handle()` BEFORE ensureReady, so they are not repeated here.
 
   // Dev live-reload client
   if (path === '/__webjs/reload.js') {
@@ -712,8 +852,9 @@ async function handleCore(req, ctx) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
       // the path-level boundary; we re-verify it on every request (not
-      // just the action-index snapshot taken at boot) so files created
-      // after boot, FS races, or developer error never punch through.
+      // just rely on the action-index snapshot, which is built on the first
+      // request and refreshed on rebuild) so files created later, FS races,
+      // or developer error never punch through.
       //
       // What the browser gets depends on the file's `'use server'` status:
       //   - With `'use server'` => server action: a generated RPC stub
@@ -1224,8 +1365,8 @@ function debounce(fn, ms) {
  * module graph into the full transitive closure.
  *
  * This is webjs's equivalent of Next.js's bundler-produced page
- * manifest, applied at boot time (and on every rebuild) instead of
- * compile time. The dev server's source-file branch uses the returned
+ * manifest, derived lazily on the first request (and re-derived on every
+ * rebuild) instead of at compile time. The dev server's source-file branch uses the returned
  * Set as an authorization gate: in-set → served (subject to the
  * .server.{js,ts} stub guardrail); out-of-set → 404.
  *
@@ -1245,7 +1386,7 @@ function debounce(fn, ms) {
  *
  * Components are passed in (rather than rescanned) so the caller can
  * share one scan with `primeComponentRegistry`. Saves a full
- * appDir walk at boot and on every rebuild.
+ * appDir walk on each analysis (the first request and every rebuild).
  *
  * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
  * @param {Awaited<ReturnType<typeof buildModuleGraph>>} moduleGraph

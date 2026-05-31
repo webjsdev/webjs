@@ -912,9 +912,22 @@ test('resolveVendorImports: prefers committed pin file over live API call', asyn
     await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
       imports: { 'fake-pkg': 'https://example.com/fake.js' },
     }));
-    const result = await resolveVendorImports(new Set(['unrelated']), dir);
+    let scanned = false;
+    const result = await resolveVendorImports(dir, async () => { scanned = true; return new Set(['unrelated']); });
     assert.equal(result.imports['fake-pkg'], 'https://example.com/fake.js');
     assert.deepEqual(result.integrity, {}, 'no integrity field in pin -> empty map');
+    assert.equal(scanned, false, 'a pin file must short-circuit BEFORE the bare-import scan (no whole-app walk)');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: runs the scan thunk only when there is no pin file', async () => {
+  const dir = await makeTempAppWithSource({});
+  try {
+    let scanned = false;
+    await resolveVendorImports(dir, async () => { scanned = true; return new Set(); });
+    assert.equal(scanned, true, 'unpinned: the scan thunk is invoked to discover bare specifiers');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -947,7 +960,7 @@ test('readPinFile: returns no integrity field on old pin format (backwards-compa
     assert.deepEqual(file.imports, { 'foo': 'https://cdn.example/foo.js' });
     assert.equal(file.integrity, undefined);
     // resolveVendorImports normalises the missing field to {}.
-    const r = await resolveVendorImports(new Set(), dir);
+    const r = await resolveVendorImports(dir, async () => new Set());
     assert.deepEqual(r.integrity, {});
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -983,7 +996,7 @@ test('readPinFile + resolveVendorImports: integrity keyed by FINAL URL (post-rew
       },
     };
     await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify(pinJson));
-    const r = await resolveVendorImports(new Set(['dayjs', 'dayjs/plugin/relativeTime.js']), dir);
+    const r = await resolveVendorImports(dir, async () => new Set(['dayjs', 'dayjs/plugin/relativeTime.js']));
     assert.equal(r.imports['dayjs'], '/__webjs/vendor/dayjs@1.11.20.js');
     assert.equal(r.integrity['/__webjs/vendor/dayjs@1.11.20.js'], 'sha384-aaaa');
     // Subpath import: integrity keyed by its OWN final URL, not by dayjs's.
@@ -1652,6 +1665,57 @@ test('listPinned: short package names do not false-match inside other package UR
     const ms = entries.find(e => e.pkg === 'ms');
     assert.equal(ms.version, '2.0.0',
       'must extract ms\'s own version, not the embedded "ms" inside "terms"');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: ok=true for a pin file (deterministic disk read)', async () => {
+  const dir = join(tmpdir(), `webjs-vok-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  try {
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'),
+      JSON.stringify({ imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1/index.js' }, integrity: {} }));
+    const r = await resolveVendorImports(dir, async () => new Set(['ignored']));
+    assert.equal(r.ok, true, 'a pin-file read never partially fails');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: ok=false on a transient failure, ok=true on a permanent 401', async () => {
+  // The unpinned path distinguishes a transient CDN problem (network/timeout/5xx
+  // -> ok false, retried on the next request) from a permanent unresolvable
+  // install (jspm 401 for a private/workspace/server-only dep -> ok true,
+  // tolerated so the app still boots). ensureReady keys its retry off this flag.
+  const dir = join(tmpdir(), `webjs-vok2-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, 'node_modules', 'testpkg'), { recursive: true });
+  try {
+    // resolvePackageDir uses createRequire(appDir).resolve, so the host needs a
+    // package.json and the dep needs a real resolvable entry point.
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'host' }));
+    await writeFile(join(dir, 'node_modules', 'testpkg', 'package.json'),
+      JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }));
+    await writeFile(join(dir, 'node_modules', 'testpkg', 'index.js'), 'export const x = 1;\n');
+    const thunk = async () => new Set(['testpkg']);
+
+    clearVendorCache();
+    await withMockedFetch(async () => { throw new Error('ECONNREFUSED'); }, async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, false, 'a network failure is transient -> ok false');
+    });
+
+    clearVendorCache();
+    await withMockedFetch(async () => ({ ok: false, status: 401, json: async () => ({ error: 'Unable to resolve' }) }), async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, true, 'a 401 unresolvable is permanent -> tolerated, ok true');
+    });
+
+    clearVendorCache();
+    await withMockedFetch(async () => ({ ok: false, status: 503, json: async () => ({}) }), async () => {
+      const r = await resolveVendorImports(dir, thunk);
+      assert.equal(r.ok, false, 'a 5xx is transient -> ok false');
+    });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

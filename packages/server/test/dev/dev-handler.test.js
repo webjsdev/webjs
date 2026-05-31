@@ -48,12 +48,73 @@ test('handle: /__webjs/health returns 200 JSON', async () => {
   assert.deepEqual(await resp.json(), { status: 'ok' });
 });
 
-test('handle: /__webjs/ready returns 200 JSON', async () => {
+test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', async () => {
+  // Runtime-first boot makes /ready a REAL readiness gate: 503 while the lazy
+  // analysis has not finished (so a k8s readinessProbe holds traffic off an
+  // un-analysed instance), 200 once it has. The probe itself does not block on
+  // the analysis; it kicks off the warm in the background and reports current state.
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/__webjs/ready'));
-  assert.equal(resp.status, 200);
+
+  const pending = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(pending.status, 503);
+  assert.equal(pending.headers.get('cache-control'), 'no-store');
+  assert.equal((await pending.json()).status, 'pending');
+
+  await app.warmup(); // drives ensureReady to completion
+  const ready = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), { status: 'ok' });
 });
+
+test('handle: a transient vendor failure does not block readiness', async () => {
+  // Vendor resolution is best-effort and decoupled from readiness: a transient
+  // jspm failure (here a mocked network reject) must leave the app READY (the
+  // deterministic analysis is what readiness gates on), so an offline or
+  // CDN-degraded instance still serves. The failed resolve is re-attempted on
+  // the next request, not via a background timer.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+  });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup(); // analysis succeeds; the jspm fetch for testpkg fails
+    const ready = await app.handle(new Request('http://x/__webjs/ready'));
+    assert.equal(ready.status, 200, 'a transient vendor failure must not block readiness');
+    assert.equal((await ready.json()).status, 'ok');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('handle: /__webjs/ready runs an optional readiness.{js,ts} check once warm', async () => {
+  // An app can gate readiness on live dependency health (e.g. a DB ping) by
+  // default-exporting an async check from readiness.js. Returning false or
+  // throwing reports 503 unready even though the analysis is warm, so a
+  // readinessProbe holds traffic off an instance whose deps are down.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    'readiness.js': `let n = 0; export default async () => (n++ > 0);`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  // first probe: check returns false -> 503 unready
+  const down = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(down.status, 503);
+  assert.equal((await down.json()).status, 'unready');
+
+  // second probe: check returns true -> 200 ok (analysis was already warm)
+  const up = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(up.status, 200);
+  assert.deepEqual(await up.json(), { status: 'ok' });
+});
+
 
 test('handle: /__webjs/reload.js in dev returns the client JS', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
@@ -505,7 +566,10 @@ test('handle: orphan component warning fires in dev', async () => {
       `import { WebComponent } from '@webjsdev/core';\n` +
       `export class Orphan extends WebComponent {}\n`,
   });
-  await createRequestHandler({ appDir, dev: true, logger });
+  const app = await createRequestHandler({ appDir, dev: true, logger });
+  // Orphan detection runs in the lazy first-request analysis (boot does no
+  // whole-app scan), so drive one request before asserting.
+  await app.handle(new Request('http://x/'));
   assert.ok(
     warns.some(m => /Orphan/.test(m)),
     `expected orphan warning for class "Orphan"; got: ${warns.join('\n')}`,
@@ -707,6 +771,27 @@ test('handle: expose()d action is reachable by method+path', async () => {
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/api/hello'));
+  assert.equal(resp.status, 200);
+  assert.deepEqual(await resp.json(), { ok: true });
+});
+
+test('handle: expose() via an ALIASED import still registers its REST route (lazy index)', async () => {
+  // Guards the lazy action index: a module that aliases the import
+  // (`import { expose as exp }`) must still be eagerly loaded so its route
+  // registers. Matching only `expose(` would miss `exp(` and silently 404.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    'api.server.js':
+      `'use server';\n` +
+      `import { expose as exp } from ${JSON.stringify(pathToFileURL(
+        resolve(__dirname, '../../../core/index.js'),
+      ).toString())};\n` +
+      `export const hi = exp('GET /api/aliased', async () => ({ ok: true }));\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/api/aliased'));
   assert.equal(resp.status, 200);
   assert.deepEqual(await resp.json(), { ok: true });
 });
@@ -1001,6 +1086,9 @@ test('rebuild: orphan warning fires when rebuilding after a new orphan is added'
     `import { WebComponent } from '@webjsdev/core';\n` +
     `export class LateOrphan extends WebComponent {}\n`);
   await app.rebuild();
+  // Rebuild invalidates the lazy analysis; the orphan re-scan runs on the next
+  // request, so drive one before asserting.
+  await app.handle(new Request('http://x/'));
   assert.ok(warns.slice(before).some(m => /LateOrphan/.test(m)),
     `expected LateOrphan warning after rebuild; got: ${warns.join('\n')}`);
 });
@@ -1581,4 +1669,54 @@ test('toWebRequest: x-webjs-remote-ip is set from the socket and inbound copies 
   } finally {
     await close();
   }
+});
+
+test('runtime-first boot: a throwing server-action module does not break startup', async () => {
+  // Boot must do no whole-app analysis: it must not import server modules. A
+  // module that throws at load would crash boot under the old import-every-
+  // .server-at-boot behaviour; under runtime-first boot it loads only on first
+  // call, so createRequestHandler resolves cleanly.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>x</p>\`; }\n`,
+    'modules/x/boom.server.js':
+      `'use server';\n` +
+      `throw new Error('module-load side effect that must NOT run at boot');\n` +
+      `export async function f() { return 1; }\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  assert.ok(app && typeof app.handle === 'function', 'server boots without importing server modules');
+  // The page still renders (boot did the route table only; analysis is lazy).
+  const resp = await app.handle(new Request('http://x/'));
+  assert.equal(resp.status, 200);
+});
+
+test('warmup() runs the first-request analysis in the background, ahead of any request', async () => {
+  // Self-warming (#141): the server boots clean, then warmup() primes the lazy
+  // analysis so a real first request finds it memoized. The orphan-component
+  // scan is a side effect of ensureReady, so it firing after warmup() (with NO
+  // handle() call) proves the analysis ran ahead of any request.
+  const warns = [];
+  const logger = { info: () => {}, warn: (m) => warns.push(m), error: () => {} };
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>x</p>\`; }\n`,
+    'components/orphan.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Orphan extends WebComponent {}\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger });
+  assert.equal(warns.length, 0, 'boot does no analysis');
+  await app.warmup();
+  assert.ok(warns.some((m) => /Orphan/.test(m)), 'warmup ran the analysis with no request made');
+
+  // Idempotent + single-flight: a second warmup and a real request are no-ops
+  // for the analysis and still serve correctly.
+  const before = warns.length;
+  await app.warmup();
+  assert.equal(warns.length, before, 'second warmup does not re-run the analysis');
+  const resp = await app.handle(new Request('http://x/'));
+  assert.equal(resp.status, 200);
 });

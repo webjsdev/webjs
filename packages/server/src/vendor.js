@@ -25,11 +25,12 @@
  * returns metadata, not JavaScript. The correct entry file (e.g.,
  * `/dayjs.min.js`, `/index.js`) varies per package and must be
  * resolved from the JSPM Generator API. The Generator is called once
- * per server boot for the full set of bare imports; results are
+ * on the first request for the full set of bare imports; results are
  * cached in-memory for the process lifetime.
  *
- * Server boot connectivity: the Generator API call happens during
- * `setVendorEntries` at boot. If api.jspm.io is unreachable, the
+ * Connectivity: the Generator API call happens on the first request,
+ * inside `ensureReady` via `setVendorEntries`, never at boot. If
+ * api.jspm.io is unreachable, the
  * importmap will be missing vendor entries and the browser will
  * report "unresolved bare specifier" errors. The server itself still
  * boots and serves user routes; only vendor-importing pages break
@@ -269,6 +270,14 @@ export function getPackageVersion(pkgName, appDir) {
  */
 const jspmCache = new Map();
 
+// Set by jspmResolveOne whenever a LIVE resolution attempt fails (network
+// error, timeout, or a non-ok jspm response). resolveVendorImports resets it
+// before a scan and reads it after, so a caller can tell "resolved cleanly"
+// from "served a partial map because the CDN was unreachable" and avoid
+// memoizing the failure as done. Safe under the single-flighted ensureReady
+// (one live resolve at a time); the vendor CLI does not run alongside a server.
+let lastLiveResolveFailed = false;
+
 const JSPM_GENERATE_ENDPOINT = 'https://api.jspm.io/generate';
 const JSPM_GENERATE_TIMEOUT_MS = 10_000;
 
@@ -362,6 +371,13 @@ async function jspmResolveOne(install, provider = 'jspm') {
           `[webjs] could not vendor '${install}' via ${provider} (status ${response.status})${detail}`,
         );
         jspmCache.delete(cacheKey);
+        // A 5xx/429 is a transient jspm problem worth retrying. A 401/4xx means
+        // the install is genuinely unresolvable (jspm uses 401 for that): a
+        // private / workspace / server-only package (e.g. @webjsdev/server,
+        // @prisma/client) the browser never fetches anyway. That is tolerated
+        // exactly as before and must NOT block readiness, or an app with any
+        // such dep would never become ready.
+        if (response.status >= 500 || response.status === 429) lastLiveResolveFailed = true;
         return {};
       }
       const result = await response.json();
@@ -372,6 +388,7 @@ async function jspmResolveOne(install, provider = 'jspm') {
         : `${e && e.message}`;
       console.error(`[webjs] could not vendor '${install}' via ${provider}: ${msg}`);
       jspmCache.delete(cacheKey);
+      lastLiveResolveFailed = true;
       return {};
     } finally {
       clearTimeout(timer);
@@ -411,7 +428,8 @@ export async function jspmGenerate(installs, provider = 'jspm') {
  * api.jspm.io/generate for the full importmap fragment.
  *
  * Async because the Generator API call is networked. Called from
- * `setVendorEntries` during server boot and rebuild; not per request.
+ * `resolveVendorImports` on the first request (and after a rebuild),
+ * inside `ensureReady`; never at boot, and not on every request.
  *
  * @param {Set<string>} bareImports  from scanBareImports()
  * @param {string} appDir
@@ -1257,8 +1275,8 @@ function maxSemverVersion(versions) {
 
 /**
  * Resolve the vendor importmap fragment for runtime use. Prefers the
- * committed pin file over a live api.jspm.io call. Called by dev.js
- * at server boot.
+ * committed pin file over a live api.jspm.io call. Called from
+ * `ensureReady()` in dev.js on the first request, never at boot.
  *
  * Order of preference:
  *   1. `.webjs/vendor/importmap.json` (committed; no network needed)
@@ -1270,17 +1288,29 @@ function maxSemverVersion(versions) {
  * hash, defeating the live-mode speed advantage. Users who want SRI
  * run `webjs vendor pin`).
  *
- * @param {Set<string>} bareImports
  * @param {string} appDir
+ * @param {() => Promise<Set<string>>} getBareImports lazy scan, invoked ONLY
+ *   on the unpinned path (so a pinned app never pays the whole-app walk).
  * @returns {Promise<{ imports: Record<string, string>, integrity: Record<string, string> }>}
  */
-export async function resolveVendorImports(bareImports, appDir) {
+export async function resolveVendorImports(appDir, getBareImports) {
   const file = await readPinFile(appDir);
+  // A committed pin file IS the import map. The whole-app bare-import scan is
+  // discarded in that case, so it must never run (runtime-first boot: no
+  // static analysis when pinned). The scan is supplied as a thunk and invoked
+  // solely here, only when there is no pin file.
   if (file) {
-    return { imports: file.imports, integrity: file.integrity || {} };
+    // A pin file is a deterministic disk read: always "ok" (no live CDN call
+    // that could partially fail). This is the recommended prod posture.
+    return { imports: file.imports, integrity: file.integrity || {}, ok: true };
   }
+  lastLiveResolveFailed = false;
+  const bareImports = await getBareImports();
   const imports = await vendorImportMapEntries(bareImports, appDir);
-  return { imports, integrity: {} };
+  // ok=false means at least one install could not be resolved (CDN unreachable
+  // / timeout / non-ok), so `imports` is partial. The caller must not memoize
+  // this as done; it should retry once the CDN recovers.
+  return { imports, integrity: {}, ok: !lastLiveResolveFailed };
 }
 
 /**

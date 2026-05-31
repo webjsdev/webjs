@@ -2,7 +2,7 @@
  * Server-side scanner that walks the app tree and records the
  * browser-visible URL for every webjs component module.
  *
- * Called once at server boot. Results are used to prime the core
+ * Called once on the first request (lazily, via `ensureReady`), then memoized. Results are used to prime the core
  * registry (`primeModuleUrl`) BEFORE any SSR render: so when a page
  * renders a component tag, `lookupModuleUrl(tag)` already has the URL
  * ready for `<link rel="modulepreload">` hints.
@@ -18,10 +18,23 @@
  * we only need `{ tag, className, moduleUrl }` tuples.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { sep } from 'node:path';
 import { walk } from './fs-walk.js';
 import { primeModuleUrl } from '@webjsdev/core';
+
+/**
+ * mtime-keyed cache of extracted components per file, so a rebuild re-reads
+ * only files that changed (an unchanged file reuses its cached component list
+ * after a single `stat`). Makes the component scan incremental for large apps.
+ * Keyed by mtime AND size (a same-tick length-changing edit is caught even on
+ * coarse-mtime filesystems).
+ * @type {Map<string, { mtimeMs: number, size: number, comps: Array<{ tag: string, className: string }> }>}
+ */
+const SCAN_CACHE = new Map();
+
+/** Introspection for tests/ops: is `file` currently in the scan cache? */
+export function _scanCacheHas(file) { return SCAN_CACHE.has(file); }
 
 /**
  * Recognise either registration pattern:
@@ -70,20 +83,38 @@ export function extractComponents(src) {
 export async function scanComponents(appDir) {
   /** @type {Array<{ tag: string, className: string, moduleUrl: string, file: string }>} */
   const components = [];
+  /** @type {Set<string>} live component files this scan, for cache eviction */
+  const seen = new Set();
   const filter = (p) =>
     /\.m?[jt]sx?$/.test(p) &&
     !/\.(test|spec)\.m?[jt]sx?$/.test(p) &&
     !/\.server\.m?[jt]s$/.test(p);
 
   for await (const file of walk(appDir, filter)) {
-    let src;
-    try { src = await readFile(file, 'utf8'); } catch { continue; }
-    const comps = extractComponents(src);
+    let mtimeMs, size;
+    try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; } catch { continue; }
+    seen.add(file); // mark live (hit and miss) for cache eviction
+    let comps;
+    const cached = SCAN_CACHE.get(file);
+    if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
+      comps = cached.comps;
+    } else {
+      let src;
+      try { src = await readFile(file, 'utf8'); } catch { continue; }
+      comps = extractComponents(src);
+      SCAN_CACHE.set(file, { mtimeMs, size, comps });
+    }
     if (!comps.length) continue;
     const moduleUrl = toUrlPath(file, appDir);
     for (const c of comps) {
       components.push({ ...c, moduleUrl, file });
     }
+  }
+  // Evict scan-cache entries for files no longer walked (renamed/deleted),
+  // scoped to this app so a multi-app process keeps other apps' entries.
+  const prefix = appDir.endsWith(sep) ? appDir : appDir + sep;
+  for (const key of SCAN_CACHE.keys()) {
+    if ((key === appDir || key.startsWith(prefix)) && !seen.has(key)) SCAN_CACHE.delete(key);
   }
   return components;
 }

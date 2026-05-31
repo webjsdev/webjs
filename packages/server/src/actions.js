@@ -46,8 +46,9 @@ async function rpcResponse(payload, init = {}) {
  * ignored.
  *
  * The server:
- *   1. Scans the app tree on boot, classifying server files into
- *      RPC-callable actions vs. server-only utilities.
+ *   1. Scans the app tree lazily on the first request (in `ensureReady`),
+ *      classifying server files into RPC-callable actions vs. server-only
+ *      utilities. Hashing is eager-per-file; only `expose()` files load.
  *   2. Serves a generated ES-module stub when the browser imports
  *      the file URL (an RPC stub for actions, a throw-at-load stub
  *      for server-only utilities).
@@ -106,7 +107,22 @@ export async function buildActionIndex(appDir, dev) {
     const h = await hashFile(file);
     hashToFile.set(h, file);
     fileToHash.set(file, h);
-    // Load module once at scan time to pick up any expose() tags.
+    // Pure-RPC actions are NOT executed at boot: invokeAction and
+    // serveActionStub import the module on demand (first RPC call / first stub
+    // fetch), so the hash index above is all the analysis needs. Eagerly
+    // running every server module (and its transitive Prisma init, DB
+    // connects, etc.) would be wasted work. The one thing that DOES need eager loading is expose(),
+    // which registers a REST route the router must know before any request can
+    // hit it. So load only files that REFERENCE expose. We match the bare
+    // `expose` identifier (not `expose(`) so an aliased import
+    // (`import { expose as exp }`, whose import clause still names `expose`) is
+    // not missed: missing it would silently 404 that file's REST route. A stray
+    // mention in a comment or string only over-matches, costing one harmless
+    // extra module load; the common pure-RPC file never names `expose` and so
+    // still defers entirely.
+    let src = '';
+    try { src = await readFile(file, 'utf8'); } catch {}
+    if (!/\bexpose\b/.test(src)) continue;
     try {
       const mod = await loadModule(file, dev);
       for (const [name, fn] of Object.entries(mod)) {

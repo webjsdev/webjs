@@ -16,6 +16,14 @@ services:
     command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5001"]
     ports:
       - "15001:5001"
+    # Readiness gate: unhealthy (503) until the first-request analysis is warm,
+    # then 200. Mirrors the railway.json healthcheckPath.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5001/__webjs/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
     environment:
       DOCS_URL: ${DOCS_URL:-http://localhost:15002}
       BLOG_URL: ${BLOG_URL:-http://localhost:15004}
@@ -28,6 +36,12 @@ services:
     command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5002"]
     ports:
       - "15002:5002"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5002/__webjs/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
 
   blog:
     image: webjs
@@ -43,6 +57,12 @@ services:
         node /app/node_modules/@webjsdev/cli/bin/webjs.js start --port 5004
     ports:
       - "15004:5004"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5004/__webjs/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
     environment:
       DATABASE_URL: file:/data/dev.db
       AUTH_SECRET:    ${AUTH_SECRET:-change-me-at-least-32-characters-long!}
@@ -62,6 +82,12 @@ services:
     command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5003"]
     ports:
       - "15003:5003"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5003/__webjs/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
 
 volumes:
   blog-data:

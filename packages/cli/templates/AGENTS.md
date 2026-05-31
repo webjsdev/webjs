@@ -301,6 +301,17 @@ In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
 start`) as the CMD over `node ... webjs.js start ...`. The npm form
 fires `prestart`; the direct binary form skips it.
 
+**Health and readiness probes.** Every webjs server answers two endpoints:
+`/__webjs/health` (liveness, 200 once the process is listening) and
+`/__webjs/ready` (readiness, 503 until the first-request analysis is warm,
+then 200). Point your platform's readiness check at `/__webjs/ready` so it
+holds traffic off a not-yet-warmed instance instead of routing the first user
+request into the cold analysis. On Railway, set `"healthcheckPath":
+"/__webjs/ready"` under `deploy` in `railway.json`. For dependency-aware
+readiness (gate on a live DB ping), add an optional `readiness.{js,ts}` at the
+app root that default-exports an async check; `/__webjs/ready` runs it once warm
+and reports 503 if it returns `false` or throws.
+
 Scripts:
 
 - `npm run db:migrate`: `prisma migrate dev` (dev-time schema changes + migration + generate)
@@ -332,9 +343,10 @@ npm install dayjs                 # standard npm install
 
 Now write `import dayjs from 'dayjs'` in any component or page. The
 import works in dev immediately. webjs's scanner discovers bare
-imports on each server boot and asks `api.jspm.io` to resolve them to
-CDN URLs (jspm.io serves pre-bundled ESM for every npm package). The
-browser fetches the bundle directly from `https://ga.jspm.io`.
+imports on the first request (memoized for the process) and asks
+`api.jspm.io` to resolve them to CDN URLs (jspm.io serves pre-bundled
+ESM for every npm package). The browser fetches the bundle directly
+from `https://ga.jspm.io`.
 
 **For production deploys**, run `webjs vendor pin` once and commit
 the result:
@@ -345,9 +357,9 @@ git add .webjs/vendor/
 git commit -m "vendor dayjs"
 ```
 
-The pin file holds the resolved jspm.io URLs. Server reads from disk
-on boot; no `api.jspm.io` call needed in production. Deterministic
-across deploys.
+The pin file holds the resolved jspm.io URLs. Server reads it from
+disk on the first request (memoized); no `api.jspm.io` call needed in
+production. Deterministic across deploys.
 
 **For offline-capable / strict-CSP production**, use `--download`:
 

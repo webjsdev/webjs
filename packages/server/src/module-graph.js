@@ -1,7 +1,7 @@
 /**
  * Lightweight module dependency graph.
  *
- * At startup, scans the app directory and builds an in-memory map of
+ * On the first request (lazily, via `ensureReady`), scans the app directory and builds an in-memory map of
  * `file → Set<imported files>`. The SSR pipeline queries this graph to
  * emit *complete* modulepreload hints: including transitive dependencies
  * of components: so the browser can fetch the entire tree in parallel
@@ -13,7 +13,7 @@
 
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve, dirname, extname } from 'node:path';
+import { join, resolve, dirname, extname, sep } from 'node:path';
 
 /** @type {RegExp} match static `import … from '…'` and `import '…'` */
 const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
@@ -53,7 +53,18 @@ const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
 export async function buildModuleGraph(appDir) {
   /** @type {ModuleGraph} */
   const graph = new Map();
-  await walk(appDir, appDir, graph);
+  /** @type {Set<string>} every file walked this build (graph holds only files
+   * with deps, so a separate set is needed to know what is still live). */
+  const seen = new Set();
+  await walk(appDir, appDir, graph, seen);
+  // Evict parse-cache entries for files no longer in the tree (a rebuild after
+  // a rename or delete), so a long dev session does not accumulate dead
+  // entries. Scoped to appDir so a multi-app process (tests, dogfood smoke)
+  // keeps other apps' entries.
+  const prefix = appDir.endsWith(sep) ? appDir : appDir + sep;
+  for (const key of PARSE_CACHE.keys()) {
+    if ((key === appDir || key.startsWith(prefix)) && !seen.has(key)) PARSE_CACHE.delete(key);
+  }
   return graph;
 }
 
@@ -173,7 +184,7 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function walk(dir, appDir, graph) {
+async function walk(dir, appDir, graph, seen) {
   let entries;
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
@@ -191,12 +202,27 @@ async function walk(dir, appDir, graph) {
     if (e.name.startsWith('.')) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      await walk(full, appDir, graph);
+      await walk(full, appDir, graph, seen);
     } else if (/\.(js|ts|mjs|mts)$/.test(e.name)) {
-      await parseFile(full, appDir, graph);
+      await parseFile(full, appDir, graph, seen);
     }
   }
 }
+
+/**
+ * mtime-keyed parse cache so a rebuild re-reads only files that actually
+ * changed. `buildModuleGraph` re-walks the (cheap) directory tree on every
+ * rebuild, but reading + regex-parsing each file is the cost; on an unchanged
+ * file the cached import set is reused after a single `stat`. This makes
+ * rebuilds incremental for large apps without restructuring the caller.
+ * Keyed by mtime AND size: a same-tick edit that also changes the file length
+ * is caught even on coarse-resolution filesystems where mtime alone could miss.
+ * @type {Map<string, { mtimeMs: number, size: number, deps: Set<string> }>}
+ */
+const PARSE_CACHE = new Map();
+
+/** Introspection for tests/ops: is `file` currently in the parse cache? */
+export function _parseCacheHas(file) { return PARSE_CACHE.has(file); }
 
 /**
  * Parse a single file's imports and add them to the graph.
@@ -206,7 +232,17 @@ async function walk(dir, appDir, graph) {
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function parseFile(file, appDir, graph) {
+async function parseFile(file, appDir, graph, seen) {
+  let mtimeMs, size;
+  try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; }
+  catch { return; }
+  seen?.add(file); // mark live (both cache-hit and miss paths) for cache eviction
+  const cached = PARSE_CACHE.get(file);
+  if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
+    if (cached.deps.size) graph.set(file, cached.deps);
+    return;
+  }
+
   let src;
   try { src = await readFile(file, 'utf8'); }
   catch { return; }
@@ -221,6 +257,7 @@ async function parseFile(file, appDir, graph) {
       if (resolved) deps.add(resolved);
     }
   }
+  PARSE_CACHE.set(file, { mtimeMs, size, deps });
   if (deps.size) graph.set(file, deps);
 }
 

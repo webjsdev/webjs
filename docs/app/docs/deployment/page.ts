@@ -55,11 +55,13 @@ npm run start -- --port 8080</pre>
     </ol>
     <p>Unhandled promise rejections are logged but do not crash the process. Uncaught exceptions trigger an orderly shutdown (state may be corrupted, so continuing is unsafe).</p>
 
-    <h3>Health Probes</h3>
-    <p>webjs exposes built-in health check endpoints:</p>
-    <pre>GET /__webjs/health    # { "status": "ok" }
-GET /__webjs/ready     # { "status": "ok" }</pre>
-    <p>Both return <code>200 OK</code> with <code>Cache-Control: no-store</code>. Use them for Kubernetes liveness and readiness probes, Docker HEALTHCHECK, load balancer health checks, or uptime monitoring.</p>
+    <h3>Health and readiness probes</h3>
+    <p>webjs answers two built-in probe endpoints, and the distinction matters under runtime-first boot:</p>
+    <pre>GET /__webjs/health    # liveness:  always 200 once the process is listening
+GET /__webjs/ready     # readiness: 503 until the first-request analysis is warm, then 200</pre>
+    <p><code>/__webjs/health</code> is <strong>liveness</strong>. It returns <code>200 { "status": "ok" }</code> as soon as the process is accepting connections, so an orchestrator can tell the process is alive. It never waits on the analysis.</p>
+    <p><code>/__webjs/ready</code> is <strong>readiness</strong>. Because boot is instant and the whole-app analysis runs lazily on the first request, <code>/ready</code> returns <code>503 { "status": "pending" }</code> until that analysis (memoized) has completed, then <code>200 { "status": "ok" }</code>. Point your <code>readinessProbe</code> at it so the orchestrator holds traffic off an instance until it is warm, instead of routing the first user request into the cold analysis. A background warm-up runs automatically once the server is listening, so the window is short, and a vendor-CDN hiccup does not hold readiness down (vendor resolution is best-effort and is re-attempted on the next request).</p>
+    <p>Both responses carry <code>Cache-Control: no-store</code>. Use them for Kubernetes probes, Docker HEALTHCHECK, load-balancer health checks, or uptime monitoring.</p>
     <pre># Kubernetes deployment
 livenessProbe:
   httpGet:
@@ -73,6 +75,15 @@ readinessProbe:
     port: 8080
   initialDelaySeconds: 3
   periodSeconds: 5</pre>
+    <h4>Gating readiness on dependencies (optional)</h4>
+    <p>Warm-complete does not by itself prove the database or a queue is reachable: Prisma connects lazily on the first query, not at warm-up. To gate readiness on live dependency health, add a <code>readiness.&#123;js,ts&#125;</code> file at the app root that default-exports an async function. Once the analysis is warm, <code>/ready</code> runs it on every probe; returning <code>false</code> or throwing reports <code>503 { "status": "unready" }</code>, so the orchestrator holds traffic off an instance whose dependencies are down.</p>
+    <pre>// readiness.ts
+import { prisma } from './lib/prisma.server.ts';
+
+export default async function ready() {
+  await prisma.user.findFirst();  // throws if the database is unreachable
+  return true;
+}</pre>
 
     <h2>HTTP/2: at the edge, not in webjs</h2>
     <p>webjs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>npm run start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>

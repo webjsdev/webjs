@@ -648,28 +648,80 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     }
   }
 
-  // Ship any component whose transitive import closure does client work,
-  // through ANY import (not just npm): a relative helper that imports a
-  // reactive primitive (shared module-scope signal), enables the client
-  // router, references a browser global, or side-effect imports a package.
-  // Same closure rule the route analysis applies, so a display-only
-  // component that pulls in a client-effecting helper still ships.
-  const closureIsClientEffecting = (d) =>
-    reactiveFiles.has(d) || clientRouterFiles.has(d) || clientGlobalOrBareFiles.has(d);
-  if (appDir) {
-    for (const file of componentFiles) {
-      if (mustShip.has(file)) continue;
-      const deps = transitiveDeps(moduleGraph, [file], appDir, serverFiles);
-      if (deps.some(closureIsClientEffecting)) mustShip.add(file);
+  // Reverse import edges (who imports each file), built once from the graph.
+  // Drives both the closure-client-work reachability below and the fixpoint's
+  // import rule, each in O(N+E) rather than a per-component closure walk.
+  /** @type {Map<string, Set<string>>} */
+  const importersOf = new Map();
+  for (const [file, deps] of moduleGraph) {
+    for (const dep of deps) {
+      let set = importersOf.get(dep);
+      if (!set) { set = new Set(); importersOf.set(dep, set); }
+      set.add(file);
     }
   }
 
-  // Tags each component can emit on a client re-render (own + helper closure).
+  // Files that reach client work through their imports: a reactive primitive,
+  // the client router, a browser global, an `@event` binding, or a side-effect
+  // npm import. Computed by propagating BACKWARD from the client-effecting
+  // files through the reverse edges, stopping at `.server` files (the forward
+  // closure skips them, since the browser only ever sees their stub). This is
+  // O(N+E) instead of a full transitive-closure walk per component, which was
+  // the second O(N^2) on a deep component chain.
+  /** @type {Set<string>} */
+  const reachesClientWork = new Set();
+  {
+    const work = [];
+    for (const f of [...reactiveFiles, ...clientRouterFiles, ...clientGlobalOrBareFiles]) {
+      if (!reachesClientWork.has(f)) { reachesClientWork.add(f); work.push(f); }
+    }
+    while (work.length) {
+      const node = /** @type {string} */ (work.pop());
+      const importers = importersOf.get(node);
+      if (!importers) continue;
+      for (const imp of importers) {
+        if (serverFiles.has(imp)) continue;  // a server file blocks the forward closure
+        if (!reachesClientWork.has(imp)) { reachesClientWork.add(imp); work.push(imp); }
+      }
+    }
+  }
+
+  // Ship any component whose transitive import closure does client work (the
+  // helper-imports-a-signal case): it ships if any of its direct, non-server
+  // deps reaches client work. Equivalent to the old per-component closure walk
+  // (a component that is itself client-effecting is already shipping via
+  // analyzeComponentSource), but linear.
+  if (appDir) {
+    for (const file of componentFiles) {
+      if (mustShip.has(file)) continue;
+      const deps = moduleGraph.get(file);
+      if (!deps) continue;
+      for (const dep of deps) {
+        if (serverFiles.has(dep)) continue;
+        if (reachesClientWork.has(dep)) { mustShip.add(file); break; }
+      }
+    }
+  }
+
+  // Tags each component can emit on a client re-render: its OWN rendered tags
+  // plus tags returned by the template HELPERS it imports (the lib/utils/ui.ts
+  // pattern). The closure deliberately SKIPS component and server files:
+  // importing another component does not mean rendering its tag (a rendered tag
+  // is already in the importer's own source via extractRenderedTags), and a
+  // server file renders nothing client-side. Following component edges here
+  // makes the closure O(N^2) in time AND memory on a deep component chain
+  // (every component would accumulate every downstream tag); helper-only
+  // closures keep it linear. This is verdict-SAFE: it never elides a component
+  // that the render rule requires to ship (so it can never break a page), and
+  // it actually elides strictly MORE in some shapes, because following
+  // component edges made the old version over-ship components whose tags
+  // nothing actually renders client-side.
+  const tagClosureSkip = new Set([...componentFiles, ...serverFiles]);
   /** @type {Map<string, Set<string>>} */
   const emittableTags = new Map();
   for (const file of componentFiles) {
     const tags = new Set(fileTags.get(file));
-    const deps = appDir ? transitiveDeps(moduleGraph, [file], appDir) : [];
+    const deps = appDir ? transitiveDeps(moduleGraph, [file], appDir, tagClosureSkip) : [];
     for (const dep of deps) {
       const dt = fileTags.get(dep);
       if (dt) for (const t of dt) tags.add(t);
@@ -677,24 +729,26 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     emittableTags.set(file, tags);
   }
 
-  // Fixpoint: render rule + import rule.
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const parent of mustShip) {
-      const tags = emittableTags.get(parent);
-      if (!tags) continue;
+  // Fixpoint by worklist (render rule + import rule), O(N+E). Seed with the
+  // components already known to ship; each shipping node forces the components
+  // whose tags it can emit (render rule) and the COMPONENT files that import it
+  // (import rule). Replaces the old iterate-until-stable double loop, which was
+  // O(N^2) per pass and O(N^3) / out-of-memory on a deep render chain.
+  const queue = [...mustShip];
+  while (queue.length) {
+    const node = /** @type {string} */ (queue.pop());
+    const tags = emittableTags.get(node);
+    if (tags) {
       for (const tag of tags) {
         const childFile = tagToFile.get(tag);
-        if (childFile && !mustShip.has(childFile)) { mustShip.add(childFile); changed = true; }
+        if (childFile && !mustShip.has(childFile)) { mustShip.add(childFile); queue.push(childFile); }
       }
     }
-    for (const file of componentFiles) {
-      if (mustShip.has(file)) continue;
-      const deps = moduleGraph.get(file);
-      if (!deps) continue;
-      for (const dep of deps) {
-        if (componentFiles.has(dep) && mustShip.has(dep)) { mustShip.add(file); changed = true; break; }
+    const importers = importersOf.get(node);
+    if (importers) {
+      for (const imp of importers) {
+        if (!componentFiles.has(imp)) continue;  // import rule is component -> component
+        if (!mustShip.has(imp)) { mustShip.add(imp); queue.push(imp); }
       }
     }
   }

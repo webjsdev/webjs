@@ -932,3 +932,62 @@ test('a real return-position regex is still treated as a regex (stays elidable)'
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
+
+test('a deep render chain stays linear and elides imported-but-unrendered components (no O(N^2) over-ship)', async () => {
+  // Regression for the elision fixpoint blowup (#141 benchmarking): a chain
+  // c0 imports c1 imports c2 ... At ~20k the old iterate-to-fixpoint +
+  // per-component closure walk OOM'd; the worklist + reverse-BFS rewrite is
+  // linear. The verdict assertions alone do NOT catch that rewrite, because the
+  // old code produced identical verdicts on a uniformly interactive chain (all
+  // ship) and a uniformly display-only chain (all elide). The third shape is
+  // the real guard: the interactive head imports c1 but does NOT render its
+  // tag, while the rest of the chain DOES render its next tag. Nothing renders
+  // <c-1>, so c1 is dead JS and the whole tail cascades to elidable. The new
+  // helper-only emittableTags closure elides all N-1; the old full-closure
+  // pulled every downstream rendered tag into the shipping head and over-shipped
+  // the tail, so reverting component-elision.js to that closure fails the
+  // `unrendered` assertion below.
+  const N = 600;
+  const interactiveFiles = {}, displayFiles = {}, unrenderedFiles = {};
+  const components = [], edges = {};
+  for (let i = 0; i < N; i++) {
+    const file = `/app/c${i}.js`;
+    components.push({ tag: `c-${i}`, file });
+    if (i < N - 1) edges[file] = [`/app/c${i + 1}.js`];
+    const child = i < N - 1 ? `<c-${i + 1}></c-${i + 1}>` : '';
+    const importNext = i < N - 1 ? `import './c${i + 1}.js';\n` : '';
+    // Interactive variant: only the HEAD has @click (forces the whole chain).
+    const headClick = i === 0 ? '@click=${() => {}}' : '';
+    interactiveFiles[file] =
+      `import { WebComponent, html } from '@webjsdev/core';\n${importNext}` +
+      `class C${i} extends WebComponent { render() { return html\`<button ${headClick}>${child}</button>\`; } }\nC${i}.register('c-${i}');\n`;
+    // Display-only variant: nobody is interactive.
+    displayFiles[file] =
+      `import { WebComponent, html } from '@webjsdev/core';\n${importNext}` +
+      `class C${i} extends WebComponent { render() { return html\`<span>${child}</span>\`; } }\nC${i}.register('c-${i}');\n`;
+    // Imported-but-unrendered variant: the interactive HEAD imports c1 but
+    // renders no child tag; every other component renders its next tag as
+    // usual. Since nothing renders <c-1>, c1 is dead JS and the tail cascades
+    // to elidable. The head's own emittableTags stays empty (it renders only a
+    // native <button>), so the new helper-only closure elides the tail, while
+    // the old full-closure pulled the tail's rendered tags into the head.
+    const unrenderedChild = i === 0 ? '' : child;
+    unrenderedFiles[file] =
+      `import { WebComponent, html } from '@webjsdev/core';\n${importNext}` +
+      `class C${i} extends WebComponent { render() { return html\`<button ${headClick}>${unrenderedChild}</button>\`; } }\nC${i}.register('c-${i}');\n`;
+  }
+  const g = graphOf(edges);
+  const shipAll = await computeElidableComponents(components, g, async (f) => interactiveFiles[f], '/app');
+  assert.equal(shipAll.size, 0, 'interactive head renders the chain, every component must ship');
+
+  const elideAll = await computeElidableComponents(components, g, async (f) => displayFiles[f], '/app');
+  assert.equal(elideAll.size, N, 'a fully display-only chain elides entirely');
+
+  // The real guard for the linear rewrite: importing the next module without
+  // rendering its tag leaves every non-head component as dead JS. The render
+  // rule elides all N-1 of them and keeps only the interactive head; the old
+  // import-closure shipped them all, so this fails the pre-rewrite analyser.
+  const unrendered = await computeElidableComponents(components, g, async (f) => unrenderedFiles[f], '/app');
+  assert.equal(unrendered.size, N - 1, 'imported-but-unrendered components are dead JS and must elide');
+  assert.ok(!unrendered.has('/app/c0.js'), 'the interactive head still ships');
+});

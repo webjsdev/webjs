@@ -4,7 +4,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { buildModuleGraph, transitiveDeps } from '../../src/module-graph.js';
+import { buildModuleGraph, transitiveDeps, _parseCacheHas } from '../../src/module-graph.js';
 
 test('buildModuleGraph: builds graph from source files', async () => {
   const dir = join(tmpdir(), `webjs-test-graph-${Date.now()}`);
@@ -155,4 +155,66 @@ test('buildModuleGraph: skips node_modules and _private', async () => {
   assert.ok(!graph.has(join(dir, '_private', 'secret.js')));
 
   await rm(dir, { recursive: true, force: true });
+});
+
+test('buildModuleGraph: PARSE_CACHE reuses unchanged files and a size-changing edit at the SAME mtime is still picked up', async () => {
+  // Incremental rebuild (#141): the parse cache is keyed by mtime AND size, so
+  // an edit that changes the file length is caught even if the filesystem
+  // reports an identical mtime (coarse-resolution / sub-tick edits). To isolate
+  // the `size` half of the key, page.ts is stamped to a FIXED mtime BEFORE the
+  // first build (so the cache records that mtime), then re-stamped to the SAME
+  // mtime after the edit, leaving size as the only thing that differs. With a
+  // mtime-only key the second build would hit the cache and return the stale
+  // ['a.ts'] deps, so this assertion fails without the size discriminator.
+  const { utimes, mkdtemp } = await import('node:fs/promises');
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-parsecache-'));
+  try {
+    const page = join(dir, 'page.ts');
+    const fixed = new Date(2020, 0, 1);
+    await writeFile(page, `import './a.ts';\n`);
+    await writeFile(join(dir, 'a.ts'), `export const a = 1;\n`);
+    await writeFile(join(dir, 'b.ts'), `export const b = 2;\n`);
+    await utimes(page, fixed, fixed); // pin the mtime BEFORE the cache records it
+
+    const g1 = await buildModuleGraph(dir);
+    assert.deepEqual([...(g1.get(page) || [])].map((f) => f.split('/').pop()), ['a.ts']);
+
+    // Rewrite page.ts to import b.ts (DIFFERENT length) and re-stamp the SAME
+    // mtime, so only `size` distinguishes this version from the cached one.
+    await writeFile(page, `import './b.ts'; // now imports b, a longer line\n`);
+    await utimes(page, fixed, fixed);
+
+    const g2 = await buildModuleGraph(dir);
+    assert.deepEqual([...(g2.get(page) || [])].map((f) => f.split('/').pop()), ['b.ts'],
+      'size-changing edit must invalidate the parse cache even at the same mtime');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('buildModuleGraph: evicts the parse-cache entry for a deleted file on rebuild', async () => {
+  // Incremental rebuild keeps a parse cache keyed by path. Over a long dev
+  // session, renamed/deleted files would otherwise leave dead entries forever.
+  // A rebuild walks only live files, so any cache key under appDir not seen
+  // this walk is evicted.
+  const { mkdtemp } = await import('node:fs/promises');
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-graph-evict-'));
+  try {
+    const page = join(dir, 'page.ts');
+    const gone = join(dir, 'gone.ts');
+    await writeFile(page, `import './gone.ts';\n`);
+    await writeFile(gone, `export const g = 1;\n`);
+    await buildModuleGraph(dir);
+    assert.ok(_parseCacheHas(page), 'page cached after first build');
+    assert.ok(_parseCacheHas(gone), 'gone cached after first build');
+
+    // Delete gone.ts and drop its import, then rebuild.
+    await rm(gone);
+    await writeFile(page, `export const p = 1;\n`);
+    await buildModuleGraph(dir);
+    assert.ok(_parseCacheHas(page), 'live file stays cached');
+    assert.ok(!_parseCacheHas(gone), 'deleted file is evicted from the parse cache');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

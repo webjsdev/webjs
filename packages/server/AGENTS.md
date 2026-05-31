@@ -47,7 +47,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
 | `check.js` | Convention validator backing `webjs check`. Rules include `no-json-data-files`, `no-non-erasable-typescript` |
-| `vendor.js` | Resolve bare-specifier npm deps via jspm.io. Reads `.webjs/vendor/importmap.json` if present (committed pin file), else calls `api.jspm.io/generate` at boot. Backs the `webjs vendor pin / unpin / list / audit / outdated / update` CLI surface plus the `--from <provider>` (jspm, jsdelivr, unpkg, skypack) and `--download` modes. `--download` mode also serves cached bundle files from `.webjs/vendor/`. |
+| `vendor.js` | Resolve bare-specifier npm deps. `resolveVendorImports(appDir, getBareImports)` reads `.webjs/vendor/importmap.json` if present (committed pin file) and short-circuits BEFORE running the bare-import scan; only when there is no pin file does it invoke the `getBareImports` thunk (the whole-app `scanBareImports` walk) and call `api.jspm.io/generate`. So a pinned app does no vendor static analysis at boot (runtime-first). Backs the `webjs vendor pin / unpin / list / audit / outdated / update` CLI surface plus the `--from <provider>` (jspm, jsdelivr, unpkg, skypack) and `--download` modes. `--download` mode also serves cached bundle files from `.webjs/vendor/`. |
 | `module-graph.js` | Dependency graph for transitive preload hints |
 | `importmap.js` | Browser import-map builder. `setCoreInstall(coreDir, distMode)` binds the importmap to the resolved `@webjsdev/core` install and runs `buildCoreEntries()`, which reads the package's `package.json` and derives one importmap line per exported subpath from its `exports` field, picking the `default` (`dist/webjs-core-*.js`) condition in dist mode and the `source` (`src/*.js`) condition otherwise. `dev.js` calls `setCoreInstall` at boot based on `existsSync(coreDir/dist/webjs-core.js) && existsSync(coreDir/dist/webjs-core-browser.js)`. The bare `@webjsdev/core` specifier always points at the BROWSER entry (`index-browser.js` or `dist/webjs-core-browser.js`); the slim entry drops `renderToString`, `renderToStream`, `expose`, `getExposed`, and `setCspNonceProvider` so server-only bytes do not ride the wire. Node-side consumers resolve via the package.json exports and still get the full `index.js`. |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
@@ -66,14 +66,17 @@ can load it without booting the full server.
 
 1. **Source-file branch is gated by the browser-bound module graph.**
    `dev.js` walks the import graph from every page / layout / error /
-   loading / not-found / component entry at boot (and on every
-   `fs.watch` rebuild), producing `state.browserBoundFiles`. The
-   source-file branch in `handle()` only serves paths whose resolved
-   absolute file is in that Set; everything else 404s before any
-   filesystem operation. Same model as Next.js's bundler manifest,
-   derived statically at boot instead of via a build step. The
-   `module-graph.js` module exports `reachableFromEntries` as the
-   reusable BFS helper.
+   loading / not-found / component entry to produce
+   `state.browserBoundFiles`. This is computed **lazily on the first
+   request** (in `ensureReady()`, memoized) rather than at boot, and
+   re-derived after each `fs.watch` rebuild; `handle()` awaits
+   `ensureReady()` before the source-file branch runs, so the Set is
+   always populated by the time it is read. The source-file branch only
+   serves paths whose resolved absolute file is in that Set; everything
+   else 404s before any filesystem operation. Same model as Next.js's
+   bundler manifest, derived statically (now on first request, not at
+   boot). The `module-graph.js` module exports `reachableFromEntries`
+   as the reusable BFS helper.
    The walk stops AT `.server.{js,ts,mjs,mts}` boundaries: the
    server file itself stays in the Set (its URL yields the stub via
    invariant 2), but its outgoing edges are not followed. Files
@@ -98,6 +101,43 @@ can load it without booting the full server.
    tests live at `test/guardrails/server-file-guardrail.test.js`.
 3. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
+   The route table is the only eager ANALYSIS artifact (a cheap directory
+   scan, no code reads). Boot does exactly two other, trivial loads,
+   neither of which reads app source or touches the network: `setCoreInstall`
+   (one read of `@webjsdev/core`'s OWN `package.json` to seed the browser
+   import map, in `importmap.js`) and the `.env` auto-load (Node's
+   `process.loadEnvFile` into `process.env`, before any server-only module is
+   imported). So the complete list of eager boot work is: the route-table
+   scan, the core `package.json` read, and the `.env` load. Everything else
+   (module graph, browser-bound gate, action index, middleware, elision,
+   vendor map) is built lazily on the first request via `ensureReady()` in
+   `dev.js`, so boot reads no app source, executes no server module, walks no
+   graph, and makes no network call.
+   `ensureReady()` is single-flighted and memoized; the handler exposes
+   `warmup()` (which calls it), and `startServer` fires `warmup()`
+   fire-and-forget once the HTTP server is listening, so the analysis runs
+   in the background ahead of a real first request without delaying
+   readiness. `warmup()` is a single best-effort kick: a failure is caught and
+   logged, not thrown, and whatever failed simply re-runs on the next request
+   or readiness probe. There is NO internal retry timer or backoff; the
+   platform's traffic and probes are the retry loop. Analysis runs in two
+   stages: a deterministic stage (graph, scan, gate, action index, middleware,
+   elision) that readiness gates on, and a best-effort vendor stage (a pinned
+   app reads the committed importmap; an unpinned app auto-fetches jspm).
+   Readiness does NOT depend on vendor, so an offline or partially-unresolvable
+   app still boots; a TRANSIENT vendor failure (network / timeout / jspm 5xx)
+   is re-attempted on the next `ensureReady` call, non-blocking, with a
+   `vendorGen` guard so a rebuild cannot let a stale resolve win. A permanent
+   unresolvable (jspm 401 for a private / workspace / server-only dep) reports
+   ok and is tolerated. `ensureReady()` logs a one-line per-pass timing
+   breakdown so a slow first request is diagnosable.
+   **Probes:** `/__webjs/health` is liveness (always 200 once listening);
+   `/__webjs/ready` is readiness (503 until the analysis is warm, then 200).
+   An optional `readiness.{js,ts}` at the app root default-exports an async
+   check that `/ready` runs once warm (returning `false` or throwing yields
+   503), so readiness can gate on live dependency health (e.g. a DB ping)
+   that the static analysis cannot see. Both are answered in `handle()`
+   BEFORE `ensureReady`, so a probe never blocks on the analysis.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
@@ -107,8 +147,9 @@ can load it without booting the full server.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
 7. **Display-only component AND inert-route elision is conservative.**
-   `analyzeElision` in `component-elision.js` computes, at boot and on
-   every rebuild, (a) the set of component modules that are purely
+   `analyzeElision` in `component-elision.js` computes, lazily on the
+   first request (inside `ensureReady()`) and again after each rebuild,
+   (a) the set of component modules that are purely
    display-only, and (b) the set of page/layout route modules that are
    inert (do no client work even transitively). The serving branch in
    `dev.js` strips side-effect imports of display-only components from the

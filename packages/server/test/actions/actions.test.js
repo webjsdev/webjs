@@ -151,3 +151,34 @@ test('hashFile: returns a 10-char hex string, stable per input', async () => {
   assert.equal(a1, a2, 'hashFile must be deterministic for the same input');
   assert.notEqual(a1, b1, 'hashFile must differ for different inputs');
 });
+
+test('a pure-RPC server module is hashed at boot but NOT executed until first call', async () => {
+  // Runtime-first boot (#141): buildActionIndex must not import every server
+  // module (which would fire Prisma init etc.). It hashes them so RPC dispatch
+  // can resolve them, and the module loads on the first invoke.
+  const dir = await scaffold({
+    'actions/side.server.js': `'use server';
+      globalThis.__webjs_boot_probe = (globalThis.__webjs_boot_probe || 0) + 1;
+      export async function ping() { return 'pong'; }
+    `,
+  });
+  try {
+    delete globalThis.__webjs_boot_probe;
+    const idx = await buildActionIndex(dir, true);
+    const file = resolveServerModule(idx, '/actions/side.server.js');
+    assert.ok(idx.fileToHash.get(file), 'module is in the hash index after boot');
+    assert.equal(globalThis.__webjs_boot_probe, undefined, 'module must NOT execute at boot');
+
+    const hash = idx.fileToHash.get(file);
+    const tok = 't';
+    const headers = { 'content-type': RPC_CONTENT_TYPE, cookie: `webjs_csrf=${tok}`, 'x-webjs-csrf': tok };
+    const r = await invokeAction(idx, hash, 'ping',
+      new Request('http://x/__webjs/action/' + hash + '/ping',
+        { method: 'POST', headers, body: await wjStringify([]) }));
+    assert.equal(wjParse(await r.text()), 'pong');
+    assert.equal(globalThis.__webjs_boot_probe, 1, 'module executes on first call, not at boot');
+  } finally {
+    delete globalThis.__webjs_boot_probe;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

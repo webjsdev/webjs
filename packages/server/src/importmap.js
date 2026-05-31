@@ -17,7 +17,8 @@ function escapeAttr(s) {
  * scanner discovers npm packages used by client code. The resolution
  * happens via `vendor.js`'s `resolveVendorImports`, which reads the
  * committed `.webjs/vendor/importmap.json` if present, else calls
- * `api.jspm.io/generate` once at boot. Browser fetches vendor packages
+ * `api.jspm.io/generate` once on the first request (memoized), never at
+ * boot. Browser fetches vendor packages
  * directly from jspm.io's CDN (default) or from local `/__webjs/vendor/`
  * paths (after `webjs vendor pin --download`).
  */
@@ -36,8 +37,8 @@ let _vendorIntegrity = {};
 /**
  * Merge additional vendor entries into the import map and precompute
  * the importmap-hash so `importMapHash()` can stay synchronous on the
- * per-request SSR hot path. Called by the dev server at boot and on
- * every vendor rebuild.
+ * per-request SSR hot path. Called from `ensureReady()` on the first
+ * request and on every vendor rebuild.
  *
  * @param {Record<string, string>} entries
  * @param {Record<string, string>} [integrity]  SRI hashes keyed by URL
@@ -64,8 +65,8 @@ export async function setVendorEntries(entries, integrity) {
  * the change and hard-reload before applying the swap.
  *
  * Synchronous accessor. The hash is precomputed eagerly inside
- * `setVendorEntries` (which the dev server `await`s during boot and
- * on every rebuild) so the per-request SSR hot path can return the
+ * `setVendorEntries` (which `ensureReady()` `await`s on the first request
+ * and on every rebuild) so the per-request SSR hot path can return the
  * cached string without crossing a Promise boundary.
  *
  * Returns an empty string if `setVendorEntries` has never run; the
