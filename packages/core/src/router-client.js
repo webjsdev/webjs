@@ -150,24 +150,21 @@ let prevScrollRestoration = null;
 export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
   enabled = true;
-  // NOTE: `click` is still capture, which carries the same latent issue the
-  // submit listener below fixes: a component `<a @click=preventDefault>` runs
-  // at-target, AFTER this capture listener, so onClick's defaultPrevented guard
-  // does not see it and the router hijacks the link. The blog does not hit this
-  // (its nav is plain `<a href>`), so flipping click to bubble is deferred to
-  // its own change (more cases: modifier/middle clicks, downloads, hash links).
-  // Tracked in #153.
-  document.addEventListener('click', onClick, true);
-  // `submit` is BUBBLE, not capture. A component's `@submit` handler is bound
-  // per-element (render-client.js), so it runs in the at-target phase, BEFORE a
-  // document-level bubble listener. onSubmit's `if (e.defaultPrevented) return`
-  // guard therefore sees the component's `preventDefault` and leaves the form
-  // alone (the documented "forms that preventDefault in @submit are untouched"
-  // contract). A capture listener would run FIRST, before the component, so the
-  // guard would always see `false` and the router would wrongly intercept a
-  // JS-handled form (e.g. the live chat / comments forms, which preventDefault
-  // and send over WebSocket / fetch) and navigate the page out from under it.
-  // Mirrors hotwired/turbo, which performs the submission in a bubble listener.
+  // Both `click` and `submit` are BUBBLE phase, not capture. A component's
+  // per-element `@click` / `@submit` handler (render-client.js) runs in the
+  // at-target phase, BEFORE a document-level bubble listener. So onClick /
+  // onSubmit run AFTER the component, and their `if (e.defaultPrevented) return`
+  // guard sees the component's `preventDefault` and leaves the element alone.
+  // A capture listener would run FIRST, before the component, so the guard
+  // would always see `false` and the router would wrongly hijack a JS-handled
+  // link or form: navigate a `<a @click=${e => e.preventDefault()}>` away, or
+  // submit a `<form @submit=${e => e.preventDefault()}>` (the live chat /
+  // comments forms, which preventDefault and send over WebSocket / fetch),
+  // navigating the page out from under it. All the phase-independent filtering
+  // (modifier / middle clicks, downloads, cross-origin, hash links, GET-vs-POST)
+  // happens inside onClick / onSubmit regardless of phase. Mirrors
+  // hotwired/turbo, which does its interception work in bubble listeners.
+  document.addEventListener('click', onClick, false);
   document.addEventListener('submit', onSubmit, false);
   window.addEventListener('popstate', onPopState);
   ensureUpgradeObserver();
@@ -186,7 +183,7 @@ export function enableClientRouter() {
 export function disableClientRouter() {
   if (!enabled) return;
   enabled = false;
-  document.removeEventListener('click', onClick, true);
+  document.removeEventListener('click', onClick, false);
   document.removeEventListener('submit', onSubmit, false);
   window.removeEventListener('popstate', onPopState);
   if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
