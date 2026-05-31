@@ -507,12 +507,17 @@ export async function createRequestHandler(opts) {
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
       // process is up and accepting connections). `/__webjs/ready` is 503 until
-      // the analysis is warm, then 200 unless an optional app readiness check
+      // the instance is FULLY warm (the deterministic analysis AND the first
+      // vendor attempt have both completed, so the importmap build id is
+      // settled), then 200 unless an optional app readiness check
       // (readiness.{js,ts}) reports a dependency down. So a readinessProbe holds
-      // traffic off a not-yet-warm or dependency-unhealthy instance. Probing
-      // `/__webjs/ready` also kicks off the warm in the background, so an
-      // embedder that never called warmup() still warms. A vendor CDN failure
-      // does NOT block readiness (vendor is best-effort, retried on the next request).
+      // traffic off a not-yet-warm or dependency-unhealthy instance, and admits
+      // it only once the build id is stable, never mid vendor-resolution.
+      // Probing `/__webjs/ready` also kicks off the warm in the background, so
+      // an embedder that never called warmup() still warms. The first vendor
+      // attempt is bounded (the jspm fetch timeout), so a vendor CDN failure
+      // delays readiness only briefly and then admits the instance (degraded but
+      // reload-safe); a transient failure is re-attempted on the next request.
       let probePath;
       try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
       if (probePath === '/__webjs/health') {
