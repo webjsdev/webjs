@@ -14,6 +14,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, dirname, extname, sep } from 'node:path';
+import { redactStringsAndTemplates } from './js-scan.js';
 
 /** @type {RegExp} match static `import … from '…'` and `import '…'` */
 const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
@@ -104,6 +105,17 @@ export function transitiveDeps(graph, entryFiles, appDir, skip) {
       if (dep.startsWith(appDir)) {
         result.push(dep);
       }
+      // Stop at server-file boundaries, exactly like reachableFromEntries
+      // (the authorization gate). The browser fetches a `.server.*` URL as
+      // an RPC or throw-at-load stub, never its source, so the server
+      // file's own imports are never fetched. Following them would emit
+      // modulepreload hints for server-only modules that the gate then
+      // 404s (a preload set wider than the servable set). The `.server.*`
+      // file itself stays in the result; the preload emitter filters it via
+      // the server-file index. A file imported through BOTH a server file
+      // and a real client path is still reached via the client path, so it
+      // is not wrongly dropped.
+      if (SERVER_FILE_RE.test(dep)) continue;
       queue.push(dep);
     }
   }
@@ -247,9 +259,23 @@ async function parseFile(file, appDir, graph, seen) {
   try { src = await readFile(file, 'utf8'); }
   catch { return; }
 
+  // Mask of `src` with all string / template-literal / comment / regex
+  // CONTENT blanked to spaces (positions preserved). Used to reject an
+  // `import '…'` / `export … from '…'` that appears as TEXT inside a
+  // template literal (e.g. example code shown in a `<pre>` inside an
+  // `html\`\`` template, as the docs site does) rather than as a real
+  // statement. We still read the specifier from the RAW `src` (the
+  // specifier is itself a string, blanked in the mask), and only consult
+  // the mask to confirm the `import` / `export` KEYWORD survived
+  // redaction, i.e. sits in code position and not inside a literal.
+  const masked = redactStringsAndTemplates(src);
   const deps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
     for (const m of src.matchAll(re)) {
+      // m.index is the keyword start (`\bimport` / `\bexport`). If that
+      // position is blanked in the mask, the match lives inside a literal
+      // and is not a real import edge.
+      if (masked[m.index] === ' ') continue;
       const spec = m[1];
       // Only resolve relative imports within the project.
       if (!spec.startsWith('.') && !spec.startsWith('/')) continue;

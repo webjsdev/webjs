@@ -956,6 +956,60 @@ test('ssrPage: modulepreload never points at server-only files', async () => {
     `'use server' plain file should not be preloaded; got preloads:\n${preloads}`);
 });
 
+test('ssrPage: modulepreload never points at a server-only dep reached THROUGH a .server file', async () => {
+  // Regression for #158: a page imports a server action, and the action
+  // imports a plain server-only util (the slugify.ts / types.ts shape on the
+  // blog). The util is reachable ONLY through the .server file, so the client
+  // never fetches it (the action becomes an RPC stub). The preload walk must
+  // stop at the .server boundary, exactly like the auth gate; otherwise it
+  // emits a <link rel="modulepreload"> for the util, which then 404s.
+  // Before the fix, `formatPost.ts` below leaks into the preload set.
+  const sub = mkdtempSync(join(tmpDir, 'route-serverdep-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(appDir, { recursive: true });
+
+  const action = join(appDir, 'list.server.ts');
+  const serverOnlyUtil = join(appDir, 'formatPost.ts');   // reached only via the action
+  const clientComp = join(appDir, 'card.ts');             // a real client edge, kept
+
+  writeFileSync(serverOnlyUtil, `export const fmt = (p) => p;\n`);
+  writeFileSync(action,
+    `import { fmt } from './formatPost.ts';\n` +
+    `export async function list() { return [fmt(1)]; }\n`);
+  writeFileSync(clientComp, `export const card = 1;\n`);
+
+  const pageFile = join(appDir, 'page.ts');
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `import { list } from './list.server.ts';\n` +
+    `import './card.ts';\n` +
+    `export default async function Page() { await list(); return html\`<my-card></my-card>\`; }\n`);
+
+  // Graph mirrors the imports: page -> {action, card}; action -> {serverOnlyUtil}.
+  const moduleGraph = new Map([
+    [pageFile, new Set([action, clientComp])],
+    [action, new Set([serverOnlyUtil])],
+    [serverOnlyUtil, new Set()],
+    [clientComp, new Set()],
+  ]);
+  const serverFiles = new Map([[action, 'hashA']]);
+
+  const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [] };
+  const resp = await ssrPage(route, {}, new URL('http://localhost/'), {
+    dev: false, appDir, moduleGraph, serverFiles,
+  });
+  const preloads = ((await resp.text()).match(/modulepreload[^>]*href="[^"]*"/g) || []).join('\n');
+
+  assert.ok(!/formatPost\.ts"/.test(preloads),
+    `server-only dep reached through a .server file must not be preloaded; got:\n${preloads}`);
+  assert.ok(!/list\.server\.ts"/.test(preloads),
+    `the .server file itself is not preloaded; got:\n${preloads}`);
+  // The real client edge is still preloaded (the boundary only prunes the
+  // server path, it does not drop legitimate client modules).
+  assert.ok(/card\.ts"/.test(preloads),
+    `a real client dep must still be preloaded; got:\n${preloads}`);
+});
+
 test('preloadCrossOriginAttr: adds crossorigin=anonymous for cross-origin URLs only', async () => {
   // Browsers require crossorigin on cross-origin modulepreload, else
   // the preload is ignored or double-fetched (defeating the

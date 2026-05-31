@@ -139,6 +139,92 @@ test('transitiveDeps: skip set excludes a node and its unique subtree', async ()
   await rm(dir, { recursive: true, force: true });
 });
 
+test('transitiveDeps: stops at the .server.* boundary (no preload for server-only deps)', async () => {
+  // The preload emitter walks transitiveDeps. A client import of a server
+  // action is rewritten to an RPC stub, so the browser fetches the stub URL
+  // but NEVER the server file's own imports. transitiveDeps must therefore
+  // stop at `.server.*`, exactly like reachableFromEntries (the auth gate);
+  // otherwise it emits modulepreload hints for server-only files the gate
+  // then 404s (#158: slugify.ts / types.ts on the blog). Counterfactual:
+  // remove the `SERVER_FILE_RE.test(dep)` guard in transitiveDeps and the
+  // `slugify.ts` assertion below fails (it leaks into the preload list).
+  const dir = join(tmpdir(), `webjs-test-serverbound-${Date.now()}`);
+  await mkdir(join(dir, 'modules'), { recursive: true });
+
+  // page -> create.server.ts -> slugify.ts (server-only, reachable ONLY via
+  //         the server file)
+  // page -> counter.ts (client, kept)
+  // page -> shared.ts AND create.server.ts -> shared.ts (reachable via BOTH a
+  //         server file and a real client path: must still be included)
+  await writeFile(join(dir, 'page.ts'),
+    `import './modules/create.server.ts';\nimport './counter.ts';\nimport './shared.ts';`);
+  await writeFile(join(dir, 'modules', 'create.server.ts'),
+    `'use server';\nimport '../slugify.ts';\nimport '../shared.ts';`);
+  await writeFile(join(dir, 'slugify.ts'), `export const slug = (s) => s;`);
+  await writeFile(join(dir, 'counter.ts'), `export const c = 1;`);
+  await writeFile(join(dir, 'shared.ts'), `export const s = 1;`);
+
+  const graph = await buildModuleGraph(dir);
+  const deps = transitiveDeps(graph, [join(dir, 'page.ts')], dir);
+
+  // The server file's URL itself is fetched (as a stub), so it stays in.
+  assert.ok(deps.some((d) => d.endsWith('create.server.ts')), 'the .server.* stub URL is preloadable');
+  // Its server-only dep is NOT preloaded (the gate would 404 it).
+  assert.ok(!deps.some((d) => d.endsWith('slugify.ts')), 'server-only dep must not leak into preloads');
+  // The plain client edge is preserved.
+  assert.ok(deps.some((d) => d.endsWith('counter.ts')), 'client dep stays');
+  // A file reachable via BOTH a server file and a real client path is kept
+  // (the client path still reaches it; the boundary only prunes the server path).
+  assert.ok(deps.some((d) => d.endsWith('shared.ts')), 'dual-reachable file kept via client path');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('buildModuleGraph: ignores import/export shown as code inside a template literal', async () => {
+  // A docs/tutorial page renders example code (including import statements)
+  // as TEXT inside an `html\`\`` template. The scanner must not mistake that
+  // for a real import edge (#159: a phantom /app/docs/components/counter.ts
+  // preload 404 on docs.webjs.dev). Counterfactual: drop the redaction-mask
+  // guard in parseFile and the `phantom.ts` / `phantom2.ts` assertions fail.
+  const dir = join(tmpdir(), `webjs-test-tmpl-import-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+
+  // Real imports live at top level; the phantom ones live inside the template
+  // body. A real multi-line `export … from` barrel re-export is included to
+  // prove the mask does not over-redact actual statements.
+  const pageSrc = [
+    "import { html } from '@webjsdev/core';",
+    "import './real.ts';",
+    "export {",
+    "  a,",
+    "} from './barrel.ts';",
+    "export default function Page() {",
+    "  return html`",
+    "    <h3>app/page.ts</h3>",
+    "    <pre>import './phantom.ts';",
+    "export { x } from './phantom2.ts';</pre>",
+    "  `;",
+    "}",
+  ].join('\n');
+  await writeFile(join(dir, 'page.ts'), pageSrc);
+  await writeFile(join(dir, 'real.ts'), `export const r = 1;`);
+  await writeFile(join(dir, 'barrel.ts'), `export const a = 1;`);
+  await writeFile(join(dir, 'phantom.ts'), `export const p = 1;`);
+  await writeFile(join(dir, 'phantom2.ts'), `export const p2 = 1;`);
+
+  const graph = await buildModuleGraph(dir);
+  const deps = graph.get(join(dir, 'page.ts')) || new Set();
+
+  // Real top-level imports / re-exports are detected.
+  assert.ok(deps.has(join(dir, 'real.ts')), 'real import detected');
+  assert.ok(deps.has(join(dir, 'barrel.ts')), 'real multi-line export-from detected (no over-redaction)');
+  // Imports shown as text inside the template literal are NOT edges.
+  assert.ok(!deps.has(join(dir, 'phantom.ts')), 'import inside template literal is not an edge');
+  assert.ok(!deps.has(join(dir, 'phantom2.ts')), 'export-from inside template literal is not an edge');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('buildModuleGraph: skips node_modules and _private', async () => {
   const dir = join(tmpdir(), `webjs-test-graph-skip-${Date.now()}`);
   await mkdir(join(dir, 'node_modules'), { recursive: true });
