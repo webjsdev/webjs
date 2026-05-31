@@ -158,6 +158,28 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(preloads.length > 0, 'Should have at least one modulepreload');
   });
 
+  test('every modulepreload resolves (no preload points at a 404)', async () => {
+    // Regression for #158 / #159: the preload set must be a subset of the
+    // servable set. The blog previously emitted modulepreload hints for
+    // server-only files reached through a .server.ts (slugify.ts, the two
+    // types.ts), which the auth gate then 404s. Probe each same-origin
+    // preload href and assert it serves. A real network fetch, since a
+    // 404 here is exactly what shipped to users.
+    const preloads = await page.evaluate(() =>
+      [...document.querySelectorAll('link[rel="modulepreload"]')]
+        .map(l => l.href)
+        .filter(h => h.startsWith(location.origin))
+    );
+    assert.ok(preloads.length > 0, 'expected at least one same-origin preload to probe');
+    const broken = [];
+    for (const href of preloads) {
+      const resp = await fetch(href);
+      if (resp.status >= 400) broken.push(`${href} -> ${resp.status}`);
+    }
+    assert.equal(broken.length, 0,
+      `no modulepreload may point at a non-servable URL; broken:\n${broken.join('\n')}`);
+  });
+
   test('theme-toggle custom element is upgraded (light DOM)', async () => {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(2000);

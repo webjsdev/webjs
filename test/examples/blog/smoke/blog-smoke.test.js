@@ -106,6 +106,24 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
     }
   });
 
+  test('homepage modulepreload hints all resolve (no 404 preload)', async () => {
+    // Browserless guard for the #158 / #159 class: the served HTML must never
+    // emit a <link rel="modulepreload"> for a file the server then 404s
+    // (server-only deps reached through a .server file, or an import shown as
+    // code inside a template literal). Fast HTTP-only check, no browser.
+    const html = await (await fetch(baseUrl + '/')).text();
+    const hrefs = [...html.matchAll(/<link[^>]+rel=["']modulepreload["'][^>]*href=["']([^"']+)["']/g)]
+      .map((m) => m[1])
+      .filter((h) => h.startsWith('/'));
+    assert.ok(hrefs.length > 0, 'expected at least one same-origin modulepreload to probe');
+    const broken = [];
+    for (const h of hrefs) {
+      const r = await fetch(baseUrl + h);
+      if (r.status >= 400) broken.push(`${h} -> ${r.status}`);
+    }
+    assert.equal(broken.length, 0, `modulepreload hints must all resolve; broken:\n${broken.join('\n')}`);
+  });
+
   test('/login renders class-helper output, not stale <ui-X> tags', async () => {
     const html = await fetch(baseUrl + '/login').then((r) => r.text());
 
