@@ -957,6 +957,17 @@ export async function checkConventions(appDir, opts) {
     const hasGitignore = await pathExists(join(appDir, '.gitignore'));
     if (hasGit && hasGitignore) {
       const { spawnSync } = await import('node:child_process');
+      // Strip inherited git env vars so `cwd` is the sole authority on
+      // which repo `git check-ignore` consults. Git exports GIT_DIR /
+      // GIT_WORK_TREE / GIT_INDEX_FILE / GIT_PREFIX into hook processes
+      // (notably a pre-commit hook run from a linked worktree exports
+      // GIT_WORK_TREE), and those OVERRIDE cwd-based discovery, so
+      // without this the probe would consult the outer repo instead of
+      // `appDir`. See the gitignore-vendor-not-ignored regression test.
+      const {
+        GIT_DIR: _gd, GIT_WORK_TREE: _gwt, GIT_INDEX_FILE: _gif, GIT_PREFIX: _gp,
+        ...gitEnv
+      } = process.env;
       // Check two representative paths: the pin manifest AND a sample
       // downloaded bundle. A `.gitignore` that allows the manifest
       // but blocks bundles (e.g. `*.js` higher up) would still break
@@ -970,6 +981,7 @@ export async function checkConventions(appDir, opts) {
         const result = spawnSync('git', ['check-ignore', '-q', probe], {
           cwd: appDir,
           stdio: 'pipe',
+          env: gitEnv,
         });
         if (result.status === 0) {
           violations.push({

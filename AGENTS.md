@@ -35,7 +35,7 @@ config files that each agent reads automatically.**
 | `AGENTS.md` | All agents | Framework API, conventions, recipes (this file) |
 | `CONVENTIONS.md` | All agents | Project-specific overridable conventions |
 | `CLAUDE.md` | Claude Code | Points to AGENTS.md + CONVENTIONS.md, no duplication |
-| `.claude/settings.json` | Claude Code | PreToolUse hook guarding git merge/push to main |
+| `.claude/settings.json` | Claude Code | PreToolUse hook guarding git merge/push to main; UserPromptSubmit hook routing prompts to matching skills |
 | `.cursorrules` | Cursor | Workflow rules, git rules, framework patterns |
 | `.agents/rules/workflow.md` | Antigravity (Google) | Workspace rules. Google's documented convention is `.agents/rules/*.md` per the official Antigravity Codelab. Replaces the legacy `.windsurfrules` shipped pre-acquisition. |
 | `.github/copilot-instructions.md` | GitHub Copilot | Same rules in Copilot format |
@@ -49,6 +49,10 @@ config files that each agent reads automatically.**
 3. Sync with parent: `git fetch origin && git log HEAD..origin/main --oneline`. If there are upstream commits, `git rebase origin/main` before starting.
 
 Claude Code enforces step 1 via `.claude/hooks/guard-branch-context.sh` (intercepts Edit/Write when on main). Other agents check manually.
+
+### Skills are routed deterministically, never skipped
+
+A Skill is model-invoked, so it fires only when the model judges a request to match. That judgement can be wrong (a research-framed prompt whose work a skill governs can slip past). The `.claude/hooks/route-skills.sh` `UserPromptSubmit` hook makes routing deterministic: on every prompt it keyword-matches the text against each skill's documented triggers and injects a directive to invoke the matched skill via the Skill tool before other work, plus a standing policy to check the available skills whenever a task matches one. A hook cannot force a Skill tool-call (Claude Code only lets `UserPromptSubmit` inject context, not invoke tools), so keyword cases are deterministic and genuinely-ambiguous prompts lean on the always-injected policy. Tests live in `test/hooks/route-skills.test.mjs`.
 
 ### Autonomous mode (sandbox / bypass permissions)
 

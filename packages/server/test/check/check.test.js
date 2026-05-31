@@ -1156,7 +1156,11 @@ export async function login() { return 1; }
  */
 
 function initGit(appDir) {
-  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe' });
+  // Clear inherited git env so `git init` (and the rule's later
+  // check-ignore) target appDir, not an outer repo whose GIT_DIR /
+  // GIT_WORK_TREE leaked in via a worktree pre-commit hook.
+  const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
+  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe', env });
   return result.status === 0;
 }
 
@@ -1236,6 +1240,45 @@ test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async ()
     const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
     assert.equal(v, undefined, 'rule must skip when .gitignore is absent');
   } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('gitignore-vendor-not-ignored: ignores leaked GIT_WORK_TREE/GIT_DIR (worktree pre-commit)', async () => {
+  // Regression for the env-leak fix in check.js. The rule shells out to
+  // `git check-ignore` with cwd set to appDir. When `webjs check` (or
+  // `npm test`) runs inside a git hook from a linked worktree, git
+  // exports GIT_WORK_TREE / GIT_DIR / GIT_INDEX_FILE into the env, and
+  // those OVERRIDE cwd-based repo discovery, so the probe would consult
+  // the outer repo instead of appDir. We simulate that by pointing those
+  // vars at THIS monorepo (process.cwd()), then assert the rule still
+  // reads appDir's .gitignore (flags the broken `*.js` rule). Without the
+  // `env` strip in check.js this fails: the probe resolves against the
+  // outer repo where `.webjs/vendor/*.js` is not ignored.
+  const appDir = await makeTempApp();
+  const saved = {
+    GIT_DIR: process.env.GIT_DIR,
+    GIT_WORK_TREE: process.env.GIT_WORK_TREE,
+    GIT_INDEX_FILE: process.env.GIT_INDEX_FILE,
+  };
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n',
+    );
+    // Leak outer-repo git context, the way a worktree pre-commit hook does.
+    process.env.GIT_DIR = join(process.cwd(), '.git');
+    process.env.GIT_WORK_TREE = process.cwd();
+    delete process.env.GIT_INDEX_FILE;
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.ok(v, 'rule must read appDir gitignore despite leaked GIT_* env');
+  } finally {
+    for (const [k, val] of Object.entries(saved)) {
+      if (val === undefined) delete process.env[k];
+      else process.env[k] = val;
+    }
     await rm(appDir, { recursive: true, force: true });
   }
 });
