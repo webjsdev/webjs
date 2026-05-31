@@ -734,27 +734,46 @@ test('navigate: importmap mismatch triggers full-page reload (no partial swap)',
   } finally { restore(); }
 });
 
-test('navigate: empty/absent build id never hard-reloads (warmup-safe)', async () => {
-  // Regression for the warmup hard-reload that wiped form input. During
-  // a runtime-first-boot server's warmup window the published build id
-  // is empty until the importmap is final, and the importmap textContent
-  // genuinely changes (vendor entries appear) across the first responses.
-  // The router must NOT treat that as a deploy: an empty id on either
-  // side means "version unknown", so it stays soft and the half-filled
-  // form survives. (Before the fix, the empty-vs-nonempty case fell
-  // through to a textContent compare that hard-reloaded and lost input.)
+test('navigate: empty build id during warmup stays soft and preserves page state', async () => {
+  // Regression for the exact reported bug: deploying, then typing into the blog
+  // signup form, saw the fields cleared by a hard-reload loop. During a
+  // runtime-first-boot server's warmup window the published build id is empty
+  // until the importmap is final, and the importmap textContent genuinely
+  // changes (vendor entries appear) across the first responses. Before the fix
+  // the empty-vs-nonempty case fell through to a textContent compare that
+  // hard-reloaded; each reload re-fetched a still-warming page and looped,
+  // wiping the WHOLE page (outer layout included) every time. After the fix an
+  // empty id on either side means "version unknown": the router stays soft and
+  // never hard-reloads, so page state that survives a normal navigation
+  // survives the warmup too. We assert an outer-layout input here (outside the
+  // children markers): a hard reload would have wiped it; the soft swap leaves
+  // it untouched.
   document.head.innerHTML = '<script type="importmap" data-webjs-build="">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
-  document.body.innerHTML = '<input id="name" value="typed">';
+  document.body.innerHTML =
+    '<input id="search">' +
+    '<!--wj:children:/-->' +
+    '<p>page content</p>' +
+    '<!--/wj:children-->';
+  // Simulate the user typing into the preserved outer region: sets the IDL
+  // value, not the attribute, which is what a hard reload would discard.
+  document.getElementById('search').value = 'outer kept';
   const newBody =
     '<!doctype html><html><head>' +
     '<script type="importmap" data-webjs-build="warmbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
-    '</head><body><input id="name"></body></html>';
+    '</head><body>' +
+    '<input id="search">' +
+    '<!--wj:children:/-->' +
+    '<p>after warm</p>' +
+    '<!--/wj:children-->' +
+    '</body></html>';
   // Response also carries no build header yet (still warming): the swap must stay soft.
   const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
   try {
     await navigate('http://localhost/signup');
     assert.ok(!redirect.assigns.includes('http://localhost/signup'),
       'empty current build id must NOT trigger a hard reload during warmup');
+    assert.equal(document.getElementById('search').value, 'outer kept',
+      'outer-layout input must survive: a hard reload (the bug) would have wiped it');
   } finally { restore(); }
 });
 
