@@ -151,7 +151,17 @@ export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
   enabled = true;
   document.addEventListener('click', onClick, true);
-  document.addEventListener('submit', onSubmit, true);
+  // `submit` is BUBBLE, not capture. A component's `@submit` handler is bound
+  // per-element (render-client.js), so it runs in the at-target phase, BEFORE a
+  // document-level bubble listener. onSubmit's `if (e.defaultPrevented) return`
+  // guard therefore sees the component's `preventDefault` and leaves the form
+  // alone (the documented "forms that preventDefault in @submit are untouched"
+  // contract). A capture listener would run FIRST, before the component, so the
+  // guard would always see `false` and the router would wrongly intercept a
+  // JS-handled form (e.g. the live chat / comments forms, which preventDefault
+  // and send over WebSocket / fetch) and navigate the page out from under it.
+  // Mirrors hotwired/turbo, which performs the submission in a bubble listener.
+  document.addEventListener('submit', onSubmit, false);
   window.addEventListener('popstate', onPopState);
   ensureUpgradeObserver();
   // Take control of scroll restoration so the browser doesn't fight
@@ -170,7 +180,7 @@ export function disableClientRouter() {
   if (!enabled) return;
   enabled = false;
   document.removeEventListener('click', onClick, true);
-  document.removeEventListener('submit', onSubmit, true);
+  document.removeEventListener('submit', onSubmit, false);
   window.removeEventListener('popstate', onPopState);
   if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
     history.scrollRestoration = prevScrollRestoration;
