@@ -766,6 +766,10 @@ test('navigate: empty build id during warmup stays soft and preserves page state
     '<p>after warm</p>' +
     '<!--/wj:children-->' +
     '</body></html>';
+  // Clear the infinite-reload guard flag a prior reload test may have left in
+  // sessionStorage; otherwise a regression could be masked (the guard would bail
+  // to a soft swap for the wrong reason instead of because the build id is empty).
+  sessionStorage.removeItem('webjs:importmap-reload');
   // Response also carries no build header yet (still warming): the swap must stay soft.
   const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
   try {
@@ -774,7 +778,7 @@ test('navigate: empty build id during warmup stays soft and preserves page state
       'empty current build id must NOT trigger a hard reload during warmup');
     assert.equal(document.getElementById('search').value, 'outer kept',
       'outer-layout input must survive: a hard reload (the bug) would have wiped it');
-  } finally { restore(); }
+  } finally { restore(); sessionStorage.removeItem('webjs:importmap-reload'); }
 });
 
 test('navigate: identical importmap proceeds with partial swap (no reload)', async () => {
