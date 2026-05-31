@@ -1156,7 +1156,11 @@ export async function login() { return 1; }
  */
 
 function initGit(appDir) {
-  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe' });
+  // Clear inherited git env so `git init` (and the rule's later
+  // check-ignore) target appDir, not an outer repo whose GIT_DIR /
+  // GIT_WORK_TREE leaked in via a worktree pre-commit hook.
+  const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
+  const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe', env });
   return result.status === 0;
 }
 
