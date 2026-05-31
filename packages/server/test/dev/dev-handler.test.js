@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createRequestHandler, startServer } from '../../src/dev.js';
+import { publishedBuildId } from '../../src/importmap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML_URL = pathToFileURL(
@@ -81,12 +82,21 @@ test('handle: a pinned app publishes a stable build id from the first response',
     }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  // First page response, BEFORE any warmup() call: the build id was published
-  // at boot (pinned read), so it is a non-empty 64-hex hash, not the empty
-  // warming sentinel an unpinned app would carry until its first resolve.
+  // The boot pinned-read publishes the build id DURING createRequestHandler,
+  // before any handle()/warmup(). Capture it now, off the same importmap module
+  // instance the handler uses. This is the load-bearing assertion: if the boot
+  // block were removed, publishedBuildId() here would NOT match the served id
+  // (it would still be empty or a stale leaked value, and only the deferred
+  // resolve inside the first handle() would later publish the real hash). So
+  // asserting bootId equals the served id is what catches a reverted boot block,
+  // whereas merely checking the first response is non-empty passes either way
+  // (handle() awaits ensureReady, which publishes on the deferred path too).
+  const bootId = publishedBuildId();
+  assert.match(bootId, /^[0-9a-f]{64}$/, 'pinned app publishes a build id at boot, before any request');
+  // First page response: it advertises exactly the boot-published id.
   const first = await app.handle(new Request('http://x/'));
   const build1 = first.headers.get('x-webjs-build');
-  assert.match(build1 || '', /^[0-9a-f]{64}$/, 'pinned app advertises a build id from the first response');
+  assert.equal(build1, bootId, 'the first response advertises the boot-published id, not a first-request one');
   // Stable across responses within the process (no warmup drift).
   const second = await app.handle(new Request('http://x/'));
   assert.equal(second.headers.get('x-webjs-build'), build1, 'build id is stable across requests');
