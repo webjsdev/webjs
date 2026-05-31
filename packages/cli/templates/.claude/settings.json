@@ -18,6 +18,15 @@
             "command": ".claude/hooks/guard-branch-context.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/require-tests-with-src.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
