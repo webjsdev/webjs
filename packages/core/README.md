@@ -53,11 +53,17 @@ See the full framework docs at https://github.com/webjsdev/webjs.
 ## Layout in the tarball
 
 The tarball ships both `src/` and `dist/`. The browser fetches the
-`dist/webjs-core-*.js` bundles (one per subpath, plus shared chunks)
-so a page does one request per subpath instead of waterfalling
-through 15+ source files. SSR imports the same bundles via the
-package `exports` field. The readable `src/` stays on disk so AI
-agents can grep it directly.
+framework as ONE self-contained bundle, `dist/webjs-core-browser.js`,
+instead of waterfalling through 15+ source files or a fan of code-split
+chunks. That single file re-exports the whole browser surface (html,
+render, WebComponent, the client router, directives, context, task,
+signals), so the `@webjsdev/core`, `/directives`, `/context`, `/task`,
+and `/client-router` specifiers all resolve to it and each import picks
+its named exports. `splitting` is off, so there are no `chunk-*.js`. The
+only other browser file is `dist/webjs-core-lazy-loader.js`, fetched
+on-demand for `static lazy = true` components. SSR / Node resolve the
+full surface via the package `exports` `default`. The readable `src/`
+stays on disk so AI agents can grep it directly.
 
 The bare `@webjsdev/core` specifier resolves to a BROWSER-only
 entry (`dist/webjs-core-browser.js` in production, `index-browser.js`
