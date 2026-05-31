@@ -1316,11 +1316,14 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await sleep(2000);
 
+    // Use the layout's /about nav link: always present regardless of DB
+    // state (the homepage post list can be empty in a fresh checkout).
     const href = await page.evaluate(() => {
-      const a = document.querySelector('main ul a[href^="/blog/"]');
-      return a ? new URL(a.href).pathname : null;
+      const a = [...document.querySelectorAll('a')]
+        .find((x) => { try { return new URL(x.href).pathname === '/about'; } catch { return false; } });
+      return a ? '/about' : null;
     });
-    assert.ok(href, 'homepage should list at least one /blog/... link to prefetch');
+    assert.ok(href, 'layout should render an in-app /about link to prefetch');
 
     // Count document requests to that pathname, split by the prefetch
     // header the prefetch path sets versus a real router navigation.
@@ -1337,8 +1340,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     try {
       // Hover; wait past the ~100ms intent dwell so the prefetch fires.
       await page.evaluate((p) => {
-        const a = [...document.querySelectorAll('main a')]
-          .find((x) => new URL(x.href).pathname === p);
+        const a = [...document.querySelectorAll('a')]
+          .find((x) => { try { return new URL(x.href).pathname === p; } catch { return false; } });
         a?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
       }, href);
       await sleep(600);
@@ -1347,8 +1350,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
       // Click: should resolve from the warm cache with NO extra document fetch.
       await page.evaluate((p) => {
-        const a = [...document.querySelectorAll('main a')]
-          .find((x) => new URL(x.href).pathname === p);
+        const a = [...document.querySelectorAll('a')]
+          .find((x) => { try { return new URL(x.href).pathname === p; } catch { return false; } });
         a?.click();
       }, href);
       await sleep(1500);
