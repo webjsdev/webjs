@@ -29,43 +29,55 @@ const CORE = resolve(HERE, '..', 'packages', 'core');
 
 /**
  * Entry points. Each maps a source file in `packages/core/` to a
- * stable bundle filename in `packages/core/dist/`. Filenames match
- * the issue spec so the npm-side `exports` field can point at them
- * via a single rename rule.
+ * stable bundle filename in `packages/core/dist/`.
  *
- * Note that some subpaths (e.g. `client-router`) map to a renamed
- * source file (`router-client.js`) for historical reasons.
+ * Deliberately MINIMAL. The browser surface ships as ONE self-contained
+ * bundle, `webjs-core-browser.js` (built from `index-browser.js`, which
+ * already re-exports the whole browser API: html/render/WebComponent, the
+ * client router and its top-level auto-enable, directives, context, task,
+ * signals, the frame). So the per-subpath browser entries that used to
+ * exist (directives / context / task / client-router) are GONE: the
+ * package.json `exports` `default` for those subpaths points at
+ * `webjs-core-browser.js`, and each `import` just picks its named exports
+ * from the one file. That collapses the browser to a single framework
+ * request instead of a fan of code-split chunks. Splitting is off (below)
+ * so the browser bundle is one file with no `chunk-*.js`.
+ *
+ * What stays its own file:
+ * - `webjs-core` (built from `index.js`): the full surface for Node `.`
+ *   resolution (keeps `renderToString` / `expose` / `setCspNonceProvider`).
+ * - `webjs-core-lazy-loader`: loaded on-demand for `static lazy = true`
+ *   components, not on the always-load path, so it is NOT folded in.
+ * - `webjs-core-testing`: test-only, never browser-shipped in prod.
  */
 const ENTRIES = [
   { in: 'index.js',                  out: 'webjs-core' },
-  // Browser-only entry: same as index.js minus render-server, expose,
-  // and setCspNonceProvider. The browser importmap points at this
-  // bundle (or the un-bundled `index-browser.js` in workspace dev
-  // mode); Node-side consumers keep landing on `webjs-core.js`.
   { in: 'index-browser.js',          out: 'webjs-core-browser' },
-  { in: 'src/directives.js',         out: 'webjs-core-directives' },
-  { in: 'src/context.js',            out: 'webjs-core-context' },
-  { in: 'src/task.js',               out: 'webjs-core-task' },
-  { in: 'src/router-client.js',      out: 'webjs-core-client-router' },
   { in: 'src/lazy-loader.js',        out: 'webjs-core-lazy-loader' },
   { in: 'src/testing.js',            out: 'webjs-core-testing' },
 ];
 
 async function main() {
-  const dist = join(CORE, 'dist');
+  // Output dir defaults to the package's own `dist/` (what `prepare` /
+  // `build:dist` produce for publish). An optional first CLI arg overrides it,
+  // so a test can build into a throwaway temp dir without clobbering the shared
+  // `packages/core/dist` that other tests may read.
+  const dist = process.argv[2] ? resolve(process.argv[2]) : join(CORE, 'dist');
   await rm(dist, { recursive: true, force: true });
   await mkdir(dist, { recursive: true });
 
-  // Code-split across the entry points so common modules like
-  // `html.js` and `registry.js` land in a single shared chunk
-  // instead of being duplicated into every entry bundle. The chunks
-  // sit alongside the named entries; relative `import './chunk-xxx.js'`
-  // statements in each entry resolve to the right URL at fetch time.
+  // Splitting OFF: each entry is a single self-contained file with no
+  // shared `chunk-*.js`. The browser surface is one request
+  // (`webjs-core-browser.js`); the handful of other entries (the Node
+  // full bundle, the on-demand lazy loader, the test helpers) duplicate
+  // the small amount of code they share, which is a cheap tarball cost
+  // (never shipped to a browser) in exchange for a clean, waterfall-free
+  // network graph. The few entries mean little duplication in practice.
   const result = await build({
     entryPoints: ENTRIES.map((e) => ({ in: join(CORE, e.in), out: e.out })),
     outdir: dist,
     bundle: true,
-    splitting: true,
+    splitting: false,
     format: 'esm',
     target: 'es2022',
     platform: 'browser',

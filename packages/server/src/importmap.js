@@ -269,8 +269,11 @@ export function buildCoreEntries(coreDir, distMode) {
     // The check is deliberately broad: `..` substring catches both
     // `../etc/passwd` and `./foo/../bar`.
     if (targetRel.includes('..')) continue;
-    // `./directives` → `@webjsdev/core/directives`,
-    // `./dist/webjs-core-directives.js` → `/__webjs/core/dist/webjs-core-directives.js`.
+    // `./lazy-loader` → `@webjsdev/core/lazy-loader`,
+    // `./dist/webjs-core-lazy-loader.js` → `/__webjs/core/dist/webjs-core-lazy-loader.js`.
+    // The browser-surface subpaths (`./directives`, `./context`, `./task`,
+    // `./client-router`) point their `default` at `webjs-core-browser.js`, so in
+    // dist mode they all collapse onto that one URL (the bundle re-exports them).
     out['@webjsdev/core' + subpath.slice(1)] = '/__webjs/core/' + targetRel.slice(2);
   }
   return out;

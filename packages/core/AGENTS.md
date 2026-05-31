@@ -64,15 +64,20 @@ export.
    fetches per-file. Workspace dev (this monorepo) serves per-file
    from `packages/core/src/` until you opt into the bundle by
    running `npm run build:dist --workspace=@webjsdev/core`.
-   Published-to-npm copies ship pre-built `dist/webjs-core-*.js`
-   bundles alongside `src/`; the browser fetches the bundles when
-   `dist/` is present (`scripts/build-framework-dist.js` is wired
-   to the `prepare` lifecycle so `npm publish` always rebuilds).
-   Only `@webjsdev/core` has this dual-layout. Other framework
-   packages stay source-only. The package also ships an
-   `index-browser.js` (and `dist/webjs-core-browser.js`) that strip
-   `render-server.js`, `expose.js`, and `setCspNonceProvider` from
-   the public surface. `packages/server/src/importmap.js` routes the
+   Published-to-npm copies ship pre-built `dist/` bundles alongside
+   `src/`; the browser fetches them when `dist/` is present
+   (`scripts/build-framework-dist.js` is wired to the `prepare`
+   lifecycle so `npm publish` always rebuilds). The browser surface is
+   ONE self-contained file, `dist/webjs-core-browser.js` (built with
+   `splitting` off, so no `chunk-*.js`): it re-exports the whole browser
+   API, so the bare specifier and the `/directives`, `/context`,
+   `/task`, `/client-router` subpaths all resolve to it. `dist/` also
+   carries `webjs-core.js` (the full Node surface), the on-demand
+   `webjs-core-lazy-loader.js`, and the test-only `webjs-core-testing.js`.
+   Only `@webjsdev/core` has this dual-layout. Other framework packages
+   stay source-only. `index-browser.js` (and its `dist/webjs-core-browser.js`
+   build) strip `render-server.js`, `expose.js`, and
+   `setCspNonceProvider` from the public surface. `packages/server/src/importmap.js` routes the
    bare specifier `@webjsdev/core` to that browser entry on the
    client side; Node-side consumers (SSR pipeline, framework
    internals, unit tests) keep landing on `index.js` via the

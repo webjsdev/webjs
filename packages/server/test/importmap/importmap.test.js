@@ -272,17 +272,26 @@ test('setCoreInstall(false): @webjsdev/core/* maps to /__webjs/core/src/*', asyn
   assert.equal(map.imports['@webjsdev/core/'], '/__webjs/core/src/');
 });
 
-test('setCoreInstall(true): @webjsdev/core/* maps to /__webjs/core/dist/webjs-core-*', async () => {
+test('setCoreInstall(true): browser subpaths collapse onto the one dist bundle', async () => {
   const { buildImportMap } = await import('../../src/importmap.js');
   await setVendorEntries({});
   await setCoreInstall(CORE_DIR, true);
   const map = buildImportMap();
-  // Same browser-routing logic in dist mode: bare specifier lands
-  // on the slim `webjs-core-browser.js`, not the universal
-  // `webjs-core.js`.
-  assert.equal(map.imports['@webjsdev/core'], '/__webjs/core/dist/webjs-core-browser.js');
-  assert.equal(map.imports['@webjsdev/core/directives'], '/__webjs/core/dist/webjs-core-directives.js');
-  assert.equal(map.imports['@webjsdev/core/client-router'], '/__webjs/core/dist/webjs-core-client-router.js');
+  // In dist mode the browser ships as ONE self-contained bundle. The bare
+  // specifier and every always-load browser subpath resolve to the same
+  // `webjs-core-browser.js` (which re-exports directives, context, task, and
+  // the client router), so a page makes a single framework request instead of
+  // a fan of per-subpath entries + code-split chunks. Each import just picks
+  // its named exports from the one file.
+  const BROWSER = '/__webjs/core/dist/webjs-core-browser.js';
+  assert.equal(map.imports['@webjsdev/core'], BROWSER);
+  assert.equal(map.imports['@webjsdev/core/directives'], BROWSER);
+  assert.equal(map.imports['@webjsdev/core/context'], BROWSER);
+  assert.equal(map.imports['@webjsdev/core/task'], BROWSER);
+  assert.equal(map.imports['@webjsdev/core/client-router'], BROWSER);
+  // The lazy loader is NOT folded in: it loads on-demand for `static lazy`
+  // components, off the always-load path, so it keeps its own dist file.
+  assert.equal(map.imports['@webjsdev/core/lazy-loader'], '/__webjs/core/dist/webjs-core-lazy-loader.js');
   // Catch-all prefix stays on src/ in BOTH modes so the unbundled
   // subpaths (./client, ./server, ./component, ./registry,
   // ./signals) still resolve.
