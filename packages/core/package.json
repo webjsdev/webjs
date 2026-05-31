@@ -12,19 +12,19 @@
     },
     "./directives": {
       "source": "./src/directives.js",
-      "default": "./dist/webjs-core-directives.js"
+      "default": "./dist/webjs-core-browser.js"
     },
     "./context": {
       "source": "./src/context.js",
-      "default": "./dist/webjs-core-context.js"
+      "default": "./dist/webjs-core-browser.js"
     },
     "./task": {
       "source": "./src/task.js",
-      "default": "./dist/webjs-core-task.js"
+      "default": "./dist/webjs-core-browser.js"
     },
     "./client-router": {
       "source": "./src/router-client.js",
-      "default": "./dist/webjs-core-client-router.js"
+      "default": "./dist/webjs-core-browser.js"
     },
     "./lazy-loader": {
       "source": "./src/lazy-loader.js",
