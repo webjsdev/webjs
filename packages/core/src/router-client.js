@@ -231,6 +231,11 @@ export async function navigate(url, opts) {
  * Invalidate a cached snapshot. Call after a server action mutates data
  * that affects a cached page so the next visit refetches.
  *
+ * Evicts BOTH the back/forward snapshot cache and the speculative
+ * prefetch cache. A prefetched fragment captured before a mutation would
+ * otherwise be served stale on the next forward click, the same staleness
+ * the snapshot eviction prevents for back/forward.
+ *
  * @param {string} [url]  Specific URL to invalidate, or omit to clear all.
  */
 export function revalidate(url) {
@@ -238,9 +243,11 @@ export function revalidate(url) {
   // Loose `== null` would have left `revalidate('')` to silently no-op,
   // because `new URL('', location.href)` is a valid relative URL and the
   // resulting cache key rarely matches anything.
-  if (!url) { snapshotCache.clear(); return; }
+  if (!url) { snapshotCache.clear(); prefetchCache.clear(); return; }
   const u = new URL(url, location.href);
-  snapshotCache.delete(u.pathname + u.search);
+  const key = u.pathname + u.search;
+  snapshotCache.delete(key);
+  prefetchCache.delete(key);
 }
 
 // Auto-enable on import (standard Turbo-Drive convention).
@@ -730,9 +737,12 @@ async function performSubmission(href, method, body, frameId) {
     );
     // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is
-    // snapshotted on the next nav, not pre-emptively wiped.
+    // snapshotted on the next nav, not pre-emptively wiped. Clear the
+    // speculative prefetch cache too: a fragment prefetched before this
+    // mutation would otherwise be served stale on a later forward click.
     if (!isSafe && myToken === currentNavigationToken) {
       snapshotCache.clear();
+      prefetchCache.clear();
     }
   } finally {
     if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
@@ -795,6 +805,8 @@ const PREFETCH_CAP = 8;
 const PREFETCH_TTL = 30_000;
 /** Max concurrent in-flight prefetch requests. */
 const PREFETCH_CONCURRENCY = 3;
+/** Max prefetches waiting for a free slot (bounds a huge link list). */
+const PREFETCH_QUEUE_CAP = 24;
 /** Hover dwell before a prefetch fires (ms): filter drive-by pointer moves. Matches Remix's intent timeout. */
 const PREFETCH_HOVER_DELAY = 100;
 
@@ -803,6 +815,9 @@ const PREFETCH_HOVER_DELAY = 100;
 const prefetchCache = new Map();
 /** Keys with a fetch currently in flight (dedupe + concurrency gate). */
 const prefetchInflight = new Set();
+/** hrefs waiting for a free concurrency slot (FIFO), and their keys. */
+const prefetchQueue = [];
+const prefetchQueued = new Set();
 /** Pending hover-dwell timer, cleared on pointerout / blur. */
 let prefetchHoverTimer = null;
 /** Last anchor a hover timer was armed for (so pointerout can match). */
@@ -923,8 +938,11 @@ function prefetchMode(anchor) {
 
 /**
  * Speculatively fetch `href` and stash the server fragment so a later
- * click resolves instantly. No-op when data-saving is on, the entry is
- * already cached or in flight, or the concurrency gate is full.
+ * click resolves instantly. No-op when data-saving is on or the entry is
+ * already cached or in flight. When the concurrency gate is full the
+ * request is QUEUED (not dropped) and drains as in-flight slots free, so
+ * a burst of `render` / `viewport` links all eventually prefetch rather
+ * than silently losing everything past the cap.
  *
  * @param {string} href
  */
@@ -933,9 +951,20 @@ function prefetch(href) {
   if (prefetchSaysSaveData()) return;
   const key = cacheKey(href);
   if (prefetchInflight.has(key)) return;
+  if (prefetchQueued.has(key)) return;
   const existing = prefetchCache.get(key);
   if (existing && (nowMs() - existing.at) < PREFETCH_TTL) return;
-  if (prefetchInflight.size >= PREFETCH_CONCURRENCY) return;
+  if (prefetchInflight.size >= PREFETCH_CONCURRENCY) {
+    // Gate full: queue rather than drop, bounded so a huge link list
+    // cannot grow the queue without limit (oldest queued entry is shed).
+    prefetchQueued.add(key);
+    prefetchQueue.push(href);
+    while (prefetchQueue.length > PREFETCH_QUEUE_CAP) {
+      const dropped = prefetchQueue.shift();
+      prefetchQueued.delete(cacheKey(dropped));
+    }
+    return;
+  }
 
   prefetchInflight.add(key);
   const headers = { 'x-webjs-router': '1', 'x-webjs-prefetch': '1' };
@@ -953,7 +982,19 @@ function prefetch(href) {
       prefetchStore(key, { html, build, finalUrl, at: nowMs() });
     })
     .catch(() => { /* speculative: swallow */ })
-    .finally(() => { prefetchInflight.delete(key); });
+    .finally(() => {
+      prefetchInflight.delete(key);
+      drainPrefetchQueue();
+    });
+}
+
+/** Start the next queued prefetch if a concurrency slot is free. */
+function drainPrefetchQueue() {
+  while (prefetchQueue.length && prefetchInflight.size < PREFETCH_CONCURRENCY) {
+    const href = prefetchQueue.shift();
+    prefetchQueued.delete(cacheKey(href));
+    prefetch(href);
+  }
 }
 
 /**
@@ -2085,6 +2126,8 @@ export function _prefetchInflightSize() { return prefetchInflight.size; }
 export function _resetPrefetch() {
   prefetchCache.clear();
   prefetchInflight.clear();
+  prefetchQueue.length = 0;
+  prefetchQueued.clear();
   clearPrefetchHover();
 }
 

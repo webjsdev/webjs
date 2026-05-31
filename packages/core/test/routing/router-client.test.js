@@ -2553,3 +2553,89 @@ test('prefetchTake: consumes a cached entry exactly once', async () => {
     assert.equal(_prefetchTake('http://localhost/take'), null, 'second take is a miss (single-use)');
   });
 });
+
+test('prefetch: requests past the concurrency cap queue and drain (not dropped)', async () => {
+  // Hold every fetch open until released, so the first PREFETCH_CONCURRENCY
+  // stay in flight and the rest must queue. On release, the queue should
+  // drain and ALL urls should eventually have been fetched.
+  const releases = [];
+  let n = 0;
+  await withPrefetchEnv(async () => {
+    const urls = ['/a', '/b', '/c', '/d', '/e'].map((p) => `http://localhost${p}`);
+    urls.forEach((u) => _prefetch(u));
+    // Only the cap (3) are in flight; the other 2 are queued, none dropped.
+    assert.equal(_prefetchInflightSize(), 3, 'cap in flight');
+    assert.equal(n, 3, 'only cap fetched so far');
+    // Release all in-flight; the queue drains into the freed slots.
+    for (const r of releases.splice(0)) r();
+    await new Promise((r) => setTimeout(r, 0));
+    for (const r of releases.splice(0)) r();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(n, 5, 'all five eventually fetched (queue drained, nothing dropped)');
+  }, {
+    fetchImpl: async () => {
+      n++;
+      await new Promise((res) => releases.push(res));
+      return new Response('<body>x</body>', { status: 200, headers: { 'content-type': 'text/html' } });
+    },
+  });
+});
+
+test('navigate: consumes a warm prefetch instead of hitting the network', async () => {
+  // Warm the cache for /warm, then navigate to it. The nav must read the
+  // prefetched fragment via prefetchTake and NOT issue a second fetch.
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const origHistory = globalThis.history;
+  const origScrollTo = globalThis.scrollTo;
+  let prefetchCalls = 0;
+  let navCalls = 0;
+  globalThis.location = /** @type any */ ({
+    origin: 'http://localhost', href: 'http://localhost/', pathname: '/', search: '',
+    assign() {}, replace() {},
+  });
+  Object.defineProperty(globalThis.location, 'href', {
+    configurable: true, get() { return 'http://localhost/'; }, set() {},
+  });
+  globalThis.history = /** @type any */ ({ pushState() {}, replaceState() {} });
+  globalThis.scrollTo = /** @type any */ (() => {});
+  globalThis.fetch = async (url, init) => {
+    const isPrefetch = init && init.headers && init.headers['x-webjs-prefetch'];
+    if (isPrefetch) prefetchCalls++; else navCalls++;
+    return new Response('<!doctype html><body><p>warm</p></body>', {
+      status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': 'b1' },
+    });
+  };
+  try {
+    _resetPrefetch();
+    _prefetch('http://localhost/warm');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(prefetchCalls, 1, 'prefetch warmed the cache');
+    assert.ok(_prefetchPeek('http://localhost/warm'), 'entry cached');
+    await navigate('http://localhost/warm');
+    assert.equal(navCalls, 0, 'navigation served from prefetch cache, no network fetch');
+    assert.equal(_prefetchPeek('http://localhost/warm'), null, 'entry consumed by the nav');
+  } finally {
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+    globalThis.history = origHistory;
+    globalThis.scrollTo = origScrollTo;
+    _resetPrefetch();
+  }
+});
+
+test('revalidate evicts the prefetch cache, not just the snapshot cache', async () => {
+  await withPrefetchEnv(async () => {
+    _prefetch('http://localhost/items');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(_prefetchPeek('http://localhost/items'), 'prefetched');
+    revalidate('http://localhost/items');
+    assert.equal(_prefetchPeek('http://localhost/items'), null, 'revalidate(url) dropped the prefetch entry');
+    // And the clear-all form.
+    _prefetch('http://localhost/items');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(_prefetchPeek('http://localhost/items'), 're-prefetched');
+    revalidate();
+    assert.equal(_prefetchPeek('http://localhost/items'), null, 'revalidate() cleared the prefetch cache');
+  });
+});
