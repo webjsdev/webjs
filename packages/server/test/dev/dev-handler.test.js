@@ -93,11 +93,12 @@ test('handle: a pinned app publishes a stable build id from the first response',
 });
 
 test('handle: a transient vendor failure does not block readiness', async () => {
-  // Vendor resolution is best-effort and decoupled from readiness: a transient
-  // jspm failure (here a mocked network reject) must leave the app READY (the
-  // deterministic analysis is what readiness gates on), so an offline or
-  // CDN-degraded instance still serves. The failed resolve is re-attempted on
-  // the next request, not via a background timer.
+  // Readiness gates on a fully warm instance (analysis plus the first vendor
+  // attempt), but on the ATTEMPT completing, not succeeding: a transient jspm
+  // failure (here a mocked network reject) is a completed attempt, so the app
+  // still becomes READY and serves. An offline or CDN-degraded instance is
+  // therefore not held down. The failed resolve is re-attempted on the next
+  // request, not via a background timer.
   const appDir = makeApp({
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
@@ -112,6 +113,38 @@ test('handle: a transient vendor failure does not block readiness', async () => 
     const ready = await app.handle(new Request('http://x/__webjs/ready'));
     assert.equal(ready.status, 200, 'a transient vendor failure must not block readiness');
     assert.equal((await ready.json()).status, 'ok');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('handle: a malformed pin file falls through to the real deferred resolve', async () => {
+  // Regression: hasVendorPin is a cheap existence check, but a malformed pin
+  // (exists, unparseable) must NOT be treated as pinned-at-boot. If it were,
+  // the boot read would short-circuit resolveVendorImports with the empty
+  // boot-time scan thunk, resolve zero deps, set bootVendorPinned, and the real
+  // deferred resolve (with the actual bare-import scan) would never run, serving
+  // an importmap missing every dependency. With the fix, an invalid pin falls
+  // through to the normal deferred resolve, which scans the real imports. We
+  // detect that by spying on the jspm fetch: the broken path never reaches it.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    '.webjs/vendor/importmap.json': '{ not valid json at all',
+  });
+  const origFetch = globalThis.fetch;
+  let jspmAttempted = false;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('jspm')) jspmAttempted = true;
+    throw new Error('ECONNREFUSED');
+  };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup(); // runs the deferred analysis + first vendor attempt
+    assert.ok(jspmAttempted,
+      'a malformed pin must fall through to the real bare-import scan + jspm resolve, not short-circuit at boot with an empty map');
   } finally {
     globalThis.fetch = origFetch;
   }

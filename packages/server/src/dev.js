@@ -58,7 +58,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
@@ -212,32 +212,40 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Pinned apps (a committed .webjs/vendor/importmap.json, the recommended
-  // production posture) carry a deterministic vendor map that is cheap to read
-  // (one file, no analysis, no network). Resolve it AT BOOT and publish the
-  // build id immediately so the process advertises a stable, non-empty id from
-  // its very first response: a freshly-deployed pinned process is detected as a
-  // new deploy by old-deploy clients with zero warmup window, restoring the
-  // pre-runtime-first-boot cross-deploy guarantee for this posture. Mirrors
-  // Rails importmap (committed pins rendered deterministically at runtime). The
-  // EXPENSIVE analysis (graph, scan, gate, elision) and the UNPINNED jspm
-  // resolve both stay deferred to the first request, so #143's win is intact;
-  // only the cheap committed-file read moves back to boot, and only when pinned.
-  // A committed pin file is served as-is (elision never prunes it), so the
-  // boot-resolved map equals the final served map and the published id is
-  // authoritative. An unpinned app does no vendor work at boot and publishes
-  // its id after the first successful resolve instead.
+  // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
+  // deterministic vendor map that is cheap to read (one file, no analysis, no
+  // network). Resolve it AT BOOT and publish the build id immediately so the
+  // process advertises a stable, non-empty id from its very first response: a
+  // freshly-deployed pinned process is detected as a new deploy by old-deploy
+  // clients with zero warmup window. Mirrors Rails importmap (committed pins
+  // rendered deterministically at runtime). Pinning stays optional; an unpinned
+  // app does no vendor work at boot and publishes its id after the first
+  // successful resolve instead. Either way the EXPENSIVE analysis (graph, scan,
+  // gate, elision) and the UNPINNED jspm resolve stay deferred to the first
+  // request, so #143's win is intact; only the cheap committed-file read moves
+  // back to boot, and only when a VALID pin exists. A committed pin file is
+  // served as-is (elision never prunes it), so the boot-resolved map equals the
+  // final served map and the published id is authoritative.
+  //
+  // Validate the pin with readPinFile BEFORE treating the app as pinned-at-boot.
+  // hasVendorPin is a cheap existence check; a malformed pin (exists but
+  // unparseable) must NOT short-circuit here, because resolveVendorImports would
+  // then fall through to its bare-import scan thunk, and the boot-time thunk is
+  // empty (the real scan is part of the deferred analysis). A broken pin instead
+  // falls through to the normal deferred resolve, which carries the real scan
+  // thunk and degrades gracefully, exactly as an unpinned app does.
   let bootVendorPinned = false;
-  if (hasVendorPin(appDir)) {
+  if (hasVendorPin(appDir) && (await readPinFile(appDir))) {
     try {
       const v = await resolveVendorImports(appDir, () => new Set());
       await setVendorEntries(v.imports, v.integrity);
       publishBuildId();
       bootVendorPinned = true;
     } catch (e) {
-      // A malformed pin file is non-fatal: fall through to the deferred resolve,
-      // which surfaces the error on the first request. Boot stays resilient.
-      logger.error?.(`[webjs] reading the committed vendor pin at boot failed (will retry on the first request):`, e);
+      // An unexpected failure applying a VALID pin (e.g. setVendorEntries
+      // throwing) is non-fatal: leave bootVendorPinned false so the deferred
+      // resolve re-attempts on the first request. Boot stays resilient.
+      logger.error?.(`[webjs] applying the committed vendor pin at boot failed (will retry on the first request):`, e);
     }
   }
 
