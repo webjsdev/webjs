@@ -67,7 +67,7 @@ import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
-import { setVendorEntries, setCoreInstall } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 
 const MIME = {
@@ -256,12 +256,25 @@ export async function createRequestHandler(opts) {
   async function ensureReady() {
     // Fully warm: analysis done and vendor resolved. Nothing to do.
     if (analysisDone && vendorResolved) return;
-    // Analysis warm but a prior vendor attempt failed: re-attempt WITHOUT
-    // blocking this request. The single-flight dedupes concurrent attempts;
-    // success flips the flag. This is the request/probe-driven retry (no timer).
+    // A warm pass is in flight (the analysis and/or the FIRST vendor attempt).
+    // Await it rather than serving past it: a concurrent early request must get
+    // the FINAL importmap, never a half-resolved one. This is what makes the
+    // unpinned warmup flawless. The first attempt's jspm resolve is
+    // timeout-bounded (vendor.js), so an offline app cannot hang here: on
+    // timeout the resolve returns and the response is served with an empty,
+    // reload-safe build id, then the retry below completes it. Without this
+    // wait, a request arriving mid-resolve would serve a partial map and an
+    // empty-then-changing build id, the exact warmup drift that hard-reloads
+    // and wipes a half-filled form.
+    if (readyInFlight) { await readyInFlight; return; }
+    // Analysis warm but the first vendor attempt already completed and failed:
+    // re-attempt WITHOUT blocking this request. The single-flight dedupes
+    // concurrent attempts; success flips the flag AND publishes the build id.
+    // This is the request/probe-driven retry (no timer). Until it succeeds the
+    // served build id stays empty (reload-safe), so no navigation hard-reloads.
     if (analysisDone && vendorAttemptedOnce) {
       const gen = vendorGen;
-      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) vendorResolved = true; }).catch(() => {});
+      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); } }).catch(() => {});
       return;
     }
     // Otherwise run the (single-flighted) full warm: the analysis, then the
@@ -317,8 +330,11 @@ export async function createRequestHandler(opts) {
             // Only memoize success (and only if a rebuild didn't intervene). A
             // transient failure leaves vendorResolved false; the next ensureReady
             // call re-attempts it non-blocking. A permanent unresolvable (jspm
-            // 401) reports ok and is tolerated, so it does not loop.
-            if (ok && gen === vendorGen) vendorResolved = true;
+            // 401) reports ok and is tolerated, so it does not loop. On success
+            // the importmap is now authoritatively final, so publish the build
+            // id: from here every response advertises the same stable value and
+            // the client router's deploy detection works without warmup drift.
+            if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); }
           }
           if (ranAnalysis) {
             const ms = (x) => Math.round(x || 0);

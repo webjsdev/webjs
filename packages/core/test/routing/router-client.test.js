@@ -711,14 +711,18 @@ test('navigate: importmap mismatch triggers full-page reload (no partial swap)',
   // fall back to a full page load. The new page expects the new
   // module URLs (and new SRI hashes); partial swap leaves the old
   // importmap in place and silently breaks module resolution.
-  // Mirrors Turbo's tracked_element_mismatch reload behavior.
-  document.head.innerHTML = '<script type="importmap">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
+  // Mirrors Turbo's tracked_element_mismatch reload behavior. A real
+  // cross-deploy is two DIFFERENT, non-empty published build ids: the
+  // old process published "oldbuild", the new one publishes "newbuild".
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="oldbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
   document.body.innerHTML = '<p>current</p>';
   const newBody =
     '<!doctype html><html><head>' +
-    '<script type="importmap">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
+    '<script type="importmap" data-webjs-build="newbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
     '</head><body><p>after deploy</p></body></html>';
-  const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html', body: newBody, responseHeaders: { 'X-Webjs-Build': 'newbuild' },
+  });
   try {
     await navigate('http://localhost/posts/123');
     // Hard reload should fire; partial swap must NOT run.
@@ -727,6 +731,30 @@ test('navigate: importmap mismatch triggers full-page reload (no partial swap)',
     // The current document.body must NOT have been swapped.
     assert.equal(document.body.querySelector('p')?.textContent, 'current',
       'partial swap must have been aborted');
+  } finally { restore(); }
+});
+
+test('navigate: empty/absent build id never hard-reloads (warmup-safe)', async () => {
+  // Regression for the warmup hard-reload that wiped form input. During
+  // a runtime-first-boot server's warmup window the published build id
+  // is empty until the importmap is final, and the importmap textContent
+  // genuinely changes (vendor entries appear) across the first responses.
+  // The router must NOT treat that as a deploy: an empty id on either
+  // side means "version unknown", so it stays soft and the half-filled
+  // form survives. (Before the fix, the empty-vs-nonempty case fell
+  // through to a textContent compare that hard-reloaded and lost input.)
+  document.head.innerHTML = '<script type="importmap" data-webjs-build="">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
+  document.body.innerHTML = '<input id="name" value="typed">';
+  const newBody =
+    '<!doctype html><html><head>' +
+    '<script type="importmap" data-webjs-build="warmbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
+    '</head><body><input id="name"></body></html>';
+  // Response also carries no build header yet (still warming): the swap must stay soft.
+  const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
+  try {
+    await navigate('http://localhost/signup');
+    assert.ok(!redirect.assigns.includes('http://localhost/signup'),
+      'empty current build id must NOT trigger a hard reload during warmup');
   } finally { restore(); }
 });
 
