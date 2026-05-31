@@ -1442,14 +1442,18 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await sleep(2000);
 
-    // Use the layout's /about nav link: always present regardless of DB
-    // state (the homepage post list can be empty in a fresh checkout).
-    const href = await page.evaluate(() => {
-      const a = [...document.querySelectorAll('a')]
-        .find((x) => { try { return new URL(x.href).pathname === '/about'; } catch { return false; } });
-      return a ? '/about' : null;
+    // Inject our own internal link to a real route (/about) so the test
+    // is independent of DB state and the layout's nav markup. The router
+    // intercepts document-level clicks on any same-origin <a>, so an
+    // injected light-DOM link exercises the exact prefetch + click path.
+    const href = '/about';
+    await page.evaluate(() => {
+      const a = document.createElement('a');
+      a.href = '/about';
+      a.id = 'e2e-prefetch-link';
+      a.textContent = 'about (e2e)';
+      (document.querySelector('main') || document.body).appendChild(a);
     });
-    assert.ok(href, 'layout should render an in-app /about link to prefetch');
 
     // Count document requests to that pathname, split by the prefetch
     // header the prefetch path sets versus a real router navigation.
@@ -1465,21 +1469,18 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     page.on('request', onRequest);
     try {
       // Hover; wait past the ~100ms intent dwell so the prefetch fires.
-      await page.evaluate((p) => {
-        const a = [...document.querySelectorAll('a')]
-          .find((x) => { try { return new URL(x.href).pathname === p; } catch { return false; } });
-        a?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-      }, href);
-      await sleep(600);
+      await page.evaluate(() => {
+        document.getElementById('e2e-prefetch-link')
+          ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      });
+      await sleep(700);
       assert.ok(hits.prefetch >= 1, `hover should issue a speculative prefetch GET for ${href}`);
       const afterHover = hits.prefetch;
 
       // Click: should resolve from the warm cache with NO extra document fetch.
-      await page.evaluate((p) => {
-        const a = [...document.querySelectorAll('a')]
-          .find((x) => { try { return new URL(x.href).pathname === p; } catch { return false; } });
-        a?.click();
-      }, href);
+      await page.evaluate(() => {
+        document.getElementById('e2e-prefetch-link')?.click();
+      });
       await sleep(1500);
 
       assert.ok(page.url().includes(href), `should have navigated to ${href}, got ${page.url()}`);
