@@ -851,13 +851,16 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
  * never trigger a hard reload).
  *
  * Detection uses the `X-Webjs-Build` response header (read by the
- * fetch path and passed in as `incomingBuild`). The header is set on
- * EVERY SSR response, including X-Webjs-Have partial responses that
- * omit the head and importmap entirely. Without it, comparing
- * `<script type="importmap">` textContent would silently no-op on
- * partial responses (incoming is null) and the user would stay on the
- * stale importmap after a deploy. Fallback: when the header is absent
- * (older server, non-SSR response), compare textContent as before.
+ * fetch path and passed in as `incomingBuild`), compared against the
+ * current page's `data-webjs-build`. The header is set on EVERY SSR
+ * response, including X-Webjs-Have partial responses that omit the
+ * head and importmap entirely, and it carries the PUBLISHED build id,
+ * which the server advertises only once the importmap is final. A hard
+ * reload fires only when both ids are present and differ (a real
+ * cross-deploy). An empty / absent id on either side means "version
+ * unknown" (a warming runtime-first-boot server, or a response that
+ * predates the header) and never triggers a reload, so the warmup
+ * window cannot wipe a half-filled form.
  *
  * @param {Document} doc
  * @param {string | null} frameId
@@ -919,19 +922,23 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
     const currentBuild = currentTag ? currentTag.getAttribute('data-webjs-build') : null;
     let mismatch = false;
     if (incomingBuild && currentBuild) {
-      // Preferred path: compare per-response build hash. Works even
+      // Preferred path: compare per-response build id. Works even
       // when the response body has no importmap (partial swap).
       mismatch = incomingBuild !== currentBuild;
-    } else {
-      // Fallback for responses without X-Webjs-Build (older servers,
-      // hand-crafted HTML in tests). Match the previous behavior of
-      // comparing the importmap textContent in the parsed document.
-      const incoming = doc.querySelector('script[type="importmap"]');
-      mismatch = !!(
-        incoming && currentTag &&
-        (incoming.textContent || '').trim() !== (currentTag.textContent || '').trim()
-      );
     }
+    // An empty / absent build id on EITHER side means "version unknown":
+    // the server has not published an authoritative importmap yet (the
+    // warmup window, where a runtime-first-boot app resolves its vendor
+    // map over the first request), or the response predates the build
+    // header. In that state a hard reload is unsafe and destructive: it
+    // would fire repeatedly as the warming server's id flips from empty
+    // to its final value, wiping any half-filled form on the page. So we
+    // never hard-reload against an unknown id and leave `mismatch` false;
+    // the soft swap proceeds and the page settles once the server is
+    // warm. A real cross-deploy reload still fires, because both sides
+    // then carry non-empty, differing ids. (No importmap-textContent
+    // fallback: the published-id contract above supersedes it, and the
+    // textContent of a warming map drifts for the same reason the id does.)
     // Generic `data-webjs-track="reload"` opt-in. ANY element in the
     // head that the user marks gets included in the tracked-element
     // signature. If the signature differs between current and incoming

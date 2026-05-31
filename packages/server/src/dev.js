@@ -58,7 +58,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
@@ -67,7 +67,7 @@ import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 }
-import { setVendorEntries, setCoreInstall } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 
 const MIME = {
@@ -212,6 +212,43 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
+  // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
+  // deterministic vendor map that is cheap to read (one file, no analysis, no
+  // network). Resolve it AT BOOT and publish the build id immediately so the
+  // process advertises a stable, non-empty id from its very first response: a
+  // freshly-deployed pinned process is detected as a new deploy by old-deploy
+  // clients with zero warmup window. Mirrors Rails importmap (committed pins
+  // rendered deterministically at runtime). Pinning stays optional; an unpinned
+  // app does no vendor work at boot and publishes its id after the first
+  // successful resolve instead. Either way the EXPENSIVE analysis (graph, scan,
+  // gate, elision) and the UNPINNED jspm resolve stay deferred to the first
+  // request, so #143's win is intact; only the cheap committed-file read moves
+  // back to boot, and only when a VALID pin exists. A committed pin file is
+  // served as-is (elision never prunes it), so the boot-resolved map equals the
+  // final served map and the published id is authoritative.
+  //
+  // Validate the pin with readPinFile BEFORE treating the app as pinned-at-boot.
+  // hasVendorPin is a cheap existence check; a malformed pin (exists but
+  // unparseable) must NOT short-circuit here, because resolveVendorImports would
+  // then fall through to its bare-import scan thunk, and the boot-time thunk is
+  // empty (the real scan is part of the deferred analysis). A broken pin instead
+  // falls through to the normal deferred resolve, which carries the real scan
+  // thunk and degrades gracefully, exactly as an unpinned app does.
+  let bootVendorPinned = false;
+  if (hasVendorPin(appDir) && (await readPinFile(appDir))) {
+    try {
+      const v = await resolveVendorImports(appDir, () => new Set());
+      await setVendorEntries(v.imports, v.integrity);
+      publishBuildId();
+      bootVendorPinned = true;
+    } catch (e) {
+      // An unexpected failure applying a VALID pin (e.g. setVendorEntries
+      // throwing) is non-fatal: leave bootVendorPinned false so the deferred
+      // resolve re-attempts on the first request. Boot stays resilient.
+      logger.error?.(`[webjs] applying the committed vendor pin at boot failed (will retry on the first request):`, e);
+    }
+  }
+
   // Whole-app analysis (module graph, component scan, browser-bound gate,
   // action index, middleware, elision, vendor) is NOT run at boot. It is
   // computed on the first request via ensureReady() below and memoized, so the
@@ -245,8 +282,11 @@ export async function createRequestHandler(opts) {
   // platform's traffic and probes are the retry loop. `readyError` holds a
   // propagating analysis failure so /__webjs/ready can report it.
   let analysisDone = false;        // deterministic analysis complete (readiness gate)
-  let vendorResolved = false;      // vendor map fully resolved (or permanently tolerated)
-  let vendorAttemptedOnce = false; // the first (blocking) vendor attempt has run
+  // A pinned app already resolved + published its vendor map at boot (above), so
+  // the deferred vendor stage is a no-op from the start; an unpinned app starts
+  // false and resolves on the first request.
+  let vendorResolved = bootVendorPinned;      // vendor map fully resolved (or permanently tolerated)
+  let vendorAttemptedOnce = bootVendorPinned; // the first (blocking) vendor attempt has run
   let vendorGen = 0;               // bumped on rebuild; a stale resolve cannot flip vendorResolved
   let readyDone = false;           // mirrors analysisDone; the /__webjs/ready gate
   /** @type {unknown} */
@@ -256,12 +296,25 @@ export async function createRequestHandler(opts) {
   async function ensureReady() {
     // Fully warm: analysis done and vendor resolved. Nothing to do.
     if (analysisDone && vendorResolved) return;
-    // Analysis warm but a prior vendor attempt failed: re-attempt WITHOUT
-    // blocking this request. The single-flight dedupes concurrent attempts;
-    // success flips the flag. This is the request/probe-driven retry (no timer).
+    // A warm pass is in flight (the analysis and/or the FIRST vendor attempt).
+    // Await it rather than serving past it: a concurrent early request must get
+    // the FINAL importmap, never a half-resolved one. This is what makes the
+    // unpinned warmup flawless. The first attempt's jspm resolve is
+    // timeout-bounded (vendor.js), so an offline app cannot hang here: on
+    // timeout the resolve returns and the response is served with an empty,
+    // reload-safe build id, then the retry below completes it. Without this
+    // wait, a request arriving mid-resolve would serve a partial map and an
+    // empty-then-changing build id, the exact warmup drift that hard-reloads
+    // and wipes a half-filled form.
+    if (readyInFlight) { await readyInFlight; return; }
+    // Analysis warm but the first vendor attempt already completed and failed:
+    // re-attempt WITHOUT blocking this request. The single-flight dedupes
+    // concurrent attempts; success flips the flag AND publishes the build id.
+    // This is the request/probe-driven retry (no timer). Until it succeeds the
+    // served build id stays empty (reload-safe), so no navigation hard-reloads.
     if (analysisDone && vendorAttemptedOnce) {
       const gen = vendorGen;
-      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) vendorResolved = true; }).catch(() => {});
+      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); } }).catch(() => {});
       return;
     }
     // Otherwise run the (single-flighted) full warm: the analysis, then the
@@ -304,8 +357,6 @@ export async function createRequestHandler(opts) {
             analysisDone = true;
             ranAnalysis = true;
           }
-          // Readiness gates on the analysis only; vendor is best-effort below.
-          readyDone = true;
           readyError = null;
           if (!vendorResolved) {
             const m = now();
@@ -317,9 +368,28 @@ export async function createRequestHandler(opts) {
             // Only memoize success (and only if a rebuild didn't intervene). A
             // transient failure leaves vendorResolved false; the next ensureReady
             // call re-attempts it non-blocking. A permanent unresolvable (jspm
-            // 401) reports ok and is tolerated, so it does not loop.
-            if (ok && gen === vendorGen) vendorResolved = true;
+            // 401) reports ok and is tolerated, so it does not loop. On success
+            // the importmap is now authoritatively final, so publish the build
+            // id: from here every response advertises the same stable value and
+            // the client router's deploy detection works without warmup drift.
+            if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); }
           }
+          // Readiness reflects a FULLY warm instance: the deterministic analysis
+          // AND the first vendor attempt have both completed (note: completed,
+          // not necessarily succeeded). A readiness-gated platform (Railway
+          // healthcheckPath, k8s readinessProbe) therefore admits traffic only
+          // AFTER the build id is published (vendor resolved) or definitively
+          // empty (a bounded vendor failure), never DURING the vendor-resolution
+          // window. This is what makes warm-up actually protect users: the prior
+          // instance keeps serving until the new one is fully warm, so a real
+          // request lands on a warm instance with a stable build id instead of
+          // racing the resolve. The first vendor attempt is bounded (the jspm
+          // fetch timeout in vendor.js), so an offline / CDN-degraded app still
+          // becomes ready shortly after that timeout, degraded but reload-safe,
+          // which preserves the boot resilience #143 introduced. The gate is the
+          // FIRST attempt only: a transient failure still flips readyDone here,
+          // so a later non-blocking retry never has to re-open the readiness gate.
+          readyDone = true;
           if (ranAnalysis) {
             const ms = (x) => Math.round(x || 0);
             const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
@@ -437,12 +507,17 @@ export async function createRequestHandler(opts) {
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
       // process is up and accepting connections). `/__webjs/ready` is 503 until
-      // the analysis is warm, then 200 unless an optional app readiness check
+      // the instance is FULLY warm (the deterministic analysis AND the first
+      // vendor attempt have both completed, so the importmap build id is
+      // settled), then 200 unless an optional app readiness check
       // (readiness.{js,ts}) reports a dependency down. So a readinessProbe holds
-      // traffic off a not-yet-warm or dependency-unhealthy instance. Probing
-      // `/__webjs/ready` also kicks off the warm in the background, so an
-      // embedder that never called warmup() still warms. A vendor CDN failure
-      // does NOT block readiness (vendor is best-effort, retried on the next request).
+      // traffic off a not-yet-warm or dependency-unhealthy instance, and admits
+      // it only once the build id is stable, never mid vendor-resolution.
+      // Probing `/__webjs/ready` also kicks off the warm in the background, so
+      // an embedder that never called warmup() still warms. The first vendor
+      // attempt is bounded (the jspm fetch timeout), so a vendor CDN failure
+      // delays readiness only briefly and then admits the instance (degraded but
+      // reload-safe); a transient failure is re-attempted on the next request.
       let probePath;
       try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
       if (probePath === '/__webjs/health') {

@@ -225,13 +225,19 @@ Two complementary mechanisms tell the client when a partial swap is
 unsafe and a hard reload is required:
 
 1. **Importmap drift** (the common case after a vendor pin change).
-   Server stamps a SHA-256 of the importmap on `<script type="importmap"
-   data-webjs-build="…">` AND emits the same hash as `X-Webjs-Build`
+   Server stamps the PUBLISHED build id on `<script type="importmap"
+   data-webjs-build="…">` AND emits the same value as `X-Webjs-Build`
    on every response, including X-Webjs-Have partial responses with no
-   head. Client compares the response header against the live
-   document's `data-webjs-build`; mismatch triggers `location.href =
-   target` instead of partial swap. Works for every nav, including
-   partial-response navs.
+   head. The published id is the importmap hash, but advertised only
+   once the importmap is authoritatively final (at boot for a pinned
+   app, after the first successful vendor resolve otherwise); while the
+   map is still warming it stays empty. Client compares the response
+   header against the live document's `data-webjs-build`. A hard reload
+   (`location.href = target`) fires only when both ids are present and
+   differ (a real cross-deploy). An empty id on either side means
+   "version unknown" (a warming runtime-first-boot server) and never
+   reloads, so the warmup window cannot hard-reload and wipe a
+   half-filled form. Works for every nav, including partial-response navs.
 
 2. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
    e.g. a CSS bundle hash, a build-id meta tag). Any head element with

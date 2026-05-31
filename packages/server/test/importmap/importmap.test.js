@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-import { importMapTag, setVendorEntries, buildImportMap, setCoreInstall } from '../../src/importmap.js';
+import { importMapTag, setVendorEntries, buildImportMap, setCoreInstall, importMapHash, publishedBuildId, publishBuildId } from '../../src/importmap.js';
 
 const CORE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../core');
 
@@ -14,6 +14,7 @@ await setCoreInstall(CORE_DIR, false);
 
 test('importMapTag: emits a bare script tag when no nonce is provided', async () => {
   await setVendorEntries({});
+  publishBuildId();
   const tag = importMapTag();
   assert.match(tag, /^<script type="importmap" data-webjs-build="[0-9a-f]{64}">/);
   assert.ok(!tag.includes('nonce='));
@@ -21,8 +22,26 @@ test('importMapTag: emits a bare script tag when no nonce is provided', async ()
 
 test('importMapTag: emits nonce attribute when provided', async () => {
   await setVendorEntries({});
+  publishBuildId();
   const tag = importMapTag({ nonce: 'abc123' });
   assert.match(tag, /^<script type="importmap" nonce="abc123" data-webjs-build="[0-9a-f]{64}">/);
+});
+
+test('importMapTag: build id is empty until publishBuildId, then the live hash', async () => {
+  // The tag advertises the PUBLISHED build id, not the live importMapHash().
+  // setVendorEntries computes the live hash but does NOT publish it, so the
+  // tag stays empty (reload-safe) through the warmup window. This is the
+  // core of the warmup-hash-stability fix: a not-yet-final map can never
+  // advertise a build id that later changes and triggers a spurious reload.
+  const fresh = await import(`../../src/importmap.js?gate=${Date.now()}`);
+  await fresh.setCoreInstall(CORE_DIR, false);
+  await fresh.setVendorEntries({ 'x': '/x.js' });
+  assert.notEqual(fresh.importMapHash(), '', 'live hash is computed by setVendorEntries');
+  assert.equal(fresh.publishedBuildId(), '', 'but the advertised build id stays empty until published');
+  assert.match(fresh.importMapTag(), /data-webjs-build=""/, 'so the tag is reload-safe before publish');
+  fresh.publishBuildId();
+  assert.equal(fresh.publishedBuildId(), fresh.importMapHash(), 'publishBuildId promotes the live hash');
+  assert.match(fresh.importMapTag(), /data-webjs-build="[0-9a-f]{64}"/, 'and the tag now advertises it');
 });
 
 test('importMapTag: HTML-escapes embedded quotes in nonce', async () => {

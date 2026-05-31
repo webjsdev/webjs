@@ -102,17 +102,26 @@ can load it without booting the full server.
 3. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
    The route table is the only eager ANALYSIS artifact (a cheap directory
-   scan, no code reads). Boot does exactly two other, trivial loads,
-   neither of which reads app source or touches the network: `setCoreInstall`
+   scan, no code reads). Boot does two other trivial loads, plus a third
+   only when the app commits a vendor pin, none of which read app source or
+   make a network call. The two unconditional ones are `setCoreInstall`
    (one read of `@webjsdev/core`'s OWN `package.json` to seed the browser
    import map, in `importmap.js`) and the `.env` auto-load (Node's
    `process.loadEnvFile` into `process.env`, before any server-only module is
-   imported). So the complete list of eager boot work is: the route-table
-   scan, the core `package.json` read, and the `.env` load. Everything else
-   (module graph, browser-bound gate, action index, middleware, elision,
-   vendor map) is built lazily on the first request via `ensureReady()` in
-   `dev.js`, so boot reads no app source, executes no server module, walks no
-   graph, and makes no network call.
+   imported). The conditional fourth item is the **pinned vendor read**: when
+   `.webjs/vendor/importmap.json` exists (`hasVendorPin`), boot reads that
+   committed, deterministic config file (a local read, no jspm call),
+   `setVendorEntries`, and `publishBuildId()`, so a pinned process advertises
+   a stable `data-webjs-build` from its first response and a freshly-deployed
+   pinned instance is detected as a new deploy by old-deploy clients with zero
+   warmup window. So the complete list of eager boot work is: the route-table
+   scan, the core `package.json` read, the `.env` load, and (pinned apps only)
+   the committed vendor importmap read. Everything else (module graph,
+   browser-bound gate, action index, middleware, elision, and the UNPINNED
+   vendor resolve, which needs the bare-import scan plus a jspm call) is built
+   lazily on the first request via `ensureReady()` in `dev.js`, so boot reads
+   no app source, executes no server module, walks no graph, and makes no
+   network call.
    `ensureReady()` is single-flighted and memoized; the handler exposes
    `warmup()` (which calls it), and `startServer` fires `warmup()`
    fire-and-forget once the HTTP server is listening, so the analysis runs
@@ -122,22 +131,47 @@ can load it without booting the full server.
    or readiness probe. There is NO internal retry timer or backoff; the
    platform's traffic and probes are the retry loop. Analysis runs in two
    stages: a deterministic stage (graph, scan, gate, action index, middleware,
-   elision) that readiness gates on, and a best-effort vendor stage (a pinned
-   app reads the committed importmap; an unpinned app auto-fetches jspm).
-   Readiness does NOT depend on vendor, so an offline or partially-unresolvable
-   app still boots; a TRANSIENT vendor failure (network / timeout / jspm 5xx)
-   is re-attempted on the next `ensureReady` call, non-blocking, with a
-   `vendorGen` guard so a rebuild cannot let a stale resolve win. A permanent
-   unresolvable (jspm 401 for a private / workspace / server-only dep) reports
-   ok and is tolerated. `ensureReady()` logs a one-line per-pass timing
-   breakdown so a slow first request is diagnosable.
+   elision) and a vendor stage (a pinned app reads the committed importmap; an
+   unpinned app auto-fetches jspm). **Readiness gates on a FULLY warm instance:
+   the deterministic stage AND the first vendor attempt both completed (note:
+   completed, not necessarily succeeded).** A readiness-gated platform (Railway
+   `healthcheckPath`, a k8s readinessProbe) therefore admits traffic only after
+   the importmap build id is published (vendor resolved) or definitively empty
+   (a bounded vendor failure), never DURING the vendor-resolution window. This
+   is what makes `warmup()` actually protect users: the prior instance keeps
+   serving until the new one is fully warm, so a real request lands on a warm
+   instance with a stable build id instead of racing the resolve. The first
+   vendor attempt is bounded (the jspm fetch timeout in `vendor.js`), so an
+   offline or CDN-degraded app still becomes ready shortly after that timeout
+   (degraded but reload-safe, see the build-id note below), preserving the boot
+   resilience. Readiness gates on the FIRST attempt only: a TRANSIENT vendor
+   failure (network / timeout / jspm 5xx) still flips readiness, then is
+   re-attempted on the next `ensureReady` call, non-blocking, with a `vendorGen`
+   guard so a rebuild cannot let a stale resolve win. A permanent unresolvable
+   (jspm 401 for a private / workspace / server-only dep) reports ok and is
+   tolerated. `ensureReady()` logs a one-line per-pass timing breakdown so a
+   slow first request is diagnosable.
+   **Build-id stability (post-deploy reload safety).** The client router reads
+   `data-webjs-build` / the `X-Webjs-Build` header to detect a real deploy and
+   hard-reload (so a partial swap never resolves modules against a stale
+   importmap). That id is the PUBLISHED build id (`publishedBuildId`), promoted
+   only when the importmap is authoritatively final: at boot for a pinned app,
+   or after the first successful vendor resolve for an unpinned one. While the
+   map is still warming it stays empty, and the router treats an empty id on
+   either side as "version unknown" and never hard-reloads against it. So the
+   warmup window can never flip the id from empty to a value mid-session and
+   trigger a destructive reload that wipes a half-filled form. A real
+   cross-deploy still reloads, because both sides then carry non-empty,
+   differing ids. Concurrent early requests await the in-flight first resolve
+   (no bypass), so the first served response already carries the final map.
    **Probes:** `/__webjs/health` is liveness (always 200 once listening);
-   `/__webjs/ready` is readiness (503 until the analysis is warm, then 200).
-   An optional `readiness.{js,ts}` at the app root default-exports an async
-   check that `/ready` runs once warm (returning `false` or throwing yields
-   503), so readiness can gate on live dependency health (e.g. a DB ping)
-   that the static analysis cannot see. Both are answered in `handle()`
-   BEFORE `ensureReady`, so a probe never blocks on the analysis.
+   `/__webjs/ready` is readiness (503 until fully warm, i.e. analysis plus the
+   first vendor attempt, then 200). An optional `readiness.{js,ts}` at the app
+   root default-exports an async check that `/ready` runs once warm (returning
+   `false` or throwing yields 503), so readiness can gate on live dependency
+   health (e.g. a DB ping) that the static analysis cannot see. Both are
+   answered in `handle()` BEFORE `ensureReady`, so a probe never blocks on the
+   analysis.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at

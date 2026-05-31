@@ -303,11 +303,14 @@ fires `prestart`; the direct binary form skips it.
 
 **Health and readiness probes.** Every webjs server answers two endpoints:
 `/__webjs/health` (liveness, 200 once the process is listening) and
-`/__webjs/ready` (readiness, 503 until the first-request analysis is warm,
-then 200). Point your platform's readiness check at `/__webjs/ready` so it
-holds traffic off a not-yet-warmed instance instead of routing the first user
-request into the cold analysis. On Railway, set `"healthcheckPath":
-"/__webjs/ready"` under `deploy` in `railway.json`. For dependency-aware
+`/__webjs/ready` (readiness, 503 until the instance is fully warm, then 200).
+Fully warm means the deterministic analysis AND the first vendor attempt have
+both completed, so the importmap and its build id are settled. Point your
+platform's readiness check at `/__webjs/ready` so it holds traffic off a
+not-yet-warmed instance instead of routing the first user request into the cold
+analysis or the brief window where the importmap is still resolving. On
+Railway, set `"healthcheckPath": "/__webjs/ready"` under `deploy` in
+`railway.json`. For dependency-aware
 readiness (gate on a live DB ping), add an optional `readiness.{js,ts}` at the
 app root that default-exports an async check; `/__webjs/ready` runs it once warm
 and reports 503 if it returns `false` or throws.

@@ -82,6 +82,46 @@ export function importMapHash() {
 }
 
 /**
+ * The published, client-facing build id: the value stamped into the
+ * `data-webjs-build` attribute and the `X-Webjs-Build` header that the
+ * client router compares across navigations to detect a real deploy.
+ *
+ * Distinct from `importMapHash()` (the live hash of the current map).
+ * The published id is advertised ONLY once the importmap is
+ * authoritatively final, so the warmup window never advertises a value
+ * that later changes. Runtime-first boot resolves an unpinned app's
+ * vendor map over the first request; while that is in flight the live
+ * hash mutates (empty, then partial, then complete), but the published
+ * id stays `''` until the map is final. The router treats an empty
+ * build id as "version unknown" and never hard-reloads against it, so a
+ * not-yet-final response is reload-safe by construction and cannot wipe
+ * a half-filled form.
+ *
+ * Promoted by `publishBuildId()`: at boot for a pinned app (the
+ * committed map is deterministic), or after the first successful vendor
+ * resolve for an unpinned app.
+ *
+ * @returns {string}  the advertised build id, or `''` until final
+ */
+let _publishedBuildId = '';
+export function publishedBuildId() {
+  return _publishedBuildId;
+}
+
+/**
+ * Promote the current `importMapHash()` to the advertised build id.
+ * Called by `dev.js` when the importmap becomes authoritatively final.
+ * Idempotent; the value only changes when the underlying map does, so
+ * re-publishing an unchanged map is a no-op for the client. Within a
+ * single process the published id therefore never changes after the
+ * first publish (a rebuild in dev re-publishes the fresh map, but dev
+ * already forces a full reload via SSE).
+ */
+export function publishBuildId() {
+  _publishedBuildId = _importMapHash;
+}
+
+/**
  * Look up the SRI integrity hash for a vendor URL, or empty string if
  * none. Used by ssr.js to add `integrity="..."` to modulepreload tags
  * pointing at vendor URLs.
@@ -295,9 +335,12 @@ export function importMapTag(opts = {}) {
   // base64-ish. A misconfigured upstream emitting `nonce-<bad>` should
   // not get its `<` rendered raw into our HTML.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
-  // Stamp the build hash so the client router can detect post-deploy
-  // importmap changes on intra-shell partial-response navigations.
-  // See importMapHash() above for the rationale.
-  const b = ` data-webjs-build="${importMapHash()}"`;
+  // Stamp the published build id so the client router can detect
+  // post-deploy importmap changes on intra-shell partial-response
+  // navigations. Uses publishedBuildId() (empty until the map is
+  // authoritatively final), NOT the live importMapHash(), so the warmup
+  // window never advertises an id that later changes. See
+  // publishedBuildId() above for the rationale.
+  const b = ` data-webjs-build="${publishedBuildId()}"`;
   return `<script type="importmap"${n}${b}>${jsonForScriptTag(buildImportMap())}</script>`;
 }

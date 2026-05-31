@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createRequestHandler, startServer } from '../../src/dev.js';
+import { publishedBuildId } from '../../src/importmap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML_URL = pathToFileURL(
@@ -67,12 +68,47 @@ test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', asyn
   assert.deepEqual(await ready.json(), { status: 'ok' });
 });
 
+test('handle: a pinned app publishes a stable build id from the first response', async () => {
+  // #146: a committed .webjs/vendor/importmap.json is deterministic, so dev.js
+  // resolves it AT BOOT and publishes the build id immediately. The recommended
+  // posture advertises a stable, non-empty X-Webjs-Build from its very first
+  // response, with zero warmup window, so an old-deploy client navigating into
+  // a freshly-deployed pinned instance hard-reloads correctly. Matches Rails
+  // importmap (committed pins, deterministic at boot) and the pre-#143 behavior.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    '.webjs/vendor/importmap.json': JSON.stringify({
+      imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.13/index.js' },
+    }),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  // The boot pinned-read publishes the build id DURING createRequestHandler,
+  // before any handle()/warmup(). Capture it now, off the same importmap module
+  // instance the handler uses. This is the load-bearing assertion: if the boot
+  // block were removed, publishedBuildId() here would NOT match the served id
+  // (it would still be empty or a stale leaked value, and only the deferred
+  // resolve inside the first handle() would later publish the real hash). So
+  // asserting bootId equals the served id is what catches a reverted boot block,
+  // whereas merely checking the first response is non-empty passes either way
+  // (handle() awaits ensureReady, which publishes on the deferred path too).
+  const bootId = publishedBuildId();
+  assert.match(bootId, /^[0-9a-f]{64}$/, 'pinned app publishes a build id at boot, before any request');
+  // First page response: it advertises exactly the boot-published id.
+  const first = await app.handle(new Request('http://x/'));
+  const build1 = first.headers.get('x-webjs-build');
+  assert.equal(build1, bootId, 'the first response advertises the boot-published id, not a first-request one');
+  // Stable across responses within the process (no warmup drift).
+  const second = await app.handle(new Request('http://x/'));
+  assert.equal(second.headers.get('x-webjs-build'), build1, 'build id is stable across requests');
+});
+
 test('handle: a transient vendor failure does not block readiness', async () => {
-  // Vendor resolution is best-effort and decoupled from readiness: a transient
-  // jspm failure (here a mocked network reject) must leave the app READY (the
-  // deterministic analysis is what readiness gates on), so an offline or
-  // CDN-degraded instance still serves. The failed resolve is re-attempted on
-  // the next request, not via a background timer.
+  // Readiness gates on a fully warm instance (analysis plus the first vendor
+  // attempt), but on the ATTEMPT completing, not succeeding: a transient jspm
+  // failure (here a mocked network reject) is a completed attempt, so the app
+  // still becomes READY and serves. An offline or CDN-degraded instance is
+  // therefore not held down. The failed resolve is re-attempted on the next
+  // request, not via a background timer.
   const appDir = makeApp({
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
@@ -87,6 +123,38 @@ test('handle: a transient vendor failure does not block readiness', async () => 
     const ready = await app.handle(new Request('http://x/__webjs/ready'));
     assert.equal(ready.status, 200, 'a transient vendor failure must not block readiness');
     assert.equal((await ready.json()).status, 'ok');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('handle: a malformed pin file falls through to the real deferred resolve', async () => {
+  // Regression: hasVendorPin is a cheap existence check, but a malformed pin
+  // (exists, unparseable) must NOT be treated as pinned-at-boot. If it were,
+  // the boot read would short-circuit resolveVendorImports with the empty
+  // boot-time scan thunk, resolve zero deps, set bootVendorPinned, and the real
+  // deferred resolve (with the actual bare-import scan) would never run, serving
+  // an importmap missing every dependency. With the fix, an invalid pin falls
+  // through to the normal deferred resolve, which scans the real imports. We
+  // detect that by spying on the jspm fetch: the broken path never reaches it.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    '.webjs/vendor/importmap.json': '{ not valid json at all',
+  });
+  const origFetch = globalThis.fetch;
+  let jspmAttempted = false;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('jspm')) jspmAttempted = true;
+    throw new Error('ECONNREFUSED');
+  };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup(); // runs the deferred analysis + first vendor attempt
+    assert.ok(jspmAttempted,
+      'a malformed pin must fall through to the real bare-import scan + jspm resolve, not short-circuit at boot with an empty map');
   } finally {
     globalThis.fetch = origFetch;
   }
