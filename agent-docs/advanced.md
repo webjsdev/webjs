@@ -300,9 +300,12 @@ Only internal links qualify, using the same eligibility as a click:
 cross-origin, `download`, `target` other than `_self`, non-HTML
 extensions, `data-no-router`, and pure same-page hash jumps are skipped.
 Opt out with `data-prefetch="none"`, `data-no-prefetch`, or
-`rel="external"`. Speculation is bounded by a concurrency cap, in-flight
-de-dupe, and an LRU + TTL cache, and is disabled entirely under
-`Save-Data` or `prefers-reduced-data`.
+`rel="external"`. Speculation is bounded by a concurrency cap (excess
+requests queue and drain as slots free, rather than being dropped),
+in-flight de-dupe, and an LRU + TTL cache, and is disabled entirely under
+`Save-Data` or `prefers-reduced-data`. A mutating form submission and
+`revalidate(url)` both evict the prefetch cache alongside the snapshot
+cache, so a fragment prefetched before a mutation is never served stale.
 
 There is no logout-style safeguard, matching every framework that
 auto-prefetches: a prefetch issues a real GET, so a `/logout` or any
