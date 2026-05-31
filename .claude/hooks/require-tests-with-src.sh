@@ -39,17 +39,23 @@ payload=$(cat)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
 if [ -z "$cmd" ]; then exit 0; fi
 
-case "$cmd" in
-  *"git commit"*) : ;;
-  *) exit 0 ;;
-esac
+# Match `git commit` as a whole word: the char after `commit` must not be
+# a letter, digit, or hyphen, so a real commit (followed by a space, end,
+# newline, `;`, `&`, etc.) trips the gate while sibling subcommands
+# (git commit-graph, git commit-tree) do not.
+if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)'; then
+  exit 0
+fi
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 
 staged=$(git diff --cached --name-only 2>/dev/null || true)
 if [ -z "$staged" ]; then exit 0; fi
 
-src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/[^/]+/src/' || true)
+# Framework source lives under each package's src/, EXCEPT the CLI, which
+# keeps its logic in packages/cli/lib/. Gate both so a CLI change (the
+# framework's own installer) is not a blind spot.
+src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/([^/]+/src|cli/lib)/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi
 
 test_staged=$(printf '%s\n' "$staged" | grep -E '(^|/)test/|\.test\.[mc]?[jt]sx?$|\.spec\.[mc]?[jt]sx?$' || true)
