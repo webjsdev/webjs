@@ -1438,6 +1438,93 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(layoutInBoot, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
 
+  test('prefetch: hovering an internal link warms the cache; the click consumes it (no second fetch)', async () => {
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(2000);
+
+    const href = await page.evaluate(() => {
+      const a = document.querySelector('main ul a[href^="/blog/"]');
+      return a ? new URL(a.href).pathname : null;
+    });
+    assert.ok(href, 'homepage should list at least one /blog/... link to prefetch');
+
+    // Count document requests to that pathname, split by the prefetch
+    // header the prefetch path sets versus a real router navigation.
+    const hits = { prefetch: 0, nav: 0 };
+    const onRequest = (req) => {
+      let p;
+      try { p = new URL(req.url()).pathname; } catch { return; }
+      if (p !== href) return;
+      const h = req.headers();
+      if (h['x-webjs-prefetch']) hits.prefetch++;
+      else if (h['x-webjs-router']) hits.nav++;
+    };
+    page.on('request', onRequest);
+    try {
+      // Hover; wait past the ~100ms intent dwell so the prefetch fires.
+      await page.evaluate((p) => {
+        const a = [...document.querySelectorAll('main a')]
+          .find((x) => new URL(x.href).pathname === p);
+        a?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      }, href);
+      await sleep(600);
+      assert.ok(hits.prefetch >= 1, `hover should issue a speculative prefetch GET for ${href}`);
+      const afterHover = hits.prefetch;
+
+      // Click: should resolve from the warm cache with NO extra document fetch.
+      await page.evaluate((p) => {
+        const a = [...document.querySelectorAll('main a')]
+          .find((x) => new URL(x.href).pathname === p);
+        a?.click();
+      }, href);
+      await sleep(1500);
+
+      assert.ok(page.url().includes(href), `should have navigated to ${href}, got ${page.url()}`);
+      assert.equal(hits.nav, 0, 'click should consume the prefetch cache, not issue a second fetch');
+      assert.equal(hits.prefetch, afterHover, 'no extra prefetch fired during the click');
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
+  test('prefetch: cross-origin and data-prefetch="none" links are never prefetched', async () => {
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(1000);
+
+    await page.evaluate(() => {
+      const main = document.querySelector('main') || document.body;
+      const ext = document.createElement('a');
+      ext.href = 'https://example.com/somewhere';
+      ext.id = 'e2e-ext-link';
+      ext.textContent = 'external';
+      const opt = document.createElement('a');
+      opt.href = '/about';
+      opt.setAttribute('data-prefetch', 'none');
+      opt.id = 'e2e-optout-link';
+      opt.textContent = 'opted-out';
+      main.append(ext, opt);
+    });
+
+    let webjsPrefetches = 0;
+    const onRequest = (req) => {
+      if (req.headers()['x-webjs-prefetch']) webjsPrefetches++;
+    };
+    page.on('request', onRequest);
+    try {
+      await page.evaluate(() => {
+        for (const id of ['e2e-ext-link', 'e2e-optout-link']) {
+          document.getElementById(id)
+            ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+        }
+      });
+      await sleep(600);
+      assert.equal(webjsPrefetches, 0,
+        'cross-origin and data-prefetch="none" links must not trigger a webjs prefetch');
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
   test('chat: sending a message keeps you on the page and the message survives (#150)', async () => {
     // The chat form calls e.preventDefault() and sends over WebSocket, so the
     // client router must NOT intercept it (its submit listener is bubble, so the
