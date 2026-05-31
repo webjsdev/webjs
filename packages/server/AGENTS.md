@@ -102,17 +102,26 @@ can load it without booting the full server.
 3. **File router has no manifest.** `buildRouteTable()` walks `app/`
    at boot; route invalidation in dev is via `fs.watch` (Node 24+ built-in, recursive) → SSE.
    The route table is the only eager ANALYSIS artifact (a cheap directory
-   scan, no code reads). Boot does exactly two other, trivial loads,
-   neither of which reads app source or touches the network: `setCoreInstall`
+   scan, no code reads). Boot does two other trivial loads, plus a third
+   only when the app commits a vendor pin, none of which read app source or
+   make a network call. The two unconditional ones are `setCoreInstall`
    (one read of `@webjsdev/core`'s OWN `package.json` to seed the browser
    import map, in `importmap.js`) and the `.env` auto-load (Node's
    `process.loadEnvFile` into `process.env`, before any server-only module is
-   imported). So the complete list of eager boot work is: the route-table
-   scan, the core `package.json` read, and the `.env` load. Everything else
-   (module graph, browser-bound gate, action index, middleware, elision,
-   vendor map) is built lazily on the first request via `ensureReady()` in
-   `dev.js`, so boot reads no app source, executes no server module, walks no
-   graph, and makes no network call.
+   imported). The conditional fourth item is the **pinned vendor read**: when
+   `.webjs/vendor/importmap.json` exists (`hasVendorPin`), boot reads that
+   committed, deterministic config file (a local read, no jspm call),
+   `setVendorEntries`, and `publishBuildId()`, so a pinned process advertises
+   a stable `data-webjs-build` from its first response and a freshly-deployed
+   pinned instance is detected as a new deploy by old-deploy clients with zero
+   warmup window. So the complete list of eager boot work is: the route-table
+   scan, the core `package.json` read, the `.env` load, and (pinned apps only)
+   the committed vendor importmap read. Everything else (module graph,
+   browser-bound gate, action index, middleware, elision, and the UNPINNED
+   vendor resolve, which needs the bare-import scan plus a jspm call) is built
+   lazily on the first request via `ensureReady()` in `dev.js`, so boot reads
+   no app source, executes no server module, walks no graph, and makes no
+   network call.
    `ensureReady()` is single-flighted and memoized; the handler exposes
    `warmup()` (which calls it), and `startServer` fires `warmup()`
    fire-and-forget once the HTTP server is listening, so the analysis runs

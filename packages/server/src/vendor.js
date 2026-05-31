@@ -481,6 +481,21 @@ function pinFilePath(appDir) {
 }
 
 /**
+ * True when the app commits a vendor pin file (`.webjs/vendor/importmap.json`).
+ * A pinned app's importmap is deterministic and cheap to read, so `dev.js`
+ * resolves it AT BOOT (no analysis, no network) and publishes the build id
+ * immediately, giving the recommended posture a stable id from the first
+ * response with zero warmup exposure. An unpinned app returns false and keeps
+ * its vendor resolution deferred to the first request.
+ *
+ * @param {string} appDir
+ * @returns {boolean}
+ */
+export function hasVendorPin(appDir) {
+  return existsSync(pinFilePath(appDir));
+}
+
+/**
  * Filesystem-safe filename for a downloaded bundle. Encodes the full
  * specifier (which may include a subpath) into a flat filename:
  *

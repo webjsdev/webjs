@@ -67,6 +67,31 @@ test('handle: /__webjs/ready is 503 until ensureReady completes, then 200', asyn
   assert.deepEqual(await ready.json(), { status: 'ok' });
 });
 
+test('handle: a pinned app publishes a stable build id from the first response', async () => {
+  // #146: a committed .webjs/vendor/importmap.json is deterministic, so dev.js
+  // resolves it AT BOOT and publishes the build id immediately. The recommended
+  // posture advertises a stable, non-empty X-Webjs-Build from its very first
+  // response, with zero warmup window, so an old-deploy client navigating into
+  // a freshly-deployed pinned instance hard-reloads correctly. Matches Rails
+  // importmap (committed pins, deterministic at boot) and the pre-#143 behavior.
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'ok';`,
+    '.webjs/vendor/importmap.json': JSON.stringify({
+      imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.13/index.js' },
+    }),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  // First page response, BEFORE any warmup() call: the build id was published
+  // at boot (pinned read), so it is a non-empty 64-hex hash, not the empty
+  // warming sentinel an unpinned app would carry until its first resolve.
+  const first = await app.handle(new Request('http://x/'));
+  const build1 = first.headers.get('x-webjs-build');
+  assert.match(build1 || '', /^[0-9a-f]{64}$/, 'pinned app advertises a build id from the first response');
+  // Stable across responses within the process (no warmup drift).
+  const second = await app.handle(new Request('http://x/'));
+  assert.equal(second.headers.get('x-webjs-build'), build1, 'build id is stable across requests');
+});
+
 test('handle: a transient vendor failure does not block readiness', async () => {
   // Vendor resolution is best-effort and decoupled from readiness: a transient
   // jspm failure (here a mocked network reject) must leave the app READY (the

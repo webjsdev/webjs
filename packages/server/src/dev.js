@@ -58,7 +58,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
@@ -212,6 +212,35 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
+  // Pinned apps (a committed .webjs/vendor/importmap.json, the recommended
+  // production posture) carry a deterministic vendor map that is cheap to read
+  // (one file, no analysis, no network). Resolve it AT BOOT and publish the
+  // build id immediately so the process advertises a stable, non-empty id from
+  // its very first response: a freshly-deployed pinned process is detected as a
+  // new deploy by old-deploy clients with zero warmup window, restoring the
+  // pre-runtime-first-boot cross-deploy guarantee for this posture. Mirrors
+  // Rails importmap (committed pins rendered deterministically at runtime). The
+  // EXPENSIVE analysis (graph, scan, gate, elision) and the UNPINNED jspm
+  // resolve both stay deferred to the first request, so #143's win is intact;
+  // only the cheap committed-file read moves back to boot, and only when pinned.
+  // A committed pin file is served as-is (elision never prunes it), so the
+  // boot-resolved map equals the final served map and the published id is
+  // authoritative. An unpinned app does no vendor work at boot and publishes
+  // its id after the first successful resolve instead.
+  let bootVendorPinned = false;
+  if (hasVendorPin(appDir)) {
+    try {
+      const v = await resolveVendorImports(appDir, () => new Set());
+      await setVendorEntries(v.imports, v.integrity);
+      publishBuildId();
+      bootVendorPinned = true;
+    } catch (e) {
+      // A malformed pin file is non-fatal: fall through to the deferred resolve,
+      // which surfaces the error on the first request. Boot stays resilient.
+      logger.error?.(`[webjs] reading the committed vendor pin at boot failed (will retry on the first request):`, e);
+    }
+  }
+
   // Whole-app analysis (module graph, component scan, browser-bound gate,
   // action index, middleware, elision, vendor) is NOT run at boot. It is
   // computed on the first request via ensureReady() below and memoized, so the
@@ -245,8 +274,11 @@ export async function createRequestHandler(opts) {
   // platform's traffic and probes are the retry loop. `readyError` holds a
   // propagating analysis failure so /__webjs/ready can report it.
   let analysisDone = false;        // deterministic analysis complete (readiness gate)
-  let vendorResolved = false;      // vendor map fully resolved (or permanently tolerated)
-  let vendorAttemptedOnce = false; // the first (blocking) vendor attempt has run
+  // A pinned app already resolved + published its vendor map at boot (above), so
+  // the deferred vendor stage is a no-op from the start; an unpinned app starts
+  // false and resolves on the first request.
+  let vendorResolved = bootVendorPinned;      // vendor map fully resolved (or permanently tolerated)
+  let vendorAttemptedOnce = bootVendorPinned; // the first (blocking) vendor attempt has run
   let vendorGen = 0;               // bumped on rebuild; a stale resolve cannot flip vendorResolved
   let readyDone = false;           // mirrors analysisDone; the /__webjs/ready gate
   /** @type {unknown} */
