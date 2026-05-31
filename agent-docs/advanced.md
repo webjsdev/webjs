@@ -268,6 +268,51 @@ revalidate();                 // clear the entire cache
 Call `revalidate(path)` after a server action mutates data that
 affects a cached page.
 
+### Link prefetch
+
+Same-origin in-app links are prefetched speculatively so a click
+resolves from a warm cache with no round-trip. On by default with the
+`intent` strategy (no per-link opt-in needed), the way Next / Nuxt /
+SvelteKit ship auto-prefetch. The prefetch request carries the same
+`X-Webjs-Have` header a real navigation sends, so the server returns the
+same divergent fragment; that fragment lands in a dedicated prefetch
+cache (separate from the back/forward snapshot cache) and `fetchAndApply`
+consumes it via `prefetchTake` before falling back to the network.
+
+Per link, set `data-prefetch` (a valid-HTML `data-*` attribute, the shape
+SvelteKit and Astro use; Next / Nuxt / Remix use a component prop, which
+webjs has no equivalent for since links are plain `<a href>`):
+
+```html
+<a href="/dashboard">intent: hover / focus / touch (default)</a>
+<a href="/dashboard" data-prefetch="render">eager on insert</a>
+<a href="/dashboard" data-prefetch="viewport">on scroll-into-view</a>
+<a href="/dashboard" data-prefetch="none">never</a>
+```
+
+Next-style aliases are accepted: `true` = `render`, `auto` = `viewport`,
+`false` = `none`. `intent` waits a short dwell (~100ms) after hover/focus
+so a pointer passing over a link does not fetch it; `viewport` uses an
+IntersectionObserver at threshold 0.5; `render` and `viewport` are
+applied by a document scan on enable and after each navigation.
+
+Only internal links qualify, using the same eligibility as a click:
+cross-origin, `download`, `target` other than `_self`, non-HTML
+extensions, `data-no-router`, and pure same-page hash jumps are skipped.
+Opt out with `data-prefetch="none"`, `data-no-prefetch`, or
+`rel="external"`. Speculation is bounded by a concurrency cap (excess
+requests queue and drain as slots free, rather than being dropped),
+in-flight de-dupe, and an LRU + TTL cache, and is disabled entirely under
+`Save-Data` or `prefers-reduced-data`. A mutating form submission and
+`revalidate(url)` both evict the prefetch cache alongside the snapshot
+cache, so a fragment prefetched before a mutation is never served stale.
+
+There is no logout-style safeguard, matching every framework that
+auto-prefetches: a prefetch issues a real GET, so a `/logout` or any
+mutating endpoint MUST be a POST or a `<form>` submission (which the
+router never prefetches), not a GET link. A native `<link rel="prefetch">`
+in the document head is the browser's own mechanism and is left untouched.
+
 ### Per-segment loading skeletons
 
 Each `loading.{js,ts}` in the route chain is rendered into a hidden

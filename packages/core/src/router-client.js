@@ -167,7 +167,20 @@ export function enableClientRouter() {
   document.addEventListener('click', onClick, false);
   document.addEventListener('submit', onSubmit, false);
   window.addEventListener('popstate', onPopState);
+  // Intent prefetch: warm the next page on hover / focus / touch-start.
+  // pointerover + focusin bubble, so one delegated listener each covers
+  // the whole document, including links added by later navigations.
+  document.addEventListener('pointerover', onPrefetchIntent, true);
+  document.addEventListener('focusin', onPrefetchIntent, true);
+  document.addEventListener('touchstart', onPrefetchIntent, { capture: true, passive: true });
+  document.addEventListener('pointerout', onPrefetchOut, true);
+  // After every client navigation the swapped-in DOM may carry new
+  // anchors, so re-scan for render/viewport modes. webjs:navigate fires
+  // at the end of fetchAndApply for both link and frame swaps.
+  document.addEventListener('webjs:navigate', refreshPrefetchObservers);
   ensureUpgradeObserver();
+  // Apply render/viewport prefetch modes to the initial document.
+  refreshPrefetchObservers();
   // Take control of scroll restoration so the browser doesn't fight
   // the SPA's own snapshot-based restore on popstate.
   if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
@@ -186,6 +199,13 @@ export function disableClientRouter() {
   document.removeEventListener('click', onClick, false);
   document.removeEventListener('submit', onSubmit, false);
   window.removeEventListener('popstate', onPopState);
+  document.removeEventListener('pointerover', onPrefetchIntent, true);
+  document.removeEventListener('focusin', onPrefetchIntent, true);
+  document.removeEventListener('touchstart', onPrefetchIntent, /** @type any */ ({ capture: true }));
+  document.removeEventListener('pointerout', onPrefetchOut, true);
+  document.removeEventListener('webjs:navigate', refreshPrefetchObservers);
+  clearPrefetchHover();
+  if (prefetchViewObserver) { prefetchViewObserver.disconnect(); prefetchViewObserver = null; }
   if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
     history.scrollRestoration = prevScrollRestoration;
     prevScrollRestoration = null;
@@ -211,6 +231,11 @@ export async function navigate(url, opts) {
  * Invalidate a cached snapshot. Call after a server action mutates data
  * that affects a cached page so the next visit refetches.
  *
+ * Evicts BOTH the back/forward snapshot cache and the speculative
+ * prefetch cache. A prefetched fragment captured before a mutation would
+ * otherwise be served stale on the next forward click, the same staleness
+ * the snapshot eviction prevents for back/forward.
+ *
  * @param {string} [url]  Specific URL to invalidate, or omit to clear all.
  */
 export function revalidate(url) {
@@ -218,9 +243,11 @@ export function revalidate(url) {
   // Loose `== null` would have left `revalidate('')` to silently no-op,
   // because `new URL('', location.href)` is a valid relative URL and the
   // resulting cache key rarely matches anything.
-  if (!url) { snapshotCache.clear(); return; }
+  if (!url) { snapshotCache.clear(); prefetchCache.clear(); return; }
   const u = new URL(url, location.href);
-  snapshotCache.delete(u.pathname + u.search);
+  const key = u.pathname + u.search;
+  snapshotCache.delete(key);
+  prefetchCache.delete(key);
 }
 
 // Auto-enable on import (standard Turbo-Drive convention).
@@ -710,9 +737,12 @@ async function performSubmission(href, method, body, frameId) {
     );
     // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is
-    // snapshotted on the next nav, not pre-emptively wiped.
+    // snapshotted on the next nav, not pre-emptively wiped. Clear the
+    // speculative prefetch cache too: a fragment prefetched before this
+    // mutation would otherwise be served stale on a later forward click.
     if (!isSafe && myToken === currentNavigationToken) {
       snapshotCache.clear();
+      prefetchCache.clear();
     }
   } finally {
     if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
@@ -735,6 +765,375 @@ function buildHaveHeader() {
   return [...slots.keys()].join(',');
 }
 
+/* ====================================================================
+ * Link prefetch (Remix-style strategies, fast-by-default)
+ *
+ * A link click already resolves through fetchAndApply, but the fetch
+ * only STARTS on click, so the user waits a full round-trip. Prefetch
+ * warms a dedicated cache speculatively so the click reads it instantly.
+ *
+ * Strategy per anchor via a `data-prefetch` attribute (valid-HTML data-*,
+ * like SvelteKit / Astro), defaulting to `intent` so the common case is
+ * fast without per-link opt-in, the way Next / Nuxt / SvelteKit ship
+ * auto-prefetch. Value vocabulary borrows Next's true/false/auto aliases:
+ *   - intent    (default)    : hover / focus / touch, after a short dwell
+ *   - true / render          : eager, as soon as a document scan sees it
+ *   - auto / viewport        : on viewport entry (IntersectionObserver, 0.5)
+ *   - false / none           : never (also data-no-prefetch / rel="external")
+ *
+ * Why a separate cache, not snapshotCache: snapshotCache is keyed to the
+ * back/forward restore path (popstate), which holds the FULL serialized
+ * document of pages the user already visited. A prefetch holds the
+ * SERVER FRAGMENT for a page not yet visited (the same X-Webjs-Have
+ * partial body a real nav would receive). fetchAndApply consumes it via
+ * prefetchTake() before falling back to the network.
+ *
+ * Only same-origin in-app links are prefetched (the same eligibility as
+ * a click), and never under Save-Data / prefers-reduced-data. There is no
+ * logout-style heuristic: prefetch issues a real GET, so as everywhere in
+ * the ecosystem (Next / Nuxt / Remix), a non-idempotent action must be a
+ * POST or a `<form>`, and `data-no-prefetch` / `rel="external"` opt out.
+ *
+ * What we do NOT touch: a native `<link rel="prefetch">` in the document
+ * head is the browser's own mechanism and warms the HTTP cache; we never
+ * interfere with it.
+ * ==================================================================== */
+
+/** Max speculative responses held at once (LRU). */
+const PREFETCH_CAP = 8;
+/** Speculative entries expire after this long (ms): avoid serving stale. */
+const PREFETCH_TTL = 30_000;
+/** Max concurrent in-flight prefetch requests. */
+const PREFETCH_CONCURRENCY = 3;
+/** Max prefetches waiting for a free slot (bounds a huge link list). */
+const PREFETCH_QUEUE_CAP = 24;
+/** Hover dwell before a prefetch fires (ms): filter drive-by pointer moves. Matches Remix's intent timeout. */
+const PREFETCH_HOVER_DELAY = 100;
+
+/** @typedef {{ html: string, build: string | null, finalUrl: string, at: number }} PrefetchEntry */
+/** @type {Map<string, PrefetchEntry>} */
+const prefetchCache = new Map();
+/** Keys with a fetch currently in flight (dedupe + concurrency gate). */
+const prefetchInflight = new Set();
+/** hrefs waiting for a free concurrency slot (FIFO), and their keys. */
+const prefetchQueue = [];
+const prefetchQueued = new Set();
+/** Pending hover-dwell timer, cleared on pointerout / blur. */
+let prefetchHoverTimer = null;
+/** Last anchor a hover timer was armed for (so pointerout can match). */
+let prefetchHoverAnchor = null;
+/** IntersectionObserver for data-prefetch="viewport" anchors, or null. */
+let prefetchViewObserver = null;
+
+/**
+ * True when the user or platform has asked us to conserve data. Both the
+ * Save-Data client hint and the prefers-reduced-data media query disable
+ * speculative fetching. Guarded for non-browser / partial DOM.
+ *
+ * @returns {boolean}
+ */
+function prefetchSaysSaveData() {
+  try {
+    const c = typeof navigator !== 'undefined' ? /** @type any */ (navigator).connection : null;
+    if (c && c.saveData === true) return true;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-data: reduce)').matches) {
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
+/**
+ * Lowercased whitespace-separated rel tokens of an anchor.
+ * @param {Element} anchor
+ * @returns {string[]}
+ */
+function relTokens(anchor) {
+  const rel = anchor.getAttribute('rel');
+  return rel ? rel.toLowerCase().split(/\s+/).filter(Boolean) : [];
+}
+
+/**
+ * Decide whether an anchor is a same-origin in-app target the router can
+ * navigate, returning its absolute href or null. Shared by onClick and
+ * the prefetch listeners so eligibility never drifts between them.
+ *
+ * @param {Element | null} anchor
+ * @returns {string | null}
+ */
+function eligibleAnchorHref(anchor) {
+  if (!anchor || !(anchor instanceof HTMLAnchorElement)) return null;
+  if (anchor.hasAttribute('download')) return null;
+  if (anchor.hasAttribute('data-no-router')) return null;
+  if (anchor.target && anchor.target !== '_self') return null;
+  const href = anchor.href;
+  if (!href) return null;
+  let url;
+  try { url = new URL(href); } catch { return null; }
+  if (url.origin !== location.origin) return null;
+  // A pure same-page hash jump is not a navigation we fetch.
+  if (url.pathname === location.pathname && url.search === location.search && url.hash) return null;
+  if (NON_HTML_EXTENSIONS.test(url.pathname)) return null;
+  return href;
+}
+
+/**
+ * Whether prefetching this anchor is suppressed by author intent. The
+ * `external` rel marks a link leaving the app, `no-prefetch` and
+ * `data-no-prefetch` are explicit opt-outs, and `data-no-router` already
+ * disables routing entirely (so it is caught upstream too).
+ *
+ * @param {Element} anchor
+ * @returns {boolean}
+ */
+function prefetchSuppressed(anchor) {
+  if (anchor.hasAttribute('data-no-prefetch')) return true;
+  const rel = relTokens(anchor);
+  return rel.includes('external') || rel.includes('no-prefetch');
+}
+
+/**
+ * Resolve the prefetch strategy for an anchor from a `data-prefetch`
+ * attribute. webjs has no Link component (links are plain `<a href>`), so
+ * the knob is a valid-HTML `data-*` attribute, the same shape SvelteKit
+ * (`data-sveltekit-preload-data`) and Astro (`data-astro-prefetch`) use.
+ * Next.js / Nuxt / Remix express the same choice as a component PROP
+ * (`<Link prefetch>`) that never reaches the DOM, so there is nothing to
+ * mirror attribute-wise; we reuse their value vocabulary (true/false/auto)
+ * as aliases. Default is `intent` (fast-by-default) when the attribute is
+ * absent or unrecognised.
+ *
+ * Value mapping (case-insensitive):
+ *   - absent / unknown   : `intent`  (the default)
+ *   - `intent`           : hover / focus / touch, after a short dwell
+ *   - `true` / `render`  : eager, as soon as a document scan sees the link
+ *   - `auto` / `viewport`: on viewport entry (IntersectionObserver)
+ *   - `false` / `none`   : never (also via data-no-prefetch / rel="external")
+ *
+ * Returns `none` for suppressed anchors so callers have a single check.
+ *
+ * @param {Element} anchor
+ * @returns {'intent' | 'render' | 'viewport' | 'none'}
+ */
+function prefetchMode(anchor) {
+  if (prefetchSuppressed(anchor)) return 'none';
+  const raw = (anchor.getAttribute('data-prefetch') || '').toLowerCase().trim();
+  switch (raw) {
+    case 'false':
+    case 'none':
+      return 'none';
+    case 'true':
+    case 'render':
+      return 'render';
+    case 'auto':
+    case 'viewport':
+      return 'viewport';
+    case 'intent':
+      return 'intent';
+    default:
+      // Unset or unrecognised value: the fast default.
+      return 'intent';
+  }
+}
+
+/**
+ * Speculatively fetch `href` and stash the server fragment so a later
+ * click resolves instantly. No-op when data-saving is on or the entry is
+ * already cached or in flight. When the concurrency gate is full the
+ * request is QUEUED (not dropped) and drains as in-flight slots free, so
+ * a burst of `render` / `viewport` links all eventually prefetch rather
+ * than silently losing everything past the cap.
+ *
+ * @param {string} href
+ */
+function prefetch(href) {
+  if (typeof fetch !== 'function') return;
+  if (prefetchSaysSaveData()) return;
+  const key = cacheKey(href);
+  if (prefetchInflight.has(key)) return;
+  if (prefetchQueued.has(key)) return;
+  const existing = prefetchCache.get(key);
+  if (existing && (nowMs() - existing.at) < PREFETCH_TTL) return;
+  if (prefetchInflight.size >= PREFETCH_CONCURRENCY) {
+    // Gate full: queue rather than drop, bounded so a huge link list
+    // cannot grow the queue without limit (oldest queued entry is shed).
+    prefetchQueued.add(key);
+    prefetchQueue.push(href);
+    while (prefetchQueue.length > PREFETCH_QUEUE_CAP) {
+      const dropped = prefetchQueue.shift();
+      prefetchQueued.delete(cacheKey(dropped));
+    }
+    return;
+  }
+
+  prefetchInflight.add(key);
+  const headers = { 'x-webjs-router': '1', 'x-webjs-prefetch': '1' };
+  const have = buildHaveHeader();
+  if (have) headers['x-webjs-have'] = have;
+
+  fetch(href, { method: 'GET', headers, credentials: 'same-origin' })
+    .then(async (resp) => {
+      const ctype = resp.headers.get('content-type') || '';
+      if (!/^text\/html\b/i.test(ctype)) return;
+      if (resp.status >= 400) return;
+      const build = resp.headers.get('x-webjs-build');
+      const finalUrl = resp.redirected && resp.url ? resp.url : href;
+      const html = await resp.text();
+      prefetchStore(key, { html, build, finalUrl, at: nowMs() });
+    })
+    .catch(() => { /* speculative: swallow */ })
+    .finally(() => {
+      prefetchInflight.delete(key);
+      drainPrefetchQueue();
+    });
+}
+
+/** Start the next queued prefetch if a concurrency slot is free. */
+function drainPrefetchQueue() {
+  while (prefetchQueue.length && prefetchInflight.size < PREFETCH_CONCURRENCY) {
+    const href = prefetchQueue.shift();
+    prefetchQueued.delete(cacheKey(href));
+    prefetch(href);
+  }
+}
+
+/**
+ * Store a speculative entry under LRU + cap.
+ * @param {string} key
+ * @param {PrefetchEntry} entry
+ */
+function prefetchStore(key, entry) {
+  if (prefetchCache.has(key)) prefetchCache.delete(key);
+  prefetchCache.set(key, entry);
+  while (prefetchCache.size > PREFETCH_CAP) {
+    const oldest = prefetchCache.keys().next().value;
+    prefetchCache.delete(oldest);
+  }
+}
+
+/**
+ * Consume a fresh speculative entry for `href`, removing it (a fragment
+ * is single-use: once applied it becomes a real snapshot). Returns null
+ * on miss or when the entry has aged past the TTL.
+ *
+ * @param {string} href
+ * @returns {PrefetchEntry | null}
+ */
+function prefetchTake(href) {
+  const key = cacheKey(href);
+  const entry = prefetchCache.get(key);
+  if (!entry) return null;
+  prefetchCache.delete(key);
+  if ((nowMs() - entry.at) >= PREFETCH_TTL) return null;
+  return entry;
+}
+
+/** Monotonic-ish clock guarded for environments without performance. */
+function nowMs() {
+  try {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+  } catch { /* ignore */ }
+  return 0;
+}
+
+/** @param {Event} e */
+function onPrefetchIntent(e) {
+  if (!enabled) return;
+  const anchor = closestAnchor(/** @type any */ (e.target));
+  if (!anchor) return;
+  // Only `intent` links prefetch on hover/focus/touch. `render` and
+  // `viewport` links are handled by the document scan / observer, and
+  // `none` is suppressed.
+  if (prefetchMode(anchor) !== 'intent') return;
+  const href = eligibleAnchorHref(anchor);
+  if (!href) return;
+  // pointerover/focusin bubble, so re-entering a child of the same anchor
+  // would re-arm; collapse to one timer per anchor.
+  if (prefetchHoverAnchor === anchor && prefetchHoverTimer) return;
+  clearPrefetchHover();
+  prefetchHoverAnchor = anchor;
+  prefetchHoverTimer = setTimeout(() => {
+    prefetchHoverTimer = null;
+    prefetchHoverAnchor = null;
+    prefetch(href);
+  }, PREFETCH_HOVER_DELAY);
+}
+
+/** @param {Event} e */
+function onPrefetchOut(e) {
+  const anchor = closestAnchor(/** @type any */ (e.target));
+  if (anchor && anchor === prefetchHoverAnchor) clearPrefetchHover();
+}
+
+function clearPrefetchHover() {
+  if (prefetchHoverTimer) { clearTimeout(prefetchHoverTimer); prefetchHoverTimer = null; }
+  prefetchHoverAnchor = null;
+}
+
+/**
+ * Nearest enclosing <a>, crossing shadow boundaries, from an event
+ * target. composedPath is click-only, so walk getRootNode().host here.
+ *
+ * @param {EventTarget | null} target
+ * @returns {HTMLAnchorElement | null}
+ */
+function closestAnchor(target) {
+  let node = /** @type {Node | null} */ (target);
+  while (node) {
+    if (node instanceof HTMLAnchorElement) return node;
+    const el = node.nodeType === 1 ? /** @type {Element} */ (node) : null;
+    if (el) {
+      const a = el.closest && el.closest('a');
+      if (a instanceof HTMLAnchorElement) return a;
+    }
+    const root = node.getRootNode ? node.getRootNode() : null;
+    node = root && /** @type any */ (root).host ? /** @type any */ (root).host : null;
+  }
+  return null;
+}
+
+/**
+ * (Re)scan the document and apply the non-hover prefetch modes:
+ *   - `render`   anchors prefetch immediately (they are now in the DOM).
+ *   - `viewport` anchors are observed and prefetch on intersection.
+ * `intent` (the default) is handled by the hover/focus/touch listeners,
+ * and `none` is skipped. Called on enable and after each navigation,
+ * since the swapped-in DOM may carry new links.
+ *
+ * The viewport threshold (0.5) matches Remix's IntersectionObserver.
+ */
+function refreshPrefetchObservers() {
+  if (typeof document === 'undefined') return;
+  if (prefetchSaysSaveData()) return;
+  const hasIO = typeof IntersectionObserver !== 'undefined';
+  if (hasIO) {
+    if (!prefetchViewObserver) {
+      prefetchViewObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const anchor = /** @type {Element} */ (entry.target);
+          prefetchViewObserver.unobserve(anchor);
+          const href = eligibleAnchorHref(anchor);
+          if (href && prefetchMode(anchor) === 'viewport') prefetch(href);
+        }
+      }, { threshold: 0.5 });
+    } else {
+      prefetchViewObserver.disconnect();
+    }
+  }
+  for (const anchor of document.querySelectorAll('a[href]')) {
+    const mode = prefetchMode(anchor);
+    if (mode === 'render') {
+      const href = eligibleAnchorHref(anchor);
+      if (href) prefetch(href);
+    } else if (mode === 'viewport' && hasIO) {
+      prefetchViewObserver.observe(anchor);
+    }
+  }
+}
+
 /**
  * Fetch the target URL and apply the swap.
  *
@@ -755,6 +1154,18 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   /** @type {string} */
   let finalUrl = href;
   try {
+    // Warm-cache fast path: a hover/focus/viewport prefetch may have
+    // already fetched this exact page (same X-Webjs-Have shell). Consume
+    // it instead of going to the network, so the click resolves with no
+    // round-trip. Only for plain GET navs without a frame target; form
+    // submissions and frame swaps always hit the server. The entry is
+    // single-use (prefetchTake removes it) and TTL-guarded inside take.
+    const prefetched = (method === 'GET' && !body && !frameId) ? prefetchTake(href) : null;
+    if (prefetched) {
+      html = prefetched.html;
+      incomingBuild = prefetched.build;
+      finalUrl = prefetched.finalUrl;
+    } else {
     const headers = { 'x-webjs-router': '1' };
     const have = buildHaveHeader();
     if (have) headers['x-webjs-have'] = have;
@@ -807,6 +1218,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // this to detect deploys that bumped the vendor pin.
     incomingBuild = resp.headers.get('x-webjs-build');
     html = await resp.text();
+    }
   } catch (err) {
     // Aborted by a newer navigation: let it run, don't fall back.
     if (err && /** @type any */ (err).name === 'AbortError') return;
@@ -1698,7 +2110,26 @@ export {
   getSubmitAction as _getSubmitAction,
   buildSubmitFormData as _buildSubmitFormData,
   restoreOptimistic as _restoreOptimistic,
+  eligibleAnchorHref as _eligibleAnchorHref,
+  prefetchSuppressed as _prefetchSuppressed,
+  prefetchMode as _prefetchMode,
+  prefetch as _prefetch,
+  prefetchTake as _prefetchTake,
+  prefetchSaysSaveData as _prefetchSaysSaveData,
 };
+
+/** Test-only: peek the speculative cache for a href without consuming it. */
+export function _prefetchPeek(href) { return prefetchCache.get(cacheKey(href)) || null; }
+/** Test-only: number of prefetch requests currently in flight. */
+export function _prefetchInflightSize() { return prefetchInflight.size; }
+/** Test-only: clear all prefetch state between cases. */
+export function _resetPrefetch() {
+  prefetchCache.clear();
+  prefetchInflight.clear();
+  prefetchQueue.length = 0;
+  prefetchQueued.clear();
+  clearPrefetchHover();
+}
 
 /** Test-only: read the monotonic navigation-token counter. */
 export function _navToken() { return currentNavigationToken; }
