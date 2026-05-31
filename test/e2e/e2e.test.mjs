@@ -1334,6 +1334,110 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
 
+  // ---------------------------------------------------------------------------
+  // Vendor-package elision (the network probe for #170)
+  //
+  //   <vendor-badge> is display-only and its ONLY non-core dependency is
+  //   the `dayjs` npm package (a binding import, not an interactivity
+  //   signal). Because the component is elided, the bare-import scan skips
+  //   its file, so dayjs never enters the importmap and the browser never
+  //   fetches it from the CDN. The badge's dayjs-formatted text is still
+  //   SSR'd. Mirrors the <build-stamp> probe one section up.
+  // ---------------------------------------------------------------------------
+
+  test('vendor package used only by a display-only component is never fetched (#170)', async () => {
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      // Cache disabled so a real dayjs fetch would hit the network and show
+      // up in the log. Settle on a fixed delay after domcontentloaded (the
+      // chat WebSocket keeps the connection open, so networkidle is unusable)
+      // long enough for the boot script to walk the import graph.
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(3000);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+
+    // dayjs resolves to a jspm.io CDN URL when it is in the importmap. If the
+    // package were shipped, the browser would fetch a URL containing 'dayjs'.
+    const dayjsFetched = requested.some((u) => /dayjs/i.test(u));
+    // The badge's import is stripped from the served page source, so its
+    // module is never downloaded either.
+    const badgeFetched = requested.some((u) => /\/components\/vendor-badge\.(ts|js)/.test(u));
+
+    // The home page renders <vendor-badge> correctly without its JS: the
+    // dayjs-formatted date is computed server-side and inlined.
+    const badgeText = await page.evaluate(
+      () => document.querySelector('vendor-badge')?.textContent?.trim() || '',
+    );
+    assert.match(badgeText, /released\b/i, 'vendor-badge SSR content is present');
+    assert.match(badgeText, /\b2026\b/, 'vendor-badge dayjs-formatted year is SSR-rendered');
+
+    // The served importmap has no entry for dayjs (pruned because the only
+    // importer is elided and the map is resolved live, not from a pin file).
+    const hasDayjsEntry = await page.evaluate(() => {
+      const s = document.querySelector('script[type="importmap"]');
+      if (!s) return false;
+      const map = JSON.parse(s.textContent);
+      return Object.keys(map.imports || {}).some((k) => /dayjs/i.test(k));
+    });
+
+    assert.equal(dayjsFetched, false, 'dayjs (used only by an elided component) must NOT be fetched');
+    assert.equal(badgeFetched, false, 'display-only vendor-badge module must NOT be downloaded');
+    assert.equal(hasDayjsEntry, false, 'dayjs must NOT have an importmap entry');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Inert-route zero-JS probe (#170)
+  //
+  //   /static-info is a fully-static page (no custom elements, events,
+  //   signals, or npm imports). Its boot script must import ZERO application
+  //   module URLs: the inert page module is dropped, and the only remaining
+  //   import is the router-enabling root layout. Asserts on the served boot
+  //   script directly, complementing the request-log <about> probe above.
+  // ---------------------------------------------------------------------------
+
+  test('inert route /static-info ships zero application page JS (#170)', async () => {
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/static-info`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2500);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+
+    // The inline boot script's import specifiers: the page module must be
+    // absent; the router-enabling layout is the only application module that
+    // legitimately ships (it enables SPA nav and registers the theme toggle).
+    const bootImports = await page.evaluate(() => {
+      const scripts = [...document.querySelectorAll('script[type="module"]:not([src])')];
+      const specs = [];
+      for (const s of scripts) {
+        for (const m of s.textContent.matchAll(/import\s+["']([^"']+)["']/g)) specs.push(m[1]);
+      }
+      return specs;
+    });
+    const pageInBoot = bootImports.some((s) => /static-info\/page\.(ts|js)/.test(s));
+    const layoutInBoot = bootImports.some((s) => /\/layout\.(ts|js)/.test(s));
+    const pageFetched = requested.some((u) => /static-info\/page\.(ts|js)/.test(u));
+    const rendered = await page.evaluate(() => document.body.textContent || '');
+
+    assert.match(rendered, /zero application JS/i, '/static-info content is server-rendered');
+    assert.equal(pageInBoot, false, 'inert page module must NOT appear in the boot script');
+    assert.equal(pageFetched, false, 'inert page module must NOT be downloaded');
+    assert.equal(layoutInBoot, true, 'the router-enabling layout still ships (SPA nav intact)');
+  });
+
   test('chat: sending a message keeps you on the page and the message survives (#150)', async () => {
     // The chat form calls e.preventDefault() and sends over WebSocket, so the
     // client router must NOT intercept it (its submit listener is bubble, so the
