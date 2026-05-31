@@ -22,13 +22,14 @@
     "@prisma/client": "^5.22.0",
     "@webjsdev/cli": "^0.8.0",
     "@webjsdev/core": "^0.7.0",
-    "@webjsdev/server": "^0.8.0"
+    "@webjsdev/server": "^0.8.0",
+    "dayjs": "^1.11.21"
   },
   "devDependencies": {
-    "prisma": "^5.22.0",
-    "typescript": "^6.0.3",
     "@webjsdev/ts-plugin": "^0.4.0",
-    "@webjsdev/ui": "^0.3.0"
+    "@webjsdev/ui": "^0.3.0",
+    "prisma": "^5.22.0",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=24.0.0"
