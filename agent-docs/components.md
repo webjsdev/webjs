@@ -88,13 +88,23 @@ code depends on the definition:
 - `el instanceof TheClass` is `false`.
 - a CSS `the-tag:defined { … }` rule never matches.
 
-If a component is observed any of these ways, it is interactive in
-practice; add an interactivity signal (an `@event`, a non-`state`
-reactive property, or a lifecycle hook) so it ships. In idiomatic webjs
-this is rare: a display-only element is server-rendered to its final
-HTML and read as plain markup, and `:defined` FOUC-hiding works against
-progressive enhancement (it would hide content that already painted).
-But if you reach for those patterns, treat the component as interactive.
+**The three statically visible forms are now detected and force the
+observed component to ship**: a literal `whenDefined('the-tag')`, a CSS
+`the-tag:defined` selector, and `instanceof TheClass` (mapped back to the
+tag via the component's class name) anywhere in a graph-reachable module
+mark `the-tag`'s component as must-ship, so it is never elided. The bias
+stays conservative: detection only ever forces MORE components to ship.
+
+What remains an author-facing caveat is the part static analysis cannot
+see: a tag built from a dynamic string (`whenDefined(\`x-\${name}\`)`), or
+a `:defined` rule in an external stylesheet that is not part of the module
+graph. If you observe a component that way, add an interactivity signal
+(an `@event`, a non-`state` reactive property, or a lifecycle hook) so it
+ships. In idiomatic webjs this is rare: a display-only element is
+server-rendered to its final HTML and read as plain markup, and
+`:defined` FOUC-hiding works against progressive enhancement (it would
+hide content that already painted). But if you reach for those dynamic
+patterns, treat the component as interactive.
 
 The detection lists live in `packages/server/src/component-elision.js`
 and are the single source of truth. They are kept in lockstep with the

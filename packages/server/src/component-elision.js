@@ -132,6 +132,21 @@ const CLIENT_ROUTER_IMPORTS = ['navigate', 'enableClientRouter', 'disableClientR
 
 /** Identifiers that only exist in a browser; their presence means client work. */
 const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
+
+/**
+ * Cross-module observation of a component's registration. A module that
+ * observes another component's tag forces that component to register on the
+ * client, so the observed component cannot be elided even when its own render
+ * is display-only (eliding it drops its `customElements.define`, after which
+ * the observation silently fails). These scan for the three statically visible
+ * forms; the captured group is the observed tag (or class) name.
+ * - `customElements.whenDefined('my-tag')` / `whenDefined("my-tag")`
+ * - a CSS `my-tag:defined { … }` selector
+ * - `x instanceof MyClass` (mapped back to a tag via the component's className)
+ */
+const WHEN_DEFINED_RE = /\bwhenDefined\s*\(\s*['"`]([a-z][a-z0-9]*-[a-z0-9-]*)['"`]/g;
+const TAG_DEFINED_RE = /\b([a-z][a-z0-9]*-[a-z0-9-]*):defined\b/g;
+const INSTANCEOF_RE = /\binstanceof\s+([A-Z][A-Za-z0-9_$]*)/g;
 /** Same, for component source, minus `customElements` (the registration call
  * `customElements.define(...)` legitimately uses it and must not force ship). */
 const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
@@ -598,9 +613,12 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   const componentFiles = new Set();
   /** @type {Map<string, string>} */
   const tagToFile = new Map();
+  /** @type {Map<string, string>} className -> file, for instanceof observation */
+  const classToFile = new Map();
   for (const c of components) {
     componentFiles.add(c.file);
     tagToFile.set(c.tag, c.file);
+    if (c.className) classToFile.set(c.className, c.file);
   }
 
   /** @type {Set<string>} */
@@ -615,6 +633,9 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   const clientGlobalOrBareFiles = new Set();
   /** @type {Set<string>} */
   const serverFiles = new Set();
+  /** @type {Set<string>} component files forced to ship because some module
+   * observes their registration (whenDefined / :defined / instanceof). */
+  const observedComponentFiles = new Set();
 
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
@@ -646,7 +667,28 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
       mustShip.add(file);
     }
+    // Cross-module registration observation (#169): if THIS module observes
+    // another component's tag, that component must register client-side, so
+    // it cannot be elided. Map each observed tag/class back to its component
+    // file. Resolution against tagToFile / classToFile happens after the loop
+    // (all components are known up front, but we collect here while we hold
+    // each source). Verdict-safe: only ever forces MORE components to ship.
+    for (const m of src.matchAll(WHEN_DEFINED_RE)) {
+      const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
+    }
+    for (const m of src.matchAll(TAG_DEFINED_RE)) {
+      const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
+    }
+    for (const m of src.matchAll(INSTANCEOF_RE)) {
+      const f = classToFile.get(m[1]); if (f) observedComponentFiles.add(f);
+    }
   }
+
+  // Force every observed component to ship before the fixpoint runs, so the
+  // render/import rules propagate from it too. Dynamic tag strings and external
+  // (non graph-reachable) stylesheets remain an author-facing caveat, since
+  // static analysis cannot see them.
+  for (const f of observedComponentFiles) mustShip.add(f);
 
   // Reverse import edges (who imports each file), built once from the graph.
   // Drives both the closure-client-work reachability below and the fixpoint's

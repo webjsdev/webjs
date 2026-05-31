@@ -217,14 +217,18 @@ can load it without booting the full server.
    must grow whenever core adds an interactivity surface (enforced by
    `test/elision/lifecycle-coverage.test.js`). Only side-effect imports
    are stripped; binding imports are always preserved. Tests live in
-   `test/elision/`. The model's one blind spot is cross-module
-   observation of an elided element's registration (a shipping
-   `whenDefined('tag')`, an upgraded-member read off `querySelector`, an
-   `instanceof`, or a CSS `tag:defined` rule), since elision skips the
-   `customElements.define`. Static analysis cannot see these (dynamic tag
-   strings, external CSS), so it is documented as an author-facing caveat
-   in `agent-docs/components.md` rather than detected: such a component is
-   interactive in practice and needs an interactivity signal.
+   `test/elision/`. Cross-module observation of an elided element's
+   registration (a shipping `whenDefined('tag')`, a CSS `tag:defined`
+   rule, or an `instanceof TheClass`) would break if the component were
+   elided, since elision skips the `customElements.define`. The three
+   statically visible forms ARE detected (`WHEN_DEFINED_RE`,
+   `TAG_DEFINED_RE`, `INSTANCEOF_RE` in `component-elision.js`, the last
+   mapped to a tag via the component class name): any graph-reachable
+   module observing a tag forces that component to ship. Verdict-safe (it
+   only ever ships more). The residual caveat is the part static analysis
+   cannot see (a dynamic tag string, a `:defined` rule in an external
+   stylesheet outside the module graph), documented in
+   `agent-docs/components.md`; for those, add an interactivity signal.
 
 ## Tests
 
