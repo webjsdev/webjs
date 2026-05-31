@@ -100,6 +100,37 @@ test('a single @click flips the verdict: counterpart import is NOT stripped', as
   assert.match(code, /badge\.ts/, 'an interactive badge must keep its import');
 });
 
+test('a display-only component observed via whenDefined is NOT stripped (#169)', async () => {
+  // Through the full dev handler: a shipping helper calls
+  // whenDefined('x-badge'), so the badge must register client-side and its
+  // import must survive elision (otherwise customElements.define never runs
+  // and whenDefined never resolves). Counterfactual is the first test in this
+  // file, where the same display-only badge with no observer IS stripped.
+  const observer = `
+    customElements.whenDefined('x-badge').then(() => {});
+    export const ready = true;
+  `;
+  const pageWithObserver = `
+    import { html } from '@webjsdev/core';
+    import '../components/badge.ts';
+    import '../components/counter.ts';
+    import '../lib/observe.ts';
+    export default () => html\`<x-badge>hi</x-badge><x-counter></x-counter>\`;
+  `;
+  const appDir = makeApp({
+    'app/page.ts': pageWithObserver,
+    'components/badge.ts': BADGE,
+    'components/counter.ts': COUNTER,
+    'lib/observe.ts': observer,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  const code = await resp.text();
+  assert.match(code, /badge\.ts/, 'an observed display-only badge must keep its import');
+  assert.doesNotMatch(code, /webjs: elided display-only component/,
+    'nothing should be elided when the only display-only component is observed');
+});
+
 test('webjs.elide: false disables elision app-wide (display-only import survives)', async () => {
   // Project-level opt-out. With the switch off, the display-only badge that
   // would normally be stripped keeps its import, like before the feature.
