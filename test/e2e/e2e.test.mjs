@@ -1328,11 +1328,18 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const msg = 'e2e-chat-stays-onpage';
     await page.type('chat-box input', msg);
     await page.keyboard.press('Enter');
-    await sleep(1500); // WS round-trip: send -> server broadcast -> onMessage -> re-render
-    const present = await page.evaluate(
-      (m) => { const box = document.querySelector('chat-box'); return !!box && (box.textContent || '').includes(m); },
-      msg,
-    );
+    // Poll (not a fixed sleep) for the message to land in the chat-box via the
+    // WS round-trip: send -> server broadcast -> onMessage -> re-render. On the
+    // buggy (capture) code the page swaps and the message never appears, so this
+    // times out and `present` stays false, failing the assertion below.
+    let present = false;
+    try {
+      await page.waitForFunction(
+        (m) => { const box = document.querySelector('chat-box'); return !!box && (box.textContent || '').includes(m); },
+        { timeout: 6000 }, msg,
+      );
+      present = true;
+    } catch { present = false; }
     assert.ok(present, 'the sent chat message must remain visible (the page must not have navigated/swapped)');
     const path = await page.evaluate(() => location.pathname);
     assert.equal(path, '/', 'must stay on the home page after sending a chat message');

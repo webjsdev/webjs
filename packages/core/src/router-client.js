@@ -150,6 +150,13 @@ let prevScrollRestoration = null;
 export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
   enabled = true;
+  // NOTE: `click` is still capture, which carries the same latent issue the
+  // submit listener below fixes: a component `<a @click=preventDefault>` runs
+  // at-target, AFTER this capture listener, so onClick's defaultPrevented guard
+  // does not see it and the router hijacks the link. The blog does not hit this
+  // (its nav is plain `<a href>`), so flipping click to bubble is deferred to
+  // its own change (more cases: modifier/middle clicks, downloads, hash links).
+  // Tracked in #153.
   document.addEventListener('click', onClick, true);
   // `submit` is BUBBLE, not capture. A component's `@submit` handler is bound
   // per-element (render-client.js), so it runs in the at-target phase, BEFORE a
@@ -267,11 +274,14 @@ function onPopState(_e) {
 }
 
 /**
- * Intercept form submissions. Capture phase so we run before user
- * `@submit` handlers in component templates: they can call
- * `e.preventDefault()` or `e.stopImmediatePropagation()` first if they
- * want to handle the submission themselves (server-action RPC stubs do
- * this).
+ * Intercept form submissions. BUBBLE phase (see enableClientRouter) so we run
+ * AFTER a component's per-element `@submit` handler, which is bound at-target.
+ * That ordering is what makes the `if (e.defaultPrevented) return` guard below
+ * work: a component that calls `e.preventDefault()` (the chat / comments forms,
+ * or any JS-handled form) has already run, so we see the prevented default and
+ * leave the form alone. A capture listener would fire us first, before the
+ * component, defeating the guard and wrongly navigating the page out from under
+ * a JS-handled form.
  *
  * Filtering mirrors Turbo's `form_submit_observer.js`:
  *   - `data-no-router` on form or submitter → full browser submit.
