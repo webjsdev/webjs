@@ -349,8 +349,6 @@ export async function createRequestHandler(opts) {
             analysisDone = true;
             ranAnalysis = true;
           }
-          // Readiness gates on the analysis only; vendor is best-effort below.
-          readyDone = true;
           readyError = null;
           if (!vendorResolved) {
             const m = now();
@@ -368,6 +366,22 @@ export async function createRequestHandler(opts) {
             // the client router's deploy detection works without warmup drift.
             if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); }
           }
+          // Readiness reflects a FULLY warm instance: the deterministic analysis
+          // AND the first vendor attempt have both completed (note: completed,
+          // not necessarily succeeded). A readiness-gated platform (Railway
+          // healthcheckPath, k8s readinessProbe) therefore admits traffic only
+          // AFTER the build id is published (vendor resolved) or definitively
+          // empty (a bounded vendor failure), never DURING the vendor-resolution
+          // window. This is what makes warm-up actually protect users: the prior
+          // instance keeps serving until the new one is fully warm, so a real
+          // request lands on a warm instance with a stable build id instead of
+          // racing the resolve. The first vendor attempt is bounded (the jspm
+          // fetch timeout in vendor.js), so an offline / CDN-degraded app still
+          // becomes ready shortly after that timeout, degraded but reload-safe,
+          // which preserves the boot resilience #143 introduced. The gate is the
+          // FIRST attempt only: a transient failure still flips readyDone here,
+          // so a later non-blocking retry never has to re-open the readiness gate.
+          readyDone = true;
           if (ranAnalysis) {
             const ms = (x) => Math.round(x || 0);
             const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
