@@ -1,0 +1,119 @@
+// Tests for the UserPromptSubmit skill-routing hook
+// (.claude/hooks/route-skills.sh). The hook reads a prompt on stdin and
+// emits hookSpecificOutput.additionalContext that routes the prompt to the
+// skills it matches, so a relevant skill is never silently skipped.
+//
+// We exercise the hook as a black box: feed it the JSON the harness would,
+// parse its stdout, and assert which skills it routed to. The standing
+// policy must always be present; per-skill routing must fire on the
+// documented trigger phrases and stay quiet on unrelated prompts.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const HOOK = resolve(here, '../../.claude/hooks/route-skills.sh');
+
+/**
+ * Run the hook with a prompt and return { code, ctx } where ctx is the
+ * parsed additionalContext string (or '' if none).
+ */
+function run(prompt) {
+  const r = spawnSync('bash', [HOOK], {
+    input: JSON.stringify({ prompt }),
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, `hook exited non-zero: ${r.stderr}`);
+  if (!r.stdout.trim()) return { code: 0, ctx: '' };
+  const parsed = JSON.parse(r.stdout);
+  return { code: 0, ctx: parsed.hookSpecificOutput?.additionalContext ?? '' };
+}
+
+/** Count how many times a skill name was routed (one bullet per skill). */
+function routed(ctx, skill) {
+  const re = new RegExp(`^- ${skill}:`, 'm');
+  return re.test(ctx);
+}
+
+test('standing policy is injected on every prompt', () => {
+  for (const p of ['file a task for X', 'explain the SSR pipeline', '']) {
+    const { ctx } = run(p);
+    if (p === '') {
+      // Empty prompt is a no-op (nothing to route).
+      assert.equal(ctx, '');
+    } else {
+      assert.match(ctx, /skill policy/i);
+      // Newlines wrap the sentence, so match the salient tokens flexibly.
+      assert.match(ctx, /invoke that skill via the[\s\S]*Skill tool BEFORE other work/i);
+    }
+  }
+});
+
+test('webjs-file-issue routes on its trigger phrases', () => {
+  for (const p of [
+    'file a task for adding dark mode',
+    'create an issue for the streaming bug',
+    'track this as a todo: refactor the rate limiter',
+    'make this an issue',
+    'add a new task to investigate the SSR race',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-file-issue'), `expected file-issue route for: ${p}`);
+  }
+});
+
+test('webjs-start-work routes on its trigger phrases', () => {
+  for (const p of [
+    'work on #112',
+    "let's start work on the rate-limit issue",
+    'pick up #114',
+    'tackle the dist issue (#113)',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-start-work'), `expected start-work route for: ${p}`);
+  }
+});
+
+test('webjs-list-todos routes on its trigger phrases', () => {
+  for (const p of [
+    "what's pending",
+    'what should I work on next',
+    'show me the open issues',
+    'list webjs todos',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-list-todos'), `expected list-todos route for: ${p}`);
+  }
+});
+
+test('use-railway routes on infra phrases', () => {
+  for (const p of [
+    'redeploy the docs service',
+    'check the railway deployment',
+    'the build failed on deploy',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'use-railway'), `expected railway route for: ${p}`);
+  }
+});
+
+test('unrelated prompt routes to no skill but still carries the policy', () => {
+  const { ctx } = run('explain how the SSR pipeline works');
+  assert.match(ctx, /skill policy/i);
+  assert.ok(!routed(ctx, 'webjs-file-issue'));
+  assert.ok(!routed(ctx, 'webjs-start-work'));
+  assert.ok(!routed(ctx, 'webjs-list-todos'));
+  assert.ok(!routed(ctx, 'use-railway'));
+  // The no-match branch tells the model to apply the policy if the task
+  // turns out to match a skill mid-stream.
+  assert.match(ctx, /if you determine mid-task that the work matches a skill/i);
+});
+
+test('a single prompt routes each matched skill exactly once', () => {
+  const { ctx } = run('file a task for dark mode');
+  const count = (ctx.match(/^- webjs-file-issue:/gm) || []).length;
+  assert.equal(count, 1);
+});
