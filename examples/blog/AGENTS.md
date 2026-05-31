@@ -115,6 +115,22 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - `app/api/comments/[postId]/route.ts` exports `WS` for live comment threads.
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
 
+### Elision fixtures (e2e-pinned)
+The app carries display-only and inert-route fixtures so the network
+probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
+
+- `components/build-stamp.ts` (rendered on `/`): a display-only
+  component whose module is stripped from the served page source, so the
+  browser never downloads it.
+- `components/vendor-badge.ts` (rendered on `/`): a display-only
+  component whose only non-core dependency is `dayjs` (a binding import,
+  not an interactivity signal). Because the component is elided, the
+  bare-import scan skips it, so `dayjs` never enters the importmap and is
+  never fetched. The dayjs-formatted date is still SSR'd.
+- `app/static-info/page.ts`: a fully-static route whose inert page module
+  is dropped from the boot script, so it ships zero application page JS
+  (only the router-enabling root layout loads).
+
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:
 
