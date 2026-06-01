@@ -3,12 +3,19 @@
 # Framework-repo pre-commit hook.
 #
 # Mirrors what scaffolded webjs apps get via webjs create, adapted
-# for the framework's own test runner. Three gates:
+# for the framework's own toolchain. Two gates:
 #   1. Block direct commits to main/master. Use a feature branch.
-#   2. Run `npm test` to refuse commits that break the suite.
-#   3. Auto-generate matching changelog/<pkg>/<version>.md files
+#   2. Auto-generate matching changelog/<pkg>/<version>.md files
 #      when a packages/<pkg>/package.json version bumped in the
 #      staged diff.
+#
+# The test suite is NOT run here. CI (.github/workflows/ci.yml) is the
+# test gate: it runs Conventions (webjs check), unit + integration,
+# browser, e2e, and the dist build on every push and PR, and branch
+# protection blocks a merge until all five pass. Running the full
+# ~800-test suite on every local commit was redundant with that gate
+# and made commit-per-logical-unit slow, so it was removed; commits
+# stay fast and the gate lives in CI where it cannot be bypassed.
 #
 # Exception: the release workflow's `github-actions[bot]` commits
 # the lockstep wrapper bumps directly to main (.github/workflows/
@@ -39,16 +46,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   exit 1
 fi
 
-echo "Running npm test..."
-if ! npm test --silent; then
-  echo ""
-  echo "ERROR: npm test failed. Fix tests before committing."
-  echo "To bypass (emergencies only): git commit --no-verify"
-  echo ""
-  exit 1
-fi
-
-# Gate 3: when a packages/<pkg>/package.json version bumped, auto-
+# Gate 2: when a packages/<pkg>/package.json version bumped, auto-
 # generate the matching changelog/<pkg>/<version>.md and stage it so
 # the version-bump commit ships with its release notes in one shot.
 # Bumps are detected by scanning the staged diff for a `+ "version":`

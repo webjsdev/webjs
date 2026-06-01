@@ -451,14 +451,14 @@ test/
 - `webjs test --browser` (or `npx wtr`) runs the browser tests.
 - `WEBJS_E2E=1 webjs test` adds the e2e tests.
 
-**Every change ships with a test, enforced at commit time.** A commit
-that stages app code (`app/`, `modules/`, `components/`, `lib/`) without
-staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`
-(Claude Code) and the universal `.hooks/pre-commit` (any agent or human).
+**Every change ships with a test.** For Claude Code, a commit that
+stages app code (`app/`, `modules/`, `components/`, `lib/`) without
+staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`.
 A unit test alone is not enough for interactive or component code: add
-the browser test that asserts the rendered/hydrated behaviour. Bypass a
-genuine non-code commit with `WEBJS_NO_TEST_GATE=1`, or `--no-verify` in
-an emergency.
+the browser test that asserts the rendered/hydrated behaviour. The test
+suite itself runs in CI (`.github/workflows/ci.yml`) on every PR and
+push to main, not in the local pre-commit hook, so `git commit` stays
+fast and the gate cannot be skipped with a local `--no-verify`.
 
 ### Choosing a feature folder
 
@@ -1003,10 +1003,19 @@ This project enforces a git workflow via agent-specific config files
   Other agents enforce this via `.cursorrules`, `.agents/rules/workflow.md`,
   `.github/copilot-instructions.md`.
 
-**Pre-commit checks:**
-- `webjs test` must pass
-- `webjs check` must pass
-- No unrelated files in the commit
+**Pre-commit hook (`.hooks/pre-commit`):**
+- Blocks commits to `main` / `master`. Nothing else runs locally, so
+  `git commit` stays fast. Keeping commits to one logical unit (no
+  unrelated files) is your discipline plus the `nudge-uncommitted`
+  hooks, not something this hook enforces.
+
+**CI gate (`.github/workflows/ci.yml`), on every PR and push to main:**
+- `webjs check` (conventions) must pass
+- `webjs test` (unit + integration), the browser layer, and the e2e
+  layer must pass
+- Mark these as required status checks in the branch-protection rule for
+  main so a PR can only merge when the gate is green. The gate lives in
+  CI, where a local `--no-verify` cannot skip it.
 
 ---
 

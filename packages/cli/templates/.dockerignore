@@ -1,0 +1,43 @@
+.git
+.github
+node_modules
+**/node_modules
+
+# `.webjs/` is ignored EXCEPT for `.webjs/vendor/`, which holds the committed
+# importmap manifest (and optionally downloaded bundle bytes) the server needs
+# at boot without reaching api.jspm.io. DO NOT collapse to `**/.webjs`: parent
+# exclusion blocks child negations and the vendor files would never ship.
+.webjs/*
+!.webjs/vendor/
+!.webjs/vendor/**
+
+dist
+build
+out
+.cache
+
+# Local env files. The container gets its env from compose / uncloud, not a
+# committed file. Keep the example for reference.
+.env
+!.env.example
+
+# Prisma local SQLite. Schema + migrations ship; the runtime volume owns the db.
+dev.db
+dev.db-journal
+prisma/dev.db
+prisma/dev.db-journal
+
+# logs
+*.log
+npm-debug.log*
+
+# editors / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# tests aren't needed in the production image
+coverage/
+test/
+**/test/

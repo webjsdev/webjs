@@ -1,0 +1,28 @@
+# {{APP_NAME}} local parity with production, using the same Dockerfile, one service.
+#
+#   docker compose up --build   →   http://localhost:8080
+#
+# In production the webdeploy tool (ubicloud + uncloud) provisions a managed
+# Postgres and injects DATABASE_URL + AUTH_SECRET for you. Locally this uses
+# the scaffold's SQLite file on a named volume so data survives `compose down`.
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      # SQLite on a volume for local dev. For production, point DATABASE_URL at
+      # your managed Postgres and switch prisma/schema.prisma's provider to
+      # "postgresql".
+      DATABASE_URL: file:/data/dev.db
+      # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      AUTH_SECRET: ${AUTH_SECRET:-change-me-please-at-least-32-characters!}
+      # Uncomment to back cache / sessions / rate-limiting / pub-sub with Redis
+      # instead of the in-memory defaults.
+      # REDIS_URL: redis://redis:6379
+    volumes:
+      - app-data:/data
+
+volumes:
+  app-data:

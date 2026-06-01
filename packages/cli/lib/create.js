@@ -392,7 +392,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.cursorrules',
     '.github/copilot-instructions.md',
     '.github/pull_request_template.md',
+    // CI is the test gate (the pre-commit hook only blocks main). Runs
+    // webjs check + the unit / browser / e2e layers on every PR and push
+    // to main, mirroring the webjs framework's own CI.
+    '.github/workflows/ci.yml',
     '.editorconfig',
+    // Production / deploy scaffolding. `docker compose up --build` runs
+    // the app locally with the same Dockerfile production builds from.
+    'Dockerfile',
+    'compose.yaml',
+    '.dockerignore',
   ];
   for (const f of templateFiles) {
     const src = join(TEMPLATES, f);
