@@ -318,12 +318,17 @@ Fully warm means the deterministic analysis AND the first vendor attempt have
 both completed, so the importmap and its build id are settled. Point your
 platform's readiness check at `/__webjs/ready` so it holds traffic off a
 not-yet-warmed instance instead of routing the first user request into the cold
-analysis or the brief window where the importmap is still resolving. On
-Railway, set `"healthcheckPath": "/__webjs/ready"` under `deploy` in
-`railway.json`. For dependency-aware
-readiness (gate on a live DB ping), add an optional `readiness.{js,ts}` at the
-app root that default-exports an async check; `/__webjs/ready` runs it once warm
-and reports 503 if it returns `false` or throws.
+analysis or the brief window where the importmap is still resolving. The
+scaffolded `Dockerfile` and `compose.yaml` already wire this up with a
+`HEALTHCHECK` that probes `/__webjs/ready`, so any Docker-based deploy gets the
+gate with no extra config. On a platform that reads its own config instead,
+point its equivalent knob at the same path: Railway `"healthcheckPath":
+"/__webjs/ready"`, Render `healthCheckPath: /__webjs/ready`, Fly a
+`[[http_service.checks]]` on `/__webjs/ready`, or a Kubernetes `readinessProbe`
+with `httpGet.path: /__webjs/ready`. For dependency-aware readiness (gate on a
+live DB ping), add an optional `readiness.{js,ts}` at the app root that
+default-exports an async check; `/__webjs/ready` runs it once warm and reports
+503 if it returns `false` or throws.
 
 Scripts:
 

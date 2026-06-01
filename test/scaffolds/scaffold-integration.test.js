@@ -128,6 +128,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'Dockerfile pins the same Node major as CI (24)');
     assert.match(dockerfile, /CMD \["npm", "start"\]/,
       'Dockerfile starts via npm so prestart hooks fire');
+    // Platform-neutral readiness gate: a HEALTHCHECK probing /__webjs/ready, so
+    // the gate works on any Docker-based deploy without a per-platform file.
+    assert.match(dockerfile, /HEALTHCHECK[\s\S]*\/__webjs\/ready/,
+      'Dockerfile HEALTHCHECK probes /__webjs/ready');
+    const compose = readFileSync(join(appDir, 'compose.yaml'), 'utf8');
+    assert.match(compose, /healthcheck:[\s\S]*\/__webjs\/ready/,
+      'compose.yaml healthcheck probes /__webjs/ready');
     // .dockerignore must preserve the .webjs/vendor negation (parent
     // exclusion would silently drop the committed importmap).
     const dockerignore = readFileSync(join(appDir, '.dockerignore'), 'utf8');

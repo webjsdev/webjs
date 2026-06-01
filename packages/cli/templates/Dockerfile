@@ -33,6 +33,17 @@ ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
+# Platform-neutral readiness gate. webjs answers /__webjs/ready with 503 until
+# the instance is fully warm (analysis + first vendor attempt), then 200. This
+# HEALTHCHECK is honoured by Docker, compose, and most Docker-based platforms,
+# so the gate works the same everywhere instead of needing a per-platform file.
+# The probe is dependency-free (Node 24's built-in fetch, no curl/wget). For
+# platforms that read their own config, point the equivalent knob at the same
+# path (Railway healthcheckPath, Render healthCheckPath, Fly [checks], k8s
+# readinessProbe); see AGENTS.md "Health and readiness probes".
+HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/__webjs/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+
 # `npm start` runs `prestart: prisma migrate deploy` (idempotent, a no-op when
 # there are no migrations yet) and then `webjs start`, which serves on $PORT.
 CMD ["npm", "start"]
