@@ -301,6 +301,16 @@ In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
 start`) as the CMD over `node ... webjs.js start ...`. The npm form
 fires `prestart`; the direct binary form skips it.
 
+**Containerized deploy ships with the scaffold.** `Dockerfile`,
+`compose.yaml`, and `.dockerignore` are scaffolded at the app root. The
+Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs
+deps, runs `prisma generate`, and starts via `npm start` so `prestart`
+applies migrations. Run it locally with `docker compose up --build` (the
+app comes up on http://localhost:8080 against a SQLite file on a named
+volume). For production, point `DATABASE_URL` at managed Postgres and set
+`AUTH_SECRET`. The `.dockerignore` keeps the `.webjs/vendor/` importmap in
+the image while excluding `node_modules`, tests, and local state.
+
 **Health and readiness probes.** Every webjs server answers two endpoints:
 `/__webjs/health` (liveness, 200 once the process is listening) and
 `/__webjs/ready` (readiness, 503 until the instance is fully warm, then 200).

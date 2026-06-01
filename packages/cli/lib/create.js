@@ -397,6 +397,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // to main, mirroring the webjs framework's own CI.
     '.github/workflows/ci.yml',
     '.editorconfig',
+    // Production / deploy scaffolding. `docker compose up --build` runs
+    // the app locally with the same Dockerfile production builds from.
+    'Dockerfile',
+    'compose.yaml',
+    '.dockerignore',
   ];
   for (const f of templateFiles) {
     const src = join(TEMPLATES, f);

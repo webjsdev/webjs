@@ -119,6 +119,21 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(ciWorkflow, /WEBJS_E2E/,
       'CI runs the e2e layer');
 
+    // Production / deploy scaffolding ships with every app.
+    assert.ok(existsSync(join(appDir, 'Dockerfile')), 'Dockerfile scaffolded');
+    assert.ok(existsSync(join(appDir, 'compose.yaml')), 'compose.yaml scaffolded');
+    assert.ok(existsSync(join(appDir, '.dockerignore')), '.dockerignore scaffolded');
+    const dockerfile = readFileSync(join(appDir, 'Dockerfile'), 'utf8');
+    assert.match(dockerfile, /FROM node:24-alpine/,
+      'Dockerfile pins the same Node major as CI (24)');
+    assert.match(dockerfile, /CMD \["npm", "start"\]/,
+      'Dockerfile starts via npm so prestart hooks fire');
+    // .dockerignore must preserve the .webjs/vendor negation (parent
+    // exclusion would silently drop the committed importmap).
+    const dockerignore = readFileSync(join(appDir, '.dockerignore'), 'utf8');
+    assert.match(dockerignore, /!\.webjs\/vendor\//,
+      '.dockerignore keeps .webjs/vendor/ (committed importmap ships)');
+
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
     assert.equal(pkg.name, 'my-app');
