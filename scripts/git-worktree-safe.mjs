@@ -110,6 +110,14 @@ function check() {
     problems.push(`extensions.worktreeConfig is "${wtConfig}" (expected "true"); without it a shared core.bare flip is fatal`);
   }
 
+  // extensions.worktreeConfig is only contractually honored at rfv >= 1, so a
+  // drop back to 0 is the same threat as worktreeConfig being off: assert it
+  // here, not just in ensure, or the guard does not defend the property.
+  const rfv = parseInt(git(['config', 'core.repositoryformatversion'], { allowFail: true }) || '0', 10);
+  if (!(rfv >= 1)) {
+    problems.push(`core.repositoryformatversion is "${rfv}" (expected >= 1); below it a stricter git may ignore the worktree override`);
+  }
+
   const top = topLevel();
   const hooksDir = join(top, '.hooks');
   if (existsSync(hooksDir)) {

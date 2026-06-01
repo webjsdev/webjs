@@ -119,4 +119,15 @@ describe('git-worktree-safe (#166)', () => {
     assert.equal(runScript().code, 0);
     assert.equal(runScript(['--check']).code, 0);
   });
+
+  test('--check rejects an rfv drop below 1 (worktree override no longer guaranteed)', () => {
+    // worktreeConfig + the override stay in place; only rfv drops. Current git
+    // still honors the override, but the check must flag it because a stricter
+    // git would not, which is exactly what ensure's rfv bump defends against.
+    git(['config', 'core.repositoryformatversion', '0']);
+    assert.equal(runScript(['--check']).code, 1, 'rfv < 1 must fail the check');
+    assert.equal(runScript().code, 0);
+    assert.equal(git(['config', 'core.repositoryformatversion']), '1', 'heal restores rfv=1');
+    assert.equal(runScript(['--check']).code, 0);
+  });
 });
