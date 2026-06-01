@@ -691,11 +691,21 @@ test('navigate: text/html response proceeds with router swap (no fallback)', asy
       '<!--wj:children:/-->content<!--/wj:children-->' +
       '</body></html>',
   });
+  const seen = [];
+  const onNav = (e) => seen.push(e.detail);
+  document.addEventListener('webjs:navigate', onNav);
   try {
     document.body.innerHTML = '<!--wj:children:/-->old<!--/wj:children-->';
     await navigate('http://localhost/ok');
     assert.equal(redirect.href, null, 'text/html response should not trigger location.href fallback');
+    // The navigate event carries a `from: 'navigate'` tag, symmetric with
+    // webjs:prefetch's `from: 'prefetch'`, so a listener bound to both can
+    // tell a real nav from a speculative prefetch landing.
+    assert.ok(seen.length >= 1, 'a webjs:navigate event fired');
+    assert.equal(seen[seen.length - 1].from, 'navigate');
+    assert.equal(seen[seen.length - 1].url, 'http://localhost/ok');
   } finally {
+    document.removeEventListener('webjs:navigate', onNav);
     restore();
     document.body.innerHTML = '';
   }

@@ -1282,7 +1282,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     }
   }
 
-  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId } }));
+  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
 }
 
 /**
