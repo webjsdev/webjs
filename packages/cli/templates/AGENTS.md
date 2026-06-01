@@ -889,9 +889,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
    action called from the client needs a browser test
    (`webjs test --browser`) asserting the behaviour in a real browser. A
    commit that stages app code (`app/`, `modules/`, `components/`, `lib/`)
-   with no test is blocked by `.claude/hooks/require-tests-with-src.sh`
-   and the `.hooks/pre-commit` floor (bypass a genuine non-code commit
-   with `WEBJS_NO_TEST_GATE=1`).
+   with no test is blocked for Claude Code by
+   `.claude/hooks/require-tests-with-src.sh`. The test suite itself runs in
+   CI (`.github/workflows/ci.yml`), not in the pre-commit hook, so `git
+   commit` stays fast and the gate cannot be skipped with a local
+   `--no-verify`.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.
@@ -907,9 +909,10 @@ composition, so a nested shell ends up dropped by the HTML parser.
    | Antigravity (Google) | text rule only (post-write hooks not yet exposed) | `.agents/rules/workflow.md` |
    | GitHub Copilot | text rule only (no hooks API) | `.github/copilot-instructions.md` |
 
-   Tool-agnostic fallback: `.hooks/pre-commit` runs `webjs test` + `webjs check`
-   on every commit, regardless of which agent (or human) made it. No AI
-   attribution trailers in commit messages.
+   The `.hooks/pre-commit` hook blocks commits to main and nothing else;
+   `webjs test` + `webjs check` run in CI (`.github/workflows/ci.yml`) on
+   every PR and push to main, regardless of which agent (or human) made
+   the commit. No AI attribution trailers in commit messages.
 4. Run the **pre-merge self-review loop** before signaling the PR is
    ready. After committing the work, trigger a fresh-context review
    pass (a new chat / composer tab / subagent / Cascade thread

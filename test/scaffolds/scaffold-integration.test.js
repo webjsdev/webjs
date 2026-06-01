@@ -79,11 +79,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');
 
-    // require-tests gate reaches the scaffolded app three ways: the hook
-    // file is copied, the Claude settings wire it into PreToolUse, and the
-    // tool-agnostic pre-commit floor carries the block. All three must be
-    // present so an app-code commit with no test is blocked regardless of
-    // which agent (or human) commits.
+    // The require-tests hook still reaches the scaffolded app for Claude
+    // Code: the hook file is copied and the Claude settings wire it into
+    // PreToolUse. (The tool-agnostic test gate has moved to CI, see below.)
     assert.ok(existsSync(join(appDir, '.claude/hooks/require-tests-with-src.sh')),
       'require-tests hook is scaffolded');
     const claudeSettings = JSON.parse(
@@ -95,9 +93,31 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       preCommands.includes('.claude/hooks/require-tests-with-src.sh'),
       'settings.json wires the require-tests hook into PreToolUse',
     );
+
+    // The local pre-commit hook is lightweight: it blocks commits to main
+    // and nothing else. The test/convention gate runs in CI, not locally,
+    // so `git commit` stays fast and the gate cannot be skipped with a
+    // local --no-verify. Mirrors the webjs framework's own pre-commit.
     const preCommit = readFileSync(join(appDir, '.hooks/pre-commit'), 'utf8');
-    assert.match(preCommit, /no test is staged/,
-      'pre-commit carries the tool-agnostic require-tests floor');
+    assert.match(preCommit, /Cannot commit directly to/,
+      'pre-commit blocks commits to main');
+    assert.doesNotMatch(preCommit, /npx --no-install webjs/,
+      'pre-commit no longer runs the test suite (moved to CI)');
+    assert.doesNotMatch(preCommit, /no test is staged/,
+      'pre-commit no longer carries the require-tests floor (moved to CI)');
+
+    // CI carries the test gate: webjs check + the unit / browser / e2e
+    // layers on every PR and push to main.
+    const ciWorkflow = readFileSync(
+      join(appDir, '.github/workflows/ci.yml'), 'utf8');
+    assert.match(ciWorkflow, /npm run check/,
+      'CI runs webjs check');
+    assert.match(ciWorkflow, /npm test/,
+      'CI runs the unit + integration suite');
+    assert.match(ciWorkflow, /npm run test:browser/,
+      'CI runs the browser suite');
+    assert.match(ciWorkflow, /WEBJS_E2E/,
+      'CI runs the e2e layer');
 
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));

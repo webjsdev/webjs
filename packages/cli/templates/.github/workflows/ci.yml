@@ -1,0 +1,101 @@
+name: CI
+
+# The test gate for {{APP_NAME}}. Runs the full test pyramid on every PR
+# into main and on every push to main. This is the gate the local
+# pre-commit hook deliberately leaves out, so `git commit` stays fast and
+# the test gate runs in one authoritative place a local --no-verify cannot
+# skip. Same posture as the webjs framework's own CI.
+#
+# The four layers run as separate jobs so a failure names the layer that
+# broke. Mark all four as required status checks in the branch-protection
+# rule for main so a PR can only merge when every layer is green. Free on
+# public repos (ubuntu-latest has unlimited Actions minutes).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels the older in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: Conventions (webjs check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  unit:
+    name: Unit + integration (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./ci.db
+      - run: npm test
+        env:
+          DATABASE_URL: file:./ci.db
+
+  browser:
+    name: Browser (web-test-runner / Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+  e2e:
+    name: E2E (full app boot)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./ci.db
+      # The scaffold's e2e test (test/hello/e2e/) drives a real browser
+      # via puppeteer-core, which is not a default dependency (the test
+      # skips when it is absent). Install it and Chromium so the e2e
+      # layer actually runs in CI rather than skipping silently.
+      - name: Install puppeteer-core + Chromium
+        run: |
+          npm install --no-save puppeteer-core
+          npx playwright install --with-deps chromium
+      - name: Resolve the Chromium binary path
+        run: echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: Run e2e
+        env:
+          WEBJS_E2E: '1'
+          DATABASE_URL: file:./ci.db
+        run: npm test
