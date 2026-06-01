@@ -321,15 +321,26 @@ function decode(v, ctx) {
 
 function decodeTagged(v, tag, ctx) {
   const id = v[ID_KEY];
+  // Register the decoded value under its `_id` so a later `Ref` to it
+  // resolves. Container tags (Map/Set/Arr/Error/object) register BEFORE
+  // decoding children (so a cycle through the container resolves); leaf
+  // rich types (Date, typed arrays, Blob, ...) have no children and register
+  // through this helper at return. Without it, a SHARED Date or typed array
+  // (the same instance appearing twice) decodes the first copy but throws
+  // "Dangling reference" on the second.
+  const reg = (value) => {
+    if (typeof id === 'number') ctx.refs.set(id, value);
+    return value;
+  };
   switch (tag) {
     case 'undef': return undefined;
     case 'NaN':   return NaN;
     case 'Inf':   return Infinity;
     case '-Inf':  return -Infinity;
     case '-0':    return -0;
-    case 'BigInt': return BigInt(v.v);
-    case 'Sym':   return Symbol.for(v.v);
-    case 'Date':  return v.v == null ? new Date(NaN) : new Date(v.v);
+    case 'BigInt': return reg(BigInt(v.v));
+    case 'Sym':   return reg(Symbol.for(v.v));
+    case 'Date':  return reg(v.v == null ? new Date(NaN) : new Date(v.v));
     case 'Error': {
       const e = new Error(v.v.message);
       e.name = v.v.name;
@@ -365,16 +376,17 @@ function decodeTagged(v, tag, ctx) {
     case 'Blob': {
       if (typeof Blob === 'undefined') throw new TypeError('Blob is not available in this environment.');
       const bytes = b64ToBytes(v.v);
-      return new Blob([bytes], { type: v.t || '' });
+      return reg(new Blob([bytes], { type: v.t || '' }));
     }
     case 'File': {
       if (typeof File === 'undefined') throw new TypeError('File is not available in this environment.');
       const bytes = b64ToBytes(v.v);
-      return new File([bytes], v.n, { type: v.t || '', lastModified: v.m });
+      return reg(new File([bytes], v.n, { type: v.t || '', lastModified: v.m }));
     }
     case 'FD': {
       if (typeof FormData === 'undefined') throw new TypeError('FormData is not available in this environment.');
       const fd = new FormData();
+      reg(fd);
       for (const [k, val] of v.v) {
         const decoded = decode(val, ctx);
         fd.append(k, decoded);
@@ -385,17 +397,17 @@ function decodeTagged(v, tag, ctx) {
       // Typed arrays + binary buffers
       if (tag === 'buf') {
         const bytes = b64ToBytes(v.v);
-        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        return reg(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
       }
       if (tag === 'dv') {
         const bytes = b64ToBytes(v.v);
-        return new DataView(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+        return reg(new DataView(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)));
       }
       const Ctor = TAG_TO_TYPED_ARRAY[tag];
       if (Ctor) {
         const bytes = b64ToBytes(v.v);
         const sliced = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-        return new Ctor(sliced);
+        return reg(new Ctor(sliced));
       }
       throw new TypeError(`Unknown serialization tag: ${tag}`);
     }
