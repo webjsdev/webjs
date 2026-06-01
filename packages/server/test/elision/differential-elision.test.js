@@ -130,6 +130,38 @@ test('the mixed page actually elides JS on the ON side (the diff is not vacuous)
   );
 });
 
+test('served module source reflects each handler\'s own elision verdict (no cross-handler cache bleed)', async () => {
+  // Regression: the transformed-source cache used to be module-global keyed
+  // on (path, mtime), but the cached bytes bake in a handler's elision
+  // verdict. Booting an ON handler then an OFF handler in one process made
+  // the OFF handler serve the ON handler's already-elided source for the
+  // same path. A multi-tenant embedder running createRequestHandler per app
+  // with different elision settings hit the same poisoning. The cache is now
+  // per-handler (state.tsCache). ON is warmed FIRST here so a shared cache
+  // would be poisoned by the time OFF reads it.
+  const ORIG = process.env.WEBJS_ELIDE;
+  const IMPORT = /import\s+['"][^'"]*build-stamp\.ts['"]/;
+  try {
+    delete process.env.WEBJS_ELIDE;
+    const hOn = await createRequestHandler({ appDir: BLOG, dev: false });
+    if (hOn.warmup) await hOn.warmup();
+    const onSrc = await (await hOn.handle(new Request('http://localhost/app/page.ts'))).text();
+
+    process.env.WEBJS_ELIDE = '0';
+    const hOff = await createRequestHandler({ appDir: BLOG, dev: false });
+    if (hOff.warmup) await hOff.warmup();
+    const offSrc = await (await hOff.handle(new Request('http://localhost/app/page.ts'))).text();
+
+    // The page side-effect-imports the display-only <build-stamp>. ON strips
+    // that import (the module is never downloaded); OFF keeps it.
+    assert.ok(!IMPORT.test(onSrc), 'ON handler must strip the elided build-stamp import from the served page source');
+    assert.ok(IMPORT.test(offSrc), 'OFF handler must keep the build-stamp import (cross-handler cache bleed would strip it)');
+  } finally {
+    if (ORIG === undefined) delete process.env.WEBJS_ELIDE;
+    else process.env.WEBJS_ELIDE = ORIG;
+  }
+});
+
 test('counterfactual: the masked diff is sensitive to a real body change', () => {
   // The comparator must not pass vacuously by masking too much. A dropped
   // NEEDED module manifests, in the worst case, as missing rendered output;
