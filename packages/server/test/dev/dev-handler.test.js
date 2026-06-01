@@ -239,6 +239,16 @@ test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
 });
 
+test('handle: /__webjs/core/ refuses an encoded-slash sibling escape → 403', async () => {
+  // `..%2f` survives URL normalization (the slash is encoded) and then decodes
+  // to `../`, so a raw startsWith(coreDir) prefix check would admit a sibling
+  // package like @webjsdev/core-evil. The trailing-separator boundary blocks it.
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/core/..%2fcore-evil/secret.js'));
+  assert.equal(resp.status, 403, `expected 403, got ${resp.status}`);
+});
+
 /* ------------ vendor URLs: --download mode handler ------------ */
 //
 // In the default jspm.io mode, the importmap routes bare imports to

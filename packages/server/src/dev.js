@@ -830,7 +830,13 @@ async function tryServeFrameworkStatic(path, method, ctx) {
   if (path.startsWith('/__webjs/core/')) {
     const rel = path.slice('/__webjs/core/'.length);
     const abs = resolve(coreDir, rel);
-    if (!abs.startsWith(coreDir)) return new Response('forbidden', { status: 403 });
+    // Trailing-separator boundary check, not a raw string prefix: a raw
+    // `startsWith(coreDir)` would admit a sibling like `@webjsdev/core-evil`,
+    // reachable via an encoded slash (`..%2f`, which survives URL normalization
+    // and then decodes to `../`). Match the public-root branch's guard.
+    if (abs !== coreDir && !abs.startsWith(coreDir + sep)) {
+      return new Response('forbidden', { status: 403 });
+    }
     return fileResponse(abs, { dev, immutable: false });
   }
 
