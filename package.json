@@ -16,7 +16,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "prepare": "node scripts/git-worktree-safe.mjs",
+    "prepare": "node scripts/git-worktree-safe.mjs 2>/dev/null || true",
     "fix:git": "node scripts/git-worktree-safe.mjs",
     "check:git": "node scripts/git-worktree-safe.mjs --check",
     "dev": "node scripts/dev-all.js",
