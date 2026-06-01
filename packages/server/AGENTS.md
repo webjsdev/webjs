@@ -209,9 +209,15 @@ can load it without booting the full server.
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely, so a fully-static route ships
    zero application JS. Preload hints for elided modules drop too, and their
-   importmap entries drop when the map is resolved live via `vendorImportMapEntries`;
-   a committed `.webjs/vendor/importmap.json` pin file is served as-is, so an
-   elided dep keeps its (harmless, never-fetched) importmap line in that mode.
+   importmap entries drop too, for a live-resolved AND a pinned app alike. The
+   live path excludes elided components from the bare-import scan; a committed
+   `.webjs/vendor/importmap.json` is applied verbatim at boot (for a stable
+   build id) and then, once elision is known, pruned to the specifiers still
+   reachable from non-elided modules via `prunePinToReachable` in `ensureReady`
+   (issue #197). So a pinned app and an unpinned app serve the SAME map. The
+   advertised build id stays the boot-published hash of the committed pin (a
+   deploy fingerprint) and is not re-published, so only the served map shrinks
+   and the warmup window cannot drift the id.
    This is progressive-enhancement-safe by construction:
    the SSR'd HTML is the baseline, swap markers are static comments, and
    navigation/forms fall back to native browser behavior, so removing
