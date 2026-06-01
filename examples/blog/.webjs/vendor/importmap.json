@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "dayjs": "https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js"
+  },
+  "integrity": {
+    "https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js": "sha384-XFWkZWcQLB8xNT7bYSAjwHRjTg6esPTolseu0+AjqHGKkP+fqTc5/7pe1lEqB0Mp"
+  }
+}

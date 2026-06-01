@@ -549,6 +549,16 @@ export async function createRequestHandler(opts) {
         }
         return Response.json({ status: 'ok' }, { headers: noStore });
       }
+      // Framework-internal static assets (the @webjsdev/core runtime, the dev
+      // reload client, downloaded vendor bundles) depend on neither the analysis
+      // nor the vendor importmap, so serve them BEFORE ensureReady(). Otherwise a
+      // cold instance blocks them behind the first vendor resolve (issue #190),
+      // and the core bundle is on every page's boot path, so that stalled first
+      // interactivity site-wide. Matched on the decoded path, like handleCore.
+      let assetPath = probePath;
+      try { assetPath = decodeURIComponent(probePath); } catch { /* keep raw on malformed escape */ }
+      const staticResp = await tryServeFrameworkStatic(assetPath, req.method.toUpperCase(), { coreDir, appDir, dev });
+      if (staticResp) return staticResp;
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
@@ -775,23 +785,29 @@ export async function startServer(opts) {
  * @param {Request} req
  * @param {{state: any, appDir: string, coreDir: string, dev: boolean}} ctx
  */
-async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev } = ctx;
-  const url = new URL(req.url);
-  // Decode percent-encoded characters so filesystem lookups match real
-  // filenames. Dynamic route segments like `[slug]` and route groups like
-  // `(marketing)` contain chars that browsers percent-encode in URLs
-  // (`%5B`, `%5D`, `%28`, `%29`). Without decoding, the server joins the
-  // encoded path with the app directory → file not found → 404 → no JS
-  // loads → no interactivity.
-  let path;
-  try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
-  const method = req.method.toUpperCase();
+/**
+ * Serve framework-internal static assets that depend on NEITHER the whole-app
+ * analysis NOR the vendor importmap: the `@webjsdev/core` runtime files, the
+ * dev reload client, and (in `--download` pin mode) the committed vendor
+ * bundles. `handle()` calls this BEFORE `ensureReady()`, so a cold instance
+ * returns them immediately instead of blocking on the first vendor resolve
+ * (issue #190). The core bundle is on every page's boot path, so coupling it
+ * to the jspm resolve stalled first interactivity site-wide on a cold instance.
+ *
+ * Like the health / readiness probes (also answered pre-`ensureReady`), these
+ * bypass app middleware. That is correct: they are framework infrastructure the
+ * app needs to function, not app routes, and `state.middleware` is not even
+ * loaded until `ensureReady()` completes.
+ *
+ * @param {string} path decoded pathname
+ * @param {string} method upper-cased HTTP method
+ * @param {{ coreDir: string, appDir: string, dev: boolean }} ctx
+ * @returns {Promise<Response|null>} a Response, or null when path is not one of these assets
+ */
+async function tryServeFrameworkStatic(path, method, ctx) {
+  const { coreDir, appDir, dev } = ctx;
 
-  // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) are handled
-  // in `handle()` BEFORE ensureReady, so they are not repeated here.
-
-  // Dev live-reload client
+  // Dev live-reload client.
   if (path === '/__webjs/reload.js') {
     if (!dev) return new Response('Not found', { status: 404 });
     return new Response(RELOAD_CLIENT_JS, {
@@ -802,35 +818,38 @@ async function handleCore(req, ctx) {
   // Core module: /__webjs/core/*
   //
   // ETag + ~1h max-age, NOT immutable. The URL path is un-versioned
-  // (`/__webjs/core/src/render-client.js` etc.), so bumping
-  // `@webjsdev/core` ships different bytes at the same URL. An
-  // `immutable` cache-control directive at an edge CDN (Cloudflare,
-  // Vercel, Fly) keeps the prior bytes pinned for up to a year, which
-  // silently bricks the next deploy: browsers load the old client
-  // renderer against a server emitting the new SSR shape, and any
-  // exports added in the bump (e.g., the slot.js entry points landed
+  // (`/__webjs/core/src/render-client.js` etc.), so bumping `@webjsdev/core`
+  // ships different bytes at the same URL. An `immutable` cache-control
+  // directive at an edge CDN (Cloudflare, Vercel, Fly) keeps the prior bytes
+  // pinned for up to a year, which silently bricks the next deploy: browsers
+  // load the old client renderer against a server emitting the new SSR shape,
+  // and any exports added in the bump (e.g., the slot.js entry points landed
   // for 0.6.0) resolve to undefined in the cached file.
   // Regression: 2026-05-20, ui.webjs.dev tier-2 components after
   // @webjsdev/core 0.5.0 -> 0.6.0 republish.
   if (path.startsWith('/__webjs/core/')) {
     const rel = path.slice('/__webjs/core/'.length);
     const abs = resolve(coreDir, rel);
-    if (!abs.startsWith(coreDir)) return new Response('forbidden', { status: 403 });
+    // Trailing-separator boundary check, not a raw string prefix: a raw
+    // `startsWith(coreDir)` would admit a sibling like `@webjsdev/core-evil`,
+    // reachable via an encoded slash (`..%2f`, which survives URL normalization
+    // and then decodes to `../`). Match the public-root branch's guard.
+    if (abs !== coreDir && !abs.startsWith(coreDir + sep)) {
+      return new Response('forbidden', { status: 403 });
+    }
     return fileResponse(abs, { dev, immutable: false });
   }
 
-  // Vendor URL handler for `webjs vendor pin --download` mode only.
-  // In default pin mode (or no-pin mode) the importmap routes bare
-  // imports straight to ga.jspm.io URLs and the browser bypasses this
-  // server entirely. When the user ran `webjs vendor pin --download`,
-  // the importmap has local `/__webjs/vendor/<file>.js` URLs and this
-  // handler serves the committed bundle files from `.webjs/vendor/`.
+  // Vendor URL handler for `webjs vendor pin --download` mode only. In default
+  // pin mode (or no-pin mode) the importmap routes bare imports straight to
+  // ga.jspm.io URLs and the browser bypasses this server entirely. When the
+  // user ran `webjs vendor pin --download`, the importmap has local
+  // `/__webjs/vendor/<file>.js` URLs and this serves the committed bundle files
+  // from `.webjs/vendor/`. These are read-only static content: allow GET/HEAD
+  // for the normal fetch, OPTIONS for any cross-origin preflight (204 with the
+  // same Allow header rather than 405, which some intermediaries treat as a
+  // hard failure even for a CORS probe), and 405 everything else.
   if (path.startsWith('/__webjs/vendor/') && path.endsWith('.js')) {
-    // Vendor bundles are read-only static content. Allow GET/HEAD for
-    // the normal fetch, OPTIONS for any cross-origin preflight (we
-    // return 204 with the same Allow header rather than 405, which
-    // some intermediaries treat as a hard failure even for a CORS
-    // probe), and 405 everything else.
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { allow: 'GET, HEAD, OPTIONS' } });
     }
@@ -845,6 +864,31 @@ async function handleCore(req, ctx) {
     }
     return resp;
   }
+
+  return null;
+}
+
+async function handleCore(req, ctx) {
+  const { state, appDir, coreDir, dev } = ctx;
+  const url = new URL(req.url);
+  // Decode percent-encoded characters so filesystem lookups match real
+  // filenames. Dynamic route segments like `[slug]` and route groups like
+  // `(marketing)` contain chars that browsers percent-encode in URLs
+  // (`%5B`, `%5D`, `%28`, `%29`). Without decoding, the server joins the
+  // encoded path with the app directory → file not found → 404 → no JS
+  // loads → no interactivity.
+  let path;
+  try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
+  const method = req.method.toUpperCase();
+
+  // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) and the
+  // framework-internal static assets (`/__webjs/core/*`, `/__webjs/reload.js`,
+  // downloaded `/__webjs/vendor/*`) are served in `handle()` BEFORE ensureReady,
+  // so they are not repeated here. This fallback covers the (currently
+  // unreachable) case of handleCore being entered for one of those assets, so
+  // the routing stays correct if a future caller bypasses the early path.
+  const frameworkStatic = await tryServeFrameworkStatic(path, method, { coreDir, appDir, dev });
+  if (frameworkStatic) return frameworkStatic;
 
   // Internal server-action RPC endpoint
   const actMatch = /^\/__webjs\/action\/([a-f0-9]+)\/([A-Za-z0-9_$]+)$/.exec(path);

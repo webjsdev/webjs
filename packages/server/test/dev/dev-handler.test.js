@@ -208,12 +208,45 @@ test('handle: /__webjs/core/* serves core source files', async () => {
   assert.ok(resp.headers.get('content-type').includes('javascript'));
 });
 
+test('handle: /__webjs/core/* and reload.js serve BEFORE ensureReady (cold instance)', async () => {
+  // #190: the core runtime bundle is on every page's boot path, so it must not
+  // be gated behind the first-request vendor resolve (a cold instance stalled it
+  // for up to ~30s while jspm resolved). Proven by serving it on a handler that
+  // is never warmed and then checking readiness is STILL pending: serving the
+  // asset did not run the whole-app analysis. On the pre-#190 ordering the core
+  // branch sat after `await ensureReady()`, so this request would have flipped
+  // readiness to ready here.
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  const app = await createRequestHandler({ appDir, dev: true }); // no warmup()
+
+  const core = await app.handle(new Request('http://x/__webjs/core/index.js'));
+  assert.equal(core.status, 200, 'core asset serves on a cold handler');
+  const reload = await app.handle(new Request('http://x/__webjs/reload.js'));
+  assert.equal(reload.status, 200, 'reload client serves on a cold handler');
+
+  // Neither request ran ensureReady, so readiness is still pending. (This probe
+  // returns 503 from the synchronous not-ready check before its own background
+  // warm kicks in.)
+  const ready = await app.handle(new Request('http://x/__webjs/ready'));
+  assert.equal(ready.status, 503, 'serving a static asset must not trigger ensureReady');
+});
+
 test('handle: /__webjs/core/ refuses path traversal → 403', async () => {
   const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/__webjs/core/../../etc/passwd'));
   // Either 403 (traversal detected) or 404 (normalised outside dir): both safe.
   assert.ok(resp.status === 403 || resp.status === 404, `expected 403/404, got ${resp.status}`);
+});
+
+test('handle: /__webjs/core/ refuses an encoded-slash sibling escape → 403', async () => {
+  // `..%2f` survives URL normalization (the slash is encoded) and then decodes
+  // to `../`, so a raw startsWith(coreDir) prefix check would admit a sibling
+  // package like @webjsdev/core-evil. The trailing-separator boundary blocks it.
+  const appDir = makeApp({ 'app/page.ts': `export default () => 'ok';` });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/__webjs/core/..%2fcore-evil/secret.js'));
+  assert.equal(resp.status, 403, `expected 403, got ${resp.status}`);
 });
 
 /* ------------ vendor URLs: --download mode handler ------------ */
