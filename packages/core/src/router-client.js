@@ -250,8 +250,13 @@ export function revalidate(url) {
   prefetchCache.delete(key);
 }
 
-// Auto-enable on import (standard Turbo-Drive convention).
-enableClientRouter();
+// Auto-enable on import: deferred to the END of this module (see the
+// call after the test-only exports). enableClientRouter() transitively
+// reads the prefetch state (prefetchViewObserver and the caches), which
+// are `const`/`let` declared lower in the file and therefore in the
+// temporal dead zone here. Calling enable at module-end, after every
+// top-level binding is initialised, avoids a ReferenceError in the
+// bundled browser build.
 
 /* ====================================================================
  * Click + popstate handlers
@@ -2150,3 +2155,8 @@ export function _setCurrentPageUrl(u) { currentPageUrl = u; }
 export function _isNonHtmlPath(pathname) {
   return NON_HTML_EXTENSIONS.test(pathname);
 }
+
+// Auto-enable on import (standard Turbo-Drive convention). Placed last so
+// every top-level binding the router touches (notably the prefetch state)
+// is initialised before enableClientRouter() runs.
+enableClientRouter();
