@@ -448,14 +448,14 @@ function findBrowserMemberUses(code) {
   while ((m = gRe.exec(code)) !== null) {
     if (seen.has(m[1])) continue;
     seen.add(m[1]);
-    out.push({ member: m[1], kind: 'browser global' });
+    out.push({ member: m[1], kind: 'a browser global' });
   }
   const hRe = new RegExp(`\\bthis\\.(${HTMLELEMENT_MEMBERS.join('|')})\\b`, 'g');
   while ((m = hRe.exec(code)) !== null) {
     const key = `this.${m[1]}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ member: key, kind: 'HTMLElement member' });
+    out.push({ member: key, kind: 'an HTMLElement member' });
   }
   return out;
 }
@@ -644,7 +644,7 @@ export async function checkConventions(appDir, opts) {
             violations.push({
               rule: 'no-browser-globals-in-render',
               file: rel,
-              message: `\`${member}\` (a ${kind}) is used in ${method}(), which runs during SSR where it is not available, so it throws and the component fails to server-render.`,
+              message: `\`${member}\` (${kind}) is used in ${method}(), which runs during SSR where it is not available, so it throws and the component fails to server-render.`,
               fix: `Move browser-only work to connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls. Seed first-paint defaults in the constructor only from server-known inputs (attributes / props), then refine in connectedCallback by writing to a signal.`,
             });
           }

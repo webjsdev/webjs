@@ -54,7 +54,7 @@ Ctor.register('ctor-el');
 `);
   try {
     const v = find(await checkConventions(dir), 'ctor.ts');
-    assert.ok(v.some((x) => x.member ? false : x.message.includes('matchMedia') && x.message.includes('constructor')), 'matchMedia in constructor flagged');
+    assert.ok(v.some((x) => x.message.includes('matchMedia') && x.message.includes('constructor')), 'matchMedia in constructor flagged');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
