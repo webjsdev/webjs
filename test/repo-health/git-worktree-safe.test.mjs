@@ -74,6 +74,8 @@ describe('git-worktree-safe (#166)', () => {
       'core.bare resolves to false');
     assert.equal(git(['config', 'extensions.worktreeConfig']), 'true',
       'per-worktree config is enabled');
+    assert.equal(git(['config', 'core.repositoryformatversion']), '1',
+      'repositoryformatversion bumped to 1 so the extension is contractually honored');
     const hooks = git(['config', 'core.hooksPath']);
     assert.equal(hooks, join(repo, '.hooks'),
       'core.hooksPath pinned to the absolute .hooks dir');

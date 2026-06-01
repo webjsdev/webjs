@@ -66,7 +66,11 @@ function ensure() {
 
   // 2. Enable per-worktree config and pin the override on the MAIN worktree.
   //    The override wins even if a later worktree event flips the shared
-  //    core.bare back to true.
+  //    core.bare back to true. extensions.* are only contractually honored at
+  //    core.repositoryformatversion >= 1, and git's own `git worktree` bumps
+  //    it when enabling worktreeConfig; match that so a stricter git cannot
+  //    silently ignore the override the fix depends on.
+  git(['config', 'core.repositoryformatversion', '1'], { allowFail: true });
   git(['config', 'extensions.worktreeConfig', 'true'], { allowFail: true });
   git(['config', '--worktree', 'core.bare', 'false'], { allowFail: true });
 
