@@ -139,6 +139,20 @@ connectedCallback() {
 }
 ```
 
+The same applies to HTMLElement instance members on `this`
+(`this.setAttribute(...)`, `this.classList`, `this.querySelector(...)`,
+`this.attachShadow(...)`, `this.hasAttribute(...)`): the SSR-time instance is
+a bare class with no DOM, so they throw. Read an attribute that drives render
+through a reactive property (`static properties` + `declare`) instead of
+`this.hasAttribute(...)`; the SSR walker applies the attribute to the property
+before calling render.
+
+Two guards catch this. `webjs check` flags browser globals and HTMLElement
+members used in a constructor or render body (the `no-browser-globals-in-render`
+rule). And if one slips through, the SSR crash is now actionable: the log names
+the offending member and tells you to move it to `connectedCallback` or a
+lifecycle hook, instead of a raw `document is not defined`.
+
 ### 4. Top-level imports of browser-only libraries
 
 `import * as d3 from 'd3'`, `import Chart from 'chart.js'`, or any
