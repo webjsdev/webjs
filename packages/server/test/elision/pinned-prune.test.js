@@ -49,13 +49,17 @@ const PIN = JSON.stringify({
   integrity: { 'https://ga.jspm.io/npm:leftpad@1.0.0/index.js': 'sha384-x' },
 });
 
-async function importmapOf(appDir) {
-  const app = await createRequestHandler({ appDir, dev: false });
-  await app.warmup();
+async function importmapFromHandler(app) {
   const resp = await app.handle(new Request('http://x/'));
   const html = await resp.text();
   const m = html.match(/<script type="importmap"[^>]*>([^<]*)<\/script>/);
   return m ? JSON.parse(m[1]) : { imports: {} };
+}
+
+async function importmapOf(appDir) {
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  return importmapFromHandler(app);
 }
 
 test('a pinned vendor dep used only by an elided component is pruned from the served map', async () => {
@@ -69,6 +73,26 @@ test('a pinned vendor dep used only by an elided component is pruned from the se
     !Object.keys(map.imports).some((k) => k === 'leftpad' || k.startsWith('leftpad/')),
     `leftpad should be pruned (its only importer is elided), got keys: ${Object.keys(map.imports).join(', ')}`,
   );
+});
+
+test('the prune survives a rebuild (the pinned map does not regrow)', async () => {
+  // After an fs.watch rebuild the vendor stage re-runs; it must re-prune, not
+  // re-apply the full pin. (Regression guard: an earlier version pruned only on
+  // first warm, so a rebuild regrew the elided-only dep.)
+  const appDir = makeApp({
+    'app/page.ts': PAGE,
+    'components/badge.ts': BADGE,
+    '.webjs/vendor/importmap.json': PIN,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+  let map = await importmapFromHandler(app);
+  assert.ok(!Object.keys(map.imports).includes('leftpad'), 'pruned on first warm');
+
+  await app.rebuild();
+  map = await importmapFromHandler(app);
+  assert.ok(!Object.keys(map.imports).includes('leftpad'),
+    `still pruned after rebuild, got keys: ${Object.keys(map.imports).join(', ')}`);
 });
 
 test('a pinned vendor dep used by a NON-elided (interactive) component is kept', async () => {
