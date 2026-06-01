@@ -1,4 +1,4 @@
-# {{APP_NAME}} — local parity with production: same Dockerfile, one service.
+# {{APP_NAME}} local parity with production, using the same Dockerfile, one service.
 #
 #   docker compose up --build   →   http://localhost:8080
 #

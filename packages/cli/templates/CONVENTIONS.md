@@ -1005,8 +1005,9 @@ This project enforces a git workflow via agent-specific config files
 
 **Pre-commit hook (`.hooks/pre-commit`):**
 - Blocks commits to `main` / `master`. Nothing else runs locally, so
-  `git commit` stays fast.
-- No unrelated files in the commit (keep commits per logical unit).
+  `git commit` stays fast. Keeping commits to one logical unit (no
+  unrelated files) is your discipline plus the `nudge-uncommitted`
+  hooks, not something this hook enforces.
 
 **CI gate (`.github/workflows/ci.yml`), on every PR and push to main:**
 - `webjs check` (conventions) must pass

@@ -50,7 +50,9 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: file:./ci.db
-      - run: npm test
+      # --server keeps this job to node:test (the browser layer is its own
+      # job below). Without WEBJS_E2E the e2e folders are skipped too.
+      - run: npm run test:server
         env:
           DATABASE_URL: file:./ci.db
 
@@ -94,8 +96,10 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Resolve the Chromium binary path
         run: echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      # --server with WEBJS_E2E=1 runs node:test including the e2e folders
+      # (the runner gates them on that env var) and skips the browser layer.
       - name: Run e2e
         env:
           WEBJS_E2E: '1'
           DATABASE_URL: file:./ci.db
-        run: npm test
+        run: npm run test:server

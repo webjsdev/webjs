@@ -112,8 +112,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       join(appDir, '.github/workflows/ci.yml'), 'utf8');
     assert.match(ciWorkflow, /npm run check/,
       'CI runs webjs check');
-    assert.match(ciWorkflow, /npm test/,
-      'CI runs the unit + integration suite');
+    assert.match(ciWorkflow, /npm run test:server/,
+      'CI runs the unit + integration suite (server layer)');
     assert.match(ciWorkflow, /npm run test:browser/,
       'CI runs the browser suite');
     assert.match(ciWorkflow, /WEBJS_E2E/,

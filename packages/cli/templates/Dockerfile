@@ -3,8 +3,8 @@
 # Works with a plain `docker build` / `docker compose up`, and is the same
 # artifact the webdeploy hosting tool (ubicloud + uncloud) builds and ships.
 #
-# webjs serves .ts directly via Node's built-in type-stripping — there is NO
-# JavaScript build step. **Node 24+ is REQUIRED**: on older Node the runtime
+# webjs serves .ts directly via Node's built-in type-stripping, so there is
+# NO JavaScript build step. **Node 24+ is REQUIRED**: on older Node the runtime
 # falls back to esbuild, whose class-declaration transform breaks webjs's SSR
 # walker for multi-class component files. Do not lower this base image
 # below 24 (the same version the CI workflow and the framework pin).
@@ -33,6 +33,6 @@ ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
-# `npm start` runs `prestart: prisma migrate deploy` (idempotent — a no-op when
+# `npm start` runs `prestart: prisma migrate deploy` (idempotent, a no-op when
 # there are no migrations yet) and then `webjs start`, which serves on $PORT.
 CMD ["npm", "start"]
