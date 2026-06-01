@@ -130,6 +130,12 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
 - `app/static-info/page.ts`: a fully-static route whose inert page module
   is dropped from the boot script, so it ships zero application page JS
   (only the router-enabling root layout loads).
+- `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
+  on `/observed`): a display-only component that WOULD elide, paired with a
+  module that observes it via `customElements.whenDefined('observed-badge')`.
+  The observation forces the badge to ship, so the probe asserts its module
+  IS downloaded (the cross-module-registration fix, #169). The unobserved
+  `build-stamp` is the negative control.
 
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:
