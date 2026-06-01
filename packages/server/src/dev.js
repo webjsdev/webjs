@@ -58,7 +58,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
@@ -282,11 +282,14 @@ export async function createRequestHandler(opts) {
   // platform's traffic and probes are the retry loop. `readyError` holds a
   // propagating analysis failure so /__webjs/ready can report it.
   let analysisDone = false;        // deterministic analysis complete (readiness gate)
-  // A pinned app already resolved + published its vendor map at boot (above), so
-  // the deferred vendor stage is a no-op from the start; an unpinned app starts
-  // false and resolves on the first request.
-  let vendorResolved = bootVendorPinned;      // vendor map fully resolved (or permanently tolerated)
-  let vendorAttemptedOnce = bootVendorPinned; // the first (blocking) vendor attempt has run
+  // A pinned app applied its FULL vendor map and published the build id at boot
+  // (above). The deferred vendor stage still runs once (and after every rebuild)
+  // to PRUNE that map to the elision-reachable specifiers, so a pinned app serves
+  // the same map an unpinned one does (#197); it does not re-publish the build id
+  // (the boot hash stays the deploy fingerprint). An unpinned app starts false and
+  // resolves live on the first request.
+  let vendorResolved = false;      // vendor map fully resolved/pruned (or permanently tolerated)
+  let vendorAttemptedOnce = false; // the first (blocking) vendor attempt has run
   let vendorGen = 0;               // bumped on rebuild; a stale resolve cannot flip vendorResolved
   let readyDone = false;           // mirrors analysisDone; the /__webjs/ready gate
   /** @type {unknown} */
@@ -314,7 +317,7 @@ export async function createRequestHandler(opts) {
     // served build id stays empty (reload-safe), so no navigation hard-reloads.
     if (analysisDone && vendorAttemptedOnce) {
       const gen = vendorGen;
-      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); } }).catch(() => {});
+      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); } }).catch(() => {});
       return;
     }
     // Otherwise run the (single-flighted) full warm: the analysis, then the
@@ -372,7 +375,11 @@ export async function createRequestHandler(opts) {
             // the importmap is now authoritatively final, so publish the build
             // id: from here every response advertises the same stable value and
             // the client router's deploy detection works without warmup drift.
-            if (ok && gen === vendorGen) { vendorResolved = true; publishBuildId(); }
+            // A pinned app published the build id at boot (hash of the committed
+            // pin) and the prune only shrinks the served map, so do NOT re-publish
+            // (that would drift the id mid-process). An unpinned app publishes its
+            // now-final live map here.
+            if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); }
           }
           // Readiness reflects a FULLY warm instance: the deterministic analysis
           // AND the first vendor attempt have both completed (note: completed,
@@ -423,9 +430,20 @@ export async function createRequestHandler(opts) {
     if (vendorResolveInFlight) return vendorResolveInFlight;
     vendorResolveInFlight = (async () => {
       try {
-        const v = await resolveVendorImports(appDir,
-          () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules])));
-        await setVendorEntries(v.imports, v.integrity);
+        const scan = () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
+        const v = await resolveVendorImports(appDir, scan);
+        let { imports, integrity } = v;
+        if (bootVendorPinned) {
+          // resolveVendorImports returns a committed pin VERBATIM (it never runs
+          // the scan for a pinned app). Prune it to the elision-reachable
+          // specifiers so a pinned app serves the same map an unpinned one does
+          // (#197): an elided-only dep like dayjs is dropped. One scan; the pin
+          // path skipped it. This runs on the first warm AND after every rebuild,
+          // so the pruned map is the single source of truth.
+          const reachable = await scan();
+          ({ imports, integrity } = prunePinToReachable(imports, integrity, reachable));
+        }
+        await setVendorEntries(imports, integrity);
         return v.ok;
       } catch (e) {
         logger.error?.(`[webjs] vendor resolve failed (will retry on the next request):`, e);

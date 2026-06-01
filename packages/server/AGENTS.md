@@ -47,7 +47,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
 | `check.js` | Convention validator backing `webjs check`. Rules include `no-json-data-files`, `no-non-erasable-typescript` |
-| `vendor.js` | Resolve bare-specifier npm deps. `resolveVendorImports(appDir, getBareImports)` reads `.webjs/vendor/importmap.json` if present (committed pin file) and short-circuits BEFORE running the bare-import scan; only when there is no pin file does it invoke the `getBareImports` thunk (the whole-app `scanBareImports` walk) and call `api.jspm.io/generate`. So a pinned app does no vendor static analysis at boot (runtime-first). Backs the `webjs vendor pin / unpin / list / audit / outdated / update` CLI surface plus the `--from <provider>` (jspm, jsdelivr, unpkg, skypack) and `--download` modes. `--download` mode also serves cached bundle files from `.webjs/vendor/`. |
+| `vendor.js` | Resolve bare-specifier npm deps. `resolveVendorImports(appDir, getBareImports)` reads `.webjs/vendor/importmap.json` if present (committed pin file) and short-circuits BEFORE running the bare-import scan; only when there is no pin file does it invoke the `getBareImports` thunk (the whole-app `scanBareImports` walk) and call `api.jspm.io/generate`. So a pinned app does no vendor static analysis at boot (runtime-first); the elision-aware prune of a pinned map (`prunePinToReachable`) runs lazily in `ensureReady`, not at boot. Backs the `webjs vendor pin / unpin / list / audit / outdated / update` CLI surface plus the `--from <provider>` (jspm, jsdelivr, unpkg, skypack) and `--download` modes. `--download` mode also serves cached bundle files from `.webjs/vendor/`. |
 | `module-graph.js` | Dependency graph for transitive preload hints. Both walks (`transitiveDeps` for preloads, `reachableFromEntries` for the auth gate) stop at `.server.*` boundaries, so a preload set is always a subset of the servable set. The import scanner masks string / template-literal content (`redactStringsAndTemplates`) so an `import`/`export … from` shown as example code inside an `html\`\`` template is not counted as a real edge. |
 | `importmap.js` | Browser import-map builder. `setCoreInstall(coreDir, distMode)` binds the importmap to the resolved `@webjsdev/core` install and runs `buildCoreEntries()`, which reads the package's `package.json` and derives one importmap line per exported subpath from its `exports` field, picking the `default` condition in dist mode and the `source` (`src/*.js`) condition otherwise. In dist mode the browser surface is ONE self-contained bundle: the `exports` `default` for the always-load browser subpaths (`/directives`, `/context`, `/task`, `/client-router`) all point at `dist/webjs-core-browser.js`, so those entries plus the bare specifier collapse onto that single file (each import picks its named exports from it) instead of a fan of per-subpath bundles + code-split chunks. `/lazy-loader` keeps its own file (on-demand). In src/dev mode each subpath stays granular (`src/*.js`) since there is no bundle to collapse into. `dev.js` calls `setCoreInstall` at boot based on `existsSync(coreDir/dist/webjs-core.js) && existsSync(coreDir/dist/webjs-core-browser.js)`. The bare `@webjsdev/core` specifier always points at the BROWSER entry (`index-browser.js` or `dist/webjs-core-browser.js`); the slim entry drops `renderToString`, `renderToStream`, `expose`, `getExposed`, and `setCspNonceProvider` so server-only bytes do not ride the wire. Node-side consumers resolve via the package.json exports and still get the full `index.js`. |
 | `component-scanner.js` | Maps every webjs component class to its browser-visible URL |
@@ -138,8 +138,10 @@ can load it without booting the full server.
    or readiness probe. There is NO internal retry timer or backoff; the
    platform's traffic and probes are the retry loop. Analysis runs in two
    stages: a deterministic stage (graph, scan, gate, action index, middleware,
-   elision) and a vendor stage (a pinned app reads the committed importmap; an
-   unpinned app auto-fetches jspm). **Readiness gates on a FULLY warm instance:
+   elision) and a vendor stage (a pinned app reads the committed importmap and
+   prunes it to the elision-reachable specifiers via `prunePinToReachable`, so it
+   serves the same map an unpinned app would; an unpinned app auto-fetches jspm
+   with the elision-excluded scan). **Readiness gates on a FULLY warm instance:
    the deterministic stage AND the first vendor attempt both completed (note:
    completed, not necessarily succeeded).** A readiness-gated platform (Railway
    `healthcheckPath`, a k8s readinessProbe) therefore admits traffic only after
@@ -209,9 +211,15 @@ can load it without booting the full server.
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely, so a fully-static route ships
    zero application JS. Preload hints for elided modules drop too, and their
-   importmap entries drop when the map is resolved live via `vendorImportMapEntries`;
-   a committed `.webjs/vendor/importmap.json` pin file is served as-is, so an
-   elided dep keeps its (harmless, never-fetched) importmap line in that mode.
+   importmap entries drop too, for a live-resolved AND a pinned app alike. The
+   live path excludes elided components from the bare-import scan; a committed
+   `.webjs/vendor/importmap.json` is applied verbatim at boot (for a stable
+   build id) and then, once elision is known, pruned to the specifiers still
+   reachable from non-elided modules via `prunePinToReachable` in `ensureReady`
+   (issue #197). So a pinned app and an unpinned app serve the SAME map. The
+   advertised build id stays the boot-published hash of the committed pin (a
+   deploy fingerprint) and is not re-published, so only the served map shrinks
+   and the warmup window cannot drift the id.
    This is progressive-enhancement-safe by construction:
    the SSR'd HTML is the baseline, swap markers are static comments, and
    navigation/forms fall back to native browser behavior, so removing

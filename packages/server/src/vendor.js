@@ -1308,6 +1308,55 @@ function maxSemverVersion(versions) {
  *   on the unpinned path (so a pinned app never pays the whole-app walk).
  * @returns {Promise<{ imports: Record<string, string>, integrity: Record<string, string> }>}
  */
+/**
+ * Base package of a bare specifier: `dayjs` -> `dayjs`,
+ * `dayjs/plugin/utc` -> `dayjs`, `@scope/pkg/sub` -> `@scope/pkg`.
+ *
+ * @param {string} spec
+ * @returns {string}
+ */
+function basePackage(spec) {
+  const parts = spec.split('/');
+  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+/**
+ * Prune a pinned import map to the vendor specifiers still reachable from
+ * NON-elided modules. A committed pin is the whole map, but elision can make
+ * a pinned package unreachable (its only importer is a display-only component
+ * that ships no JS, e.g. dayjs via the blog's vendor-badge). The live-resolve
+ * path prunes such a package by excluding elided components from the bare-
+ * import scan; this brings the pinned path to the same result, so a pinned app
+ * and an unpinned app serve the same import map (issue #197).
+ *
+ * Keeps an entry when its specifier is reachable, OR when its base package is
+ * the base of any reachable specifier (so a pinned base entry `dayjs` survives
+ * when code imports `dayjs/plugin/utc`, and vice versa). Integrity hashes for
+ * dropped URLs are pruned too.
+ *
+ * @param {Record<string, string>} imports  pin entries (specifier -> URL)
+ * @param {Record<string, string>} integrity  SRI hashes keyed by URL
+ * @param {Set<string>} reachable  bare specifiers used by non-elided modules
+ * @returns {{ imports: Record<string, string>, integrity: Record<string, string> }}
+ */
+export function prunePinToReachable(imports, integrity, reachable) {
+  const reachableBases = new Set([...reachable].map(basePackage));
+  /** @type {Record<string, string>} */
+  const keptImports = {};
+  for (const [spec, url] of Object.entries(imports || {})) {
+    if (reachable.has(spec) || reachableBases.has(basePackage(spec))) {
+      keptImports[spec] = url;
+    }
+  }
+  const keptUrls = new Set(Object.values(keptImports));
+  /** @type {Record<string, string>} */
+  const keptIntegrity = {};
+  for (const [url, hash] of Object.entries(integrity || {})) {
+    if (keptUrls.has(url)) keptIntegrity[url] = hash;
+  }
+  return { imports: keptImports, integrity: keptIntegrity };
+}
+
 export async function resolveVendorImports(appDir, getBareImports) {
   const file = await readPinFile(appDir);
   // A committed pin file IS the import map. The whole-app bare-import scan is
