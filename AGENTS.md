@@ -115,6 +115,8 @@ This repo uses git worktrees (the review subagents spawn throwaway ones under `.
 - `npm run fix:git` heals the config on demand (run it if a git command reports the work-tree error).
 - `npm run check:git` asserts the invariant (`core.bare` resolves false, the framework hook is active) and exits non-zero otherwise. The regression test is `test/repo-health/git-worktree-safe.test.mjs`.
 
+Because the pin lives in the main worktree's `config.worktree`, `git worktree add` copies it into each linked worktree, so a commit made inside a throwaway review worktree also runs the framework `.hooks/pre-commit`. That is harmless (the hook only blocks main and auto-generates a changelog on a version bump), and review subagents are read-only so they do not commit; the inheritance is noted here only so the behavior is not surprising.
+
 The fix only repairs the LOCAL checkout. Commits and branches are always safe on GitHub regardless.
 
 ### Changelog: per-package, per-version, auto-generated

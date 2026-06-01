@@ -98,4 +98,23 @@ describe('git-worktree-safe (#166)', () => {
     assert.equal(runScript().code, 0);
     assert.equal(runScript(['--check']).code, 0);
   });
+
+  test('--check rejects a relative hooksPath drift, cwd-independently', () => {
+    // Drift hooksPath back to a relative value (the old-prepare bug), while
+    // core.bare and worktreeConfig stay healthy. A cwd-relative comparison
+    // would have passed this from the repo root; it must fail everywhere.
+    git(['config', '--worktree', 'core.hooksPath', '.hooks']);
+    assert.equal(runScript(['--check']).code, 1, 'fails from the repo root');
+    const sub = join(repo, 'pkg', 'nested');
+    mkdirSync(sub, { recursive: true });
+    let fromSub;
+    try {
+      execFileSync(process.execPath, [SCRIPT, '--check'], { cwd: sub, stdio: ['ignore', 'pipe', 'pipe'] });
+      fromSub = 0;
+    } catch (err) { fromSub = err.status ?? 1; }
+    assert.equal(fromSub, 1, 'fails from a subdirectory too');
+    // Healing restores the absolute pin and the check goes green.
+    assert.equal(runScript().code, 0);
+    assert.equal(runScript(['--check']).code, 0);
+  });
 });

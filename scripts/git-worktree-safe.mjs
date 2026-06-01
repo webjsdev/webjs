@@ -29,7 +29,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, isAbsolute } from 'node:path';
 
 const CHECK = process.argv.includes('--check');
 
@@ -110,8 +110,15 @@ function check() {
   const hooksDir = join(top, '.hooks');
   if (existsSync(hooksDir)) {
     const resolvedHooks = git(['config', 'core.hooksPath'], { allowFail: true });
-    if (resolve(resolvedHooks || '') !== resolve(hooksDir)) {
-      problems.push(`core.hooksPath is "${resolvedHooks}" (expected "${hooksDir}"); the framework hook is not active`);
+    // Compare WITHOUT resolving a relative value against the cwd. The old
+    // drift was a relative `.hooks` on the shared config, which a cwd-relative
+    // resolve() would pass from the repo root but fail from a subdirectory.
+    // ensure pins an absolute path, so a healthy repo is an exact match and a
+    // relative value fails the same way regardless of where the check runs.
+    const hooksOk = resolvedHooks && isAbsolute(resolvedHooks)
+      && resolve(resolvedHooks) === resolve(hooksDir);
+    if (!hooksOk) {
+      problems.push(`core.hooksPath is "${resolvedHooks}" (expected the absolute "${hooksDir}"); the framework hook is not reliably active`);
     }
   }
 
