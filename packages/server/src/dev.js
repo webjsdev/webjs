@@ -1445,13 +1445,17 @@ async function stripTs(source, _abs) {
 
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
- * Result is cached by mtime so subsequent requests are instant; a
- * file edit invalidates naturally. `elideOpts` additionally strips
- * side-effect imports of display-only components from the served code.
+ * Result is cached by mtime in the handler's own `cache` so subsequent
+ * requests are instant; a file edit invalidates naturally. `elideOpts`
+ * additionally strips side-effect imports of display-only components from
+ * the served code, which is exactly why `cache` is the per-handler
+ * `state.tsCache` and not a module-global: the cached bytes bake in this
+ * handler's elision verdict.
  *
  * @param {string} abs
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
+ * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
  */
 async function tsResponse(abs, dev, elideOpts, cache) {
   const st = await stat(abs);
