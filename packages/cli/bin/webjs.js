@@ -148,17 +148,31 @@ async function main() {
         const { readdir } = await import('node:fs/promises');
         const testFiles = [];
 
-        for (const dir of ['test/server', 'test/unit', 'test']) {
-          const fullDir = join(cwd, dir);
-          if (!existsSync(fullDir)) continue;
-          const files = await readdir(fullDir);
-          for (const f of files) {
-            if (/\.test\.(js|ts|mjs|mts)$/.test(f)) {
-              const full = join(fullDir, f);
+        // Walk test/ recursively so the documented feature-folder layout
+        // (test/<feature>/<name>.test.ts) is discovered, not just files
+        // sitting directly in test/. Two kinds are NOT run here:
+        //   - **/browser/**  → real-browser tests, owned by WTR below.
+        //   - **/e2e/**      → full-app boot, opt-in via WEBJS_E2E=1 (the
+        //                      documented "WEBJS_E2E=1 webjs test adds the
+        //                      e2e tests" semantics).
+        const runE2E = !!process.env.WEBJS_E2E;
+        const walk = async (dir, segments) => {
+          let entries;
+          try { entries = await readdir(dir, { withFileTypes: true }); }
+          catch { return; }
+          for (const ent of entries) {
+            if (ent.name === 'node_modules') continue;
+            const full = join(dir, ent.name);
+            if (ent.isDirectory()) {
+              if (ent.name === 'browser') continue;
+              if (ent.name === 'e2e' && !runE2E) continue;
+              await walk(full, [...segments, ent.name]);
+            } else if (/\.test\.(js|ts|mjs|mts)$/.test(ent.name)) {
               if (!testFiles.includes(full)) testFiles.push(full);
             }
           }
-        }
+        };
+        await walk(join(cwd, 'test'), []);
 
         if (testFiles.length > 0) {
           console.log(`webjs test: running ${testFiles.length} server test file(s)…\n`);
