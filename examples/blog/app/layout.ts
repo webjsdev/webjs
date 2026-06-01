@@ -215,6 +215,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       <!-- Inline nav, sm and up. -->
       <nav class="hidden sm:flex gap-4 items-center">
         ${navLink('/', 'Posts')}
+        ${navLink('/search', 'Search')}
         ${navLink('/about', 'About')}
         ${navLink('/dashboard', 'Dashboard')}
         <a href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener" class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">GitHub</a>
@@ -236,6 +237,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           </summary>
           <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/">Posts</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/search">Search</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/about">About</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/dashboard">Dashboard</a>
             <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener">GitHub</a>
