@@ -150,13 +150,23 @@ suite('SSR vs client render parity (#184)', () => {
     }
     P5.register('parity-prop-rich');
     const value = { items: ['a', 'b', 'c'] };
-    const ssr = normalize(ssrLightInner(await renderToString(html`<parity-prop-rich .data=${value}></parity-prop-rich>`), 'parity-prop-rich'));
-    const el = document.createElement('parity-prop-rich');
-    el.data = value;
-    await clientMount(el);
+    // SSR encodes the rich .prop to a data-webjs-prop-* wire attribute.
+    const ssrFull = await renderToString(html`<parity-prop-rich .data=${value}></parity-prop-rich>`);
+    assert.ok(/data-webjs-prop-data=/.test(ssrFull), 'SSR must encode the rich prop to the wire attribute');
+    const ssr = normalize(ssrLightInner(ssrFull, 'parity-prop-rich'));
+    // Hydrate the client FROM the SSR markup so connectedCallback decodes the
+    // wire attribute back into the live property (the actual round-trip),
+    // rather than assigning .data directly and skipping the serializer.
+    const c = freshContainer();
+    c.innerHTML = ssrFull;
+    const el = c.firstElementChild;
+    if (el.updateComplete) await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
     const client = normalize(el.innerHTML);
     assert.equal(client, ssr, `rich-prop parity mismatch\nSSR:    ${ssr}\nCLIENT: ${client}`);
     assert.ok(ssr.includes('<li>a</li>'), 'rich prop rendered');
+    assert.ok(el.data && el.data.items && el.data.items[0] === 'a',
+      'client must decode the wire prop attribute back into the live .data property');
   });
 
   test('signal-backed component: SSR equals first client render', async () => {
