@@ -179,6 +179,18 @@ can load it without booting the full server.
    health (e.g. a DB ping) that the static analysis cannot see. Both are
    answered in `handle()` BEFORE `ensureReady`, so a probe never blocks on the
    analysis.
+   **Framework-internal static assets are also served before `ensureReady`.**
+   `tryServeFrameworkStatic` (called in `handle()` right after the probes)
+   serves `/__webjs/core/*` (the `@webjsdev/core` runtime, resolved from the
+   boot-set `coreDir`), `/__webjs/reload.js`, and downloaded `/__webjs/vendor/*`
+   bundles without awaiting the analysis or the vendor importmap, because they
+   depend on neither. Otherwise a cold instance gated the core runtime (on every
+   page's boot path) behind the first vendor resolve, stalling first
+   interactivity site-wide for up to the jspm timeout (#190). Like the probes,
+   these bypass app middleware (`state.middleware` is not even loaded until
+   `ensureReady` completes); that is correct, since they are framework
+   infrastructure the app needs to function, not app routes. `handleCore` keeps
+   a fallback call so it stays correct if entered directly.
 4. **One pluggable cache store, four built-in consumers.** `cache.js`
    is shared by `cache-fn.js`, `session.js` (store-backed), and
    `rate-limit.js`. A single `setStore(redisStore({…}))` call at
