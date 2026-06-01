@@ -31,6 +31,8 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
   _currentPageUrl, _setCurrentPageUrl,
+  _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetch, _prefetchTake,
+  _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
   enableClientRouter, disableClientRouter, revalidate,
   WebComponent, html;
 
@@ -93,6 +95,15 @@ before(async () => {
     _bumpNavToken,
     _currentPageUrl,
     _setCurrentPageUrl,
+    _eligibleAnchorHref,
+    _prefetchSuppressed,
+    _prefetchMode,
+    _prefetch,
+    _prefetchTake,
+    _prefetchSaysSaveData,
+    _prefetchPeek,
+    _prefetchInflightSize,
+    _resetPrefetch,
     navigate,
     revalidate,
     enableClientRouter,
@@ -2355,4 +2366,276 @@ test('partial-swap: keyed inner element preserves DOM identity inside the swap r
     restore();
     document.body.innerHTML = '';
   }
+});
+
+/* ====================================================================
+ * Intent prefetch (#152)
+ * ==================================================================== */
+
+/**
+ * Build a detached anchor with the given href + attributes. eligibility
+ * checks read .href (absolute) and attributes, so we set href via the
+ * attribute and rely on linkedom resolving it against location.
+ */
+function mkAnchor(href, attrs = {}) {
+  const a = document.createElement('a');
+  a.setAttribute('href', href);
+  for (const [k, v] of Object.entries(attrs)) a.setAttribute(k, v);
+  return a;
+}
+
+/** Install a fake same-origin location + a recording fetch. */
+function withPrefetchEnv(run, { fetchImpl, navigator: nav } = {}) {
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const origNav = globalThis.navigator;
+  const calls = [];
+  globalThis.location = /** @type any */ ({
+    origin: 'http://localhost',
+    href: 'http://localhost/',
+    pathname: '/',
+    search: '',
+  });
+  globalThis.fetch = fetchImpl || (async (url, init) => {
+    calls.push({ url: String(url), init });
+    return new Response('<!doctype html><body><p>ok</p></body>', {
+      status: 200,
+      headers: { 'content-type': 'text/html', 'x-webjs-build': 'b1' },
+    });
+  });
+  // globalThis.navigator is a getter-only accessor in modern Node, so a
+  // plain assignment throws. Redefine the property to override it.
+  let navOverridden = false;
+  if (nav !== undefined) {
+    Object.defineProperty(globalThis, 'navigator', { value: nav, configurable: true, writable: true });
+    navOverridden = true;
+  }
+  return Promise.resolve(run(calls)).finally(() => {
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+    if (navOverridden) {
+      Object.defineProperty(globalThis, 'navigator', { value: origNav, configurable: true, writable: true });
+    }
+    _resetPrefetch();
+  });
+}
+
+test('eligibleAnchorHref: accepts a same-origin in-app link', async () => {
+  await withPrefetchEnv(() => {
+    const href = _eligibleAnchorHref(mkAnchor('http://localhost/about'));
+    assert.equal(href, 'http://localhost/about');
+  });
+});
+
+test('eligibleAnchorHref: rejects cross-origin, download, target, non-html, data-no-router', async () => {
+  await withPrefetchEnv(() => {
+    assert.equal(_eligibleAnchorHref(mkAnchor('https://other.test/x')), null, 'cross-origin');
+    assert.equal(_eligibleAnchorHref(mkAnchor('http://localhost/f.pdf')), null, 'non-html ext');
+    assert.equal(_eligibleAnchorHref(mkAnchor('http://localhost/x', { download: '' })), null, 'download');
+    assert.equal(_eligibleAnchorHref(mkAnchor('http://localhost/x', { target: '_blank' })), null, 'target');
+    assert.equal(_eligibleAnchorHref(mkAnchor('http://localhost/x', { 'data-no-router': '' })), null, 'data-no-router');
+  });
+});
+
+test('eligibleAnchorHref: rejects a pure same-page hash jump', async () => {
+  await withPrefetchEnv(() => {
+    // location is /, so /#foo is a same-page hash and must not prefetch.
+    assert.equal(_eligibleAnchorHref(mkAnchor('http://localhost/#foo')), null);
+  });
+});
+
+test('prefetchSuppressed: rel=external, rel=no-prefetch, data-no-prefetch', async () => {
+  await withPrefetchEnv(() => {
+    assert.equal(_prefetchSuppressed(mkAnchor('/a', { rel: 'external' })), true);
+    assert.equal(_prefetchSuppressed(mkAnchor('/a', { rel: 'no-prefetch' })), true);
+    assert.equal(_prefetchSuppressed(mkAnchor('/a', { rel: 'nofollow noopener no-prefetch' })), true);
+    assert.equal(_prefetchSuppressed(mkAnchor('/a', { 'data-no-prefetch': '' })), true);
+    assert.equal(_prefetchSuppressed(mkAnchor('/a', { rel: 'prefetch' })), false);
+    assert.equal(_prefetchSuppressed(mkAnchor('/a')), false);
+  });
+});
+
+test('prefetchMode: data-prefetch attribute resolves to a strategy (intent default)', async () => {
+  await withPrefetchEnv(() => {
+    // Absent or unrecognised: the fast default.
+    assert.equal(_prefetchMode(mkAnchor('/a')), 'intent');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'bogus' })), 'intent');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'intent' })), 'intent');
+    // Next-style aliases + explicit strategy names.
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render' })), 'render');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'true' })), 'render');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'viewport' })), 'viewport');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'auto' })), 'viewport');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'none' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'false' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'VIEWPORT' })), 'viewport', 'case-insensitive');
+  });
+});
+
+test('prefetchMode: suppression wins over data-prefetch', async () => {
+  await withPrefetchEnv(() => {
+    // Even an explicit eager request is overridden by an opt-out.
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'viewport', 'data-no-prefetch': '' })), 'none');
+    assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render', rel: 'external' })), 'none');
+  });
+});
+
+test('prefetch: warms the cache with the server fragment', async () => {
+  await withPrefetchEnv(async (calls) => {
+    _prefetch('http://localhost/about');
+    // allow the fetch promise chain to settle
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1, 'one fetch issued');
+    assert.equal(calls[0].init.headers['x-webjs-prefetch'], '1', 'tagged as prefetch');
+    const entry = _prefetchPeek('http://localhost/about');
+    assert.ok(entry, 'cache entry exists');
+    assert.match(entry.html, /ok/);
+    assert.equal(entry.build, 'b1');
+  });
+});
+
+test('prefetch: dedupes concurrent requests for the same href', async () => {
+  let resolve;
+  const gate = new Promise((r) => { resolve = r; });
+  let n = 0;
+  await withPrefetchEnv(async () => {
+    _prefetch('http://localhost/dup');
+    _prefetch('http://localhost/dup');
+    assert.equal(_prefetchInflightSize(), 1, 'second call deduped while in flight');
+    resolve(); // release the gate
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(n, 1, 'fetch ran once');
+  }, {
+    fetchImpl: async () => {
+      n++;
+      await gate;
+      return new Response('<body>x</body>', { status: 200, headers: { 'content-type': 'text/html' } });
+    },
+  });
+});
+
+test('prefetch: a cached entry is not re-fetched', async () => {
+  await withPrefetchEnv(async (calls) => {
+    _prefetch('http://localhost/cached');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1);
+    _prefetch('http://localhost/cached');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1, 'second prefetch skipped, entry already cached');
+  });
+});
+
+test('prefetch: skips non-HTML and error responses', async () => {
+  await withPrefetchEnv(async () => {
+    _prefetch('http://localhost/json');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(_prefetchPeek('http://localhost/json'), null, 'non-HTML not cached');
+  }, {
+    fetchImpl: async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+  });
+});
+
+test('prefetch: respects Save-Data (no fetch)', async () => {
+  await withPrefetchEnv(async (calls) => {
+    assert.equal(_prefetchSaysSaveData(), true, 'saveData detected');
+    _prefetch('http://localhost/saver');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 0, 'no fetch under Save-Data');
+  }, { navigator: { connection: { saveData: true } } });
+});
+
+test('prefetchTake: consumes a cached entry exactly once', async () => {
+  await withPrefetchEnv(async () => {
+    _prefetch('http://localhost/take');
+    await new Promise((r) => setTimeout(r, 0));
+    const first = _prefetchTake('http://localhost/take');
+    assert.ok(first, 'first take hits');
+    assert.equal(_prefetchTake('http://localhost/take'), null, 'second take is a miss (single-use)');
+  });
+});
+
+test('prefetch: requests past the concurrency cap queue and drain (not dropped)', async () => {
+  // Hold every fetch open until released, so the first PREFETCH_CONCURRENCY
+  // stay in flight and the rest must queue. On release, the queue should
+  // drain and ALL urls should eventually have been fetched.
+  const releases = [];
+  let n = 0;
+  await withPrefetchEnv(async () => {
+    const urls = ['/a', '/b', '/c', '/d', '/e'].map((p) => `http://localhost${p}`);
+    urls.forEach((u) => _prefetch(u));
+    // Only the cap (3) are in flight; the other 2 are queued, none dropped.
+    assert.equal(_prefetchInflightSize(), 3, 'cap in flight');
+    assert.equal(n, 3, 'only cap fetched so far');
+    // Release all in-flight; the queue drains into the freed slots.
+    for (const r of releases.splice(0)) r();
+    await new Promise((r) => setTimeout(r, 0));
+    for (const r of releases.splice(0)) r();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(n, 5, 'all five eventually fetched (queue drained, nothing dropped)');
+  }, {
+    fetchImpl: async () => {
+      n++;
+      await new Promise((res) => releases.push(res));
+      return new Response('<body>x</body>', { status: 200, headers: { 'content-type': 'text/html' } });
+    },
+  });
+});
+
+test('navigate: consumes a warm prefetch instead of hitting the network', async () => {
+  // Warm the cache for /warm, then navigate to it. The nav must read the
+  // prefetched fragment via prefetchTake and NOT issue a second fetch.
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const origHistory = globalThis.history;
+  const origScrollTo = globalThis.scrollTo;
+  let prefetchCalls = 0;
+  let navCalls = 0;
+  globalThis.location = /** @type any */ ({
+    origin: 'http://localhost', href: 'http://localhost/', pathname: '/', search: '',
+    assign() {}, replace() {},
+  });
+  Object.defineProperty(globalThis.location, 'href', {
+    configurable: true, get() { return 'http://localhost/'; }, set() {},
+  });
+  globalThis.history = /** @type any */ ({ pushState() {}, replaceState() {} });
+  globalThis.scrollTo = /** @type any */ (() => {});
+  globalThis.fetch = async (url, init) => {
+    const isPrefetch = init && init.headers && init.headers['x-webjs-prefetch'];
+    if (isPrefetch) prefetchCalls++; else navCalls++;
+    return new Response('<!doctype html><body><p>warm</p></body>', {
+      status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': 'b1' },
+    });
+  };
+  try {
+    _resetPrefetch();
+    _prefetch('http://localhost/warm');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(prefetchCalls, 1, 'prefetch warmed the cache');
+    assert.ok(_prefetchPeek('http://localhost/warm'), 'entry cached');
+    await navigate('http://localhost/warm');
+    assert.equal(navCalls, 0, 'navigation served from prefetch cache, no network fetch');
+    assert.equal(_prefetchPeek('http://localhost/warm'), null, 'entry consumed by the nav');
+  } finally {
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+    globalThis.history = origHistory;
+    globalThis.scrollTo = origScrollTo;
+    _resetPrefetch();
+  }
+});
+
+test('revalidate evicts the prefetch cache, not just the snapshot cache', async () => {
+  await withPrefetchEnv(async () => {
+    _prefetch('http://localhost/items');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(_prefetchPeek('http://localhost/items'), 'prefetched');
+    revalidate('http://localhost/items');
+    assert.equal(_prefetchPeek('http://localhost/items'), null, 'revalidate(url) dropped the prefetch entry');
+    // And the clear-all form.
+    _prefetch('http://localhost/items');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.ok(_prefetchPeek('http://localhost/items'), 're-prefetched');
+    revalidate();
+    assert.equal(_prefetchPeek('http://localhost/items'), null, 'revalidate() cleared the prefetch cache');
+  });
 });
