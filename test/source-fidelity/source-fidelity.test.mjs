@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripTypeScriptTypes } from 'node:module';
 
 import { createRequestHandler } from '@webjsdev/server';
 
@@ -69,6 +70,14 @@ test('TS type-strip is position-preserving: served line/column equals authored',
     assert.equal(sl[i].length, al[i].length, `line ${i + 1} length must be preserved`);
   }
   assert.ok(positionPreserved(s, a), 'every code character must keep its exact position (types blanked to spaces)');
+  // The strongest pin: the served bytes are EXACTLY Node's position-preserving
+  // strip of the authored source, with no extra transform layered on top
+  // (no banner, no sourcemap comment, no import rewrite, nothing that could
+  // shift a line or column). This also closes the gap where positionPreserved
+  // alone would tolerate a real code character being blanked to a space: only
+  // genuine type syntax is blanked here.
+  assert.equal(s, stripTypeScriptTypes(a),
+    'served bytes must equal the position-preserving type-strip of the authored source, nothing more');
   // Sampled column fidelity: a code line with no types is byte-identical and
   // at the same line index.
   const idx = al.findIndex((l) => l.includes("TypedComp.register('typed-comp');"));
@@ -108,7 +117,7 @@ test('counterfactual: a line-shifting transform fails the fidelity assertion', a
   // if it removed a newline, shift every following line. Simulate both and
   // assert the fidelity checks catch them.
   const a = await authored('components/typed.ts');
-  const columnShifted = a.replace(': number', '');      // deletes, shifting columns
+  const columnShifted = a.replace('(by: number)', '(by)');      // deletes a type, shifting that line's columns
   const lineShifted = a.replace('\n  constructor() {', '  constructor() {'); // removes a newline
   assert.ok(!positionPreserved(columnShifted, a), 'a column-shifting (delete-not-blank) transform must fail position preservation');
   assert.ok(!sameLineCount(lineShifted, a), 'a line-removing transform must fail the line-count check');
