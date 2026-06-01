@@ -16,7 +16,9 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .hooks 2>/dev/null || true",
+    "prepare": "node scripts/git-worktree-safe.mjs",
+    "fix:git": "node scripts/git-worktree-safe.mjs",
+    "check:git": "node scripts/git-worktree-safe.mjs --check",
     "dev": "node scripts/dev-all.js",
     "test": "node scripts/run-node-tests.js",
     "test:browser": "wtr",
