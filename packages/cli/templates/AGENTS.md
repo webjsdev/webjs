@@ -883,8 +883,15 @@ composition, so a nested shell ends up dropped by the HTML parser.
 ## Workflow expectations for AI agents
 
 1. Branch before editing. Never push to `main` directly.
-2. Every code change comes with: unit test(s), AGENTS.md / docs updates if
-   the feature surface changed, `webjs check` passing.
+2. Every code change comes with a test, AGENTS.md / docs updates if the
+   feature surface changed, `webjs check` passing. A unit test is not
+   always enough: a component, hydration, the client router, or a server
+   action called from the client needs a browser test
+   (`webjs test --browser`) asserting the behaviour in a real browser. A
+   commit that stages app code (`app/`, `modules/`, `components/`, `lib/`)
+   with no test is blocked by `.claude/hooks/require-tests-with-src.sh`
+   and the `.hooks/pre-commit` floor (bypass a genuine non-code commit
+   with `WEBJS_NO_TEST_GATE=1`).
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.

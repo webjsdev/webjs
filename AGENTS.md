@@ -73,7 +73,12 @@ The principle: autonomous mode is MORE disciplined, not less. Same quality bar (
 
 Every code change MUST include, automatically:
 
-1. **Tests.** Unit test for logic, E2E for user-facing behaviour. See `agent-docs/testing.md`. Run `webjs test`; never report work done with failing tests.
+1. **Tests, every applicable layer (not just unit).** A change ships with the tests that prove it, across EVERY layer it can affect. Walk them explicitly and add coverage where the change reaches:
+   - **unit** (`packages/*/test/**`, `test/**`): logic, helpers, analysers, including the counterfactual (the negative case that fails when the change is reverted).
+   - **browser** (`*/test/**/browser/*`, run via `npm run test:browser`): anything touching hydration, client render, DOM, slots, the client router, custom-element upgrade.
+   - **e2e** (`test/e2e/*.test.mjs`, run via `WEBJS_E2E=1`): full-stack behaviour observable only in a real browser, including **network probes** (was a request issued or not), navigation, streaming.
+   - **smoke** (`test/examples/*/smoke/*`): the example apps still boot and serve.
+   A unit test is NECESSARY BUT NOT SUFFICIENT for any client-router / component / browser-facing change: the headline behaviour ("a prefetch fired on hover", "the click avoided a second fetch", "the component hydrated") is a browser/e2e assertion, and shipping unit-only there is the exact gap this rule closes. `npm test` does NOT run the browser or e2e layers; run them yourself and report the result. Never report work done with failing or missing tests. See `agent-docs/testing.md`. Enforced for Claude Code by `.claude/hooks/require-tests-with-src.sh` (blocks a commit that stages `packages/*/src/**` with no test, and a commit that net-removes test lines); the same gate ships to scaffolded apps via `webjs create`.
 2. **Documentation.** Update `AGENTS.md` for new API surface, `CONVENTIONS.md` for new conventions, `docs/` or `website/` for user-facing features.
 3. **Convention validation.** Run `webjs check` and fix violations.
 
