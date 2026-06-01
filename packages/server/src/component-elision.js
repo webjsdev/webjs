@@ -661,15 +661,24 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
       continue;
     }
     if (typeof src !== 'string') continue;
-    fileTags.set(file, extractRenderedTags(src));
-    if (importsReactivePrimitive(src)) reactiveFiles.add(file);
-    if (importsClientRouter(src)) clientRouterFiles.add(file);
-    if (EVENT_BINDING_RE.test(src) || EVENT_PROP_RE.test(src) ||
-        importsSideEffectNonCorePackage(src) || CLIENT_GLOBAL_RE.test(src) ||
-        hasModuleScopeSideEffect(src)) {
+    // Mask comments once for every signal scan below (#179): a `<tag>`, an
+    // `@event`, a browser global, an `import`, or a `whenDefined` written in a
+    // comment must not register as a real signal. String and template content
+    // is kept, so a real rendered tag, a real `@click=${}` in an html template,
+    // and a real `whenDefined('tag')` (the tag rides a string) still match.
+    // (`importsSideEffectNonCorePackage` / `hasModuleScopeSideEffect` /
+    // `analyzeComponentSource` also redact strings/templates internally; running
+    // them on the comment-masked source just additionally drops comment prose.)
+    const masked = maskComments(src);
+    fileTags.set(file, extractRenderedTags(masked));
+    if (importsReactivePrimitive(masked)) reactiveFiles.add(file);
+    if (importsClientRouter(masked)) clientRouterFiles.add(file);
+    if (EVENT_BINDING_RE.test(masked) || EVENT_PROP_RE.test(masked) ||
+        importsSideEffectNonCorePackage(masked) || CLIENT_GLOBAL_RE.test(masked) ||
+        hasModuleScopeSideEffect(masked)) {
       clientGlobalOrBareFiles.add(file);
     }
-    if (componentFiles.has(file) && analyzeComponentSource(src).interactive) {
+    if (componentFiles.has(file) && analyzeComponentSource(masked).interactive) {
       mustShip.add(file);
     }
     // Cross-module registration observation (#169): if THIS module observes
@@ -678,17 +687,13 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // file. Resolution against tagToFile / classToFile happens after the loop
     // (all components are known up front, but we collect here while we hold
     // each source). Verdict-safe: only ever forces MORE components to ship.
-    // Mask comments so a whenDefined / :defined / instanceof written in a
-    // comment is not read as a real observation (#179). String content is kept,
-    // so a real `whenDefined('tag')` (the tag rides a string) still matches.
-    const maskedObs = maskComments(src);
-    for (const m of maskedObs.matchAll(WHEN_DEFINED_RE)) {
+    for (const m of masked.matchAll(WHEN_DEFINED_RE)) {
       const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
-    for (const m of maskedObs.matchAll(TAG_DEFINED_RE)) {
+    for (const m of masked.matchAll(TAG_DEFINED_RE)) {
       const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
-    for (const m of maskedObs.matchAll(INSTANCEOF_RE)) {
+    for (const m of masked.matchAll(INSTANCEOF_RE)) {
       const f = classToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
   }

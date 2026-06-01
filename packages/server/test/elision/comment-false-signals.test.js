@@ -87,6 +87,55 @@ test('counterfactual: a REAL whenDefined does force it to ship', async () => {
     'a real whenDefined forces the badge to ship (proves the comment case is what flips it)');
 });
 
+test('a commented @event or browser global does NOT force a component to ship', async () => {
+  // Display-only render, but its comments mention @click and document. Neither
+  // is real client work, so the component stays elidable.
+  const commented = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Note extends WebComponent {
+      // interactive sibling uses @click=\${handler} and reads document.title
+      render() { return html\`<span class="note">read only</span>\`; }
+    }
+    Note.register('x-note');
+  `;
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/note.js';
+    export default () => html\`<x-note></x-note>\`;
+  `;
+  const { elidableComponents } = await run({
+    files: { '/app/page.js': page, '/app/components/note.js': commented },
+    components: [{ tag: 'x-note', className: 'Note', file: '/app/components/note.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/note.js'] },
+  });
+  assert.ok(elidableComponents.has('/app/components/note.js'),
+    'a @click / document mentioned only in a comment does not force ship');
+});
+
+test('counterfactual: a REAL @click in the template forces ship', async () => {
+  const interactive = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Note extends WebComponent {
+      render() { return html\`<button @click=\${() => {}}>x</button>\`; }
+    }
+    Note.register('x-note');
+  `;
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/note.js';
+    export default () => html\`<x-note></x-note>\`;
+  `;
+  const { elidableComponents } = await run({
+    files: { '/app/page.js': page, '/app/components/note.js': interactive },
+    components: [{ tag: 'x-note', className: 'Note', file: '/app/components/note.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/note.js'] },
+  });
+  assert.ok(!elidableComponents.has('/app/components/note.js'),
+    'a real @click forces ship (proves the comment case is what flips it)');
+});
+
 test('a commented child tag does NOT force ship via the render rule', async () => {
   // An interactive (shipping) component whose render does NOT emit x-badge, but
   // whose comment mentions <x-badge>. The render rule must not be fooled.
