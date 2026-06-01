@@ -130,6 +130,38 @@ Reach for it if the conservative analyser ever mis-elides a component, or
 to A/B the wire-byte difference. Because the analyser biases toward
 shipping, needing this should be rare.
 
+There is also a `WEBJS_ELIDE` environment override that wins over the
+`package.json` switch: `WEBJS_ELIDE=0` (also `false` / `off` / `no`) forces
+elision off, `WEBJS_ELIDE=1` (`true` / `on` / `yes`) forces it on, and any
+other value (or an unset variable) falls through to the `package.json`
+switch. It is the deploy-time escape hatch (rule elision out while
+debugging a suspected wrong-strip without editing committed code) and the
+seam the differential elision test uses to render the same app on and off
+in one process. Like the `package.json` switch, it is re-read on every
+rebuild.
+
+### The differential guard: elision never changes observable output
+
+Elision's defining invariant is that removing the elided JS NEVER changes
+what the user sees or can do (the SSR'd HTML is the progressive-enhancement
+baseline; elision only drops JS that would have done nothing). Because the
+analyser is heuristic and its long tail of inputs (comments, dynamic tag
+strings, multi-line templates, vendor side-effects, future interactivity
+surfaces) is open-ended, that invariant is verified DIFFERENTIALLY rather
+than only by example: a test renders a corpus of routes with elision on and
+off and asserts the observable output is identical, both at the SSR layer
+(served HTML, modulo the boot script and modulepreload JS set) and in a
+real browser after hydration (DOM and key interactions). The conservative
+bias means a mistake almost always only over-ships (wastes bytes, ignored
+by the diff); the dangerous direction (a needed module wrongly dropped)
+changes post-hydration behaviour and fails the e2e diff loudly. This is the
+guard that lets per-component elision stay a safe default rather than a
+leap of faith, and it is what would have caught the comment-scanning (#179)
+and cross-module-observation (#169) bug classes instantly. The test lives
+at `packages/server/test/elision/differential-elision.test.js` (SSR layer)
+and the `differential elision` cases in `test/e2e/e2e.test.mjs` (browser
+layer).
+
 ## ReactiveControllers: composable lifecycle
 
 ```js

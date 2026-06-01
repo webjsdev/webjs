@@ -230,6 +230,18 @@ can load it without booting the full server.
    entirely, leaving both sets empty so nothing is stripped and the
    importmap keeps every vendor dep. The switch is pure opt-out (default
    enabled); any value other than the literal `false` keeps elision on.
+   A `WEBJS_ELIDE` env override wins over the `package.json` switch
+   (`0`/`false`/`off`/`no` force off, `1`/`true`/`on`/`yes` force on, any
+   other value falls through), the deploy-time escape hatch and the seam
+   the differential elision test uses to render one app on and off in a
+   single process. The invariant that elision never changes observable
+   output is verified differentially by
+   `test/elision/differential-elision.test.js` (SSR layer) plus the
+   `differential elision` e2e cases: the same corpus routes rendered on vs
+   off must yield identical SSR HTML (modulo the boot-script + modulepreload
+   JS set) and identical post-hydration DOM and behaviour, so any wrong-strip
+   fails the diff regardless of its cause (this is the continuous guard for
+   the #169 / #179 bug classes).
    The analysis is a denylist that biases toward shipping: a false
    "display-only" verdict breaks the page, a false "interactive" verdict
    only misses an optimization, so anything ambiguous ships. The signal

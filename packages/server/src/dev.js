@@ -148,16 +148,40 @@ function loadAppEnv(appDir) {
 }
 
 /**
- * Read the project-level elision switch from `package.json`.
- * `{ "webjs": { "elide": false } }` disables display-only and inert-route
- * elision app-wide (everything ships, like before the feature existed).
- * Any other value, or an absent key, leaves elision enabled (the default).
- * Re-read on every rebuild so toggling the switch takes effect without a
- * server restart.
+ * Read the `WEBJS_ELIDE` environment override, if set.
+ * `0` / `false` / `off` / `no` (case-insensitive) force elision OFF;
+ * `1` / `true` / `on` / `yes` force it ON. Any other value, or an unset
+ * variable, returns `undefined` so the caller falls through to the
+ * `package.json` switch. The env override is the deploy-time / ops escape
+ * hatch: force-disable elision to rule it out while debugging a wrong-strip
+ * without editing committed code, or force-enable it regardless of an
+ * app's `package.json`. It is also the seam the differential elision test
+ * uses to render the same app on and off in one process.
+ * @returns {boolean | undefined}
+ */
+function elideEnvOverride() {
+  const raw = process.env.WEBJS_ELIDE;
+  if (raw == null || raw === '') return undefined;
+  const v = String(raw).trim().toLowerCase();
+  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+  if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
+  return undefined;
+}
+
+/**
+ * Read the project-level elision switch.
+ * Precedence: the `WEBJS_ELIDE` env override wins when set, otherwise the
+ * `package.json` `{ "webjs": { "elide": false } }` switch disables
+ * display-only and inert-route elision app-wide (everything ships, like
+ * before the feature existed). Any other value, or an absent key, leaves
+ * elision enabled (the default). Re-read on every rebuild so toggling
+ * either control takes effect without a server restart.
  * @param {string} appDir
  * @returns {Promise<boolean>}
  */
-async function readElideEnabled(appDir) {
+export async function readElideEnabled(appDir) {
+  const override = elideEnvOverride();
+  if (override !== undefined) return override;
   try {
     const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
     if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
