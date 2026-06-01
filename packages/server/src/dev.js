@@ -58,7 +58,7 @@ import {
 import { defaultLogger } from './logger.js';
 import { withRequest } from './context.js';
 import { attachWebSocket } from './websocket.js';
-import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile } from './vendor.js';
+import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
@@ -346,6 +346,29 @@ export async function createRequestHandler(opts) {
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
             t.elision = now() - m;
+
+            // Pinned-importmap elision prune (#197). A committed pin was applied
+            // verbatim at boot (for a stable build id). Now that elision is
+            // known, prune the SERVED map to the vendor specifiers still
+            // reachable from non-elided modules, so a pinned app serves the
+            // same map an unpinned app would (an elided-only dep like dayjs is
+            // dropped). The build id stays the boot-published hash of the
+            // committed pin (a deploy fingerprint); only the served map shrinks,
+            // so there is no warmup-time build-id drift. Uses the same
+            // elision-aware scan the unpinned live path uses.
+            if (bootVendorPinned) {
+              try {
+                const pin = await readPinFile(appDir);
+                if (pin) {
+                  const reachable = await scanBareImports(appDir,
+                    new Set([...state.elidableComponents, ...state.inertRouteModules]));
+                  const pruned = prunePinToReachable(pin.imports, pin.integrity || {}, reachable);
+                  await setVendorEntries(pruned.imports, pruned.integrity);
+                }
+              } catch (e) {
+                logger.warn?.(`[webjs] pinned-importmap prune skipped: ${String(e?.message || e)}`);
+              }
+            }
             if (dev) {
               for (const { className, file } of await findOrphanComponents(appDir)) {
                 logger.warn?.(
