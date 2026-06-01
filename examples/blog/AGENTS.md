@@ -37,6 +37,7 @@ app/                         thin route adapters
   error.ts                   error boundary
   not-found.ts               404
   login/page.ts              /login (auth-forms component)
+  search/page.ts             /search (progressive no-JS GET search form)
   blog/[slug]/page.ts        /blog/:slug (post + live comments)
   dashboard/
     middleware.ts             auth gate (302 → /login if no session)

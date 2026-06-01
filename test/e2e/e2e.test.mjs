@@ -1673,7 +1673,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       ]);
       assert.ok(noJs.url().endsWith('/about'), `link should navigate to /about, got ${noJs.url()}`);
       const html = await noJs.content();
-      assert.match(html, /about/i, '/about content must render after a no-JS navigation');
+      // Match a phrase unique to the about page body, not the nav word
+      // "About" that appears on every page.
+      assert.match(html, /What's on display/, '/about page body must render after a no-JS navigation');
     });
 
     test('a server-rendered form submits and the response renders with JS off', async () => {
