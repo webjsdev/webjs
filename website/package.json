@@ -12,7 +12,7 @@
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
   },
   "dependencies": {
-    "@webjsdev/cli": "^0.8.0",
+    "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0"
   },

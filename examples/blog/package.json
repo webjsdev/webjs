@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@webjsdev/cli": "^0.8.0",
+    "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0",
     "dayjs": "^1.11.21"
