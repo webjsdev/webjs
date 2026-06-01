@@ -313,6 +313,19 @@ mutating endpoint MUST be a POST or a `<form>` submission (which the
 router never prefetches), not a GET link. A native `<link rel="prefetch">`
 in the document head is the browser's own mechanism and is left untouched.
 
+The router dispatches a `webjs:prefetch` event on `document` the instant a
+speculative fragment lands in the cache and becomes consumable (which is
+strictly later than the request going out, since the entry is stored only
+after the response body is read). The detail is `{ url, key, from: 'prefetch' }`,
+mirroring `webjs:navigate` so one listener can split the two by `detail.from`.
+Listen to instrument prefetch hit rate, or to gate work on a warm cache:
+
+```ts
+document.addEventListener('webjs:prefetch', (e) => {
+  console.log('prefetched', e.detail.url); // fragment is now cached
+});
+```
+
 ### Per-segment loading skeletons
 
 Each `loading.{js,ts}` in the route chain is rendered into a hidden
