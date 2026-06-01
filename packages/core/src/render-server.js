@@ -314,6 +314,41 @@ async function renderTemplate(tr, ctx) {
   return out;
 }
 
+// Browser-only names whose absence during SSR produces a recognisable error.
+// Mirrors the `no-browser-globals-in-render` webjs check rule, which catches
+// these at edit time; this turns the runtime SSR crash into the same guidance.
+const SSR_BROWSER_GLOBALS = new Set([
+  'document', 'window', 'localStorage', 'sessionStorage', 'navigator',
+  'matchMedia', 'requestAnimationFrame', 'getComputedStyle',
+  'IntersectionObserver', 'MutationObserver', 'ResizeObserver',
+]);
+const SSR_HTMLELEMENT_METHODS = new Set([
+  'attachShadow', 'setAttribute', 'getAttribute', 'removeAttribute',
+  'hasAttribute', 'dispatchEvent', 'querySelector', 'querySelectorAll',
+  'getBoundingClientRect', 'focus', 'blur', 'scrollIntoView',
+]);
+
+/**
+ * If `e` is the recognisable failure of touching a browser-only API during
+ * SSR (a `ReferenceError` for a browser global, or a `TypeError` calling an
+ * HTMLElement method that does not exist on the bare server-side instance),
+ * return an actionable, member-naming hint; otherwise null.
+ * @param {unknown} e
+ * @returns {string | null}
+ */
+function browserMemberHint(e) {
+  const msg = e && typeof (/** @type any */ (e).message) === 'string' ? /** @type any */ (e).message : '';
+  let m = /^(\w+) is not defined$/.exec(msg);
+  if (e instanceof ReferenceError && m && SSR_BROWSER_GLOBALS.has(m[1])) {
+    return `\`${m[1]}\` is a browser-only global and is undefined during SSR.`;
+  }
+  m = /\.(\w+) is not a function$/.exec(msg);
+  if (e instanceof TypeError && m && SSR_HTMLELEMENT_METHODS.has(m[1])) {
+    return `\`${m[1]}\` is an HTMLElement method that does not exist on the server-side component instance during SSR.`;
+  }
+  return null;
+}
+
 /**
  * Scan an HTML string for registered custom elements and inject
  * Declarative Shadow DOM (`<template shadowrootmode="open">`).
@@ -443,7 +478,15 @@ async function injectDSD(html, ctx) {
         });
       }
     } catch (e) {
-      console.error(`[webjs] SSR failed for <${tag}>:`, e);
+      const hint = browserMemberHint(e);
+      if (hint) {
+        console.error(
+          `[webjs] SSR failed for <${tag}>: ${hint} It was touched in the component's constructor or render(), which run during SSR. Move browser-only work to connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor only from server-known inputs (attributes / props).`,
+          e,
+        );
+      } else {
+        console.error(`[webjs] SSR failed for <${tag}>:`, e);
+      }
     }
   }
   if (!edits.length) return html;
