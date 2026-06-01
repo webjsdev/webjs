@@ -164,17 +164,25 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // server-only files reached through a .server.ts (slugify.ts, the two
     // types.ts), which the auth gate then 404s. Probe each same-origin
     // preload href and assert it serves. A real network fetch, since a
-    // 404 here is exactly what shipped to users.
-    const preloads = await page.evaluate(() =>
-      [...document.querySelectorAll('link[rel="modulepreload"]')]
-        .map(l => l.href)
-        .filter(h => h.startsWith(location.origin))
-    );
-    assert.ok(preloads.length > 0, 'expected at least one same-origin preload to probe');
+    // 404 here is exactly what shipped to users. The in-process counterpart
+    // covering all four apps + the graph layer is test/preload-subset.test.mjs
+    // (#182); this is the real-browser layer. Probe more than one route so a
+    // route-specific preload regression is caught, and navigate explicitly so
+    // the test is self-contained rather than relying on a prior test's goto.
     const broken = [];
-    for (const href of preloads) {
-      const resp = await fetch(href);
-      if (resp.status >= 400) broken.push(`${href} -> ${resp.status}`);
+    for (const route of ['/', '/about']) {
+      await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(500);
+      const preloads = await page.evaluate(() =>
+        [...document.querySelectorAll('link[rel="modulepreload"]')]
+          .map(l => l.href)
+          .filter(h => h.startsWith(location.origin))
+      );
+      assert.ok(preloads.length > 0, `expected at least one same-origin preload to probe on ${route}`);
+      for (const href of preloads) {
+        const resp = await fetch(href);
+        if (resp.status >= 400) broken.push(`${route}: ${href} -> ${resp.status}`);
+      }
     }
     assert.equal(broken.length, 0,
       `no modulepreload may point at a non-servable URL; broken:\n${broken.join('\n')}`);
