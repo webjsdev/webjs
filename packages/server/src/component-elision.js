@@ -41,6 +41,7 @@ import {
   extractWebComponentClassBodies,
   matchClosingBrace,
   redactStringsAndTemplates,
+  maskComments,
 } from './js-scan.js';
 import { transitiveDeps } from './module-graph.js';
 
@@ -553,9 +554,13 @@ function topLevelPropertyValues(obj) {
 export function extractRenderedTags(src) {
   /** @type {Set<string>} */
   const tags = new Set();
+  // Mask comments first so a `<some-tag>` written in a doc comment is not read
+  // as a rendered tag (#179). String and template content is kept, so real tags
+  // inside `html` templates are still found.
+  const masked = maskComments(src);
   const re = /<([a-z][a-z0-9]*-[a-z0-9-]*)\b/g;
   let m;
-  while ((m = re.exec(src)) !== null) tags.add(m[1]);
+  while ((m = re.exec(masked)) !== null) tags.add(m[1]);
   return tags;
 }
 
@@ -673,13 +678,17 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // file. Resolution against tagToFile / classToFile happens after the loop
     // (all components are known up front, but we collect here while we hold
     // each source). Verdict-safe: only ever forces MORE components to ship.
-    for (const m of src.matchAll(WHEN_DEFINED_RE)) {
+    // Mask comments so a whenDefined / :defined / instanceof written in a
+    // comment is not read as a real observation (#179). String content is kept,
+    // so a real `whenDefined('tag')` (the tag rides a string) still matches.
+    const maskedObs = maskComments(src);
+    for (const m of maskedObs.matchAll(WHEN_DEFINED_RE)) {
       const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
-    for (const m of src.matchAll(TAG_DEFINED_RE)) {
+    for (const m of maskedObs.matchAll(TAG_DEFINED_RE)) {
       const f = tagToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
-    for (const m of src.matchAll(INSTANCEOF_RE)) {
+    for (const m of maskedObs.matchAll(INSTANCEOF_RE)) {
       const f = classToFile.get(m[1]); if (f) observedComponentFiles.add(f);
     }
   }

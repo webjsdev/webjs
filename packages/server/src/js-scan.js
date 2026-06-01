@@ -222,6 +222,111 @@ export function redactStringsAndTemplates(src) {
 }
 
 /**
+ * Blank ONLY comments, keeping string AND template-literal content verbatim
+ * (position-preserving: same length, newlines kept). The sibling
+ * `redactStringsAndTemplates` blanks templates too, which is wrong for callers
+ * that need to read inside `html` templates (the elision render-tag scanner) or
+ * inside string arguments (`whenDefined('tag')`). This keeps both and removes
+ * only comment text, so prose in a comment cannot be read as a real signal
+ * (issue #179). It reuses the same regex-versus-division and tagged-template
+ * disambiguation so a `//` inside a string/template/regex is never mistaken for
+ * a comment.
+ *
+ * @param {string} src
+ * @returns {string} src with comment bodies blanked, everything else verbatim
+ */
+export function maskComments(src) {
+  const n = src.length;
+  let out = '';
+  let i = 0;
+  let lastSig = '';
+  let lastWord = '';
+  let lastWordIsProp = false;
+  let lastWasIncDec = false;
+  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; };
+  const isRegex = () => {
+    if (lastSig === '') return true;
+    if (lastSig === ')' || lastSig === ']') return false;
+    if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+    if (lastWasIncDec) return false;
+    if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    return true;
+  };
+  // Comments: blank the body (keep the `//` / `/* */` delimiters and newlines).
+  const scanLineComment = () => { out += '//'; i += 2; while (i < n && src[i] !== '\n') { out += ' '; i++; } };
+  const scanBlockComment = () => {
+    out += '/*'; i += 2;
+    while (i < n) {
+      if (src[i] === '*' && src[i + 1] === '/') { out += '*/'; i += 2; return; }
+      out += src[i] === '\n' ? '\n' : ' '; i++;
+    }
+  };
+  // String / template / regex: copy verbatim, but lex correctly so a `//` or
+  // `/*` inside them is not treated as a comment.
+  const scanString = (q) => {
+    out += q; i++;
+    while (i < n) {
+      if (src[i] === '\\' && i + 1 < n) { out += src[i] + src[i + 1]; i += 2; continue; }
+      if (src[i] === q) { out += q; i++; break; }
+      if (src[i] === '\n') { out += '\n'; i++; break; }
+      out += src[i]; i++;
+    }
+    markValue();
+  };
+  const scanRegex = () => {
+    out += '/'; i++;
+    let inClass = false;
+    while (i < n) {
+      const d = src[i];
+      if (d === '\\' && i + 1 < n) { out += d + src[i + 1]; i += 2; continue; }
+      if (d === '\n') break;
+      if (d === '[') inClass = true;
+      else if (d === ']') inClass = false;
+      else if (d === '/' && !inClass) { out += '/'; i++; break; }
+      out += d; i++;
+    }
+    markValue();
+  };
+  const scanTemplate = () => {
+    out += '`'; i++;
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+      if (c === '`') { out += '`'; i++; break; }
+      if (c === '$' && src[i + 1] === '{') { out += '${'; i += 2; scanCode(true); if (i < n && src[i] === '}') { out += '}'; i++; } continue; }
+      out += c; i++;
+    }
+    markValue();
+  };
+  function scanCode(stopHole) {
+    let brace = 0;
+    while (i < n) {
+      const c = src[i], next = src[i + 1];
+      if (stopHole && c === '}' && brace === 0) return;
+      if (c === '/' && next === '/') { scanLineComment(); continue; }
+      if (c === '/' && next === '*') { scanBlockComment(); continue; }
+      if (c === '/' && isRegex()) { scanRegex(); continue; }
+      if (c === "'" || c === '"') { scanString(c); continue; }
+      if (c === '`') { scanTemplate(); continue; }
+      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
+      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
+      if (/[A-Za-z_$]/.test(c)) {
+        const prop = lastSig === '.';
+        let w = '';
+        while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += src[i]; i++; }
+        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop; lastWasIncDec = false;
+        continue;
+      }
+      if (/\s/.test(c)) { out += c; i++; continue; }
+      lastWasIncDec = (c === '+' || c === '-') && c === lastSig;
+      lastSig = c; lastWord = ''; out += c; i++;
+    }
+  }
+  scanCode(false);
+  return out;
+}
+
+/**
  * Extract the body of every `class … extends WebComponent { … }` block.
  * Brace-counts to handle nested template literals, methods, and arrow
  * functions. String state is tracked so braces inside strings/templates
