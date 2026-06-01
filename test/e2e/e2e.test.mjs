@@ -1308,6 +1308,36 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(counter, true, 'interactive counter module must be downloaded');
   });
 
+  test('a display-only component observed via whenDefined IS downloaded (#169)', async () => {
+    // Counterpart to the build-stamp probe above. <observed-badge> is just as
+    // display-only, but the /observed route imports a module that calls
+    // customElements.whenDefined('observed-badge'). That observation forces
+    // the badge to ship (eliding it would leave whenDefined unresolved), so
+    // the browser MUST download its module. The unobserved build-stamp is the
+    // negative control (proven not downloaded by the test above).
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/observed`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(3000);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+
+    const badgeFetched = requested.some((u) => /\/components\/observed-badge\.(ts|js)/.test(u));
+    const badgeText = await page.evaluate(
+      () => document.querySelector('observed-badge')?.textContent?.trim() || '',
+    );
+
+    assert.match(badgeText, /observed badge/i, 'observed-badge SSR content is present');
+    assert.equal(badgeFetched, true,
+      'an observed display-only component module MUST be downloaded (forced to ship)');
+  });
+
   test('a fully-static route (/about) drops its page module from the boot', async () => {
     // /about renders only static markup (no events, signals, or custom
     // elements), so its page module is inert and dropped from the boot
