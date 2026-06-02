@@ -64,6 +64,61 @@ Practical consequences for agents writing webjs code.
    (optimistic UI, in-flight indicators tied to client state,
    keyboard shortcuts).
 
+## Use lit idioms, not vanilla DOM (the whole point of lit-style components)
+
+webjs components are lit-shaped on purpose: the value is the declarative
+DX (typed reactive props, signals, `html` templates, declarative
+bindings), not raw DOM scripting. Reaching for vanilla web-component
+muscle memory (`this.getAttribute`, `this.setAttribute`, `this.classList`,
+`this.addEventListener`, `this.innerHTML`, `document.createElement`,
+manual `observedAttributes` / `attributeChangedCallback`, manual
+`customElements.define`) inside a component is the anti-pattern. Use the
+lit form unless the vanilla API is genuinely unavoidable.
+
+| Vanilla muscle memory | Lit-style webjs form |
+|---|---|
+| `this.getAttribute('x')` / `this.hasAttribute('x')` for own config | a reactive prop: `static properties = { x: {...} }` + `declare x`, read `this.x` (the prop rides the `x` attribute) |
+| `this.setAttribute('x', v)` / `removeAttribute` to reflect own state | a reactive prop with `reflect: true`, or for non-attribute state a `signal` |
+| `state: true` reactive prop for internal state | a `signal` (instance signal in the constructor, or module-scope) |
+| `this.classList.add/toggle(...)` on self | a `class=${...}` binding in `render()` |
+| `this.innerHTML = ...` / `appendChild` / `document.createElement` | return the markup from `render()` as `` html`...` `` |
+| `this.addEventListener('click', ...)` on own/child elements | a `@click=${...}` binding in the template |
+| `this.querySelector(...)` to reach own rendered DOM | the `ref()` directive + `createRef()`, or read a `<form>` with `new FormData(form)` |
+| manual `observedAttributes` + `attributeChangedCallback` | `static properties` (the framework derives both) |
+| manual `customElements.define('x', C)` | `C.register('x')` |
+
+Emitting an event with `this.dispatchEvent(new CustomEvent(...))` is the
+correct lit form, not a vanilla smell. Reading form values with
+`new FormData(e.currentTarget)` inside a `@submit` handler is also fine.
+
+**When vanilla DOM is genuinely needed (these stay):**
+
+- **Ancestor lookup in a compound component.** `this.closest('ui-tabs')`
+  to read a parent's state. There is no declarative lit equivalent.
+- **Slotted / projected content.** `this.querySelector(...)` reaching a
+  `<slot>`-projected child or a sibling sub-component the template does
+  not own. `ref()` only binds elements this component's own `render()`
+  creates, so it cannot reach slotted content.
+- **Host attributes in light DOM.** A light-DOM `render()` template
+  cannot bind attributes or listeners on the host element itself, so a
+  component that must style or listen on its own host writes
+  `this.dataset.* =` / `this.className =` / `this.addEventListener` on
+  `this` in a lifecycle hook. Shadow-DOM components avoid this.
+- **Global listeners.** `document` / `window` `addEventListener` for
+  click-away, global keys, resize, or reposition.
+- **Reading another element's attribute.** `contentHost.getAttribute('side')`
+  reads a different element's config, not `this`.
+- **Browser-only globals.** `localStorage`, `matchMedia`, `navigator`,
+  `document.documentElement` mutations (a theme toggle setting `<html>`),
+  clipboard. These belong in `connectedCallback` or an event handler.
+- **Imperative focus.** `el.focus()` has no declarative form.
+
+The rule of thumb: if a reactive prop, a signal, an `html` binding, or
+`ref()` expresses it, use that. Reach for vanilla DOM only for the cases
+above, where the platform offers nothing declarative. `webjs check`'s
+`prefer-reactive-prop-over-getattribute` rule flags the most common slip
+(reading own config via `this.getAttribute`).
+
 ## The SSR contract: the pre-render lifecycle plus `render()`
 
 By design, the webjs SSR pipeline constructs the instance, applies
