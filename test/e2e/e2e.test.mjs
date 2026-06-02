@@ -1871,6 +1871,121 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 });
 
 // ---------------------------------------------------------------------------
+// Page server actions: the no-JS form write-path (#244)
+//
+// The `/feedback` route exports a page `action`. A `<form method="POST">`
+// posts to it. We exercise BOTH the JS-disabled native path and the JS-enabled
+// client-router path, asserting the SAME field-error UI and the same PRG
+// redirect, plus a network probe that the enhanced path issues exactly one POST
+// and does NOT full-reload on the 422.
+// ---------------------------------------------------------------------------
+
+describe('E2E: page server actions (no-JS + enhanced)', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1 to run E2E tests' }, () => {
+  let paBrowser, paServer, paBase;
+
+  before(async () => {
+    const puppeteer = (await import('puppeteer-core')).default;
+    const chromium = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
+    const port = await freePort();
+    paBase = `http://localhost:${port}`;
+    paServer = await startBlog(port);
+    paBrowser = await puppeteer.launch({
+      executablePath: chromium,
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  });
+
+  after(async () => {
+    if (paBrowser) await paBrowser.close();
+    if (paServer) {
+      paServer.kill('SIGTERM');
+      await new Promise((r) => { paServer.on('exit', r); setTimeout(r, 3000); });
+    }
+  });
+
+  test('JS DISABLED: invalid submit re-renders the page with the error + preserved input', async () => {
+    const p = await paBrowser.newPage();
+    await p.setJavaScriptEnabled(false);
+    try {
+      await p.goto(`${paBase}/feedback`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await p.type('#email', 'taken@example.com');
+      // Native form submit (no JS): the browser POSTs and renders the 422 body.
+      await Promise.all([
+        p.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }),
+        p.click('button[type="submit"]'),
+      ]);
+      const error = await p.evaluate(() => document.getElementById('email-error')?.textContent || '');
+      assert.ok(error.includes('That email is already subscribed'), `expected field error, got "${error}"`);
+      const value = await p.evaluate(() => document.getElementById('email')?.value || '');
+      assert.equal(value, 'taken@example.com', 'the submitted value is preserved in the re-render');
+      // Still on /feedback (no PRG, the 422 re-renders in place).
+      assert.ok(p.url().endsWith('/feedback'), `expected to stay on /feedback, got ${p.url()}`);
+    } finally { await p.close(); }
+  });
+
+  test('JS DISABLED: valid submit redirects (PRG) to /feedback/thanks', async () => {
+    const p = await paBrowser.newPage();
+    await p.setJavaScriptEnabled(false);
+    try {
+      await p.goto(`${paBase}/feedback`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await p.type('#email', 'real@example.com');
+      await Promise.all([
+        p.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }),
+        p.click('button[type="submit"]'),
+      ]);
+      assert.ok(p.url().endsWith('/feedback/thanks'), `expected PRG to /feedback/thanks, got ${p.url()}`);
+      const ok = await p.evaluate(() => !!document.getElementById('thanks'));
+      assert.ok(ok, 'the thanks page rendered');
+    } finally { await p.close(); }
+  });
+
+  test('JS ENABLED: invalid submit swaps the 422 in place (one POST, no full reload)', async () => {
+    const p = await paBrowser.newPage();
+    // Network probe: count POSTs to /feedback and watch for a full document load.
+    const posts = [];
+    p.on('request', (req) => {
+      if (req.method() === 'POST' && req.url().includes('/feedback')) posts.push(req.url());
+    });
+    try {
+      await p.goto(`${paBase}/feedback`, { waitUntil: 'networkidle2', timeout: 15000 });
+      // Tag the live document; a full reload would discard the marker, an
+      // in-place client-router swap preserves it.
+      await p.evaluate(() => { window.__paMarker = 'kept'; });
+      await p.type('#email', 'taken@example.com');
+      await p.click('button[type="submit"]');
+      // Wait for the client router to apply the 422 fragment.
+      await p.waitForFunction(
+        () => !!document.getElementById('email-error'),
+        { timeout: 10000 },
+      );
+      const marker = await p.evaluate(() => window.__paMarker);
+      assert.equal(marker, 'kept', 'the client router swapped in place (no full reload)');
+      const value = await p.evaluate(() => document.getElementById('email')?.value || '');
+      assert.equal(value, 'taken@example.com', 'submitted value preserved in the enhanced re-render');
+      assert.equal(posts.length, 1, `exactly one POST issued, got ${posts.length}`);
+    } finally { await p.close(); }
+  });
+
+  test('JS ENABLED: valid submit follows the 303 to the thanks page in place', async () => {
+    const p = await paBrowser.newPage();
+    try {
+      await p.goto(`${paBase}/feedback`, { waitUntil: 'networkidle2', timeout: 15000 });
+      await p.evaluate(() => { window.__paMarker = 'kept'; });
+      await p.type('#email', 'real@example.com');
+      await p.click('button[type="submit"]');
+      await p.waitForFunction(
+        () => !!document.getElementById('thanks'),
+        { timeout: 10000 },
+      );
+      assert.ok(p.url().endsWith('/feedback/thanks'), `expected /feedback/thanks, got ${p.url()}`);
+      const marker = await p.evaluate(() => window.__paMarker);
+      assert.equal(marker, 'kept', 'the 303 was followed in place by the client router');
+    } finally { await p.close(); }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Helpers for counter & navigation tests
 // ---------------------------------------------------------------------------
 

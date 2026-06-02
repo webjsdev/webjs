@@ -396,6 +396,67 @@ submissions). DOM is untouched. History records the requested URL.
 record the **final** URL in history, not the originally-requested one.
 The Post-Redirect-Get pattern works correctly.
 
+### Page server actions (a `<form>` that re-renders with errors)
+
+The server side of the no-JS validation pattern is a page `action`
+export. A `page.{js,ts}` may export an `action` alongside its default
+render function. A non-GET/HEAD submission to that page's own URL runs
+the action (inside the page's segment middleware), so a plain
+`<form method="POST">` works with JS disabled AND through the client
+router, same UI either way.
+
+```ts
+// app/signup/page.ts
+import { html } from '@webjsdev/core';
+import { signup } from '../../modules/auth/actions/signup.server.ts';
+
+export async function action({ formData }: { formData: FormData }) {
+  const email = String(formData.get('email') || '').trim();
+  const values = { email };
+  if (!email.includes('@')) {
+    return { success: false, fieldErrors: { email: 'Enter a valid email' }, values, status: 422 };
+  }
+  const r = await signup({ email });
+  if (!r.success) return { success: false, fieldErrors: { email: r.error }, values, status: r.status };
+  return { success: true, redirect: '/login' };
+}
+
+export default function Signup({ actionData }: { actionData?: { fieldErrors?: Record<string, string>; values?: Record<string, string> } }) {
+  const errors = actionData?.fieldErrors || {};
+  const values = actionData?.values || {};
+  return html`
+    <form method="POST">
+      <input name="email" type="email" value=${values.email || ''} required>
+      ${errors.email ? html`<p class="error">${errors.email}</p>` : ''}
+      <button>Sign up</button>
+    </form>
+  `;
+}
+```
+
+The action receives `{ request, params, searchParams, url, formData }`
+(`formData` is the already-parsed body, `request` is the raw Request)
+and returns an `ActionResult`. The server interprets the result:
+
+- **Success** (`{ success: true, redirect? }`, or any non-`false`
+  result, or a thrown `redirect()`): a `303 See Other` to
+  `result.redirect` if present, else the page's own path
+  (Post/Redirect/Get, so a reload does not resubmit).
+- **Failure** (`{ success: false, fieldErrors?, values?, status? }`):
+  re-SSR the SAME page with `status` (default `422`) and the result on
+  `ctx.actionData`. The page reads `actionData.fieldErrors.<field>` for
+  messages and `actionData.values.<field>` to repopulate native
+  `<input value=...>`, so the user's typed input survives.
+- A thrown `notFound()` yields a 404, a thrown `redirect()` keeps its
+  own 307/308 status (PRG uses 303 only for the success-result path).
+
+A page WITHOUT an `action` export keeps the old behavior, a non-GET to
+it 404s. There is no form library: native input repopulation plus the
+browser's Constraint Validation API (`required`, `type="email"`,
+`minlength`) cover the rest. Field-level errors come from the server
+action result. See `agent-docs/recipes.md` for the full recipe and the
+`ActionResult` shape.
+
 ### Concurrent navigations + cancellation
 
 Each navigation/submission `abort()`s any in-flight fetch from the prior
