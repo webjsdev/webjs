@@ -75,6 +75,28 @@ Sh.register('sh-el');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test('does NOT flag attribute / event / internals methods in render (backed by the SSR shim)', async () => {
+  // The narrowing for #217: these used to be flagged, but the server element
+  // shim now backs them, so reading attributes in render and reflecting /
+  // wiring internals during the SSR update cycle is legal and must not warn.
+  const dir = await appWith('components/shimmed.ts', `
+import { WebComponent, html } from '@webjsdev/core';
+export class Shimmed extends WebComponent {
+  constructor() { super(); this.addEventListener('click', () => {}); this.attachInternals(); }
+  render() {
+    const m = this.hasAttribute('mode') ? this.getAttribute('mode') : 'x';
+    this.setAttribute('data-m', m);
+    return html\`<p>\${m}</p>\`;
+  }
+}
+Shimmed.register('shimmed-el');
+`);
+  try {
+    const v = find(await checkConventions(dir), 'shimmed.ts');
+    assert.equal(v.length, 0, `attribute/event/internals methods must NOT be flagged; got ${JSON.stringify(v.map((x) => x.message))}`);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('does NOT flag document used in connectedCallback (SSR never calls it)', async () => {
   const dir = await appWith('components/ok.ts', `
 import { WebComponent, html } from '@webjsdev/core';
