@@ -107,10 +107,29 @@ export default function Contact({ actionData }: {
 
 | Action outcome | HTTP response |
 |---|---|
-| `{ success: true, redirect?: '/path' }` (or any non-`false` return) | `303 See Other` to `redirect` if present, else the page's own path (Post/Redirect/Get) |
+| success result (see the failure rule below) | `303 See Other` to a same-site `redirect` if present, else the page's own path (Post/Redirect/Get) |
 | thrown `redirect('/x')` | `307`/`308` (keeps the status `redirect()` was called with) |
 | thrown `notFound()` | `404` rendered via `not-found.{js,ts}` |
-| `{ success: false, fieldErrors?, values?, status? }` | re-SSR the SAME page with `status` (default `422`) and the result on `ctx.actionData` |
+| failure result (`success: false`, or `fieldErrors`, or an `error`) | re-SSR the SAME page with `status` (default `422`) and the result on `ctx.actionData` |
+
+**Failure detection is robust.** A result is treated as a FAILURE (re-render)
+when ANY of these hold, so an error is never swallowed just because the author
+omitted a literal `success: false`:
+
+- `result.success === false`, OR
+- `result.fieldErrors` is present, OR
+- `result.error` is present AND `result.success !== true`.
+
+Everything else is a success (explicit `success: true`, or a bare value /
+`undefined` / `null` with no error markers), which PRG-redirects.
+
+**`result.redirect` must be a same-site local path.** It is honored only when
+it begins with a single `/` (a relative path like `/login` or `/a?b=1#c`). A
+protocol-relative `//host` and any absolute `scheme://host` URL are rejected and
+the redirect falls back to the page's own path, because a user-controlled
+redirect target is an open-redirect vector. For a legitimate EXTERNAL redirect,
+throw `redirect(absoluteUrl)` (the nav sentinel, author-controlled) instead of
+returning it as `result.redirect`.
 
 ### The `ActionResult` shape
 
@@ -118,12 +137,12 @@ The envelope is additive over the existing `{ success, data, error, status }`:
 
 ```ts
 type ActionResult<T> =
-  | { success: true; data?: T; redirect?: string }
+  | { success: true; data?: T; redirect?: string }  // redirect MUST be a same-site local path
   | {
       success: false;
       error?: string;
       fieldErrors?: Record<string, string>; // per-field messages, keyed by input `name`
-      values?: Record<string, string>;       // the submitted values, to repopulate inputs
+      values?: Record<string, string>;       // the submitted values (text fields), to repopulate inputs
       status?: number;                        // defaults to 422 on the re-render
     };
 ```
@@ -131,7 +150,8 @@ type ActionResult<T> =
 The page reads `ctx.actionData?.fieldErrors?.<name>` for the message and
 `ctx.actionData?.values?.<name>` to set a native `value=`. On a plain GET
 render `actionData` is `undefined`, so the page renders empty inputs and no
-error blocks.
+error blocks. (`values` carries text fields as strings; file uploads are a
+separate concern, tracked in #247.)
 
 ### Why no `fetch` in a `@click` handler here
 

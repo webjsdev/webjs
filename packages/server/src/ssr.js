@@ -20,7 +20,7 @@ import { transitiveDeps } from './module-graph.js';
  * @param {import('./router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown> }} opts
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
@@ -52,7 +52,7 @@ export async function ssrPage(route, params, url, opts) {
     const have = haveHeader
       ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
       : null;
-    const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have);
+    const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
     // Module URLs for the page + every layout in its chain. These ride
     // the importmap; the browser fetches each file as it walks the
     // import graph. Combined with the modulepreload hints below, this
@@ -218,8 +218,12 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   });
 }
 
-async function renderChain(route, ctx, dev, suspenseCtx, have) {
-  const page = await loadModule(route.file, dev);
+async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
+  // Reuse a caller-supplied page module when present (the page-action
+  // re-render passes the exact module whose `action` just ran, so the
+  // failure re-render shares that single evaluation instead of re-importing
+  // and re-running the module's top-level side effects).
+  const page = pageModule || await loadModule(route.file, dev);
   if (!page.default) throw new Error(`Page ${route.file} must have a default export`);
   let tree = await page.default(ctx);
 
@@ -1263,10 +1267,17 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
 }
 
 /**
+ * Import a route module. In prod the URL is stable so Node's module cache
+ * serves a single evaluation; in dev a cache-bust query forces a fresh
+ * evaluation so source edits take effect (which also re-runs the module's
+ * top-level side effects, the reason pages/layouts must keep their top level
+ * side-effect-free). Exported so page-action.js loads the page module the same
+ * way the SSR re-render does.
+ *
  * @param {string} file
  * @param {boolean} dev
  */
-async function loadModule(file, dev) {
+export async function loadModule(file, dev) {
   const url = pathToFileURL(file).toString();
   const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
   return import(url + bust);

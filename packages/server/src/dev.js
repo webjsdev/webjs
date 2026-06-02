@@ -1124,9 +1124,9 @@ async function handleCore(req, ctx) {
         const handler = () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });
         return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
       }
-      const action = await loadPageAction(page.route.file, dev);
-      if (action) {
-        const handler = () => runPageAction(page.route, page.params, url, action, req, ssrOpts);
+      const loaded = await loadPageAction(page.route.file, dev);
+      if (loaded) {
+        const handler = () => runPageAction(page.route, page.params, url, loaded, req, ssrOpts);
         return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
       }
     }

@@ -450,7 +450,7 @@ Add `@webjsdev/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugi
 - Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
 - Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). See `agent-docs/metadata.md`.
-- Optional named export `action`: a possibly-async function receiving `{ request, params, searchParams, url, formData }` that handles a non-GET/HEAD submission to the page's own URL (the no-JS form write-path, #244). It returns an `ActionResult`. On success the server responds `303` to `result.redirect` or the page's own path (Post/Redirect/Get). On failure (`{ success: false, fieldErrors, values }`) the SAME page re-renders with status `422` and the result on `ctx.actionData`, so the page reads `actionData.fieldErrors.<name>` for messages and `actionData.values.<name>` to repopulate inputs. A thrown `redirect()`/`notFound()` is honored. A page with no `action` export 404s on a non-GET, unchanged. `actionData` is `undefined` on a plain GET. See the recipe in `agent-docs/recipes.md` and the client-router side in `agent-docs/advanced.md`.
+- Optional named export `action`: a possibly-async function receiving `{ request, params, searchParams, url, formData }` that handles a non-GET/HEAD submission to the page's own URL (the no-JS form write-path, #244). It returns an `ActionResult`. On success the server responds `303` to a same-site `result.redirect` (a local `/path`; a cross-origin value is ignored to prevent an open redirect) or the page's own path (Post/Redirect/Get). On failure (`success: false`, or a `fieldErrors`, or an `error`) the SAME page re-renders with status `422` and the result on `ctx.actionData`, so the page reads `actionData.fieldErrors.<name>` for messages and `actionData.values.<name>` to repopulate inputs. A thrown `redirect()`/`notFound()` is honored (a thrown `redirect()` may target an external URL). A page with no `action` export 404s on a non-GET, unchanged. `actionData` is `undefined` on a plain GET. See the recipe in `agent-docs/recipes.md` and the client-router side in `agent-docs/advanced.md`.
 - Page modules also load on the client so transitively imported components register. Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything needing Node APIs) goes only in `.server.{js,ts}`, `route.ts`, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
 
 ### Layouts (`app/**/layout.{js,ts}`)
@@ -545,12 +545,12 @@ Two markers describe server-side files. The combination determines behaviour:
 
 ```ts
 type ActionResult<T> =
-  | { success: true, data?: T, redirect?: string }
+  | { success: true, data?: T, redirect?: string }  // redirect MUST be a same-site local path
   | {
       success: false,
       error?: string,
       fieldErrors?: Record<string, string>, // per-field messages, keyed by input `name`
-      values?: Record<string, string>,        // submitted values, to repopulate inputs
+      values?: Record<string, string>,        // submitted text fields, to repopulate inputs
       status?: number,
     };
 ```
@@ -559,7 +559,20 @@ The `fieldErrors` / `values` / `redirect` members are additive (the plain
 `{ success, data, error, status }` form keeps working). A page `action` uses
 `fieldErrors` + `values` to drive the no-JS re-render (the page reads them off
 `ctx.actionData`), and `redirect` to choose the Post/Redirect/Get target on
-success. See `agent-docs/recipes.md`.
+success. Two rules a page-action author must know:
+
+- **Failure detection is robust.** A result is a FAILURE (re-render) when
+  `result.success === false`, OR `result.fieldErrors` is present, OR
+  `result.error` is present and `result.success !== true`. So returning
+  `{ error, status }` or `{ fieldErrors }` WITHOUT a literal `success: false`
+  still surfaces the error and re-renders, it is not silently treated as success.
+- **`result.redirect` must be a same-site local path** (begins with a single
+  `/`). A protocol-relative `//host` or absolute `scheme://host` value is
+  ignored (it falls back to the page's own path), since a user-controlled
+  redirect target is an open-redirect. For a legitimate external redirect, throw
+  `redirect(absoluteUrl)` instead.
+
+See `agent-docs/recipes.md`.
 
 Routes translate mechanically:
 

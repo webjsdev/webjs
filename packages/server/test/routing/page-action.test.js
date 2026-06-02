@@ -185,6 +185,86 @@ test('GET render is unchanged: no actionData, status 200', async () => {
   assert.match(body, /value=""/, 'empty input on a plain GET');
 });
 
+test('OPEN-REDIRECT GUARD: a cross-origin result.redirect is NOT honored', async () => {
+  // A user-controlled `result.redirect` must be restricted to a same-site local
+  // path. An absolute `scheme://host` (or protocol-relative `//host`) target is
+  // dropped and the PRG falls back to the page's own path, so a poisoned action
+  // result cannot become an open redirect.
+  const PAGE = `
+import { html } from ${CORE};
+export async function action({ formData }) {
+  return { success: true, redirect: String(formData.get('next') || '') };
+}
+export default () => html\`<p>ok</p>\`;
+`;
+  const appDir = makeApp({ 'app/go/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  // Absolute cross-origin URL: dropped, falls back to /go.
+  const evil = await app.handle(
+    new Request('http://x/go', form({ next: 'https://evil.example.com/phish' })),
+  );
+  assert.equal(evil.status, 303);
+  assert.equal(evil.headers.get('location'), '/go', 'cross-origin redirect must be ignored');
+
+  // Protocol-relative `//host`: also dropped.
+  const protoRel = await app.handle(
+    new Request('http://x/go', form({ next: '//evil.example.com/phish' })),
+  );
+  assert.equal(protoRel.headers.get('location'), '/go', 'protocol-relative redirect must be ignored');
+
+  // Backslash trick `/\\evil.com` that some browsers normalize cross-origin.
+  const backslash = await app.handle(
+    new Request('http://x/go', form({ next: '/\\\\evil.example.com' })),
+  );
+  assert.equal(backslash.headers.get('location'), '/go', 'backslash-prefixed redirect must be ignored');
+
+  // A legitimate same-site local path is still honored.
+  const ok = await app.handle(
+    new Request('http://x/go', form({ next: '/dashboard?tab=1' })),
+  );
+  assert.equal(ok.headers.get('location'), '/dashboard?tab=1', 'same-site local path is honored');
+});
+
+test('ROBUST FAILURE: a { error } result without success:false re-renders, not redirects', async () => {
+  // Failure detection must not require a literal `success: false`. An action
+  // that returns `{ error, status }` (or `{ fieldErrors }`) WITHOUT it is still
+  // a failure and re-renders the page, rather than swallowing the error and
+  // PRG-redirecting.
+  const ERROR_ONLY = `
+import { html } from ${CORE};
+export async function action() {
+  return { error: 'Something went wrong', status: 400 };
+}
+export default ({ actionData }) => html\`<p class="err">\${actionData?.error || 'no-error'}</p>\`;
+`;
+  const appDir = makeApp({ 'app/err/page.ts': ERROR_ONLY });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const resp = await app.handle(new Request('http://x/err', form({ x: '1' })));
+  assert.equal(resp.status, 400, 'error-only result re-renders with its status, not a 303');
+  assert.notEqual(resp.status, 303, 'must NOT be treated as a success redirect');
+  const body = await resp.text();
+  assert.match(body, /Something went wrong/, 'the error is surfaced on the re-render');
+
+  // A fieldErrors-only result (no success:false) is likewise a failure (422).
+  const FIELD_ONLY = `
+import { html } from ${CORE};
+export async function action() {
+  return { fieldErrors: { name: 'Required' }, values: { name: '' } };
+}
+export default ({ actionData }) => html\`<p class="fe">\${actionData?.fieldErrors?.name || 'none'}</p>\`;
+`;
+  const appDir2 = makeApp({ 'app/fe/page.ts': FIELD_ONLY });
+  const app2 = await createRequestHandler({ appDir: appDir2, dev: true });
+  await app2.warmup();
+  const resp2 = await app2.handle(new Request('http://x/fe', form({ x: '1' })));
+  assert.equal(resp2.status, 422, 'fieldErrors-only result re-renders with 422');
+  assert.match(await resp2.text(), /Required/, 'field error surfaced');
+});
+
 test('segment middleware wraps the page action', async () => {
   // A per-segment middleware that short-circuits before the action runs proves
   // the action path is wrapped in the same middleware as the page render.
