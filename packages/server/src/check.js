@@ -119,16 +119,6 @@ export const RULES = [
     description:
       'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
   },
-  {
-    name: 'prefer-reactive-prop-over-getattribute',
-    description:
-      'webjs components are lit-shaped: read your own config through a reactive property (static properties + declare, read this.x), not by calling this.getAttribute, which is vanilla web-component muscle memory. Flags this.getAttribute(\'name\') with a literal attribute name inside a WebComponent class body. Standard attributes that are not modelled as typed props are allowlisted (class, style, id, is, slot, part, title, lang, dir, role, hidden, tabindex, name, type, value, and any aria-* / data-* name), as are dynamic names (this.getAttribute(variable)) and reads off another element (only this.getAttribute on `this` is flagged). The fix is a reactive property whose camelCase name rides the hyphenated attribute. Reserve getAttribute for reading a different element\'s attribute or a standard attribute with native semantics. The companion hasAttribute pattern is covered by the prose convention. See agent-docs/lit-muscle-memory-gotchas.md.',
-  },
-  {
-    name: 'prefer-signal-over-state-prop',
-    description:
-      'Flags a `state: true` reactive property in a WebComponent\'s static properties. webjs reserves reactive properties for values that ride an HTML attribute (or arrive via .prop SSR hydration); internal reactive state with no attribute is held in a signal instead (framework invariant 5). lit uses `state: true` for attribute-less internal state, but in webjs that should be a `signal` (an instance signal created in the constructor, or a module-scope signal for shared state), read via signal.get() inside render(). Replace the `state: true` declaration with a signal field.',
-  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -475,47 +465,6 @@ function findBrowserMemberUses(code) {
   return out;
 }
 
-// Standard attributes that are NOT modelled as typed reactive props, so
-// reading them via getAttribute/hasAttribute is legitimate (not flagged).
-const ALLOWED_ATTR_READS = new Set([
-  'class', 'style', 'id', 'is', 'slot', 'part', 'title', 'lang', 'dir',
-  'role', 'hidden', 'tabindex', 'name', 'type', 'value',
-]);
-
-/**
- * Find `this.getAttribute('name')` calls with a literal, non-allowlisted
- * attribute name in a (redacted) WebComponent class body. Dynamic names,
- * allowlisted standard attributes, and aria-* / data-* are skipped. Reads off
- * another element (e.g. `host.getAttribute`) are not matched because the
- * pattern is anchored to `this.`. Only `getAttribute` is matched (the config
- * read the lit prop API replaces); `hasAttribute` is covered by the prose
- * convention in agent-docs/lit-muscle-memory-gotchas.md.
- *
- * @param {string} classBody
- * @returns {{ method: string, attr: string }[]}
- */
-/** `delay-duration` -> `delayDuration` (attribute name to reactive-prop name). */
-function attrToCamel(s) {
-  return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-}
-
-function findOwnAttributeReads(classBody) {
-  const out = [];
-  const seen = new Set();
-  const re = /\bthis\.(getAttribute)\(\s*(['"])([^'"]+)\2/g;
-  let m;
-  while ((m = re.exec(classBody)) !== null) {
-    const method = m[1];
-    const attr = m[3].toLowerCase();
-    if (ALLOWED_ATTR_READS.has(attr) || attr.startsWith('aria-') || attr.startsWith('data-')) continue;
-    const key = `${method}:${attr}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ method, attr });
-  }
-  return out;
-}
-
 /**
  * Scan a webjs app directory and report convention violations.
  *
@@ -706,48 +655,6 @@ export async function checkConventions(appDir, opts) {
               fix: `Move browser-only work to connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls. Seed first-paint defaults in the constructor only from server-known inputs (attributes / props), then refine in connectedCallback by writing to a signal.`,
             });
           }
-        }
-      }
-    }
-  }
-
-  // --- Rule: prefer-reactive-prop-over-getattribute ---
-  // Lit-shaped components read their own config through a reactive property
-  // (this.x), not this.getAttribute('x') / this.hasAttribute('x') (vanilla
-  // muscle memory). Flags only literal, non-allowlisted attribute names on
-  // `this`; standard attributes (class/style/id/...), aria-*/data-*, dynamic
-  // names, and reads off another element are not flagged.
-  if (isRuleEnabled('prefer-reactive-prop-over-getattribute', overrides)) {
-    for (const { rel, scan } of files) {
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const body of extractWebComponentClassBodies(scan)) {
-        for (const { method, attr } of findOwnAttributeReads(body)) {
-          violations.push({
-            rule: 'prefer-reactive-prop-over-getattribute',
-            file: rel,
-            message: `\`this.${method}('${attr}')\` reads own config via a vanilla attribute call. Use a reactive property instead.`,
-            fix: `Declare \`${attrToCamel(attr)}\` in \`static properties\` with a \`declare ${attrToCamel(attr)}\` field (the prop rides the \`${attr}\` attribute), then read \`this.${attrToCamel(attr)}\`. Reserve getAttribute/hasAttribute for reading another element's attribute or a standard attribute with native semantics.`,
-          });
-        }
-      }
-    }
-  }
-
-  // --- Rule: prefer-signal-over-state-prop ---
-  // `state: true` is a reactive property with no attribute (lit's internal
-  // state). webjs holds attribute-less internal state in a signal (invariant
-  // 5), so flag `state: true` in a WebComponent's static properties.
-  if (isRuleEnabled('prefer-signal-over-state-prop', overrides)) {
-    for (const { rel, scan } of files) {
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const body of extractWebComponentClassBodies(scan)) {
-        if (/\bstate\s*:\s*true\b/.test(body)) {
-          violations.push({
-            rule: 'prefer-signal-over-state-prop',
-            file: rel,
-            message: `A \`state: true\` reactive property holds internal state with no attribute. webjs uses a signal for that.`,
-            fix: `Remove the \`state: true\` declaration and hold the value in a signal: create an instance signal in the constructor (or a module-scope signal for shared state) and read it via signal.get() inside render(). Reactive properties are reserved for values that ride an HTML attribute.`,
-          });
         }
       }
     }
@@ -1195,33 +1102,6 @@ export async function checkConventions(appDir, opts) {
       }
     }
     }
-  }
-
-  // Inline opt-out (the per-occurrence escape hatch). A file may suppress a
-  // rule with a `// webjs-check-ignore <rule>[,<rule>]` comment (or `* ` for
-  // all rules) anywhere in the file. The package.json `webjs.conventions`
-  // switch turns a rule off across the whole project; this is the finer,
-  // per-file escape hatch so a component that genuinely needs a flagged
-  // pattern (a vanilla DOM call with no lit equivalent, a deliberate browser
-  // global) can keep it without disabling the rule everywhere. Authors should
-  // add a short reason after the rule name.
-  const ignoresByRel = new Map();
-  for (const { rel, content } of files) {
-    const ignored = new Set();
-    const re = /webjs-check-ignore[ \t]+([^\n]+)/gi;
-    let m;
-    while ((m = re.exec(content)) !== null) {
-      for (const tok of m[1].split(/[\s,]+/)) {
-        if (tok === '*' || RULE_NAMES.has(tok)) ignored.add(tok);
-      }
-    }
-    if (ignored.size) ignoresByRel.set(rel, ignored);
-  }
-  if (ignoresByRel.size) {
-    return violations.filter((v) => {
-      const ig = ignoresByRel.get(v.file);
-      return !ig || !(ig.has(v.rule) || ig.has('*'));
-    });
   }
 
   return violations;

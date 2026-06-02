@@ -115,21 +115,14 @@ correct lit form, not a vanilla smell. Reading form values with
 
 The rule of thumb: if a reactive prop, a signal, an `html` binding, or
 `ref()` expresses it, use that. Reach for vanilla DOM only for the cases
-above, where the platform offers nothing declarative. Two `webjs check`
-rules enforce the highest-confidence slips:
-`prefer-reactive-prop-over-getattribute` (reading own config via
-`this.getAttribute`) and `prefer-signal-over-state-prop` (a `state: true`
-reactive property that should be a signal).
+above, where the platform offers nothing declarative.
 
-**You can still use a flagged pattern when it is genuinely needed.** Both
-the project-level switch and a per-file escape hatch exist:
-
-- Turn a rule off across the project in `package.json` under
-  `"webjs": { "conventions": { "prefer-reactive-prop-over-getattribute": false } }`.
-- Suppress it for ONE file with a comment, keeping the rule on everywhere
-  else: `// webjs-check-ignore prefer-reactive-prop-over-getattribute <short reason>`
-  (use `*` to suppress every rule for that file). This is the intended way
-  to keep a deliberate vanilla call that has no clean lit equivalent.
+This is a **convention, not a lint rule.** `webjs check` is reserved for
+general correctness (SSR safety, server-only imports, erasable TS, and
+so on), not for policing every vanilla call, which would be noisy and
+poor DX. Use your judgment: prefer the lit form by default, and when a
+vanilla API genuinely has no declarative equivalent (the cases above),
+just use it.
 
 ## The SSR contract: the pre-render lifecycle plus `render()`
 
