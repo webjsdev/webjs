@@ -75,6 +75,25 @@ Sh.register('sh-el');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test('flags a browser global in willUpdate (it now runs at SSR)', async () => {
+  // willUpdate runs server-side as of #217, so a browser-only API there crashes
+  // SSR just like in the constructor / render. The rule must catch it.
+  const dir = await appWith('components/wu.ts', `
+import { WebComponent, html } from '@webjsdev/core';
+export class Wu extends WebComponent {
+  willUpdate() {
+    this.w = window.innerWidth;
+  }
+  render() { return html\`<p>\${this.w}</p>\`; }
+}
+Wu.register('wu-el');
+`);
+  try {
+    const v = find(await checkConventions(dir), 'wu.ts');
+    assert.ok(v.some((x) => x.message.includes('window') && x.message.includes('willUpdate')), 'window in willUpdate flagged');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('does NOT flag attribute / event / internals methods in render (backed by the SSR shim)', async () => {
   // The narrowing for #217: these used to be flagged, but the server element
   // shim now backs them, so reading attributes in render and reflecting /
