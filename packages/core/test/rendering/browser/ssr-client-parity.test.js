@@ -182,6 +182,29 @@ suite('SSR vs client render parity (#184)', () => {
     assert.ok(ssr.includes('7'), 'signal value rendered');
   });
 
+  test('willUpdate-derived state: SSR equals first client render (#217)', async () => {
+    // willUpdate runs on BOTH sides now: the server runs it before render in
+    // the SSR walker, the client runs it in the normal update cycle. So a
+    // value derived in willUpdate and read in render must be identical server
+    // and client. Before #217 the SSR side skipped willUpdate, so the server
+    // emitted the constructor placeholder while the client emitted the
+    // derived value, a hydration divergence this case now guards against.
+    class P8 extends WebComponent {
+      static properties = { count: { type: Number } };
+      constructor() { super(); this.count = 0; this.derived = 'placeholder'; }
+      willUpdate() { this.derived = `derived-${this.count}`; }
+      render() { return html`<output>${this.derived}</output>`; }
+    }
+    P8.register('parity-willupdate');
+    const ssr = normalize(ssrLightInner(await renderToString(html`<parity-willupdate count="3"></parity-willupdate>`), 'parity-willupdate'));
+    const el = document.createElement('parity-willupdate');
+    el.setAttribute('count', '3');
+    await clientMount(el);
+    const client = normalize(el.innerHTML);
+    assert.equal(client, ssr, `willUpdate parity mismatch\nSSR:    ${ssr}\nCLIENT: ${client}`);
+    assert.ok(ssr.includes('derived-3'), 'SSR emitted the willUpdate-derived value, not the constructor placeholder');
+  });
+
   test('counterfactual: a non-deterministic render FAILS the parity check', async () => {
     // render() returns a different value on each call. The SSR call and the
     // fresh client render therefore diverge, which is exactly the
