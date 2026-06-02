@@ -94,7 +94,13 @@ correct lit form, not a vanilla smell. Reading form values with
 **When vanilla DOM is genuinely needed (these stay):**
 
 - **Ancestor lookup in a compound component.** `this.closest('ui-tabs')`
-  to read a parent's state. There is no declarative lit equivalent.
+  to read a parent's state. There is no declarative lit equivalent. This
+  resolves at SSR too (tag-name selectors, against the SSR ancestor
+  chain), so a compound child's active/pressed state is correct in the
+  first server paint, not just after hydration. Host attributes the
+  child sets in `render()` (`this.dataset.* =`, `this.className =`,
+  `this.ariaPressed =`) reflect onto the SSR'd host tag. A class or
+  attribute selector still resolves to null server-side.
 - **Slotted / projected content.** `this.querySelector(...)` reaching a
   `<slot>`-projected child or a sibling sub-component the template does
   not own. `ref()` only binds elements this component's own `render()`

@@ -177,9 +177,9 @@ export class UiTabsTrigger extends WebComponent {
     this.value = '';
   }
 
-  // render() runs server-side too; linkedom doesn't implement closest()
-  // on custom elements. Return null during SSR; the client re-renders
-  // with the parent reference after hydration.
+  // render() runs server-side too. webjs resolves closest() at SSR against
+  // the enclosing-element ancestor chain, so the active tab is marked in the
+  // first paint (no hydration flash). The typeof guard stays defensive.
   get _tabs(): UiTabs | null {
     if (typeof this.closest !== 'function') return null;
     return this.closest('ui-tabs') as UiTabs | null;

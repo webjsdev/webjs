@@ -402,6 +402,49 @@ Both modes are SSR'd:
   browser opens the shadow root on parse and projects natively, again
   without JavaScript.
 
+### Compound components read their parent via `closest()` at SSR
+
+A compound component (a tabs trigger, a toggle-group item) typically
+derives its active/pressed state by walking to the parent and reading
+its value:
+
+```ts
+get _tabs() { return this.closest('ui-tabs'); }
+render() {
+  const active = this._tabs?.value === this.value;
+  this.dataset.state = active ? 'active' : 'inactive';
+  return html`<button data-state=${active ? 'active' : 'inactive'}><slot></slot></button>`;
+}
+```
+
+This works in the **first server paint**, not only after hydration. The
+SSR walker threads the chain of enclosing custom-element instances into
+each instance, and the server element shim's `closest()` resolves a
+parent over that chain (so `this.closest('ui-tabs').value` reads the
+live parent property the walker already applied). Host IDL properties a
+`render()` mutates on `this` (`this.dataset.*`, `this.className`,
+`this.hidden`, `this.ariaPressed`, the rest of the `aria*` mixin)
+reflect to the matching attribute on the SSR'd host tag, so the active
+tab is marked before any JavaScript runs. The first client render
+produces the identical state (the browser's real `closest()` against the
+real DOM), so there is no hydration flash.
+
+Limits:
+
+- Only **tag-name selectors** resolve at SSR (`closest('ui-tabs')`). A
+  class, attribute, or descendant selector returns null server-side and
+  resolves on the client. That covers the compound-component pattern;
+  anything finer is client-only.
+- The compound **parent** must be light DOM (the default, and what every
+  kit Tier-2 component uses). A shadow-DOM parent projects its children
+  through a native `<slot>`, and those slotted children are not threaded
+  the SSR ancestor chain, so their `closest(parent)` resolves to null in
+  the first server paint (it still resolves on the client after
+  hydration). Keep compound parents light DOM for a correct first paint.
+- Genuine layout / live-DOM reads (`querySelector`, `classList`,
+  `attachShadow`, geometry) still throw at SSR, so keep them in
+  `connectedCallback` / `firstUpdated`.
+
 ### Slot inside conditionals and lists
 
 A slot can live inside any `html\`\`` template fragment: conditional
