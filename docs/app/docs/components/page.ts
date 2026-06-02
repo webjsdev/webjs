@@ -348,7 +348,7 @@ Card.register('my-card');</pre>
       <li>Inlines the rendered HTML as the element's children (light DOM) or wraps it in <code>&lt;template shadowrootmode="open"&gt;</code> (shadow DOM).</li>
     </ol>
 
-    <p><strong>The server does NOT call <code>connectedCallback</code>, <code>firstUpdated</code>, or any other lifecycle hook.</strong> Those run only after the script loads in the browser. This is intentional. The server runs many components for many concurrent requests, and lifecycle hooks frequently touch <code>window</code>, <code>document</code>, <code>localStorage</code>, observers, and timers that don't exist server-side.</p>
+    <p>The server runs the pre-render value-deriving hooks before <code>render()</code>: <code>willUpdate</code> and controllers' <code>hostUpdate</code>, then it reflects <code>reflect: true</code> properties. <strong>It does NOT call <code>connectedCallback</code>, <code>firstUpdated</code>, <code>updated</code>, or any browser-only hook.</strong> Those run only after the script loads in the browser. This is intentional. The server runs many components for many concurrent requests, and the browser-only hooks frequently touch <code>window</code>, <code>document</code>, <code>localStorage</code>, observers, and timers that don't exist server-side. (A <code>Task</code> is the exception among controllers: its <code>hostUpdate</code> does not auto-run at SSR, so it ships the <code>INITIAL</code> state and fetches only on hydration.)</p>
 
     <h3>Rule: SSR-meaningful state goes in the constructor</h3>
 
