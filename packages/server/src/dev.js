@@ -70,6 +70,7 @@ function kebab(name) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
+import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -196,6 +197,24 @@ export async function readElideEnabled(appDir) {
 }
 
 /**
+ * Read the per-path response-header config (`webjs.headers`) from the
+ * app's package.json and compile it to URLPattern rules. A missing,
+ * malformed, or unreadable config yields an empty rule set (the secure
+ * defaults still apply), never a throw.
+ *
+ * @param {string} appDir
+ * @returns {Promise<ReturnType<typeof compileHeaderRules>>}
+ */
+export async function readHeaderRules(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return compileHeaderRules(pkg);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -285,6 +304,11 @@ export async function createRequestHandler(opts) {
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+
+  // Per-path response-header rules (issue #232), read once from the
+  // app's package.json `webjs.headers`. Static config, so no rebuild
+  // re-read; the secure defaults need no config and apply regardless.
+  const headerRules = await readHeaderRules(appDir);
 
   const state = {
     routeTable,
@@ -556,6 +580,26 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      const res = await produce(req);
+      // Merge in the secure-by-default headers plus the per-path config
+      // (issue #232) as the final step, so app middleware, route
+      // handlers, and `expose` headers (already on `res`) always win.
+      // Applied to every served response (documents, assets, the core
+      // runtime, probes), since the defaults are universally safe.
+      let pathname = '/';
+      try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
+      return applySecurityHeaders(res, {
+        pathname,
+        https: webRequestIsHttps(req),
+        prod: !dev,
+        rules: headerRules,
+      });
+    });
+  }
+
+  /** @param {Request} req */
+  function produce(req) {
+    return (async () => {
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
       // process is up and accepting connections). `/__webjs/ready` is 503 until
@@ -624,7 +668,7 @@ export async function createRequestHandler(opts) {
         }
       }
       return next();
-    });
+    })();
   }
 
   /**

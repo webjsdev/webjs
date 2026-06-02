@@ -733,6 +733,45 @@ The shim also defines `process.env.NODE_ENV` (`'development'` in `webjs dev`, `'
 
 ---
 
+## Secure response headers (on by default, overridable per path)
+
+The server sets a baseline of standard security headers on every response, so a scaffolded app is not clickjackable or MIME-sniffable out of the box (no reverse proxy needed for the baseline). The defaults are literal HTTP headers, no abstraction:
+
+| Header | Value | When |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | always |
+| `X-Frame-Options` | `SAMEORIGIN` | always |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | always |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | always |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` | production AND HTTPS only |
+
+HSTS is gated to production over HTTPS, detected from `X-Forwarded-Proto` (the request the trusted edge proxy forwards). It honors the same proxy-trust posture as the rest of the framework (`WEBJS_NO_TRUST_PROXY=1` disables forwarded-header trust), so HSTS is never set on a plain-HTTP hop or in dev.
+
+A default is only set when absent, so a header the app already set (in middleware, a `route.{js,ts}` handler, or `expose`) is never clobbered.
+
+### Per-path overrides (`webjs.headers` in package.json)
+
+Declare per-path header rules under `package.json` `"webjs": { "headers": [...] }`, shaped like Next's. `source` is a path pattern matched with the native URLPattern API (so `:param` and `:rest*` syntax works):
+
+```jsonc
+{
+  "webjs": {
+    "headers": [
+      { "source": "/embed/:path*", "headers": [{ "key": "X-Frame-Options", "value": null }] },
+      { "source": "/app/:path*",   "headers": [{ "key": "X-Frame-Options", "value": "DENY" }] }
+    ]
+  }
+}
+```
+
+A rule can ADD a header, OVERRIDE a default (give a new value), or DISABLE a default on a path (a `value` of `null`, e.g. dropping `X-Frame-Options` on a public-embed route).
+
+### Precedence (lowest to highest)
+
+`secure defaults` < `webjs.headers` path config < `app middleware`. App middleware always wins (its headers are already on the response when the framework merges), the path config overrides defaults, and the defaults are the floor. The merge seam lives in `packages/server/src/headers.js` (`applySecurityHeaders`), which is also where future CSP / CORS policy layering plugs in.
+
+---
+
 ## CONVENTIONS.md and webjs check: two surfaces, split by nature
 
 Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. It is the source of truth for **project conventions**: how code is organized, named, and tested (modules layout, action placement, one-function-per-file, the testing approach, styling, git workflow). These are preferences a reasonable project could do differently, so they are guidance, customizable directly in the prose (sections marked `<!-- OVERRIDE -->`), not enforced by any tool.
