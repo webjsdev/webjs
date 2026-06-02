@@ -36,3 +36,13 @@ test('the documented lit-parity directives are all present', () => {
     assert.equal(typeof indexBrowser[name], 'function', `${name} must be on the browser surface`);
   }
 });
+
+test('src/directives.js exposes the full documented /directives table, including repeat', () => {
+  // The AGENTS.md table lists these as importable from `@webjsdev/core/directives`.
+  // In src/dev mode that subpath resolves to src/directives.js, so the whole table
+  // (repeat included, even though it's implemented in repeat.js) must be re-exported
+  // here, or a dev-mode import of a documented directive silently reads undefined.
+  for (const name of ['repeat', 'isRepeat', 'unsafeHTML', 'live', 'keyed', 'guard', 'templateContent', 'ref', 'createRef', 'cache', 'until', 'asyncAppend', 'asyncReplace', 'watch']) {
+    assert.equal(typeof directives[name], 'function', `${name} must be exported from src/directives.js (the /directives src-mode surface)`);
+  }
+});

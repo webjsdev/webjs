@@ -12,10 +12,16 @@
  * } from '@webjsdev/core/directives';
  * ```
  *
- * `repeat()` lives in `./repeat.js` (re-exported from the package root).
+ * `repeat()` is implemented in `./repeat.js`; it is re-exported here so the
+ * `@webjsdev/core/directives` subpath exposes the whole documented directive
+ * table in src/dev mode too (the dist browser bundle already carries it).
  *
  * @module directives
  */
+
+// Re-export so the `/directives` subpath surface matches the documented table
+// in both src and dist mode. The implementation stays in repeat.js.
+export { repeat, isRepeat } from './repeat.js';
 
 /* ================================================================
  * unsafeHTML
