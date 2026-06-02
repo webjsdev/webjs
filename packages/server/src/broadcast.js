@@ -55,7 +55,11 @@ export function broadcast(path, data, opts) {
   const msg = typeof data === 'string' ? data : data.toString();
   for (const ws of clients) {
     if (opts?.except && ws === opts.except) continue;
-    if (ws.readyState === 1) ws.send(msg);
+    if (ws.readyState !== 1) continue;
+    // A socket can die between the readyState check and the send (or send
+    // can throw for other reasons). Isolate each send so one dead client
+    // cannot abort the fan-out to everyone after it in the set.
+    try { ws.send(msg); } catch { /* drop this client's frame; close handler removes it */ }
   }
 }
 

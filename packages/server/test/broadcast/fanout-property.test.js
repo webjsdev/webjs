@@ -50,6 +50,22 @@ test('a closed subscriber auto-deregisters and stops receiving', async () => {
   assert.deepEqual(b.sent, ['after-close'], 'the remaining subscriber still receives');
 });
 
+test('one client whose send throws does not abort delivery to the rest', () => {
+  // Regression (#210 hardening): a socket can die between the readyState
+  // check and the send. If that send throws, every client AFTER it in the
+  // set must still receive the message.
+  const before = mockWs();
+  const dead = mockWs();
+  dead.send = () => { throw new Error('socket gone'); };
+  const after = mockWs();
+  registerClient('/resilient', before);
+  registerClient('/resilient', dead);
+  registerClient('/resilient', after);
+  assert.doesNotThrow(() => broadcast('/resilient', 'msg'), 'a failing send must not throw out of broadcast');
+  assert.deepEqual(before.sent, ['msg'], 'a client before the dead one receives');
+  assert.deepEqual(after.sent, ['msg'], 'a client after the dead one still receives');
+});
+
 test('the `except` client is skipped', async () => {
   const sender = mockWs(), other = mockWs();
   registerClient('/c', sender);
