@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/core",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "type": "module",
   "description": "webjs core runtime - html/css tags, WebComponent base, isomorphic renderers",
   "types": "./index.d.ts",
