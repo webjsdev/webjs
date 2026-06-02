@@ -429,12 +429,21 @@ tab is marked before any JavaScript runs. The first client render
 produces the identical state (the browser's real `closest()` against the
 real DOM), so there is no hydration flash.
 
-Limit: only **tag-name selectors** resolve at SSR (`closest('ui-tabs')`).
-A class, attribute, or descendant selector returns null server-side and
-resolves on the client. That covers the compound-component pattern;
-anything finer is client-only. Genuine layout / live-DOM reads
-(`querySelector`, `classList`, `attachShadow`, geometry) still throw at
-SSR, so keep them in `connectedCallback` / `firstUpdated`.
+Limits:
+
+- Only **tag-name selectors** resolve at SSR (`closest('ui-tabs')`). A
+  class, attribute, or descendant selector returns null server-side and
+  resolves on the client. That covers the compound-component pattern;
+  anything finer is client-only.
+- The compound **parent** must be light DOM (the default, and what every
+  kit Tier-2 component uses). A shadow-DOM parent projects its children
+  through a native `<slot>`, and those slotted children are not threaded
+  the SSR ancestor chain, so their `closest(parent)` resolves to null in
+  the first server paint (it still resolves on the client after
+  hydration). Keep compound parents light DOM for a correct first paint.
+- Genuine layout / live-DOM reads (`querySelector`, `classList`,
+  `attachShadow`, geometry) still throw at SSR, so keep them in
+  `connectedCallback` / `firstUpdated`.
 
 ### Slot inside conditionals and lists
 
