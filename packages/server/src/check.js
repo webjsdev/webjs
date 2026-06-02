@@ -124,6 +124,11 @@ export const RULES = [
     description:
       'webjs components are lit-shaped: read your own config through a reactive property (static properties + declare, read this.x), not by calling this.getAttribute, which is vanilla web-component muscle memory. Flags this.getAttribute(\'name\') with a literal attribute name inside a WebComponent class body. Standard attributes that are not modelled as typed props are allowlisted (class, style, id, is, slot, part, title, lang, dir, role, hidden, tabindex, name, type, value, and any aria-* / data-* name), as are dynamic names (this.getAttribute(variable)) and reads off another element (only this.getAttribute on `this` is flagged). The fix is a reactive property whose camelCase name rides the hyphenated attribute. Reserve getAttribute for reading a different element\'s attribute or a standard attribute with native semantics. The companion hasAttribute pattern is covered by the prose convention. See agent-docs/lit-muscle-memory-gotchas.md.',
   },
+  {
+    name: 'prefer-signal-over-state-prop',
+    description:
+      'Flags a `state: true` reactive property in a WebComponent\'s static properties. webjs reserves reactive properties for values that ride an HTML attribute (or arrive via .prop SSR hydration); internal reactive state with no attribute is held in a signal instead (framework invariant 5). lit uses `state: true` for attribute-less internal state, but in webjs that should be a `signal` (an instance signal created in the constructor, or a module-scope signal for shared state), read via signal.get() inside render(). Replace the `state: true` declaration with a signal field.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -722,6 +727,26 @@ export async function checkConventions(appDir, opts) {
             file: rel,
             message: `\`this.${method}('${attr}')\` reads own config via a vanilla attribute call. Use a reactive property instead.`,
             fix: `Declare \`${attrToCamel(attr)}\` in \`static properties\` with a \`declare ${attrToCamel(attr)}\` field (the prop rides the \`${attr}\` attribute), then read \`this.${attrToCamel(attr)}\`. Reserve getAttribute/hasAttribute for reading another element's attribute or a standard attribute with native semantics.`,
+          });
+        }
+      }
+    }
+  }
+
+  // --- Rule: prefer-signal-over-state-prop ---
+  // `state: true` is a reactive property with no attribute (lit's internal
+  // state). webjs holds attribute-less internal state in a signal (invariant
+  // 5), so flag `state: true` in a WebComponent's static properties.
+  if (isRuleEnabled('prefer-signal-over-state-prop', overrides)) {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const body of extractWebComponentClassBodies(scan)) {
+        if (/\bstate\s*:\s*true\b/.test(body)) {
+          violations.push({
+            rule: 'prefer-signal-over-state-prop',
+            file: rel,
+            message: `A \`state: true\` reactive property holds internal state with no attribute. webjs uses a signal for that.`,
+            fix: `Remove the \`state: true\` declaration and hold the value in a signal: create an instance signal in the constructor (or a module-scope signal for shared state) and read it via signal.get() inside render(). Reactive properties are reserved for values that ride an HTML attribute.`,
           });
         }
       }
