@@ -156,7 +156,7 @@ test('the inert method (render) alone does not force shipping', () => {
 /** Directives whose only effect runs on the client (must be in REACTIVE_IMPORTS). */
 const CLIENT_DIRECTIVES = ['asyncAppend', 'asyncReplace', 'createRef', 'live', 'ref', 'until', 'watch'];
 /** Directives that render at SSR time and are safe in display-only components. */
-const RENDER_TIME_DIRECTIVES = ['cache', 'guard', 'keyed', 'templateContent', 'unsafeHTML'];
+const RENDER_TIME_DIRECTIVES = ['cache', 'guard', 'keyed', 'repeat', 'templateContent', 'unsafeHTML'];
 
 test('every @webjsdev/core/directives export is classified (forces SSOT update on a new directive)', () => {
   // `is*` exports are internal type-guards, not directives an author applies.

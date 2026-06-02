@@ -30,8 +30,15 @@ export { WebjsFrame } from './src/webjs-frame.js';
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
 export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
 
-// Directives, also available via '@webjsdev/core/directives'
-export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';
+// Directives, also available via '@webjsdev/core/directives'. The full
+// lit-html-parity set is re-exported so the bare specifier exposes the same
+// directive surface in Node as the browser bundle does.
+export {
+  unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
+  templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
+  until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
+  watch, isWatch,
+} from './src/directives.js';
 
 // Context Protocol, also available via '@webjsdev/core/context'
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
