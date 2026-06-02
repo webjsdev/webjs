@@ -15,7 +15,7 @@ const USAGE = `webjs commands:
   webjs dev   [--port 8080]                       Start dev server with live reload
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check                                     Validate app against conventions
+  webjs check                                     Run correctness checks on the app
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir

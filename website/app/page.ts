@@ -37,9 +37,9 @@ const FEATURES = [
   { icon: '🔌', title: 'WebSocket Built In', desc: 'Export a WS function from any route.ts and it becomes a WebSocket endpoint. connectWS() on the client auto-reconnects with exponential backoff.' },
   { icon: '🛡️', title: 'Built-in Essentials', desc: 'Auth (OAuth + credentials + JWT), sessions (cookie or Redis-backed), cache() for queries, HTTP Cache-Control for pages, WebSocket broadcast, rate limiting: the building blocks every app needs, without third-party dependencies.' },
   { icon: '📝', title: 'TypeScript or JSDoc', desc: 'Full-stack type safety with .ts files or JSDoc annotations. Node 24+ strips types natively (whitespace replacement, no sourcemap overhead, byte-exact stack traces). Erasable TypeScript only: enums and parameter properties are rejected at compile time by erasableSyntaxOnly in tsconfig. The TypeScript compiler shows red squiggles before code ever runs, and the erasable-typescript-only convention check verifies the flag is on.' },
-  { icon: '🧪', title: 'Testing Built In', desc: 'webjs test runs server + browser tests (WTR + Playwright). webjs check validates conventions. webjs create scaffolds test directories and example tests. AI agents auto-generate tests with every feature.' },
+  { icon: '🧪', title: 'Testing Built In', desc: 'webjs test runs server + browser tests (WTR + Playwright). webjs check catches correctness issues (SSR crashes, leaked env, broken reactivity). webjs create scaffolds test directories and example tests. AI agents auto-generate tests with every feature.' },
   { icon: '🔀', title: 'Git Workflow Guardrails', desc: 'Branch checking before edits, merge approval with delete/keep prompt, no AI attribution in commits, auto-rebase before work. Enforced via hooks for Claude Code, config files for Cursor/Antigravity/Copilot.' },
-  { icon: '📐', title: 'Opinionated Conventions', desc: 'Modules architecture, one-function-per-file actions, CONVENTIONS.md with overridable rules, webjs check validator. AI agents produce consistent code across teams.' },
+  { icon: '📐', title: 'Opinionated Conventions', desc: 'Modules architecture, one-function-per-file actions, CONVENTIONS.md guidance, plus a webjs check correctness validator. AI agents produce consistent code across teams.' },
 ];
 
 export default function LandingPage() {
@@ -333,8 +333,8 @@ middleware.ts              → global auth</pre>
           <p>
             Every webjs app ships <code>AGENTS.md</code> with the full API surface,
             directive decision guide, lifecycle hooks, controller patterns, and
-            step-by-step recipes. <code>CONVENTIONS.md</code> adds overridable
-            project rules. AI agents read both before making any change.
+            step-by-step recipes. <code>CONVENTIONS.md</code> holds the
+            project conventions (guidance). AI agents read both before making any change.
           </p>
         </div>
         <div class="mode-card">
@@ -351,7 +351,7 @@ middleware.ts              → global auth</pre>
           <h3>Quality enforced, not requested</h3>
           <p>
             <code>webjs test</code> runs server + browser tests (WTR + Playwright). <code>webjs check</code>
-            validates conventions (actions in modules, components registered, tests exist).
+            catches correctness issues (a browser global in render, a leaked env var, broken reactivity).
             AI agents run both automatically, so the user never has to ask for tests or docs.
           </p>
         </div>

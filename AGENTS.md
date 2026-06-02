@@ -33,7 +33,7 @@ config files that each agent reads automatically.**
 | File | Agent | Purpose |
 |---|---|---|
 | `AGENTS.md` | All agents | Framework API, conventions, recipes (this file) |
-| `CONVENTIONS.md` | All agents | Project-specific overridable conventions |
+| `CONVENTIONS.md` | All agents | Project conventions (guidance, customizable in the prose) |
 | `CLAUDE.md` | Claude Code | Points to AGENTS.md + CONVENTIONS.md, no duplication |
 | `.claude/settings.json` | Claude Code | PreToolUse hook guarding git merge/push to main; UserPromptSubmit hook routing prompts to matching skills |
 | `.cursorrules` | Cursor | Workflow rules, git rules, framework patterns |
