@@ -93,6 +93,16 @@
  * @readonly
  * @enum {number}
  */
+// The SSR walker now runs controllers' hostUpdate during the pre-render pass
+// (issue #217). A Task must NOT invoke its task function server-side (that
+// would fire a fetch during SSR); the browser runs it on hydration. Read live
+// (not cached) so the auto-run gate reflects the current environment: SSR
+// ships the task's INITIAL state, unchanged from before hostUpdate fired at
+// SSR, and the browser runs it on connect.
+function inBrowser() {
+  return typeof window !== 'undefined';
+}
+
 export const TaskStatus = /** @type {const} */ ({
   INITIAL: 0,
   PENDING: 1,
@@ -326,6 +336,9 @@ export class Task {
    */
   hostUpdate() {
     if (!this._autoRun) return;
+    // Never auto-run server-side: SSR ships the INITIAL state and the task
+    // function (typically a fetch) runs only in the browser on hydration.
+    if (!inBrowser()) return;
 
     const nextArgs = this._argsFn();
 

@@ -19,6 +19,24 @@ function createMockHost() {
   };
 }
 
+/**
+ * Run `fn` with a stubbed `globalThis.window` so Task's browser-only auto-run
+ * path executes in this Node test, then restore. Task.hostUpdate gates its
+ * auto-run on `typeof window !== 'undefined'` so it never fires the task
+ * function during SSR (issue #217).
+ */
+async function withBrowser(fn) {
+  const had = 'window' in globalThis;
+  const prev = globalThis.window;
+  globalThis.window = /** @type {any} */ ({});
+  try {
+    await fn();
+  } finally {
+    if (had) globalThis.window = prev;
+    else delete globalThis.window;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // TaskStatus
 // ---------------------------------------------------------------------------
@@ -256,28 +274,33 @@ test('Task: auto-run triggers when args change on hostUpdate', async () => {
     autoRun: true,
   });
 
-  // First hostUpdate: prevArgs is null so it always runs.
-  task.hostUpdate();
-  // run() is async, give it a tick to settle.
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(runCount, 1);
+  // autoRun on hostUpdate is browser-only behaviour (the task fires a fetch);
+  // simulate the browser so the controller's auto-run path runs in this Node
+  // test. Without a window, hostUpdate is a no-op (the SSR-safety guard).
+  await withBrowser(async () => {
+    // First hostUpdate: prevArgs is null so it always runs.
+    task.hostUpdate();
+    // run() is async, give it a tick to settle.
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(runCount, 1);
 
-  // Same args: should not re-run.
-  task.hostUpdate();
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(runCount, 1);
+    // Same args: should not re-run.
+    task.hostUpdate();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(runCount, 1);
 
-  // Changed args: should re-run.
-  currentQuery = 'bar';
-  task.hostUpdate();
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(runCount, 2);
+    // Changed args: should re-run.
+    currentQuery = 'bar';
+    task.hostUpdate();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(runCount, 2);
+  });
 
   assert.equal(task.status, TaskStatus.COMPLETE);
   assert.equal(task.value, 'result:bar');
 });
 
-test('Task: autoRun false does not run on hostUpdate', () => {
+test('Task: autoRun false does not run on hostUpdate', async () => {
   const host = createMockHost();
   let runCount = 0;
 
@@ -287,8 +310,29 @@ test('Task: autoRun false does not run on hostUpdate', () => {
     autoRun: false,
   });
 
+  await withBrowser(async () => {
+    task.hostUpdate();
+    assert.equal(runCount, 0);
+  });
+});
+
+test('Task: hostUpdate does NOT auto-run server-side (no fetch fired during SSR)', async () => {
+  // The SSR walker runs controllers' hostUpdate during the pre-render pass
+  // (issue #217). A Task must keep its INITIAL state and never invoke its task
+  // function server-side, so an SSR'd component that owns a Task ships the
+  // pending UI without firing a request.
+  const host = createMockHost();
+  let runCount = 0;
+  const task = new Task(host, {
+    task: async () => { runCount++; },
+    args: () => ['a'],
+    autoRun: true,
+  });
+  // No window in this Node context: stands in for SSR.
   task.hostUpdate();
-  assert.equal(runCount, 0);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(runCount, 0, 'task function must not run server-side');
+  assert.equal(task.status, TaskStatus.INITIAL, 'SSR ships the INITIAL state');
 });
 
 // ---------------------------------------------------------------------------
