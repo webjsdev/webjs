@@ -86,7 +86,7 @@ function clearCookie(name) {
 // -- JWT --------------------------------------------------------------------
 
 /** @param {Record<string,unknown>} payload @param {string} secret */
-async function encodeJwt(payload, secret) {
+export async function encodeJwt(payload, secret) {
   const h = b64url(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
   const p = b64url(enc.encode(JSON.stringify(payload)));
   const unsigned = `${h}.${p}`;
@@ -95,7 +95,7 @@ async function encodeJwt(payload, secret) {
 }
 
 /** @param {string} token @param {string} secret @returns {Promise<Record<string,unknown>|null>} */
-async function decodeJwt(token, secret) {
+export async function decodeJwt(token, secret) {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   // `unb64url` → `atob` throws InvalidCharacterError on non-base64 input.
