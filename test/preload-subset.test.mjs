@@ -27,8 +27,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // One handler per app, representative routes that render a real page (a 307
 // redirect has no body to probe and is treated as a pass). Routes here are
 // known to serve 200 in prod mode.
+// The blog routes are deliberately DB-independent (`/about` and the inert
+// `/static-info`), since the unit/integration CI job does not migrate the
+// blog's Prisma DB; `/` calls listPosts() and would 500 there. Both still
+// emit the layout's modulepreloads, which is what this test probes.
 const APPS = [
-  { name: 'blog', dir: 'examples/blog', routes: ['/', '/about'] },
+  { name: 'blog', dir: 'examples/blog', routes: ['/about', '/static-info'] },
   { name: 'website', dir: 'website', routes: ['/'] },
   { name: 'docs', dir: 'docs', routes: ['/docs/architecture', '/docs/components'] },
   { name: 'ui-website', dir: 'packages/ui/packages/website', routes: ['/'] },
@@ -79,7 +83,7 @@ test('counterfactual: the probe catches a preload pointing outside the servable 
   // must flag it, proving the per-app tests above are not passing vacuously.
   const h = await createRequestHandler({ appDir: resolve(ROOT, 'examples/blog'), dev: false });
   if (h.warmup) await h.warmup();
-  const html = await (await h.handle(new Request('http://localhost/'))).text();
+  const html = await (await h.handle(new Request('http://localhost/about'))).text();
   const tampered = html.replace('</head>',
     '<link rel="modulepreload" href="/package.json"></head>');
 
