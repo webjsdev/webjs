@@ -178,6 +178,54 @@ the host actually provides. The default rate-limit collapsing to
 
 **Scaling:** in-memory by default. `setStore(redisStore({ url: process.env.REDIS_URL }))` shares limits across instances.
 
+## CORS via `cors()`
+
+`cors()` is a middleware factory (same `(req, next) => Response` contract as `rateLimit()`), usable in `middleware.js` (root or per-segment) or wrapped around a `route.js` handler. It handles origin reflection, the `OPTIONS` preflight, `Vary: Origin`, and the credentials rule, so route handlers do not hand-roll any of it. The `--template api` scaffold ships a root `middleware.ts` demonstrating it.
+
+```js
+// middleware.js (applies to every request)
+import { cors } from '@webjsdev/server';
+export default cors({
+  origin: ['https://app.example.com', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['content-type', 'authorization'],
+  maxAge: 86400,
+});
+```
+
+Wrap a single handler instead of going app-wide:
+
+```js
+// app/api/widgets/route.js
+import { cors } from '@webjsdev/server';
+const corsMw = cors({ origin: '*' });
+export async function GET(req) {
+  return corsMw(req, async () => Response.json({ widgets: [] }));
+}
+```
+
+### Options
+
+| Option | Meaning |
+|---|---|
+| `origin` | A string (exact), `string[]` allow-list, a `RegExp`, a function `(origin) => boolean`, or `'*'` / `true` (any). Entries in an array may mix strings and RegExps. Defaults to `'*'`. |
+| `credentials` | Sets `Access-Control-Allow-Credentials: true` for an allowed specific origin. |
+| `methods` | Advertised on a preflight (`Access-Control-Allow-Methods`). |
+| `allowedHeaders` | Advertised on a preflight; defaults to reflecting `Access-Control-Request-Headers`. |
+| `exposedHeaders` | `Access-Control-Expose-Headers` on the actual response. |
+| `maxAge` | Preflight cache lifetime in seconds. |
+
+### Behavior
+
+- **Preflight.** An `OPTIONS` request carrying `Access-Control-Request-Method` short-circuits with a `204` carrying the Allow-Methods / Allow-Headers / Max-Age headers. `next()` is NOT called. A disallowed-origin preflight returns a bare `204` with no CORS headers, so the browser blocks the follow-up.
+- **Actual request.** `next()` runs, then `Access-Control-Allow-Origin` (plus credentials / exposed headers) is attached. A disallowed origin gets NO `Access-Control-Allow-Origin`, and the browser blocks the cross-origin read, but the server still serves the response (CORS is browser-enforced, not a server gate; this matches the `expose()` path, which never 403s a mismatched actual request).
+- **`Vary: Origin`.** Appended (never clobbering an existing `Vary`) whenever the allowed origin is dynamic (a reflected, per-origin value), so a shared cache keys on `Origin` and cannot poison one origin's response onto another. A constant `*` (no credentials) does not vary, so no `Vary` is added.
+
+### The credentials + wildcard rule (spec, enforced)
+
+`Access-Control-Allow-Origin: *` is INVALID together with `Access-Control-Allow-Credentials: true`, and the browser rejects the pair. So when `credentials: true` is combined with a wildcard `origin`, `cors()` NARROWS to the reflected request origin instead of sending `*` (and appends `Vary: Origin`). With no `Origin` header under that combination it refuses entirely (no ACAO). To allow credentialed cross-origin requests, list explicit origins; never rely on `'*'` + credentials.
+
 ## Client router: nested-layout-aware partial swap
 
 `import '@webjsdev/core/client-router'` enables SPA-style navigation that

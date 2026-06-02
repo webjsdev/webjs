@@ -517,8 +517,20 @@ Two markers describe server-side files. The combination determines behaviour:
 1. Authenticate every mutating endpoint (bearer/API key, explicit CSRF, or origin allow-list).
 2. Use `validate`. Never trust merged `{...query, ...params, ...body}`.
 3. Log responsibly. No user input or secrets in errors.
-4. Configure CORS narrowly.
+4. Configure CORS narrowly. For a route handler (or app-wide), use the `cors()` middleware (see below); for an `expose()`d endpoint use a tight `origin` allow-list. Never combine `origin: '*'` with `credentials: true` (the CORS spec forbids it; `cors()` narrows the wildcard to the reflected origin instead of serving an invalid `*`).
 5. Rate-limit at the edge (`rateLimit()` middleware, see `agent-docs/advanced.md`).
+
+### CORS for route handlers (`cors()` middleware)
+
+`cors()` from `@webjsdev/server` returns a webjs middleware `(req, next) => Response`, usable in `middleware.{js,ts}` (root or per-segment) OR wrapped around a `route.{js,ts}` handler. It handles origin reflection, the `OPTIONS` preflight (`204` short-circuit), `Vary: Origin` (append, not clobber), and the credentials rule. The `--template api` scaffold ships a root `middleware.ts` demonstrating it.
+
+```js
+// middleware.js
+import { cors } from '@webjsdev/server';
+export default cors({ origin: ['https://app.example.com'], credentials: true });
+```
+
+`origin` accepts a string (exact), `string[]` allow-list, a `RegExp`, a function `(origin) => boolean`, or `'*'` / `true` (any). A disallowed origin gets no `Access-Control-Allow-Origin` (the browser blocks the read) but the actual request is still served, since CORS is browser-enforced. **`credentials: true` + a wildcard origin is invalid per the CORS spec; `cors()` narrows the wildcard to the reflected request origin (and adds `Vary: Origin`) rather than emitting `*`.** See `agent-docs/advanced.md` for the full option reference.
 
 ### Components (`components/*.{js,ts}`)
 

@@ -190,6 +190,15 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
     assert.ok(existsSync(join(appDir, 'app', 'api', 'health', 'route.ts')), 'health route');
     assert.ok(existsSync(join(appDir, 'app', 'api', 'users', 'route.ts')), 'users route');
 
+    // Root CORS middleware demonstrating the cors() primitive
+    const mwPath = join(appDir, 'middleware.ts');
+    assert.ok(existsSync(mwPath), 'api template ships a root middleware.ts');
+    const mw = readFileSync(mwPath, 'utf8');
+    assert.match(mw, /import \{ cors \} from '@webjsdev\/server'/, 'imports cors()');
+    assert.match(mw, /export default cors\(/, 'default-exports the cors() middleware');
+    // Never demonstrate the invalid wildcard + credentials combination.
+    assert.doesNotMatch(mw, /origin:\s*'\*'/, 'no wildcard origin with credentials');
+
     // Module skeleton
     assert.ok(existsSync(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts')));
     assert.ok(existsSync(join(appDir, 'modules', 'users', 'actions', 'create-user.server.ts')));
