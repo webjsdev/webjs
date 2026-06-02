@@ -1740,6 +1740,94 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const path = await page.evaluate(() => location.pathname);
     assert.equal(path, '/', 'must stay on the home page after sending a chat message');
   });
+
+  // --- Progressive enhancement: the no-JS baseline must hold (#183) ---
+  //
+  // "Progressive enhancement by default" is the foundational claim: with
+  // JavaScript disabled the page must still read, <a> links must navigate,
+  // a <form> server action must submit, and display-only components must
+  // render. This layer loads the blog with JS OFF and asserts each.
+  //
+  // setJavaScriptEnabled(false) disables ALL page script execution,
+  // including page.evaluate, so this block reads the DOM via page.content()
+  // (HTML serialization, no page JS) and interacts via CDP-level type/click
+  // (real input/mouse events the browser handles natively), never evaluate.
+  describe('progressive enhancement (JS disabled) (#183)', () => {
+    let noJs;
+
+    before(async () => {
+      noJs = await browser.newPage();
+      await noJs.setJavaScriptEnabled(false);
+      await noJs.setViewport({ width: 1024, height: 768 }); // show the desktop nav
+    });
+
+    after(async () => {
+      if (noJs) await noJs.close();
+    });
+
+    test('content reads and a display-only component renders with JS off', async () => {
+      await noJs.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      const html = await noJs.content();
+      // Real post content from the SSR'd HTML (seeded posts).
+      assert.match(html, /Hello, webjs|Zero build steps|Web components first/,
+        'post content must be server-rendered and readable with JS off');
+      // The display-only build-stamp renders its SSR markup even though its
+      // module never ships (criterion: a display-only component renders).
+      assert.match(html, /zero JS shipped for this badge/,
+        'a display-only component must render its SSR markup with JS off');
+    });
+
+    test('an <a> link performs a full navigation with JS off', async () => {
+      await noJs.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      // With JS off the client router never attaches, so clicking a same-origin
+      // <a> is a native full-page navigation. Click the desktop nav About link.
+      await Promise.all([
+        noJs.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+        noJs.click('nav a[href="/about"]'),
+      ]);
+      assert.ok(noJs.url().endsWith('/about'), `link should navigate to /about, got ${noJs.url()}`);
+      const html = await noJs.content();
+      // Match a phrase unique to the about page body, not the nav word
+      // "About" that appears on every page.
+      assert.match(html, /What's on display/, '/about page body must render after a no-JS navigation');
+    });
+
+    test('a server-rendered form submits and the response renders with JS off', async () => {
+      await noJs.goto(`${baseUrl}/search`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      // Type a query and submit the native GET form. Both are CDP-level
+      // browser events, so they work with page JS disabled. The submission is
+      // a real navigation to /search?q=web that the SERVER renders.
+      await noJs.type('input[name="q"]', 'web');
+      await Promise.all([
+        noJs.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+        noJs.click('form button[type="submit"]'),
+      ]);
+      assert.match(noJs.url(), /\/search\?q=web/, `form should GET-navigate to /search?q=web, got ${noJs.url()}`);
+      const html = await noJs.content();
+      assert.match(html, /Found 2 results for "web"/,
+        'the server must render the search results for the no-JS form submission');
+      assert.match(html, /class="search-result"/, 'result items must render');
+    });
+
+    test('counterfactual: a JS-dependent interaction does NOT work with JS off', async () => {
+      // The interactive counter needs JS to increment. With JS off, clicking
+      // the increment button must do nothing: the seeded value stays put. This
+      // proves the harness genuinely disabled JS, so any feature whose first
+      // paint or core behaviour depended on JS would render broken and fail
+      // the assertions above rather than passing on a secretly-live page.
+      await noJs.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      const countOf = (html) => {
+        const m = html.match(/<my-counter[^>]*>[\s\S]*?<output[^>]*>(\d+)<\/output>/);
+        return m ? Number(m[1]) : NaN;
+      };
+      const before = countOf(await noJs.content());
+      assert.equal(before, 3, `counter SSRs its seeded value (got ${before})`);
+      await noJs.click('my-counter button[aria-label="Increment"]');
+      await sleep(300);
+      const after = countOf(await noJs.content());
+      assert.equal(after, 3, `with JS off the counter must NOT increment (got ${after})`);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
