@@ -440,7 +440,7 @@ import { createContext } from '@webjsdev/core/context';
 import { Task } from '@webjsdev/core/task';
 import { fixture, waitForUpdate } from '@webjsdev/core/testing';
 
-import { rateLimit, cache, createAuth, Credentials, Session } from '@webjsdev/server';
+import { rateLimit, cors, cache, createAuth, Credentials, Session } from '@webjsdev/server';
 ```
 
 ## Environment variables (server vs browser)

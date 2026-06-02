@@ -35,6 +35,7 @@ export { scanComponents, primeComponentRegistry, extractComponents, findOrphanCo
 export { headers, cookies, getRequest, withRequest, cspNonce } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
 export { rateLimit, parseWindow, clientIp, stampRemoteIp } from './src/rate-limit.js';
+export { cors, resolveOrigin, applyCorsHeaders } from './src/cors.js';
 export { memoryStore, redisStore, getStore, setStore } from './src/cache.js';
 export { cache } from './src/cache-fn.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';

@@ -494,6 +494,27 @@ if (process.env.NODE_ENV !== 'production') g.__prisma = prisma;
   if (isApi) {
     // API-only template: no layout, no page, no components.
     // Just a health route and an example module with route wrapper.
+
+    // Root middleware applying CORS to every route. An API consumed by a
+    // browser from another origin needs this; the `cors()` primitive
+    // handles origin reflection, the OPTIONS preflight, Vary: Origin, and
+    // the credentials rule, so route handlers stay focused on data.
+    await writeFile(join(appDir, 'middleware.ts'), `import { cors } from '@webjsdev/server';
+
+/**
+ * App-wide CORS policy. Replace the allow-list with your real frontend
+ * origins. With \`credentials: true\` a wildcard origin is invalid per the
+ * CORS spec, so list explicit origins (never \`'*'\` + credentials).
+ */
+export default cors({
+  origin: ['http://localhost:3000', 'https://app.example.com'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['content-type', 'authorization'],
+  maxAge: 86400,
+});
+`);
+
     await mkdir(join(appDir, 'app', 'api', 'health'), { recursive: true });
     await mkdir(join(appDir, 'app', 'api', 'users'), { recursive: true });
     await writeFile(join(appDir, 'app', 'api', 'health', 'route.ts'), `export async function GET() {

@@ -41,6 +41,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `cache.js` | Pluggable cache store: `memoryStore` / `redisStore`; `setStore` / `getStore` |
 | `cache-fn.js` | `cache(key, fn, { ttl })` query-caching helper + `invalidate()` |
 | `rate-limit.js` | `rateLimit({ window, max })` middleware factory |
+| `cors.js` | `cors({ origin, credentials, methods, allowedHeaders, exposedHeaders, maxAge })` middleware factory for route handlers / `middleware.js`. Shared origin-resolution + header-building core (`resolveOrigin` / `applyCorsHeaders`) reused by the `expose()` REST path in `actions.js`. Enforces the CORS-spec rule that `credentials: true` forbids a wildcard ACAO (narrows `*` to the reflected origin). |
 | `csrf.js` | Double-submit CSRF protection (server-action endpoints) |
 | `websocket.js` | WS upgrade handling: invokes `WS` export from `route.ts` |
 | `broadcast.js` | `broadcast(topic, msg)` for fan-out messaging |

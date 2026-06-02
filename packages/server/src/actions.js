@@ -6,6 +6,7 @@ import { getExposed } from '@webjsdev/core';
 import { walk } from './fs-walk.js';
 import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
+import { resolveOrigin } from './cors.js';
 
 /**
  * Internal RPC wire-format content type. Distinguishes webjs action
@@ -388,11 +389,23 @@ export function withCors(resp, route, req) {
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: newHeaders });
 }
 
-/** @param {string|string[]} configured @param {string} origin */
+/**
+ * Match a route's configured origin policy against the request origin,
+ * preserving the expose() path's historical contract: `*` returns `true`
+ * (literal wildcard), an allowed concrete origin echoes back, and a
+ * mismatch returns `null`. Delegates the per-rule decision to the shared
+ * cors.js resolver (so RegExp + function policies work here too) but keeps
+ * the wildcard-as-`true` and echo-vs-null shape this caller expects.
+ *
+ * @param {string|string[]|RegExp|((origin: string) => boolean)} configured
+ * @param {string} origin
+ * @returns {true | string | null}
+ */
 function matchOrigin(configured, origin) {
   if (configured === '*') return true;
-  if (Array.isArray(configured)) return configured.includes(origin) ? origin : null;
-  return configured === origin ? origin : null;
+  const resolved = resolveOrigin(configured, origin, false);
+  if (!resolved) return null;
+  return resolved.allowOrigin === '*' ? true : resolved.allowOrigin;
 }
 
 /**
