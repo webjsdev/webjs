@@ -64,6 +64,7 @@
  * Design tokens used: --background, --border, --muted-foreground.
  */
 import { WebComponent, html } from '@webjsdev/core';
+import { ref, createRef } from '@webjsdev/core/directives';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
@@ -228,18 +229,23 @@ export class UiAlertDialogContent extends WebComponent {
   };
   declare size: 'default' | 'sm';
 
+  // ref to the own-rendered native <dialog>. render() creates it, so a
+  // ref() binding is the lit-idiomatic handle (no querySelector against
+  // a string selector into the component's own output).
+  #dialog = createRef<HTMLDialogElement>();
+
   constructor() {
     super();
     this.size = 'default';
   }
 
   showModal(): void {
-    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="alert-dialog-native"]');
+    const native = this.#dialog.value;
     if (native && !native.open) native.showModal();
   }
 
   close(): void {
-    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="alert-dialog-native"]');
+    const native = this.#dialog.value;
     if (native?.open) native.close();
   }
 
@@ -248,6 +254,7 @@ export class UiAlertDialogContent extends WebComponent {
     return html`<dialog
       data-slot="alert-dialog-native"
       class=${NATIVE_DIALOG_CLASS}
+      ${ref(this.#dialog)}
       @cancel=${this._onNativeCancel}
       @close=${this._onNativeClose}
     ><div

@@ -74,7 +74,7 @@
  * Design tokens used: --popover, --popover-foreground, --accent,
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
-import { WebComponent, html, unsafeHTML } from '@webjsdev/core';
+import { WebComponent, html, unsafeHTML, signal } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -348,6 +348,12 @@ export class UiDropdownMenuItem extends WebComponent {
   declare variant: 'default' | 'destructive';
   declare inset: boolean;
 
+  // Keyboard / pointer highlight state for the own-rendered menuitem. A
+  // local signal bound with ?data-highlighted keeps the highlight in the
+  // declarative template instead of an imperative setAttribute on
+  // e.currentTarget (the lit-idiomatic form).
+  #highlighted = signal(false);
+
   constructor() {
     super();
     this.variant = 'default';
@@ -361,6 +367,7 @@ export class UiDropdownMenuItem extends WebComponent {
       tabindex="-1"
       data-variant=${this.variant}
       ?data-inset=${this.inset}
+      ?data-highlighted=${this.#highlighted.get()}
       class=${dropdownMenuItemClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
@@ -381,12 +388,12 @@ export class UiDropdownMenuItem extends WebComponent {
     el.focus();
   };
 
-  _onFocus = (e: Event): void => {
-    (e.currentTarget as HTMLElement).setAttribute('data-highlighted', '');
+  _onFocus = (): void => {
+    this.#highlighted.set(true);
   };
 
-  _onBlur = (e: Event): void => {
-    (e.currentTarget as HTMLElement).removeAttribute('data-highlighted');
+  _onBlur = (): void => {
+    this.#highlighted.set(false);
   };
 }
 UiDropdownMenuItem.register('ui-dropdown-menu-item');
