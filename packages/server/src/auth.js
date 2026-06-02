@@ -49,8 +49,13 @@ async function unsign(input, secret) {
   const idx = input.lastIndexOf('.');
   if (idx < 1) return null;
   const value = input.slice(0, idx);
-  const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret), unb64url(input.slice(idx + 1)), enc.encode(value));
-  return ok ? value : null;
+  // `unb64url` -> `atob` throws on non-base64 input. A malformed signature
+  // (a corrupted or attacker-supplied cookie) must read as "not signed by
+  // us", not crash the request. Mirrors the guard in `decodeJwt`.
+  try {
+    const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret), unb64url(input.slice(idx + 1)), enc.encode(value));
+    return ok ? value : null;
+  } catch { return null; }
 }
 
 function randomId() {
