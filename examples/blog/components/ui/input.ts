@@ -1,8 +1,12 @@
 /**
- * Input: styled native `<input>` via a class-helper function. Works with
- * every native input type (text, email, password, number, search, tel, url,
- * date, time, file, color, …). Form submission, autocomplete, browser
- * validation, and password managers all work because it IS the native input.
+ * Input: styled native `<input>`. Tier-1 class helper. Works with every
+ * input type (text, email, password, number, search, tel, url, date,
+ * time, file, color, …). Form submission, autocomplete, browser
+ * validation, and password managers all work because it IS the native
+ * input.
+ *
+ * shadcn parity:
+ *   Input  → inputClass()
  *
  * Usage:
  *   <input class=${inputClass()} type="email" name="email" id="email" required

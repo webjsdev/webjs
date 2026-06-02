@@ -1,8 +1,11 @@
 /**
- * Alert: informational banner. Composition of three class helpers.
+ * Alert: informational banner. Tier-1 class helpers; compose with a
+ * native `<div role="alert">` (or `role="status"` for non-urgent updates).
  *
  * shadcn parity:
- *   Alert (variant: default | destructive), AlertTitle, AlertDescription.
+ *   Alert (variant: default | destructive)  → alertClass({ variant })
+ *   AlertTitle                              → alertTitleClass()
+ *   AlertDescription                        → alertDescriptionClass()
  *
  * Usage:
  *   <div role="alert" class=${alertClass()}>
