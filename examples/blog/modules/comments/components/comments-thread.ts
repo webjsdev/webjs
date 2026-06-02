@@ -21,6 +21,7 @@ export class CommentsThread extends WebComponent {
   busy = signal(false);
   error = signal<string | null>(null);
   _conn: ReturnType<typeof connectWS> | null = null;
+  _seeded = false;
 
   constructor() {
     super();
@@ -29,9 +30,24 @@ export class CommentsThread extends WebComponent {
     this.signedIn = false;
   }
 
+  willUpdate(changed: Map<string, unknown>) {
+    // Seed the live comment list from the server-provided `initial` prop the
+    // first time it is applied. willUpdate runs at SSR (and on the client's
+    // first render) AFTER props are applied, so the server-rendered first
+    // paint shows the real comments instead of the empty-state placeholder,
+    // rather than waiting for connectedCallback to fill it in on hydration.
+    // The `_seeded` guard means a later re-render never clobbers comments
+    // added live over the WebSocket or by a POST.
+    if (!this._seeded && changed.has('initial')) {
+      this._seeded = true;
+      if (Array.isArray(this.initial) && this.initial.length) {
+        this.comments.set(this.initial);
+      }
+    }
+  }
+
   connectedCallback() {
     super.connectedCallback();
-    this.comments.set(Array.isArray(this.initial) ? this.initial : []);
     this._conn = connectWS(`/api/comments/${this.postId}`, {
       onMessage: (msg: CommentFormatted) => {
         const cur = this.comments.get();
