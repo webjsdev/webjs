@@ -1489,6 +1489,16 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       a.textContent = 'about (e2e)';
       (document.querySelector('main') || document.body).appendChild(a);
       window.__e2ePrefetchSentinel = 'alive';
+      // Latch the webjs:prefetch event (fires the instant the fragment is
+      // cached and consumable) BEFORE hovering, so the click below waits
+      // for the cache to be warm rather than racing the response.
+      window.__e2ePrefetchCached = false;
+      document.addEventListener('webjs:prefetch', (e) => {
+        const u = e.detail && e.detail.url;
+        if (typeof u === 'string' && (u === '/about' || u.endsWith('/about'))) {
+          window.__e2ePrefetchCached = true;
+        }
+      });
     });
 
     // Count document requests to that pathname, split by the prefetch
@@ -1514,6 +1524,16 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       await waitFor(() => hits.prefetch >= 1, 4000,
         () => `hover should issue a speculative prefetch GET for ${href} (got ${hits.prefetch})`);
       const afterHover = hits.prefetch;
+
+      // The prefetch REQUEST going out is not the same as the fragment
+      // being CACHED: the router stores the entry only after it reads the
+      // response body (prefetchStore runs inside the fetch `.then`).
+      // Clicking in that window misses the cache and issues a real
+      // navigation fetch, which is the race this test used to flake on.
+      // Wait for the webjs:prefetch latch set above, so the click is
+      // guaranteed to consume the cached fragment.
+      await waitForCond(() => page.evaluate(() => window.__e2ePrefetchCached === true), 4000,
+        () => `prefetch fragment for ${href} should become cached (webjs:prefetch) before the click`);
 
       // Click; poll until the URL reflects the navigation.
       await page.evaluate(() => {
@@ -1703,6 +1723,17 @@ async function waitFor(cond, timeoutMs, msg) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (cond()) return;
+    await sleep(50);
+  }
+  throw new Error(msg());
+}
+
+// Like waitFor, but awaits an async predicate (e.g. a page.evaluate that
+// reads in-page state) on each poll.
+async function waitForCond(cond, timeoutMs, msg) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await cond()) return;
     await sleep(50);
   }
   throw new Error(msg());

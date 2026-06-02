@@ -691,11 +691,21 @@ test('navigate: text/html response proceeds with router swap (no fallback)', asy
       '<!--wj:children:/-->content<!--/wj:children-->' +
       '</body></html>',
   });
+  const seen = [];
+  const onNav = (e) => seen.push(e.detail);
+  document.addEventListener('webjs:navigate', onNav);
   try {
     document.body.innerHTML = '<!--wj:children:/-->old<!--/wj:children-->';
     await navigate('http://localhost/ok');
     assert.equal(redirect.href, null, 'text/html response should not trigger location.href fallback');
+    // The navigate event carries a `from: 'navigate'` tag, symmetric with
+    // webjs:prefetch's `from: 'prefetch'`, so a listener bound to both can
+    // tell a real nav from a speculative prefetch landing.
+    assert.ok(seen.length >= 1, 'a webjs:navigate event fired');
+    assert.equal(seen[seen.length - 1].from, 'navigate');
+    assert.equal(seen[seen.length - 1].url, 'http://localhost/ok');
   } finally {
+    document.removeEventListener('webjs:navigate', onNav);
     restore();
     document.body.innerHTML = '';
   }
@@ -2491,6 +2501,50 @@ test('prefetch: warms the cache with the server fragment', async () => {
     assert.ok(entry, 'cache entry exists');
     assert.match(entry.html, /ok/);
     assert.equal(entry.build, 'b1');
+  });
+});
+
+test('prefetch: dispatches webjs:prefetch when the fragment lands in the cache', async () => {
+  await withPrefetchEnv(async () => {
+    const seen = [];
+    const onPrefetch = (e) => seen.push(e.detail);
+    document.addEventListener('webjs:prefetch', onPrefetch);
+    try {
+      // No event before the fetch resolves: the request being in flight is
+      // not the same as the fragment being cached.
+      _prefetch('http://localhost/about');
+      assert.equal(seen.length, 0, 'no event while the prefetch is still in flight');
+      await new Promise((r) => setTimeout(r, 0));
+      // Exactly one event, fired the instant the entry became consumable,
+      // and it agrees with what _prefetchPeek now returns.
+      assert.equal(seen.length, 1, 'one webjs:prefetch event after the fragment is stored');
+      assert.equal(seen[0].url, 'http://localhost/about');
+      assert.equal(seen[0].from, 'prefetch', 'detail tags the source so a shared listener can split it from webjs:navigate');
+      assert.ok(_prefetchPeek('http://localhost/about'), 'event coincides with a consumable cache entry');
+    } finally {
+      document.removeEventListener('webjs:prefetch', onPrefetch);
+    }
+  });
+});
+
+test('prefetch: a non-html or error response caches nothing and fires no event', async () => {
+  // Counterfactual: the event is bound to a real cache store, not merely
+  // to the request going out, so a 404 (which prefetchStore never runs for)
+  // must stay silent.
+  await withPrefetchEnv(async () => {
+    const seen = [];
+    const onPrefetch = (e) => seen.push(e.detail);
+    document.addEventListener('webjs:prefetch', onPrefetch);
+    try {
+      _prefetch('http://localhost/missing');
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(seen.length, 0, 'no event when nothing was cached');
+      assert.equal(_prefetchPeek('http://localhost/missing'), null, 'and no cache entry');
+    } finally {
+      document.removeEventListener('webjs:prefetch', onPrefetch);
+    }
+  }, {
+    fetchImpl: async () => new Response('nope', { status: 404, headers: { 'content-type': 'text/plain' } }),
   });
 });
 

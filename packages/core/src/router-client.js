@@ -1003,7 +1003,17 @@ function drainPrefetchQueue() {
 }
 
 /**
- * Store a speculative entry under LRU + cap.
+ * Store a speculative entry under LRU + cap, then announce that the
+ * fragment is cached and consumable.
+ *
+ * The `webjs:prefetch` event fires the instant a speculative fragment
+ * becomes consumable (after the response body has been read), which is
+ * strictly later than the prefetch request going out. App code can
+ * listen to instrument prefetch hit rate, and tests can await it to know
+ * a subsequent click will consume the cache rather than refetch. The
+ * detail carries the cached URL and a `from: 'prefetch'` tag so a single
+ * listener can disambiguate it from `webjs:navigate`.
+ *
  * @param {string} key
  * @param {PrefetchEntry} entry
  */
@@ -1013,6 +1023,11 @@ function prefetchStore(key, entry) {
   while (prefetchCache.size > PREFETCH_CAP) {
     const oldest = prefetchCache.keys().next().value;
     prefetchCache.delete(oldest);
+  }
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(new CustomEvent('webjs:prefetch', {
+      detail: { url: entry.finalUrl, key, from: 'prefetch' },
+    }));
   }
 }
 
@@ -1267,7 +1282,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     }
   }
 
-  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId } }));
+  document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
 }
 
 /**
