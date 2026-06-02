@@ -173,9 +173,9 @@ export class UiToggleGroupItem extends WebComponent {
     this.pressed = false;
   }
 
-  // render() runs server-side too. linkedom doesn't implement closest()
-  // on custom elements, so guard it; the client re-renders with the
-  // real parent reference after hydration.
+  // render() runs server-side too. webjs resolves closest() at SSR against
+  // the enclosing-element ancestor chain, so the pressed item is marked in
+  // the first paint (no hydration flash). The typeof guard stays defensive.
   get _group(): UiToggleGroup | null {
     if (typeof this.closest !== 'function') return null;
     return this.closest('ui-toggle-group') as UiToggleGroup | null;
