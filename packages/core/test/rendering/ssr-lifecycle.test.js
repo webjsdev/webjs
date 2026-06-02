@@ -159,6 +159,30 @@ test('a component that neither reflects nor sets attributes keeps a byte-identic
   assert.match(out, /<ssr-plain name="x" class="y"><!--webjs-hydrate-->/, 'opening tag unchanged');
 });
 
+test('the server element shim mirrors lit: attributes getter, toggleAttribute, double-attach throws', async () => {
+  let snapshot = null;
+  let toggledOn = false;
+  let secondAttachThrew = false;
+  class ShimSurface extends WebComponent {
+    constructor() {
+      super();
+      toggledOn = this.toggleAttribute('data-flag'); // -> true, sets ''
+      this.setAttribute('data-x', 'X');
+      // `attributes` mirrors Element.attributes: [{name, value}, ...]
+      snapshot = this.attributes.map((a) => `${a.name}=${a.value}`).sort();
+      this.attachInternals();
+      try { this.attachInternals(); } catch { secondAttachThrew = true; }
+    }
+    render() { return html`<p>shim</p>`; }
+  }
+  ShimSurface.register('ssr-shim-surface');
+
+  await renderToString(html`<ssr-shim-surface></ssr-shim-surface>`);
+  assert.equal(toggledOn, true, 'toggleAttribute with no force adds the attribute and returns true');
+  assert.deepEqual(snapshot, ['data-flag=', 'data-x=X'], 'attributes getter reflects the live shim store');
+  assert.equal(secondAttachThrew, true, 'a second attachInternals throws, matching the browser and lit');
+});
+
 test('COUNTERFACTUAL: without the willUpdate pass, the derived value would be the constructor placeholder', async () => {
   // Mirrors the first test but proves the assertion would FAIL if willUpdate
   // did not run: a subclass that deliberately renders the raw constructor

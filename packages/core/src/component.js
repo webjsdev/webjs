@@ -149,11 +149,18 @@ function defaultHasChanged(a, b) {
 
 /**
  * Inert `ElementInternals`-shaped object returned by the server shim's
- * `attachInternals()`. Form-association, validity, and custom-state calls
- * are no-ops at SSR (there is no form, no constraint validation, no
- * `:state()` matching server-side), so a component that calls
- * `this.attachInternals()` in its constructor renders instead of crashing.
- * The browser later runs the real `attachInternals()` on hydration.
+ * `attachInternals()`. Modeled on `@lit-labs/ssr-dom-shim`'s
+ * `ElementInternalsShim` (lit repo, `packages/labs/ssr-dom-shim/src/lib/
+ * element-internals.ts`): form-association, validity, and custom-state
+ * calls are no-ops at SSR (no form, no constraint validation, no `:state()`
+ * matching server-side), so a component that calls `this.attachInternals()`
+ * in its constructor renders instead of crashing. The browser runs the real
+ * `attachInternals()` on hydration.
+ *
+ * Deliberate deviation from lit: lit's `checkValidity` / `reportValidity`
+ * THROW on the server. webjs returns `true` instead, to keep SSR
+ * progressive-enhancement-safe (a stray validity call in a constructor must
+ * not 500 the page); the browser does the real validation.
  * @returns {any}
  */
 function makeServerInternals() {
@@ -162,10 +169,10 @@ function makeServerInternals() {
     shadowRoot: null,
     form: null,
     labels: [],
+    role: '',
     willValidate: true,
-    validity: /** @type {any} */ ({ valid: true }),
+    validity: /** @type {any} */ ({}),
     validationMessage: '',
-    role: null,
     setFormValue() {},
     setValidity() {},
     checkValidity() { return true; },
@@ -176,17 +183,23 @@ function makeServerInternals() {
 /**
  * Server-side stand-in for `HTMLElement`. The SSR pipeline constructs
  * component instances in Node, where `HTMLElement` does not exist, so the
- * base class is this shim. It backs the attribute methods with a plain Map
- * (`getAttribute` / `setAttribute` / `hasAttribute` / `removeAttribute` /
- * `toggleAttribute` / `getAttributeNames`), so lit muscle-memory patterns
- * that read attributes in `render()` or set them while deriving state work
- * server-side; the SSR walker seeds the Map from the element's source
- * attributes and reads it back to surface reflected/added attributes in the
- * output. Event methods are no-ops (there is no server event loop), and
- * `attachInternals()` returns the inert object above. The genuinely
- * browser-only surface (`querySelector`, layout reads, `attachShadow`,
- * `focus`) is deliberately absent and still throws at SSR, which the
- * `no-browser-globals-in-render` rule and the SSR crash hint flag.
+ * base class is this shim. It is modeled on `@lit-labs/ssr-dom-shim`'s
+ * `ElementShim` (lit repo, `packages/labs/ssr-dom-shim/src/index.ts`): the
+ * attribute methods (`getAttribute` / `setAttribute` / `hasAttribute` /
+ * `removeAttribute` / `toggleAttribute`, the `attributes` getter) are backed
+ * by a Map, so lit muscle-memory patterns that read attributes in `render()`
+ * or set them while deriving state work server-side; the SSR walker seeds
+ * the Map from the element's source attributes and reads it back to surface
+ * reflected/added attributes in the output. Event methods are no-ops (no
+ * server event loop), and `attachInternals()` returns the inert object
+ * above. The genuinely browser-only surface (`querySelector`, layout reads,
+ * `attachShadow`, `focus`) is deliberately absent and still throws at SSR,
+ * which the `no-browser-globals-in-render` rule and the SSR crash hint flag.
+ *
+ * Deliberate deviation from lit: this shim lowercases attribute names so
+ * `getAttribute('Foo')` after `setAttribute('foo', x)` resolves, matching how
+ * a real browser treats HTML attribute names as case-insensitive. lit's shim
+ * keys the Map by the raw name (a known fidelity gap in lit-labs).
  */
 class ServerElement {
   constructor() {
@@ -197,6 +210,13 @@ class ServerElement {
      * @type {Map<string, string>}
      */
     this.__ssrAttrs = new Map();
+    /** @type {any} */
+    this.__internals = null;
+  }
+
+  /** Mirrors `Element.attributes`: an array of `{ name, value }`. */
+  get attributes() {
+    return [...this.__ssrAttrs].map(([name, value]) => ({ name, value }));
   }
 
   /** @param {string} name */
@@ -207,6 +227,7 @@ class ServerElement {
 
   /** @param {string} name @param {unknown} value */
   setAttribute(name, value) {
+    // Emulate the browser casting all values to string (lit does the same).
     this.__ssrAttrs.set(String(name).toLowerCase(), String(value));
   }
 
@@ -222,6 +243,7 @@ class ServerElement {
 
   /** @param {string} name @param {boolean} [force] */
   toggleAttribute(name, force) {
+    // Steps mirror https://dom.spec.whatwg.org/#dom-element-toggleattribute
     const key = String(name).toLowerCase();
     const present = this.__ssrAttrs.has(key);
     const next = force === undefined ? !present : force;
@@ -248,7 +270,15 @@ class ServerElement {
 
   /** @returns {any} */
   attachInternals() {
-    return makeServerInternals();
+    // Match the browser (and lit's shim): a second attach is an error.
+    if (this.__internals !== null) {
+      throw new Error(
+        "Failed to execute 'attachInternals' on 'HTMLElement': " +
+          'ElementInternals for the specified element was already attached.',
+      );
+    }
+    this.__internals = makeServerInternals();
+    return this.__internals;
   }
 }
 
