@@ -222,9 +222,20 @@ export async function GET(req) {
 - **Actual request.** `next()` runs, then `Access-Control-Allow-Origin` (plus credentials / exposed headers) is attached. A disallowed origin gets NO `Access-Control-Allow-Origin`, and the browser blocks the cross-origin read, but the server still serves the response (CORS is browser-enforced, not a server gate; this matches the `expose()` path, which never 403s a mismatched actual request).
 - **`Vary: Origin`.** Appended (never clobbering an existing `Vary`) whenever the allowed origin is dynamic (a reflected, per-origin value), so a shared cache keys on `Origin` and cannot poison one origin's response onto another. A constant `*` (no credentials) does not vary, so no `Vary` is added.
 
-### The credentials + wildcard rule (spec, enforced)
+### `credentials: true` requires an explicit origin allowlist (spec, enforced, warned)
 
-`Access-Control-Allow-Origin: *` is INVALID together with `Access-Control-Allow-Credentials: true`, and the browser rejects the pair. So when `credentials: true` is combined with a wildcard `origin`, `cors()` NARROWS to the reflected request origin instead of sending `*` (and appends `Vary: Origin`). With no `Origin` header under that combination it refuses entirely (no ACAO). To allow credentialed cross-origin requests, list explicit origins; never rely on `'*'` + credentials.
+**For any credentialed endpoint, pass an explicit `origin` allowlist (string / array / RegExp / function). Never combine `credentials: true` with a wildcard `origin` (`'*'` / `true`).**
+
+`Access-Control-Allow-Origin: *` is INVALID together with `Access-Control-Allow-Credentials: true`, and the browser rejects the pair. Worse, the usual workaround (reflecting the request origin) under credentials effectively grants credentialed access (cookies, `Authorization`) to EVERY origin, a real footgun.
+
+`cors()` keeps the request working rather than failing it: when `credentials: true` meets a wildcard `origin` it NARROWS to the reflected request origin instead of sending `*` (and appends `Vary: Origin`). With no `Origin` header under that combination it refuses entirely (no ACAO). Because that reflects any origin with credentials, it ALSO emits a one-time `console.warn` (deduped, not per-request):
+
+```
+cors(): credentials with a wildcard origin reflects ANY origin with credentials.
+Use an explicit origin allowlist for credentialed requests.
+```
+
+The warning is informational; the request still proceeds. Treat it as a prompt to replace the wildcard with a real allowlist. An explicit allowlist with `credentials: true` is the safe, silent path.
 
 ## Client router: nested-layout-aware partial swap
 

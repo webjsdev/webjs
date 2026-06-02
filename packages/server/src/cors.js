@@ -62,6 +62,29 @@
 
 const DEFAULT_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'];
 
+/**
+ * Module-level dedupe flag for the credentials+wildcard warning. Reflecting
+ * the request origin under `credentials: true` grants credentialed access to
+ * EVERY origin, a real footgun, so we warn ONCE (not per request) to keep
+ * logs readable while still surfacing it. The request still proceeds.
+ */
+let warnedCredentialedWildcard = false;
+
+/** Emit the one-time credentials+wildcard warning (deduped across requests). */
+function warnCredentialedWildcard() {
+  if (warnedCredentialedWildcard) return;
+  warnedCredentialedWildcard = true;
+  console.warn(
+    'cors(): credentials with a wildcard origin reflects ANY origin with credentials. ' +
+      'Use an explicit origin allowlist for credentialed requests.',
+  );
+}
+
+/** Testing hook: reset the one-time warning dedupe flag. */
+export function _resetCorsWarnings() {
+  warnedCredentialedWildcard = false;
+}
+
 /** @param {string[] | string | undefined} v @returns {string | undefined} */
 function csv(v) {
   if (v == null) return undefined;
@@ -113,7 +136,10 @@ export function resolveOrigin(policy, origin, credentials) {
     // Wildcard + credentials is invalid per the CORS spec: a literal `*`
     // ACAO can never be combined with `Allow-Credentials: true`. Narrow
     // to the reflected origin (dynamic), or refuse if no origin is given.
+    // Reflecting under credentials effectively allows EVERY origin, so warn
+    // once (the request still proceeds) to flag the footgun.
     if (credentials) {
+      warnCredentialedWildcard();
       if (!origin) return null;
       return { allowOrigin: origin, dynamic: true };
     }

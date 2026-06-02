@@ -517,7 +517,7 @@ Two markers describe server-side files. The combination determines behaviour:
 1. Authenticate every mutating endpoint (bearer/API key, explicit CSRF, or origin allow-list).
 2. Use `validate`. Never trust merged `{...query, ...params, ...body}`.
 3. Log responsibly. No user input or secrets in errors.
-4. Configure CORS narrowly. For a route handler (or app-wide), use the `cors()` middleware (see below); for an `expose()`d endpoint use a tight `origin` allow-list. Never combine `origin: '*'` with `credentials: true` (the CORS spec forbids it; `cors()` narrows the wildcard to the reflected origin instead of serving an invalid `*`).
+4. Configure CORS narrowly. For a route handler (or app-wide), use the `cors()` middleware (see below); for an `expose()`d endpoint use a tight `origin` allow-list. **A credentialed endpoint (`credentials: true`) REQUIRES an explicit `origin` allowlist; never combine it with a wildcard `'*'`.** The CORS spec forbids the pair, and reflecting under credentials grants any origin credentialed access. `cors()` narrows the wildcard to the reflected origin to keep the request working but emits a one-time `console.warn`; do not rely on that fallback for a real allowlist.
 5. Rate-limit at the edge (`rateLimit()` middleware, see `agent-docs/advanced.md`).
 
 ### CORS for route handlers (`cors()` middleware)
@@ -530,7 +530,11 @@ import { cors } from '@webjsdev/server';
 export default cors({ origin: ['https://app.example.com'], credentials: true });
 ```
 
-`origin` accepts a string (exact), `string[]` allow-list, a `RegExp`, a function `(origin) => boolean`, or `'*'` / `true` (any). A disallowed origin gets no `Access-Control-Allow-Origin` (the browser blocks the read) but the actual request is still served, since CORS is browser-enforced. **`credentials: true` + a wildcard origin is invalid per the CORS spec; `cors()` narrows the wildcard to the reflected request origin (and adds `Vary: Origin`) rather than emitting `*`.** See `agent-docs/advanced.md` for the full option reference.
+`origin` accepts a string (exact), `string[]` allow-list, a `RegExp`, a function `(origin) => boolean`, or `'*'` / `true` (any). A disallowed origin gets no `Access-Control-Allow-Origin` (the browser blocks the read) but the actual request is still served, since CORS is browser-enforced.
+
+> **`credentials: true` REQUIRES an explicit origin allowlist.** A wildcard origin (`'*'` / `true`) with `credentials: true` is invalid per the CORS spec, and combining them effectively grants credentialed access to EVERY origin (cookies, `Authorization`). `cors()` keeps the request working by narrowing the wildcard to the reflected request origin (and adds `Vary: Origin`) rather than emitting an invalid `*`, BUT it emits a one-time `console.warn` flagging the footgun. For any credentialed endpoint, pass an explicit `origin` list (string / array / RegExp / function), never `'*'`.
+
+See `agent-docs/advanced.md` for the full option reference.
 
 ### Components (`components/*.{js,ts}`)
 

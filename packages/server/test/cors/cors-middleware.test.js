@@ -11,7 +11,27 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { cors, resolveOrigin, applyCorsHeaders } from '../../src/cors.js';
+import { cors, resolveOrigin, applyCorsHeaders, _resetCorsWarnings } from '../../src/cors.js';
+
+/**
+ * Run `fn` capturing console.warn calls, then restore. Returns the array
+ * of warning strings emitted during `fn`.
+ *
+ * @param {() => unknown | Promise<unknown>} fn
+ * @returns {Promise<string[]>}
+ */
+async function captureWarnings(fn) {
+  const original = console.warn;
+  /** @type {string[]} */
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(' '));
+  try {
+    await fn();
+  } finally {
+    console.warn = original;
+  }
+  return warnings;
+}
 
 /** @param {string|null} origin @param {string} [method] @param {Record<string,string>} [extra] */
 function req(origin, method = 'GET', extra = {}) {
@@ -177,7 +197,10 @@ test('COUNTERFACTUAL: credentials + wildcard NEVER emits ACAO: * with ACAC', asy
   // (resolveOrigin returning `{ allowOrigin: '*' }` under credentials),
   // this assertion fails.
   const mw = cors({ origin: '*', credentials: true });
-  const resp = await mw(req('https://a.com'), nextOk());
+  let resp;
+  await captureWarnings(async () => {
+    resp = await mw(req('https://a.com'), nextOk());
+  });
   const acao = resp.headers.get('access-control-allow-origin');
   assert.notEqual(acao, '*', 'must not send wildcard ACAO with credentials');
   assert.equal(acao, 'https://a.com', 'wildcard narrows to the reflected origin');
@@ -188,13 +211,19 @@ test('COUNTERFACTUAL: credentials + wildcard NEVER emits ACAO: * with ACAC', asy
 
 test('credentials + wildcard with NO origin header refuses (no ACAO at all)', async () => {
   const mw = cors({ origin: '*', credentials: true });
-  const resp = await mw(req(null), nextOk());
+  let resp;
+  await captureWarnings(async () => {
+    resp = await mw(req(null), nextOk());
+  });
   assert.equal(resp.headers.get('access-control-allow-origin'), null);
   assert.equal(resp.headers.get('access-control-allow-credentials'), null);
 });
 
-test('resolveOrigin counterfactual at the unit level: wildcard+credentials never yields *', () => {
-  const r = resolveOrigin('*', 'https://a.com', true);
+test('resolveOrigin counterfactual at the unit level: wildcard+credentials never yields *', async () => {
+  let r;
+  await captureWarnings(() => {
+    r = resolveOrigin('*', 'https://a.com', true);
+  });
   assert.ok(r);
   assert.notEqual(r.allowOrigin, '*');
   assert.equal(r.allowOrigin, 'https://a.com');
@@ -254,4 +283,55 @@ test('cors() wraps a route.js handler: compose middleware + handler', async () =
   assert.equal(resp.headers.get('access-control-allow-origin'), 'https://app.example.com');
   assert.equal(resp.headers.get('access-control-allow-credentials'), 'true');
   assert.deepEqual(await resp.json(), { users: [] });
+});
+
+// --- credentials + wildcard footgun warning ---
+
+test('credentials + wildcard warns LOUDLY (the dangerous any-origin reflection)', async () => {
+  _resetCorsWarnings();
+  const mw = cors({ origin: '*', credentials: true });
+  const warnings = await captureWarnings(() => mw(req('https://a.com'), nextOk()));
+  assert.equal(warnings.length, 1, 'exactly one warning for the credentials+wildcard combo');
+  assert.match(warnings[0], /credentials/i);
+  assert.match(warnings[0], /wildcard|any origin/i);
+  assert.match(warnings[0], /allowlist/i, 'points the user at the explicit-allowlist fix');
+});
+
+test('credentials + wildcard warning is deduped to ONCE across many requests', async () => {
+  _resetCorsWarnings();
+  const mw = cors({ origin: true, credentials: true });
+  const warnings = await captureWarnings(async () => {
+    await mw(req('https://a.com'), nextOk());
+    await mw(req('https://b.com'), nextOk());
+    await mw(req('https://c.com'), nextOk());
+  });
+  assert.equal(warnings.length, 1, 'one-time, not per-request');
+});
+
+test('explicit allowlist with credentials does NOT warn (the safe path)', async () => {
+  _resetCorsWarnings();
+  const mw = cors({ origin: ['https://a.com', 'https://b.com'], credentials: true });
+  const warnings = await captureWarnings(async () => {
+    await mw(req('https://a.com'), nextOk());
+    await mw(req('https://b.com'), nextOk());
+  });
+  assert.equal(warnings.length, 0, 'an explicit allowlist is safe and silent');
+});
+
+test('wildcard WITHOUT credentials does not warn (no footgun, plain ACAO: *)', async () => {
+  _resetCorsWarnings();
+  const mw = cors({ origin: '*' });
+  const warnings = await captureWarnings(() => mw(req('https://a.com'), nextOk()));
+  assert.equal(warnings.length, 0);
+});
+
+test('the warning still serves the request (warn, not error)', async () => {
+  _resetCorsWarnings();
+  const mw = cors({ origin: '*', credentials: true });
+  let resp;
+  await captureWarnings(async () => {
+    resp = await mw(req('https://a.com'), nextOk());
+  });
+  assert.equal(resp.status, 200, 'request proceeds despite the warning');
+  assert.equal(resp.headers.get('access-control-allow-origin'), 'https://a.com');
 });
