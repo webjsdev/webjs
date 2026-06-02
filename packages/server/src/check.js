@@ -402,11 +402,16 @@ const BROWSER_GLOBALS = [
   'matchMedia', 'requestAnimationFrame', 'getComputedStyle',
   'IntersectionObserver', 'MutationObserver', 'ResizeObserver',
 ];
-// HTMLElement instance members that do not exist on the bare server class, so
-// `this.<member>` throws (a method call) or is `undefined` (a property) at SSR.
+// HTMLElement instance members that do not exist on the server element shim,
+// so `this.<member>` throws (a method call) or is `undefined` (a property) at
+// SSR. The attribute methods (get/set/has/remove/toggleAttribute), the event
+// methods (add/removeEventListener, dispatchEvent), and attachInternals are
+// backed by the shim and run server-side, so they are intentionally NOT
+// flagged: a component may read attributes in render and reflect properties
+// during the SSR update cycle. What stays is the genuinely browser-only
+// surface (DOM querying, layout reads, shadow construction, focus).
 const HTMLELEMENT_MEMBERS = [
-  'attachShadow', 'shadowRoot', 'setAttribute', 'getAttribute',
-  'removeAttribute', 'hasAttribute', 'dispatchEvent', 'classList',
+  'attachShadow', 'shadowRoot', 'classList',
   'querySelector', 'querySelectorAll', 'getBoundingClientRect',
   'focus', 'blur', 'scrollIntoView',
 ];

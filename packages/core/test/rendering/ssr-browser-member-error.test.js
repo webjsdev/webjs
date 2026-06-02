@@ -35,15 +35,39 @@ test('a browser global in render yields an actionable, member-naming SSR error',
   assert.match(out, /connectedCallback/, 'points at the fix');
 });
 
-test('an HTMLElement method in render yields an actionable, member-naming SSR error', async () => {
-  class UsesSetAttr extends WebComponent {
-    render() { this.setAttribute('x', '1'); return html`<p></p>`; }
+test('a browser-only HTMLElement method in render yields an actionable, member-naming SSR error', async () => {
+  // Uses a member with NO server shim. The attribute / event / internals
+  // methods are now backed by the server element shim (so reading or
+  // reflecting attributes at SSR works); querySelector and friends still have
+  // no server stand-in and throw, which is what this hint is for.
+  class UsesQuery extends WebComponent {
+    render() { this.querySelector('p'); return html`<p></p>`; }
   }
-  UsesSetAttr.register('ssr-uses-setattr');
-  const out = await captureErrors(() => renderToString(html`<ssr-uses-setattr></ssr-uses-setattr>`));
-  assert.match(out, /`setAttribute`/, 'names the offending HTMLElement method');
+  UsesQuery.register('ssr-uses-query');
+  const out = await captureErrors(() => renderToString(html`<ssr-uses-query></ssr-uses-query>`));
+  assert.match(out, /`querySelector`/, 'names the offending HTMLElement method');
   assert.match(out, /HTMLElement method/, 'explains it is an HTMLElement method');
   assert.match(out, /connectedCallback/, 'points at the fix');
+});
+
+test('attribute, event, and internals methods do NOT crash at SSR (backed by the server shim)', async () => {
+  // The counterpart to the rule narrowing: these lit muscle-memory patterns
+  // must render cleanly server-side, with no SSR-failure log at all.
+  class UsesShimmed extends WebComponent {
+    constructor() {
+      super();
+      this.addEventListener('click', () => {});
+      this.attachInternals().setFormValue('v');
+    }
+    render() {
+      const has = this.hasAttribute('role') ? 'y' : 'n';
+      this.setAttribute('data-ok', '1');
+      return html`<p>${has}${this.getAttribute('data-ok')}</p>`;
+    }
+  }
+  UsesShimmed.register('ssr-uses-shimmed');
+  const out = await captureErrors(() => renderToString(html`<ssr-uses-shimmed></ssr-uses-shimmed>`));
+  assert.doesNotMatch(out, /SSR failed/, 'no SSR failure logged for shimmed members');
 });
 
 test('an unrelated SSR error keeps the plain message (no false member hint)', async () => {

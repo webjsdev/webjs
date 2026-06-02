@@ -54,6 +54,10 @@ const CLASSIFICATION = {
   addController: 'call',
   removeController: 'call',
   render: 'inert',
+  // Server-only: runs the pre-render lifecycle at SSR. Never a client-ship
+  // signal (it executes during SSR regardless of whether the module is
+  // elided), so overriding or calling it does not force interactivity.
+  performServerUpdate: 'inert',
 };
 
 function publicPrototypeMethods() {
