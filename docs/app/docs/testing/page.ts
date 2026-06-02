@@ -141,15 +141,13 @@ describe('Contact form', () =&gt; {
 });</pre>
 
     <h2>Convention Validation</h2>
-    <p><code>webjs check</code> validates your app against conventions:</p>
-    <pre># Check all conventions
+    <p><code>webjs check</code> validates your app for correctness issues:</p>
+    <pre># Run the correctness checks
 webjs check
 
-# List available rules
+# List the checks and their descriptions
 webjs check --rules</pre>
-    <p>Rules include: actions in modules, one function per action file, components have <code>Class.register('tag')</code>, no server imports in client code, tests exist for modules, tag names have hyphens.</p>
-    <p>Override rules in <code>package.json</code>:</p>
-    <pre>{ "webjs": { "conventions": { "tests-exist": false } } }</pre>
+    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, erasable TypeScript only. They always run; project conventions (layout, testing) are guidance in <code>CONVENTIONS.md</code>, not checks.</p>
 
     <h2>Recommended Test Structure</h2>
     <pre>test/

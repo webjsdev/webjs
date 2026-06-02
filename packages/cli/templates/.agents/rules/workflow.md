@@ -12,8 +12,8 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   ANY data the app stores (todos, posts, messages, products, comments), define
   a Prisma model. NEVER create `data/*.json`, `db.json`, or any JSON file as a
   fake database. NEVER use module-scope arrays / Maps as a substitute. NEVER
-  use localStorage for app data. `webjs check`'s `no-json-data-files` rule
-  will fail the build if you do.
+  use localStorage for app data. a project convention in CONVENTIONS.md (it resets on reload and cannot
+  scale).
 - **The scaffold is reference, not the final product.** Replace `app/page.ts`,
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the

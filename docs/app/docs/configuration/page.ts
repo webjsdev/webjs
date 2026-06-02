@@ -59,16 +59,8 @@ webjs db studio       # prisma studio</pre>
       <li><code>checkJs</code>: type-check <code>.js</code> files too (for mixed codebases)</li>
     </ul>
 
-    <h2>package.json (lint rule overrides)</h2>
-    <p>The only project-level webjs config that lives in <code>package.json</code> is the <code>"webjs": { "conventions": { … } }</code> block, which disables individual <code>webjs check</code> lint rules. If the block is absent, every default rule is enabled.</p>
-    <pre>{
-  "webjs": {
-    "conventions": {
-      "tests-exist": false
-    }
-  }
-}</pre>
-    <p>See <a href="/docs/conventions">Conventions &amp; AI Workflow</a> for the rule catalogue, the workflow for AI agents, and what <code>webjs check --rules</code> prints. This page does not duplicate the list; the linter's <code>RULES</code> array is the single source of truth.</p>
+    <h2>webjs check: correctness, not config</h2>
+    <p><code>webjs check</code> runs a fixed set of correctness checks (a crash, a security leak, a build or type-strip failure). They always run; there is no project-level config to disable them, and webjs reads no <code>package.json</code> config block. Project <em>conventions</em> (layout, naming, testing) are guidance in <code>CONVENTIONS.md</code>, not a tool. See <a href="/docs/conventions">Conventions &amp; AI Workflow</a> for the split and run <code>webjs check --rules</code> to list the checks.</p>
 
     <h2>Environment Variables</h2>
     <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). webjs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> once at boot using Node 24+'s built-in <code>process.loadEnvFile</code>, so a scaffolded app with a committed <code>.env.example</code> and a developer-copied <code>.env</code> just works without installing <code>dotenv</code> or wiring up the file path. The auto-load fires before any server-only module is imported, which matters for code that reads <code>process.env</code> at module-init time (e.g. <code>createAuth({ secret: process.env.AUTH_SECRET })</code>).</p>

@@ -127,8 +127,8 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    comments, users…), define a Prisma model in `prisma/schema.prisma`
    and persist there.
 2. **NEVER** create JSON files under `data/`, `db.json`, `posts.json`,
-   `todos.json`, etc. as a fake database. The `no-json-data-files`
-   convention check flags this and `webjs check` will fail.
+   `todos.json`, etc. as a fake database. It resets on reload and cannot scale; this is a
+   project convention (see the conventions section above).
 3. **NEVER** use module-scope arrays or `Map`s as a "store". They
    reset on every dev-server reload and can't scale beyond one process.
 4. **NEVER** use `localStorage` / `sessionStorage` to persist app data -

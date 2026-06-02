@@ -536,7 +536,7 @@ export async function POST(req: Request) {
   return Response.json(await createUser(body));
 }
 `);
-    // Minimal test stub so the scaffold passes `webjs check` (tests-exist)
+    // Minimal starter test so a freshly scaffolded app ships with a test
     // and `webjs test` runs cleanly. Replace these with real assertions
     // once you wire the action/query to a real data source.
     await writeFile(join(appDir, 'test', 'unit', 'users.test.ts'), `import { test } from 'node:test';

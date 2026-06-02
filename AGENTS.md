@@ -641,7 +641,7 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
    Default to full-stack when ambiguous.
 
-3. **Default to a real database (Prisma + SQLite). NEVER use JSON files, in-memory arrays, or localStorage as a substitute for persistence.** Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts`, and `npm run db:*` scripts. The `no-json-data-files` check flags JSON-as-database.
+3. **Default to a real database (Prisma + SQLite). NEVER use JSON files, in-memory arrays, or localStorage as a substitute for persistence.** Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts`, and `npm run db:*` scripts. Persisting data as JSON is a project convention violation (it resets on reload and cannot scale).
 4. **Treat the scaffold as REFERENCE, not the final product.** Replace the example `app/page.ts`, `User` model, and components.
 5. **Update `prisma/schema.prisma` to real models FIRST.** Run `webjs db migrate <name>`, then build pages/actions/queries.
 6. Full docs at **https://docs.webjs.com**.

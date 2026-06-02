@@ -174,7 +174,7 @@ export async function writeSaasFiles(appDir) {
   ].join('\n'));
 
   // test/unit/auth.test.ts: minimal stub so the scaffold passes
-  // `webjs check` (tests-exist) and `webjs test` runs cleanly out of the
+  // `webjs test` runs cleanly out of the
   // box. The signup/current-user functions import from lib/prisma.server.ts
   // and lib/auth.server.ts, both of which need `prisma generate` to have run before
   // they can be imported, so we deliberately test only the runtime-

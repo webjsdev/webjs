@@ -24,8 +24,8 @@ the app the user actually asked for.
    stores (todos, posts, messages, products, comments, anything),
    define a Prisma model and persist there.
    - **NEVER** store app data in JSON files (`data/todos.json`,
-     `db.json`, …). The convention check `no-json-data-files` flags
-     this and the user's prompt explicitly forbids it.
+     `db.json`, …). It resets on reload and cannot scale. This is a project convention,
+     and the user's prompt explicitly forbids it.
    - **NEVER** use in-memory arrays or `Map`s as a substitute for the
      database. They vanish on every dev-server reload and aren't
      shared across processes.

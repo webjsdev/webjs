@@ -1126,4 +1126,3 @@ test('tag-name-has-hyphen: tagged template with ASI-style newline between tag an
   }
 });
 
-// --- package.json overrides still apply to rules touched by PR #109 ---
