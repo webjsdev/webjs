@@ -40,6 +40,7 @@ process.emitWarning = function (warning, type, code, ctor) {
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
 import { ssrPage, ssrNotFound } from './ssr.js';
+import { loadPageAction, runPageAction } from './page-action.js';
 import { handleApi } from './api.js';
 import {
   buildActionIndex,
@@ -1103,17 +1104,31 @@ async function handleCore(req, ctx) {
     return runWithSegmentMiddleware(req, api.route.middlewares, handler, dev);
   }
 
-  // Page route (only for GET/HEAD)
-  if (method === 'GET' || method === 'HEAD') {
+  // Page route. GET/HEAD render the page. A NON-GET/HEAD method (POST/PUT/…)
+  // is only routed here when the page module exports an `action` (#244); the
+  // action runs inside the page's segment middleware, then either PRG-redirects
+  // (303) on success, re-renders the same page (422) with field errors on
+  // failure, or honors a thrown redirect()/notFound(). Without an `action`
+  // export, a non-GET/HEAD request falls through to the 404 below, unchanged.
+  {
     const page = matchPage(state.routeTable, path);
     if (page) {
-      const handler = () => ssrPage(page.route, page.params, url, {
-        dev, appDir, req, moduleGraph: state.moduleGraph,
+      const ssrOpts = {
+        dev, appDir, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
         elidableComponents: state.elidableComponents,
         inertRouteModules: state.inertRouteModules,
-      });
-      return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
+        notFoundFile: state.routeTable.notFound,
+      };
+      if (method === 'GET' || method === 'HEAD') {
+        const handler = () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });
+        return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
+      }
+      const action = await loadPageAction(page.route.file, dev);
+      if (action) {
+        const handler = () => runPageAction(page.route, page.params, url, action, req, ssrOpts);
+        return runWithSegmentMiddleware(req, page.route.middlewares, handler, dev);
+      }
     }
   }
 

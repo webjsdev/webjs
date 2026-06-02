@@ -229,6 +229,16 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     const schema = readFileSync(join(appDir, 'prisma', 'schema.prisma'), 'utf8');
     assert.match(schema, /model User/, 'User model present');
     assert.match(schema, /passwordHash/, 'User has passwordHash field');
+
+    // Signup page is the canonical no-JS form write-path (#244): it exports a
+    // page `action`, posts via `<form method="POST">`, and returns fieldErrors
+    // + values on failure so the re-render keeps the user's input.
+    const signup = readFileSync(join(appDir, 'app', 'signup', 'page.ts'), 'utf8');
+    assert.match(signup, /export async function action/, 'signup page exports an action');
+    assert.match(signup, /<form method="POST"/, 'signup form posts to the page action');
+    assert.match(signup, /fieldErrors/, 'signup action returns field errors');
+    assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
+    assert.doesNotMatch(signup, /id="signup-form"/, 'old inert JS-only form id is gone');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

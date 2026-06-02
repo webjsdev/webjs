@@ -32,7 +32,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 |---|---|
 | `dev.js` | The request handler. File serving, TypeScript stripping (Node 24+ built-in `module.stripTypeScriptTypes`, backed by the `amaro` package; non-erasable syntax fails at strip time with a 500), **server-file guardrail**, live reload via SSE |
 | `router.js` | Scans `app/` once, builds the route table, matches pages + APIs (`buildRouteTable`, `matchPage`, `matchApi`) |
-| `ssr.js` | SSR pipeline: nested layouts, metadata → `<head>`, Suspense streaming, error boundaries |
+| `ssr.js` | SSR pipeline: nested layouts, metadata → `<head>`, Suspense streaming, error boundaries. `ssrPage` accepts `actionData` (put on `ctx.actionData` for the page + layouts) and `status` (default 200; the page-action re-render passes 422) |
+| `page-action.js` | Page server actions (#244): `loadPageAction` reads a page module's optional `action` export, `runPageAction` parses the form body, runs the action, and maps the `ActionResult` to a response (303 PRG on success, 422 re-render with `actionData` on failure, honoring thrown `redirect()`/`notFound()`). `dev.js` routes a non-GET/HEAD page request here only when the page exports `action`, wrapped in the page's segment middleware |
 | `actions.js` | `.server.js` / `.server.ts` scanner. Generates RPC stubs for browser-bound imports; exposes RPC endpoints; honours `expose()` |
 | `api.js` | `route.ts` `GET` / `POST` / `PUT` / `DELETE` handler dispatch |
 | `auth.js` | `createAuth()` with Credentials / Google / GitHub providers; JWT signing |

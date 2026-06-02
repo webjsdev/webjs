@@ -447,9 +447,10 @@ Add `@webjsdev/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugi
 
 ### Pages (`app/**/page.{js,ts}`)
 
-- Default export is a possibly-async function receiving `{ params, searchParams, url }`.
+- Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
 - Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). See `agent-docs/metadata.md`.
+- Optional named export `action`: a possibly-async function receiving `{ request, params, searchParams, url, formData }` that handles a non-GET/HEAD submission to the page's own URL (the no-JS form write-path, #244). It returns an `ActionResult`. On success the server responds `303` to `result.redirect` or the page's own path (Post/Redirect/Get). On failure (`{ success: false, fieldErrors, values }`) the SAME page re-renders with status `422` and the result on `ctx.actionData`, so the page reads `actionData.fieldErrors.<name>` for messages and `actionData.values.<name>` to repopulate inputs. A thrown `redirect()`/`notFound()` is honored. A page with no `action` export 404s on a non-GET, unchanged. `actionData` is `undefined` on a plain GET. See the recipe in `agent-docs/recipes.md` and the client-router side in `agent-docs/advanced.md`.
 - Page modules also load on the client so transitively imported components register. Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything needing Node APIs) goes only in `.server.{js,ts}`, `route.ts`, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
 
 ### Layouts (`app/**/layout.{js,ts}`)
@@ -544,9 +545,21 @@ Two markers describe server-side files. The combination determines behaviour:
 
 ```ts
 type ActionResult<T> =
-  | { success: true, data: T }
-  | { success: false, error: string, status: number };
+  | { success: true, data?: T, redirect?: string }
+  | {
+      success: false,
+      error?: string,
+      fieldErrors?: Record<string, string>, // per-field messages, keyed by input `name`
+      values?: Record<string, string>,        // submitted values, to repopulate inputs
+      status?: number,
+    };
 ```
+
+The `fieldErrors` / `values` / `redirect` members are additive (the plain
+`{ success, data, error, status }` form keeps working). A page `action` uses
+`fieldErrors` + `values` to drive the no-JS re-render (the page reads them off
+`ctx.actionData`), and `redirect` to choose the Post/Redirect/Get target on
+success. See `agent-docs/recipes.md`.
 
 Routes translate mechanically:
 
@@ -590,6 +603,8 @@ Custom CSS is fully supported. Light-DOM components MUST follow the class-prefix
 Nested layouts auto-emit `<!--wj:children:<segment-path>-->` markers around each `${children}` interpolation. The client router walks both DOMs for these markers and replaces only the inside of the deepest shared layout's children slot. **Outer-layout DOM identity is preserved** (sidenav scroll, input values, `<details>` state survive).
 
 Form submissions (`<form action method>`) ride the same pipeline. GET forms promote `FormData` to the query string. Non-GET forms send `FormData` as body and clear the snapshot cache on success. Forms that already `e.preventDefault()` in `@submit` are untouched. `data-no-router` opts out.
+
+A non-GET `<form>` whose target page exports an `action` (see Pages above) is the no-JS write-path. With JS disabled it is a native round-trip; with JS the router applies the server's response in place, an HTML body of any status (including a `422` re-render carrying field errors and the user's typed `value=` attributes) is swapped without a full reload, and a `303` See Other (the success/Post-Redirect-Get case) is followed via `fetch`, recording the final URL. The no-JS path and the enhanced path produce the same field-error UI.
 
 Wire-byte optimization is automatic: the router sends `X-Webjs-Have` listing marker paths it has; the server short-circuits at the deepest match and returns only the divergent fragment. Rapid clicks are safe (prior fetches abort, nav-tokens prevent stale reverts). Scroll position is captured + restored on back/forward.
 

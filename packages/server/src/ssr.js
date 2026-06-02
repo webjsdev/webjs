@@ -20,7 +20,7 @@ import { transitiveDeps } from './module-graph.js';
  * @param {import('./router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string> }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number }} opts
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
@@ -28,6 +28,12 @@ export async function ssrPage(route, params, url, opts) {
     params,
     searchParams: Object.fromEntries(url.searchParams.entries()),
     url: url.toString(),
+    // Populated only when this render is the re-render after a failed page
+    // `action` submission (#244). The page function and every layout receive
+    // it so they can surface field errors and repopulate inputs from the
+    // user's submitted values. Undefined on a normal GET render, so GET output
+    // is byte-identical to before this feature.
+    actionData: opts.actionData,
   };
 
   // Collect metadata across layouts (outermost first) then page.
@@ -102,7 +108,10 @@ export async function ssrPage(route, params, url, opts) {
       streamBody,
       closer,
       suspenseCtx,
-      200,
+      // Normally 200. After a failed page `action` submission the caller passes
+      // 422 (or another 4xx) so the re-rendered page with field errors carries
+      // the right status for both the no-JS reload and the enhanced swap (#244).
+      opts.status || 200,
       opts.req,
       url,
       metadata,
