@@ -276,6 +276,14 @@ server-side is the post-render and connection hooks (`update` commit,
 `hostConnected` / `hostUpdated`), so state those compute is absent from
 the first paint.
 
+One tradeoff to know: overriding `willUpdate` is an interactivity
+signal for the elision analyser, so a component that uses it (even
+purely to derive SSR state) ships its JS to the browser and is never
+elided. For a truly display-only component, prefer computing the value
+inline in `render()` so the module can still be elided; reach for
+`willUpdate` when the component is interactive anyway, or when the
+derivation is shared across `render()` and a client hook.
+
 ### 10. `ContextProvider` for server-known data
 
 Context providers in lit publish on connect via `hostConnected`. In

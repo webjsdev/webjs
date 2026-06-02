@@ -790,20 +790,21 @@ function parseAttrs(attrStr) {
 }
 
 /**
- * Seed the server-side attribute shim (`instance.__ssrAttrs`) from the
- * element's source attributes so reads like `this.getAttribute(name)` and
- * `this.hasAttribute(name)` inside willUpdate / render return the real value
- * during SSR. Only WebComponent instances carry the shim Map; bare
- * Base-extending kit components do not, so it is a no-op for them.
+ * Seed the element's attributes from the source opening tag so reads like
+ * `this.getAttribute(name)` / `this.hasAttribute(name)` inside willUpdate /
+ * render return the real value during SSR. Goes through `setAttribute`, which
+ * both the server element shim (Node SSR) and a real `HTMLElement`
+ * (renderToString called in a browser, e.g. tests) implement, so the path
+ * does not depend on the shim's internal store. A bare Base-extending kit
+ * component without `setAttribute` is skipped.
  *
  * @param {any} instance
  * @param {Record<string,string>} attrs  parsed source attributes (data-webjs-prop-* already removed)
  */
 function seedServerAttrs(instance, attrs) {
-  const store = instance && instance.__ssrAttrs;
-  if (!(store instanceof Map)) return;
+  if (!instance || typeof instance.setAttribute !== 'function') return;
   for (const [name, raw] of Object.entries(attrs)) {
-    store.set(name.toLowerCase(), unescapeAttr(raw));
+    instance.setAttribute(name, unescapeAttr(raw));
   }
 }
 
@@ -811,7 +812,9 @@ function seedServerAttrs(instance, attrs) {
  * Append attributes the component set before render (reflected reflect:true
  * properties, or an explicit `this.setAttribute` in the constructor /
  * willUpdate) to the element's opening tag, skipping any name already present
- * in the source tag. Returns the opening tag unchanged when there is nothing
+ * in the source tag. Reads via the standard `getAttributeNames` /
+ * `getAttribute` API so it works whether the instance is the server shim or a
+ * real `HTMLElement`. Returns the opening tag unchanged when there is nothing
  * to add, so existing SSR output stays byte-identical when no component
  * reflects, which preserves the elision on-vs-off differential invariant.
  *
@@ -821,11 +824,12 @@ function seedServerAttrs(instance, attrs) {
  * @returns {string}
  */
 function appendReflectedAttrs(opening, instance, presentAttrNames) {
-  const store = instance && instance.__ssrAttrs;
-  if (!(store instanceof Map) || store.size === 0) return opening;
+  if (!instance || typeof instance.getAttributeNames !== 'function') return opening;
   let extra = '';
-  for (const [name, value] of store) {
+  for (const rawName of instance.getAttributeNames()) {
+    const name = String(rawName).toLowerCase();
     if (presentAttrNames.has(name)) continue;
+    const value = instance.getAttribute(rawName);
     extra += value === '' ? ` ${name}` : ` ${name}="${escapeAttr(String(value))}"`;
   }
   if (!extra) return opening;

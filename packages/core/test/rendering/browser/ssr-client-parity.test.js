@@ -66,6 +66,21 @@ function ssrLightInner(ssr, tag) {
   return m ? m[1] : ssr;
 }
 
+/**
+ * The set of reflected/host attribute names on the SSR'd opening tag, minus
+ * the framework's own hydration artifacts (`data-webjs-prop-*`). Used to
+ * assert that a reflect:true property surfaces identically on the SSR opening
+ * tag and the live client element (the inner-HTML helpers above deliberately
+ * skip the opening tag).
+ */
+function ssrHostAttrNames(ssr, tag) {
+  const m = ssr.match(new RegExp(`<${tag}((?:"[^"]*"|'[^']*'|[^>])*)>`));
+  if (!m) return [];
+  return [...m[1].matchAll(/([a-zA-Z_:][\w:.-]*)(?:\s*=|\s|$)/g)]
+    .map((x) => x[1].toLowerCase())
+    .filter((n) => !n.startsWith('data-webjs-prop-'));
+}
+
 let host;
 function freshContainer() {
   if (host) host.remove();
@@ -203,6 +218,32 @@ suite('SSR vs client render parity (#184)', () => {
     const client = normalize(el.innerHTML);
     assert.equal(client, ssr, `willUpdate parity mismatch\nSSR:    ${ssr}\nCLIENT: ${client}`);
     assert.ok(ssr.includes('derived-3'), 'SSR emitted the willUpdate-derived value, not the constructor placeholder');
+  });
+
+  test('reflect:true constructor default: same attribute on the SSR tag and a fresh client element (#217)', async () => {
+    // SSR reflects reflect:true props before render, and the client reflects
+    // them on its first connected render, so a server-rendered element and a
+    // freshly-created one agree on the opening-tag attribute. Before the
+    // client-side fix, SSR emitted level="4" while a fresh client mount had
+    // no attribute, an SSR-vs-client divergence.
+    class P9 extends WebComponent {
+      static properties = { level: { type: Number, reflect: true } };
+      constructor() { super(); this.level = 4; }
+      render() { return html`<p>L${this.level}</p>`; }
+    }
+    P9.register('parity-reflect');
+    const ssrFull = await renderToString(html`<parity-reflect></parity-reflect>`);
+    assert.ok(/<parity-reflect[^>]*\blevel="4"/.test(ssrFull), 'SSR reflected the constructor default to an attribute');
+    const ssrAttrs = ssrHostAttrNames(ssrFull, 'parity-reflect');
+
+    const el = await clientMount(document.createElement('parity-reflect'));
+    assert.equal(el.getAttribute('level'), '4', 'fresh client element reflects the same attribute');
+    const clientAttrs = [...el.attributes].map((a) => a.name.toLowerCase()).filter((n) => !n.startsWith('data-webjs-prop-')).sort();
+    assert.equal(JSON.stringify(clientAttrs), JSON.stringify(ssrAttrs.sort()), `host attribute parity mismatch\nSSR:    ${ssrAttrs}\nCLIENT: ${clientAttrs}`);
+
+    // inner parity holds too
+    const ssrInner = normalize(ssrLightInner(ssrFull, 'parity-reflect'));
+    assert.equal(normalize(el.innerHTML), ssrInner, 'inner render parity');
   });
 
   test('counterfactual: a non-deterministic render FAILS the parity check', async () => {

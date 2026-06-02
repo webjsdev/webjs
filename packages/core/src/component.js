@@ -602,6 +602,13 @@ export class WebComponent extends Base {
 
   _activate() {
     this._connected = true;
+    // Reflect declared reflect:true properties from their current value now
+    // that the element is connected. Constructor / willUpdate defaults were
+    // set while disconnected (the setter skips reflection then), so this is
+    // what makes a freshly-created client element carry the same reflected
+    // attributes the SSR walker emitted. Same-value reflects are no-ops, so a
+    // hydrated element (whose attribute already arrived from SSR) is unchanged.
+    this._reflectDeclaredAttributes();
     const Ctor = /** @type any */ (this.constructor);
     if (Ctor.shadow === true) {
       const hadSSRShadow = !!this.shadowRoot;
@@ -979,21 +986,30 @@ export class WebComponent extends Base {
       for (const c of this.__controllers) {
         if (c.hostUpdate) c.hostUpdate();
       }
-      this._reflectServerAttributes();
+      this._reflectDeclaredAttributes();
     } finally {
       this._isUpdating = false;
     }
   }
 
   /**
-   * Reflect every reflect:true (non-state) property to its attribute during
-   * SSR. Reflection normally happens only in the browser (the property setter
-   * gates `_reflectAttribute` on `_connected`), so this is the SSR
-   * equivalent: it writes into the server attribute shim, which the SSR
-   * walker reads back to surface the attributes in the rendered HTML.
+   * Reflect every reflect:true (non-state) property to its attribute from its
+   * CURRENT value, regardless of whether the value arrived via the setter.
+   *
+   * The property setter only reflects on a connected change, so a value set
+   * in the constructor (a default) or in `willUpdate` is not reflected by the
+   * setter alone. This syncs those: the SSR walker calls it in
+   * `performServerUpdate` (writing into the server attribute shim, which the
+   * walker reads back into the rendered HTML), and `_activate` calls it on
+   * the client's first connected render. Running it on both sides is what
+   * keeps a server-rendered element and a freshly-created client element
+   * agree on their reflected attributes (matching lit, which reflects during
+   * the first update). `_reflectAttribute`'s re-entrancy guard makes a
+   * same-value reflect a no-op, so re-reflecting an attribute that already
+   * arrived from SSR does not churn.
    * @private
    */
-  _reflectServerAttributes() {
+  _reflectDeclaredAttributes() {
     const props = /** @type {any} */ (this.constructor).properties || {};
     for (const name of Object.keys(props)) {
       const decl = props[name];
