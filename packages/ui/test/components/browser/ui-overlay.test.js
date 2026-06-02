@@ -258,6 +258,36 @@ suite('ui-dropdown-menu', () => {
     root.remove();
   });
 
+  test('focus highlights the item (signal-backed data-highlighted), blur clears it', async () => {
+    const root = await mount(html`
+      <ui-dropdown-menu>
+        <ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger>
+        <ui-dropdown-menu-content>
+          <ui-dropdown-menu-item>One</ui-dropdown-menu-item>
+          <ui-dropdown-menu-item>Two</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
+    `);
+    const dm = root.querySelector('ui-dropdown-menu');
+    dm.show();
+    await tick();
+    const items = root.querySelectorAll('ui-dropdown-menu-item [role="menuitem"]');
+    assert.ok(items.length >= 2);
+    // Highlight rides a local signal -> ?data-highlighted re-render, so it
+    // applies after the microtask tick, not synchronously on focus.
+    items[0].focus();
+    await tick();
+    assert.equal(items[0].hasAttribute('data-highlighted'), true, 'focused item is highlighted');
+    assert.equal(items[1].hasAttribute('data-highlighted'), false, 'unfocused item is not highlighted');
+    // Moving focus to the next item blurs the first and highlights the second.
+    items[1].focus();
+    await tick();
+    assert.equal(items[0].hasAttribute('data-highlighted'), false, 'blurred item clears highlight');
+    assert.equal(items[1].hasAttribute('data-highlighted'), true, 'newly focused item is highlighted');
+    dm.hide();
+    root.remove();
+  });
+
   test('escape closes the dropdown', async () => {
     const root = await mount(html`
       <ui-dropdown-menu>
@@ -337,6 +367,10 @@ suite('ui-alert-dialog', () => {
     assert.ok(ad.hasAttribute('open'), 'host gets [open] attribute');
     const inner = ad.querySelector('ui-alert-dialog-content [role="alertdialog"]');
     assert.ok(inner, 'inner alertdialog rendered');
+    // showModal() reaches the own-rendered native <dialog> through the
+    // ref()/createRef() handle, so the native element is actually open.
+    const native = ad.querySelector('dialog[data-slot="alert-dialog-native"]');
+    assert.ok(native && native.open, 'ref()-driven showModal opened the native <dialog>');
     ad.hide();
     root.remove();
   });
