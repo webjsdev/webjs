@@ -246,6 +246,62 @@ suite('SSR vs client render parity (#184)', () => {
     assert.equal(normalize(el.innerHTML), ssrInner, 'inner render parity');
   });
 
+  test('compound component via closest(): client first paint marks the active item (#220)', async () => {
+    // A child derives its active state by reading the parent through
+    // closest(). This asserts the CLIENT first render (real DOM, real
+    // closest()) marks the matching item active and the others inactive.
+    // The SERVER side of the same components is pinned in the Node test
+    // packages/core/test/rendering/ssr-closest.test.js, where the server
+    // element shim resolves the parent via the SSR ancestor chain and
+    // produces the identical active/inactive state. Together the two pin
+    // SSR-vs-client parity for the compound pattern: the first paint a user
+    // sees before hydration equals the first render after it, so the active
+    // tab/item never flashes wrong. (renderToString cannot stand in for the
+    // server here when run IN the browser: its instances are detached real
+    // HTMLElements whose native closest() returns null, which is exactly why
+    // the server path uses the ancestor-chain shim instead.)
+    class ParityCxGroup extends WebComponent {
+      static properties = { value: { type: String } };
+      constructor() { super(); this.value = ''; }
+      render() { return html`<div data-group><slot></slot></div>`; }
+    }
+    ParityCxGroup.register('parityc-group');
+
+    class ParityCxItem extends WebComponent {
+      static properties = { value: { type: String } };
+      constructor() { super(); this.value = ''; }
+      render() {
+        const group = typeof this.closest === 'function' ? this.closest('parityc-group') : null;
+        const active = !!group && group.value === this.value && this.value !== '';
+        this.dataset.state = active ? 'active' : 'inactive';
+        this.ariaPressed = String(active);
+        return html`<button>${this.value}</button>`;
+      }
+    }
+    ParityCxItem.register('parityc-item');
+
+    // Build the compound tree fresh on the client and let the browser upgrade
+    // + render it (real closest() against the real DOM), with no SSR DOM.
+    const c = freshContainer();
+    const group = document.createElement('parityc-group');
+    group.setAttribute('value', 'b');
+    const itemA = document.createElement('parityc-item'); itemA.setAttribute('value', 'a');
+    const itemB = document.createElement('parityc-item'); itemB.setAttribute('value', 'b');
+    group.append(itemA, itemB);
+    c.appendChild(group);
+    if (group.updateComplete) await group.updateComplete;
+    if (itemA.updateComplete) await itemA.updateComplete;
+    if (itemB.updateComplete) await itemB.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The matching item (value="b") is active; the other is inactive. These
+    // are the SAME verdicts the Node SSR test asserts for the server paint.
+    assert.equal(itemB.getAttribute('data-state'), 'active', 'client marks the matching item active');
+    assert.equal(itemA.getAttribute('data-state'), 'inactive', 'client marks the non-matching item inactive');
+    assert.equal(itemB.getAttribute('aria-pressed'), 'true', 'client active item is aria-pressed');
+    assert.equal(itemA.getAttribute('aria-pressed'), 'false', 'client inactive item is not pressed');
+  });
+
   test('counterfactual: a non-deterministic render FAILS the parity check', async () => {
     // render() returns a different value on each call. The SSR call and the
     // fresh client render therefore diverge, which is exactly the

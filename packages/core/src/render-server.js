@@ -362,7 +362,7 @@ function browserMemberHint(e) {
  * @param {SuspenseCtx} [ctx]
  * @returns {Promise<string>}
  */
-async function injectDSD(html, ctx) {
+async function injectDSD(html, ctx, ancestors = []) {
   const tags = allTags();
   if (!tags.length) return html;
   // Sort longest tag name first so the regex alternation tries the most
@@ -391,6 +391,12 @@ async function injectDSD(html, ctx) {
     try {
       const isShadow = /** @type any */ (Cls).shadow === true;
       const instance = new /** @type any */ (Cls)();
+      // Thread the ancestor chain (the enclosing custom-element instances)
+      // so the server element shim's closest() can resolve a parent at SSR.
+      // Set before performServerUpdate so a willUpdate() that reads a parent
+      // via closest() sees the chain. Each child recursion below extends it.
+      instance.__ssrTag = tag;
+      instance.__ssrAncestors = ancestors;
       const attrMap = parseAttrs(attrs);
       // Decode `data-webjs-prop-*` attributes first (rich-typed values
       // emitted for `.prop=${val}` bindings in the parent template),
@@ -416,13 +422,16 @@ async function injectDSD(html, ctx) {
       // SSR. WebComponent instances expose performServerUpdate; bare
       // Base-extending kit components (no lifecycle) do not, so it is guarded.
       if (typeof instance.performServerUpdate === 'function') instance.performServerUpdate();
-      // Surface attributes the component set before render (reflected
-      // reflect:true props, or an explicit this.setAttribute in the
-      // constructor / willUpdate) that were not already in the source tag.
-      // Appending keeps the original tag byte-identical when nothing changed.
-      opening = appendReflectedAttrs(opening, instance, presentAttrNames);
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
+      // Surface attributes the component set up to and including render()
+      // that were not already in the source tag: reflected reflect:true
+      // props, an explicit this.setAttribute in the constructor / willUpdate,
+      // or a host-attribute mutation inside render() itself (a light-DOM
+      // compound-component pattern, e.g. this.dataset.state / this.className /
+      // this.hidden on the host). Reading after render() captures all three.
+      // Appending keeps the original tag byte-identical when nothing changed.
+      opening = appendReflectedAttrs(opening, instance, presentAttrNames);
       // Render the template to HTML. injectDSD recurses on the result so
       // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
       // get their own DSD pass.
@@ -432,7 +441,7 @@ async function injectDSD(html, ctx) {
         // Shadow DOM: native <slot> stays as-is in the DSD template. The
         // browser handles projection from the host's light-DOM children
         // into the shadow tree natively. No framework substitution here.
-        const innerProcessed = await injectDSD(rawInner, ctx);
+        const innerProcessed = await injectDSD(rawInner, ctx, [...ancestors, instance]);
         const rawStyles = /** @type any */ (Cls).styles;
         const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
         const styleStr = stylesToString(styleList);
@@ -495,7 +504,7 @@ async function injectDSD(html, ctx) {
         }
         const partitioned = partitionAuthoredBySlot(authoredInner);
         const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
-        const innerProcessed = await injectDSD(innerWithSlots, ctx);
+        const innerProcessed = await injectDSD(innerWithSlots, ctx, [...ancestors, instance]);
         edits.push({
           start: m.index,
           end: closeEnd,
