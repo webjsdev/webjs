@@ -1,6 +1,7 @@
 import { html } from '@webjsdev/core';
 import '../../components/observed-badge.ts';
 import '../../components/observe-badge.ts';
+import '../../components/ssr-derived-badge.ts';
 
 export const metadata = {
   title: 'Observed badge · webjs blog',
@@ -25,6 +26,7 @@ export default function Observed() {
         markup.
       </p>
       <observed-badge></observed-badge>
+      <ssr-derived-badge seed="42"></ssr-derived-badge>
     </section>
   `;
 }
