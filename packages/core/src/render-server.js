@@ -532,6 +532,11 @@ async function injectDSD(html, ctx, ancestors = []) {
   // independently against the original html, but those inner elements
   // are processed by the recursive injectDSD call on innerWithSlots.
   // Keeping both edits would double-process them and corrupt the output.
+  // A consequence: a nested instance's render() runs once per chain depth
+  // (the discarded top-level pass sees an empty ancestor chain, so its
+  // closest() reads null; the kept recursive pass has the real chain). The
+  // kept pass is the only output, and closest() is a read, so render() must
+  // stay pure at SSR (the standard SSR contract), not branch on side effects.
   edits.sort((a, b) => a.start - b.start);
   /** @type {{start:number, end:number, text:string}[]} */
   const filtered = [];
