@@ -45,6 +45,29 @@ npm run start -- --port 8080</pre>
     </ol>
     <p>Pick the mode that matches your security posture. The choice is per-deploy, not per-package: either everything goes through jspm.io or everything is locally vendored. Mixing modes per-package is not supported.</p>
 
+    <h3>Secure response headers</h3>
+    <p>webjs sets a baseline of standard security headers on every response, so a deployed app is not clickjackable or MIME-sniffable without any reverse-proxy configuration. The defaults are literal HTTP headers:</p>
+    <ul>
+      <li><code>X-Content-Type-Options: nosniff</code></li>
+      <li><code>X-Frame-Options: SAMEORIGIN</code></li>
+      <li><code>Referrer-Policy: strict-origin-when-cross-origin</code></li>
+      <li><code>Permissions-Policy: camera=(), microphone=(), geolocation=()</code></li>
+      <li><code>Strict-Transport-Security: max-age=63072000; includeSubDomains</code> in production over HTTPS only</li>
+    </ul>
+    <p>HSTS is gated to production AND HTTPS. webjs detects the original scheme from <code>X-Forwarded-Proto</code> (the header the trusted edge proxy forwards after terminating TLS), honoring the same proxy-trust posture as the rest of the framework, so HSTS is never set on a plain-HTTP hop or in dev. Set <code>WEBJS_NO_TRUST_PROXY=1</code> to stop trusting forwarded headers when the container is directly exposed.</p>
+    <p>A default is set only when the response does not already carry that header, so anything your middleware, a <code>route.&#123;js,ts&#125;</code> handler, or <code>expose</code> sets always wins.</p>
+    <h4>Per-path overrides</h4>
+    <p>Declare per-path header rules in <code>package.json</code> under <code>"webjs": &#123; "headers": [...] &#125;</code>, shaped like Next's. The <code>source</code> is a path pattern matched with the native URLPattern API, so <code>:param</code> and <code>:rest*</code> tokens work:</p>
+    <pre>&#123;
+  "webjs": &#123;
+    "headers": [
+      &#123; "source": "/embed/:path*", "headers": [&#123; "key": "X-Frame-Options", "value": null &#125;] &#125;,
+      &#123; "source": "/app/:path*",   "headers": [&#123; "key": "X-Frame-Options", "value": "DENY" &#125;] &#125;
+    ]
+  &#125;
+&#125;</pre>
+    <p>A rule can ADD a header, OVERRIDE a default by giving a new value, or DISABLE a default on a path with a <code>null</code> value (the first example drops <code>X-Frame-Options</code> so a public-embed route can be framed). Precedence, lowest to highest, runs secure defaults, then the <code>webjs.headers</code> path config, then app middleware (which always wins, since its headers are already on the response when webjs merges).</p>
+
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
     <ol>

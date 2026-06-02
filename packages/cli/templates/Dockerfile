@@ -8,6 +8,14 @@
 # falls back to esbuild, whose class-declaration transform breaks webjs's SSR
 # walker for multi-class component files. Do not lower this base image
 # below 24 (the same version the CI workflow and the framework pin).
+#
+# Security headers are set by the framework, not the proxy. webjs emits
+# X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and
+# Permissions-Policy on every response, plus Strict-Transport-Security in
+# production over HTTPS (detected from X-Forwarded-Proto on the trusted
+# edge). So the baseline needs no reverse-proxy config. Override or extend
+# per path with package.json "webjs": { "headers": [...] }. See the
+# framework AGENTS.md "Secure response headers" section.
 FROM node:24-alpine
 
 # openssl + ca-certificates are required by Prisma's query engine at runtime.
