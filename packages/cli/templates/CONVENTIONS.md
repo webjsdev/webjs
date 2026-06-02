@@ -878,11 +878,15 @@ toggle, the tab switch) requires JS.
   JS will fill it in. The first paint must be the right content.
 
 **SSR-meaningful component state.** The SSR pipeline constructs the
-component, applies its attributes, and calls `render()`. It does NOT
-call `connectedCallback`, `firstUpdated`, or any other browser-only
-lifecycle hook. Whatever state should appear on first paint MUST be
-set in the constructor (after `super()`) or be derivable from
-`static properties` + attributes on the rendered tag.
+component, applies its attributes, runs `willUpdate` and controllers'
+`hostUpdate`, and calls `render()`. It does NOT call `connectedCallback`,
+`firstUpdated`, `updated`, or any other browser-only lifecycle hook.
+Whatever state should appear on first paint MUST be set in the
+constructor (after `super()`), derived in `willUpdate`, or derivable
+from `static properties` + attributes on the rendered tag. Reading
+`this.getAttribute` / `hasAttribute` in `render()` works server-side (a
+server attribute shim backs the attribute methods), but a `Task`'s
+fetch still runs only on the client.
 
 ```ts
 import { WebComponent, html, signal } from '@webjsdev/core';
