@@ -24,6 +24,9 @@ const ROOT = resolve(__dirname, '..', '..');
 const BLOG_DIR = resolve(ROOT, 'examples', 'blog');
 
 let browser, page, serverProcess, baseUrl;
+// A second blog instance with elision forced OFF (WEBJS_ELIDE=0), for the
+// differential elision test that asserts on-vs-off observable parity.
+let offPage, offServerProcess, offBaseUrl;
 
 /**
  * Find a free port by binding to 0 and releasing.
@@ -45,7 +48,7 @@ function freePort() {
  * @param {number} port
  * @returns {Promise<import('node:child_process').ChildProcess>}
  */
-function startBlog(port) {
+function startBlog(port, extraEnv = {}) {
   const cliPath = resolve(ROOT, 'packages', 'cli', 'bin', 'webjs.js');
   return new Promise((res, reject) => {
     const child = spawn(
@@ -53,7 +56,7 @@ function startBlog(port) {
       [cliPath, 'dev', '--port', String(port)],
       {
         cwd: BLOG_DIR,
-        env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
+        env: { ...process.env, __WEBJS_DEV_CHILD: '1', ...extraEnv },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
@@ -1466,6 +1469,97 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(pageInBoot, false, 'inert page module must NOT appear in the boot script');
     assert.equal(pageFetched, false, 'inert page module must NOT be downloaded');
     assert.equal(layoutInBoot, true, 'the router-enabling layout still ships (SPA nav intact)');
+  });
+
+  // --- Differential elision: ON vs OFF must be observably identical (#181) ---
+  //
+  // `page` runs the default (elision ON) blog; `offPage` runs a SECOND blog
+  // instance with WEBJS_ELIDE=0 (everything ships). The invariant is that
+  // removing the elided JS never changes what the user sees or can do, so a
+  // real browser must render the same DOM and behave the same on both. The
+  // SAFE direction (over-ship) is invisible here; only the DANGEROUS
+  // direction (a needed module wrongly dropped, blanking content or breaking
+  // an interaction) makes these fail. This is the layer that would have
+  // caught the build-stamp regression instantly.
+  //
+  // The off-server lives in this nested describe (started lazily, torn down
+  // right after) rather than the suite-wide setup, so the rest of the e2e
+  // suite never pays for a second always-on dev server. Running two servers
+  // for the whole run added enough load to tip timing-sensitive tests into
+  // 5s waitFor timeouts.
+  describe('differential elision (#181)', () => {
+    before(async () => {
+      const offPort = await freePort();
+      offBaseUrl = `http://localhost:${offPort}`;
+      offServerProcess = await startBlog(offPort, { WEBJS_ELIDE: '0' });
+      offPage = await browser.newPage();
+    });
+
+    after(async () => {
+      if (offPage) await offPage.close();
+      if (offServerProcess) {
+        offServerProcess.kill('SIGTERM');
+        await new Promise((r) => { offServerProcess.on('exit', r); setTimeout(r, 3000); });
+      }
+    });
+
+    // Snapshot the observable content of <main>: visible text and the ordered
+    // tag structure, with framework hydration internals (comment markers, the
+    // live wall-clock) normalised away, since those are not observable output.
+    const observableMain = (pg) => pg.evaluate(() => {
+      const main = document.querySelector('main') || document.body;
+      const text = (main.textContent || '')
+        .replace(/\d{1,2}:\d{2}:\d{2}\s?[AP]M/gi, 'TIME')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const tags = [...main.querySelectorAll('*')].map((el) => el.tagName.toLowerCase());
+      return { text, tags };
+    });
+
+    test('the mixed page renders identically on vs off', async () => {
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await offPage.goto(`${offBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2500); // allow hydration on both
+      const onSnap = await observableMain(page);
+      const offSnap = await observableMain(offPage);
+      // The display-only badges (build-stamp, vendor-badge, muted-text) are
+      // elided ON and shipped OFF, yet their rendered output must match: that
+      // identity is exactly why they are safe to elide.
+      assert.deepEqual(onSnap.tags, offSnap.tags,
+        'post-hydration tag structure of <main> must match on vs off');
+      assert.equal(onSnap.text, offSnap.text,
+        'post-hydration visible text of <main> must match on vs off');
+    });
+
+    test('the interactive counter behaves identically on vs off', async () => {
+      // The counter is interactive, so it ships in BOTH builds and MUST work
+      // in both. If elision ever wrongly dropped its module on the ON side,
+      // the ON counter would not increment and this assertion fails: the live
+      // guard for the dangerous direction.
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await offPage.goto(`${offBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2500);
+
+      assert.equal(await getCounterValue(page), await getCounterValue(offPage),
+        'counter seeds to the same value on vs off');
+      await clickCounterButton(page, 'Increment');
+      await clickCounterButton(offPage, 'Increment');
+      await sleep(300);
+      const onAfter = await getCounterValue(page);
+      const offAfter = await getCounterValue(offPage);
+      assert.equal(onAfter, offAfter, `counter increments identically on vs off (on=${onAfter}, off=${offAfter})`);
+      assert.equal(onAfter, 4, `counter incremented from its seed (got ${onAfter})`);
+    });
+
+    test('the fully-static route renders identically on vs off', async () => {
+      await page.goto(`${baseUrl}/static-info`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await offPage.goto(`${offBaseUrl}/static-info`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(1500);
+      const onSnap = await observableMain(page);
+      const offSnap = await observableMain(offPage);
+      assert.deepEqual(onSnap.tags, offSnap.tags, 'static route tag structure must match on vs off');
+      assert.equal(onSnap.text, offSnap.text, 'static route visible text must match on vs off');
+    });
   });
 
   test('prefetch: hovering an internal link warms the cache; the click consumes it via SPA swap (no second fetch)', async () => {

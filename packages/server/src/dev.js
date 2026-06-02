@@ -105,10 +105,13 @@ const MIME = {
  * lint rules catch these at edit time. webjs is buildless end-to-end:
  * there is no bundler fallback.
  *
- * @type {Map<string, { mtimeMs: number, code: string, map: string | null }>}
+ * The transformed bytes are cached per request handler in `state.tsCache`
+ * (a `Map<string, { mtimeMs, code, map }>`), bounded to `TS_CACHE_MAX`
+ * entries. The cache is per-handler rather than module-global because the
+ * cached code bakes in that handler's elision verdict, so two handlers for
+ * the same app with different elision settings must not share it.
  */
 const TS_CACHE_MAX = 500;
-const TS_CACHE = new Map();
 
 /**
  * Auto-load `<appDir>/.env` into `process.env` once at boot. Mirrors
@@ -148,16 +151,40 @@ function loadAppEnv(appDir) {
 }
 
 /**
- * Read the project-level elision switch from `package.json`.
- * `{ "webjs": { "elide": false } }` disables display-only and inert-route
- * elision app-wide (everything ships, like before the feature existed).
- * Any other value, or an absent key, leaves elision enabled (the default).
- * Re-read on every rebuild so toggling the switch takes effect without a
- * server restart.
+ * Read the `WEBJS_ELIDE` environment override, if set.
+ * `0` / `false` / `off` / `no` (case-insensitive) force elision OFF;
+ * `1` / `true` / `on` / `yes` force it ON. Any other value, or an unset
+ * variable, returns `undefined` so the caller falls through to the
+ * `package.json` switch. The env override is the deploy-time / ops escape
+ * hatch: force-disable elision to rule it out while debugging a wrong-strip
+ * without editing committed code, or force-enable it regardless of an
+ * app's `package.json`. It is also the seam the differential elision test
+ * uses to render the same app on and off in one process.
+ * @returns {boolean | undefined}
+ */
+function elideEnvOverride() {
+  const raw = process.env.WEBJS_ELIDE;
+  if (raw == null || raw === '') return undefined;
+  const v = String(raw).trim().toLowerCase();
+  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+  if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
+  return undefined;
+}
+
+/**
+ * Read the project-level elision switch.
+ * Precedence: the `WEBJS_ELIDE` env override wins when set, otherwise the
+ * `package.json` `{ "webjs": { "elide": false } }` switch disables
+ * display-only and inert-route elision app-wide (everything ships, like
+ * before the feature existed). Any other value, or an absent key, leaves
+ * elision enabled (the default). Re-read on every rebuild so toggling
+ * either control takes effect without a server restart.
  * @param {string} appDir
  * @returns {Promise<boolean>}
  */
-async function readElideEnabled(appDir) {
+export async function readElideEnabled(appDir) {
+  const override = elideEnvOverride();
+  if (override !== undefined) return override;
   try {
     const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
     if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
@@ -267,6 +294,12 @@ export async function createRequestHandler(opts) {
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
     browserBoundFiles: null,
+    // Transformed-source cache (stripped TS + applied elision). Per-handler,
+    // NOT module-global: the cached bytes bake in THIS handler's elision
+    // verdict, so two handlers for the same app with different elision
+    // settings (a multi-tenant embedder, or the differential elision test)
+    // must not share it, or the second would serve the first's elided source.
+    tsCache: new Map(),
   };
 
   // All whole-app analysis is built lazily on the first request, memoized so
@@ -500,12 +533,12 @@ export async function createRequestHandler(opts) {
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
     clearVendorCache();
-    TS_CACHE.clear();
+    state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.
     // Wait out any in-flight build first so it cannot commit stale results
     // after the reset. A dependency edit can flip an elision verdict without
-    // changing an importer's mtime, hence the TS_CACHE.clear above.
+    // changing an importer's mtime, hence the state.tsCache.clear above.
     if (readyInFlight) { try { await readyInFlight; } catch {} }
     // Bump the vendor generation so a vendor resolve still in flight from the
     // previous build cannot flip vendorResolved against the fresh state.
@@ -1028,7 +1061,7 @@ async function handleCore(req, ctx) {
         appDir,
       };
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts);
+        return tsResponse(abs, dev, elideOpts, state.tsCache);
       }
       if (/\.m?js$/.test(abs)) {
         return jsModuleResponse(abs, dev, elideOpts);
@@ -1412,17 +1445,21 @@ async function stripTs(source, _abs) {
 
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
- * Result is cached by mtime so subsequent requests are instant; a
- * file edit invalidates naturally. `elideOpts` additionally strips
- * side-effect imports of display-only components from the served code.
+ * Result is cached by mtime in the handler's own `cache` so subsequent
+ * requests are instant; a file edit invalidates naturally. `elideOpts`
+ * additionally strips side-effect imports of display-only components from
+ * the served code, which is exactly why `cache` is the per-handler
+ * `state.tsCache` and not a module-global: the cached bytes bake in this
+ * handler's elision verdict.
  *
  * @param {string} abs
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
+ * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
  */
-async function tsResponse(abs, dev, elideOpts) {
+async function tsResponse(abs, dev, elideOpts, cache) {
   const st = await stat(abs);
-  const cached = TS_CACHE.get(abs);
+  const cached = cache.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
     return new Response(cached.code, {
       headers: {
@@ -1475,11 +1512,11 @@ async function tsResponse(abs, dev, elideOpts) {
     );
   }
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
-  if (TS_CACHE.size >= TS_CACHE_MAX) {
-    const oldest = TS_CACHE.keys().next().value;
-    TS_CACHE.delete(oldest);
+  if (cache.size >= TS_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
   }
-  TS_CACHE.set(abs, { mtimeMs: st.mtimeMs, code, map: null });
+  cache.set(abs, { mtimeMs: st.mtimeMs, code, map: null });
   return new Response(code, {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
