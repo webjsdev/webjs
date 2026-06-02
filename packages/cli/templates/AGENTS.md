@@ -24,8 +24,8 @@ the app the user actually asked for.
    stores (todos, posts, messages, products, comments, anything),
    define a Prisma model and persist there.
    - **NEVER** store app data in JSON files (`data/todos.json`,
-     `db.json`, …). The convention check `no-json-data-files` flags
-     this and the user's prompt explicitly forbids it.
+     `db.json`, …). It resets on reload and cannot scale. This is a project convention,
+     and the user's prompt explicitly forbids it.
    - **NEVER** use in-memory arrays or `Map`s as a substitute for the
      database. They vanish on every dev-server reload and aren't
      shared across processes.
@@ -944,5 +944,6 @@ composition, so a nested shell ends up dropped by the HTML parser.
 5. When unsure how a framework feature works, `grep` or `cat` the
    relevant `node_modules/@webjsdev/*/src/` file before asking the user.
 
-Project-specific conventions and overrides live in
-[CONVENTIONS.md](./CONVENTIONS.md).
+Project conventions live in [CONVENTIONS.md](./CONVENTIONS.md) (guidance
+you follow by judgment). `webjs check` is separate: correctness checks
+only, always on, no per-project disabling.

@@ -9,59 +9,41 @@ Edit the content below the marker to change the convention for your project.
 
 ---
 
-## How `CONVENTIONS.md` relates to `webjs check`
+## `CONVENTIONS.md` vs `webjs check`: two different things
 
-This markdown file holds **architectural conventions** (modules layout,
-styling, testing, git workflow) that the linter can't enforce
-programmatically. The `<!-- OVERRIDE -->` markers let you customize
-those for this project, and AI agents read them when writing code.
+This file is the source of truth for **project conventions**: how code
+is organized, named, and tested. They are preferences a reasonable
+project could do differently, so they are guidance (for humans and AI
+agents), not a hard gate. Customize any of them; sections marked
+`<!-- OVERRIDE -->` are explicit customization points.
 
-The **lint rules** are a separate, narrower thing: the boolean checks
-that `webjs check` runs (one function per action, components register
-themselves, tag names have hyphens, etc.). They are NOT documented in
-this file. Their **single source of truth** is the
-`"webjs": { "conventions": { … } }` key in `package.json`.
+`webjs check` is a separate, narrower tool: **correctness checks** that
+catch objectively broken code (a crash, a security leak, a build or
+type-strip failure). Those always run, there is no per-project
+disabling, and they are not listed here (run `webjs check --rules` to
+see them). The line between the two: *could a sensible app legitimately
+want this to pass?* If yes, it is a convention (this file); if no, it is
+a check (the tool).
 
-If that key is absent, **every default rule is enabled** and AI agents
-must follow all of them.
+### Project conventions (follow these)
 
-### Discovering the active rules
+These are the architectural conventions for this app. They are not
+enforced by `webjs check`; follow them by judgment.
 
-```sh
-webjs check --rules
-```
-
-prints every available rule with its description and shows which ones
-are currently disabled by this project's overrides. That command is the
-**authoritative** list. Do not maintain a copy elsewhere; it will drift.
-
-### Disabling a rule
-
-Add the rule name to `package.json` with a value of `false`:
-
-```jsonc
-{
-  "webjs": {
-    "conventions": {
-      "tests-exist": false,
-      "actions-in-modules": false
-    }
-  }
-}
-```
-
-Only `false` is meaningful. There's no way to tweak rule *behaviour*
-via config. A rule is either on or off.
-
-### Rule for AI agents
-
-1. Run `webjs check --rules` to learn the active rule set for this
-   project.
-2. Treat every rule not explicitly disabled as binding when writing
-   code.
-3. To change which rules are active, edit the `webjs.conventions`
-   block in `package.json`. Never inline a rule list into prose, since
-   it will drift.
+- **Server actions and queries live in `modules/<feature>/actions/` and
+  `modules/<feature>/queries/`** (`*.server.{js,ts}`), not loose in the
+  app root. Cross-cutting server infrastructure (the Prisma singleton,
+  session helpers, auth config) lives in `lib/`.
+- **One exported function per action/query file.** Name the file after
+  the function (`create-post.server.ts` exports `createPost`). It keeps
+  the action surface greppable.
+- **Every feature has tests.** A `modules/<feature>/` directory should
+  have matching test files under `test/<feature>/`. A unit test for
+  logic, a browser/e2e test for user-facing behaviour.
+- **Persist data with Prisma + SQLite, never JSON files.** The scaffold
+  wires up `prisma/schema.prisma` and `lib/prisma.server.ts`. A
+  `data/todos.json` or `db.json` used as a database resets on reload and
+  cannot scale; define a Prisma model instead.
 
 ---
 
@@ -125,9 +107,9 @@ checklist mirrors this list.
    If yes, update it on this PR. Common surfaces (non-exhaustive):
    - `AGENTS.md` (root and every nested one) for API surface, invariants,
      file-routing rules, project-wide agent workflow.
-   - `CONVENTIONS.md` (this file) for architectural conventions. Do NOT
-     enumerate lint rules in prose; those live in `package.json` under
-     `"webjs": { "conventions": { … } }`.
+   - `CONVENTIONS.md` (this file) for project conventions (layout,
+     naming, testing). The `webjs check` correctness rules are a separate
+     tool surface, not documented here (run `webjs check --rules`).
    - `README.md` (root and any nested ones) for install / use / public
      surface descriptions.
    - `CHANGELOG.md` for any user-visible change, including the SHA / PR
@@ -267,8 +249,8 @@ deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
    comments, users…), define a Prisma model in `prisma/schema.prisma`
    and persist there.
 2. **NEVER** create JSON files under `data/`, `db.json`, `posts.json`,
-   `todos.json`, etc. as a fake database. The `no-json-data-files`
-   convention check flags this and `webjs check` will fail.
+   `todos.json`, etc. as a fake database. It resets on reload and cannot
+   scale; this is a project convention (see the conventions section above).
 3. **NEVER** use module-scope arrays or `Map`s as a "store". They
    reset on every dev-server reload and can't scale beyond one process.
 4. **NEVER** use `localStorage` / `sessionStorage` to persist app data -
@@ -1023,15 +1005,17 @@ This project enforces a git workflow via agent-specific config files
 
 ---
 
-## Overriding conventions
+## Customizing conventions
 
-See the **"How `CONVENTIONS.md` relates to `webjs check`"** section at
-the top of this file. Short version: set a rule to `false` in
-`package.json` under `"webjs": { "conventions": { … } }`. With no
-override, every default rule is on.
+The conventions in this file are guidance, so customize them directly:
+edit the prose under any `<!-- OVERRIDE -->` marker. There is no
+`package.json` switch and nothing to toggle, because conventions are not
+enforced by a tool.
 
-Run `webjs check` to validate. Run `webjs check --rules` to list every
-rule with its description and current enabled state.
+`webjs check` is separate: it runs only correctness checks (a crash, a
+security leak, a build/type-strip failure), always, with no per-project
+disabling. Run `webjs check` to validate, and `webjs check --rules` to
+list those checks.
 
 ---
 

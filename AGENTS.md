@@ -33,7 +33,7 @@ config files that each agent reads automatically.**
 | File | Agent | Purpose |
 |---|---|---|
 | `AGENTS.md` | All agents | Framework API, conventions, recipes (this file) |
-| `CONVENTIONS.md` | All agents | Project-specific overridable conventions |
+| `CONVENTIONS.md` | All agents | Project conventions (guidance, customizable in the prose) |
 | `CLAUDE.md` | Claude Code | Points to AGENTS.md + CONVENTIONS.md, no duplication |
 | `.claude/settings.json` | Claude Code | PreToolUse hook guarding git merge/push to main; UserPromptSubmit hook routing prompts to matching skills |
 | `.cursorrules` | Cursor | Workflow rules, git rules, framework patterns |
@@ -641,7 +641,7 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 
    Default to full-stack when ambiguous.
 
-3. **Default to a real database (Prisma + SQLite). NEVER use JSON files, in-memory arrays, or localStorage as a substitute for persistence.** Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts`, and `npm run db:*` scripts. The `no-json-data-files` check flags JSON-as-database.
+3. **Default to a real database (Prisma + SQLite). NEVER use JSON files, in-memory arrays, or localStorage as a substitute for persistence.** Every scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts`, and `npm run db:*` scripts. Persisting data as JSON is a project convention violation (it resets on reload and cannot scale).
 4. **Treat the scaffold as REFERENCE, not the final product.** Replace the example `app/page.ts`, `User` model, and components.
 5. **Update `prisma/schema.prisma` to real models FIRST.** Run `webjs db migrate <name>`, then build pages/actions/queries.
 6. Full docs at **https://docs.webjs.com**.
@@ -705,27 +705,19 @@ The shim also defines `process.env.NODE_ENV` (`'development'` in `webjs dev`, `'
 
 ---
 
-## CONVENTIONS.md and the lint config: complementary, not redundant
+## CONVENTIONS.md and webjs check: two surfaces, split by nature
 
-Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. Sections marked `<!-- OVERRIDE -->` are customization points. **`CONVENTIONS.md` is markdown prose for architectural conventions** (modules layout, styling, testing, git workflow) the linter can't enforce programmatically.
+Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. It is the source of truth for **project conventions**: how code is organized, named, and tested (modules layout, action placement, one-function-per-file, the testing approach, styling, git workflow). These are preferences a reasonable project could do differently, so they are guidance, customizable directly in the prose (sections marked `<!-- OVERRIDE -->`), not enforced by any tool.
 
-**`webjs check` rules are a separate, narrower surface.** Source of truth at the project level is the `"webjs": { "conventions": { … } }` key in `package.json`. No override present → every default rule is enabled.
+**`webjs check` is a separate, narrower tool: correctness checks only.** Every rule catches objectively broken code (a crash, a security leak, a build or type-strip failure). They run unconditionally; there is no per-project disabling, and no `package.json` switch (the old `"webjs": { "conventions": { … } }` override was removed). Run `webjs check --rules` to list the checks; the rule descriptions are their own documentation.
 
-**Do NOT maintain a list of rules in prose.** Run `webjs check --rules` to enumerate them.
-
-### Disabling a rule
-
-```jsonc
-// package.json
-{ "webjs": { "conventions": { "tests-exist": false } } }
-```
+The dividing line: *could a sensible app legitimately want this to pass?* If yes, it is a convention (CONVENTIONS.md prose); if no, it is a check (the tool). That is why checks are not overridable (they catch real breakage) and conventions are not tool-enforced (they are judgment).
 
 ### What AI agents must do
 
-1. Read `CONVENTIONS.md` for architectural conventions.
-2. Run `webjs check --rules` to learn active lint rules.
-3. Treat every rule not explicitly disabled as binding.
-4. To change rules, edit the `webjs.conventions` block in `package.json` (never the prose).
+1. Read `CONVENTIONS.md` for the project conventions and follow them by judgment.
+2. Run `webjs check` and fix every violation (they are correctness bugs, not style).
+3. To change a convention, edit the prose in `CONVENTIONS.md`. There is nothing to toggle in `package.json`.
 
 ---
 

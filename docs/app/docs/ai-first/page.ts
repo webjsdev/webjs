@@ -103,7 +103,7 @@ export async function createPost(
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
       <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.server.ts</code> (singleton), <code>predev</code> / <code>prestart</code> hooks for <code>prisma generate</code> / <code>prisma migrate deploy</code>, and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
-      <li><strong><code>no-json-data-files</code> convention check.</strong> <code>webjs check</code> flags JSON files used as a fake database (<code>data/todos.json</code>, <code>db.json</code>, etc.) so an agent that takes the shortcut gets caught before shipping.</li>
+      <li><strong>Persist with Prisma, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in CONVENTIONS.md, so an agent reading it takes the database path.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
     <pre>User asks for…                                          Scaffold

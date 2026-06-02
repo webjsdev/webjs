@@ -28,40 +28,25 @@ export default function Conventions() {
 - Author styles via static styles = css\`...\`
 - Always call register()</pre>
 
-    <p>AI agents read <code>CONVENTIONS.md</code> before every task and follow the overrides. The markdown is for the <em>architectural</em> conventions the linter can't enforce.</p>
+    <p>AI agents read <code>CONVENTIONS.md</code> before every task and follow it. It is the source of truth for <em>project conventions</em>: how code is organized, named, and tested. These are preferences you can change, so they are guidance, not a hard gate.</p>
 
-    <h2>webjs check &amp; lint rules</h2>
-    <p>The <code>webjs check</code> command runs a set of boolean lint rules: one function per action, components register themselves, tag names have hyphens, and so on. These rules are a <strong>separate surface</strong> from <code>CONVENTIONS.md</code>: they are not listed in the markdown, and editing the markdown does not change which rules run.</p>
+    <h2>webjs check: correctness, not conventions</h2>
+    <p>The <code>webjs check</code> command is a <strong>separate tool</strong> from <code>CONVENTIONS.md</code>. It runs only <strong>correctness checks</strong>: rules that catch objectively broken code, such as a browser global in <code>render()</code> that crashes SSR, a non-public <code>process.env</code> read that leaks a secret, a reactive prop that silently breaks reactivity, or non-erasable TypeScript that fails the type-strip. Every rule always runs.</p>
 
-    <h3>Single source of truth</h3>
-    <p>The <strong>active rules for a project</strong> are determined by the <code>"webjs": { "conventions": { … } }</code> key in <code>package.json</code>. That is the only supported config surface. If it's absent, <strong>every default rule is enabled</strong> and AI agents must follow all of them.</p>
+    <h3>The dividing line</h3>
+    <p>One test decides where something belongs: <em>could a sensible app legitimately want this to pass?</em> If yes, it is a convention (it lives in <code>CONVENTIONS.md</code> as guidance). If no, it is a check (it lives in <code>webjs check</code> and always runs). That is why checks are not overridable, they catch real breakage, and conventions are not enforced by a tool, they are judgment.</p>
 
-    <h3>Discover the active rule set</h3>
-    <pre># Validate the project
+    <pre># Validate the project (correctness only)
 webjs check
 
-# List every rule, its description, and current enabled state
+# List the correctness checks and their descriptions
 webjs check --rules</pre>
-    <p><code>webjs check --rules</code> is the <strong>authoritative</strong> catalogue. It reads the project's config and tells you which rules are enabled and which are disabled by an override. Do not maintain a separate rule list in prose or in this documentation; it will drift.</p>
-
-    <h3>Disable a rule</h3>
-    <p>Add the rule name to <code>package.json</code> with a value of <code>false</code>:</p>
-    <pre>{
-  "webjs": {
-    "conventions": {
-      "tests-exist": false,
-      "actions-in-modules": false
-    }
-  }
-}</pre>
-    <p>Only <code>false</code> is meaningful. There is no way to tweak a rule's behavior, only switch it off.</p>
 
     <h3>Workflow for AI agents</h3>
     <ol>
-      <li>Read <code>CONVENTIONS.md</code> for architectural conventions.</li>
-      <li>Run <code>webjs check --rules</code> to learn which lint rules are active.</li>
-      <li>Treat every rule not explicitly disabled as binding.</li>
-      <li>To change which rules are active, edit the <code>webjs.conventions</code> block in <code>package.json</code>. Never embed a rule list into prose.</li>
+      <li>Read <code>CONVENTIONS.md</code> for the project conventions and follow them by judgment.</li>
+      <li>Run <code>webjs check</code> and fix every violation: they are correctness bugs, not style.</li>
+      <li>To change a convention, edit the prose in <code>CONVENTIONS.md</code>. There is no <code>package.json</code> switch and nothing to toggle.</li>
       <li>Run <code>webjs check</code> before every commit. AI agents run it automatically as part of their workflow.</li>
     </ol>
 
@@ -106,7 +91,7 @@ webjs test --e2e
       <li><strong>Unit tests</strong> for server actions, queries, and component rendering.</li>
       <li><strong>E2E tests</strong> for user-facing features (navigation, forms, auth flows).</li>
     </ul>
-    <p>The <code>webjs check</code> command flags modules without tests.</p>
+    <p>Tests-per-feature is a project convention (guidance), not a <code>webjs check</code> rule.</p>
 
     <h2>AI Agent Guardrails</h2>
     <p>webjs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Antigravity, and others.</p>
@@ -144,7 +129,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
       </thead>
       <tbody>
         <tr><td><code>AGENTS.md</code></td><td>All agents</td><td>Framework API, conventions, recipes (the source of truth)</td></tr>
-        <tr><td><code>CONVENTIONS.md</code></td><td>All agents</td><td>Project-specific overridable conventions</td></tr>
+        <tr><td><code>CONVENTIONS.md</code></td><td>All agents</td><td>Project conventions (guidance, customizable in the prose)</td></tr>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Points to AGENTS.md + CONVENTIONS.md</td></tr>
         <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>PreToolUse hook guarding git merge/push to main</td></tr>
         <tr><td><code>.cursorrules</code></td><td>Cursor</td><td>Workflow rules, git rules, framework patterns</td></tr>
@@ -196,7 +181,7 @@ cd my-app && npm run dev</pre>
       <li><code>CLAUDE.md</code>: quick reminders for Claude Code</li>
       <li>Agent config files (<code>.cursorrules</code>, <code>.agents/rules/workflow.md</code>, <code>.github/copilot-instructions.md</code>)</li>
       <li><code>.editorconfig</code> for consistent formatting</li>
-      <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>) and webjs conventions config</li>
+      <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>)</li>
     </ul>
 
     <p>Every file is ready to use immediately. The project works out of the box with <code>webjs dev</code>, and every AI agent that opens the project will automatically read the config files and follow the conventions.</p>

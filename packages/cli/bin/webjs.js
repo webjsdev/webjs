@@ -15,7 +15,7 @@ const USAGE = `webjs commands:
   webjs dev   [--port 8080]                       Start dev server with live reload
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check                                     Validate app against conventions
+  webjs check                                     Run correctness checks on the app
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir
@@ -212,22 +212,16 @@ async function main() {
       break;
     }
     case 'check': {
-      const { checkConventions, RULES, loadConventionOverrides } = await import('@webjsdev/server/check');
+      const { checkConventions, RULES } = await import('@webjsdev/server/check');
 
       if (rest.includes('--rules')) {
-        const overrides = await loadConventionOverrides(process.cwd());
-        const anyOverride = Object.keys(overrides).length > 0;
-        console.log('webjs check, available rules:');
-        console.log('  All rules are ENABLED by default. A rule is only off when');
-        console.log('  package.json "webjs": { "conventions": { ... } } sets it');
-        console.log('  to false.\n');
+        console.log('webjs check, correctness rules:');
+        console.log('  Every rule catches objectively broken code (a crash, a');
+        console.log('  security leak, or a build/type-strip failure) and always');
+        console.log('  runs. Project conventions (layout, style, process) are');
+        console.log('  guidance in CONVENTIONS.md, not rules here.\n');
         for (const r of RULES) {
-          const off = overrides[r.name] === false;
-          const status = off ? '[disabled by override]' : '[enabled]';
-          console.log(`  ${r.name.padEnd(30)} ${status.padEnd(24)} ${r.description}`);
-        }
-        if (!anyOverride) {
-          console.log('\n  (no overrides found; every rule above is active in this project)');
+          console.log(`  ${r.name.padEnd(30)} ${r.description}`);
         }
         break;
       }
@@ -235,7 +229,7 @@ async function main() {
       const violations = await checkConventions(process.cwd());
 
       if (violations.length === 0) {
-        console.log('webjs check: all conventions pass ✓');
+        console.log('webjs check: all checks pass ✓');
       } else {
         console.log(`webjs check: ${violations.length} violation(s) found\n`);
         for (const v of violations) {

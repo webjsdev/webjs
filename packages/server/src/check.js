@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join, relative, sep, basename, dirname } from 'node:path';
 import { walk } from './fs-walk.js';
 import {
@@ -10,18 +10,17 @@ import {
 /**
  * Convention validator for webjs apps.
  *
- * Scans an app directory and reports deviations from the conventions
- * documented in AGENTS.md. Designed to be run by AI agents, CI pipelines,
- * or `webjs lint` to catch structural mistakes early.
+ * Scans an app directory and reports correctness violations: things that
+ * crash the app, leak a secret, or fail the build / type-strip. Designed to be
+ * run by AI agents, CI pipelines, or `webjs check` to catch real breakage
+ * early. Every rule is unconditional (no per-project disabling): project
+ * conventions (layout, style, process) are guidance in CONVENTIONS.md, not
+ * rules in this tool.
  *
  * **How AI agents should use the output:**
  * Each violation includes a machine-readable `rule` identifier, the offending
  * `file` (relative to appDir), a human-readable `message`, and a suggested
  * `fix`. Agents should iterate the array and apply (or propose) the fixes.
- * Rules can be disabled per-project via the
- * `"webjs": { "conventions": { … } }` key in `package.json`. That is
- * the only supported config surface. If the key is absent, every
- * rule defaults to enabled.
  *
  * @module check
  */
@@ -50,16 +49,6 @@ import {
  */
 export const RULES = [
   {
-    name: 'actions-in-modules',
-    description:
-      'Server action files (*.server.{js,ts} or \'use server\') should live under modules/*/actions/ or modules/*/queries/, not loose in the app root. Files under lib/ are exempt: lib/ is the documented home for cross-cutting server infrastructure (prisma client, session helpers, auth config). Skipped when no modules/ directory exists.',
-  },
-  {
-    name: 'one-function-per-action',
-    description:
-      'Each .server.{js,ts} file under modules/*/actions/ or modules/*/queries/ should export exactly one async function (one-function-per-file convention). Files outside those two directories: lib/ infrastructure modules, route handlers: are exempt; this rule is specifically about the action/query file pattern.',
-  },
-  {
     name: 'components-have-register',
     description:
       'Component files that define a class extending WebComponent must register the class with ClassName.register(\'tag\') (or customElements.define). The server-side scanner derives the module URL from the file path.',
@@ -70,11 +59,6 @@ export const RULES = [
       'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
   },
   {
-    name: 'tests-exist',
-    description:
-      'Each modules/<feature>/ directory should have corresponding test files under test/unit/ or test/e2e/.',
-  },
-  {
     name: 'tag-name-has-hyphen',
     description:
       'Static tag = \'...\' in component files must contain a hyphen (HTML custom element spec).',
@@ -83,11 +67,6 @@ export const RULES = [
     name: 'reactive-props-use-declare',
     description:
       'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
-  },
-  {
-    name: 'no-json-data-files',
-    description:
-      'Apps must use Prisma + SQLite (already wired up in every scaffold) for persisted data, not JSON files. Flags JSON files that look like a fake database: top-level data/ JSON files (data/todos.json, data/posts.json…), or DB-shaped names (db.json, database.json, store.json, *-db.json) anywhere outside node_modules/, prisma/, .next/, dist/, build/, public/. Read-only seed data and config JSON (package.json, tsconfig.json, etc.) are exempt.',
   },
   {
     name: 'shell-in-non-root-layout',
@@ -160,105 +139,6 @@ function isServerActionFile(filePath, content) {
 function isComponentFile(relPath) {
   const segments = relPath.split(sep);
   return segments.includes('components');
-}
-
-/**
- * Public wrapper around `loadOverrides` for callers (CLI, docs tools)
- * that want to inspect what's disabled in a project without running
- * the full check pipeline.
- *
- * @param {string} appDir
- * @returns {Promise<Record<string, boolean>>}
- */
-export async function loadConventionOverrides(appDir) {
-  return loadOverrides(appDir);
-}
-
-/**
- * Load overrides from the `"webjs": { "conventions": { … } }` key in
- * `package.json`. Returns a map of rule name to boolean (true =
- * enabled, false = disabled). Missing rules default to true.
- *
- * @param {string} appDir
- * @returns {Promise<Record<string, boolean>>}
- */
-async function loadOverrides(appDir) {
-  try {
-    const pkgPath = join(appDir, 'package.json');
-    const pkgText = await readFile(pkgPath, 'utf8');
-    const pkg = JSON.parse(pkgText);
-    if (pkg.webjs && typeof pkg.webjs === 'object'
-      && pkg.webjs.conventions && typeof pkg.webjs.conventions === 'object') {
-      return pkg.webjs.conventions;
-    }
-  } catch {
-    // No package.json: every rule defaults to enabled.
-  }
-  return {};
-}
-
-/**
- * Check whether a rule is enabled given the overrides.
- * @param {string} ruleName
- * @param {Record<string, boolean>} overrides
- * @returns {boolean}
- */
-function isRuleEnabled(ruleName, overrides) {
-  if (ruleName in overrides) return overrides[ruleName] !== false;
-  return true;
-}
-
-/**
- * Guess a module name from a loose server action file path. Used for the
- * `fix` suggestion in `actions-in-modules`.
- * @param {string} relPath
- * @returns {string}
- */
-function guessModuleName(relPath) {
-  const segments = relPath.split(sep);
-  // Try to infer from the parent directory name
-  // e.g. app/api/users/create.server.ts -> "users"
-  for (let i = segments.length - 2; i >= 0; i--) {
-    const seg = segments[i];
-    if (seg !== 'app' && seg !== 'api' && !seg.startsWith('[') && !seg.startsWith('(') && !seg.startsWith('_')) {
-      return seg;
-    }
-  }
-  // Fall back to the file stem
-  const base = basename(relPath).replace(/\.server\.m?[jt]s$/, '').replace(/\.m?[jt]s$/, '');
-  return base;
-}
-
-/**
- * Count the number of named exported async functions in source text using
- * regex heuristics (no AST: intentionally fast and loose).
- *
- * Looks for patterns like:
- *   export async function name(...)
- *   export const name = async (...)
- *   export const name = async function(...)
- *   export default async function(...)
- *
- * @param {string} content
- * @returns {number}
- */
-function countExportedFunctions(content) {
-  const patterns = [
-    /export\s+async\s+function\s+\w+/g,
-    /export\s+const\s+\w+\s*=\s*async\s/g,
-    /export\s+default\s+async\s+function/g,
-    /export\s+function\s+\w+/g,
-    /export\s+const\s+\w+\s*=\s*(?:async\s*)?\(/g,
-    /export\s+const\s+\w+\s*=\s*(?:async\s*)?function/g,
-  ];
-  const seen = new Set();
-  for (const pat of patterns) {
-    let m;
-    while ((m = pat.exec(content)) !== null) {
-      seen.add(m.index);
-    }
-  }
-  return seen.size;
 }
 
 /**
@@ -468,12 +348,13 @@ function findBrowserMemberUses(code) {
 /**
  * Scan a webjs app directory and report convention violations.
  *
- * @param {string} appDir - absolute path to the app root (the directory
+ * Every rule is a correctness check (a crash, a security leak, or a
+ * build/type-strip failure), so they all run unconditionally. There is no
+ * per-project disabling: project conventions (layout, style, process) live in
+ * CONVENTIONS.md as guidance, not in this tool.
+ *
+ * @param {string} appDir  absolute path to the app root (the directory
  *   containing `app/`, `modules/`, `components/`, etc.)
- * @param {{ rules?: Record<string, boolean> }} [opts] - programmatic
- *   overrides. Merged on top of file-based overrides loaded from
- *   `package.json` `"webjs"."conventions"`. Set a rule to `false` to
- *   skip it.
  * @returns {Promise<Violation[]>}
  *
  * @example
@@ -485,37 +366,9 @@ function findBrowserMemberUses(code) {
  * }
  * ```
  */
-export async function checkConventions(appDir, opts) {
-  const fileOverrides = await loadOverrides(appDir);
-  const overrides = { ...fileOverrides, ...(opts?.rules || {}) };
-
+export async function checkConventions(appDir) {
   /** @type {Violation[]} */
   const violations = [];
-
-  // Determine if modules/ directory exists (small apps exempt from some rules)
-  let hasModulesDir = false;
-  try {
-    const s = await stat(join(appDir, 'modules'));
-    hasModulesDir = s.isDirectory();
-  } catch {
-    // no modules/ dir
-  }
-
-  // Determine which module feature names exist
-  /** @type {string[]} */
-  const moduleNames = [];
-  if (hasModulesDir) {
-    try {
-      const entries = await readdir(join(appDir, 'modules'), { withFileTypes: true });
-      for (const e of entries) {
-        if (e.isDirectory() && !e.name.startsWith('.')) {
-          moduleNames.push(e.name);
-        }
-      }
-    } catch {
-      // could not read modules/
-    }
-  }
 
   // Collect all JS/TS files in the app directory. Each entry carries
   // both the raw `content` (for rules that need verbatim source: the
@@ -538,56 +391,8 @@ export async function checkConventions(appDir, opts) {
     files.push({ abs, rel, content, scan: redactStringsAndTemplates(content) });
   }
 
-  // --- Rule: actions-in-modules ---
-  if (hasModulesDir && isRuleEnabled('actions-in-modules', overrides)) {
-    for (const { abs, rel, content } of files) {
-      if (!isServerActionFile(abs, content)) continue;
-      const normRel = rel.split(sep).join('/');
-      // OK: action / query files inside modules/<feature>/{actions,queries}/
-      if (/^modules\/[^/]+\/(actions|queries)\//.test(normRel)) continue;
-      // OK: module-scoped components/utils (utils may use 'use server' too)
-      if (/^modules\/[^/]+\/(components|utils)\//.test(normRel)) continue;
-      // OK: cross-cutting server infrastructure under lib/. The documented
-      // pattern puts the Prisma singleton, session helpers, auth config,
-      // password hashing, etc. in lib/: those files are intentionally
-      // multi-export 'use server' modules, not one-function actions.
-      if (/^lib\//.test(normRel)) continue;
-      // Anything else (loose at the root, under app/, etc.) is flagged.
-      const moduleName = guessModuleName(rel);
-      const fileBase = basename(rel);
-      violations.push({
-        rule: 'actions-in-modules',
-        file: rel,
-        message: `Server action should be in modules/${moduleName}/actions/`,
-        fix: `Move to modules/${moduleName}/actions/${fileBase}`,
-      });
-    }
-  }
-
-  // --- Rule: one-function-per-action ---
-  // Apply ONLY to files inside modules/<feature>/{actions,queries}/: that
-  // is where the one-function-per-file convention lives. lib/ infra modules
-  // and any other 'use server' file outside the action/query dirs are
-  // intentional multi-export utility modules and are exempt.
-  if (isRuleEnabled('one-function-per-action', overrides)) {
-    for (const { abs, rel, content } of files) {
-      if (!isServerActionFile(abs, content)) continue;
-      const normRel = rel.split(sep).join('/');
-      if (!/^modules\/[^/]+\/(actions|queries)\//.test(normRel)) continue;
-      const count = countExportedFunctions(content);
-      if (count > 1) {
-        violations.push({
-          rule: 'one-function-per-action',
-          file: rel,
-          message: `Server action file exports ${count} functions; convention is one per file`,
-          fix: 'Split into separate .server.{js,ts} files, one exported function each',
-        });
-      }
-    }
-  }
-
   // --- Rule: components-have-register ---
-  if (isRuleEnabled('components-have-register', overrides)) {
+  {
     for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
       // Use redacted source so a code-example string like
@@ -611,7 +416,7 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: reactive-props-use-declare ---
-  if (isRuleEnabled('reactive-props-use-declare', overrides)) {
+  {
     for (const { rel, scan } of files) {
       // Use redacted source so test-fixture-style strings like
       // `class X extends WebComponent { x = 0 }` inside template
@@ -640,7 +445,7 @@ export async function checkConventions(appDir, opts) {
   // `this` touched in any of those throws at SSR time. Those belong in
   // connectedCallback / post-render hooks, which SSR never calls. willUpdate is
   // scanned because it now runs at SSR (issue #217).
-  if (isRuleEnabled('no-browser-globals-in-render', overrides)) {
+  {
     for (const { rel, scan } of files) {
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       for (const body of extractWebComponentClassBodies(scan)) {
@@ -665,7 +470,7 @@ export async function checkConventions(appDir, opts) {
   // WEBJS_PUBLIC_* var and not NODE_ENV. The SSR shim only exposes those
   // two categories to the browser; any other read either leaks a secret
   // into the SSR'd HTML or reads as undefined after hydration.
-  if (isRuleEnabled('no-server-env-in-components', overrides)) {
+  {
     for (const { abs, rel, content } of files) {
       if (!isComponentFile(rel)) continue;
       if (isServerActionFile(abs, content)) continue;
@@ -689,132 +494,11 @@ export async function checkConventions(appDir, opts) {
     }
   }
 
-  // --- Rule: tests-exist ---
-  if (hasModulesDir && isRuleEnabled('tests-exist', overrides)) {
-    for (const mod of moduleNames) {
-      // Look for test files that reference this module
-      let hasTest = false;
-
-      // Check test/unit/ and test/e2e/
-      for (const testDir of ['test/unit', 'test/e2e', 'test']) {
-        try {
-          const testDirAbs = join(appDir, testDir);
-          for await (const testFile of walk(testDirAbs, (p) => /\.(test|spec)\.m?[jt]sx?$/.test(p))) {
-            const testRel = relative(appDir, testFile);
-            // Check if test file name contains the module name
-            if (testRel.toLowerCase().includes(mod.toLowerCase())) {
-              hasTest = true;
-              break;
-            }
-          }
-        } catch {
-          // test directory doesn't exist
-        }
-        if (hasTest) break;
-      }
-
-      if (!hasTest) {
-        violations.push({
-          rule: 'tests-exist',
-          file: `modules/${mod}`,
-          message: `No test files found for module "${mod}"`,
-          fix: `Add test files under test/unit/${mod}.test.js or test/e2e/${mod}.test.js`,
-        });
-      }
-    }
-  }
-
-  // --- Rule: no-json-data-files ---
-  // Catch AI agents (or hurried humans) using JSON files as a substitute for
-  // the real database. Every scaffold ships Prisma + SQLite ready to go, so
-  // there is never a good reason to invent `data/todos.json`, `db.json`,
-  // etc. The rule is intentionally narrow: we only flag JSON files that
-  // *look like* a database: by location (top-level `data/` directory) or by
-  // name (db/database/store/*-db). Config and read-only seed JSON elsewhere
-  // is left alone.
-  if (isRuleEnabled('no-json-data-files', overrides)) {
-    /** @type {Array<{rel: string, why: string}>} */
-    const suspects = [];
-    /**
-     * @param {string} dir absolute
-     * @param {string} relBase relative to appDir
-     */
-    async function scanDir(dir, relBase) {
-      /** @type {import('node:fs').Dirent[]} */
-      let entries;
-      try {
-        entries = await readdir(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        const name = e.name;
-        if (name.startsWith('.')) continue;
-        // Skip directories we know are not the user's data dir.
-        if (e.isDirectory()) {
-          if (
-            name === 'node_modules' ||
-            name === 'prisma' ||
-            name === 'dist' ||
-            name === 'build' ||
-            name === '.next' ||
-            name === 'coverage' ||
-            name === 'public'
-          ) continue;
-          await scanDir(join(dir, name), relBase ? `${relBase}/${name}` : name);
-          continue;
-        }
-        if (!e.isFile()) continue;
-        if (!name.endsWith('.json')) continue;
-        const rel = relBase ? `${relBase}/${name}` : name;
-
-        // Skip well-known config / tooling JSON.
-        const configNames = new Set([
-          'package.json', 'package-lock.json', 'tsconfig.json',
-          'jsconfig.json', 'manifest.json', 'site.webmanifest',
-          '.eslintrc.json', '.prettierrc.json', 'compose.json',
-          'turbo.json', 'lerna.json', 'nx.json', 'biome.json',
-          'renovate.json', 'vercel.json', 'now.json', 'fly.json',
-        ]);
-        if (configNames.has(name)) continue;
-
-        // Trigger 1: any JSON under a top-level `data/` directory.
-        if (rel.startsWith('data/')) {
-          suspects.push({ rel, why: `JSON file in top-level data/ directory (likely a fake database)` });
-          continue;
-        }
-
-        // Trigger 2: file name looks like a database.
-        const lower = name.toLowerCase();
-        const dbShapedName =
-          lower === 'db.json' ||
-          lower === 'database.json' ||
-          lower === 'store.json' ||
-          lower === 'storage.json' ||
-          /-db\.json$/.test(lower) ||
-          /\.db\.json$/.test(lower);
-        if (dbShapedName) {
-          suspects.push({ rel, why: `file name "${name}" suggests it is being used as a database` });
-        }
-      }
-    }
-    await scanDir(appDir, '');
-
-    for (const s of suspects) {
-      violations.push({
-        rule: 'no-json-data-files',
-        file: s.rel,
-        message: `${s.why}. webjs apps must persist data with Prisma + SQLite (already wired up: see prisma/schema.prisma and lib/prisma.server.ts), not JSON files.`,
-        fix: `Define a Prisma model in prisma/schema.prisma for this data, run \`webjs db migrate <name>\` to create the migration, then read/write via \`import { prisma } from 'lib/prisma.server.ts'\`. Delete ${s.rel} once the data has moved.`,
-      });
-    }
-  }
-
   // --- Rule: shell-in-non-root-layout ---
   // Only app/layout.{js,ts} may write <!doctype>/<html>/<head>/<body>. The
   // framework auto-emits the shell around the whole composition; a nested
   // shell ends up duplicated and silently dropped by the HTML parser.
-  if (isRuleEnabled('shell-in-non-root-layout', overrides)) {
+  {
     // Root layout = exactly "app/layout.js" or "app/layout.ts".
     const ROOT_LAYOUT = /^app\/layout\.(?:js|mjs|ts|mts)$/;
     // Any other layout or page under app/ (including pages, nested layouts).
@@ -858,7 +542,7 @@ export async function checkConventions(appDir, opts) {
   // the editor before they ever hit the dev server. The companion
   // no-non-erasable-typescript rule (below) catches violations even if
   // the tsconfig flag is unset.
-  if (isRuleEnabled('erasable-typescript-only', overrides)) {
+  {
     let tsconfigContent = null;
     try {
       tsconfigContent = await readFile(join(appDir, 'tsconfig.json'), 'utf8');
@@ -901,7 +585,7 @@ export async function checkConventions(appDir, opts) {
   // case where the flag is missing OR the user has bypassed it and
   // written offending syntax anyway. Both rules ship enabled by
   // default so violators get the strongest signal possible.
-  if (isRuleEnabled('no-non-erasable-typescript', overrides)) {
+  {
     /** @type {Array<{ name: string, regex: RegExp, fix: string }>} */
     const NON_ERASABLE_PATTERNS = [
       {
@@ -992,7 +676,7 @@ export async function checkConventions(appDir, opts) {
   // directive alone does nothing (the file is served to the browser as
   // plain source and exports are not registered as RPC), which is a
   // silent footgun. The fix is mechanical: rename the file.
-  if (isRuleEnabled('use-server-needs-extension', overrides)) {
+  {
     for (const { rel, content } of files) {
       if (!hasUseServerDirective(content)) continue;
       if (/\.server\.m?[jt]s$/.test(rel)) continue; // OK: has both markers
@@ -1009,7 +693,7 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: tag-name-has-hyphen ---
-  if (isRuleEnabled('tag-name-has-hyphen', overrides)) {
+  {
     for (const { rel, scan } of files) {
       if (!isComponentFile(rel)) continue;
       // Use redacted source. A `register('tag')` call inside a
@@ -1055,7 +739,7 @@ export async function checkConventions(appDir, opts) {
   //
   // Skipped when the directory isn't a git repo or has no .gitignore
   // (the user hasn't opted into version control yet).
-  if (isRuleEnabled('gitignore-vendor-not-ignored', overrides)) {
+  {
     const hasGit = await pathExists(join(appDir, '.git'));
     const hasGitignore = await pathExists(join(appDir, '.gitignore'));
     if (hasGit && hasGitignore) {
