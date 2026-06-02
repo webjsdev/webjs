@@ -64,6 +64,7 @@
  * Design tokens used: --background, --border, --muted-foreground.
  */
 import { WebComponent, html, unsafeHTML } from '@webjsdev/core';
+import { ref, createRef } from '@webjsdev/core/directives';
 import { buttonClass } from './button.ts';
 
 // --------------------------------------------------------------------------
@@ -262,18 +263,23 @@ export class UiDialogContent extends WebComponent {
   };
   declare showCloseButton: string;
 
+  // ref to the own-rendered native <dialog>. render() creates it, so a
+  // ref() binding is the lit-idiomatic handle (no querySelector against
+  // a string selector into the component's own output).
+  #dialog = createRef<HTMLDialogElement>();
+
   constructor() {
     super();
     this.showCloseButton = 'true';
   }
 
   showModal(): void {
-    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    const native = this.#dialog.value;
     if (native && !native.open) native.showModal();
   }
 
   close(): void {
-    const native = this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    const native = this.#dialog.value;
     if (native?.open) native.close();
   }
 
@@ -283,6 +289,7 @@ export class UiDialogContent extends WebComponent {
     return html`<dialog
       data-slot="dialog-native"
       class=${NATIVE_DIALOG_CLASS}
+      ${ref(this.#dialog)}
       @close=${this._onNativeClose}
       @click=${this._onNativeBackdropClick}
     ><div

@@ -1,11 +1,12 @@
 /**
- * Button: styled `<button>` via a class-helper function. Use with a real
- * native element so form submission, focus, keyboard activation, screen-reader
- * semantics all "just work".
+ * Button: styled native `<button>`. Tier-1 class helper. Compose with a
+ * real `<button>` (or `<a>` for link-styled buttons) so form submission,
+ * focus, keyboard activation, and screen-reader semantics all "just work".
  *
  * shadcn parity:
- *   variants: default | destructive | outline | secondary | ghost | link
- *   sizes:    default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg
+ *   Button (variant: default | destructive | outline | secondary | ghost | link)
+ *         (size:    default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg)
+ *                                            → buttonClass({ variant, size })
  *
  * Usage:
  *   <button class=${buttonClass()} type="submit">Save</button>
@@ -13,9 +14,8 @@
  *   <button class=${buttonClass({ size: 'icon' })} aria-label="Settings">⚙</button>
  *   <a       class=${buttonClass({ variant: 'link' })} href="/about">About</a>
  *
- * The shadcn React component supports `asChild` to apply Button styles to a
- * different element. The web equivalent is just calling buttonClass() and
- * spreading the classes onto whatever element you want: no Slot needed.
+ * shadcn React's `asChild` (Slot) prop has no equivalent here: just call
+ * `buttonClass(...)` and spread the classes onto whatever element you want.
  *
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
@@ -23,8 +23,16 @@
  */
 import { cn } from '../../lib/utils/cn.ts';
 
+// cursor-pointer is on the BASE so every variant (default, outline,
+// ghost, link, …) gets the right hover affordance. Native <button>
+// defaults to the OS arrow cursor in Chromium and Firefox: fine for
+// native chrome but unusual for app buttons; shadcn's modern Button
+// has long since gravitated toward an explicit cursor-pointer in the
+// real world (see the open issue shadcn-ui/ui#1791). disabled:pointer-
+// events-none below already suppresses cursor on disabled buttons by
+// virtue of the element not receiving pointer events at all.
 const BASE =
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
 const VARIANTS = {
   default: 'bg-primary text-primary-foreground hover:bg-primary/90',
