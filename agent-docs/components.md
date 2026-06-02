@@ -44,7 +44,7 @@ line, and only in TypeScript files.
 
 Assignments during `willUpdate` fold into the current cycle (no new render scheduled); assignments during `updated` or `firstUpdated` queue a fresh cycle. The framework gates this via an internal flag, so authors don't manage it.
 
-All hooks are **client-only**. The SSR pipeline calls `instance.render()` directly and does not invoke `shouldUpdate` / `willUpdate` / `update` / `updated` / `firstUpdated` / `connectedCallback` / `disconnectedCallback`. Set SSR-meaningful defaults in the constructor; use lifecycle hooks for browser-only work.
+The SSR pipeline runs the **pre-render value-deriving hooks** before `render()`: `willUpdate` (so derived state is in the first paint) and controllers' `hostUpdate`, then it reflects `reflect: true` properties to attributes. The rest stay **client-only** and SSR does not invoke them: `shouldUpdate`, the `update` DOM commit, `hostUpdated`, `updated`, `firstUpdated`, `connectedCallback`, `disconnectedCallback`. Set SSR-meaningful defaults in the constructor, derive SSR-visible state in `willUpdate`, and keep browser-only work (DOM queries, layout, localStorage, viewport) in `connectedCallback` / `firstUpdated`. A `Task` is the one controller whose `hostUpdate` does not act at SSR: it ships the `INITIAL` state and runs only on hydration, so no request fires server-side.
 
 For component-local state, create an instance signal in the constructor and call `signal.set(...)` to mutate. The built-in `SignalWatcher` re-runs `render()` on the next microtask; the same lifecycle hooks fire as for reactive-property changes.
 

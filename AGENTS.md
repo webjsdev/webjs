@@ -405,13 +405,13 @@ Every update cycle runs these hooks in order. All receive a `changedProperties` 
 | 7 | `updated(changedProperties)` | After every render | Post-render DOM work conditional on what changed |
 | 8 | `updateComplete` Promise | Resolves last | `await el.updateComplete` after triggering an update |
 
-The `update()` body has an error boundary that calls `renderError(error)` if `render()` throws. All hooks are **client-only**; SSR doesn't call them (SSR walker calls `instance.render()` directly).
+The `update()` body has an error boundary that calls `renderError(error)` if `render()` throws. At SSR the walker runs the pre-render value-deriving hooks (`willUpdate`, then controllers' `hostUpdate`) before `render()` and reflects `reflect: true` properties, so derived state and reflected attributes land in the first paint. The remaining hooks stay **client-only**: `shouldUpdate`, the `update` DOM commit, `firstUpdated`, `updated`, and the connection callbacks run only in the browser.
 
 **ReactiveControllers** are composable lifecycle logic via `host.addController(this)`. Built-in `Task`, `ContextProvider`, `ContextConsumer` are all controllers. See `agent-docs/components.md`.
 
 ### SSR-safe state (progressive enhancement)
 
-The SSR pipeline runs the constructor, applies attributes, calls `instance.render()`, and inlines the result. **It does NOT call `connectedCallback`, `firstUpdated`, or any browser-only hook.** Those run after script load.
+The SSR pipeline runs the constructor, applies attributes, runs `willUpdate` and controllers' `hostUpdate`, calls `instance.render()`, and inlines the result. **It does NOT call `connectedCallback`, `firstUpdated`, `updated`, or any browser-only hook.** Those run after script load. So a value derived in `willUpdate` is in the SSR'd HTML, but browser-only data (localStorage, viewport) still belongs in `connectedCallback`.
 
 Rules:
 
@@ -420,7 +420,7 @@ Rules:
 - **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
 - **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
-**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth, and `agent-docs/lit-muscle-memory-gotchas.md` for the full catalog of lit patterns that produce broken SSR or silent reactivity failures in webjs. A browser global or `HTMLElement` member (`document`, `window`, `localStorage`, `this.setAttribute`, `this.classList`, ...) touched in the constructor or `render()` throws during SSR; `webjs check`'s `no-browser-globals-in-render` rule flags it, and an SSR crash on one now names the member and the fix.
+**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth, and `agent-docs/lit-muscle-memory-gotchas.md` for the full catalog of lit patterns that produce broken SSR or silent reactivity failures in webjs. A genuinely browser-only global or `HTMLElement` member (`document`, `window`, `localStorage`, `this.querySelector`, `this.classList`, `this.attachShadow`, ...) touched in the constructor or `render()` throws during SSR, and `webjs check`'s `no-browser-globals-in-render` rule flags it, with the SSR crash naming the member and the fix. The attribute methods (`getAttribute` / `setAttribute` / `hasAttribute` / `toggleAttribute`), the event methods, and `attachInternals` are backed by a server element shim, so reading attributes in `render()` and reflecting properties during the SSR update cycle are supported (not flagged).
 
 ### Light DOM (default) vs Shadow DOM (opt-in)
 

@@ -64,19 +64,23 @@ Practical consequences for agents writing webjs code.
    (optimistic UI, in-flight indicators tied to client state,
    keyboard shortcuts).
 
-## The SSR contract: constructor and `render()` only
+## The SSR contract: the pre-render lifecycle plus `render()`
 
-By design, the webjs SSR pipeline runs three steps. Construct the
-instance. Apply attributes. Call `instance.render()`. Nothing else
-fires server-side. Not `connectedCallback`, not `willUpdate`, not
-`shouldUpdate`, not `firstUpdated`, not `updated`, not controllers'
-`hostConnected` / `hostUpdate` / `hostUpdated`. See
+By design, the webjs SSR pipeline constructs the instance, applies
+attributes, runs the **pre-render value-deriving hooks** (`willUpdate`,
+then controllers' `hostUpdate`), reflects `reflect: true` properties,
+and calls `instance.render()`. Nothing past render fires server-side.
+Not `connectedCallback`, not `shouldUpdate`, not the `update` DOM
+commit, not `firstUpdated`, not `updated`, not controllers'
+`hostConnected` / `hostUpdated`. See
 `packages/core/src/render-server.js` around line 357.
 
-The mental model is one sentence. Code in the constructor and `render()`
-must be SSR-safe (no browser APIs). Code in every other hook is
-client-only and can freely use any browser API without an `isServer`
-guard.
+The mental model is one sentence. Code in the constructor, `willUpdate`,
+and `render()` must avoid the genuinely browser-only surface (`document`,
+`window`, `localStorage`, `navigator`, `querySelector`, layout reads),
+though the attribute, event, and `attachInternals` methods are backed by
+a server shim and are safe. Code in every other hook is client-only and
+can freely use any browser API without an `isServer` guard.
 
 The gotchas below are all violations of that rule.
 
@@ -104,9 +108,10 @@ export default async function User({ params }) {
 ### 2. Using `Task` for initial-paint data
 
 Lit's canonical async pattern. The `Task` controller wires up a fetcher
-that runs on host update. In webjs, `Task` is client-only by design
-(`hostUpdate` does not fire server-side). SSR ships the pending state,
-then the client renders the resolved state, causing a flash.
+that runs on host update. Controllers' `hostUpdate` does fire at SSR, but
+`Task` deliberately does not auto-run server-side: it keeps its `INITIAL`
+state and runs only on hydration, so no request fires during SSR. The
+client then renders the resolved state, causing a flash.
 
 `Task` is still useful for client-time async (interaction-triggered
 mutations, polling, websocket reactions). For initial-paint data, fetch
@@ -139,19 +144,25 @@ connectedCallback() {
 }
 ```
 
-The same applies to HTMLElement instance members on `this`
-(`this.setAttribute(...)`, `this.classList`, `this.querySelector(...)`,
-`this.attachShadow(...)`, `this.hasAttribute(...)`): the SSR-time instance is
-a bare class with no DOM, so they throw. Read an attribute that drives render
-through a reactive property (`static properties` + `declare`) instead of
-`this.hasAttribute(...)`; the SSR walker applies the attribute to the property
-before calling render.
+This applies only to the genuinely browser-only HTMLElement members on
+`this` (`this.classList`, `this.querySelector(...)`,
+`this.attachShadow(...)`, `this.getBoundingClientRect(...)`, `this.focus()`):
+the SSR-time instance has no DOM, so they throw. The attribute methods
+(`this.getAttribute` / `setAttribute` / `hasAttribute` / `toggleAttribute`),
+the event methods (`addEventListener` / `removeEventListener` /
+`dispatchEvent`), and `this.attachInternals()` ARE backed by a server shim,
+so reading an attribute in `render()`, wiring a delegated listener in the
+constructor, or reflecting a property during the SSR update cycle all work.
+Reading attributes that drive render through a reactive property
+(`static properties` + `declare`) is still the idiomatic path, but
+`this.hasAttribute(...)` no longer crashes.
 
-Two guards catch this. `webjs check` flags browser globals and HTMLElement
-members used in a constructor or render body (the `no-browser-globals-in-render`
-rule). And if one slips through, the SSR crash is now actionable: the log names
-the offending member and tells you to move it to `connectedCallback` or a
-lifecycle hook, instead of a raw `document is not defined`.
+Two guards catch the browser-only cases. `webjs check` flags browser
+globals and the still-unsupported HTMLElement members used in a constructor
+or render body (the `no-browser-globals-in-render` rule). And if one slips
+through, the SSR crash is actionable: the log names the offending member and
+tells you to move it to `connectedCallback` or a lifecycle hook, instead of
+a raw `document is not defined`.
 
 ### 4. Top-level imports of browser-only libraries
 
@@ -240,12 +251,15 @@ mutations via `MutationObserver`. Code that reads
 empty list in light DOM and a populated list in shadow DOM. Use
 `slotchange` to react instead of reading synchronously.
 
-## Lifecycle hooks that do not run server-side
+## Lifecycle subtleties at SSR
 
-### 9. `willUpdate` computing state that needs to appear in SSR
+### 9. `willUpdate` computing state for SSR (this now works)
+
+This used to be a gotcha. The SSR pipeline now runs `willUpdate` (and
+controllers' `hostUpdate`) before `render()`, so deriving render state
+there is correct in the first paint:
 
 ```ts
-// wrong
 willUpdate(changedProperties) {
   this.fullName = `${this.first} ${this.last}`;
 }
@@ -254,20 +268,13 @@ render() {
 }
 ```
 
-The SSR HTML shows `<p></p>` because `willUpdate` is client-only.
-
-Fix. Compute in `render()` directly, in a property setter, or via a
-`static properties` setter wrapper. The rule is broader than this one
-hook. Any value that needs to appear in SSR output must be computable
-from constructor-initialized state plus applied attributes plus
-`render()` body alone.
-
-```ts
-render() {
-  const fullName = `${this.first} ${this.last}`;
-  return html`<p>${fullName}</p>`;
-}
-```
+The SSR HTML now shows `<p>Ada Lovelace</p>`. The value must still be a
+pure function of constructor state plus applied attributes (no
+browser-only APIs), since SSR has no DOM. What still does NOT run
+server-side is the post-render and connection hooks (`update` commit,
+`firstUpdated`, `updated`, `connectedCallback`, controllers'
+`hostConnected` / `hostUpdated`), so state those compute is absent from
+the first paint.
 
 ### 10. `ContextProvider` for server-known data
 
@@ -295,7 +302,8 @@ transient UI state).
 | `student: Student = { ... }` field initializer | `declare student: Student` plus constructor default |
 | `@property()` decorator | `static properties = { ... }` plus `declare` |
 | `static styles = css` with default shadow | Add `static shadow = true`, or switch to Tailwind |
-| `willUpdate` for SSR-visible derived state | Compute inline in `render()` |
+| `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |
+| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim) |
 | `ContextProvider` for server-known data | Pass via props from the page function |
 
 ## When in doubt

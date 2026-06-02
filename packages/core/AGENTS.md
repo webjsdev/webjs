@@ -28,8 +28,8 @@ the same output in all three.
 |---|---|
 | `html.js` | `` html`` `` tagged-template → `TemplateResult`, plus `MARKER` and `isTemplate` |
 | `css.js` | `` css`` `` → `CSSResult`, `adoptStyles`, `stylesToString` |
-| `component.js` | `WebComponent` base class: lifecycle, properties, reactive accessors, light-vs-shadow DOM, scheduling, slot host wiring |
-| `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming), SSR slot substitution in `injectDSD` |
+| `component.js` | `WebComponent` base class: lifecycle, properties, reactive accessors, light-vs-shadow DOM, scheduling, slot host wiring. On the server the base is a DOM shim (attribute methods backed by a Map, no-op events, inert `attachInternals`); `performServerUpdate` runs the pre-render lifecycle (`willUpdate` + controllers' `hostUpdate` + reflection) for SSR |
+| `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming), SSR slot substitution in `injectDSD`. The walker seeds the server attribute shim from the source attributes, calls `performServerUpdate` before `render()`, and appends reflected/added attributes to the opening tag |
 | `render-client.js` | Client-side patcher + hydration; the only file that touches `document`. Also discovers and binds light-DOM slot parts |
 | `slot.js` | Light-DOM `<slot>` runtime: `HTMLSlotElement` polyfills (`assignedNodes`, `assignedElements`, `slotchange`), projection scheduling, MutationObserver, first-wins resolution, fallback swap, pending-fragment recovery |
 | `directives.js` | `unsafeHTML`, `live` (and `isUnsafeHTML` / `isLive`) |
