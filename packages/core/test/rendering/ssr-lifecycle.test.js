@@ -183,6 +183,30 @@ test('the server element shim mirrors lit: attributes getter, toggleAttribute, d
   assert.equal(secondAttachThrew, true, 'a second attachInternals throws, matching the browser and lit');
 });
 
+test('an Object/Array attribute carrying JSON is entity-decoded before parse at SSR', async () => {
+  // A JSON value in an attribute is escaped to `&quot;` by the renderer. The
+  // SSR walker must decode those entities before JSON.parse, or the prop ends
+  // up holding the raw string and render() sees the wrong type. Regression for
+  // applyAttrsToInstance.
+  let seenType = 'unset';
+  class JsonAttr extends WebComponent {
+    static properties = { data: { type: Object } };
+    constructor() { super(); this.data = null; }
+    render() {
+      seenType = Array.isArray(this.data) ? 'array' : typeof this.data;
+      const first = Array.isArray(this.data) ? this.data[0]?.label : undefined;
+      return html`<p>${first ?? 'none'}</p>`;
+    }
+  }
+  JsonAttr.register('ssr-json-attr');
+
+  const payload = [{ label: 'has "quotes" & <ammp>' }];
+  const out = await renderToString(html`<ssr-json-attr data=${JSON.stringify(payload)}></ssr-json-attr>`);
+  assert.equal(seenType, 'array', 'the Object attribute parsed to an array, not a string');
+  // In text content, `&` and `<`/`>` are escaped but quotes stay literal.
+  assert.match(out, /<p>has "quotes" &amp; &lt;ammp&gt;<\/p>/, 'the decoded value rendered correctly');
+});
+
 test('COUNTERFACTUAL: without the willUpdate pass, the derived value would be the constructor placeholder', async () => {
   // Mirrors the first test but proves the assertion would FAIL if willUpdate
   // did not run: a subclass that deliberately renders the raw constructor

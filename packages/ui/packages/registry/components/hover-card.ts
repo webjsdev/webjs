@@ -55,8 +55,14 @@ export const hoverCardContentClass = (): string =>
 export class UiHoverCard extends WebComponent {
   static properties = {
     open: { type: Boolean, reflect: true },
+    openDelay: { type: Number },
+    closeDelay: { type: Number },
   };
   declare open: boolean;
+  // `openDelay` / `closeDelay` ride the `open-delay` / `close-delay`
+  // attributes (shadcn parity), read as typed props.
+  declare openDelay: number;
+  declare closeDelay: number;
 
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
@@ -64,6 +70,8 @@ export class UiHoverCard extends WebComponent {
   constructor() {
     super();
     this.open = false;
+    this.openDelay = 700;
+    this.closeDelay = 300;
   }
 
   // Back-compat getter.
@@ -71,14 +79,12 @@ export class UiHoverCard extends WebComponent {
 
   show(): void {
     clearTimeout(this._hideTimer);
-    const delay = Number(this.getAttribute('open-delay') ?? 700);
-    this._showTimer = window.setTimeout(() => { this.open = true; }, delay);
+    this._showTimer = window.setTimeout(() => { this.open = true; }, this.openDelay);
   }
 
   hide(): void {
     clearTimeout(this._showTimer);
-    const delay = Number(this.getAttribute('close-delay') ?? 300);
-    this._hideTimer = window.setTimeout(() => { this.open = false; }, delay);
+    this._hideTimer = window.setTimeout(() => { this.open = false; }, this.closeDelay);
   }
 
   render() {

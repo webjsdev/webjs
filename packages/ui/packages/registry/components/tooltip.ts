@@ -64,8 +64,14 @@ let lastTooltipHideAt = 0;
 export class UiTooltip extends WebComponent {
   static properties = {
     open: { type: Boolean, reflect: true },
+    delayDuration: { type: Number },
+    skipDelayDuration: { type: Number },
   };
   declare open: boolean;
+  // `delayDuration` / `skipDelayDuration` ride the `delay-duration` /
+  // `skip-delay-duration` attributes (shadcn parity), read as typed props.
+  declare delayDuration: number;
+  declare skipDelayDuration: number;
 
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
@@ -73,6 +79,8 @@ export class UiTooltip extends WebComponent {
   constructor() {
     super();
     this.open = false;
+    this.delayDuration = 700;
+    this.skipDelayDuration = 300;
   }
 
   // Back-compat getter for tests + external code that read `el.isOpen`
@@ -82,8 +90,8 @@ export class UiTooltip extends WebComponent {
   show(): void {
     clearTimeout(this._showTimer);
     clearTimeout(this._hideTimer);
-    const delay = Number(this.getAttribute('delay-duration') ?? 700);
-    const skipDelay = Number(this.getAttribute('skip-delay-duration') ?? 300);
+    const delay = this.delayDuration;
+    const skipDelay = this.skipDelayDuration;
     const sinceLastHide = Date.now() - lastTooltipHideAt;
     if (lastTooltipHideAt > 0 && sinceLastHide < skipDelay) {
       this.open = true;

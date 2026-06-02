@@ -854,7 +854,12 @@ function applyAttrsToInstance(instance, attrs, Cls) {
     if (def.type === Number) instance[propName] = Number(raw);
     else if (def.type === Boolean) instance[propName] = raw !== 'false';
     else if (def.type === Object || def.type === Array) {
-      try { instance[propName] = JSON.parse(raw); } catch { instance[propName] = raw; }
+      // `raw` is the entity-encoded attribute text (parseAttrs returns the
+      // literal characters between the quotes), so decode the HTML entities
+      // before JSON.parse. A JSON attribute carries `&quot;` for every `"`;
+      // parsing it raw throws and would silently fall back to the string,
+      // leaving an Object/Array prop holding a string at SSR.
+      try { instance[propName] = JSON.parse(unescapeAttr(raw)); } catch { instance[propName] = raw; }
     } else instance[propName] = raw;
   }
 }
