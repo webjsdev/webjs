@@ -243,7 +243,7 @@ class ThemeBadge extends WebComponent {
     <ul>
       <li><strong>Simple one-off logic</strong>: if only one component needs the behavior, put it directly in the component. Don't over-abstract.</li>
       <li><strong>Shared rendering</strong>: controllers don't produce templates. For reusable UI, create a component. Controllers are for reusable <em>behavior</em>.</li>
-      <li><strong>Page-level data</strong>: use async page functions for server-side data loading. Controllers run on the client.</li>
+      <li><strong>Page-level data</strong>: use async page functions for server-side data loading. A controller's <code>hostUpdate</code> runs at SSR (pre-render), but its connection and post-render hooks (<code>hostConnected</code> / <code>hostUpdated</code> / <code>hostDisconnected</code>) run only on the client.</li>
     </ul>
 
     <h2>Next Steps</h2>

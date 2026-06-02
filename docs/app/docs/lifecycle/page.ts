@@ -98,7 +98,7 @@ this.name = 'updated';                       // reactive property assignment
 
     <h2>SSR vs Browser: which hooks run where</h2>
 
-    <p>The SSR pipeline runs each component to produce its first-paint HTML. It calls a deliberately narrow subset of the lifecycle. Everything else runs only in the browser after the script loads.</p>
+    <p>The SSR pipeline runs each component to produce its first-paint HTML. It runs the pre-render value-deriving hooks plus <code>render()</code>; the post-render and connection hooks run only in the browser after the script loads.</p>
 
     <table>
       <thead>
@@ -107,16 +107,20 @@ this.name = 'updated';                       // reactive property assignment
       <tbody>
         <tr><td><code>constructor()</code></td><td>✅</td><td>✅</td></tr>
         <tr><td>attribute application (via <code>static properties</code> converters)</td><td>✅</td><td>✅</td></tr>
+        <tr><td><code>willUpdate()</code></td><td>✅</td><td>✅</td></tr>
+        <tr><td>controllers' <code>hostUpdate</code></td><td>✅</td><td>✅</td></tr>
+        <tr><td><code>reflect: true</code> property reflection</td><td>✅</td><td>✅</td></tr>
         <tr><td><code>render()</code></td><td>✅</td><td>✅</td></tr>
+        <tr><td><code>shouldUpdate()</code></td><td>❌</td><td>✅</td></tr>
         <tr><td><code>connectedCallback()</code></td><td>❌</td><td>✅</td></tr>
         <tr><td><code>disconnectedCallback()</code></td><td>❌</td><td>✅</td></tr>
-        <tr><td><code>firstUpdated()</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td><code>firstUpdated()</code> / <code>updated()</code></td><td>❌</td><td>✅</td></tr>
         <tr><td><code>attributeChangedCallback()</code></td><td>❌</td><td>✅</td></tr>
-        <tr><td>controllers' <code>hostUpdate</code> / <code>hostUpdated</code></td><td>❌</td><td>✅</td></tr>
+        <tr><td>controllers' <code>hostUpdated</code></td><td>❌</td><td>✅</td></tr>
       </tbody>
     </table>
 
-    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em>, or as the initial value of an instance signal (class-field initializer). Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and write the signal to refine the initial render after hydration.</p>
+    <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em> (or as an instance signal's initial value), and derive SSR-visible state in <code>willUpdate</code>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and write the signal to refine the initial render after hydration. A <code>Task</code> is the exception among controllers: its <code>hostUpdate</code> does not auto-run server-side, so it ships the <code>INITIAL</code> state and fetches only on hydration.</p>
 
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full pattern, including how to push server-known data through the page function instead of fetching in browser-only hooks.</p>
   `;
