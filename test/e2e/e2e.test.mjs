@@ -1349,6 +1349,38 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'an observed display-only component module MUST be downloaded (forced to ship)');
   });
 
+  test('willUpdate-derived state and reflected props are in the SSR HTML before JS (#217)', async () => {
+    // <ssr-derived-badge seed="42"> derives its text in willUpdate and flips a
+    // reflect:true `ready` boolean there. The SSR walker now runs willUpdate
+    // and reflects properties before render(), so both must be present in the
+    // raw served HTML (a JS-off view), then unchanged after hydration (no flash).
+    const res = await fetch(`${baseUrl}/observed`);
+    const rawHtml = await res.text();
+    // JS-off proof: the derived text and the reflected attribute are in the
+    // server response, not produced by client hydration.
+    assert.match(rawHtml, /derived-from-42/, 'willUpdate-derived text is in the SSR HTML');
+    assert.match(rawHtml, /<ssr-derived-badge[^>]*\bready\b/,
+      'reflect:true property set in willUpdate appears as an attribute in the SSR HTML');
+
+    // Post-hydration: a real browser keeps the same derived text and attribute
+    // (SSR and the client first render agree, so there is no flash/divergence).
+    await page.goto(`${baseUrl}/observed`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const state = await waitForCond(
+      async () => await page.evaluate(() => {
+        const el = document.querySelector('ssr-derived-badge');
+        if (!el) return null;
+        return { text: el.textContent.trim(), ready: el.hasAttribute('ready') };
+      }),
+      5000,
+      () => 'ssr-derived-badge did not settle',
+    ).then(() => page.evaluate(() => {
+      const el = document.querySelector('ssr-derived-badge');
+      return { text: el.textContent.trim(), ready: el.hasAttribute('ready') };
+    }));
+    assert.equal(state.text, 'derived-from-42', 'derived text unchanged after hydration');
+    assert.equal(state.ready, true, 'reflected ready attribute unchanged after hydration');
+  });
+
   test('a fully-static route (/about) drops its page module from the boot', async () => {
     // /about renders only static markup (no events, signals, or custom
     // elements), so its page module is inert and dropped from the boot

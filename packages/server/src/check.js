@@ -117,7 +117,7 @@ export const RULES = [
   {
     name: 'no-browser-globals-in-render',
     description:
-      'Flags browser-only APIs used in a WebComponent constructor or render() method. The SSR pipeline instantiates the component (running the constructor) and calls render() to produce HTML, on a bare server-side class with no DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an HTMLElement instance member on `this` (attachShadow, shadowRoot, setAttribute, getAttribute, removeAttribute, dispatchEvent, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). These belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor only from server-known inputs (attributes, props). Conservative: only the constructor and render bodies are scanned (the methods SSR actually runs), and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
+      'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
   },
 ];
 
@@ -402,11 +402,16 @@ const BROWSER_GLOBALS = [
   'matchMedia', 'requestAnimationFrame', 'getComputedStyle',
   'IntersectionObserver', 'MutationObserver', 'ResizeObserver',
 ];
-// HTMLElement instance members that do not exist on the bare server class, so
-// `this.<member>` throws (a method call) or is `undefined` (a property) at SSR.
+// HTMLElement instance members that do not exist on the server element shim,
+// so `this.<member>` throws (a method call) or is `undefined` (a property) at
+// SSR. The attribute methods (get/set/has/remove/toggleAttribute), the event
+// methods (add/removeEventListener, dispatchEvent), and attachInternals are
+// backed by the shim and run server-side, so they are intentionally NOT
+// flagged: a component may read attributes in render and reflect properties
+// during the SSR update cycle. What stays is the genuinely browser-only
+// surface (DOM querying, layout reads, shadow construction, focus).
 const HTMLELEMENT_MEMBERS = [
-  'attachShadow', 'shadowRoot', 'setAttribute', 'getAttribute',
-  'removeAttribute', 'hasAttribute', 'dispatchEvent', 'classList',
+  'attachShadow', 'shadowRoot', 'classList',
   'querySelector', 'querySelectorAll', 'getBoundingClientRect',
   'focus', 'blur', 'scrollIntoView',
 ];
@@ -629,15 +634,17 @@ export async function checkConventions(appDir, opts) {
   }
 
   // --- Rule: no-browser-globals-in-render ---
-  // The SSR pipeline runs the constructor (`new Cls()`) and calls `render()`
-  // on a bare server-side class with no DOM. A browser global or an
-  // HTMLElement member on `this` touched there throws at SSR time. Those
-  // belong in connectedCallback / lifecycle hooks, which SSR never calls.
+  // The SSR pipeline runs the constructor (`new Cls()`), willUpdate, and
+  // render() on the server element shim (attribute methods backed, but no real
+  // DOM). A genuinely browser-only global or an unshimmed HTMLElement member on
+  // `this` touched in any of those throws at SSR time. Those belong in
+  // connectedCallback / post-render hooks, which SSR never calls. willUpdate is
+  // scanned because it now runs at SSR (issue #217).
   if (isRuleEnabled('no-browser-globals-in-render', overrides)) {
     for (const { rel, scan } of files) {
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       for (const body of extractWebComponentClassBodies(scan)) {
-        for (const method of ['constructor', 'render']) {
+        for (const method of ['constructor', 'willUpdate', 'render']) {
           const code = methodBodyOf(body, method);
           if (!code) continue;
           for (const { member, kind } of findBrowserMemberUses(code)) {

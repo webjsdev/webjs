@@ -322,9 +322,13 @@ const SSR_BROWSER_GLOBALS = new Set([
   'matchMedia', 'requestAnimationFrame', 'getComputedStyle',
   'IntersectionObserver', 'MutationObserver', 'ResizeObserver',
 ]);
+// Attribute methods (get/set/has/remove/toggleAttribute), the event methods
+// (add/removeEventListener, dispatchEvent), and attachInternals are backed by
+// the server-side element shim and work at SSR, so they are NOT listed here.
+// What remains is the genuinely browser-only HTMLElement surface that still
+// has no server stand-in and throws at SSR.
 const SSR_HTMLELEMENT_METHODS = new Set([
-  'attachShadow', 'setAttribute', 'getAttribute', 'removeAttribute',
-  'hasAttribute', 'dispatchEvent', 'querySelector', 'querySelectorAll',
+  'attachShadow', 'querySelector', 'querySelectorAll',
   'getBoundingClientRect', 'focus', 'blur', 'scrollIntoView',
 ]);
 
@@ -383,7 +387,7 @@ async function injectDSD(html, ctx) {
     // Track which custom elements actually appeared: used by SSR to emit
     // `<link rel="modulepreload">` hints for their module URLs.
     if (ctx && ctx.usedComponents) ctx.usedComponents.add(tag);
-    const opening = selfClose ? `<${tag}${attrs}>` : match;
+    let opening = selfClose ? `<${tag}${attrs}>` : match;
     try {
       const isShadow = /** @type any */ (Cls).shadow === true;
       const instance = new /** @type any */ (Cls)();
@@ -394,8 +398,29 @@ async function injectDSD(html, ctx) {
       // properties` type. Property bindings take priority on a name
       // collision because they preserve the original JS reference.
       const propValues = consumePropAttrs(attrMap);
+      // Names already present in the source opening tag (including the
+      // data-webjs-prop-* bindings, which were stripped from attrMap above
+      // but remain in the emitted `attrs` string). Reflected/added
+      // attributes are appended only when their name is NOT already here, so
+      // existing output stays byte-identical when nothing reflects.
+      const presentAttrNames = new Set(Object.keys(parseAttrs(attrs)).map((n) => n.toLowerCase()));
+      // Seed the server attribute shim so `this.getAttribute(...)` /
+      // `this.hasAttribute(...)` in willUpdate / render read the source
+      // attributes (a lit muscle-memory pattern) instead of reading empty.
+      seedServerAttrs(instance, attrMap);
       applyAttrsToInstance(instance, attrMap, Cls);
       for (const [k, v] of Object.entries(propValues)) instance[k] = v;
+      // Run the pre-render lifecycle (willUpdate, controllers' hostUpdate,
+      // then reflect reflect:true props) so derived state computed there is
+      // correct in the SSR'd HTML, matching how lit runs the update cycle at
+      // SSR. WebComponent instances expose performServerUpdate; bare
+      // Base-extending kit components (no lifecycle) do not, so it is guarded.
+      if (typeof instance.performServerUpdate === 'function') instance.performServerUpdate();
+      // Surface attributes the component set before render (reflected
+      // reflect:true props, or an explicit this.setAttribute in the
+      // constructor / willUpdate) that were not already in the source tag.
+      // Appending keeps the original tag byte-identical when nothing changed.
+      opening = appendReflectedAttrs(opening, instance, presentAttrNames);
       let tpl = instance.render ? instance.render() : '';
       if (tpl && typeof tpl.then === 'function') tpl = await tpl;
       // Render the template to HTML. injectDSD recurses on the result so
@@ -762,6 +787,55 @@ function parseAttrs(attrStr) {
     out[m[1]] = m[2] ?? m[3] ?? m[4] ?? '';
   }
   return out;
+}
+
+/**
+ * Seed the element's attributes from the source opening tag so reads like
+ * `this.getAttribute(name)` / `this.hasAttribute(name)` inside willUpdate /
+ * render return the real value during SSR. Goes through `setAttribute`, which
+ * both the server element shim (Node SSR) and a real `HTMLElement`
+ * (renderToString called in a browser, e.g. tests) implement, so the path
+ * does not depend on the shim's internal store. A bare Base-extending kit
+ * component without `setAttribute` is skipped.
+ *
+ * @param {any} instance
+ * @param {Record<string,string>} attrs  parsed source attributes (data-webjs-prop-* already removed)
+ */
+function seedServerAttrs(instance, attrs) {
+  if (!instance || typeof instance.setAttribute !== 'function') return;
+  for (const [name, raw] of Object.entries(attrs)) {
+    instance.setAttribute(name, unescapeAttr(raw));
+  }
+}
+
+/**
+ * Append attributes the component set before render (reflected reflect:true
+ * properties, or an explicit `this.setAttribute` in the constructor /
+ * willUpdate) to the element's opening tag, skipping any name already present
+ * in the source tag. Reads via the standard `getAttributeNames` /
+ * `getAttribute` API so it works whether the instance is the server shim or a
+ * real `HTMLElement`. Returns the opening tag unchanged when there is nothing
+ * to add, so existing SSR output stays byte-identical when no component
+ * reflects, which preserves the elision on-vs-off differential invariant.
+ *
+ * @param {string} opening  the element's opening tag, ending in `>`
+ * @param {any} instance
+ * @param {Set<string>} presentAttrNames  lowercased names already in the source tag
+ * @returns {string}
+ */
+function appendReflectedAttrs(opening, instance, presentAttrNames) {
+  if (!instance || typeof instance.getAttributeNames !== 'function') return opening;
+  let extra = '';
+  for (const rawName of instance.getAttributeNames()) {
+    const name = String(rawName).toLowerCase();
+    if (presentAttrNames.has(name)) continue;
+    const value = instance.getAttribute(rawName);
+    extra += value === '' ? ` ${name}` : ` ${name}="${escapeAttr(String(value))}"`;
+  }
+  if (!extra) return opening;
+  // Insert before the closing `>` (the opening tag is normalised to end in
+  // `>`; a self-closing source tag was already rewritten without the slash).
+  return `${opening.slice(0, -1)}${extra}>`;
 }
 
 /**

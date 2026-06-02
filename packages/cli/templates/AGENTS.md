@@ -588,7 +588,8 @@ Practical consequences for agents writing webjs code.
 | Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
 | `@property()` decorator | Banned by invariant 10 (erasable TS) | `static properties = { ... }` plus `declare` |
 | `static styles = css` block without `static shadow = true` | Styles leak globally; the framework warns at runtime | Add `static shadow = true`, or use Tailwind utilities |
-| `willUpdate` computing SSR-visible derived state | Field is `undefined` in SSR HTML (hook is client-only) | Compute inline in `render()` |
+| `willUpdate` computing SSR-visible derived state | Works (runs at SSR), but overriding it opts the component out of elision | Fine for interactive components; for display-only, derive inline in `render()` |
+| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via a `static properties` + `declare` reactive prop |
 | `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
 
 The full annotated catalog with code examples lives in the framework

@@ -147,8 +147,143 @@ function defaultHasChanged(a, b) {
  * ```
  */
 
-// Base class choice: real HTMLElement on the browser, a dummy on the server.
-const Base = isBrowser ? HTMLElement : /** @type {any} */ (class {});
+/**
+ * Inert `ElementInternals`-shaped object returned by the server shim's
+ * `attachInternals()`. Modeled on `@lit-labs/ssr-dom-shim`'s
+ * `ElementInternalsShim` (lit repo, `packages/labs/ssr-dom-shim/src/lib/
+ * element-internals.ts`): form-association, validity, and custom-state
+ * calls are no-ops at SSR (no form, no constraint validation, no `:state()`
+ * matching server-side), so a component that calls `this.attachInternals()`
+ * in its constructor renders instead of crashing. The browser runs the real
+ * `attachInternals()` on hydration.
+ *
+ * Deliberate deviation from lit: lit's `checkValidity` / `reportValidity`
+ * THROW on the server. webjs returns `true` instead, to keep SSR
+ * progressive-enhancement-safe (a stray validity call in a constructor must
+ * not 500 the page); the browser does the real validation.
+ * @returns {any}
+ */
+function makeServerInternals() {
+  return {
+    states: new Set(),
+    shadowRoot: null,
+    form: null,
+    labels: [],
+    role: '',
+    willValidate: true,
+    validity: /** @type {any} */ ({}),
+    validationMessage: '',
+    setFormValue() {},
+    setValidity() {},
+    checkValidity() { return true; },
+    reportValidity() { return true; },
+  };
+}
+
+/**
+ * Server-side stand-in for `HTMLElement`. The SSR pipeline constructs
+ * component instances in Node, where `HTMLElement` does not exist, so the
+ * base class is this shim. It is modeled on `@lit-labs/ssr-dom-shim`'s
+ * `ElementShim` (lit repo, `packages/labs/ssr-dom-shim/src/index.ts`): the
+ * attribute methods (`getAttribute` / `setAttribute` / `hasAttribute` /
+ * `removeAttribute` / `toggleAttribute`, the `attributes` getter) are backed
+ * by a Map, so lit muscle-memory patterns that read attributes in `render()`
+ * or set them while deriving state work server-side; the SSR walker seeds
+ * the Map from the element's source attributes and reads it back to surface
+ * reflected/added attributes in the output. Event methods are no-ops (no
+ * server event loop), and `attachInternals()` returns the inert object
+ * above. The genuinely browser-only surface (`querySelector`, layout reads,
+ * `attachShadow`, `focus`) is deliberately absent and still throws at SSR,
+ * which the `no-browser-globals-in-render` rule and the SSR crash hint flag.
+ *
+ * Deliberate deviation from lit: this shim lowercases attribute names so
+ * `getAttribute('Foo')` after `setAttribute('foo', x)` resolves, matching how
+ * a real browser treats HTML attribute names as case-insensitive. lit's shim
+ * keys the Map by the raw name (a known fidelity gap in lit-labs).
+ */
+class ServerElement {
+  constructor() {
+    /**
+     * Backing store for the attribute methods. Keys are lowercased
+     * attribute names (HTML attributes are case-insensitive). Seeded by the
+     * SSR walker from the element's source attributes.
+     * @type {Map<string, string>}
+     */
+    this.__ssrAttrs = new Map();
+    /** @type {any} */
+    this.__internals = null;
+  }
+
+  /** Mirrors `Element.attributes`: an array of `{ name, value }`. */
+  get attributes() {
+    return [...this.__ssrAttrs].map(([name, value]) => ({ name, value }));
+  }
+
+  /** @param {string} name */
+  getAttribute(name) {
+    const v = this.__ssrAttrs.get(String(name).toLowerCase());
+    return v === undefined ? null : v;
+  }
+
+  /** @param {string} name @param {unknown} value */
+  setAttribute(name, value) {
+    // Emulate the browser casting all values to string (lit does the same).
+    this.__ssrAttrs.set(String(name).toLowerCase(), String(value));
+  }
+
+  /** @param {string} name */
+  removeAttribute(name) {
+    this.__ssrAttrs.delete(String(name).toLowerCase());
+  }
+
+  /** @param {string} name */
+  hasAttribute(name) {
+    return this.__ssrAttrs.has(String(name).toLowerCase());
+  }
+
+  /** @param {string} name @param {boolean} [force] */
+  toggleAttribute(name, force) {
+    // Steps mirror https://dom.spec.whatwg.org/#dom-element-toggleattribute
+    const key = String(name).toLowerCase();
+    const present = this.__ssrAttrs.has(key);
+    const next = force === undefined ? !present : force;
+    if (next) {
+      this.__ssrAttrs.set(key, '');
+      return true;
+    }
+    this.__ssrAttrs.delete(key);
+    return false;
+  }
+
+  /** @returns {string[]} */
+  getAttributeNames() {
+    return [...this.__ssrAttrs.keys()];
+  }
+
+  // No server event loop: listeners never fire at SSR. The no-op keeps a
+  // constructor that wires delegated listeners (a common lit pattern) from
+  // crashing; the browser re-runs the constructor on hydration where the
+  // real HTMLElement methods apply.
+  addEventListener() {}
+  removeEventListener() {}
+  dispatchEvent() { return true; }
+
+  /** @returns {any} */
+  attachInternals() {
+    // Match the browser (and lit's shim): a second attach is an error.
+    if (this.__internals !== null) {
+      throw new Error(
+        "Failed to execute 'attachInternals' on 'HTMLElement': " +
+          'ElementInternals for the specified element was already attached.',
+      );
+    }
+    this.__internals = makeServerInternals();
+    return this.__internals;
+  }
+}
+
+// Base class choice: real HTMLElement on the browser, the shim on the server.
+const Base = isBrowser ? HTMLElement : /** @type {any} */ (ServerElement);
 
 export class WebComponent extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
@@ -467,6 +602,13 @@ export class WebComponent extends Base {
 
   _activate() {
     this._connected = true;
+    // Reflect declared reflect:true properties from their current value now
+    // that the element is connected. Constructor / willUpdate defaults were
+    // set while disconnected (the setter skips reflection then), so this is
+    // what makes a freshly-created client element carry the same reflected
+    // attributes the SSR walker emitted. Same-value reflects are no-ops, so a
+    // hydrated element (whose attribute already arrived from SSR) is unchanged.
+    this._reflectDeclaredAttributes();
     const Ctor = /** @type any */ (this.constructor);
     if (Ctor.shadow === true) {
       const hadSSRShadow = !!this.shadowRoot;
@@ -812,6 +954,67 @@ export class WebComponent extends Base {
       const settled = this._changedProperties.size === 0;
       this._updateResolve(settled);
       this._updateResolve = null;
+    }
+  }
+
+  /**
+   * Run the pre-render half of the update cycle synchronously for SSR.
+   *
+   * The SSR walker constructs the instance, applies attributes/props, then
+   * calls this BEFORE `render()`. It mirrors how lit drives the update
+   * lifecycle server-side: `willUpdate` runs so derived state computed there
+   * is correct in the SSR'd HTML, then reactive controllers' `hostUpdate`
+   * runs, then reflect:true properties are written to attributes so they
+   * appear in the serialized output. It deliberately does NOT run
+   * `shouldUpdate` (SSR always produces the first paint, there is no prior
+   * render to skip), `update` (the walker commits by calling `render`
+   * itself), or the post-commit hooks `firstUpdated` / `updated` (browser-only
+   * DOM work).
+   *
+   * `_isUpdating` is set so a property assignment inside `willUpdate` folds
+   * into the current `changedProperties` snapshot instead of scheduling a
+   * fresh cycle (the SSR scheduler short-circuits anyway, since the element
+   * is not connected). Hook throws propagate to the walker's per-component
+   * try/catch, which logs an actionable hint and skips DSD for that element,
+   * the same as a throwing `render()`.
+   */
+  performServerUpdate() {
+    const changedProperties = this._changedProperties;
+    this._isUpdating = true;
+    try {
+      this.willUpdate(changedProperties);
+      for (const c of this.__controllers) {
+        if (c.hostUpdate) c.hostUpdate();
+      }
+      this._reflectDeclaredAttributes();
+    } finally {
+      this._isUpdating = false;
+    }
+  }
+
+  /**
+   * Reflect every reflect:true (non-state) property to its attribute from its
+   * CURRENT value, regardless of whether the value arrived via the setter.
+   *
+   * The property setter only reflects on a connected change, so a value set
+   * in the constructor (a default) or in `willUpdate` is not reflected by the
+   * setter alone. This syncs those: the SSR walker calls it in
+   * `performServerUpdate` (writing into the server attribute shim, which the
+   * walker reads back into the rendered HTML), and `_activate` calls it on
+   * the client's first connected render. Running it on both sides is what
+   * keeps a server-rendered element and a freshly-created client element
+   * agree on their reflected attributes (matching lit, which reflects during
+   * the first update). `_reflectAttribute`'s re-entrancy guard makes a
+   * same-value reflect a no-op, so re-reflecting an attribute that already
+   * arrived from SSR does not churn.
+   * @private
+   */
+  _reflectDeclaredAttributes() {
+    const props = /** @type {any} */ (this.constructor).properties || {};
+    for (const name of Object.keys(props)) {
+      const decl = props[name];
+      if (!decl || !decl.reflect || decl.state) continue;
+      this._reflectAttribute(name, this[name], decl);
     }
   }
 

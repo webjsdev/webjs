@@ -189,7 +189,7 @@ export default async function Posts() {
     <h3>6. Set SSR-meaningful defaults in the <em>constructor</em>, not <code>connectedCallback</code></h3>
 
     <p>
-      The SSR pipeline constructs each web component (<code>new Cls()</code>), applies its attributes, and calls <code>render()</code>. <strong>It does <em>not</em> call <code>connectedCallback</code>, <code>firstUpdated</code>, or any other lifecycle hook.</strong> Those run only in the browser, after the script loads. Whatever state your component should display on first paint must be set in the constructor (or be derivable from <code>static properties</code> on the element's attributes).
+      The SSR pipeline constructs each web component (<code>new Cls()</code>), applies its attributes, runs <code>willUpdate</code> and controllers' <code>hostUpdate</code>, reflects <code>reflect: true</code> properties, and calls <code>render()</code>. <strong>It does <em>not</em> call <code>connectedCallback</code>, <code>firstUpdated</code>, <code>updated</code>, or any browser-only hook.</strong> Those run only in the browser, after the script loads. Whatever state your component should display on first paint must be set in the constructor, derived in <code>willUpdate</code>, or be derivable from <code>static properties</code> on the element's attributes.
     </p>
 
     <pre>// ❌ first paint is empty, initial state set in browser-only hook
