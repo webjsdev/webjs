@@ -32,7 +32,7 @@ the same output in all three.
 | `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming), SSR slot substitution in `injectDSD`. The walker seeds the server attribute shim from the source attributes, calls `performServerUpdate` before `render()`, and appends reflected/added attributes to the opening tag |
 | `render-client.js` | Client-side patcher + hydration; the only file that touches `document`. Also discovers and binds light-DOM slot parts |
 | `slot.js` | Light-DOM `<slot>` runtime: `HTMLSlotElement` polyfills (`assignedNodes`, `assignedElements`, `slotchange`), projection scheduling, MutationObserver, first-wins resolution, fallback swap, pending-fragment recovery |
-| `directives.js` | `unsafeHTML`, `live` (and `isUnsafeHTML` / `isLive`) |
+| `directives.js` | the lit-html-parity directive set (`unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref` / `createRef`, `cache`, `until`, `asyncAppend` / `asyncReplace`, `watch`, plus each `is*` guard). `repeat` lives in `repeat.js`. All are re-exported from `index.js` / `index-browser.js` so the bare specifier and the `/directives` subpath (which collapses onto the dist browser bundle) expose the full set |
 | `repeat.js` | `repeat(items, keyFn, templateFn)` for keyed list reconciliation |
 | `suspense.js` | `Suspense()` boundary primitive |
 | `context.js` | Context Protocol: `createContext`, `ContextProvider`, `ContextConsumer`, `ContextRequestEvent` |
