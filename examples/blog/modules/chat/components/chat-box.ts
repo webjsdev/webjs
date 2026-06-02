@@ -54,11 +54,10 @@ export class ChatBox extends WebComponent {
   onSubmit(e: SubmitEvent) {
     e.preventDefault();
     const form = e.currentTarget as HTMLFormElement;
-    const input = form.querySelector('input') as HTMLInputElement;
-    const text = input.value.trim();
+    const text = String(new FormData(form).get('message') ?? '').trim();
     if (!text || !this._conn) return;
     this._conn.send({ text });
-    input.value = '';
+    form.reset();
   }
 
   render() {
@@ -99,7 +98,7 @@ export class ChatBox extends WebComponent {
                   : html`<p class="m-0 mb-2 text-fg">${l.text}</p>`)}
         </div>
         <form class="flex gap-2 px-4 py-3 border-t border-border bg-bg-subtle" @submit=${(e) => this.onSubmit(e)}>
-          <input class="${inputClass()} flex-1"
+          <input name="message" class="${inputClass()} flex-1"
                  placeholder=${placeholder}
                  ?disabled=${!live} autocomplete="off">
           <button class=${buttonClass({ size: 'sm' })} ?disabled=${!live}>Send</button>

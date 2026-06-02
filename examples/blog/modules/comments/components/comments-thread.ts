@@ -61,8 +61,7 @@ export class CommentsThread extends WebComponent {
   async onSubmit(e: SubmitEvent) {
     e.preventDefault();
     const form = e.currentTarget as HTMLFormElement;
-    const input = form.querySelector('input') as HTMLInputElement;
-    const body = input.value.trim();
+    const body = String(new FormData(form).get('body') ?? '').trim();
     if (!body) return;
     this.busy.set(true);
     this.error.set(null);
@@ -82,7 +81,7 @@ export class CommentsThread extends WebComponent {
         this.comments.set([...cur, created]);
       }
       this.busy.set(false);
-      input.value = '';
+      form.reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.busy.set(false);
@@ -110,7 +109,7 @@ export class CommentsThread extends WebComponent {
 
       ${this.signedIn
         ? html`<form class="flex gap-2 p-3 bg-bg-elev border border-border rounded" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
-            <input class="${inputClass()} flex-1"
+            <input name="body" class="${inputClass()} flex-1"
                    placeholder="Add a comment…" ?disabled=${busy} autocomplete="off">
             <button class=${buttonClass({ size: 'sm' })} type="submit" ?disabled=${busy}>Post</button>
           </form>
