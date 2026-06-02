@@ -10,7 +10,12 @@ import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
  *
  * Strictly server-side: importing this module on the client is a bug.
  *
- * @typedef {{ req: Request }} Store
+ * `cspNonce` holds the per-request CSP nonce when CSP is enabled
+ * (issue #233). It is minted in the request handler and written here via
+ * `setCspNonce`, so the same value the `Content-Security-Policy` header
+ * carries is what `cspNonce()` returns for the inline boot script.
+ *
+ * @typedef {{ req: Request, cspNonce?: string }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -33,10 +38,31 @@ export function getRequest() {
 }
 
 /**
- * Server-only implementation of the CSP nonce reader: pulls the
- * current request from AsyncLocalStorage, parses the
- * `script-src 'nonce-...'` value from its CSP header, returns ''
- * when none in scope.
+ * Set the per-request CSP nonce on the current AsyncLocalStorage store.
+ * Called by the request handler when CSP is enabled, AFTER it mints the
+ * nonce and BEFORE the page renders, so `cspNonce()` returns this exact
+ * value during SSR (the same value the response's
+ * `Content-Security-Policy` header carries: one source, no drift).
+ *
+ * A no-op outside a request scope, or when CSP is disabled (the handler
+ * simply never calls it, so the store's `cspNonce` stays undefined and
+ * `cspNonce()` falls through to '').
+ *
+ * @param {string} nonce
+ */
+export function setCspNonce(nonce) {
+  const store = als.getStore();
+  if (store) store.cspNonce = nonce;
+}
+
+/**
+ * Server-only implementation of the CSP nonce reader. Returns the
+ * per-request nonce that the handler MINTED and stored (issue #233) when
+ * CSP is enabled. Falls back to parsing an INBOUND
+ * `Content-Security-Policy` request header (the legacy consume-only
+ * behaviour) so an app sitting behind a proxy that already mints a nonce
+ * still works without enabling webjs's own CSP. Returns '' when neither
+ * is in scope.
  *
  * The public `cspNonce()` function lives in `@webjsdev/core` so user
  * layouts / pages can import it without dragging server-only deps
@@ -46,18 +72,16 @@ export function getRequest() {
  * `cspNonce()` returns '' (empty `nonce=""` attribute, browser
  * ignores it).
  */
-// The regex captures the first `nonce-...` token anywhere in the CSP
-// header. Webjs uses a single per-request nonce shared across all
-// directives that emit it (the standard CSP3 single-nonce model),
-// so reading the first match is correct. If a future caller emits
-// styled inline content under a separate style nonce, this reader
-// would need to become directive-scoped. Kept identical to the
-// matching helper in ssr.js so both paths interpret the header the
-// same way.
+// The regex fallback captures the first `nonce-...` token anywhere in the
+// inbound CSP header. Webjs uses a single per-request nonce shared across
+// all directives that emit it (the standard CSP3 single-nonce model), so
+// reading the first match is correct. Kept identical to the matching
+// helper in ssr.js so both paths interpret the header the same way.
 setCspNonceProvider(() => {
-  const req = als.getStore()?.req;
-  if (!req) return '';
-  const csp = req.headers.get('content-security-policy') || '';
+  const store = als.getStore();
+  if (!store) return '';
+  if (typeof store.cspNonce === 'string') return store.cspNonce;
+  const csp = store.req?.headers.get('content-security-policy') || '';
   const match = /\bnonce-([A-Za-z0-9+/=]+)/.exec(csp);
   return match ? match[1] : '';
 });

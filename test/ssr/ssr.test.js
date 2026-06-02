@@ -21,6 +21,7 @@ const WEBJS_MODULE_URL = pathToFileURL(
 ).toString();
 
 let _hoistHeadTags, _extractUserShell, _buildDocumentParts, ssrPage, ssrNotFound;
+let withRequest;
 let tmpDir;
 
 before(async () => {
@@ -31,6 +32,12 @@ before(async () => {
     ssrPage,
     ssrNotFound,
   } = await import('../../packages/server/src/ssr.js'));
+  // The CSP nonce now flows through the per-request AsyncLocalStorage store
+  // (issue #233): `cspNonce()` reads the minted nonce there, or falls back
+  // to an inbound Content-Security-Policy request header. The legacy
+  // inbound-header tests below exercise that fallback, so they must call
+  // ssrPage inside a request scope, exactly as the real handler does.
+  ({ withRequest } = await import('../../packages/server/src/context.js'));
   tmpDir = mkdtempSync(join(tmpdir(), 'webjs-ssr-test-'));
 });
 
@@ -1367,7 +1374,8 @@ test('ssrPage: Suspense resolution fallback <script> carries the CSP nonce', asy
   const req = new Request('http://localhost/', {
     headers: { 'content-security-policy': "script-src 'nonce-suspNonce99' 'self'" },
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
   const body = await resp.text();
   // Locate every script that contains __webjsResolve and assert each one
   // carries nonce="suspNonce99".
@@ -1410,7 +1418,8 @@ test('ssrPage: CSP nonce on request → nonce attribute on injected scripts', as
   const req = new Request('http://localhost/', {
     headers: { 'content-security-policy': "script-src 'nonce-abc123XYZ' 'self'" },
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
   const body = await resp.text();
   assert.ok(body.includes('nonce="abc123XYZ"'));
 });
@@ -1428,7 +1437,8 @@ test('ssrPage: CSP nonce → meta csp-nonce tag emitted for client-router pickup
   const req = new Request('http://localhost/', {
     headers: { 'content-security-policy': "script-src 'nonce-xyz789' 'self'" },
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
   const body = await resp.text();
   assert.match(body, /<meta name="csp-nonce" content="xyz789">/);
 });
@@ -1440,7 +1450,8 @@ test('ssrPage: no nonce in CSP → no meta csp-nonce tag', async () => {
       `export default function Page() { return html\`<p>ok</p>\`; }\n`,
   });
   const req = new Request('http://localhost/');
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
   const body = await resp.text();
   assert.ok(!body.includes('csp-nonce'), 'no meta tag when no nonce in request CSP');
 });
@@ -1459,7 +1470,8 @@ test('ssrPage: CSP nonce propagates to error-page response (boot scripts on erro
   const req = new Request('http://localhost/', {
     headers: { 'content-security-policy': "script-src 'nonce-errnonceXYZ' 'self'" },
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
   assert.equal(resp.status, 500);
   const body = await resp.text();
   assert.match(body, /<meta name="csp-nonce" content="errnonceXYZ">/,

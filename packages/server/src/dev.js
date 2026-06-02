@@ -57,7 +57,8 @@ import {
   hashFile,
 } from './actions.js';
 import { defaultLogger } from './logger.js';
-import { withRequest } from './context.js';
+import { withRequest, setCspNonce } from './context.js';
+import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
@@ -215,6 +216,24 @@ export async function readHeaderRules(appDir) {
 }
 
 /**
+ * Read the CSP config (`webjs.csp`) from the app's package.json and
+ * normalize it (issue #233). A missing, malformed, or unreadable config
+ * yields a disabled config (no nonce minted, no CSP header), never a
+ * throw: a broken security knob must fail closed, not take the app down.
+ *
+ * @param {string} appDir
+ * @returns {Promise<ReturnType<typeof readCspConfig>>}
+ */
+export async function readCspConfigFromApp(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return readCspConfig(pkg);
+  } catch {
+    return readCspConfig(undefined);
+  }
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -309,6 +328,14 @@ export async function createRequestHandler(opts) {
   // app's package.json `webjs.headers`. Static config, so no rebuild
   // re-read; the secure defaults need no config and apply regardless.
   const headerRules = await readHeaderRules(appDir);
+
+  // CSP config (issue #233), read once from the app's package.json
+  // `webjs.csp`. OFF by default: when disabled no nonce is minted and no
+  // Content-Security-Policy header is set, so an unconfigured app is
+  // unchanged. When enabled, `handle()` mints a fresh per-request nonce,
+  // makes it the value `cspNonce()` returns (so the SSR'd inline scripts
+  // carry it), and sets the matching header carrying the same nonce.
+  const cspConfig = await readCspConfigFromApp(appDir);
 
   const state = {
     routeTable,
@@ -580,6 +607,15 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      // CSP (issue #233): when enabled, mint a fresh CSPRNG nonce and store
+      // it on the request scope BEFORE producing the response, so the SSR
+      // pipeline's `cspNonce()` reads this exact value and stamps it on the
+      // inline boot script, the importmap, and the modulepreload hints.
+      // Disabled by default, so no nonce is minted and the response is
+      // unchanged. One minted value flows mint -> store -> SSR -> header.
+      const nonce = cspConfig.enabled ? mintNonce() : '';
+      if (nonce) setCspNonce(nonce);
+
       const res = await produce(req);
       // Merge in the secure-by-default headers plus the per-path config
       // (issue #232) as the final step, so app middleware, route
@@ -588,12 +624,22 @@ export async function createRequestHandler(opts) {
       // runtime, probes), since the defaults are universally safe.
       let pathname = '/';
       try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
-      return applySecurityHeaders(res, {
+      const merged = applySecurityHeaders(res, {
         pathname,
         https: webRequestIsHttps(req),
         prod: !dev,
         rules: headerRules,
       });
+      // Emit the Content-Security-Policy header carrying the SAME minted
+      // nonce the SSR'd scripts got (no drift). Set only when CSP is
+      // enabled; never clobber a CSP header the app already set (in
+      // middleware, a route handler, or via the webjs.headers config), so
+      // an explicit app policy still wins.
+      if (nonce && !merged.headers.has('content-security-policy') &&
+          !merged.headers.has('content-security-policy-report-only')) {
+        merged.headers.set(cspHeaderName(cspConfig), buildCspHeader(cspConfig, nonce));
+      }
+      return merged;
     });
   }
 

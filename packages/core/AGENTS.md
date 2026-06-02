@@ -43,6 +43,7 @@ the same output in all three.
 | `nav.js` | `notFound()`, `redirect()` sentinels for page/action handlers |
 | `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging |
 | `escape.js` | HTML attribute / text escaping (the only sanitiser) |
+| `csp-nonce.js` | Isomorphic CSP nonce reader: `cspNonce()` (returns the request nonce, `''` in the browser) + `setCspNonceProvider` (server-only wiring). The provider is installed by `@webjsdev/server`'s `context.js`; as of #233 it returns a freshly-MINTED per-request nonce (not just an inbound-header parse). `setCspNonceProvider` is stripped from the browser surface |
 | `rich-fetch.js` | Content-negotiated fetch helper |
 | `websocket-client.js` | `connectWS()` with auto-reconnect |
 | `serialize.js` | Wire-format primitives (Date/Map/Set/BigInt/cycles…) used by RPC |

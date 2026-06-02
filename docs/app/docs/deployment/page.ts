@@ -68,6 +68,23 @@ npm run start -- --port 8080</pre>
 &#125;</pre>
     <p>A rule can ADD a header, OVERRIDE a default by giving a new value, or DISABLE a default on a path with a <code>null</code> value (the first example drops <code>X-Frame-Options</code> so a public-embed route can be framed). Precedence, lowest to highest, runs secure defaults, then the <code>webjs.headers</code> path config, then app middleware (which always wins, since its headers are already on the response when webjs merges).</p>
 
+    <h4>Content-Security-Policy (nonce, opt-in)</h4>
+    <p>webjs can mint a fresh per-request CSP nonce and emit a matching <code>Content-Security-Policy</code> response header. It is OFF by default (a strict policy would break an app with third-party inline scripts/styles, so you opt in). Enable it with a <code>webjs.csp</code> key in <code>package.json</code>:</p>
+    <pre>&#123;
+  "webjs": &#123; "csp": true &#125;
+&#125;</pre>
+    <p><code>true</code> turns on a strict-by-default policy: <code>script-src 'nonce-&lt;minted&gt;' 'strict-dynamic' 'self' https:</code> plus <code>default-src 'self'</code>, <code>object-src 'none'</code>, <code>frame-ancestors 'self'</code>, and an inline-style allowance for the Tailwind runtime. On every request the framework mints a CSPRNG nonce (16 random bytes, base64), stamps it on every inline <code>&lt;script&gt;</code>, the importmap, and the <code>modulepreload</code> hints it emits (the same value <code>cspNonce()</code> returns during SSR), and sets the header carrying that exact nonce. The nonce on the header and the nonce on the scripts are one minted value, so there is no drift, and it changes every request.</p>
+    <p>For a custom policy, give an object. <code>directives</code> is merged over the strict defaults (override one directive without restating the rest; a <code>null</code> value drops a default directive), and <code>reportOnly: true</code> emits <code>Content-Security-Policy-Report-Only</code> for a staged rollout:</p>
+    <pre>&#123;
+  "webjs": &#123;
+    "csp": &#123;
+      "directives": &#123; "connect-src": "'self' https://api.example.com" &#125;,
+      "reportOnly": true
+    &#125;
+  &#125;
+&#125;</pre>
+    <p>The <code>__NONCE__</code> placeholder inside a directive value (e.g. in a custom <code>script-src</code>) is substituted with the minted nonce per request. A CSP header your app already set (in middleware, a <code>route.&#123;js,ts&#125;</code> handler, or the <code>webjs.headers</code> config) is never clobbered, so an explicit app policy still wins. Inside layouts/pages, read the nonce with <code>import &#123; cspNonce &#125; from '@webjsdev/core'</code> to stamp it on your own inline <code>&lt;script&gt;</code> tags; it is isomorphic (returns <code>''</code> in the browser, so the same source is safe to ship).</p>
+
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
     <ol>
