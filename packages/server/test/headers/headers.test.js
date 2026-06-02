@@ -188,6 +188,54 @@ test('config: a rule with a null value DISABLES a secure default on a path', asy
   assert.equal(elsewhere.headers.get('x-frame-options'), 'SAMEORIGIN', 'default intact elsewhere');
 });
 
+test('config: a malformed directive (CRLF value / bad name) does NOT crash the request', async () => {
+  // Regression: an unvalidated directive value containing CR/LF, or an
+  // invalid header NAME, made applySecurityHeaders throw on every matching
+  // request (a self-inflicted 500). The bad directive must be dropped at
+  // compile time, the request still serves 200, and a GOOD sibling
+  // directive in the same config still applies.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({
+      name: 'host',
+      webjs: {
+        headers: [
+          {
+            source: '/danger',
+            headers: [
+              { key: 'X-Evil', value: 'a\r\nSet-Cookie: x=1' },  // CRLF value: dropped
+              { key: 'X Bad Name', value: 'ok' },                 // invalid name: dropped
+              { key: 'X-Good', value: 'kept' },                   // valid: applied
+            ],
+          },
+        ],
+      },
+    }),
+    'app/page.js': page('<p>root</p>'),
+    'app/danger/page.js': page('<p>danger</p>'),
+  });
+  // Handler creation reads the config and warns once per dropped directive;
+  // silence that expected noise for a clean test run.
+  const prevWarn = console.warn;
+  console.warn = () => {};
+  let app;
+  try {
+    app = await createRequestHandler({ appDir, dev: true });
+  } finally {
+    console.warn = prevWarn;
+  }
+
+  const resp = await app.handle(new Request('http://x/danger'));
+  assert.equal(resp.status, 200, 'a malformed directive must not crash the request');
+  // The CRLF-bearing directive is dropped. (The invalid-NAME directive
+  // cannot even be queried via Headers.get, which is exactly why it can
+  // never land on the response; its drop is asserted at the
+  // compileHeaderRules unit layer.)
+  assert.equal(resp.headers.get('x-evil'), null, 'CRLF-bearing directive is dropped');
+  // The good sibling directive still applies, and the defaults are intact.
+  assert.equal(resp.headers.get('x-good'), 'kept', 'a valid sibling directive still applies');
+  assert.equal(resp.headers.get('x-content-type-options'), 'nosniff');
+});
+
 /* ------------ precedence: app middleware wins ------------ */
 
 test('precedence: app middleware setting a header wins over the secure default', async () => {
@@ -250,6 +298,56 @@ test('compileHeaderRules: ignores a malformed config without throwing', () => {
   });
   assert.equal(rules.length, 1);
   assert.ok(rules[0].pattern.test({ pathname: '/ok' }));
+});
+
+test('compileHeaderRules: drops a directive whose key/value the Headers parser rejects', () => {
+  const prevWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const rules = compileHeaderRules({
+      webjs: {
+        headers: [
+          {
+            source: '/x',
+            headers: [
+              { key: 'X-Evil', value: 'a\r\nSet-Cookie: x=1' },  // CRLF value
+              { key: 'X Bad Name', value: 'ok' },                 // invalid name
+              { key: 'X-Good', value: 'kept' },                   // valid
+            ],
+          },
+        ],
+      },
+    });
+    // The rule survives with ONLY the valid directive.
+    assert.equal(rules.length, 1);
+    assert.deepEqual(rules[0].directives, [{ key: 'X-Good', value: 'kept' }]);
+  } finally {
+    console.warn = prevWarn;
+  }
+});
+
+test('compileHeaderRules: a delete directive (null value) validates only the key', () => {
+  const prevWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const rules = compileHeaderRules({
+      webjs: {
+        headers: [
+          {
+            source: '/x',
+            headers: [
+              { key: 'X-Frame-Options', value: null },  // valid delete
+              { key: 'Bad Name', value: null },          // invalid name: dropped
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(rules.length, 1);
+    assert.deepEqual(rules[0].directives, [{ key: 'X-Frame-Options', value: null }]);
+  } finally {
+    console.warn = prevWarn;
+  }
 });
 
 test('applySecurityHeaders: never overwrites a header already on the response', () => {

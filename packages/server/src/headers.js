@@ -95,6 +95,22 @@ export function compileHeaderRules(pkg) {
       const v = /** @type {any} */ (d).value;
       // null / undefined / false means REMOVE the header on a match.
       const value = v === null || v === undefined || v === false ? null : String(v);
+      // Validate the key/value against the real Headers parser at COMPILE
+      // time (consistent with dropping a bad `source`). A name or value
+      // that Headers rejects (an invalid header name, or a value carrying
+      // CR/LF) would otherwise make `applySecurityHeaders` THROW on every
+      // matching request, a self-inflicted 500, which breaks this file's
+      // "a broken config must not take the app down" guarantee. Probe on a
+      // throwaway Headers and DROP the directive if it throws. For a delete
+      // (value null) only the key needs to be a valid header name, so probe
+      // it with a placeholder value.
+      try {
+        new Headers().set(key, value === null ? 'x' : value);
+      } catch {
+        // eslint-disable-next-line no-console
+        console.warn(`[webjs] dropping invalid webjs.headers directive for key "${key}"`);
+        continue;
+      }
       directives.push({ key, value });
     }
     if (directives.length) rules.push({ pattern, directives });
@@ -152,8 +168,16 @@ export function applySecurityHeaders(res, ctx) {
     if (!rule.pattern.test({ pathname: ctx.pathname })) continue;
     for (const { key, value } of rule.directives) {
       if (appSet.has(key.toLowerCase())) continue; // middleware wins
-      if (value === null) headers.delete(key);
-      else headers.set(key, value);
+      // Belt and suspenders: compileHeaderRules already validated the
+      // key/value, so this never throws in practice, but a surprise from a
+      // directive constructed elsewhere must never throw the response
+      // pipeline. Skip the bad directive instead.
+      try {
+        if (value === null) headers.delete(key);
+        else headers.set(key, value);
+      } catch {
+        /* skip a directive the Headers parser rejects */
+      }
     }
   }
 
