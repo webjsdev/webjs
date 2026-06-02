@@ -343,22 +343,24 @@ UiDropdownMenuContent.register('ui-dropdown-menu-content');
 export class UiDropdownMenuItem extends WebComponent {
   static properties = {
     variant: { type: String, reflect: true },
+    inset: { type: Boolean },
   };
   declare variant: 'default' | 'destructive';
+  declare inset: boolean;
 
   constructor() {
     super();
     this.variant = 'default';
+    this.inset = false;
   }
 
   render() {
-    const inset = this.hasAttribute('inset');
     return html`<div
       data-slot="dropdown-menu-item"
       role="menuitem"
       tabindex="-1"
       data-variant=${this.variant}
-      ?data-inset=${inset}
+      ?data-inset=${this.inset}
       class=${dropdownMenuItemClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
@@ -394,11 +396,18 @@ UiDropdownMenuItem.register('ui-dropdown-menu-item');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuLabel extends WebComponent {
+  static properties = { inset: { type: Boolean } };
+  declare inset: boolean;
+
+  constructor() {
+    super();
+    this.inset = false;
+  }
+
   render() {
-    const inset = this.hasAttribute('inset');
     return html`<div
       data-slot="dropdown-menu-label"
-      ?data-inset=${inset}
+      ?data-inset=${this.inset}
       class=${dropdownMenuLabelClass()}
     ><slot></slot></div>`;
   }
@@ -540,6 +549,14 @@ export class UiDropdownMenuSub extends WebComponent {
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
 export class UiDropdownMenuSubTrigger extends WebComponent {
+  static properties = { inset: { type: Boolean } };
+  declare inset: boolean;
+
+  constructor() {
+    super();
+    this.inset = false;
+  }
+
   // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _sub(): UiDropdownMenuSub | null {
     if (typeof this.closest !== 'function') return null;
@@ -547,7 +564,6 @@ export class UiDropdownMenuSubTrigger extends WebComponent {
   }
 
   render() {
-    const inset = this.hasAttribute('inset');
     const open = !!this._sub()?.open;
     return html`<div
       data-slot="dropdown-menu-sub-trigger"
@@ -556,7 +572,7 @@ export class UiDropdownMenuSubTrigger extends WebComponent {
       aria-haspopup="menu"
       aria-expanded=${String(open)}
       data-state=${open ? 'open' : 'closed'}
-      ?data-inset=${inset}
+      ?data-inset=${this.inset}
       class=${dropdownMenuSubTriggerClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}

@@ -420,7 +420,7 @@ Rules:
 - **Server-known data** (session, accept-language, theme cookie, URL) goes through the page function and is passed as a prop/attribute.
 - **For unacceptable flicker** (theme color, RTL), use a synchronous inline `<script>` in the root layout's `<head>` to set `document.documentElement` before custom elements upgrade.
 
-**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth, and `agent-docs/lit-muscle-memory-gotchas.md` for the full catalog of lit patterns that produce broken SSR or silent reactivity failures in webjs.
+**Anti-pattern:** a component whose first paint is empty/placeholder because real data is fetched in `connectedCallback`/`firstUpdated`. Fetch on the server in the page function instead. See `agent-docs/components.md` for SSR mechanics in depth, and `agent-docs/lit-muscle-memory-gotchas.md` for the full catalog of lit patterns that produce broken SSR or silent reactivity failures in webjs. A browser global or `HTMLElement` member (`document`, `window`, `localStorage`, `this.setAttribute`, `this.classList`, ...) touched in the constructor or `render()` throws during SSR; `webjs check`'s `no-browser-globals-in-render` rule flags it, and an SSR crash on one now names the member and the fix.
 
 ### Light DOM (default) vs Shadow DOM (opt-in)
 

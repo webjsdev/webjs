@@ -114,6 +114,11 @@ export const RULES = [
     description:
       'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `.webjs/*` (NOT `.webjs/`) plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
   },
+  {
+    name: 'no-browser-globals-in-render',
+    description:
+      'Flags browser-only APIs used in a WebComponent constructor or render() method. The SSR pipeline instantiates the component (running the constructor) and calls render() to produce HTML, on a bare server-side class with no DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an HTMLElement instance member on `this` (attachShadow, shadowRoot, setAttribute, getAttribute, removeAttribute, dispatchEvent, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). These belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor only from server-known inputs (attributes, props). Conservative: only the constructor and render bodies are scanned (the methods SSR actually runs), and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -389,6 +394,72 @@ function findFieldInitializers(classBody, props) {
   return out;
 }
 
+// Browser-only globals that are undefined during SSR (the server-side
+// WebComponent base is a bare class with no DOM). High-confidence names only
+// (unlikely to be ordinary local variables), so the rule stays low-noise.
+const BROWSER_GLOBALS = [
+  'document', 'window', 'localStorage', 'sessionStorage', 'navigator',
+  'matchMedia', 'requestAnimationFrame', 'getComputedStyle',
+  'IntersectionObserver', 'MutationObserver', 'ResizeObserver',
+];
+// HTMLElement instance members that do not exist on the bare server class, so
+// `this.<member>` throws (a method call) or is `undefined` (a property) at SSR.
+const HTMLELEMENT_MEMBERS = [
+  'attachShadow', 'shadowRoot', 'setAttribute', 'getAttribute',
+  'removeAttribute', 'hasAttribute', 'dispatchEvent', 'classList',
+  'querySelector', 'querySelectorAll', 'getBoundingClientRect',
+  'focus', 'blur', 'scrollIntoView',
+];
+
+/**
+ * Extract the body text of a named method from a (redacted) class body, or
+ * '' if absent. Handles `async`, a TS return-type annotation, and params.
+ * @param {string} classBody
+ * @param {string} name
+ */
+function methodBodyOf(classBody, name) {
+  const re = new RegExp(`(?:^|[\\s;}])(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`, 'g');
+  const m = re.exec(classBody);
+  if (!m) return '';
+  const open = classBody.indexOf('{', m.index + m[0].length - 1);
+  if (open === -1) return '';
+  const close = matchClosingBrace(classBody, open + 1);
+  return close === -1 ? '' : classBody.slice(open + 1, close);
+}
+
+/**
+ * Find browser-only globals and HTMLElement `this.<member>` accesses in a
+ * (redacted) method body. Returns one entry per distinct member.
+ * @param {string} code
+ * @returns {{ member: string, kind: string }[]}
+ */
+function findBrowserMemberUses(code) {
+  // The class body arrives template-redacted, but `redactStringsAndTemplates`
+  // keeps single/double-quoted string CONTENT (real specifiers ride strings).
+  // Blank that too so a browser word inside a string literal (e.g. a label
+  // `'open the document'`) is not mistaken for a real global access.
+  code = code
+    .replace(/'(?:[^'\\]|\\.)*'/g, (s) => `'${' '.repeat(Math.max(0, s.length - 2))}'`)
+    .replace(/"(?:[^"\\]|\\.)*"/g, (s) => `"${' '.repeat(Math.max(0, s.length - 2))}"`);
+  const out = [];
+  const seen = new Set();
+  const gRe = new RegExp(`(?<![.\\w$])(${BROWSER_GLOBALS.join('|')})\\b`, 'g');
+  let m;
+  while ((m = gRe.exec(code)) !== null) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    out.push({ member: m[1], kind: 'a browser global' });
+  }
+  const hRe = new RegExp(`\\bthis\\.(${HTMLELEMENT_MEMBERS.join('|')})\\b`, 'g');
+  while ((m = hRe.exec(code)) !== null) {
+    const key = `this.${m[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ member: key, kind: 'an HTMLElement member' });
+  }
+  return out;
+}
+
 /**
  * Scan a webjs app directory and report convention violations.
  *
@@ -552,6 +623,31 @@ export async function checkConventions(appDir, opts) {
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
             fix: `Replace with \`declare ${bad}: <Type>;\` and set the default inside \`constructor()\` after \`super()\`.`,
           });
+        }
+      }
+    }
+  }
+
+  // --- Rule: no-browser-globals-in-render ---
+  // The SSR pipeline runs the constructor (`new Cls()`) and calls `render()`
+  // on a bare server-side class with no DOM. A browser global or an
+  // HTMLElement member on `this` touched there throws at SSR time. Those
+  // belong in connectedCallback / lifecycle hooks, which SSR never calls.
+  if (isRuleEnabled('no-browser-globals-in-render', overrides)) {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const body of extractWebComponentClassBodies(scan)) {
+        for (const method of ['constructor', 'render']) {
+          const code = methodBodyOf(body, method);
+          if (!code) continue;
+          for (const { member, kind } of findBrowserMemberUses(code)) {
+            violations.push({
+              rule: 'no-browser-globals-in-render',
+              file: rel,
+              message: `\`${member}\` (${kind}) is used in ${method}(), which runs during SSR where it is not available, so it throws and the component fails to server-render.`,
+              fix: `Move browser-only work to connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls. Seed first-paint defaults in the constructor only from server-known inputs (attributes / props), then refine in connectedCallback by writing to a signal.`,
+            });
+          }
         }
       }
     }
