@@ -1197,6 +1197,33 @@ export async function checkConventions(appDir, opts) {
     }
   }
 
+  // Inline opt-out (the per-occurrence escape hatch). A file may suppress a
+  // rule with a `// webjs-check-ignore <rule>[,<rule>]` comment (or `* ` for
+  // all rules) anywhere in the file. The package.json `webjs.conventions`
+  // switch turns a rule off across the whole project; this is the finer,
+  // per-file escape hatch so a component that genuinely needs a flagged
+  // pattern (a vanilla DOM call with no lit equivalent, a deliberate browser
+  // global) can keep it without disabling the rule everywhere. Authors should
+  // add a short reason after the rule name.
+  const ignoresByRel = new Map();
+  for (const { rel, content } of files) {
+    const ignored = new Set();
+    const re = /webjs-check-ignore[ \t]+([^\n]+)/gi;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      for (const tok of m[1].split(/[\s,]+/)) {
+        if (tok === '*' || RULE_NAMES.has(tok)) ignored.add(tok);
+      }
+    }
+    if (ignored.size) ignoresByRel.set(rel, ignored);
+  }
+  if (ignoresByRel.size) {
+    return violations.filter((v) => {
+      const ig = ignoresByRel.get(v.file);
+      return !ig || !(ig.has(v.rule) || ig.has('*'));
+    });
+  }
+
   return violations;
 }
 
