@@ -70,6 +70,17 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # Some integration tests boot the blog example in-process (e.g. the
+      # differential elision test renders its mixed `/` page), which calls
+      # listPosts() and needs a migrated Prisma DB, the same setup the e2e job
+      # does.
+      - name: Prepare the blog example database
+        working-directory: examples/blog
+        run: |
+          cp .env.example .env
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma db seed
       - run: npm test
 
   browser:
