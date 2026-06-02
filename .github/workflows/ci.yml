@@ -31,12 +31,10 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Dogfood the framework's own convention validator on the example
-      # apps. These three pass clean; website is intentionally omitted (it
-      # carries a pre-existing tests-exist deviation tracked separately).
-      - name: webjs check (blog, docs, ui website)
+      # Dogfood the framework's own correctness checks on the in-repo apps.
+      - name: webjs check (blog, website, docs, ui website)
         run: |
-          for app in examples/blog docs packages/ui/packages/website; do
+          for app in examples/blog website docs packages/ui/packages/website; do
             echo "::group::webjs check $app"
             ( cd "$app" && node "$GITHUB_WORKSPACE/packages/cli/bin/webjs.js" check )
             echo "::endgroup::"

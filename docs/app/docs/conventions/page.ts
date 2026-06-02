@@ -91,7 +91,7 @@ webjs test --e2e
       <li><strong>Unit tests</strong> for server actions, queries, and component rendering.</li>
       <li><strong>E2E tests</strong> for user-facing features (navigation, forms, auth flows).</li>
     </ul>
-    <p>The <code>webjs check</code> command flags modules without tests.</p>
+    <p>Tests-per-feature is a project convention (guidance), not a <code>webjs check</code> rule.</p>
 
     <h2>AI Agent Guardrails</h2>
     <p>webjs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Antigravity, and others.</p>
@@ -129,7 +129,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
       </thead>
       <tbody>
         <tr><td><code>AGENTS.md</code></td><td>All agents</td><td>Framework API, conventions, recipes (the source of truth)</td></tr>
-        <tr><td><code>CONVENTIONS.md</code></td><td>All agents</td><td>Project-specific overridable conventions</td></tr>
+        <tr><td><code>CONVENTIONS.md</code></td><td>All agents</td><td>Project conventions (guidance, customizable in the prose)</td></tr>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Points to AGENTS.md + CONVENTIONS.md</td></tr>
         <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>PreToolUse hook guarding git merge/push to main</td></tr>
         <tr><td><code>.cursorrules</code></td><td>Cursor</td><td>Workflow rules, git rules, framework patterns</td></tr>
@@ -181,7 +181,7 @@ cd my-app && npm run dev</pre>
       <li><code>CLAUDE.md</code>: quick reminders for Claude Code</li>
       <li>Agent config files (<code>.cursorrules</code>, <code>.agents/rules/workflow.md</code>, <code>.github/copilot-instructions.md</code>)</li>
       <li><code>.editorconfig</code> for consistent formatting</li>
-      <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>) and webjs conventions config</li>
+      <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>)</li>
     </ul>
 
     <p>Every file is ready to use immediately. The project works out of the box with <code>webjs dev</code>, and every AI agent that opens the project will automatically read the config files and follow the conventions.</p>
