@@ -249,3 +249,62 @@ test('an app-set CSP header is not clobbered by the framework default', async ()
   const resp = await app.handle(new Request('http://x/'));
   assert.equal(resp.headers.get('content-security-policy'), "default-src 'self'");
 });
+
+/* ------------ malformed config fails closed, never crashes the request ------------ */
+
+test('readCspConfig: a CRLF-bearing directive value is dropped, the rest survives', () => {
+  // A header value with CR/LF would make Headers.set throw. The config
+  // reader must drop it (fail closed), not let it reach buildCspHeader.
+  const c = readCspConfig({
+    webjs: { csp: { directives: { 'connect-src': "'self'\r\nX-Evil: 1" } } },
+  });
+  assert.equal(c.enabled, true);
+  // The poisoned directive is gone.
+  assert.ok(!('connect-src' in c.directives), 'CRLF directive dropped');
+  // The rest of the strict defaults are intact, so the policy still applies.
+  assert.match(c.directives['script-src'], /'nonce-__NONCE__'/);
+  // And the built header carries no CR/LF, so Headers.set accepts it.
+  const v = buildCspHeader(c, 'NONCE123');
+  assert.ok(!/[\r\n]/.test(v));
+  assert.doesNotThrow(() => new Headers().set('Content-Security-Policy', v));
+});
+
+test('readCspConfig: a control char in a directive NAME is dropped too', () => {
+  const c = readCspConfig({
+    webjs: { csp: { directives: { 'script-src\nX-Evil': "'self'" } } },
+  });
+  // The injected name is dropped; the legit default script-src remains.
+  assert.match(c.directives['script-src'], /'strict-dynamic'/);
+  const v = buildCspHeader(c, 'NONCE123');
+  assert.ok(!/[\r\n]/.test(v));
+});
+
+test('a CRLF-bearing webjs.csp directive does NOT crash the request', async () => {
+  // COUNTERFACTUAL: without the control-char drop in readCspConfig AND the
+  // try/catch backstop in dev.js, Headers.set throws "invalid header value"
+  // and handle() rejects on EVERY request. This asserts the request still
+  // returns a normal 200 with a clean (CR/LF-free) CSP header.
+  const appDir = makeApp({
+    // Build the package.json manually so the literal \r\n survives JSON.
+    'package.json': JSON.stringify({
+      name: 'csp-crlf',
+      type: 'module',
+      webjs: { csp: { directives: { 'connect-src': "'self'\r\nX-Evil: 1" } } },
+    }),
+    'app/page.js': page('<h1>home</h1>'),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/'));
+  // The request did not crash.
+  assert.equal(resp.status, 200);
+  const csp = resp.headers.get('content-security-policy');
+  // A header is still emitted (the rest of the strict policy), and it is
+  // free of the injected CR/LF + smuggled header.
+  assert.ok(csp, 'CSP header still emitted after dropping the bad directive');
+  assert.ok(!/[\r\n]/.test(csp), 'no CR/LF in the emitted header');
+  assert.ok(!csp.toLowerCase().includes('x-evil'), 'no smuggled header in the value');
+  // The page still rendered and the nonce still matches.
+  const body = await resp.text();
+  const hNonce = headerNonce(csp);
+  assert.ok(hNonce && body.includes(`nonce="${hNonce}"`));
+});

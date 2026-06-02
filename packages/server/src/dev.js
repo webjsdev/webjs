@@ -637,7 +637,16 @@ export async function createRequestHandler(opts) {
       // an explicit app policy still wins.
       if (nonce && !merged.headers.has('content-security-policy') &&
           !merged.headers.has('content-security-policy-report-only')) {
-        merged.headers.set(cspHeaderName(cspConfig), buildCspHeader(cspConfig, nonce));
+        // readCspConfig already drops a directive whose name/value carries a
+        // control char, so buildCspHeader produces a Headers-safe value. The
+        // try/catch is a belt-and-suspenders backstop: a surprise value must
+        // never throw the response pipeline (fail closed to no CSP header
+        // rather than a self-inflicted 500 on every request).
+        try {
+          merged.headers.set(cspHeaderName(cspConfig), buildCspHeader(cspConfig, nonce));
+        } catch {
+          /* a malformed policy must not take the request down: serve without CSP */
+        }
       }
       return merged;
     });

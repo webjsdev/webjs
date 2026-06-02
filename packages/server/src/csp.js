@@ -37,6 +37,14 @@
  */
 
 /**
+ * Any C0/C1 control character, including CR and LF. A directive name or
+ * value carrying one of these would make `Headers.set` throw, so such a
+ * directive is dropped from the policy at config-read time (fail closed).
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\x00-\x1f\x7f-\x9f]/;
+
+/**
  * The strict-by-default directive set used when `webjs.csp` is `true`
  * (or an object that does not override a given directive). Tuned to work
  * with webjs's own output, which is: nonce-signed inline `<script>` tags
@@ -140,7 +148,23 @@ export function readCspConfig(pkg) {
         delete directives[k];
         continue;
       }
-      directives[k] = String(v);
+      const value = String(v);
+      // Reject a directive NAME or VALUE carrying CR/LF or other control
+      // chars. Author-controlled config (no injection vector, the only
+      // request-derived input is the safe base64 nonce), but a CRLF in a
+      // value would make `Headers.set` THROW in `buildCspHeader`'s caller,
+      // a self-inflicted 500 on every request that breaks this file's
+      // "never a throw, fail closed" promise. Drop the bad directive with a
+      // one-line warning, consistent with how headers.js drops a bad
+      // header directive. `__NONCE__` is substituted later with a base64
+      // nonce, so the post-substitution value stays control-char-free.
+      if (CONTROL_CHARS.test(k) || CONTROL_CHARS.test(value)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[webjs] dropping invalid webjs.csp directive "${k}" (control character in name or value)`);
+        delete directives[k];
+        continue;
+      }
+      directives[k] = value;
     }
   }
   return { enabled: true, directives, reportOnly };
