@@ -44,7 +44,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `csrf.js` | Double-submit CSRF protection (server-action endpoints) |
 | `websocket.js` | WS upgrade handling: invokes `WS` export from `route.ts` |
 | `broadcast.js` | `broadcast(topic, msg)` for fan-out messaging |
-| `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`) |
+| `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`). Also wires the server-side `cspNonce()` provider: returns the per-request nonce `setCspNonce` stored (minted when CSP is on, #233), else falls back to parsing an inbound `Content-Security-Policy` request header |
+| `csp.js` | CSP nonce minting + `Content-Security-Policy` header building (#233). `readCspConfig` normalizes the `webjs.csp` package.json key (off by default; `true` = strict default policy, object = custom directives + `reportOnly`); `mintNonce` is the per-request CSPRNG nonce; `buildCspHeader` substitutes the nonce into the policy. Plugs into the #232 `applySecurityHeaders` seam in `dev.js`'s `handle()` |
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
 | `check.js` | Convention validator backing `webjs check`. Correctness-only; rules include `no-browser-globals-in-render`, `no-non-erasable-typescript` |

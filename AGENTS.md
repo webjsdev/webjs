@@ -768,7 +768,21 @@ A rule can ADD a header, OVERRIDE a default (give a new value), or DISABLE a def
 
 ### Precedence (lowest to highest)
 
-`secure defaults` < `webjs.headers` path config < `app middleware`. App middleware always wins (its headers are already on the response when the framework merges), the path config overrides defaults, and the defaults are the floor. The merge seam lives in `packages/server/src/headers.js` (`applySecurityHeaders`), which is also where future CSP / CORS policy layering plugs in.
+`secure defaults` < `webjs.headers` path config < `app middleware`. App middleware always wins (its headers are already on the response when the framework merges), the path config overrides defaults, and the defaults are the floor. The merge seam lives in `packages/server/src/headers.js` (`applySecurityHeaders`), which is also where the CSP layer (below) and future CORS policy plug in.
+
+### Content-Security-Policy (nonce, opt-in)
+
+CSP is OFF by default and opt-in via a `webjs.csp` key in `package.json`. When enabled the server MINTS a fresh per-request CSPRNG nonce, makes it the value `cspNonce()` returns during SSR (so the inline boot script, the importmap, and the `modulepreload` hints all carry it), and emits a literal `Content-Security-Policy` response header carrying that EXACT nonce. One minted value flows mint -> request store -> SSR (`cspNonce()`) -> header, so there is no drift, and it changes every request.
+
+```jsonc
+{ "webjs": { "csp": true } }                       // strict default policy
+{ "webjs": { "csp": {                              // custom
+  "directives": { "connect-src": "'self' https://api.example.com" },
+  "reportOnly": true                               // emits *-Report-Only
+} } }
+```
+
+`true` enables a strict-dynamic + nonce posture tuned for webjs's own output (`script-src 'nonce-<minted>' 'strict-dynamic' 'self' https:`, `default-src 'self'`, `object-src 'none'`, an inline-style allowance for the Tailwind runtime). An object merges `directives` over those defaults (a `null` value drops a default directive), and `reportOnly: true` emits `Content-Security-Policy-Report-Only`. A `__NONCE__` placeholder inside any directive value is substituted with the minted nonce per request. A CSP header the app already set (middleware, a route handler, or the `webjs.headers` config) is never clobbered. Mechanism: `mintNonce` / `readCspConfig` / `buildCspHeader` in `packages/server/src/csp.js`, minted in `handle()` and stored on the request scope via `setCspNonce` (`packages/server/src/context.js`); `cspNonce()` reads that store, falling back to an inbound CSP request header (the legacy consume-only path) when no nonce was minted. Read the nonce in a layout/page with `import { cspNonce } from '@webjsdev/core'` to stamp it on your own inline `<script>` tags.
 
 ---
 

@@ -1,6 +1,6 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy } from '@webjsdev/core';
+import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
 import { importMapTag, vendorIntegrityFor, publishedBuildId } from './importmap.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
@@ -1295,26 +1295,24 @@ function toUrlPath(file, appDir) {
 }
 
 /**
- * Extract a CSP nonce from the request's Content-Security-Policy header.
- * Matches `'nonce-<base64>'` in the script-src directive.
+ * The CSP nonce for the in-flight request, or undefined if none is in
+ * scope. Delegates to `cspNonce()`, which returns the per-request nonce
+ * the handler MINTED when CSP is enabled (issue #233), or, as a fallback,
+ * the nonce parsed from an inbound `Content-Security-Policy` request
+ * header (the legacy consume-only path). Using the same source as the
+ * `Content-Security-Policy` response header is what guarantees the inline
+ * boot script, the importmap, the modulepreload hints, and the header all
+ * carry the EXACT same nonce: one minted value, no drift.
  *
- * The regex matches the first `nonce-...` token anywhere in the
- * header, regardless of which directive it sits under. This is
- * intentional: in practice every reasonable CSP uses the same
- * nonce across `script-src` and `style-src` (a per-request
- * single-nonce model), and webjs only emits `<script>` /
- * `<link rel="modulepreload">` tags, so reading the first match
- * is the right behaviour. A future caller that emits styled
- * inline content under a separate style nonce would need to
- * extend this to be directive-scoped.
+ * `req` is accepted (and ignored) so existing call sites stay unchanged;
+ * the value comes from the request-scoped AsyncLocalStorage store, not
+ * the argument.
  *
- * @param {Request} req
+ * @param {Request} [_req]
  * @returns {string | undefined}
  */
-function getNonce(req) {
-  const csp = req.headers.get('content-security-policy') || '';
-  const match = /\bnonce-([A-Za-z0-9+/=]+)/.exec(csp);
-  return match ? match[1] : undefined;
+function getNonce(_req) {
+  return cspNonce() || undefined;
 }
 
 /** @param {string} s */
