@@ -820,7 +820,7 @@ export default function Home() {
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
         Edit <code class="font-mono text-[0.9em]">app/page.ts</code> to get started.
         Run \${accentLink('#', 'webjs test')} to run tests and
-        \${accentLink('#', 'webjs check')} to validate conventions.
+        \${accentLink('#', 'webjs check')} to catch correctness issues.
       </p>
       <div class="flex gap-3 items-center">
         <button class=\${buttonClass()}>Get started</button>
