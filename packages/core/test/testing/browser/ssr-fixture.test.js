@@ -42,24 +42,25 @@ function ssrLightInner(ssr, tag) {
 suite('ssrFixture() (#268)', () => {
 
   test('hydrates and awaits the native updateComplete', async () => {
-    // The component records, inside willUpdate (which runs during the update
-    // cycle, not the constructor), a derived value read in render(). If
-    // ssrFixture did NOT await the real update cycle, this value would be the
-    // constructor placeholder. Its presence proves updateComplete was awaited.
+    // The component sets a reactive value in connectedCallback, which the SSR
+    // walker does NOT run (it runs the constructor + willUpdate only). So the
+    // SSR markup shows the constructor default, and the post-connectedCallback
+    // value appears ONLY after the client update cycle. If ssrFixture did NOT
+    // await the real updateComplete, the DOM would still show the SSR default
+    // (the connectedCallback-scheduled re-render is microtask-deferred), so the
+    // 'hydrated' value genuinely proves the await happened.
     class SF1 extends WebComponent {
-      static properties = { count: { type: Number } };
-      constructor() { super(); this.count = 0; this.derived = 'placeholder'; }
-      willUpdate() { this.derived = `cycle-${this.count}`; }
-      render() { return html`<output>${this.derived}</output>`; }
+      static properties = { label: { type: String, state: true } };
+      constructor() { super(); this.label = 'ssr-default'; }
+      connectedCallback() { super.connectedCallback(); this.label = 'hydrated'; }
+      render() { return html`<output>${this.label}</output>`; }
     }
     SF1.register('ssrf-cycle');
 
-    const el = await ssrFixture(html`<ssrf-cycle count="5"></ssrf-cycle>`);
-    // The promise the helper awaits is the element's real updateComplete; assert
-    // it is settled (awaiting again resolves synchronously to a truthy value).
+    const el = await ssrFixture(html`<ssrf-cycle></ssrf-cycle>`);
     assert.ok(el.updateComplete && typeof el.updateComplete.then === 'function', 'element exposes updateComplete');
-    assert.ok(el.innerHTML.includes('cycle-5'), `post-hydration DOM should show the cycle-derived value, got: ${el.innerHTML}`);
-    assert.ok(!el.innerHTML.includes('placeholder'), 'constructor placeholder must not survive the awaited update cycle');
+    assert.ok(el.innerHTML.includes('hydrated'), `post-hydration DOM must show the connectedCallback value, got: ${el.innerHTML}`);
+    assert.ok(!el.innerHTML.includes('ssr-default'), 'the SSR default must not survive the awaited client update cycle');
   });
 
   test('passing case: SSR markup equals the hydrated DOM (no mismatch)', async () => {
