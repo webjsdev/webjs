@@ -41,6 +41,7 @@ import {
   isCacheableResponse,
   revalidatePath,
   revalidateAll,
+  setAppSourceFingerprint,
 } from '../../src/html-cache.js';
 import { STREAM_MARKER } from '../../src/conditional-get.js';
 import { setVendorEntries, publishBuildId, publishedBuildId } from '../../src/importmap.js';
@@ -471,4 +472,131 @@ test('isCacheableResponse fails safe when getSetCookie is unavailable', () => {
   const clean = new Response('x', { status: 200, headers: { 'content-type': 'text/html' } });
   clean.headers.getSetCookie = undefined;
   assert.equal(isCacheableResponse(clean), true, 'no Set-Cookie stays cacheable under the fallback');
+});
+
+test('#318: the app-source fingerprint re-keys the HTML cache on an app-only change', () => {
+  const url = new URL('http://x/blog');
+  const HEX16 = /:[0-9a-f]{16}:/;
+  try {
+    setAppSourceFingerprint('');
+    const empty = htmlCacheKey(url);
+    assert.ok(!HEX16.test(empty), 'an empty fingerprint collapses to the prior key shape (byte-identical)');
+
+    setAppSourceFingerprint('app/page.ts:aaaa\ncomponents/x.ts:bbbb');
+    const v1 = htmlCacheKey(url);
+    assert.ok(HEX16.test(v1), 'a non-empty fingerprint adds a digest segment to the key');
+    assert.notEqual(v1, empty, 'the fingerprint changes the key');
+
+    // A deploy that changes ONLY an app module's bytes (its content hash moves).
+    setAppSourceFingerprint('app/page.ts:aaaa\ncomponents/x.ts:CHANGED');
+    const v2 = htmlCacheKey(url);
+    assert.notEqual(v2, v1, 'an app-source byte change re-keys (cache miss to a fresh render, no stale ?v body)');
+
+    // A no-change redeploy reproduces the SAME fingerprint, so the key is stable
+    // and a warm cache survives (the whole point: do not invalidate for nothing).
+    setAppSourceFingerprint('app/page.ts:aaaa\ncomponents/x.ts:bbbb');
+    assert.equal(htmlCacheKey(url), v1, 'the same app source produces the same key (no spurious invalidation)');
+  } finally {
+    setAppSourceFingerprint('');
+  }
+});
+
+test('#318: an app-module byte change re-renders a cached revalidate page (prod, end to end)', async () => {
+  // A prod handler caches a revalidate page, then a browser-bound component's
+  // bytes change and rebuild() runs, so the app-source fingerprint moves, the
+  // cache key moves, and the next request MISSES the stale entry and re-renders
+  // with the new `?v` boot URLs instead of serving the baked-in old ones (#243
+  // finding C). A per-render counter baked into the HTML proves the re-render.
+  setStore(memoryStore());
+  const key = 'cf318_render';
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
+    'app/layout.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import './widget.js';\n` +
+      `export const revalidate = 60;\n` +
+      `export default function P() {\n` +
+      `  const k = ${JSON.stringify(key)};\n` +
+      `  globalThis.__renders = globalThis.__renders || {};\n` +
+      `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
+      `  return html\`<h1>render #\${globalThis.__renders[k]}</h1><x-w></x-w>\`;\n` +
+      `}\n`,
+    'app/widget.js':
+      `import { WebComponent } from ${JSON.stringify(HTML_URL.replace('html.js', 'component.js'))};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XW extends WebComponent { render() { return html\`<button @click=\${() => 1}>v1</button>\`; } }\n` +
+      `XW.register('x-w');\n`,
+  });
+  try {
+    delete globalThis.__renders;
+    const app = await createRequestHandler({ appDir, dev: false });
+    await app.warmup();
+
+    const r1 = await (await app.handle(new Request('http://x/'))).text();
+    assert.match(r1, /render #1/, 'first request renders');
+    const r2 = await (await app.handle(new Request('http://x/'))).text();
+    assert.match(r2, /render #1/, 'second request is a cache HIT (no re-render)');
+
+    // Change the component's bytes (an app-only deploy), then rebuild.
+    writeFileSync(
+      join(appDir, 'app', 'widget.js'),
+      `import { WebComponent } from ${JSON.stringify(HTML_URL.replace('html.js', 'component.js'))};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XW extends WebComponent { render() { return html\`<button @click=\${() => 2}>v2-changed</button>\`; } }\n` +
+      `XW.register('x-w');\n`,
+    );
+    await app.rebuild();
+
+    const r3 = await (await app.handle(new Request('http://x/'))).text();
+    assert.match(r3, /render #2/, 'after an app-module change the cache key moved, so the page RE-RENDERS (not the stale cached body)');
+  } finally {
+    delete globalThis.__renders;
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('#318: two deploys of IDENTICAL source at different paths produce the SAME key (no spurious invalidation)', async () => {
+  // The location-independence property: the app-source fingerprint is a digest
+  // of RELATIVIZED paths + content hashes, so two prod boots of byte-identical
+  // source at different absolute tmpdirs (a redeploy to a fresh container)
+  // compute the SAME cache key, and a Redis-backed warm cache survives the
+  // redeploy instead of being spuriously invalidated. The fp is module-global,
+  // so each key is captured right after its OWN warmup.
+  const files = {
+    'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
+    'app/layout.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import './widget.js';\n` +
+      `export const revalidate = 60;\n` +
+      `export default () => html\`<x-w></x-w>\`;\n`,
+    'app/widget.js':
+      `import { WebComponent } from ${JSON.stringify(HTML_URL.replace('html.js', 'component.js'))};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XW extends WebComponent { render() { return html\`<button @click=\${() => 1}>v1</button>\`; } }\n` +
+      `XW.register('x-w');\n`,
+  };
+  const url = new URL('http://x/');
+  const dirA = makeApp(files);
+  const dirB = makeApp(files); // identical source, different tmpdir
+  try {
+    const a = await createRequestHandler({ appDir: dirA, dev: false });
+    await a.warmup();
+    const keyA = htmlCacheKey(url);
+
+    const b = await createRequestHandler({ appDir: dirB, dev: false });
+    await b.warmup();
+    const keyB = htmlCacheKey(url);
+
+    assert.match(keyA, /:[0-9a-f]{16}:/, 'the key carries an app-source fingerprint segment');
+    assert.equal(keyB, keyA, 'identical source at different paths yields the SAME key (location-independent, no spurious invalidation)');
+  } finally {
+    rmSync(dirA, { recursive: true, force: true });
+    rmSync(dirB, { recursive: true, force: true });
+  }
 });
