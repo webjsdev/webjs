@@ -3,7 +3,7 @@
   "$id": "https://webjs.dev/schemas/webjs-config.schema.json",
   "title": "webjs config block",
   "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented server reader. An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
-  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
+  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -80,6 +80,11 @@
       "type": "string",
       "enum": ["never", "always", "ignore"],
       "default": "ignore"
+    },
+    "basePath": {
+      "description": "Sub-path deployment prefix for an app mounted under example.com/app/ behind a proxy that does NOT strip the prefix. 'app', '/app', and '/app/' all normalize to '/app'; an empty value (the default) is a root mount and a pure no-op. The prefix is stripped from the incoming path at ingress and prepended to every framework-emitted URL (importmap targets, modulepreload hints, boot module specifiers, the dev reload src). Read by readBasePath in base-path.js. Author-written <a href> links and client-router navigation are NOT auto-prefixed (a documented follow-up).",
+      "type": "string",
+      "default": ""
     },
     "csp": {
       "description": "Content-Security-Policy config. Off by default. true enables a strict nonce-based default policy. An object customizes directives and report-only mode. Read by readCspConfig in csp.js.",

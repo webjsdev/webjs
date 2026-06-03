@@ -32,6 +32,7 @@ const full: WebjsConfig = {
     { source: '/legacy', destination: '/', statusCode: 301 },
   ],
   trailingSlash: 'never',
+  basePath: '/app',
   csp: { directives: { 'connect-src': "'self' https://api.example.com" }, reportOnly: true },
   maxBodyBytes: 262144,
   maxMultipartBytes: 5242880,
@@ -95,6 +96,10 @@ void missingDest;
 // @ts-expect-error a numeric knob is a number, not a string.
 const badNumber: WebjsConfig = { maxBodyBytes: '1mb' };
 void badNumber;
+
+// @ts-expect-error basePath is a string, not a number.
+const badBasePath: WebjsConfig = { basePath: 42 };
+void badBasePath;
 
 // @ts-expect-error a header value of true is rejected (only string, null, or false).
 const badHeaderValue: WebjsConfig = { headers: [{ source: '/a', headers: [{ key: 'X-Test', value: true }] }] };

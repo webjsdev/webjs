@@ -9,6 +9,8 @@ import { getSerializer } from './serializer.js';
 import { resolveOrigin } from './cors.js';
 import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import { getBodyLimits } from './context.js';
+import { basePath } from './importmap.js';
+import { withBasePath } from './base-path.js';
 
 /**
  * The JSON / RPC body cap in effect for the current request: the per-request
@@ -257,6 +259,12 @@ export async function serveActionStub(idx, absFile) {
   if (typeof mod.default === 'function' && !fnNames.includes('default')) {
     fnNames.push('default');
   }
+  // The RPC endpoint is a framework-emitted same-origin URL, so it must
+  // carry the basePath prefix under a sub-path deploy (#256), exactly like
+  // the importmap targets and the boot module specifiers. Without this the
+  // stub would POST to a bare /__webjs/action/... that the ingress strip
+  // 404s, breaking every server action when webjs.basePath is set.
+  const actionUrl = withBasePath(`/__webjs/action/${hash}/`, basePath());
   const body = `// webjs: generated server-action stub for ${relative(idx.appDir, absFile)}\n` +
     `import { stringify as __wjStringify, parse as __wjParse } from '@webjsdev/core';\n` +
     `function __csrf() {\n` +
@@ -265,7 +273,7 @@ export async function serveActionStub(idx, absFile) {
     `}\n` +
     `async function __rpc(fn, args) {\n` +
     `  const body = await __wjStringify(args);\n` +
-    `  const res = await fetch(${JSON.stringify(`/__webjs/action/${hash}/`)} + fn, {\n` +
+    `  const res = await fetch(${JSON.stringify(actionUrl)} + fn, {\n` +
     `    method: 'POST',\n` +
     `    headers: {\n` +
     `      'content-type': ${JSON.stringify(RPC_CONTENT_TYPE)},\n` +
