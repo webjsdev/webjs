@@ -554,6 +554,63 @@ export declare function broadcast(
 ): void;
 
 // ---------------------------------------------------------------------------
+// file-storage.js (#247)
+// ---------------------------------------------------------------------------
+
+/** A streaming handle returned by `FileStore.get` (body is a stream, never buffered). */
+export interface StoredObjectHandle {
+  body: ReadableStream | import('node:stream').Readable;
+  size: number;
+  contentType: string;
+}
+
+/** The result of `FileStore.put`. */
+export interface PutResult {
+  key: string;
+  size: number;
+  contentType: string;
+}
+
+/**
+ * The pluggable file-storage interface. `diskStore` is the local-disk default;
+ * an S3-compatible adapter is a drop-in (same web-standard object shapes).
+ */
+export interface FileStore {
+  put(
+    key: string,
+    file: Blob | File | ReadableStream | Uint8Array,
+    opts?: { contentType?: string },
+  ): Promise<PutResult>;
+  get(key: string): Promise<StoredObjectHandle | null>;
+  delete(key: string): Promise<void>;
+  url(key: string): string;
+  has?(key: string): Promise<boolean>;
+}
+
+/** The default uploads directory (relative to cwd), gitignore-friendly. */
+export declare const DEFAULT_UPLOAD_DIR: string;
+/** Local-disk file store (the default adapter). Streams writes. */
+export declare function diskStore(opts?: { dir?: string; baseUrl?: string }): FileStore;
+/** Set the default file store (call at startup to use a custom dir or S3). */
+export declare function setFileStore(store: FileStore): void;
+/** Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set). */
+export declare function getFileStore(): FileStore;
+/** Generate a random, opaque, traversal-safe key, preserving a whitelisted extension. */
+export declare function generateKey(filename?: string): string;
+/** Validate a key and return the absolute path it resolves to (throws on traversal). */
+export declare function assertSafeKey(dir: string, key: string): string;
+/** Mint a signed, expiring URL for a stored object (HMAC-SHA256). */
+export declare function signedUrl(
+  key: string,
+  opts: { secret: string; expiresIn?: number; base?: string },
+): string;
+/** Verify a signed URL (or parsed params); constant-time, checks expiry + tamper. */
+export declare function verifySignedUrl(
+  input: string | URL | URLSearchParams | { key?: string; exp?: string | number; sig?: string },
+  secret: string,
+): { valid: boolean; key: string | null; reason?: string };
+
+// ---------------------------------------------------------------------------
 // json.js
 // ---------------------------------------------------------------------------
 

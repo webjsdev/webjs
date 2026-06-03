@@ -307,8 +307,8 @@ type ActionResult<T> =
 The page reads `ctx.actionData?.fieldErrors?.<name>` for the message and
 `ctx.actionData?.values?.<name>` to set a native `value=`. On a plain GET
 render `actionData` is `undefined`, so the page renders empty inputs and no
-error blocks. (`values` carries text fields as strings; file uploads are a
-separate concern, tracked in #247.)
+error blocks. (`values` carries text fields as strings; for a file upload see
+the "Receive and persist an uploaded file" recipe below.)
 
 ### Why no `fetch` in a `@click` handler here
 
@@ -320,3 +320,121 @@ for `fetch` + a JS submit handler would break the no-JS baseline. Use a
 
 See `agent-docs/advanced.md` for the client-router side (how the enhanced
 303/422 swap works) and the rest of the form-submission behavior.
+
+## Receive and persist an uploaded file
+
+A file upload is just a `<form enctype="multipart/form-data">` posting to a page
+`action`. With JS disabled it is a native round-trip; with JS the client router
+upgrades it in place. No upload library, no `fetch`. The bytes are STREAMED to
+storage via the file-storage primitive (`getFileStore()`), never buffered whole,
+and a `route.{js,ts}` serves them back through a signed URL.
+
+```ts
+// app/avatar/page.ts
+import { html } from '@webjsdev/core';
+import { saveAvatar } from '../../modules/avatar/actions/save-avatar.server.ts';
+
+export async function action({ formData }: { formData: FormData }) {
+  const file = formData.get('avatar');               // a web `File`
+  if (!(file instanceof File) || file.size === 0) {
+    return { success: false, fieldErrors: { avatar: 'Choose an image' }, status: 422 };
+  }
+  const result = await saveAvatar(file);             // persists + returns the key
+  if (!result.success) return result;
+  return { success: true, redirect: '/avatar' };
+}
+
+export default function Avatar({ actionData }: {
+  actionData?: { fieldErrors?: Record<string, string> };
+}) {
+  const errors = actionData?.fieldErrors || {};
+  return html`
+    <form method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
+      <input name="avatar" type="file" accept="image/*" required>
+      ${errors.avatar ? html`<p class="text-sm text-red-600">${errors.avatar}</p>` : ''}
+      <button type="submit">Upload</button>
+    </form>
+  `;
+}
+```
+
+The action delegates to a `.server` action that streams the file to storage with
+a generated, traversal-safe key and persists that key on the DB row. Never use
+the user-supplied filename as a key; `generateKey` makes an opaque one.
+
+```ts
+// modules/avatar/actions/save-avatar.server.ts
+'use server';
+import { getFileStore, generateKey } from '@webjsdev/server';
+import { prisma } from '../../../lib/prisma.server.ts';
+
+export async function saveAvatar(file: File) {
+  const key = generateKey(file.name);                // <uuid>.<ext>, safe
+  const { size, contentType } = await getFileStore().put(key, file); // streams to disk
+  if (size > 5 * 1024 * 1024) {                      // app-level policy check
+    await getFileStore().delete(key);
+    return { success: false, fieldErrors: { avatar: 'Max 5 MB' }, status: 422 };
+  }
+  await prisma.user.update({ where: { id: 'me' }, data: { avatarKey: key } });
+  return { success: true, data: { key, contentType } };
+}
+```
+
+Serve the stored file from a `route.{js,ts}`, streaming `get(key)` and (optionally)
+gating it behind a signed URL so the object is not world-readable by key alone.
+
+```ts
+// app/files/[key]/route.ts
+import { getFileStore, verifySignedUrl } from '@webjsdev/server';
+
+export async function GET(request: Request, { params }: { params: { key: string } }) {
+  const check = verifySignedUrl(new URL(request.url).searchParams, process.env.AUTH_SECRET!);
+  if (!check.valid || check.key !== params.key) {
+    return new Response('Forbidden', { status: 403 });
+  }
+  const handle = await getFileStore().get(params.key);
+  if (!handle) return new Response('Not Found', { status: 404 });
+  return new Response(handle.body, {            // streams; never reads the file into memory
+    headers: {
+      'content-type': handle.contentType,
+      'content-length': String(handle.size),
+      // SECURITY (do NOT drop these for user-uploaded bytes). The stored
+      // content-type came from the UPLOAD, which is client-controlled, so an
+      // attacker can upload HTML/SVG tagged `text/html` under an innocent key.
+      // `nosniff` stops the browser MIME-sniffing it into HTML, and
+      // `attachment` forces a download instead of rendering it in your origin,
+      // which is what turns an upload into stored XSS.
+      'x-content-type-options': 'nosniff',
+      'content-disposition': 'attachment',
+    },
+  });
+}
+```
+
+Mint the signed URL where you render the link (a page or component):
+
+```ts
+import { signedUrl } from '@webjsdev/server';
+const href = signedUrl(user.avatarKey, { secret: process.env.AUTH_SECRET!, expiresIn: 3600 });
+```
+
+> **Serving user uploads safely (the canonical upload vulnerability).** The
+> content-type a store records is the one the BROWSER sent at upload time, so it
+> is attacker-controlled. Serving it inline lets an attacker run script in your
+> origin (stored XSS) via an HTML or `image/svg+xml` payload under an innocent
+> key. ALWAYS send `X-Content-Type-Options: nosniff`, and prefer
+> `Content-Disposition: attachment` for anything a user uploaded. Only serve a
+> user upload INLINE (no `attachment`) when you have validated the bytes
+> server-side and are emitting a content-type from a strict inert allowlist
+> (e.g. `image/png`, `image/jpeg`), never reflecting `text/html` or
+> `image/svg+xml`. Best of all, serve user uploads from a SEPARATE origin / cookieless
+> subdomain so even a sniffing bypass cannot reach your session.
+
+For a public asset you control, you may drop the signature and serve
+`getFileStore().get(key)` directly, but keep `nosniff` + `attachment` for
+anything a user supplied. To point storage at a custom directory or an
+S3-compatible backend, call `setFileStore(diskStore({ dir, baseUrl }))` (or a
+custom adapter) once at startup; the call sites above do not change. The default
+uploads directory is `<cwd>/.webjs/uploads`, which the app should `.gitignore`.
+See the "File storage" section in `agent-docs/built-ins.md` for the full
+interface and the traversal-safety + signed-URL guarantees.
