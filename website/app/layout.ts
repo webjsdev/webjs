@@ -114,7 +114,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent:        oklch(0.58 0.16 52);
         --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
-        --heart:         oklch(0.72 0.15 5);
+        --heart:         oklch(0.74 0.18 6);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
