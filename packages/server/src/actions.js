@@ -301,8 +301,12 @@ export async function serveActionStub(idx, absFile) {
  * @param {string} hash
  * @param {string} fnName
  * @param {Request} req
+ * @param {(error: unknown) => void} [onError] best-effort sink (issue #239)
+ *   invoked when the action throws unexpectedly, BEFORE the sanitized 500 is
+ *   returned, so an APM integration sees the original error. The caller wraps
+ *   it so a throwing sink can never affect the response.
  */
-export async function invokeAction(idx, hash, fnName, req) {
+export async function invokeAction(idx, hash, fnName, req, onError) {
   if (!verifyCsrf(req)) {
     return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
   }
@@ -327,6 +331,7 @@ export async function invokeAction(idx, hash, fnName, req) {
     const result = await fn(...args);
     return rpcResponse(result ?? null);
   } catch (e) {
+    if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
 }
@@ -432,8 +437,12 @@ function matchOrigin(configured, origin) {
  * @param {ExposedRoute} route
  * @param {Record<string,string>} params
  * @param {Request} req
+ * @param {(error: unknown) => void} [onError] best-effort sink (issue #239)
+ *   invoked when the exposed REST handler throws unexpectedly, BEFORE the
+ *   sanitized 500 is returned, so an APM integration sees the original error.
+ *   The caller wraps it so a throwing sink can never affect the response.
  */
-export async function invokeExposedAction(idx, route, params, req) {
+export async function invokeExposedAction(idx, route, params, req, onError) {
   const url = new URL(req.url);
   const query = Object.fromEntries(url.searchParams.entries());
   let body = {};
@@ -473,6 +482,7 @@ export async function invokeExposedAction(idx, route, params, req) {
     if (result instanceof Response) return result;
     return Response.json(result ?? null);
   } catch (e) {
+    if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
 }

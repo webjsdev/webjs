@@ -20,7 +20,14 @@ import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
  * server state) can enforce the same limit the RPC and page-action paths do. The
  * handler writes it per request via `setBodyLimits`.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number } }} Store
+ * `requestId` holds the per-request correlation id (issue #239). The handler
+ * mints a `crypto.randomUUID()` at the start of every request (or honors an
+ * inbound `X-Request-Id` from a trusted upstream proxy) and stores it here via
+ * `setRequestId`, so server-side app code can read it with `requestId()` to
+ * stamp it on its own logs / outbound calls, and the framework includes it in
+ * the access log, the error log, and the `X-Request-Id` response header.
+ *
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -79,6 +86,32 @@ export function setBodyLimits(limits) {
  */
 export function getBodyLimits() {
   return als.getStore()?.bodyLimits ?? null;
+}
+
+/**
+ * Set the per-request correlation id on the current store (issue #239). The
+ * handler calls this at the start of every request with either an inbound
+ * `X-Request-Id` (a trusted upstream proxy's trace id) or a freshly minted
+ * `crypto.randomUUID()`. A no-op outside a request scope.
+ *
+ * @param {string} id
+ */
+export function setRequestId(id) {
+  const store = als.getStore();
+  if (store) store.requestId = id;
+}
+
+/**
+ * The correlation id for the in-flight request (issue #239), or `null`
+ * outside a request scope. Server-side app code (pages, layouts, server
+ * actions, route handlers, middleware) reads it to correlate its own logs and
+ * outbound calls with the framework's access / error logs and the
+ * `X-Request-Id` response header, all of which carry the same id.
+ *
+ * @returns {string | null}
+ */
+export function requestId() {
+  return als.getStore()?.requestId ?? null;
 }
 
 /**

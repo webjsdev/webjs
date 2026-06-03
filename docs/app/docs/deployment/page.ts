@@ -161,6 +161,43 @@ const app = await createRequestHandler({
   },
 });</pre>
 
+    <h2>Observability: access log, request id, error hook, build-info</h2>
+    <p>Day-2 ops needs more than liveness probes. webjs ships four standards-native observability surfaces, all wired at the single response funnel so they apply uniformly across pages, route handlers, server actions, and assets.</p>
+
+    <h3>Per-request access log</h3>
+    <p>Every handled request emits ONE structured <code>info</code> line through the pluggable logger after the response is produced, carrying <code>method</code>, <code>path</code>, <code>status</code>, <code>durationMs</code>, and <code>requestId</code>. It never logs request bodies or secrets. In prod the default logger writes it as one JSON object per line; in dev it is a readable line.</p>
+    <pre>{"level":"info","msg":"request","time":"2026-06-03T10:30:00.000Z","requestId":"4f1c…","method":"GET","path":"/dashboard","status":200,"durationMs":12.4}</pre>
+    <p>The framework's own <code>/__webjs/*</code> probe and static traffic is suppressed from the access log so it does not spam. App routes (including your <code>/api/*</code>) are logged. Swap in pino / your aggregator via the pluggable logger above and these lines flow straight into it.</p>
+    <p><code>durationMs</code> is time-to-response-headers (a TTFB-like measure), not full-stream completion. For a streaming / Suspense response it reflects when the headers were produced, not when the last chunk flushed.</p>
+
+    <h3>Request id / correlation id (X-Request-Id)</h3>
+    <p>Each request gets a correlation id, minted with the native <code>crypto.randomUUID()</code>. An inbound <code>X-Request-Id</code> from a trusted upstream proxy is honored instead (so one trace id propagates across services); a missing or malformed value falls back to a minted id. The id is set on the response as <code>X-Request-Id</code>, included in the access log and the error log, and readable inside any server-side code (pages, layouts, server actions, route handlers, middleware) via <code>requestId()</code>:</p>
+    <pre>import { requestId } from '@webjsdev/server';
+
+export async function GET() {
+  const id = requestId();   // same id the response's X-Request-Id carries
+  return Response.json({ traceId: id });
+}</pre>
+
+    <h3>onError hook (APM / Sentry integration point)</h3>
+    <p>Register an error sink to forward unhandled errors to your APM. <code>createRequestHandler({ onError })</code> (and <code>startServer({ onError })</code>) calls it whenever the request pipeline catches an unhandled error: the 500 path (a thrown route handler, middleware, or page render), or a server action that throws unexpectedly. The sink receives the original error plus a context object with the <code>request</code>, the <code>requestId</code>, and a coarse <code>phase</code> label, so you can correlate the report with the access log line.</p>
+    <pre>import { createRequestHandler } from '@webjsdev/server';
+import * as Sentry from '@sentry/node';
+
+const app = await createRequestHandler({
+  appDir: process.cwd(),
+  onError(error, { request, requestId, phase }) {
+    Sentry.captureException(error, { tags: { requestId, phase } });
+  },
+});</pre>
+    <p><strong>The contract is best-effort.</strong> A throwing <code>onError</code> is caught and ignored so it can never crash the response, and the hook is purely additive: webjs's existing behavior (the sanitized 500, with only <code>error.message</code> in prod and never the stack) is unchanged. The hook fires BEFORE the sanitized response is sent, so the sink always sees the real error.</p>
+
+    <h3>Build-info endpoint</h3>
+    <p><code>GET /__webjs/version</code> returns JSON describing the live build, alongside the health and readiness probes. A deploy can curl it to confirm which build is serving. It carries no secrets, and it is answered before the analysis warms (like the other probes), so it responds on a cold instance.</p>
+    <pre>GET /__webjs/version
+{ "version": "0.8.10", "build": "&lt;importmap-hash&gt;", "node": "v24.4.0", "uptime": 38.21 }</pre>
+    <p><code>version</code> is the <code>@webjsdev/server</code> framework version, <code>build</code> is the published importmap build id (the same fingerprint the client router reads from <code>data-webjs-build</code> to detect a deploy; empty until the vendor map resolves), <code>node</code> is the running Node version, and <code>uptime</code> is process uptime in seconds. The response carries <code>Cache-Control: no-store</code>.</p>
+
     <h2>createRequestHandler for Embedding</h2>
     <p>If you need to embed webjs inside an existing server (Express, Fastify, Bun, Deno, serverless), use <code>createRequestHandler</code> directly. It returns a <code>handle(req: Request) =&gt; Promise&lt;Response&gt;</code> function that takes a standard Web API Request and returns a standard Response:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
