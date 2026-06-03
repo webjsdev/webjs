@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://webjs.dev/schemas/webjs-config.schema.json",
+  "title": "webjs config block",
+  "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented server reader. An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
+  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "elide": {
+      "description": "Display-only and inert-route dead-JS elision switch. Default true. Set to false to ship every module's JS app-wide, as before the feature existed. Read by readElideEnabled in dev.js; the WEBJS_ELIDE env override wins over this.",
+      "type": "boolean",
+      "default": true
+    },
+    "headers": {
+      "description": "Per-path response-header rules, shaped like Next's. Each rule pairs a URLPattern source against header directives. Read by compileHeaderRules in headers.js.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "headers"],
+        "properties": {
+          "source": {
+            "description": "Path pattern matched with the native URLPattern API (so :param and :rest* syntax works).",
+            "type": "string"
+          },
+          "headers": {
+            "description": "Header directives applied on a match.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key"],
+              "properties": {
+                "key": {
+                  "description": "Header name, e.g. X-Frame-Options.",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "Header value. A null or false value REMOVES the header on a match, the escape hatch that drops a secure default on a path. true is intentionally not allowed (it would stringify to the literal 'true').",
+                  "oneOf": [{ "type": ["string", "null"] }, { "const": false }]
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "redirects": {
+      "description": "Declarative permanent / temporary redirects for moved URLs. Compiled once at boot by compileRedirectRules in redirects.js. A malformed entry is dropped with a warning.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "destination"],
+        "properties": {
+          "source": {
+            "description": "Path pattern matched with the native URLPattern API (so :param and :rest* syntax works).",
+            "type": "string"
+          },
+          "destination": {
+            "description": "Target path, a path referencing named groups captured by source, or an absolute URL. The incoming query string is preserved and merged onto the destination.",
+            "type": "string"
+          },
+          "permanent": {
+            "description": "true (the default) is a 308 Permanent Redirect, false is a 307 Temporary Redirect. Both preserve the request method and body. statusCode wins over this when set.",
+            "type": "boolean",
+            "default": true
+          },
+          "statusCode": {
+            "description": "Explicit redirect status, for a tool needing a legacy code. Wins over permanent. One of 301, 302, 303, 307, 308.",
+            "type": "integer",
+            "enum": [301, 302, 303, 307, 308]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "trailingSlash": {
+      "description": "Trailing-slash canonicalization policy. 'never' strips a trailing slash, 'always' adds one (both via a 308 redirect), 'ignore' (the default) does nothing. An unrecognized value is treated as 'ignore'. Read by readTrailingSlashPolicy in redirects.js.",
+      "type": "string",
+      "enum": ["never", "always", "ignore"],
+      "default": "ignore"
+    },
+    "csp": {
+      "description": "Content-Security-Policy config. Off by default. true enables a strict nonce-based default policy. An object customizes directives and report-only mode. Read by readCspConfig in csp.js.",
+      "oneOf": [
+        {
+          "description": "true enables the strict default policy, false (or absence) disables CSP.",
+          "type": "boolean"
+        },
+        {
+          "description": "Custom config. directives merges over the strict defaults (a null / false / '' value drops a default directive); reportOnly emits the Content-Security-Policy-Report-Only header. A bare directive map (without a directives key) is also accepted.",
+          "type": "object",
+          "properties": {
+            "directives": {
+              "description": "Directive map merged over the strict defaults, e.g. { \"connect-src\": \"'self' https://api.example.com\" }. A __NONCE__ token in a value is replaced with the per-request nonce.",
+              "type": "object",
+              "additionalProperties": {
+                "type": ["string", "null", "boolean"]
+              }
+            },
+            "reportOnly": {
+              "description": "true emits Content-Security-Policy-Report-Only instead of the enforcing header (the staged-rollout path).",
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
+    },
+    "maxBodyBytes": {
+      "description": "JSON / RPC request body cap in bytes. Default 1048576 (1 MiB). A value of 0 disables the cap. The WEBJS_MAX_BODY_BYTES env override wins. Read by readBodyLimits in body-limit.js.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 1048576
+    },
+    "maxMultipartBytes": {
+      "description": "Form / multipart request body cap in bytes. Default 10485760 (10 MiB). A value of 0 disables the cap. The WEBJS_MAX_MULTIPART_BYTES env override wins. Read by readBodyLimits in body-limit.js.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10485760
+    },
+    "requestTimeoutMs": {
+      "description": "Max time in ms to receive the ENTIRE request (headers plus body). Default 30000. A value of 0 disables the timeout. The WEBJS_REQUEST_TIMEOUT_MS env override wins. Read by computeServerTimeouts in body-limit.js.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 30000
+    },
+    "headersTimeoutMs": {
+      "description": "Max time in ms to receive just the request headers. Default 20000. Clamped strictly under requestTimeoutMs per node semantics. A value of 0 disables the timeout. The WEBJS_HEADERS_TIMEOUT_MS env override wins. Read by computeServerTimeouts in body-limit.js.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 20000
+    },
+    "keepAliveTimeoutMs": {
+      "description": "Idle time in ms before a kept-alive socket is closed. Default 5000. A value of 0 disables the timeout. The WEBJS_KEEP_ALIVE_TIMEOUT_MS env override wins. Read by computeServerTimeouts in body-limit.js.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 5000
+    }
+  }
+}

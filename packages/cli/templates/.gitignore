@@ -40,7 +40,13 @@ npm-debug.log*
 Thumbs.db
 
 # editors
-.vscode/
+# `.vscode/*` ignored, but `.vscode/settings.json` (the webjs-config JSON
+# Schema association, #259) is committed so the editor validates package.json's
+# webjs block out of the box. Same gitignore shape as `.webjs/*` above: a bare
+# `.vscode/` would exclude the directory and no negation could re-include a
+# child, so the settings file would silently never ship.
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # test artifacts

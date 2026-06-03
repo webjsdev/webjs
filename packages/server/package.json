@@ -6,11 +6,13 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./check": "./src/check.js"
+    "./check": "./src/check.js",
+    "./webjs-config.schema.json": "./webjs-config.schema.json"
   },
   "files": [
     "index.js",
     "src",
+    "webjs-config.schema.json",
     "README.md"
   ],
   "dependencies": {
