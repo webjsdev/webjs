@@ -58,6 +58,10 @@ suite('copy-cmd', () => {
       'the slotted command text is projected into the click target',
     );
     assert.ok(el.querySelector('button'), 'a copy button is rendered');
+    assert.ok(
+      el.querySelector('button').className.includes('opacity-100'),
+      'the copy button is always visible (not hover-only)',
+    );
     // Pre-copy the button shows the copy (clipboard) icon, not the check.
     assert.ok(el.querySelector('button rect'), 'copy icon is shown initially');
     assert.equal(el.querySelector('button polyline'), null, 'no checkmark initially');

@@ -4,7 +4,7 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * `<copy-cmd>` wraps a shell-command line with a copy-to-clipboard
  * affordance. Light DOM, Tailwind utilities throughout. The whole
  * inner wrapper is the click target (text or icon both trigger copy);
- * the icon is a hover-revealed visual hint, not a separate focusable
+ * the icon is an always-visible visual hint, not a separate focusable
  * element.
  *
  * Usage:
@@ -64,7 +64,7 @@ export class CopyCmd extends WebComponent {
           @keydown=${this._onKey}
         ><slot></slot></span>
         <button
-          class="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 p-0 rounded-[7px] border bg-bg-elev cursor-copy transition-[opacity,color,border-color] duration-[140ms] hover:text-fg hover:border-fg-muted group-hover:opacity-100 group-focus-within:opacity-100 ${isCopied ? 'opacity-100 text-[oklch(0.66_0.16_150)] border-accent-tint' : 'opacity-0 text-fg-muted border-border'}"
+          class="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 p-0 rounded-[7px] border bg-bg-elev cursor-copy transition-[opacity,color,border-color] duration-[140ms] hover:text-fg hover:border-fg-muted ${isCopied ? 'opacity-100 text-[oklch(0.66_0.16_150)] border-accent-tint' : 'opacity-100 text-fg-muted border-border'}"
           type="button"
           aria-hidden="true"
           tabindex="-1"
