@@ -115,7 +115,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash } from './asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -126,7 +126,7 @@ import {
 } from './redirects.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
-import { commitHtmlCache } from './html-cache.js';
+import { commitHtmlCache, setAppSourceFingerprint } from './html-cache.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -706,6 +706,24 @@ export async function createRequestHandler(opts) {
                 ...state.inertRouteModules,
               ].map(rel).sort();
               setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
+            }
+            // App-source fingerprint for the HTML cache key (#318): a
+            // deterministic, location-independent digest of the browser-bound
+            // file set's content hashes, so a deploy that changes ONLY an app
+            // module's bytes (which the importmap-only build id misses) re-keys
+            // the cache instead of serving a body with stale `?v` boot URLs.
+            // PROD only (asset-hash is enabled there); '' in dev, where fs.watch
+            // handles staleness. Computed AFTER the elision fingerprint, so each
+            // per-file hash already reflects the elision verdict (an elision
+            // flip changes the served output, so it moves this fingerprint too).
+            if (!dev && state.browserBoundFiles) {
+              const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
+              const lines = [...state.browserBoundFiles]
+                .map((abs) => `${relApp(abs)}:${assetHashFor(abs)}`)
+                .sort();
+              setAppSourceFingerprint(lines.join('\n'));
+            } else {
+              setAppSourceFingerprint('');
             }
             t.elision = now() - m;
             if (dev) {
