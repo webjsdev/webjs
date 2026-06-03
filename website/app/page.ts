@@ -1,5 +1,6 @@
 import { html } from '@webjsdev/core';
 import '../components/copy-cmd.ts';
+import '../components/scroll-reveal.ts';
 import { highlight } from '../lib/highlight.ts';
 
 export const metadata = {
@@ -178,7 +179,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28">
+    <section class="py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Built for agents</div>
@@ -207,7 +208,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28">
+    <section class="py-28" data-reveal>
       <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
@@ -231,7 +232,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28">
+    <section class="py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Why webjs</div>
@@ -250,7 +251,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28">
+    <section class="py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
@@ -271,7 +272,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28">
+    <section class="py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>
@@ -309,7 +310,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <section class="py-28 text-center" id="get-started">
+    <section class="py-28 text-center" id="get-started" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
@@ -343,5 +344,7 @@ lib/session.server.ts</pre>
       </div>
       <div class="w-full text-center mt-6 text-fg-subtle text-[12.5px]">Built with webjs. No build step, no bundler, served as native ES modules.</div>
     </footer>
+
+    <scroll-reveal></scroll-reveal>
   `;
 }

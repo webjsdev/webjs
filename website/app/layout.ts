@@ -1,6 +1,7 @@
 import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
+import '../components/cursor-glow.ts';
 
 /**
  * Root layout for the redesigned marketing site.
@@ -165,6 +166,21 @@ export default function RootLayout({ children }: { children: unknown }) {
           radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--accent-live) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
           radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--accent-live) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
       }
+      /* JS-opt-in motion. The host of cursor-glow is the layer, and its
+         move handler sets --cg-x / --cg-y / --cg-on. scroll-reveal adds the
+         reveal-ready class, so a data-reveal section is hidden only when JS
+         is present, and visible otherwise. */
+      cursor-glow {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        opacity: var(--cg-on, 0); transition: opacity 500ms ease;
+        background: radial-gradient(460px 460px at var(--cg-x, 50%) var(--cg-y, 26%), color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 72%);
+      }
+      .reveal-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
+      .reveal-ready [data-reveal].is-revealed { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) {
+        cursor-glow { display: none; }
+        .reveal-ready [data-reveal] { opacity: 1; transform: none; transition: none; }
+      }
       .scroll-thin { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color var(--t); }
       .scroll-thin:hover { scrollbar-color: color-mix(in oklch, var(--fg-subtle) 70%, transparent) transparent; }
       .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
@@ -184,6 +200,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     </style>
 
     <div class="glow-layer" aria-hidden="true"></div>
+    <cursor-glow aria-hidden="true"></cursor-glow>
 
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent bg-accent-tint rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
