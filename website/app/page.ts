@@ -330,11 +330,8 @@ lib/session.server.ts</pre>
     </section>
 
     <footer class="mt-16 md:mt-16 border-t border-border py-12 px-6">
-      <div class="max-w-[1080px] mx-auto flex items-center justify-between gap-6 flex-wrap">
-        <a class="inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-base leading-none tracking-[-0.02em]" href="/">
-          <span class="w-5 h-5 rounded-md bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))]"></span>webjs
-        </a>
-        <nav class="flex gap-4 flex-wrap">
+      <div class="max-w-[1080px] mx-auto">
+        <nav class="flex gap-4 flex-wrap justify-center">
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank">GitHub</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank">UI</a>
