@@ -286,7 +286,7 @@ export default function LandingPage() {
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted">app/page.ts
 components/counter.ts
 actions/posts.server.ts</pre>
-            <div class="cmd-foot mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-app</copy-cmd></div>
+            <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-app</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
             <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">API only</span>
@@ -295,7 +295,7 @@ actions/posts.server.ts</pre>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted">app/api/users/route.ts
 app/api/chat/route.ts
 middleware.ts</pre>
-            <div class="cmd-foot mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd></div>
+            <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
             <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">SaaS</span>
@@ -304,7 +304,7 @@ middleware.ts</pre>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted">app/(auth)/login/page.ts
 app/dashboard/page.ts
 lib/session.server.ts</pre>
-            <div class="cmd-foot mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd></div>
+            <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd></div>
           </div>
         </div>
       </div>
