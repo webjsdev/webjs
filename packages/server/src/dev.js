@@ -57,6 +57,7 @@ import {
   hashFile,
 } from './actions.js';
 import { defaultLogger } from './logger.js';
+import { assertNodeVersion } from './node-version.js';
 import { withRequest, setCspNonce, setBodyLimits } from './context.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
@@ -287,6 +288,10 @@ export async function readServerTimeoutsFromApp(appDir) {
  * }} opts
  */
 export async function createRequestHandler(opts) {
+  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // Throw a clear Error here so an embedded host (Express/Fastify/Bun/Deno)
+  // gets the actionable message at boot, not a cryptic API failure mid-request.
+  assertNodeVersion({ onFail: 'throw' });
   const appDir = resolve(opts.appDir);
   // Load <appDir>/.env into process.env BEFORE anything else.
   // buildActionIndex below imports server-only files (lib/*.server.ts,

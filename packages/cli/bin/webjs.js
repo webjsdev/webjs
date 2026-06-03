@@ -41,6 +41,15 @@ function flag(args, name, def) {
 }
 
 async function main() {
+  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // Run before any subcommand so an older Node fails fast with a clear,
+  // actionable message naming the found + required version, exiting non-zero
+  // instead of crashing cryptically later. `help` is exempt so a user on an
+  // old Node can still read usage.
+  if (cmd !== 'help' && cmd !== undefined) {
+    const { assertNodeVersion } = await import('@webjsdev/server');
+    assertNodeVersion({ onFail: 'exit' });
+  }
   switch (cmd) {
     case 'dev': {
       // If we're already inside the --watch child, start the server directly.
