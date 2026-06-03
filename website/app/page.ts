@@ -226,7 +226,7 @@ export default function LandingPage(ctx: { searchParams?: Record<string, string>
     </section>
 
     <section class="py-28">
-      <div class="max-w-[1080px] mx-auto px-6">
+      <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The whole stack, in three files</h2>
