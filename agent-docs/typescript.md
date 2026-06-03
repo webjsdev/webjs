@@ -156,6 +156,35 @@ The `json()` helper reads the in-flight Request via AsyncLocalStorage:
 
 Request bodies parse with `readBody(req)` from `@webjsdev/server`.
 
+### Page metadata: the `Metadata` type
+
+A page or layout exports `metadata` (static) or `generateMetadata(ctx)`
+(request-scoped). Annotate the return with the exported `Metadata` type so
+a misspelled field or a wrong-typed value is a compile-time error, the
+same ergonomics as Next.js's `import type { Metadata } from 'next'`.
+
+```ts
+import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+export const metadata: Metadata = {
+  title: 'Blog',
+  description: 'Latest posts',
+  openGraph: { type: 'website', image: '/og.png' },
+  twitter: { card: 'summary_large_image' },
+};
+
+export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> {
+  return { title: `Post: ${ctx.params.slug}`, metadataBase: new URL(ctx.url).origin };
+}
+```
+
+`Metadata` covers every field the SSR pipeline reads (see
+`agent-docs/metadata.md`); each field is optional, and string-or-object
+fields (`title`, `viewport`, `robots`, `appleWebApp`, `icons`) are unions.
+It is a pure type in `packages/core/src/metadata.d.ts`, so it is erased at
+runtime with zero build cost. `MetadataContext` types the
+`generateMetadata` argument (`{ params, searchParams, url }`).
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language

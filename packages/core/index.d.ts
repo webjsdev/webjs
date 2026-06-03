@@ -9,6 +9,22 @@
  */
 
 export * from './src/component.d.ts';
+export type {
+  Metadata,
+  MetadataContext,
+  TitleMetadata,
+  ViewportMetadata,
+  RobotsMetadata,
+  AlternatesMetadata,
+  VerificationMetadata,
+  OpenGraphMetadata,
+  TwitterMetadata,
+  AppleWebAppMetadata,
+  IconsMetadata,
+  IconDescriptor,
+  AuthorMetadata,
+  PreloadDescriptor,
+} from './src/metadata.d.ts';
 
 export { html, isTemplate, MARKER } from './src/html.js';
 export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
