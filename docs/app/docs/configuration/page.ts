@@ -65,6 +65,19 @@ webjs db studio       # prisma studio</pre>
     <h2>Security response headers</h2>
     <p>webjs sets standard security headers on every response by default (<code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, plus <code>Strict-Transport-Security</code> in production over HTTPS). Override or extend them per path with a <code>webjs.headers</code> block in <code>package.json</code>, an array of <code>&#123; source, headers: [&#123; key, value &#125;] &#125;</code> rules where <code>source</code> is a URLPattern path pattern and a <code>null</code> value removes a default. App middleware wins over the path config, which wins over the defaults. A <code>webjs.csp</code> key (off by default) additionally mints a per-request CSP nonce and emits a matching <code>Content-Security-Policy</code> header. See <a href="/docs/deployment">Deployment &rarr; Secure response headers</a> for the full reference.</p>
 
+    <h2>Redirects</h2>
+    <p>For a moved URL, declare a redirect under <code>webjs.redirects</code> in <code>package.json</code>, an array of <code>&#123; source, destination, permanent?, statusCode? &#125;</code> rules. <code>source</code> is a URLPattern path pattern (so <code>:param</code> / <code>:rest*</code> works) and <code>destination</code> is the target: a path, a path referencing named groups from the source (<code>/posts/:slug</code> filled from <code>/blog/:slug</code>), or an absolute URL for an external redirect. <code>permanent</code> defaults to <code>true</code> (a <strong>308</strong> Permanent Redirect, what SEO wants so link equity transfers); <code>permanent: false</code> is a <strong>307</strong> Temporary Redirect. 308 / 307 preserve the request method (a redirected POST stays a POST); for a legacy <strong>301</strong> / <strong>302</strong> set <code>statusCode</code> explicitly. The incoming query string is preserved by default. Redirects apply at the very start of request handling, before routing, and a malformed entry is dropped with a warning rather than crashing the app.</p>
+    <pre><code>&#123;
+  "webjs": &#123;
+    "redirects": [
+      &#123; "source": "/old", "destination": "/new" &#125;,
+      &#123; "source": "/blog/:slug", "destination": "/posts/:slug" &#125;,
+      &#123; "source": "/legacy", "destination": "/", "permanent": false &#125;,
+      &#123; "source": "/docs", "destination": "https://docs.example.com" &#125;
+    ]
+  &#125;
+&#125;</code></pre>
+
     <h2>Request limits &amp; server timeouts</h2>
     <p>The server caps inbound request bodies and bounds connection lifetimes by default, so an uncapped body is not a memory-exhaustion vector and a slow connection is not a slowloris vector. Both apply with secure defaults when unset and are configurable in <code>package.json</code> (env overrides win, and a value of <code>0</code> disables that limit / timeout).</p>
     <p><strong>Body-size limit (413).</strong> Every request body the server reads (the action RPC endpoint, <code>route.&#123;js,ts&#125;</code> handlers via <code>readBody</code>, and the no-JS page-action form path) is capped. A JSON / RPC body defaults to 1 MiB (<code>webjs.maxBodyBytes</code> or <code>WEBJS_MAX_BODY_BYTES</code>); a form / multipart body defaults to 10 MiB (<code>webjs.maxMultipartBytes</code> or <code>WEBJS_MAX_MULTIPART_BYTES</code>). An over-limit body responds <code>413 Payload Too Large</code> and is never buffered whole: a <code>Content-Length</code> over the cap is rejected before the body is read, and a chunked body with no declared length is abandoned the instant it crosses the cap.</p>

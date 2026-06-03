@@ -115,6 +115,7 @@ function shouldAccessLog(pathname) {
 import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
+import { compileRedirectRules, applyRedirects } from './redirects.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
 import { commitHtmlCache } from './html-cache.js';
@@ -256,6 +257,24 @@ export async function readHeaderRules(appDir) {
   try {
     const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
     return compileHeaderRules(pkg);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read the declarative redirect config (`webjs.redirects`) from the app's
+ * package.json and compile it to URLPattern rules (issue #254). A missing,
+ * malformed, or unreadable config yields an empty rule set (no redirects),
+ * never a throw. Patterns are compiled ONCE here at boot, not per request.
+ *
+ * @param {string} appDir
+ * @returns {Promise<ReturnType<typeof compileRedirectRules>>}
+ */
+export async function readRedirectRules(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return compileRedirectRules(pkg);
   } catch {
     return [];
   }
@@ -450,6 +469,14 @@ export async function createRequestHandler(opts) {
   // app's package.json `webjs.headers`. Static config, so no rebuild
   // re-read; the secure defaults need no config and apply regardless.
   const headerRules = await readHeaderRules(appDir);
+
+  // Declarative redirect rules (issue #254), read once from the app's
+  // package.json `webjs.redirects` and compiled to URLPattern rules at
+  // boot (never per request). Empty when unconfigured, so an app with no
+  // redirects is unchanged. Applied at the very start of request handling,
+  // before routing / SSR / asset serving, so a moved URL returns a 308/307
+  // immediately.
+  const redirectRules = await readRedirectRules(appDir);
 
   // CSP config (issue #233), read once from the app's package.json
   // `webjs.csp`. OFF by default: when disabled no nonce is minted and no
@@ -866,6 +893,17 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function produce(req) {
     return (async () => {
+      // Declarative redirects (issue #254): apply the configured old-path ->
+      // new-path rules at the VERY START of request handling, before the
+      // probes, routing, SSR, or asset serving. A matched source returns a
+      // 308 (permanent, the SEO default) / 307 (temporary) / configured
+      // status immediately, so a moved URL never reaches the router.
+      // `applyRedirects` skips /__webjs/* itself, so the framework probes /
+      // runtime below are never redirected. The secure-header + conditional-GET
+      // funnel in handle() still wraps this Response, like any other.
+      const redirectResp = applyRedirects(req, redirectRules);
+      if (redirectResp) return redirectResp;
+
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
       // process is up and accepting connections). `/__webjs/ready` is 503 until

@@ -1,0 +1,222 @@
+/**
+ * Declarative permanent / temporary redirects (issue #254).
+ *
+ * webjs already ships `redirect(url)` (a per-request throw sentinel) for
+ * imperative, request-time redirects. This module adds the missing
+ * DECLARATIVE surface: a config of old-path -> new-path rules an app
+ * declares once and the framework applies at the very start of request
+ * handling, before routing / SSR / asset serving. This is what SEO wants
+ * for a moved URL, a permanent 308 (or legacy 301) so link equity
+ * transfers and search engines update their index.
+ *
+ * Config lives in `package.json` -> `webjs.redirects`, an array of
+ * `{ source, destination, permanent?, statusCode? }`, cohesive with the
+ * #232 `webjs.headers` config (same `source` URLPattern matching, same
+ * fail-safe "a malformed entry is dropped at config-load, never a
+ * throw" posture, patterns compiled ONCE at boot):
+ *
+ *   "webjs": { "redirects": [
+ *     { "source": "/old", "destination": "/new" },
+ *     { "source": "/blog/:slug", "destination": "/posts/:slug" },
+ *     { "source": "/legacy", "destination": "/", "permanent": false },
+ *     { "source": "/docs", "destination": "https://docs.example.com" }
+ *   ] }
+ *
+ * Status code. `permanent` defaults to true (308 Permanent Redirect);
+ * `permanent: false` is 307 (Temporary Redirect). 308 / 307 are the
+ * MODERN choice because they preserve the request method and body
+ * (a redirected POST stays a POST). The legacy 301 / 302 do not
+ * guarantee that. An app that needs a specific legacy code (e.g. a 301
+ * for a tool that only understands it) can set `statusCode` explicitly,
+ * which wins over `permanent`.
+ *
+ * Destination. A `destination` may be:
+ *   - a path (`/new`), optionally referencing named groups captured by
+ *     the source pattern (`/posts/:slug` filled from `/blog/:slug`),
+ *   - an absolute URL (`https://docs.example.com`) for an external
+ *     redirect (group substitution applies there too).
+ *
+ * Query string. The incoming query string is PRESERVED by default and
+ * appended to the destination (a destination that carries its own query
+ * is merged, the destination's keys winning). This matches Next.js's
+ * default redirect behavior.
+ */
+
+/** Default status for `permanent: true` (the SEO permanent redirect). */
+const PERMANENT_STATUS = 308;
+/** Default status for `permanent: false` (a temporary redirect). */
+const TEMPORARY_STATUS = 307;
+
+/** Redirect status codes a `statusCode` override may legitimately set. */
+const ALLOWED_STATUS = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Read the redirect config from the app's package.json
+ * (`webjs.redirects`) and compile it to a cached array of rules, each
+ * pairing a URLPattern (matched on the pathname) against a destination
+ * template + resolved status. A malformed or absent config yields an
+ * empty array (no redirects), never a throw: a broken redirect config
+ * must not take the request pipeline down. Each malformed entry is
+ * DROPPED with a one-line warning, so a single typo never disables the
+ * valid rules around it.
+ *
+ * @param {unknown} pkg parsed package.json (or any object)
+ * @returns {Array<{ pattern: URLPattern, destination: string, status: number }>}
+ */
+export function compileRedirectRules(pkg) {
+  const raw =
+    pkg &&
+    typeof pkg === 'object' &&
+    /** @type {any} */ (pkg).webjs &&
+    /** @type {any} */ (pkg).webjs.redirects;
+  if (!Array.isArray(raw)) return [];
+  /** @type {Array<{ pattern: URLPattern, destination: string, status: number }>} */
+  const rules = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const source = /** @type {any} */ (entry).source;
+    const destination = /** @type {any} */ (entry).destination;
+    if (typeof source !== 'string' || !source) {
+      warnDrop('source must be a non-empty string', entry);
+      continue;
+    }
+    if (typeof destination !== 'string' || !destination) {
+      warnDrop('destination must be a non-empty string', entry);
+      continue;
+    }
+    let pattern;
+    try {
+      // Match on the pathname only, like the #232 header config. A bare
+      // path string is the common Next-style usage; URLPattern treats it
+      // as the pathname component, so `:slug` / `:rest*` syntax works.
+      pattern = new URLPattern({ pathname: source });
+    } catch {
+      warnDrop(`invalid source pattern "${source}"`, entry);
+      continue;
+    }
+    const status = resolveStatus(entry);
+    if (status === null) {
+      warnDrop(`invalid statusCode on "${source}"`, entry);
+      continue;
+    }
+    rules.push({ pattern, destination, status });
+  }
+  return rules;
+}
+
+/**
+ * Resolve the redirect status for one entry. `statusCode` wins when set
+ * (must be one of the allowed redirect codes), else `permanent` chooses
+ * 308 (default true) vs 307.
+ *
+ * @param {any} entry
+ * @returns {number | null} the status, or null if `statusCode` is invalid
+ */
+function resolveStatus(entry) {
+  const raw = entry.statusCode;
+  if (raw !== undefined && raw !== null) {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || !ALLOWED_STATUS.has(n)) return null;
+    return n;
+  }
+  // `permanent` defaults to TRUE (the SEO permanent redirect). Only an
+  // explicit `false` opts into the temporary 307.
+  return entry.permanent === false ? TEMPORARY_STATUS : PERMANENT_STATUS;
+}
+
+/** @param {string} reason @param {unknown} entry */
+function warnDrop(reason, entry) {
+  // eslint-disable-next-line no-console
+  console.warn(`[webjs] dropping invalid webjs.redirects entry (${reason}):`, entry);
+}
+
+/**
+ * Substitute named groups captured by the source pattern into the
+ * destination template. A `:name` token in the destination is replaced
+ * by the matching group's value (URL-pathname-encoded by URLPattern's
+ * own capture). An undefined group leaves the literal token in place
+ * (a misconfigured destination, not a crash).
+ *
+ * @param {string} destination the destination template
+ * @param {Record<string, string | undefined>} groups URLPattern exec groups
+ * @returns {string}
+ */
+function fillGroups(destination, groups) {
+  if (!groups) return destination;
+  // Replace `:name` tokens. The name charset matches URLPattern's
+  // (letters, digits, underscore). A token with no matching group is
+  // left untouched.
+  return destination.replace(/:([A-Za-z0-9_]+)/g, (whole, name) => {
+    const v = groups[name];
+    return v === undefined ? whole : v;
+  });
+}
+
+/**
+ * Build the final redirect Location for a matched rule: fill named
+ * groups, then merge the incoming query string onto the destination
+ * (preserved by default, the destination's own query keys winning).
+ *
+ * @param {{ destination: string, status: number }} rule
+ * @param {Record<string, string | undefined>} groups
+ * @param {URL} url the incoming request URL
+ * @returns {string} the Location header value
+ */
+function buildLocation(rule, groups, url) {
+  let dest = fillGroups(rule.destination, groups);
+  const incoming = url.search; // includes the leading '?', or '' when absent
+  if (!incoming) return dest;
+  // Preserve the incoming query string. If the destination already
+  // carries its own query, merge, with the destination's keys winning
+  // (an explicit redirect target is intentional).
+  const hashIdx = dest.indexOf('#');
+  const hash = hashIdx === -1 ? '' : dest.slice(hashIdx);
+  const noHash = hashIdx === -1 ? dest : dest.slice(0, hashIdx);
+  const qIdx = noHash.indexOf('?');
+  const base = qIdx === -1 ? noHash : noHash.slice(0, qIdx);
+  const destQuery = qIdx === -1 ? '' : noHash.slice(qIdx + 1);
+  const merged = new URLSearchParams(incoming.slice(1));
+  for (const [k, v] of new URLSearchParams(destQuery)) merged.set(k, v);
+  const qs = merged.toString();
+  return base + (qs ? '?' + qs : '') + hash;
+}
+
+/**
+ * Apply the declarative redirect rules to an incoming request. Returns a
+ * redirect Response (308 / 307 / the configured status, with the
+ * computed `Location`) on the FIRST matching rule, else null so the
+ * request falls through to normal routing. Framework-internal paths
+ * (`/__webjs/*`) are never redirected.
+ *
+ * Compiled rules are passed in (built once at boot), so this is O(rules)
+ * per request with no per-request pattern compilation.
+ *
+ * @param {Request} req
+ * @param {Array<{ pattern: URLPattern, destination: string, status: number }>} rules
+ * @returns {Response | null}
+ */
+export function applyRedirects(req, rules) {
+  if (!rules || !rules.length) return null;
+  let url;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return null;
+  }
+  // Never redirect framework-internal paths (probes, the core runtime,
+  // the action endpoint, the dev reload stream). They are infrastructure,
+  // not app URLs.
+  if (url.pathname.startsWith('/__webjs/')) return null;
+
+  for (const rule of rules) {
+    const match = rule.pattern.exec({ pathname: url.pathname });
+    if (!match) continue;
+    const groups = (match.pathname && match.pathname.groups) || {};
+    const location = buildLocation(rule, groups, url);
+    return new Response(null, {
+      status: rule.status,
+      headers: { location: location },
+    });
+  }
+  return null;
+}

@@ -826,6 +826,37 @@ CSP is OFF by default and opt-in via a `webjs.csp` key in `package.json`. When e
 
 ---
 
+## Declarative redirects: `webjs.redirects` in package.json (#254)
+
+webjs already has `redirect(url)` (an imperative, request-time throw sentinel). For a MOVED URL (old-path -> new-path), SEO wants a DECLARATIVE permanent redirect so link equity transfers and search engines update their index. Declare those under `package.json` `"webjs": { "redirects": [...] }`, an array of `{ source, destination, permanent?, statusCode? }`, cohesive with the `webjs.headers` config:
+
+```jsonc
+{
+  "webjs": {
+    "redirects": [
+      { "source": "/old", "destination": "/new" },
+      { "source": "/blog/:slug", "destination": "/posts/:slug" },
+      { "source": "/legacy", "destination": "/", "permanent": false },
+      { "source": "/docs", "destination": "https://docs.example.com" }
+    ]
+  }
+}
+```
+
+- **`source`** is a path PATTERN matched with the native URLPattern API (so `:param` and `:rest*` syntax works), exactly like `webjs.headers`.
+- **`destination`** is the target: a path, a path referencing named groups captured by `source` (`/posts/:slug` filled from `/blog/:slug`), or an absolute URL (an external redirect; group substitution applies there too).
+- **`permanent`** chooses the status: `true` (the DEFAULT) is **308 Permanent Redirect**, `false` is **307 Temporary Redirect**. 308 / 307 are the MODERN choice because they preserve the request method and body (a redirected POST stays a POST). The legacy equivalents are **301 (permanent)** and **302 (temporary)**, which do not guarantee that; set `statusCode` explicitly (e.g. `"statusCode": 301`) when a tool needs a specific legacy code. `statusCode` wins over `permanent`.
+
+**Query string is preserved.** The incoming query string is appended to the destination by default (a destination carrying its own query is merged, the destination's keys winning), matching Next.js.
+
+**Where it applies.** At the very START of request handling (in `dev.js`'s `produce()`, before the probes, routing, SSR, or asset serving), so a matched source returns the redirect immediately and never reaches the router. Framework-internal `/__webjs/*` paths are never redirected. The secure-header + conditional-GET funnel still wraps the redirect Response.
+
+**Config robustness.** Patterns are compiled ONCE at boot, not per request. A malformed entry (bad pattern, missing/empty `destination`, invalid `statusCode`) is DROPPED at config-load with a one-line warning and never crashes the request pipeline (the same fail-safe posture `webjs.headers` / `webjs.csp` use), so a single typo never disables the valid rules around it. Mechanism: `compileRedirectRules` / `applyRedirects` in `packages/server/src/redirects.js`.
+
+**Avoiding redirect loops (your responsibility).** There is no server-side loop guard, matching Next.js. A rule whose `destination` matches another rule's (or its own) `source` redirects forever (the browser eventually aborts it). Make sure a `destination` does not land on a path that another rule moves again. Captured groups are kept percent-encoded by `URLPattern`, so a user-controlled `:slug` cannot escape the origin into an open redirect; only an app-authored `destination` literal controls the target.
+
+---
+
 ## Conditional GET: ETag + If-None-Match -> 304 (on by default) (#240)
 
 Every CACHEABLE response carries a content-hash `ETag`, and a repeat request whose `If-None-Match` matches it gets a `304 Not Modified` with no body (RFC 7232). So a client holding an identical copy revalidates with a tiny 304 instead of re-transferring the whole body. Wired once at the response funnel in `dev.js`'s `handle()` (mechanism: `applyConditionalGet` in `packages/server/src/conditional-get.js`), so it covers SSR HTML pages, static assets in `public/`, app source modules, and the core / vendor runtime modules uniformly.
