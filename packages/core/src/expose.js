@@ -143,7 +143,12 @@ function normaliseCors(c) {
  *
  * Disambiguation: a return is a result-envelope ONLY when it is an object with
  * a boolean `success` property OR a `fieldErrors` property; otherwise it is a
- * transformed input value.
+ * transformed input value. Caveat: if your validator returns the input
+ * VERBATIM (the bare-transform style) and that input can itself carry a
+ * `success` boolean or a `fieldErrors` key, it would be misread as an envelope.
+ * Return the explicit `{ success: true, data }` envelope in that case (the zod
+ * adapter and the recommended hand-rolled form already do, so they never
+ * collide).
  *
  * Server-side only; import inside `.server.{js,ts}` files. The bare
  * `@webjsdev/core` specifier resolves to the browser entry, which excludes
