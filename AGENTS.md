@@ -739,7 +739,7 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 webjs dev    [--port N]                               # dev server with live reload
 webjs start  [--port N]                               # prod server. No build step, source IS the runtime. Speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
-webjs check  [--fix]                                  # convention validator
+webjs check  [--rules]                                # correctness validator (--rules lists the checks; report-only, no autofix)
 webjs doctor                                          # project-health checklist (Node, tsconfig, env drift, vendor pins, @webjsdev versions, git hook); non-zero exit on a hard fail so CI can gate
 webjs types                                           # generate .webjs/routes.d.ts (typed Route union + per-route params; #258). Opt-in; webjs dev emits it automatically
 webjs typecheck [tsc args...]                         # type-check the app with the project's own tsc --noEmit (non-zero on errors; needs typescript installed)

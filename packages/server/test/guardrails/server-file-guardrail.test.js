@@ -62,6 +62,11 @@ function assertIsServerOnlyStub(text) {
     `expected server-only throw-at-load stub, got body starting with: ${text.slice(0, 80)}`
   );
   assert.ok(/throw new Error/.test(text), 'server-only stub must throw on import');
+  // #263: the throw-at-load message anchors a stable, fetchable docs URL.
+  assert.ok(
+    text.includes('https://docs.webjs.com/docs/server-actions'),
+    'server-only stub message must anchor a docs URL'
+  );
   assertNoSourceLeak(text);
 }
 
