@@ -35,8 +35,8 @@
                   "type": "string"
                 },
                 "value": {
-                  "description": "Header value. A null (or false) value REMOVES the header on a match, the escape hatch that drops a secure default on a path.",
-                  "type": ["string", "null", "boolean"]
+                  "description": "Header value. A null or false value REMOVES the header on a match, the escape hatch that drops a secure default on a path. true is intentionally not allowed (it would stringify to the literal 'true').",
+                  "oneOf": [{ "type": ["string", "null"] }, { "const": false }]
                 }
               },
               "additionalProperties": false

@@ -136,6 +136,32 @@ test('key shapes match the reader contracts', () => {
   assert.ok(Array.isArray(p.csp.oneOf), 'csp is a oneOf(boolean, object)');
 });
 
+// The schema and the exported WebjsConfig type are two artifacts that must
+// stay in lockstep (the procedure in packages/server/AGENTS.md). The schema is
+// already cross-checked against KNOWN_KEYS above; this closes the third edge so
+// adding a key to the schema + readers while forgetting the .d.ts (or vice
+// versa) fails a test instead of silently drifting.
+test('the WebjsConfig type top-level keys match the reader keys', () => {
+  const dtsPath = fileURLToPath(
+    new URL('../../../core/src/webjs-config.d.ts', import.meta.url),
+  );
+  const src = readFileSync(dtsPath, 'utf8');
+  const start = src.indexOf('interface WebjsConfig');
+  assert.ok(start >= 0, 'webjs-config.d.ts declares interface WebjsConfig');
+  const open = src.indexOf('{', start);
+  const close = src.indexOf('\n}', open);
+  const body = src.slice(open + 1, close);
+  // Top-level members are indented one level (two spaces) inside the interface.
+  // Nested object literals (none today, the type references named shapes) would
+  // sit deeper, so anchoring at the two-space indent captures only the keys.
+  const keys = [...body.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(
+    keys,
+    [...KNOWN_KEYS].sort(),
+    'WebjsConfig keys must equal the reader keys (schema and type out of lockstep)',
+  );
+});
+
 /**
  * A tiny structural validator standing in for ajv (which the repo does not
  * ship). It only checks the constraints this schema relies on: known-key

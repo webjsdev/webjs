@@ -95,3 +95,7 @@ void missingDest;
 // @ts-expect-error a numeric knob is a number, not a string.
 const badNumber: WebjsConfig = { maxBodyBytes: '1mb' };
 void badNumber;
+
+// @ts-expect-error a header value of true is rejected (only string, null, or false).
+const badHeaderValue: WebjsConfig = { headers: [{ source: '/a', headers: [{ key: 'X-Test', value: true }] }] };
+void badHeaderValue;

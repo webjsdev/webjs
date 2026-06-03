@@ -31,10 +31,12 @@ export interface WebjsHeaderDirective {
   /** Header name, e.g. `X-Frame-Options`. */
   key: string;
   /**
-   * Header value. A `null` (or `false`) value REMOVES the header on a
+   * Header value. A `null` or `false` value REMOVES the header on a
    * match, the escape hatch that drops a secure default on a path.
+   * `true` is intentionally not allowed (the runtime would stringify it
+   * to the literal `"true"`, which is never a useful header value).
    */
-  value?: string | null | boolean;
+  value?: string | null | false;
 }
 
 /** One per-path response-header rule in `webjs.headers`. */
