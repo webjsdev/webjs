@@ -286,6 +286,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
       check: 'webjs check',
+      typecheck: 'webjs typecheck',
       'db:migrate': 'prisma migrate dev',
       'db:generate': 'prisma generate',
       'db:studio': 'prisma studio',
@@ -298,6 +299,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     devDependencies: {
       prisma: '^6.0.0',
+      // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
+      // tsc --noEmit). Not needed at runtime (Node strips types in place), only
+      // to type-check the app.
+      typescript: '^5.6.0',
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
