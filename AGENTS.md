@@ -288,7 +288,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `richFetch<T>(url, init?)` | Content-negotiated fetch with rich-type encoding. |
 | `navigate(url, opts?)` | Programmatic client-router nav. `{replace}` swaps in place. |
 | `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
-| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
+| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. A frame nav whose response lacks the frame fires a cancelable, bubbling `webjs:frame-missing` event (detail `{ frameId, url, document }`) and leaves the frame unchanged instead of full-swapping; `preventDefault()` hands the outcome to the listener. |
 | `Metadata` / `MetadataContext` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `import type { Metadata } from '@webjsdev/core'`. |
 | `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` (type-only) | Types the page / layout / route-handler args (`{ params, searchParams, url, actionData }`; layouts add `children`). `R` is an optional route literal that narrows `params` against the generated route union. `Route` / `RouteParams<R>` are the href + params helpers. Run `webjs types` to generate the union (see CLI reference). `import type { PageProps } from '@webjsdev/core'`. |
 
@@ -667,7 +667,7 @@ Wire-byte optimization is automatic: the router sends `X-Webjs-Have` listing mar
 
 **Production benefits from HTTP/2 at the edge.** Per-file ESM rides HTTP/2 multiplex to be competitive with bundling. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare, Heroku) serve HTTP/2 automatically. Bare-VM self-hosters put nginx / Caddy / Traefik in front. The production server (`npm run start`) speaks plain HTTP/1.1.
 
-For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. See `agent-docs/advanced.md` for the full mechanism.
+For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. A frame nav whose response lacks the frame fires a cancelable `webjs:frame-missing` event and leaves the frame unchanged (no silent full-page swap). See `agent-docs/advanced.md` for the full mechanism.
 
 ---
 
