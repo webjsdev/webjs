@@ -494,14 +494,19 @@ This is also why the auth test lives at `test/auth/auth.test.ts` (the
 feature-folder convention), NOT `test/unit/auth.test.ts`. Test KIND is a
 subfolder inside a feature, never the top level.
 
-**Every change ships with a test.** For Claude Code, a commit that
-stages app code (`app/`, `modules/`, `components/`, `lib/`) without
-staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`.
-A unit test alone is not enough for interactive or component code: add
-the browser test that asserts the rendered/hydrated behaviour. The test
-suite itself runs in CI (`.github/workflows/ci.yml`) on every PR and
-push to main, not in the local pre-commit hook, so `git commit` stays
-fast and the gate cannot be skipped with a local `--no-verify`.
+**Every change ships with a test.** This is a convention, not a hard
+gate, consistent with the convention-vs-check principle this file
+states (a sensible app can legitimately want a test-less commit for a
+spike, a vendored file, or a pure refactor). For Claude Code, a commit
+that stages app code (`app/`, `modules/`, `components/`, `lib/`) without
+staging a test WARNS via `.claude/hooks/require-tests-with-src.sh`, then
+lets the commit through. A project that wants the strict floor opts into
+a hard block by setting `WEBJS_TEST_GATE=block` (in
+`.claude/settings.json` env, your shell, or CI). A unit test alone is
+not enough for interactive or component code: add the browser test that
+asserts the rendered/hydrated behaviour. The real enforcement is CI: the
+test suite runs in `.github/workflows/ci.yml` on every PR and push to
+main, so the gate cannot be skipped with a local `--no-verify`.
 
 ### Choosing a feature folder
 

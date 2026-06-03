@@ -963,13 +963,16 @@ composition, so a nested shell ends up dropped by the HTML parser.
    feature surface changed, `webjs check` passing. A unit test is not
    always enough: a component, hydration, the client router, or a server
    action called from the client needs a browser test
-   (`webjs test --browser`) asserting the behaviour in a real browser. A
-   commit that stages app code (`app/`, `modules/`, `components/`, `lib/`)
-   with no test is blocked for Claude Code by
-   `.claude/hooks/require-tests-with-src.sh`. The test suite itself runs in
-   CI (`.github/workflows/ci.yml`), not in the pre-commit hook, so `git
-   commit` stays fast and the gate cannot be skipped with a local
-   `--no-verify`.
+   (`webjs test --browser`) asserting the behaviour in a real browser. For
+   Claude Code, a commit that stages app code (`app/`, `modules/`,
+   `components/`, `lib/`) with no test WARNS via
+   `.claude/hooks/require-tests-with-src.sh` (every change should still ship
+   with a test, but that is a convention, not a hard gate). A project that
+   wants the strict floor opts into a hard block by setting
+   `WEBJS_TEST_GATE=block` (in `.claude/settings.json` env, your shell, or
+   CI). The real enforcement is CI: the test suite runs in
+   `.github/workflows/ci.yml`, not in the pre-commit hook, so `git commit`
+   stays fast and the gate cannot be skipped with a local `--no-verify`.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.
