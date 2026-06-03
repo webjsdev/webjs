@@ -47,6 +47,7 @@ process.emitWarning = function (warning, type, code, ctor) {
 };
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
+import { generateRouteTypes } from './route-types.js';
 import { ssrPage, ssrNotFound } from './ssr.js';
 import { loadPageAction, runPageAction } from './page-action.js';
 import { handleApi } from './api.js';
@@ -488,6 +489,25 @@ export async function createRequestHandler(opts) {
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
 
+  // Emit `.webjs/routes.d.ts` (typed Route union + per-route params, #258) in
+  // dev so an editor's tsserver always has up-to-date route types without the
+  // developer remembering to run `webjs types`. Best-effort and fire-and-
+  // forget: a failure logs and never blocks boot. Re-emitted after each route
+  // rebuild (see doRebuild) so adding/removing a route refreshes the types.
+  /** @returns {Promise<void>} */
+  async function emitRouteTypes() {
+    try {
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      const text = await generateRouteTypes(appDir);
+      const outDir = join(appDir, '.webjs');
+      await mkdir(outDir, { recursive: true });
+      await writeFile(join(outDir, 'routes.d.ts'), text);
+    } catch (e) {
+      logger.warn?.(`[webjs] could not write .webjs/routes.d.ts (route types): ${e?.message || e}`);
+    }
+  }
+  if (dev) void emitRouteTypes();
+
   // Per-path response-header rules (issue #232), read once from the
   // app's package.json `webjs.headers`. Static config, so no rebuild
   // re-read; the secure defaults need no config and apply regardless.
@@ -773,6 +793,10 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    // Refresh the generated route types (#258) so adding/removing a route file
+    // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
+    // best-effort (see emitRouteTypes).
+    if (dev) void emitRouteTypes();
     clearVendorCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,

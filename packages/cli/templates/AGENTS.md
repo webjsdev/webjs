@@ -267,6 +267,28 @@ test/<feature>/                feature-scoped tests, one folder per concern
 middleware.ts            root middleware (optional, outermost)
 ```
 
+### Typed page / layout / route-handler props
+
+Type page / layout / route-handler arguments with the exported helpers so a
+param typo is a compile-time error:
+
+```ts
+import type { PageProps, LayoutProps, RouteHandlerContext } from '@webjsdev/core';
+
+export default function Post({ params }: PageProps<'/blog/[slug]'>) {
+  return html`<h1>${params.slug}</h1>`;   // params typed { slug: string }
+}
+export default function RootLayout({ children }: LayoutProps) { /* ... */ }
+export async function GET(req: Request, ctx: RouteHandlerContext) { /* ctx.params */ }
+```
+
+Run `webjs types` once (and ensure `tsconfig.json` `include` lists
+`.webjs/routes.d.ts`, the scaffold already does) to generate the route union:
+`PageProps<'/blog/[slug]'>['params']` then narrows to `{ slug: string }` and
+`navigate()` only accepts real app routes. `webjs dev` regenerates the file on
+startup, so it stays current. Without it, `params` is `Record<string, string>`
+and `navigate()` accepts any string (non-breaking).
+
 ## Database (Prisma + SQLite by default)
 
 Every scaffold includes a Prisma setup pointed at a local SQLite file.

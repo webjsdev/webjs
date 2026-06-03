@@ -290,6 +290,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
 | `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
 | `Metadata` / `MetadataContext` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `import type { Metadata } from '@webjsdev/core'`. |
+| `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` (type-only) | Types the page / layout / route-handler args (`{ params, searchParams, url, actionData }`; layouts add `children`). `R` is an optional route literal that narrows `params` against the generated route union. `Route` / `RouteParams<R>` are the href + params helpers. Run `webjs types` to generate the union (see CLI reference). `import type { PageProps } from '@webjsdev/core'`. |
 
 ### Directives, from `import { … } from '@webjsdev/core/directives'`
 
@@ -724,6 +725,7 @@ webjs dev    [--port N]                               # dev server with live rel
 webjs start  [--port N]                               # prod server. No build step, source IS the runtime. Speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
 webjs check  [--fix]                                  # convention validator
+webjs types                                           # generate .webjs/routes.d.ts (typed Route union + per-route params; #258). Opt-in; webjs dev emits it automatically
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to prisma
 webjs ui init                                         # @webjsdev/ui CLI

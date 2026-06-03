@@ -186,6 +186,74 @@ runtime with zero build cost. `MetadataContext` types the
 `generateMetadata` argument (`{ params, searchParams, url, actionData }`,
 where `actionData` is set only on a failed-page-action re-render).
 
+### Typed page / layout / route-handler props (`PageProps`, `LayoutProps`, `RouteHandlerContext`)
+
+A page default-export receives `{ params, searchParams, url, actionData }`; a
+layout receives the same plus `children`; a `route.{js,ts}` handler receives
+`(request, { params })`. Type each with the exported helpers so a typo in a
+param name or a wrong-typed field is a compile-time error.
+
+```ts
+import type { PageProps, LayoutProps, RouteHandlerContext } from '@webjsdev/core';
+
+// A static route: `params` is `Record<string, string>`.
+export default function About({ searchParams }: PageProps) { /* ... */ }
+
+// A dynamic route: pass the route literal to narrow `params`.
+export default function Post({ params }: PageProps<'/blog/[slug]'>) {
+  const slug = params.slug; // typed `string`
+  /* ... */
+}
+
+// A layout adds `children: TemplateResult`.
+export default function RootLayout({ children }: LayoutProps) { /* ... */ }
+
+// A route handler's 2nd arg.
+export async function GET(req: Request, ctx: RouteHandlerContext) {
+  return Response.json({ id: ctx.params.id });
+}
+```
+
+`PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` take an optional
+route literal `R`. With no `R` (or in an app that has not generated route
+types), `params` is `Record<string, string>`, the runtime default. With `R`
+set to a generated dynamic route, `params` narrows to its exact shape
+(`{ slug: string }`, `{ rest: string[] }`, `{ slug?: string[] }`). The shapes
+mirror what `packages/server/src/ssr.js` and `packages/server/src/api.js`
+actually pass, NOT Next.js's superset. Pure types in
+`packages/core/src/routes.d.ts`, erased at runtime with zero build cost.
+
+### The generated route union (`webjs types`) types `navigate()` and catches bad hrefs
+
+Run `webjs types` to generate `.webjs/routes.d.ts`, an opt-in overlay that
+augments `@webjsdev/core` with one key per route in `app/`. It narrows two
+things at tsserver time:
+
+- The `Route` href type: `navigate('/blog/anything')` is accepted,
+  `navigate('/nonexistent')` is a type error. (Until you generate the types,
+  `Route` is `string`, so `navigate()` is unconstrained, non-breaking for
+  JSDoc apps and un-generated apps alike.)
+- Per-route `params`: `PageProps<'/blog/[slug]'>['params']` becomes
+  `{ slug: string }`, derived from the generated `RouteParamMap`.
+
+```sh
+webjs types     # writes .webjs/routes.d.ts (count of routes printed)
+```
+
+`webjs dev` also emits it automatically at startup and re-emits after each
+route rebuild, so an editor always has fresh route types. The file is
+gitignored (regenerated per machine, like Next's `.next/types`); the scaffold
+`tsconfig.json` lists `.webjs/routes.d.ts` in `include` so tsserver picks it
+up. To opt in for an existing app, run `webjs types` once and ensure your
+`tsconfig.json` `include` lists `.webjs/routes.d.ts`.
+
+This is webjs's no-build equivalent of Next 15's `typedRoutes`, achieved via
+interface declaration-merging (`declare module '@webjsdev/core'`) rather than a
+bundler. The mechanism is `generateRouteTypes(appDir)` in
+`packages/server/src/route-types.js`, which reuses the one route enumerator
+(`buildRouteTable`). Output is deterministic (sorted keys), so re-running
+yields a byte-identical file.
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language
