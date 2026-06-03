@@ -7,6 +7,19 @@ import { walk } from './fs-walk.js';
 import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
 import { resolveOrigin } from './cors.js';
+import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
+import { getBodyLimits } from './context.js';
+
+/**
+ * The JSON / RPC body cap in effect for the current request: the per-request
+ * limit the handler stamped, or the secure default outside a request scope (a
+ * direct unit-test invocation). `0` disables the cap.
+ * @returns {number}
+ */
+function jsonBodyLimit() {
+  const limits = getBodyLimits();
+  return limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
+}
 
 /**
  * Internal RPC wire-format content type. Distinguishes webjs action
@@ -295,9 +308,13 @@ export async function invokeAction(idx, hash, fnName, req) {
   }
   const file = idx.hashToFile.get(hash);
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
+  // Bounded read (issue #237): reject an over-limit RPC body with 413 without
+  // buffering it whole (Content-Length fast-reject, plus a streaming cap for a
+  // chunked body with no declared length).
+  const { tooLarge, text: body } = await readTextBounded(req, jsonBodyLimit());
+  if (tooLarge) return payloadTooLarge();
   let args = [];
   try {
-    const body = await req.text();
     args = body ? getSerializer().deserialize(body) : [];
     if (!Array.isArray(args)) args = [args];
   } catch {
@@ -421,7 +438,9 @@ export async function invokeExposedAction(idx, route, params, req) {
   const query = Object.fromEntries(url.searchParams.entries());
   let body = {};
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const text = await req.text();
+    // Bounded read (issue #237): an over-limit body is a 413 before any parse.
+    const { tooLarge, text } = await readTextBounded(req, jsonBodyLimit());
+    if (tooLarge) return payloadTooLarge();
     if (text) {
       try {
         const parsed = JSON.parse(text);

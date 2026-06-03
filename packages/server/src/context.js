@@ -15,7 +15,12 @@ import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
  * `setCspNonce`, so the same value the `Content-Security-Policy` header
  * carries is what `cspNonce()` returns for the inline boot script.
  *
- * @typedef {{ req: Request, cspNonce?: string }} Store
+ * `bodyLimits` holds the resolved request body-size caps (issue #237) so
+ * `readBody` (used inside `route.{js,ts}` handlers, which have no handle to the
+ * server state) can enforce the same limit the RPC and page-action paths do. The
+ * handler writes it per request via `setBodyLimits`.
+ *
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number } }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -53,6 +58,27 @@ export function getRequest() {
 export function setCspNonce(nonce) {
   const store = als.getStore();
   if (store) store.cspNonce = nonce;
+}
+
+/**
+ * Set the per-request resolved body-size limits on the current store (issue
+ * #237). The handler computes them once at boot (`readBodyLimits`) and stamps
+ * them on every request so `readBody` (json.js), which runs inside route
+ * handlers with no access to the server state, can enforce the same cap.
+ *
+ * @param {{ json: number, multipart: number }} limits
+ */
+export function setBodyLimits(limits) {
+  const store = als.getStore();
+  if (store) store.bodyLimits = limits;
+}
+
+/**
+ * Read the per-request body-size limits, or null outside a request scope.
+ * @returns {{ json: number, multipart: number } | null}
+ */
+export function getBodyLimits() {
+  return als.getStore()?.bodyLimits ?? null;
 }
 
 /**

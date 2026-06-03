@@ -25,7 +25,22 @@ export async function handleApi(route, params, webRequest, dev) {
     });
   }
   /** @type any */ (webRequest).params = params;
-  const result = await handler(webRequest, { params });
+  let result;
+  try {
+    result = await handler(webRequest, { params });
+  } catch (e) {
+    // A route handler that read its body via `readBody` (json.js) over the
+    // size limit (issue #237) throws a BodyLimitError; surface it as 413 rather
+    // than a generic 500. Detected via a marker so a cross-module-copy
+    // instanceof miss never downgrades it.
+    if (e && /** @type any */ (e).webjsBodyLimit) {
+      return new Response('Payload Too Large', {
+        status: 413,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      });
+    }
+    throw e;
+  }
   if (result instanceof Response) return result;
   // Convenience: allow returning plain objects as JSON.
   return Response.json(result);

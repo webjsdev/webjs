@@ -1,6 +1,7 @@
 import { stringify as wjStringify, parse as wjParse } from '@webjsdev/core';
-import { getRequest } from './context.js';
+import { getRequest, getBodyLimits } from './context.js';
 import { RPC_CONTENT_TYPE } from './actions.js';
+import { readTextBounded, BodyLimitError, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 
 /**
  * Content-negotiated JSON helper for API routes (`route.js` handlers).
@@ -51,11 +52,19 @@ export async function json(data, init = {}) {
  * that accept rich bodies from the `richFetch` helper but plain JSON
  * from everyone else.
  *
+ * Enforces the request body-size limit (issue #237): an over-limit body throws
+ * a `BodyLimitError`, which the API dispatcher (`handleApi`) maps to a 413, so a
+ * `route.{js,ts}` handler doing `await readBody(req)` is protected with no extra
+ * code. The over-limit body is never buffered whole (see `readTextBounded`).
+ *
  * @param {Request} req
  */
 export async function readBody(req) {
   const ct = req.headers.get('content-type') || '';
-  const text = await req.text();
+  const limits = getBodyLimits();
+  const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
+  const { tooLarge, text } = await readTextBounded(req, limit);
+  if (tooLarge) throw new BodyLimitError();
   if (!text) return null;
   if (ct.includes(RPC_CONTENT_TYPE)) return wjParse(text);
   return JSON.parse(text);
