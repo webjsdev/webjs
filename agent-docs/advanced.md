@@ -45,11 +45,22 @@ Five stacked zero-build optimizations:
    specifiers. Each `pkg@version` is resolved through `api.jspm.io/generate`
    to a CDN URL (`https://ga.jspm.io/npm:<pkg>@<version>/...`) and added
    to the import map; the browser fetches each package directly from
-   the CDN. `webjs vendor pin` commits the resolved URLs + SHA-384
-   integrity hashes to `.webjs/vendor/importmap.json` for reproducible
-   deploys; `webjs vendor pin --download` also caches the bundle bytes
-   locally under `.webjs/vendor/<pkg>@<version>.js` for air-gapped /
-   strict-CSP deployments. No bundler runs at any point.
+   the CDN. **SRI integrity (SHA-384) is computed on BOTH paths.** A
+   live-resolved (unpinned) app hashes each cross-origin bundle at warmup
+   and emits `integrity` + `crossorigin` on the importmap and modulepreload
+   tags, so a swapped or compromised CDN response is rejected by the browser
+   even with no pin file (#235). The hashing is bounded (parallel fetches
+   with a small concurrency cap and a per-fetch timeout) and FAIL-OPEN: a
+   bundle fetch failure skips that one URL's integrity (it loads without SRI,
+   the same as before) and emits a one-time warning, so a CDN hiccup never
+   takes the app down. Added warmup cost is one HEAD-like GET per distinct
+   cross-origin bundle, cached per process by URL so a re-resolve does not
+   re-fetch. `webjs vendor pin` still commits the resolved URLs + integrity
+   hashes to `.webjs/vendor/importmap.json` for reproducible deploys (and a
+   stable boot-time build id with no warmup fetch); `webjs vendor pin
+   --download` also caches the bundle bytes locally under
+   `.webjs/vendor/<pkg>@<version>.js` for air-gapped / strict-CSP
+   deployments. No bundler runs at any point.
 
 ## No-build production model
 
@@ -61,7 +72,9 @@ production. The Rails 7+ / Hotwire pattern:
   resolved via `<script type="importmap">` emitted into the document
   head. By default each package resolves through `api.jspm.io/generate`
   to a `https://ga.jspm.io/npm:<pkg>@<version>/...` URL and the browser
-  fetches it from the CDN directly. `webjs vendor pin` commits the
+  fetches it from the CDN directly, with an `integrity` SRI hash on every
+  cross-origin entry (computed live at warmup for an unpinned app, or read
+  from the pin file for a pinned one). `webjs vendor pin` commits the
   resolved URLs + SHA-384 integrity hashes to `.webjs/vendor/importmap.json`
   for reproducible deploys; `webjs vendor pin --download` additionally
   caches each bundle to `.webjs/vendor/<pkg>@<version>.js` and rewrites
