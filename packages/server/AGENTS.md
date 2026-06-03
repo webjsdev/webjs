@@ -113,7 +113,7 @@ condition (FIRST in the object, as nodenext requires) wire the resolution; the
 top-level `index.d.ts` is added to the `files` allowlist (`src/*.d.ts` ships via
 the globbed `src`). **A new export added to `index.js` MUST get a declaration in
 `index.d.ts`,** enforced by the drift test
-`test/types/exports-drift.test.js` (asserts the declared set equals the runtime
+`test/types/exports-drift.test.mjs` (asserts the declared set equals the runtime
 export set); the type fixture + TS7016 counterfactual live in
 `test/types/server-exports.test-d.ts` + `test/types/server-types.test.mjs`.
 

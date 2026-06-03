@@ -16,7 +16,7 @@
  * (scanner / importmap / module-graph / vendor) get reasonable structural
  * declarations.
  *
- * The drift guard `test/types/exports-drift.test.js` asserts the set of named
+ * The drift guard `test/types/exports-drift.test.mjs` asserts the set of named
  * exports here exactly matches the runtime named exports of index.js, so a
  * future export added to index.js without a type is caught.
  */
@@ -460,7 +460,7 @@ export declare function applyCorsHeaders(
 /** In-memory LRU cache store (single-process). */
 export declare function memoryStore(opts?: { maxSize?: number }): CacheStore;
 /** Redis-backed cache store. */
-export declare function redisStore(opts?: Record<string, unknown>): CacheStore;
+export declare function redisStore(opts?: { url?: string }): CacheStore;
 /** Get the default cache store (memory unless `setStore` was called). */
 export declare function getStore(): CacheStore;
 /** Set the default cache store (call at startup to switch to Redis). */
@@ -500,7 +500,7 @@ export declare function revalidateAll(): Promise<void>;
 /** The session storage adapter interface. */
 export interface SessionStorage {
   read(cookie: string): Promise<Session>;
-  save(session: Session): Promise<string>;
+  save(session: Session): Promise<string | null>;
 }
 
 /** A per-request session: a typed key/value bag with flash + destroy. */
@@ -510,7 +510,7 @@ export declare class Session {
   readonly dirty: boolean;
   readonly destroyed: boolean;
   readonly deleteId: string | null;
-  readonly data: { id: string | null; data: Record<string, unknown> };
+  readonly data: { data: Record<string, unknown>; flash: Record<string, unknown> };
   get<T = unknown>(key: string): T | undefined;
   set(key: string, value: unknown): void;
   has(key: string): boolean;
