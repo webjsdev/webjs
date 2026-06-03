@@ -41,7 +41,8 @@ const USAGE = `webjs commands:
   webjs dev   [--port 8080]                       Start dev server with live reload
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check                                     Run correctness checks on the app
+  webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
+  webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, @webjsdev versions, git hook)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
@@ -265,6 +266,18 @@ async function main() {
       }
 
       const violations = await checkConventions(process.cwd());
+
+      // --json emits the raw structured violations + a summary count as JSON,
+      // so an agent running `webjs check` in a loop consumes structured data
+      // instead of regex-scraping stdout. The shared projector keeps this byte-
+      // identical to the MCP `check` tool. The non-zero exit on violations is
+      // preserved (an agent gates on the exit code AND parses the report).
+      if (rest.includes('--json')) {
+        const { projectCheck } = await import('../lib/check-json.js');
+        console.log(JSON.stringify(projectCheck(violations)));
+        if (violations.length > 0) process.exit(1);
+        break;
+      }
 
       if (violations.length === 0) {
         console.log('webjs check: all checks pass ✓');
@@ -630,6 +643,29 @@ Full docs: https://docs.webjs.com`);
         `\n` +
         `  --from PROVIDER     CDN to resolve through. One of: ${[...SUPPORTED_PROVIDERS].join(', ')}. Default: jspm.`);
       process.exit(1);
+    }
+    case 'mcp': {
+      // Read-only MCP server (#262) over stdio. STDOUT is the JSON-RPC channel,
+      // so nothing here may write to stdout: the data functions are read-only
+      // and `runMcpServer` routes all diagnostics to stderr. The CLI version is
+      // advertised in the initialize handshake's serverInfo.
+      const { readFileSync } = await import('node:fs');
+      let version = '0.0.0';
+      try {
+        const pkg = JSON.parse(
+          readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+        );
+        version = pkg.version || version;
+      } catch {}
+      const { runMcpServer } = await import('../lib/mcp.js');
+      await runMcpServer({
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        cwd: process.cwd(),
+        version,
+      });
+      break;
     }
     case 'help':
     case undefined:
