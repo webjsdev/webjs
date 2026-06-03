@@ -84,7 +84,20 @@ export function cache(fn, opts) {
       // Record tag -> cacheKey in the thin tag index so a later
       // revalidateTag can find and evict this entry (including
       // arg-specific keys the no-args invalidate() cannot reach).
-      await addKeyToTags(tagsFor(args), cacheKey, ttlMs);
+      // Best-effort: the value is already stored, so taggability must
+      // never break the cached call. A user tags() function that throws
+      // (e.g. reading post.id off a null arg), or an index write that
+      // fails, leaves the value cached (just untagged) and returns
+      // normally. tagsFor() is INSIDE the try because it runs the
+      // user-supplied function.
+      try {
+        await addKeyToTags(tagsFor(args), cacheKey, ttlMs);
+      } catch (err) {
+        console.warn(
+          `[webjs] cache(${prefix}): tag indexing failed, value is cached ` +
+          `but untagged (revalidateTag will not reach it): ${err && err.message ? err.message : err}`
+        );
+      }
       return result;
     }
   );

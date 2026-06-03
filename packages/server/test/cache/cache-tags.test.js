@@ -20,6 +20,11 @@ test('cache() with tags stores the tag -> key index', async () => {
 });
 
 test('revalidateTag evicts every cached key under that tag (cross-module)', async () => {
+  // COUNTERFACTUAL ANCHOR. This is the test that proves tag eviction is real:
+  // it depends on cache-fn.js recording the tag -> key index via addKeyToTags.
+  // Delete that addKeyToTags call and revalidateTag finds no keys, so both
+  // reads below serve the STALE cached value and the notEqual assertions fail.
+  // (The function-form and revalidateTags tests below fail the same way.)
   setStore(memoryStore());
   let calls = 0;
   // Two independent wrappers (simulating two modules) sharing one tag.
@@ -103,18 +108,19 @@ test('existing invalidate() still works alongside tags', async () => {
   assert.equal(calls, 2);
 });
 
-test('COUNTERFACTUAL: without the tag-index write, revalidateTag is a no-op (stale value persists)', async () => {
+test('an untagged arg-specific read is unaffected by revalidateTag', async () => {
+  // The honest framing of what the old mislabeled "COUNTERFACTUAL" test
+  // actually checked: an UNTAGGED cache() records no index, so a
+  // revalidateTag finds no key for it and the cached value persists. The
+  // real counterfactual (proving tag eviction IS wired) is the cross-module
+  // test above, which DOES tag and breaks if the index write is removed.
   setStore(memoryStore());
   let calls = 0;
-  // Simulate the pre-feature behaviour: a tagged read whose tag index was
-  // never written. revalidateTag finds no keys, so the post-revalidate read
-  // returns the STALE cached value. This is exactly what the real tag-index
-  // write prevents; removing it from cache-fn.js makes this assertion the
-  // failing counterfactual.
-  const fn = cache(async () => ++calls, { key: 'cf', ttl: 60 }); // NO tags -> no index
-  const v = await fn();
-  await revalidateTag('cf-tag'); // nothing recorded under this tag
-  assert.equal(await fn(), v, 'untagged value survives a tag revalidation (stale)');
+  const fn = cache(async (id) => { calls++; return id; }, { key: 'untagged-arg', ttl: 60 });
+  const v = await fn(7);
+  assert.equal(await fn(7), v); // cached arg-specific entry
+  await revalidateTag('untagged-arg'); // no index entry exists for it
+  assert.equal(await fn(7), v); // still cached
   assert.equal(calls, 1);
 });
 
@@ -123,4 +129,30 @@ test('revalidateTag tolerates an unknown tag (no throw, no-op)', async () => {
   await revalidateTag('never-seen'); // must not throw
   await revalidateTags(['also-never', 'nope']);
   assert.ok(true);
+});
+
+test('a throwing tags() function leaves the value cached and does not reject', async () => {
+  // Best-effort guarantee: the value is stored BEFORE the tag index is
+  // touched, so a tags function that throws (here reading .id off a null
+  // arg) must not break the cached call. The call returns normally and the
+  // second call is a cache HIT (no recompute); the entry is just untagged.
+  setStore(memoryStore());
+  let calls = 0;
+  const origWarn = console.warn;
+  let warned = false;
+  console.warn = () => { warned = true; };
+  try {
+    const postById = cache(
+      async (post) => { calls++; return { v: calls }; },
+      { key: 'throwing-tags', ttl: 60, tags: (post) => ['post:' + post.id] } // throws on null post
+    );
+    const r1 = await postById(null); // tags(null) throws inside the wrapper
+    assert.deepEqual(r1, { v: 1 }); // value still returned
+    const r2 = await postById(null); // cache hit, no recompute
+    assert.deepEqual(r2, { v: 1 });
+    assert.equal(calls, 1, 'second call served from cache (taggability failure did not poison the store)');
+    assert.equal(warned, true, 'a warning was emitted about the failed tag indexing');
+  } finally {
+    console.warn = origWarn;
+  }
 });
