@@ -89,9 +89,10 @@ function docsPage({ params }: PageProps<'/docs/[[...slug]]'>) {
 }
 void docsPage;
 
-// A static route has no dynamic params; RouteParams resolves to {}.
+// A static route has no dynamic params. RouteParams falls through to the
+// runtime default Record<string, string>, so a string-keyed object assigns.
 type AboutParams = RouteParams<'/about'>;
-const aboutParams: AboutParams = {};
+const aboutParams: AboutParams = { anything: 'ok' };
 void aboutParams;
 
 type SlugParams = RouteParams<'/blog/[slug]'>;

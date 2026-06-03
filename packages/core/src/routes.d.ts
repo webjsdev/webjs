@@ -38,7 +38,8 @@ export interface WebjsRoutes {}
  * (`'/blog/[slug]': { slug: string }`). Emitted by the generator with the
  * exact `string` / `string[]` / optional shapes known at generation time,
  * which is far more robust than deep template-literal inference. Empty by
- * default; a static route is never given an entry here (its params are `{}`).
+ * default; a static route is never given an entry here, so its params fall
+ * through to `Record<string, string>` (the runtime default), not `{}`.
  */
 export interface RouteParamMap {}
 
