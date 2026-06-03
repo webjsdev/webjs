@@ -11,7 +11,7 @@ recipes for common tasks. Keep it in sync whenever behaviour changes.
 | `agent-docs/metadata.md` | Full `metadata` / `generateMetadata` field reference |
 | `agent-docs/components.md` | WebComponent deep-dive (controllers, hooks, light/shadow DOM, slots) |
 | `agent-docs/styling.md` | Tailwind helpers + vanilla-CSS opt-out conventions |
-| `agent-docs/built-ins.md` | Auth, sessions, cache, rate-limit, broadcast |
+| `agent-docs/built-ins.md` | Auth, sessions, cache, rate-limit, broadcast, file storage |
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router, WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
 | `agent-docs/deployment.md` | Production, runtime targets, embedded use |
@@ -152,7 +152,7 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 **Why lit-style web components specifically?** AI coding agents have substantial training data on lit. Aligning webjs's component runtime API (reactive properties via `static properties`, lifecycle hooks like `shouldUpdate` / `willUpdate` / `updated` / `firstUpdated` / `updateComplete`, ReactiveController hooks `hostConnected` / `hostDisconnected` / `hostUpdate` / `hostUpdated`, the full `lit-html` directive set, `html` / `css` tagged templates) lets agents emit idiomatic webjs code without framework-specific translation. Webjs ships its own implementation under `packages/core/src/` (clean JSDoc-typed JS, no-build), but the public API surface matches lit so the ecosystem's collective lit knowledge transfers directly. Decorators are the one exception (banned by invariant 10, non-erasable TS); the `declare` + `static properties` pattern replaces them.
 
 - **Sensible defaults, overridable.** Memory store in dev, Redis when configured. HTTP caching via standard `Cache-Control`.
-- **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, all with pluggable adapters.
+- **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, file storage, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
 - **JSDoc or erasable TypeScript.** Plain `.js` with JSDoc is default. `.ts` / `.mts` is stripped via Node 24+'s built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap). See invariant 10 + `agent-docs/typescript.md`.
 - **Node 24+ required** for default strip-types behaviour. Enforced by an early preflight: the CLI and the server entry call `assertNodeVersion()` (from `@webjsdev/server`, sourced from `engines.node`), so an older Node fails fast with a clear "you need Node 24+" message naming the found + required version, instead of a cryptic late strip / `fs.watch` failure.
@@ -1109,6 +1109,18 @@ Precedence is env override > package.json > default. A value of `0` disables tha
 | `keepAliveTimeout` | 5s | `webjs.keepAliveTimeoutMs` | `WEBJS_KEEP_ALIVE_TIMEOUT_MS` | Idle window before a kept-alive socket is closed |
 
 node semantics: `headersTimeout` MUST be strictly less than `requestTimeout` to ever fire (node measures both deadlines from the same request start), so a config that sets them inconsistently has `headersTimeout` clamped to just under `requestTimeout`. A value of `0` disables that timeout (node's own no-limit sentinel). Mechanism: `computeServerTimeouts` / `readBodyLimits` in `packages/server/src/body-limit.js`, read once at boot in `dev.js` (`readServerTimeoutsFromApp` / `readBodyLimitsFromApp`) and, for the body limits, stamped on every request scope so `readBody` enforces them too.
+
+---
+
+## File storage: `FileStore` + `diskStore` (streaming, traversal-safe) (#247)
+
+webjs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. It mirrors the cache / session adapter shape: a documented `FileStore` interface, a default local-disk adapter, and a module singleton so an app swaps the backend in one call without touching any call site. `import { getFileStore, setFileStore, diskStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server'`.
+
+- **The `FileStore` interface** operates on web-standard objects only: `put(key, file)` (a `File` / `Blob` / `ReadableStream` / `Uint8Array`) returns `{ key, size, contentType }`; `get(key)` returns `{ body, size, contentType }` (a STREAMING handle, `body` is a stream so a serving route does `new Response(handle.body, { headers })` without reading the file into memory) or `null`; `delete(key)` is idempotent; `url(key)` is the served URL.
+- **`diskStore({ dir?, baseUrl? })`** is the default adapter, rooted at `<cwd>/.webjs/uploads` (gitignore the directory). The write is STREAMING (`file.stream()` -> `Readable.fromWeb` -> `createWriteStream` via `pipeline`), so a large upload uses constant memory. The upstream `maxMultipartBytes` cap (#237) bounds the size before the bytes reach the store.
+- **Traversal-safe keys (security).** Every key resolves to an absolute path under `dir` and is REJECTED if it escapes, using the same `resolve` + `startsWith(dir + sep)` containment guard as the `/public/*` serve path. A key with `..`, an absolute path, a leading slash, a NUL byte, or a backslash throws (`assertSafeKey`) BEFORE any fs op. `generateKey(filename?)` mints an opaque `<uuid>.<ext>` key (whitelisted extension only), the recommended path; never trust a user-supplied filename as a key.
+- **Signed URLs.** `signedUrl(key, { secret, expiresIn })` / `verifySignedUrl(input, secret)` mint + verify an expiring HMAC-SHA256 (base64url) over the exact key plus its expiry, so a serving route gates access without a session lookup. Both the key and the expiry are signed (neither can be tampered with) and the compare is constant-time.
+- **S3-pluggability.** Because the interface is web-standard objects only, an S3 / R2 / GCS adapter is a drop-in (`setFileStore(s3Store(...))`) with no call-site change. webjs ships no S3 SDK. Mechanism: `packages/server/src/file-storage.js`. See `agent-docs/built-ins.md` (the interface) and the "Receive and persist an uploaded file" recipe in `agent-docs/recipes.md`.
 
 ---
 

@@ -46,6 +46,7 @@ export { revalidateTag, revalidateTags } from './src/cache-tags.js';
 export { revalidatePath, revalidateAll } from './src/html-cache.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';
 export { broadcast } from './src/broadcast.js';
+export { diskStore, setFileStore, getFileStore, generateKey, signedUrl, verifySignedUrl, assertSafeKey, DEFAULT_UPLOAD_DIR } from './src/file-storage.js';
 export { json, readBody } from './src/json.js';
 export { sitemap, sitemapIndex } from './src/sitemap.js';
 export { attachWebSocket } from './src/websocket.js';

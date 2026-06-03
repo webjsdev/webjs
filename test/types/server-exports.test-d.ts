@@ -36,7 +36,14 @@ import {
   setStore,
   defaultLogger,
   validateEnv,
+  diskStore,
+  getFileStore,
+  setFileStore,
+  generateKey,
+  signedUrl,
+  verifySignedUrl,
 } from '@webjsdev/server';
+import type { FileStore } from '@webjsdev/server';
 import { testRequest, getCsrf } from '@webjsdev/server/testing';
 import { checkConventions } from '@webjsdev/server/check';
 
@@ -108,6 +115,26 @@ createRequestHandler({});
 // @ts-expect-error sitemap takes an array of entries, not a bare string.
 sitemap('not-an-array');
 
+// File storage (#247): the store surface + helpers resolve real types.
+const fileStore: FileStore = diskStore({ dir: '/tmp/up', baseUrl: '/files' });
+const sameStore: FileStore = getFileStore();
+setFileStore(fileStore);
+const fileKey: string = generateKey('photo.png');
+const signed: string = signedUrl(fileKey, { secret: 's', expiresIn: 60 });
+const verified: { valid: boolean; key: string | null } = verifySignedUrl(signed, 's');
+async function useFileStore() {
+  const put = await fileStore.put(fileKey, new Blob(['x']));
+  const _size: number = put.size;
+  const handle = await fileStore.get(fileKey);
+  const _ct: string | undefined = handle?.contentType;
+  const _u: string = fileStore.url(fileKey);
+  void _size;
+  void _ct;
+  void _u;
+}
+// @ts-expect-error signedUrl requires a secret in its options.
+signedUrl('k', { expiresIn: 60 });
+
 void boot;
 void app;
 void xml;
@@ -131,3 +158,6 @@ void authInst;
 void useSession;
 void useTesting;
 void check;
+void sameStore;
+void verified;
+void useFileStore;

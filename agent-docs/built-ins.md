@@ -240,6 +240,65 @@ if (!session) throw redirect('/login');
 
 JWT sessions by default (stateless, scales horizontally). OAuth providers handle the full redirect flow.
 
+## File storage (`FileStore` + `diskStore`)
+
+webjs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. The model mirrors the cache / session adapters: a documented `FileStore` interface, a default local-disk adapter (`diskStore`), and a module singleton (`setFileStore` / `getFileStore`) so an app swaps the backend in one call without touching any call site.
+
+```js
+import { getFileStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server';
+```
+
+### The `FileStore` interface
+
+Every method operates on web-standard objects, so an S3-compatible adapter is a drop-in (see below).
+
+| Method | Shape |
+|---|---|
+| `put(key, file, opts?)` | Stream a `File` / `Blob` / `ReadableStream` / `Uint8Array` to storage. Returns `{ key, size, contentType }`. |
+| `get(key)` | Returns `{ body, size, contentType }` (a STREAMING handle) or `null`. The serving route does `new Response(handle.body, { headers })`. |
+| `delete(key)` | Remove the object. Idempotent (a missing key is not an error). |
+| `url(key)` | The served URL (`<baseUrl>/<key>` for `diskStore`). |
+| `has(key)` | Whether the key exists (optional). |
+
+`get()` returns a STREAMING handle (`body` is a stream), not a `Blob`, so a serving route streams the file to the client without reading it into memory. The write path is streaming too: `put` pipes `file.stream()` -> `Readable.fromWeb` -> `createWriteStream` via `pipeline`, so a large upload uses constant memory. The upstream body-size cap (#237, `maxMultipartBytes`, default 10 MiB) bounds the upload BEFORE the bytes reach the store; the store does not re-implement that limit, it only stays streaming.
+
+### `diskStore` (the default adapter)
+
+```js
+import { setFileStore, diskStore } from '@webjsdev/server';
+// Default: <cwd>/.webjs/uploads, served under /uploads. Override at startup:
+setFileStore(diskStore({ dir: '/var/data/uploads', baseUrl: '/files' }));
+```
+
+The default store is a `diskStore` rooted at `<cwd>/.webjs/uploads`. Add the uploads directory to `.gitignore` (it holds user data, not source).
+
+### Traversal-safe keys (security guarantee)
+
+Every key is resolved to an absolute path under `dir` and REJECTED if it escapes, using the same `resolve` + `startsWith(dir + sep)` containment guard the `/public/*` serve path uses. A key with `..`, an absolute path, a leading slash, a NUL byte, or a backslash throws (`assertSafeKey`) BEFORE any filesystem operation. Never trust a user-supplied filename as a key; use `generateKey`:
+
+```js
+const key = generateKey(file.name);   // <uuid>.<ext>, opaque + safe
+```
+
+`generateKey(filename?)` returns a random `crypto.randomUUID()` key, preserving only a whitelisted, sanitized extension from the original filename (a malicious `'../../x.sh'` yields a bare opaque key with no path and no unsafe extension).
+
+### Signed URLs (gated serving)
+
+`signedUrl` / `verifySignedUrl` mint and verify an expiring HMAC-SHA256 (base64url) signature over the exact key plus its expiry, so a serving route can gate access without a session lookup. Neither the key nor the expiry can be tampered with (both are signed), and the comparison is constant-time.
+
+```js
+const url = signedUrl(key, { secret: process.env.AUTH_SECRET, expiresIn: 3600 });
+// in the serving route.js:
+const check = verifySignedUrl(new URL(request.url).searchParams, process.env.AUTH_SECRET);
+if (!check.valid) return new Response('Forbidden', { status: 403 });
+```
+
+### S3-pluggability (call-site stability)
+
+The interface operates on web-standard objects only, so an S3 / R2 / GCS / MinIO adapter is a drop-in: it implements the same `put` (PutObject, streaming the body), `get` (GetObject, returning the SDK's response stream as `body`), `delete` (DeleteObject), and `url` (the object / CDN URL). Because the shape is identical, `setFileStore(s3Store({ ... }))` switches the whole app with no call-site change. webjs ships no S3 SDK (no new dependency); the adapter is a thin wrapper an app provides.
+
+See the "Receive and persist an uploaded file" recipe in `agent-docs/recipes.md` for the no-JS `<form>` upload + serving route end to end.
+
 ## Environment variables
 
 | Variable | Effect |
