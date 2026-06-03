@@ -731,8 +731,13 @@ return html`
 ```
 
 The router's `closest('webjs-frame')` detection takes precedence over
-layout markers. Only the frame's content swaps. Use this sparingly -
-folder-based layouts handle 99% of cases.
+layout markers. Only the frame's content swaps. Use this sparingly,
+folder-based layouts handle 99% of cases. When a frame nav's response
+lacks the matching `<webjs-frame id>` (e.g. an auth redirect), the router
+fires a cancelable, bubbling `webjs:frame-missing` event (detail
+`{ frameId, url, document }`) and leaves the frame unchanged rather than
+silently swapping the whole page; call `preventDefault()` to take over
+the outcome (e.g. `location.assign(e.detail.url)`).
 
 ### 5. `loading.ts` for per-segment skeletons
 

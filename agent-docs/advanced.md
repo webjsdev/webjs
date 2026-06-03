@@ -550,8 +550,36 @@ html`<webjs-frame id="activity">…contents…</webjs-frame>`
 On click, the router walks `closest('webjs-frame')` from the click
 target. If a frame is found AND the response contains a matching
 `<webjs-frame id="...">`, the swap is scoped to that frame's children,
-which takes precedence over the layout-marker mechanism. Otherwise the
-router falls through to the layout-marker path.
+which takes precedence over the layout-marker mechanism.
+
+#### `webjs:frame-missing` (response lacks the requested frame)
+
+When a frame-scoped navigation's response does NOT carry a matching
+`<webjs-frame id="...">` (e.g. an auth gate returns a login page without
+the frame), the router does NOT fall through to a full-page swap, because
+that would silently destroy the page. Instead it dispatches a cancelable,
+bubbling `webjs:frame-missing` CustomEvent on the frame element (so a
+document-level listener catches it) and returns.
+
+- **Default (not prevented):** the router emits a one-line `console.warn`
+  and leaves the frame UNCHANGED (its current content stays, now stale).
+  No full-page swap ever happens.
+- **`preventDefault()`:** the framework stays silent and does nothing
+  further. The listener owns the outcome, e.g. it may call `navigate(url)`
+  for a deliberate full swap, or `location.assign(url)` for a hard load.
+
+`event.detail` is `{ frameId, url, document }`, where `frameId` is the
+requested frame id, `url` is the navigation target, and `document` is the
+parsed response document (so a listener can inspect what came back).
+
+```ts
+document.addEventListener('webjs:frame-missing', (e) => {
+  // The frame wasn't in the response (auth redirect, say). Take over
+  // with a deliberate full navigation to the URL the server returned.
+  e.preventDefault();
+  location.assign(e.detail.url);
+});
+```
 
 ### Opt out per link
 

@@ -1473,6 +1473,23 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
       blurOutgoingFocus();
       return;
     }
+    // The response did not carry the requested frame (source null), or the
+    // target frame is gone from the live DOM (target null). Falling through
+    // would wholesale-replace the document, a silent full-page swap that
+    // destroys the page (e.g. an auth redirect returning a login page without
+    // the frame). Surface the contract violation with a cancelable event
+    // instead. Default: warn and leave the frame unchanged. A listener that
+    // calls preventDefault owns the outcome.
+    const evt = new CustomEvent('webjs:frame-missing', {
+      bubbles: true,
+      cancelable: true,
+      detail: { frameId, url: href || (typeof location !== 'undefined' ? location.href : null), document: doc },
+    });
+    (target || document).dispatchEvent(evt);
+    if (!evt.defaultPrevented) {
+      console.warn(`[webjs] frame "${frameId}" was not in the navigation response, leaving it unchanged. Handle "webjs:frame-missing" (preventDefault) to override.`);
+    }
+    return;
   }
 
   // 2. Auto-derived layout-marker swap.
