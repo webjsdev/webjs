@@ -206,7 +206,7 @@ node_modules/@webjsdev/
 
 Starting points: SSR pipeline → `@webjsdev/server/src/ssr.js`. Client hydration → `@webjsdev/core/src/render-client.js`. Client router → `@webjsdev/core/src/router-client.js`. Convention rules → `@webjsdev/server/src/check.js`.
 
-For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts.
+For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts. For live app introspection, the scaffold also wires a read-only **`webjs` MCP server** (`webjs mcp`, in `.claude.json` next to Playwright) exposing four tools (`list_routes`, `list_actions`, `list_components`, `check`) over the same data functions documented here. It mutates nothing, so it is the safe way to ask "what routes / actions / components does this app expose, and does it pass `webjs check`?" without grepping.
 
 ---
 
@@ -743,7 +743,8 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 webjs dev    [--port N]                               # dev server with live reload
 webjs start  [--port N]                               # prod server. No build step, source IS the runtime. Speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
-webjs check  [--rules]                                # correctness validator (--rules lists the checks; report-only, no autofix)
+webjs check  [--rules] [--json]                       # correctness validator (--rules lists the checks; report-only, no autofix). --json emits the structured violations + a summary count as JSON (non-zero exit on violations preserved), for an agent loop
+webjs mcp                                             # read-only MCP server (stdio) exposing the live route table, server actions (with RPC hashes), custom-element tags, and structured check violations, all reusing existing functions. Mutates nothing
 webjs doctor                                          # project-health checklist (Node, tsconfig, env drift, vendor pins, @webjsdev versions, git hook); non-zero exit on a hard fail so CI can gate
 webjs types                                           # generate .webjs/routes.d.ts (typed Route union + per-route params; #258). Opt-in; webjs dev emits it automatically
 webjs typecheck [tsc args...]                         # type-check the app with the project's own tsc --noEmit (non-zero on errors; needs typescript installed)
