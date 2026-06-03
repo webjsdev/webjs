@@ -915,6 +915,63 @@ Time-based eviction is handled by the store TTL (= `revalidate` seconds). This P
 
 ---
 
+## Server cache() data invalidation: tags + `revalidateTag` (#242)
+
+`revalidatePath` (above) evicts cached HTML; `revalidateTag` evicts cached `cache()` DATA. They are separate functions for two distinct caches, documented together as **the server cache invalidation surface**: a mutation often wants to evict BOTH a tagged data read AND a cached HTML path. `import { revalidateTag, revalidateTags } from '@webjsdev/server'`.
+
+The problem: `cache(fn, { key, ttl })` could only be invalidated via `wrapped.invalidate()` from the module that owns the wrapper, and even then only the no-args base key (arg-specific keys leaked until TTL). There was no way for an unrelated mutation (createComment) to invalidate a related read (postById) without importing every cached wrapper.
+
+### The `tags` option
+
+`cache(fn, { key, ttl, tags })` accepts `tags` as either a static `string[]` (every cached entry of this function shares them) or a **function** `(...args) => string[]` so a per-arg read tags with the entity id:
+
+```ts
+// modules/posts/queries/post-by-id.server.ts
+'use server';
+import { cache } from '@webjsdev/server';
+import { prisma } from '../../../lib/prisma.server.ts';
+
+export const postById = cache(
+  async (id: string) => prisma.post.findUnique({ where: { id } }),
+  { key: 'post', ttl: 300, tags: (id) => ['post:' + id] } // per-entity tag
+);
+
+export const listPosts = cache(
+  async () => prisma.post.findMany(),
+  { key: 'posts', ttl: 60, tags: ['posts'] } // static tag, all entries
+);
+```
+
+When a result is stored, the framework also records a `tag -> cacheKey` mapping in a THIN key-index over the existing store (`cache:tag:<tag>` holds a JSON array of cache keys), so the per-arg entry becomes findable by tag.
+
+### Action-driven invalidation
+
+A `'use server'` mutation calls `revalidateTag(tag)` after writing. It works ACROSS modules: the read tagged `'posts'` in the posts module is evicted by a `revalidateTag('posts')` issued from the comments module, with no import of the wrapper.
+
+```ts
+// modules/comments/actions/create-comment.server.ts
+'use server';
+import { revalidateTag, revalidatePath } from '@webjsdev/server';
+export async function createComment(input) {
+  await prisma.comment.create({ data: input });
+  await revalidateTag('post:' + input.postId); // postById(postId) recomputes
+  await revalidatePath('/blog');               // also evict the cached HTML
+  return { success: true };
+}
+```
+
+`revalidateTag('post:5')` evicts ONLY the entry tagged `post:5` (the id-5 read), leaving other ids cached. `revalidateTags([...])` clears several tags in one call. Full automatic invalidation (inferring which tags a mutation touched) is deliberately NOT done; the explicit call is the surface.
+
+### Arg-key-leak handling
+
+The existing `invalidate()` (which clears only the no-args base key) is unchanged and still works. Tags are now the way to invalidate arg-specific reads: tag a per-arg read with `tags: (id) => ['post:' + id]` and evict the exact id with `revalidateTag('post:' + id)`. An untagged `cache()` is unaffected by any `revalidateTag`.
+
+### Multi-instance (Redis) caveat
+
+The tag index is a plain read-modify-write of a JSON array, NOT atomic across processes (mirrors the #241 limitation). With a shared Redis store, `revalidateTag` deletes the keys it can see and reaches every instance for those keys, but two instances appending to the same tag concurrently can lose an append (last write wins), so a freshly-stored key on a peer might miss eviction and live until its TTL. The tag-index entry carries the cache TTL so it self-prunes. For strict cross-instance invalidation, prefer a short `ttl` as the floor. Mechanism: `packages/server/src/cache-tags.js` (the index + `revalidateTag` / `revalidateTags`), wired from `cache-fn.js`'s store write.
+
+---
+
 ## Request ingress hardening: body-size limit (413) + server timeouts (on by default)
 
 The server caps inbound request bodies and bounds connection lifetimes by default, so an uncapped RPC / route / form body is not a memory-exhaustion vector and a slow / hung connection is not a slowloris vector. Both are web-standard / node:http-native, configurable, and apply with secure defaults when unset (issue #237).
