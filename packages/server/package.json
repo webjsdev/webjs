@@ -4,14 +4,25 @@
   "type": "module",
   "description": "webjs dev/prod server: SSR, router, API, server actions, live reload",
   "main": "index.js",
+  "types": "./index.d.ts",
   "exports": {
-    ".": "./index.js",
-    "./check": "./src/check.js",
-    "./testing": "./src/testing.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./check": {
+      "types": "./src/check.d.ts",
+      "default": "./src/check.js"
+    },
+    "./testing": {
+      "types": "./src/testing.d.ts",
+      "default": "./src/testing.js"
+    },
     "./webjs-config.schema.json": "./webjs-config.schema.json"
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "src",
     "webjs-config.schema.json",
     "README.md"

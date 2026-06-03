@@ -84,6 +84,41 @@ re-exported from the main entry). The
 (below) so an editor can resolve it from
 `node_modules/@webjsdev/server/webjs-config.schema.json`.
 
+### Type overlay (#310)
+
+The package ships a hand-authored `.d.ts` overlay plus `types` export
+conditions, so a `strict` + `nodenext` TypeScript app's `import { ... } from
+'@webjsdev/server'` resolves real types instead of TS7016. The runtime stays
+plain `.js` + JSDoc; the overlay is types-only with zero runtime cost.
+
+- [`index.d.ts`](./index.d.ts) types every named export of `index.js`. The
+  high-traffic public API (`createRequestHandler`, `startServer`, `cors`,
+  `cache`, `createAuth`, `rateLimit`, `sitemap` / `sitemapIndex`, `Session`,
+  `json`, `readBody`, the `revalidate*` family, the context helpers,
+  `memoryStore` / `redisStore` / `getStore` / `setStore`, the auth providers)
+  is precisely typed from each source function's JSDoc; lower-traffic internals
+  (scanner / importmap / module-graph / vendor) get reasonable structural
+  declarations. It REUSES the core prop / metadata types
+  (`PageProps` / `LayoutProps` / `RouteHandlerContext`) rather than redefining
+  them, and defines the one server-owned shared type, `ActionResult<T>`
+  (`@webjsdev/core` does not export it). The `./testing` types are pulled in via
+  `export * from './src/testing.d.ts'` (no duplication).
+- [`src/check.d.ts`](./src/check.d.ts) types the `./check` subpath
+  (`checkConventions`, `RULES`, `Violation`).
+- [`src/testing.d.ts`](./src/testing.d.ts) types the `./testing` subpath (the
+  handle() harness helpers).
+
+In `package.json`, the top-level `"types"` plus each `exports` entry's `types`
+condition (FIRST in the object, as nodenext requires) wire the resolution; the
+top-level `index.d.ts` is added to the `files` allowlist (`src/*.d.ts` ships via
+the globbed `src`). **A new export added to `index.js` MUST get a declaration in
+`index.d.ts`,** enforced by the drift test
+`packages/server/test/types/exports-drift.test.mjs` (asserts the declared set
+equals the runtime export set); the type fixture + TS7016 counterfactual live at
+the repo-root `test/types/server-exports.test-d.ts` + `test/types/server-types.test.mjs`
+(every `.test-d.ts` lives there, outside `packages/`, so the buildless-no-`.ts`
+invariant does not flag it).
+
 ## The `webjs` package.json config block (typed surface, #259)
 
 The `webjs.*` keys an app sets in `package.json` are typed and validated
