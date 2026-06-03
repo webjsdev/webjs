@@ -1100,6 +1100,25 @@ export async function createRequestHandler(opts) {
  * etc.) sitting in front of this process. See the deployment docs for
  * the recommended topology.
  *
+/**
+ * Paths under the app root whose changes must NOT trigger a dev rebuild.
+ * `node_modules` / `.git` are noise. `.webjs/` is the framework's generated
+ * artefact dir (the #258 routes.d.ts and the vendor pin) that the dev server
+ * itself writes on startup and on every rebuild, so without this skip the
+ * write fires a watch event, triggers a rebuild, re-writes the file, and loops
+ * forever. `prisma/dev*` / `prisma/migrations` churn during db:migrate. The
+ * prisma branch is prefix-only (no trailing separator) so the SQLite sidecars
+ * `prisma/dev.db` / `prisma/dev.db-journal` match too; the others stay
+ * separator-anchored so an unrelated name like `node_modules.bak/foo` does not.
+ *
+ * @param {string} filename relative path from an fs.watch `event.filename`
+ * @returns {boolean} true when the change should be ignored
+ */
+export function shouldIgnoreWatchPath(filename) {
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/.test(filename || '');
+}
+
+/**
  * @param {{
  *   appDir: string,
  *   port?: number,
@@ -1135,18 +1154,9 @@ export async function startServer(opts) {
     // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
     // Node 24. No external dep needed.
     //
-    // fs.watch returns relative paths in event.filename. We apply
-    // the same ignore filter chokidar used before: skip
-    // node_modules, .git, and prisma's dev artefacts (dev.db,
-    // dev.db-journal, migrations/) which the dev server writes
-    // during db:migrate and would otherwise loop.
-    //
-    // The prisma branch uses prefix-only matching (no required
-    // trailing separator) so the SQLite sidecar files like
-    // `prisma/dev.db` and `prisma/dev.db-journal` are ignored too.
-    // node_modules / .git stay separator-anchored so unrelated
-    // names like `node_modules.bak/foo` don't get caught.
-    const IGNORE = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/;
+    // fs.watch returns relative paths in event.filename. `shouldIgnoreWatchPath`
+    // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
+    // prisma's dev artefacts so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
     (async () => {
@@ -1154,7 +1164,7 @@ export async function startServer(opts) {
         const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
-          if (IGNORE.test(filename)) continue;
+          if (shouldIgnoreWatchPath(filename)) continue;
           rebuild();
         }
       } catch (err) {
