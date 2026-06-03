@@ -131,6 +131,13 @@ export const metadata = {
     { href: '/public/fonts/Inter.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
   ],
 
+  // ----- Connection-warming hints (#243) -----
+  preconnect: [                                      // → <link rel="preconnect">
+    'https://api.example.com',                       //   warms DNS + TLS + TCP
+    { url: 'https://fonts.gstatic.com', crossorigin: true },
+  ],
+  dnsPrefetch: 'https://analytics.example.com',      // → <link rel="dns-prefetch"> (DNS only)
+
   // ----- Catch-all -----
   other: {
     'msvalidate.01': 'bing-token',
@@ -187,6 +194,43 @@ returns a `304 Not Modified` with no body. A `no-store` or `private` page
 gets NO ETag and never 304s, so private / per-user content is never
 revalidated across sessions. A streamed Suspense response is not ETagged.
 See the conditional-GET section in the framework root `AGENTS.md`.
+
+## Connection-warming: `preconnect` / `dnsPrefetch` (#243)
+
+Warm a cross-origin connection the page is about to use (an API host, a
+font / image CDN) so the browser pays the DNS + TLS + TCP cost ahead of the
+first real request:
+
+```ts
+export const metadata = {
+  preconnect: [
+    'https://api.example.com',                              // bare URL
+    { url: 'https://fonts.gstatic.com', crossorigin: true },// crossorigin set
+  ],
+  dnsPrefetch: 'https://analytics.example.com',             // a single URL
+};
+```
+
+- **`preconnect`** emits `<link rel="preconnect" href="..." [crossorigin]>`,
+  warming DNS + TLS + TCP. Each entry is a URL string or
+  `{ url, crossorigin? }` (`crossorigin: true` / `''` emits a bare
+  `crossorigin`; a string like `'anonymous'` emits its value). A font CDN
+  needs `crossorigin`.
+- **`dnsPrefetch`** emits `<link rel="dns-prefetch" href="...">`, which
+  resolves DNS only (a lighter-weight precursor; it never carries
+  `crossorigin`).
+- Each field takes a URL string, the object form, or an array of either.
+  Every href is HTML-escaped.
+
+**Auto vendor preconnect.** For an UNPINNED app resolving vendors live from
+a cross-origin CDN, the framework auto-emits ONE
+`<link rel="preconnect" href="<cdn-origin>" crossorigin>` (the resolved
+vendor CDN origin, e.g. `https://ga.jspm.io`, derived from the importmap so
+a `--from jsdelivr` app preconnects to jsdelivr), so the browser warms that
+connection before the importmap resolves. It is DEDUPED against an
+author-declared `preconnect` to the same origin, and NONE is emitted for a
+same-origin pinned app (vendors served from the app's own origin) or an app
+with no cross-origin vendors.
 
 ## JSON-LD structured data (`jsonLd`)
 

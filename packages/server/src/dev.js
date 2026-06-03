@@ -115,6 +115,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
+import { setAssetRoots, clearAssetHashCache } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -471,6 +472,15 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core.js')) &&
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
+
+  // Content-hash asset URLs for immutable caching (issue #243). Bind the
+  // asset-hash module to the app + core roots and enable fingerprinting in
+  // PROD only. In dev `withAssetHash` stays a pure no-op (never enabled), so
+  // the dev importmap / boot / preload output is byte-identical to before.
+  // This runs AFTER setBasePath / setCoreInstall, but those recompute the
+  // importmap hash with `{ fingerprint: false }`, so the boot-published build
+  // id is a stable deploy fingerprint independent of per-file content hashes.
+  setAssetRoots({ appDir, coreDir, enabled: !dev });
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no
@@ -834,6 +844,11 @@ export async function createRequestHandler(opts) {
     // best-effort (see emitRouteTypes).
     if (dev) void emitRouteTypes();
     clearVendorCache();
+    // Content-hash asset cache (#243): clear so a changed file re-hashes and
+    // its emitted `?v` busts the stale immutable copy. A no-op in dev (the
+    // module is never enabled there), kept for correctness + the deploy-busts
+    // regression test, which clears + re-hashes to observe a changed `?v`.
+    clearAssetHashCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.
@@ -1131,7 +1146,12 @@ export async function createRequestHandler(opts) {
       // interactivity site-wide. Matched on the decoded path, like handleCore.
       let assetPath = probePath;
       try { assetPath = decodeURIComponent(probePath); } catch { /* keep raw on malformed escape */ }
-      const staticResp = await tryServeFrameworkStatic(assetPath, req.method.toUpperCase(), { coreDir, appDir, dev });
+      // Content-hash fingerprint (#243): a `?v=` query means an immutable,
+      // content-addressed asset url. Detected off the raw request url here
+      // (probePath was parsed from it above).
+      let assetVersioned = false;
+      try { assetVersioned = new URL(req.url).searchParams.has('v'); } catch { /* none */ }
+      const staticResp = await tryServeFrameworkStatic(assetPath, req.method.toUpperCase(), { coreDir, appDir, dev, versioned: assetVersioned });
       if (staticResp) return staticResp;
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
@@ -1415,11 +1435,15 @@ export async function startServer(opts) {
  *
  * @param {string} path decoded pathname
  * @param {string} method upper-cased HTTP method
- * @param {{ coreDir: string, appDir: string, dev: boolean }} ctx
+ * @param {{ coreDir: string, appDir: string, dev: boolean, versioned?: boolean }} ctx
+ *   `versioned` is true when the request carried a `?v=` query (a
+ *   content-hash-fingerprinted url, issue #243); the core module is then served
+ *   `immutable` (1 year) instead of the 1h fallback, since the hash in the url
+ *   busts the cache on the next deploy.
  * @returns {Promise<Response|null>} a Response, or null when path is not one of these assets
  */
 async function tryServeFrameworkStatic(path, method, ctx) {
-  const { coreDir, appDir, dev } = ctx;
+  const { coreDir, appDir, dev, versioned } = ctx;
 
   // Dev live-reload client.
   if (path === '/__webjs/reload.js') {
@@ -1451,7 +1475,11 @@ async function tryServeFrameworkStatic(path, method, ctx) {
     if (abs !== coreDir && !abs.startsWith(coreDir + sep)) {
       return new Response('forbidden', { status: 403 });
     }
-    return fileResponse(abs, { dev, immutable: false });
+    // A `?v=<hash>` request is content-addressed, so serve it `immutable` (#243):
+    // the hash busts the cache on the next core bump, so the regression the
+    // un-versioned 1h cap guards against (a stale immutable core after a bump)
+    // cannot recur. An un-fingerprinted request keeps the 1h fallback.
+    return fileResponse(abs, { dev, immutable: !!versioned });
   }
 
   // Vendor URL handler for `webjs vendor pin --download` mode only. In default
@@ -1494,6 +1522,11 @@ async function handleCore(req, ctx) {
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
   const method = req.method.toUpperCase();
+  // Content-hash fingerprint (#243): a `?v=` query marks a content-addressed
+  // asset url that may be served `immutable` (the hash busts the cache on a
+  // byte change). The pathname (query stripped by `url.pathname`) resolves the
+  // file as today; only the cache header changes when `?v` is present.
+  const versioned = url.searchParams.has('v');
 
   // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) and the
   // framework-internal static assets (`/__webjs/core/*`, `/__webjs/reload.js`,
@@ -1501,7 +1534,7 @@ async function handleCore(req, ctx) {
   // so they are not repeated here. This fallback covers the (currently
   // unreachable) case of handleCore being entered for one of those assets, so
   // the routing stays correct if a future caller bypasses the early path.
-  const frameworkStatic = await tryServeFrameworkStatic(path, method, { coreDir, appDir, dev });
+  const frameworkStatic = await tryServeFrameworkStatic(path, method, { coreDir, appDir, dev, versioned });
   if (frameworkStatic) return frameworkStatic;
 
   // Internal server-action RPC endpoint
@@ -1559,7 +1592,8 @@ async function handleCore(req, ctx) {
     if (!abs.startsWith(publicRoot)) {
       return new Response(null, { status: 404 });
     }
-    if (await exists(abs)) return fileResponse(abs, { dev, immutable: false });
+    // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
+    if (await exists(abs)) return fileResponse(abs, { dev, immutable: versioned });
   }
 
   // User source modules (served as ES modules, with action-file rewriting).
@@ -1631,13 +1665,15 @@ async function handleCore(req, ctx) {
         elidableComponents: state.elidableComponents,
         appDir,
       };
+      // A `?v=<hash>` app-module request is content-addressed -> immutable
+      // (#243); an un-fingerprinted request keeps the 1h fallback.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts, state.tsCache);
+        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned);
       }
       if (/\.m?js$/.test(abs)) {
-        return jsModuleResponse(abs, dev, elideOpts);
+        return jsModuleResponse(abs, dev, elideOpts, versioned);
       }
-      return fileResponse(abs, { dev, immutable: false });
+      return fileResponse(abs, { dev, immutable: versioned });
     }
   }
 
@@ -1991,8 +2027,10 @@ async function fileResponse(abs, opts) {
  * @param {string} abs
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} elideOpts
+ * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
+ *   serve `immutable` (1 year) instead of the 1h fallback. Dev stays `no-cache`.
  */
-async function jsModuleResponse(abs, dev, elideOpts) {
+async function jsModuleResponse(abs, dev, elideOpts, immutable) {
   let source;
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
@@ -2003,7 +2041,7 @@ async function jsModuleResponse(abs, dev, elideOpts) {
   // weak ETag + 304 (see fileResponse).
   const headers = {
     'content-type': 'application/javascript; charset=utf-8',
-    'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+    'cache-control': dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
     [BUFFERED_MARKER]: '1',
   };
   return new Response(code, { status: 200, headers });
@@ -2049,15 +2087,21 @@ async function stripTs(source, _abs) {
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
  * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
+ * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
+ *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
+ *   the same bytes regardless; only the cache header varies. Dev stays `no-cache`.
  */
-async function tsResponse(abs, dev, elideOpts, cache) {
+async function tsResponse(abs, dev, elideOpts, cache, immutable) {
+  // The body bytes are identical with or without `?v`; only the cache header
+  // changes, so the per-mtime cache stays a single entry.
+  const cacheControl = dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
   const st = await stat(abs);
   const cached = cache.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
     return new Response(cached.code, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
-        'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+        'cache-control': cacheControl,
         [BUFFERED_MARKER]: '1',
       },
     });
@@ -2115,7 +2159,7 @@ async function tsResponse(abs, dev, elideOpts, cache) {
   return new Response(code, {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
-      'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+      'cache-control': cacheControl,
       [BUFFERED_MARKER]: '1',
     },
   });

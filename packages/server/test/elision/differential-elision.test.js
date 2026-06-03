@@ -46,6 +46,15 @@ function maskJsSet(html) {
     .replace(/<script type="importmap"[\s\S]*?<\/script>/g, '')
     .replace(/<script type="module"[\s\S]*?<\/script>/g, '')
     .replace(/<link rel="modulepreload"[^>]*>/g, '')
+    // The auto vendor preconnect / dns-prefetch (#243) is a connection-warming
+    // HINT derived from the served vendor map, which legitimately differs on vs
+    // off (a vendor reachable only through an elided component is pruned on the
+    // ON side, so its preconnect drops too, exactly like its modulepreload). It
+    // is part of the same JS-loaded set, so mask it. The blog corpus declares
+    // no `metadata.preconnect` of its own, so every preconnect/dns-prefetch
+    // here is the auto vendor one.
+    .replace(/<link rel="preconnect"[^>]*>/g, '')
+    .replace(/<link rel="dns-prefetch"[^>]*>/g, '')
     .replace(/ data-webjs-build="[^"]*"/g, '')
     // Render-clock nondeterminism: the home page SSRs a live wall-clock time
     // ("posts loaded · 3:10:10 AM"), which ticks between the on and off
