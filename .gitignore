@@ -55,3 +55,6 @@ Thumbs.db
 
 # test artifacts
 coverage/
+
+# Playwright/chrome-devtools MCP console-log output
+.playwright-mcp/
