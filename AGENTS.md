@@ -15,7 +15,7 @@ recipes for common tasks. Keep it in sync whenever behaviour changes.
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router, WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
 | `agent-docs/deployment.md` | Production, runtime targets, embedded use |
-| `agent-docs/testing.md` | Unit, browser, convention validation |
+| `agent-docs/testing.md` | Unit, browser, convention validation, the `handle()` test harness (`@webjsdev/server/testing`) |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself) |
 | `agent-docs/recipes.md` | Page / route / action / component recipes |
 | `agent-docs/lit-muscle-memory-gotchas.md` | **READ FIRST** when writing components. Lit patterns that break webjs SSR or reactivity, with the webjs-shaped fix for each |

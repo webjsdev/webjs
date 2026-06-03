@@ -52,3 +52,19 @@ export { getSerializer, setSerializer, defaultSerializer } from './src/serialize
 
 // Auth (NextAuth-style)
 export { createAuth, Credentials, Google, GitHub } from './src/auth.js';
+
+// Test harness helpers (issue #267): thin builders over handle()
+export {
+  testRequest,
+  toRequest,
+  getCsrf,
+  readCsrfCookie,
+  getSetCookies,
+  cookiesToHeader,
+  withCookies,
+  withSessionCookie,
+  loginAndGetCookies,
+  actionEndpoint,
+  invokeActionForTest,
+  rawActionRequest,
+} from './src/testing.js';

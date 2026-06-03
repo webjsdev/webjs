@@ -116,6 +116,102 @@ package, it goes in that package's `test/`.
 
 ---
 
+## The handle() test harness (`@webjsdev/server/testing`)
+
+`createRequestHandler({ appDir }).handle(request)` drives the FULL request
+pipeline (middleware, routing, SSR, page actions, server-action RPC, auth +
+CSRF) and returns a native `Response`. It is the same entry the framework's own
+suite uses, so the most realistic way to test an app is to fire a `Request`
+through it and assert on the `Response`, no spawned process and no network.
+
+`@webjsdev/server/testing` ships THIN builders over that `handle()`. They are
+not a test framework: each is a few lines over native `Request` / `Response`,
+and they reuse the REAL cookie / header names and the REAL wire serializer (so a
+test exercises the production contract, never a parallel fake).
+
+```js
+import { createRequestHandler } from '@webjsdev/server';
+import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+  from '@webjsdev/server/testing';
+
+const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
+```
+
+### testRequest: fire a request, get the Response
+
+```js
+const res = await testRequest(app.handle, '/about');
+assert.equal(res.status, 200);
+assert.match(await res.text(), /About/);
+```
+
+A bare path (`/about`) is prefixed with a dummy origin (the pipeline only reads
+`pathname` + `search`); a full URL string or a pre-built `Request` works too.
+The optional third arg is a standard `RequestInit` (method, headers, body).
+
+### getCsrf + the auth/session helpers
+
+The action RPC endpoint requires a `x-webjs-csrf` header matching the
+`webjs_csrf` cookie issued on the first SSR response. `getCsrf(handle)` does the
+initial GET and returns `{ token, cookie, header }` so a test can send a
+CSRF-valid request. `loginAndGetCookies(handle, { email, password })` drives the
+REAL credentials login through `handle()` (the `createAuth` route handler) and
+captures the genuine signed session `Set-Cookie`, so a follow-up request can hit
+a protected route as the logged-in user:
+
+```js
+// unauthenticated protected route is gated
+const gated = await testRequest(app.handle, '/dashboard');
+assert.equal(gated.status, 302);                     // -> /login
+
+// real login, then reuse the captured cookie
+const { cookies } = await loginAndGetCookies(app.handle, { email, password });
+const dash = await testRequest(app.handle, '/dashboard', withSessionCookie({}, cookies));
+assert.equal(dash.status, 200);
+```
+
+The session cookie is the production cookie, captured from a real login, never a
+hand-built shape. (The default login path is `/api/auth/signin/credentials`, the
+route `createAuth`'s handler routes a credentials login through; override
+`opts.loginPath` / `opts.body` for a different wiring.)
+
+### invokeActionForTest: round-trip an action through the REAL endpoint
+
+```js
+// modules/posts/actions/create.server.ts exports createPost
+const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);
+```
+
+`invokeActionForTest` serializes `args` with the webjs serializer (exactly as
+the generated client stub does), POSTs them to the REAL
+`/__webjs/action/<hash>/<fn>` endpoint with a valid CSRF cookie + header, and
+parses the response with the serializer. The action is addressed by the SHA-256
+hash of its `.server.{js,ts}` file path (absolute or appDir-relative) plus the
+function name, the same scheme the stub uses (`actionEndpoint(appDir, file, fn)`
+returns that path if you need it directly).
+
+**Prefer this over a direct import of the action.** A direct import calls the
+function in-process and bypasses three production concerns the endpoint
+enforces:
+
+- **the wire serializer** (a `Date` / `Map` / `BigInt` arg or return is
+  genuinely encoded + decoded, not passed by reference),
+- **CSRF** (a missing token is a 403),
+- **prod error sanitization** (a thrown error surfaces as a sanitized
+  message-only payload, never the stack or extra error fields).
+
+So `invokeActionForTest` catches a serializer / CSRF / error-sanitization
+regression a direct import cannot see. For the negative cases (assert a 403 on
+missing CSRF, or inspect a sanitized 500 body), `rawActionRequest(...)` returns
+the raw `Response` and never throws on a non-2xx; pass `{ omitCsrf: true }` to
+deliberately drop the CSRF pair.
+
+The saas scaffold's `test/auth/auth.test.ts` is a worked example: it drives the
+unauthenticated-redirect gate, then a real signup -> login -> dashboard flow
+through `handle()` using these helpers.
+
+---
+
 ## App layout (what users get)
 
 A scaffolded webjs app has one `test/` directory at its root,

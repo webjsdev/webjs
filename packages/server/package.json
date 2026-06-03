@@ -7,6 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./check": "./src/check.js",
+    "./testing": "./src/testing.js",
     "./webjs-config.schema.json": "./webjs-config.schema.json"
   },
   "files": [
