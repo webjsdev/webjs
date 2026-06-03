@@ -88,10 +88,12 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // Pause the infinite accent-drift (a fixed full-viewport gradient) while
-      // the tab is hidden so it stops repainting in the background.
+      // Pause every infinite animation (the accent-drift gradient and the
+      // footer heart) while the tab is hidden so nothing repaints in the
+      // background. A class is used because animation-play-state does not
+      // inherit, so an inline style on <html> would miss descendant animations.
       document.addEventListener('visibilitychange', function () {
-        document.documentElement.style.animationPlayState = document.hidden ? 'paused' : 'running';
+        document.documentElement.classList.toggle('paused', document.hidden);
       });
       document.addEventListener('click', function (e) {
         var t = e.target;
@@ -189,6 +191,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         animation: heart-pump 1.4s ease-in-out infinite;
         transform-origin: center;
       }
+      /* Hidden-tab pause (the .paused class is toggled on a visibilitychange).
+         Covers both the :root accent-drift and the descendant heart. */
+      :root.paused, :root.paused .heart { animation-play-state: paused; }
       .glow-layer {
         position: fixed; inset: 0; z-index: 0; pointer-events: none;
         background:
