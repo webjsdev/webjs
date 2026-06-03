@@ -858,6 +858,54 @@ node semantics: `headersTimeout` MUST be strictly less than `requestTimeout` to 
 
 ---
 
+## Observability: access log, request id, onError hook, build-info (on by default) (#239)
+
+Four standards-native observability surfaces, wired at the single response funnel in `dev.js`'s `handle()` (the same seam that applies security headers), so they cover pages, route handlers, server actions, and assets uniformly.
+
+### Per-request access log
+
+Every handled request emits ONE structured `info` line through the pluggable `logger` after the response is produced, carrying `method`, `path`, `status`, `durationMs`, and `requestId`. Never logs request bodies or secrets. The default logger writes one JSON object per line in prod, a readable line in dev. The framework's own `/__webjs/*` probe / static traffic is suppressed so it does not spam; app routes (including app `/api/*`) are logged.
+
+```jsonc
+{"level":"info","msg":"request","requestId":"4f1c…","method":"GET","path":"/dashboard","status":200,"durationMs":12.4}
+```
+
+### Request id / correlation id (`X-Request-Id` + `requestId()`)
+
+Each request gets a correlation id, the native `crypto.randomUUID()`. An inbound `X-Request-Id` from a trusted upstream proxy is honored instead (one trace id across services); a missing or malformed inbound value falls back to a minted id (the inbound value is length-capped and token-charset validated, so a hostile value is never echoed back). The id is set on the response as `X-Request-Id` (never clobbering one the app already set), included in the access log and the error log, and readable in any server-side code with `requestId()` from `@webjsdev/server` (returns `null` outside a request scope), the same context-helper ergonomics as `headers()` / `cookies()`.
+
+```ts
+import { requestId } from '@webjsdev/server';
+export async function GET() {
+  return Response.json({ traceId: requestId() }); // same id as the X-Request-Id header
+}
+```
+
+### `onError` hook (APM / Sentry integration point)
+
+Register an error sink via `createRequestHandler({ onError })` (and `startServer({ onError })`). It is called with `(error, { request, requestId, phase })` whenever the request pipeline catches an unhandled error: the 500 path (a thrown route handler / middleware / page render, labeled phase `handle` / `middleware` / `ssr` / `metadata`) or a server action that throws unexpectedly (phase `action`). **The contract is best-effort:** a throwing `onError` is caught and ignored so it can never crash the response, and the hook is purely additive (webjs's existing sanitized 500, with only `error.message` in prod and never the stack, is unchanged). The hook fires BEFORE the sanitized response is sent, so the sink sees the original error. The `requestId` ties the report to the access-log line.
+
+```ts
+const app = await createRequestHandler({
+  appDir: process.cwd(),
+  onError(error, { request, requestId, phase }) {
+    Sentry.captureException(error, { tags: { requestId, phase } });
+  },
+});
+```
+
+### Build-info endpoint (`GET /__webjs/version`)
+
+Returns JSON describing the live build, alongside the `/__webjs/health` and `/__webjs/ready` probes, so a deploy can curl it to confirm which build is serving. No secrets; answered before the analysis warms (like the other probes), so it responds on a cold instance. `Cache-Control: no-store`.
+
+```jsonc
+{ "version": "0.8.10", "build": "<importmap-hash>", "node": "v24.4.0", "uptime": 38.21 }
+```
+
+`version` is the `@webjsdev/server` framework version (read from its own `package.json`), `build` is the published importmap build id (the same fingerprint the client router reads from `data-webjs-build`; empty until the vendor map resolves), `node` is the running Node version, `uptime` is process uptime in seconds. Mechanism: `requestId()` / `setRequestId` in `packages/server/src/context.js`, `buildInfo` / `buildInfoResponse` in `packages/server/src/build-info.js`, all wired in `packages/server/src/dev.js`.
+
+---
+
 ## CONVENTIONS.md and webjs check: two surfaces, split by nature
 
 Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. It is the source of truth for **project conventions**: how code is organized, named, and tested (modules layout, action placement, one-function-per-file, the testing approach, styling, git workflow). These are preferences a reasonable project could do differently, so they are guidance, customizable directly in the prose (sections marked `<!-- OVERRIDE -->`), not enforced by any tool.

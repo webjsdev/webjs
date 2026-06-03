@@ -68,7 +68,8 @@ import {
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
 import { applyEnvValidation } from './env-schema.js';
-import { withRequest, setCspNonce, setBodyLimits } from './context.js';
+import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from './context.js';
+import { buildInfoResponse } from './build-info.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
@@ -79,6 +80,38 @@ import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 /** PascalCase → kebab-case for a helpful diagnostic example tag name. */
 function kebab(name) {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+/**
+ * Per-request correlation id (issue #239). Honor an inbound `X-Request-Id`
+ * from a trusted upstream proxy so a trace id propagates across services; mint
+ * a fresh `crypto.randomUUID()` otherwise. The inbound value is length-capped
+ * and validated against a conservative token charset so a hostile client
+ * cannot inject control chars / a header-splitting payload (the value is
+ * echoed back in the `X-Request-Id` response header). On any mismatch we fall
+ * back to a minted id rather than trust the junk.
+ *
+ * @param {Request} req
+ * @returns {string}
+ */
+function resolveRequestId(req) {
+  const inbound = req.headers.get('x-request-id');
+  if (inbound && inbound.length <= 200 && /^[A-Za-z0-9._-]+$/.test(inbound)) return inbound;
+  return crypto.randomUUID();
+}
+
+/**
+ * Whether a path should be access-logged (issue #239). The framework's own
+ * `/__webjs/*` probes, static runtime assets, and the dev SSE reload stream
+ * are high-frequency infrastructure traffic, not app requests, so logging them
+ * would just spam the access log. App routes (including app-authored
+ * `/api/*`) are logged.
+ *
+ * @param {string} pathname
+ * @returns {boolean}
+ */
+function shouldAccessLog(pathname) {
+  return !pathname.startsWith('/__webjs/');
 }
 import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
@@ -294,6 +327,7 @@ export async function readServerTimeoutsFromApp(appDir) {
  *   appDir: string,
  *   dev?: boolean,
  *   logger?: import('./logger.js').Logger,
+ *   onError?: (error: unknown, ctx: { request: Request, requestId: string|null, phase: string }) => void,
  *   onReload?: () => void,
  * }} opts
  */
@@ -321,6 +355,30 @@ export async function createRequestHandler(opts) {
   await applyEnvValidation(appDir, { dev: !!opts.dev });
   const dev = !!opts.dev;
   const logger = opts.logger || defaultLogger({ dev });
+  // APM / Sentry integration point (issue #239). Called whenever the request
+  // pipeline catches an unhandled error: the top-level handle() catch (the
+  // last-resort 500), an unexpected throw inside the produce() funnel, or a
+  // middleware that threw. BEST-EFFORT by contract: a throwing onError is
+  // caught here so it can never crash the response, and the framework's own
+  // sanitized 500 / existing error behavior is unchanged (the hook is purely
+  // additive). The sink receives the error plus the correlation id so it can
+  // tie the report to the same id the access log and X-Request-Id carry.
+  const onError = typeof opts.onError === 'function' ? opts.onError : null;
+  /**
+   * Invoke the app's onError sink defensively. The phase is a coarse label of
+   * where the pipeline caught the error, for the sink's own grouping.
+   * @param {unknown} error
+   * @param {Request} request
+   * @param {string} phase
+   */
+  function reportError(error, request, phase) {
+    if (!onError) return;
+    try {
+      onError(error, { request, requestId: getRequestId(), phase });
+    } catch (e) {
+      logger.error?.('[webjs] onError hook threw (ignored)', { err: String(e) });
+    }
+  }
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
   // URLs depending on whether the resolved @webjsdev/core install
@@ -679,6 +737,14 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function handle(req) {
     return withRequest(req, async () => {
+      // Correlation id (issue #239): honor an inbound X-Request-Id from a
+      // trusted upstream proxy, else mint a fresh UUID. Stored on the request
+      // scope FIRST so everything downstream (the SSR, server actions, the
+      // access / error log, the onError sink, the response header) reads the
+      // same id, threading one trace id across services.
+      const reqId = resolveRequestId(req);
+      setRequestId(reqId);
+
       // CSP (issue #233): when enabled, mint a fresh CSPRNG nonce and store
       // it on the request scope BEFORE producing the response, so the SSR
       // pipeline's `cspNonce()` reads this exact value and stamps it on the
@@ -693,20 +759,45 @@ export async function createRequestHandler(opts) {
       // cap the framework's own RPC / page-action body reads do.
       setBodyLimits(state.bodyLimits);
 
-      const res = await produce(req);
+      let pathname = '/';
+      try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
+      const startedAt = performance.now();
+
+      let res;
+      try {
+        res = await produce(req);
+      } catch (e) {
+        // A throw escaping produce() is the last-resort 500 (every interior
+        // path catches its own errors, but a surprise still must not crash the
+        // host). Fire the onError sink (best-effort) and emit a sanitized 500,
+        // preserving the prior behavior plus the new APM hook.
+        reportError(e, req, 'handle');
+        logger.error?.('[webjs] request pipeline threw', {
+          requestId: reqId,
+          method: req.method,
+          path: pathname,
+          err: e instanceof Error ? e.stack : String(e),
+        });
+        res = new Response('Server error', { status: 500 });
+      }
+
       // Merge in the secure-by-default headers plus the per-path config
       // (issue #232) as the final step, so app middleware, route
       // handlers, and `expose` headers (already on `res`) always win.
       // Applied to every served response (documents, assets, the core
       // runtime, probes), since the defaults are universally safe.
-      let pathname = '/';
-      try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
       const merged = applySecurityHeaders(res, {
         pathname,
         https: webRequestIsHttps(req),
         prod: !dev,
         rules: headerRules,
       });
+
+      // Expose the correlation id on the response (issue #239) so a client /
+      // proxy can read it from the X-Request-Id header. Never clobber an id an
+      // upstream / the app already set on the response.
+      if (!merged.headers.has('x-request-id')) merged.headers.set('x-request-id', reqId);
+
       // Emit the Content-Security-Policy header carrying the SAME minted
       // nonce the SSR'd scripts got (no drift). Set only when CSP is
       // enabled; never clobber a CSP header the app already set (in
@@ -725,6 +816,24 @@ export async function createRequestHandler(opts) {
           /* a malformed policy must not take the request down: serve without CSP */
         }
       }
+
+      // Structured access log (issue #239): ONE info line per handled request
+      // at the single response funnel, carrying only method / path / status /
+      // duration / requestId (no bodies, no secrets). Suppressed for the
+      // framework's own /__webjs/* probe + static traffic so it does not spam.
+      // Best-effort: a logger that throws must not take the response down.
+      if (shouldAccessLog(pathname)) {
+        try {
+          logger.info?.('request', {
+            requestId: reqId,
+            method: req.method,
+            path: pathname,
+            status: merged.status,
+            durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+          });
+        } catch { /* never let logging crash the response */ }
+      }
+
       return merged;
     });
   }
@@ -750,6 +859,13 @@ export async function createRequestHandler(opts) {
       try { probePath = new URL(req.url).pathname; } catch { probePath = ''; }
       if (probePath === '/__webjs/health') {
         return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store' } });
+      }
+      // Build-info probe (issue #239): which build is live? Answered before
+      // ensureReady like the other probes (it depends only on the package
+      // version + already-published build id + process info, never the app
+      // analysis). No secrets.
+      if (probePath === '/__webjs/version') {
+        return buildInfoResponse();
       }
       if (probePath === '/__webjs/ready') {
         const noStore = { 'cache-control': 'no-store' };
@@ -790,12 +906,13 @@ export async function createRequestHandler(opts) {
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
-      const next = () => handleCore(req, { state, appDir, coreDir, dev });
+      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError });
       if (state.middleware) {
         try {
           return await state.middleware(req, next);
         } catch (e) {
-          logger.error('middleware threw', { err: String(e) });
+          reportError(e, req, 'middleware');
+          logger.error('middleware threw', { err: String(e), requestId: getRequestId() });
           return new Response('Server error', { status: 500 });
         }
       }
@@ -861,6 +978,7 @@ export async function createRequestHandler(opts) {
  *   dev?: boolean,
  *   compress?: boolean,
  *   logger?: import('./logger.js').Logger,
+ *   onError?: (error: unknown, ctx: { request: Request, requestId: string|null, phase: string }) => void,
  * }} opts
  */
 export async function startServer(opts) {
@@ -1111,7 +1229,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
 }
 
 async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev } = ctx;
+  const { state, appDir, coreDir, dev, reportError } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -1136,7 +1254,10 @@ async function handleCore(req, ctx) {
   const actMatch = /^\/__webjs\/action\/([a-f0-9]+)\/([A-Za-z0-9_$]+)$/.exec(path);
   if (actMatch) {
     if (method !== 'POST') return new Response('POST only', { status: 405 });
-    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req);
+    // Pass the onError sink (issue #239): a server action that throws
+    // unexpectedly is reported to the APM hook before the sanitized 500.
+    const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
+    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError);
   }
 
   // expose()d server actions (first-class REST), with optional CORS support.
@@ -1281,6 +1402,7 @@ async function handleCore(req, ctx) {
           });
         }
       } catch (e) {
+        if (reportError) reportError(e, req, 'metadata');
         if (dev) console.error(`[webjs] metadata route error (${meta.stem}):`, e);
         return new Response('Internal error', { status: 500 });
       }
@@ -1309,6 +1431,9 @@ async function handleCore(req, ctx) {
         elidableComponents: state.elidableComponents,
         inertRouteModules: state.inertRouteModules,
         notFoundFile: state.routeTable.notFound,
+        // onError sink (issue #239): a page render error that becomes a 500 is
+        // reported to the APM hook with the active request's correlation id.
+        onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,
       };
       if (method === 'GET' || method === 'HEAD') {
         const handler = () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });

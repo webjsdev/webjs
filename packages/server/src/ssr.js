@@ -126,6 +126,15 @@ export async function ssrPage(route, params, url, opts) {
       const html = await ssrNotFoundHtml(null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
+    // APM / Sentry sink (issue #239): a page render error that becomes a 500
+    // (an error.js boundary OR the default 500 page) is an unhandled error the
+    // app should see in its error tracker. Report it best-effort BEFORE
+    // rendering the boundary, so the sink gets the ORIGINAL error even if the
+    // boundary itself swallows or transforms it. notFound / redirect are
+    // sentinels (control flow), not errors, so they are excluded above.
+    if (typeof opts.onError === 'function') {
+      try { opts.onError(err); } catch { /* a throwing sink must not affect the response */ }
+    }
     // Error paths still need to honor the request's CSP nonce so the
     // error page's boot scripts (when moduleUrls is non-empty) and
     // the meta csp-nonce tag both pass strict-CSP enforcement.

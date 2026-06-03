@@ -34,7 +34,7 @@ export {
 } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
-export { headers, cookies, getRequest, withRequest, cspNonce } from './src/context.js';
+export { headers, cookies, getRequest, withRequest, cspNonce, requestId } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
 export { rateLimit, parseWindow, clientIp, stampRemoteIp } from './src/rate-limit.js';
 export { cors, resolveOrigin, applyCorsHeaders } from './src/cors.js';

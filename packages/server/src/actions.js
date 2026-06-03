@@ -301,8 +301,12 @@ export async function serveActionStub(idx, absFile) {
  * @param {string} hash
  * @param {string} fnName
  * @param {Request} req
+ * @param {(error: unknown) => void} [onError] best-effort sink (issue #239)
+ *   invoked when the action throws unexpectedly, BEFORE the sanitized 500 is
+ *   returned, so an APM integration sees the original error. The caller wraps
+ *   it so a throwing sink can never affect the response.
  */
-export async function invokeAction(idx, hash, fnName, req) {
+export async function invokeAction(idx, hash, fnName, req, onError) {
   if (!verifyCsrf(req)) {
     return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
   }
@@ -327,6 +331,7 @@ export async function invokeAction(idx, hash, fnName, req) {
     const result = await fn(...args);
     return rpcResponse(result ?? null);
   } catch (e) {
+    if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
 }
