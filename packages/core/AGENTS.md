@@ -47,7 +47,7 @@ the same output in all three.
 | `rich-fetch.js` | Content-negotiated fetch helper |
 | `websocket-client.js` | `connectWS()` with auto-reconnect |
 | `serialize.js` | Wire-format primitives (Date/Map/Set/BigInt/cycles…) used by RPC |
-| `testing.js` | `fixture`, `waitForUpdate`, `click`, `shadowQuery`, `shadowQueryAll` |
+| `testing.js` | `fixture`, `ssrFixture` (SSR + hydrate, awaits the native `updateComplete`), `waitForUpdate` (awaits `updateComplete` when present), `assertNoA11yViolations` (opt-in axe-core a11y assertion, dynamically imports the test-only `axe-core` peer), `click`, `shadowQuery`, `shadowQueryAll` |
 
 ## Public exports (re-exported from `index.js`)
 

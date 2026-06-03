@@ -311,6 +311,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
+      // The standard accessibility engine, used opt-in by the
+      // assertNoA11yViolations() test helper from @webjsdev/core/testing.
+      // Test-only: dynamically imported, never shipped to the app runtime.
+      'axe-core': '^4.10.0',
       // tsserver plugin for editor intelligence inside html`` templates.
       // @webjsdev/ts-plugin bundles ts-lit-plugin internally, so just one
       // plugin entry is needed in tsconfig (see below).

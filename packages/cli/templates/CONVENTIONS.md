@@ -442,6 +442,16 @@ test/
 | node (unit + integration) | `test/<feature>/*.test.ts` | Fast, no spawned process. Import server actions/queries/utilities and call them directly. Use `renderToString` for SSR HTML assertions. |
 | browser | `test/<feature>/browser/*.test.js` | Real Chromium via web-test-runner + Playwright. Shadow DOM, events, `adoptedStyleSheets`, `IntersectionObserver`. |
 | e2e | `test/<feature>/e2e/*.test.ts` | Boots the app and drives it through HTTP / a real browser. Gated behind `WEBJS_E2E=1` so it doesn't run on every `webjs test`. |
+
+For a browser component test, `ssrFixture(html\`<my-el></my-el>\`)` from
+`@webjsdev/core/testing` server-renders THEN hydrates the component, awaiting
+its native `updateComplete`, so the post-hydration DOM is observable and an
+SSR-vs-hydrate mismatch shows up (contrast `fixture()`, which only waits two
+macrotasks). `assertNoA11yViolations(el)` is the OPT-IN axe-core accessibility
+assertion: axe-core is a test-only devDependency, dynamically imported, never
+shipped to the app runtime, and the assertion is never an automatic gate.
+Install it once with `npm install -D axe-core` (the scaffold already lists it).
+The scaffold's `test/hello/browser/hello.test.js` demonstrates both.
 | smoke | `test/<feature>/smoke/*.test.ts` | Fast deploy-time sanity check (single critical path; "does this surface still return 200"). |
 
 ### Running
