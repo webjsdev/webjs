@@ -71,17 +71,19 @@ re-minted per response on a hit and does not block), or runs under CSP
 new visitor still gets a fresh CSRF cookie, so it stays correct.
 
 **Framework defense, not just the contract.** When the render reads
-per-user state through a framework helper (`cookies()`, `headers()`, or
-`getSession()`), the framework auto-marks the request dynamic and refuses
-to cache it even if you set `revalidate`, warning you once with the page
-path. So a wrong `revalidate` on a cookie-reading page fails safe (served
-fresh) instead of leaking. **The loud caveat:** this only catches reads
-THROUGH those helpers. A page that varies its body by an inbound auth
-cookie / `Authorization` header but reads it RAW (not via `cookies()` /
-`headers()` / `getSession()`) and sets no new `Set-Cookie` WILL be cached
-and served to a logged-out visitor. Read per-user request state through
-the framework helpers (which auto-exclude the page), or never set
-`revalidate` on a per-user page.
+per-user state through a framework helper (`cookies()`, `headers()`,
+`getSession()`, or `auth()`), the framework auto-marks the request
+dynamic and refuses to cache it even if you set `revalidate`, warning you
+once with the page path. So a wrong `revalidate` on a cookie-reading or
+`auth()`-gated page fails safe (served fresh) instead of leaking. A
+saas-dashboard page that does `const session = await auth()` is
+auto-excluded. **The loud caveat:** this only catches reads THROUGH those
+helpers. A page that varies its body by an inbound auth cookie /
+`Authorization` header but reads it RAW (not via `cookies()` /
+`headers()` / `getSession()` / `auth()`) and sets no new `Set-Cookie`
+WILL be cached and served to a logged-out visitor. Read per-user request
+state through the framework helpers (which auto-exclude the page), or
+never set `revalidate` on a per-user page.
 
 Evict on a write with `revalidatePath`:
 

@@ -54,6 +54,11 @@ const HTML_URL = pathToFileURL(
 const CONTEXT_URL = pathToFileURL(
   resolve(__dirname, '../../src/context.js')
 ).toString();
+// File URL of the auth module, so a page fixture can call the real `auth()`
+// (whose readSession path marks the request dynamic, the #241 auth-path fix).
+const AUTH_URL = pathToFileURL(
+  resolve(__dirname, '../../src/auth.js')
+).toString();
 
 let tmpRoot;
 
@@ -105,6 +110,32 @@ function cookieReadingPage(counterKey, { revalidate } = {}) {
     `  globalThis.__renders = globalThis.__renders || {};\n` +
     `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
     `  const who = cookies().get('uid') || 'anon';\n` +
+    `  return html\`<h1>render #\${globalThis.__renders[k]} for \${who}</h1>\`;\n` +
+    `}\n`
+  );
+}
+
+// A page that calls auth() (the real createAuth current-user accessor, the
+// primary per-user read in the saas scaffold) during render AND declares
+// `revalidate`. The auth read reaches readSession() (auth.js), which marks the
+// request dynamic, so the framework must refuse to cache the page even though
+// it sets no new Set-Cookie. This is the residual auth-path leak the #241 fix
+// closes. The page branches its body on the logged-in user.
+function authReadingPage(counterKey, { revalidate } = {}) {
+  return (
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import { createAuth, Credentials } from ${JSON.stringify(AUTH_URL)};\n` +
+    `const { auth } = createAuth({\n` +
+    `  secret: 'test-secret-test-secret',\n` +
+    `  providers: [Credentials({ authorize: async () => null })],\n` +
+    `});\n` +
+    (revalidate != null ? `export const revalidate = ${revalidate};\n` : '') +
+    `export default async function P() {\n` +
+    `  const k = ${JSON.stringify(counterKey)};\n` +
+    `  globalThis.__renders = globalThis.__renders || {};\n` +
+    `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
+    `  const session = await auth();\n` +
+    `  const who = session?.user?.name || 'guest';\n` +
     `  return html\`<h1>render #\${globalThis.__renders[k]} for \${who}</h1>\`;\n` +
     `}\n`
   );
@@ -367,6 +398,29 @@ test('a page that reads cookies() AND sets revalidate is NOT cached (dynamicAcce
     warnings.some((w) => w.includes('/') && w.includes('revalidate') && w.toLowerCase().includes('per-user')),
     'a one-time warning names the per-user revalidate page'
   );
+});
+
+test('a page that calls auth() AND sets revalidate is NOT cached (auth-path dynamicAccess defense)', async () => {
+  freshStore();
+  // The page calls auth() during render (the saas-dashboard pattern). auth()
+  // reaches readSession(), which now marks the request dynamic, so the page
+  // must never be cached even though it sets no new Set-Cookie. Without the
+  // fix the logged-in body would be cached and served to the next visitor.
+  const appDir = makeApp({ 'app/page.js': authReadingPage('auth', { revalidate: 60 }) });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const first = await (await app.handle(new Request('http://x/'))).text();
+    assert.ok(first.includes('render #1'), 'first render calls auth()');
+    // A second request re-renders (#2), proving the auth-reading page was never
+    // cached. If readSession did not mark dynamic, this would serve cached #1.
+    const second = await (await app.handle(new Request('http://x/'))).text();
+    assert.ok(second.includes('render #2'), 'an auth()-reading page re-renders each request (never cached)');
+  } finally {
+    console.warn = origWarn;
+  }
 });
 
 /* ---------------- build-id key folding: a deploy invalidates (#241) ---------------- */

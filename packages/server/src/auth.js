@@ -8,7 +8,7 @@
  */
 
 import { getStore } from './cache.js';
-import { getRequest, getBodyLimits } from './context.js';
+import { getRequest, getBodyLimits, markDynamicAccess } from './context.js';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 
 const enc = new TextEncoder();
@@ -220,6 +220,13 @@ export function createAuth(config) {
   // -- Session read/write ---------------------------------------------------
 
   async function readSession(req) {
+    // Reading the auth session is per-user (the body branches on the logged-in
+    // user), so mark the request dynamic so the server HTML cache excludes the
+    // page even when it wrongly set `revalidate`, mirroring getSession() /
+    // cookies() / headers(). This closes the auth-path leak (#241): `auth()`
+    // reaches here, reads the auth cookie raw, and would otherwise leave the
+    // page cacheable so a logged-in body could be served to the next visitor.
+    markDynamicAccess();
     const cookies = parseCookies(req.headers.get('cookie') || '');
     const raw = cookies[AUTH_COOKIE];
     if (!raw) return null;
