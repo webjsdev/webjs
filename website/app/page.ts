@@ -47,6 +47,19 @@ const PILLARS = [
   { icon: ICON.shield, title: 'Built-in essentials', desc: 'Auth, sessions, cache, rate limiting, and WebSockets, with pluggable adapters. The building blocks every app needs, no third-party glue.' },
 ];
 
+// Reusable warm-gradient text (matches the hero headline accent word).
+const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,var(--accent-live)_72%,var(--fg)))] bg-clip-text text-transparent';
+
+// Framework-weight stats. Measured: gzipped production browser bundle,
+// npm package metadata, and framework source line counts. Kept honest
+// and comparative against react + react-dom.
+const STATS = [
+  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'react + react-dom ship ~99 KB. webjs core is about 4.5x lighter on the wire.' },
+  { big: '0', label: 'Runtime dependencies', sub: '@webjsdev/core has none. The whole stack adds only ws, for WebSockets.' },
+  { big: '~15k', label: 'Lines of framework code', sub: 'Small enough that an AI agent can read and grep the whole framework, not guess.' },
+  { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
+];
+
 // Code samples. Plain strings so backticks and ${...} stay literal and never
 // enter an html`` body. The SSR highlighter colors them.
 const COMPONENT_SAMPLE = [
@@ -252,6 +265,26 @@ export default function LandingPage(ctx: { searchParams?: Record<string, string>
             </div>
           `)}
         </div>
+      </div>
+    </section>
+
+    <section class="py-28">
+      <div class="max-w-[1080px] mx-auto px-6">
+        <div class="max-w-[720px] mx-auto mb-12 text-center">
+          <div class=${KICKER}>Small by design</div>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough to read, fast enough to ship</h2>
+          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules; the browser gets a minified bundle.</p>
+        </div>
+        <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4">
+          ${STATS.map(s => html`
+            <div class="p-6 text-center rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-elev)_70%,transparent)] transition-[border-color,box-shadow] duration-[240ms] hover:border-border-strong hover:shadow-[var(--shadow)]">
+              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] ${GRADTEXT}">${s.big}</div>
+              <div class="mt-3 font-semibold text-[0.95rem]">${s.label}</div>
+              <p class="mt-1.5 m-0 text-[13px] leading-[1.55] text-fg-muted">${s.sub}</p>
+            </div>
+          `)}
+        </div>
+        <p class="mt-6 mx-auto max-w-[640px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom. The framework is JSDoc-typed JavaScript with no build step.</p>
       </div>
     </section>
 
