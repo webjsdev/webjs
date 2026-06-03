@@ -8,7 +8,10 @@
  *
  *   node scripts/generate-og.mjs
  *
- * The card mirrors the dark-theme design tokens declared in app/layout.ts
+ * Prerequisites: ImageMagick (the `magick` binary) on PATH, and playwright
+ * resolvable from the monorepo (neither is a website dependency, since this is
+ * a manual tool). The card mirrors the dark-theme design tokens declared in
+ * app/layout.ts
  * (background, foreground, accent, the warm accent glow) and the hero
  * headline, so a regenerated card always matches the live site.
  */

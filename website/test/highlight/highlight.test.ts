@@ -61,3 +61,15 @@ test('leading and trailing blank lines are trimmed', async () => {
   const out = await render('\n\nconst x\n\n');
   assert.equal(out, '<pre><span class="t-kw">const</span> <span class="t-id">x</span></pre>');
 });
+
+test('tokenizer edge cases: block comments, backtick strings, hex/underscore numbers, more keywords', async () => {
+  assert.match(await render('/* block */ x'), /<span class="t-com">\/\* block \*\/<\/span>/);
+  // a whole backtick string is one t-str token (the reason samples avoid html`` bodies)
+  assert.match(await render('const s = `hi`;'), /<span class="t-str">`hi`<\/span>/);
+  // hex and underscore-grouped numbers stay a single t-num
+  assert.match(await render('0xFF'), /<span class="t-num">0xFF<\/span>/);
+  assert.match(await render('1_000'), /<span class="t-num">1_000<\/span>/);
+  // the extra keywords the sample surface uses
+  assert.match(await render('x as Foo'), /<span class="t-kw">as<\/span>/);
+  assert.match(await render('typeof y'), /<span class="t-kw">typeof<\/span>/);
+});

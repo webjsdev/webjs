@@ -62,6 +62,10 @@ suite('copy-cmd', () => {
       el.querySelector('button').className.includes('opacity-100'),
       'the copy button is always visible (not hover-only)',
     );
+    assert.ok(
+      !el.querySelector('button').className.includes('opacity-0'),
+      'the idle button is not hover-gated (no opacity-0)',
+    );
     // Pre-copy the button shows the copy (clipboard) icon, not the check.
     assert.ok(el.querySelector('button rect'), 'copy icon is shown initially');
     assert.equal(el.querySelector('button polyline'), null, 'no checkmark initially');
@@ -92,6 +96,17 @@ suite('copy-cmd', () => {
     await el.updateComplete;
     assert.equal(written, 'npm create webjs@latest my-app', 'Enter triggers a copy');
     assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark on Enter');
+    document.body.removeChild(el);
+  });
+
+  test('keyboard activation (Space) copies too', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    await tick(10);
+    await el.updateComplete;
+    assert.equal(written, 'npm create webjs@latest my-app', 'Space triggers a copy');
+    assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark on Space');
     document.body.removeChild(el);
   });
 
