@@ -64,9 +64,13 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="icon" href="/public/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/public/favicon.png">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <!-- Self-hosted fonts (declared via @font-face in input.css). Preload the
+         above-the-fold weights so they fetch in parallel with the stylesheet:
+         the hero headline (Inter Tight 800), body text (Inter 400), and the
+         nav / button weight (Inter 600). -->
+    <link rel="preload" href="/public/fonts/inter-tight-800.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/inter-600.woff2" as="font" type="font/woff2" crossorigin>
 
     <script nonce="${nonce}">
       (function(){

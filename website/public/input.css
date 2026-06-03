@@ -34,3 +34,21 @@
   --duration-fast: 140ms;
   --duration-slow: 220ms;
 }
+
+/*
+ * Self-hosted fonts (latin subset woff2 in public/fonts/, fetched by
+ * scripts/fetch-fonts.mjs). No Google Fonts CDN: no render-blocking
+ * third-party stylesheet and no third-party request. font-display:swap
+ * paints immediately with the fallback stack, then swaps. The critical
+ * weights are preloaded in app/layout.ts so they fetch in parallel.
+ */
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:500;font-display:swap;src:url('/public/fonts/inter-tight-500.woff2') format('woff2');}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:600;font-display:swap;src:url('/public/fonts/inter-tight-600.woff2') format('woff2');}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:700;font-display:swap;src:url('/public/fonts/inter-tight-700.woff2') format('woff2');}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:800;font-display:swap;src:url('/public/fonts/inter-tight-800.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url('/public/fonts/inter-400.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url('/public/fonts/inter-500.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url('/public/fonts/inter-600.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/public/fonts/jetbrains-mono-400.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/public/fonts/jetbrains-mono-500.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('/public/fonts/jetbrains-mono-600.woff2') format('woff2');}
