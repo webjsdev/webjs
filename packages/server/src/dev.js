@@ -117,6 +117,7 @@ import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
+import { applyConditionalGet } from './conditional-get.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -817,6 +818,19 @@ export async function createRequestHandler(opts) {
         }
       }
 
+      // Conditional GET (RFC 7232, issue #240): attach a content-hash ETag to
+      // a cacheable response missing one, and turn a matching If-None-Match
+      // into a 304 Not Modified with no body. Applied LAST, after every header
+      // (X-Webjs-Build, X-Request-Id, Set-Cookie, CSP) is on the response, so a
+      // 304 carries the validators a shared cache and the client router need.
+      // A no-store / per-user response, a non-GET/HEAD, and a streaming Suspense
+      // body are all skipped (see conditional-get.js). Logged with the final
+      // (possibly 304) status. Best-effort: a failure leaves the 200 untouched.
+      let conditioned = merged;
+      try {
+        conditioned = await applyConditionalGet(req, merged);
+      } catch { /* never let validator computation crash the response */ }
+
       // Structured access log (issue #239): ONE info line per handled request
       // at the single response funnel, carrying only method / path / status /
       // duration / requestId (no bodies, no secrets). Suppressed for the
@@ -828,13 +842,13 @@ export async function createRequestHandler(opts) {
             requestId: reqId,
             method: req.method,
             path: pathname,
-            status: merged.status,
+            status: conditioned.status,
             durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
           });
         } catch { /* never let logging crash the response */ }
       }
 
-      return merged;
+      return conditioned;
     });
   }
 

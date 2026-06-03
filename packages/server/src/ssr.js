@@ -1225,6 +1225,12 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
     return new Response(prefix + bodyHtml + closer, { status, headers });
   }
 
+  // Flag a genuinely streamed body so the conditional-GET funnel skips it
+  // (an unflushed stream cannot be hashed without buffering, which would
+  // defeat streaming). The marker is internal and stripped at the funnel
+  // before the response reaches the client. See conditional-get.js.
+  headers.set('x-webjs-stream', '1');
+
   const stream = new ReadableStream({
     async start(controller) {
       controller.enqueue(encoder.encode(prefix + bodyHtml));
