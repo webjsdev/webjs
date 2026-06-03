@@ -113,7 +113,8 @@ function resolveRequestId(req) {
 function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
-import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath } from './importmap.js';
+import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -305,6 +306,25 @@ export async function readTrailingSlashFromApp(appDir) {
 }
 
 /**
+ * Read the sub-path base path (`webjs.basePath`) from the app's
+ * package.json (issue #256). A missing, malformed, or unreadable config
+ * yields `''` (root mount), never a throw, so an unconfigured app is
+ * byte-identical to before this feature. Normalized to `''` or
+ * `/segment[/segment...]` by `readBasePath`.
+ *
+ * @param {string} appDir
+ * @returns {Promise<string>}
+ */
+export async function readBasePathFromApp(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return readBasePath(pkg);
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Read the CSP config (`webjs.csp`) from the app's package.json and
  * normalize it (issue #233). A missing, malformed, or unreadable config
  * yields a disabled config (no nonce minted, no CSP header), never a
@@ -423,6 +443,15 @@ export async function createRequestHandler(opts) {
       logger.error?.('[webjs] onError hook threw (ignored)', { err: String(e) });
     }
   }
+  // Sub-path deployment base path (issue #256), read once from the app's
+  // package.json `webjs.basePath` and bound into the importmap builder BEFORE
+  // setCoreInstall / setVendorEntries so every importmap target (and the
+  // recomputed hash) reflects the prefix. Empty (the default) makes both the
+  // ingress strip and the emit-side prefix pure no-ops, so an unconfigured app
+  // is byte-identical to before this feature.
+  const basePathValue = await readBasePathFromApp(appDir);
+  await setBasePath(basePathValue);
+
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
   // URLs depending on whether the resolved @webjsdev/core install
@@ -851,6 +880,19 @@ export async function createRequestHandler(opts) {
 
       let pathname = '/';
       try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
+      // Sub-path deployment (issue #256): the per-path response-header rules
+      // (`webjs.headers`) author their `source` patterns app-root-relative,
+      // exactly like `webjs.redirects` / `webjs.trailingSlash` (which the
+      // ingress strip in produce() already sees root-relative). So match the
+      // header rules against the STRIPPED path too, keeping the whole config
+      // surface consistent under a base path. `pathname` itself (used for the
+      // access log) stays the RAW path the client hit. No-op when basePath is
+      // empty or the request is not under it.
+      let headerPathname = pathname;
+      if (basePathValue) {
+        const s = stripBasePath(pathname, basePathValue);
+        if (s !== null) headerPathname = s;
+      }
       const startedAt = performance.now();
 
       let res;
@@ -877,7 +919,7 @@ export async function createRequestHandler(opts) {
       // Applied to every served response (documents, assets, the core
       // runtime, probes), since the defaults are universally safe.
       let merged = applySecurityHeaders(res, {
-        pathname,
+        pathname: headerPathname,
         https: webRequestIsHttps(req),
         prod: !dev,
         rules: headerRules,
@@ -915,6 +957,14 @@ export async function createRequestHandler(opts) {
       // stripped here regardless. Best-effort: a store failure is swallowed.
       try {
         const reqUrl = new URL(req.url);
+        // Sub-path deployment (issue #256): the HTML cache READ (in ssrPage)
+        // and `revalidatePath` both key on the app-root-relative path, so key
+        // the WRITE on the stripped path too, or a cached page would never
+        // hit. No-op when basePath is empty / the path is not under it.
+        if (basePathValue) {
+          const s = stripBasePath(reqUrl.pathname, basePathValue);
+          if (s !== null) reqUrl.pathname = s;
+        }
         merged = await commitHtmlCache(req, merged, reqUrl);
       } catch { /* never let the cache write crash the response */ }
 
@@ -936,7 +986,10 @@ export async function createRequestHandler(opts) {
       // duration / requestId (no bodies, no secrets). Suppressed for the
       // framework's own /__webjs/* probe + static traffic so it does not spam.
       // Best-effort: a logger that throws must not take the response down.
-      if (shouldAccessLog(pathname)) {
+      // Use the STRIPPED path for the suppression check (issue #256) so a
+      // framework probe at `<basePath>/__webjs/*` is suppressed just like the
+      // root-mounted `/__webjs/*`. The logged `path` stays the RAW client URL.
+      if (shouldAccessLog(headerPathname)) {
         try {
           logger.info?.('request', {
             requestId: reqId,
@@ -955,6 +1008,48 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function produce(req) {
     return (async () => {
+      // Sub-path deployment ingress strip (issue #256). When `webjs.basePath`
+      // is set and the request path is under it, STRIP the prefix and rewrite
+      // the Request so EVERYTHING downstream (redirects, trailing-slash, the
+      // probes, the `/__webjs/*` checks, the source-file gate, route matching,
+      // SSR) sees a ROOT-relative path and works UNCHANGED. This single strip
+      // is why the rest of the framework needs no per-site changes. A request
+      // whose path is NOT under the base path is not for this mounted app, so
+      // return a 404 (the safe default for a mounted app). Empty basePath (the
+      // default) is a pure pass-through, so an unconfigured app is unchanged.
+      if (basePathValue) {
+        let reqUrl;
+        try { reqUrl = new URL(req.url); } catch { reqUrl = null; }
+        if (reqUrl) {
+          const stripped = stripBasePath(reqUrl.pathname, basePathValue);
+          if (stripped === null) {
+            // Not under the base path: this request is not for this app.
+            return new Response('Not found', {
+              status: 404,
+              headers: { 'content-type': 'text/plain; charset=utf-8' },
+            });
+          }
+          if (stripped !== reqUrl.pathname) {
+            reqUrl.pathname = stripped;
+            // Rewrite the Request with the stripped URL, preserving method,
+            // headers, and body. `duplex: 'half'` is required by the spec when
+            // a body stream is present on a non-GET/HEAD request.
+            const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+            req = new Request(
+              reqUrl.toString(),
+              /** @type {any} */ ({
+                method: req.method,
+                headers: req.headers,
+                body: hasBody ? req.body : undefined,
+                duplex: hasBody ? 'half' : undefined,
+                redirect: req.redirect,
+                signal: req.signal,
+              }),
+            );
+          }
+        }
+      }
+
       // Declarative redirects (issue #254): apply the configured old-path ->
       // new-path rules at the VERY START of request handling, before the
       // probes, routing, SSR, or asset serving. A matched source returns a
@@ -1060,14 +1155,25 @@ export async function createRequestHandler(opts) {
    * BEFORE running SSR: resolves a pathname to its page-route module URLs
    * without loading them. Returns null for non-page paths.
    *
+   * Sub-path deployment (issue #256): the HTTP layer passes the RAW request
+   * pathname (still carrying the base path, since the ingress strip happens
+   * inside `produce`, not here), so strip it for route matching and prefix
+   * the emitted module URLs so the early-hint preloads resolve under the
+   * prefix. A path not under the base path yields null (no hints).
+   *
    * @param {string} pathname
    */
   function routeFor(pathname) {
-    const page = matchPage(state.routeTable, pathname);
+    const matchPathname = basePathValue
+      ? stripBasePath(pathname, basePathValue)
+      : pathname;
+    if (matchPathname === null) return null;
+    const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
     const moduleUrls = [page.route.file, ...page.route.layouts].map((f) => {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
-      return rel.split('\\').join('/').replace(/^\/?/, '/');
+      const url = rel.split('\\').join('/').replace(/^\/?/, '/');
+      return withBasePath(url, basePathValue);
     });
     return { moduleUrls };
   }

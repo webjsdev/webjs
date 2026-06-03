@@ -291,7 +291,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. A frame nav whose response lacks the frame fires a cancelable, bubbling `webjs:frame-missing` event (detail `{ frameId, url, document }`) and leaves the frame unchanged instead of full-swapping; `preventDefault()` hands the outcome to the listener. |
 | `Metadata` / `MetadataContext` / `JsonLd` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `metadata.jsonLd` (a `JsonLd` object or array) emits schema.org structured data as `<script type="application/ld+json">` (escaped automatically). `import type { Metadata } from '@webjsdev/core'`. |
 | `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` (type-only) | Types the page / layout / route-handler args (`{ params, searchParams, url, actionData }`; layouts add `children`). `R` is an optional route literal that narrows `params` against the generated route union. `Route` / `RouteParams<R>` are the href + params helpers. Run `webjs types` to generate the union (see CLI reference). `import type { PageProps } from '@webjsdev/core'`. |
-| `WebjsConfig` (type-only) | Types the `webjs` package.json config block (`elide`, `headers`, `redirects`, `trailingSlash`, `csp`, the ingress body-size + timeout caps), with `WebjsHeaderRule` / `WebjsRedirectRule` / `WebjsCspConfig` / `WebjsTrailingSlash` for the nested shapes. A companion JSON Schema (`@webjsdev/server/webjs-config.schema.json`, associated in the scaffold's `.vscode/settings.json`) flags an unknown key in the editor. `import type { WebjsConfig } from '@webjsdev/core'`. |
+| `WebjsConfig` (type-only) | Types the `webjs` package.json config block (`elide`, `headers`, `redirects`, `trailingSlash`, `basePath`, `csp`, the ingress body-size + timeout caps), with `WebjsHeaderRule` / `WebjsRedirectRule` / `WebjsCspConfig` / `WebjsTrailingSlash` for the nested shapes. A companion JSON Schema (`@webjsdev/server/webjs-config.schema.json`, associated in the scaffold's `.vscode/settings.json`) flags an unknown key in the editor. `import type { WebjsConfig } from '@webjsdev/core'`. |
 
 ### Directives, from `import { … } from '@webjsdev/core/directives'`
 
@@ -877,6 +877,24 @@ webjs's file router matches `/about` AND `/about/` against the same route (every
 - **Exemptions.** The ROOT path `/` is always left alone under either policy. Under `"always"`, a path whose last segment looks like a FILE (contains a dot, e.g. `/foo.js`, `/image.png`) is NOT given a trailing slash, since a file is a leaf, not a page directory. Framework-internal `/__webjs/*` paths are exempt. The query string and hash are preserved on the redirect.
 
 **Order vs `webjs.redirects`.** The declarative redirects run FIRST, then the survivor is slash-canonicalized. So an explicit `webjs.redirects` rule always wins. This is NOT loop-free: a redirect whose `destination` CONTRADICTS the slash policy creates an infinite loop. For example `{ trailingSlash: 'never', redirects: [{ source: '/x', destination: '/x/' }] }` ping-pongs forever (`/x` -> 308 `/x/` -> 308 `/x` -> ...). There is no server-side loop guard (matching the `webjs.redirects` warning above); keeping a redirect destination consistent with the slash policy is the author's responsibility. Applied at the very START of request handling (in `dev.js`'s `produce()`, right after `applyRedirects`, before routing / SSR), so the canonical URL reaches the router. Mechanism: `readTrailingSlashPolicy` / `applyTrailingSlash` in `packages/server/src/redirects.js`.
+
+---
+
+## Sub-path deployment: `webjs.basePath` in package.json (#256)
+
+An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT strip the prefix needs every framework-emitted absolute URL to carry the prefix, or module resolution 404s and the page never hydrates. Declare it under `package.json` `"webjs": { "basePath": ... }`, cohesive with `webjs.redirects` / `webjs.trailingSlash` / `webjs.headers` / `webjs.csp`:
+
+```jsonc
+{ "webjs": { "basePath": "/app" } }    // example.com/app/ mount
+{ "webjs": { "basePath": "" } }        // root mount (the default, a pure no-op)
+```
+
+- **Normalization.** `'app'`, `'/app'`, and `'/app/'` all normalize to `'/app'`; a nested `'/foo/bar'` is allowed; an empty value / absence is the root-mount default. An unsafe value (`..`, a protocol, a `//host` network-path reference, whitespace, a backslash) is rejected to the empty default, so a typo fails safe instead of poisoning every emitted URL.
+- **The model is strip-at-ingress + prefix-on-emit.** At the very START of request handling the prefix is STRIPPED from the request path and the request rewritten, so all downstream logic (route matching, the `/__webjs/*` checks, the source-file gate, the redirects / trailing-slash / `webjs.headers` configs, the HTML cache key) sees a root-relative path and works UNCHANGED. A request whose path is NOT under the base path is not for this app and 404s. On emit, every framework-emitted same-origin absolute URL gets the prefix prepended: the importmap targets (`/__webjs/core/*` and same-origin `/__webjs/vendor/*`; a cross-origin `https://` CDN vendor URL is left untouched), the modulepreload hrefs, the boot script's per-route module specifiers and lazy entries, the dev reload `src`, and the 103 Early Hints preloads.
+- **Empty default is byte-identical.** With no `basePath` (or `""`) both seams are pure no-ops, so an unconfigured app serves exactly the same bytes as before this feature (guarded by a differential test).
+- **OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed (the same boundary Next draws between basePath-prefixing its `<Link>` and a raw `<a href>`; webjs links are plain `<a href>`). The #256 acceptance covers framework-emitted URLs and request matching only.
+
+Mechanism: `normalizeBasePath` / `readBasePath` / `withBasePath` / `stripBasePath` in `packages/server/src/base-path.js`; the ingress strip is in `dev.js`'s `produce()` (before `applyRedirects`), the importmap-target prefix in `importmap.js` (`setBasePath`), the boot / preload / reload prefix in `ssr.js`.
 
 ---
 

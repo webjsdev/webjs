@@ -178,6 +178,22 @@ the host actually provides. The default rate-limit collapsing to
 
 **Scaling:** in-memory by default. `setStore(redisStore({ url: process.env.REDIS_URL }))` shares limits across instances.
 
+## Sub-path deployment: `webjs.basePath` (#256)
+
+An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT strip the prefix needs every framework-emitted absolute URL to carry that prefix, or module resolution 404s and the page never hydrates. Set the prefix in `package.json`:
+
+```jsonc
+{ "webjs": { "basePath": "/app" } }
+```
+
+`'app'`, `'/app'`, and `'/app/'` all normalize to `'/app'`; a nested `'/foo/bar'` is allowed; the empty default (or absence) is a root mount and a pure no-op (an unconfigured app is byte-identical to before this feature). An unsafe value (a `..`, a protocol, a `//host` network-path reference, whitespace, a backslash) is rejected to the empty default so a typo fails safe.
+
+**The model is strip-at-ingress + prefix-on-emit, two seams only.** At the very start of request handling, when the request path is under the base path, the framework STRIPS the prefix and rewrites the request, so all downstream logic (route matching, the `/__webjs/*` checks, the source-file gate, redirects, trailing-slash, the `webjs.headers` path config, the HTML cache key) sees a root-relative path and works unchanged. A request whose path is NOT under the base path is not for this mounted app, so it 404s. On the way out, every framework-emitted same-origin absolute URL gets the prefix prepended: the importmap targets (the `/__webjs/core/*` runtime entries and any same-origin `/__webjs/vendor/*` local target; a cross-origin `https://` CDN vendor URL is left untouched), the `<link rel="modulepreload">` hrefs, the boot script's per-route module specifiers and lazy-loader entries, the dev reload `src`, and the 103 Early Hints preloads. So a sub-path deploy serves `<basePath>/__webjs/core/*` and resolves every module under the prefix.
+
+The whole config surface (`webjs.redirects` / `webjs.trailingSlash` / `webjs.headers` `source` patterns) is authored app-root-relative, exactly as without a base path, because the ingress strip runs first.
+
+**OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed under a base path. This is the same boundary Next draws between basePath auto-prefixing its `<Link>` component and a raw `<a href>`: webjs links are plain `<a href>`, so an author targeting a sub-path deploy writes the prefix into their own hrefs (or a future helper does) until client-side prefixing lands. The acceptance for #256 covers the server-emitted-URL + matching surface only.
+
 ## CORS via `cors()`
 
 `cors()` is a middleware factory (same `(req, next) => Response` contract as `rateLimit()`), usable in `middleware.js` (root or per-segment) or wrapped around a `route.js` handler. It handles origin reflection, the `OPTIONS` preflight, `Vary: Origin`, and the credentials rule, so route handlers do not hand-roll any of it. The `--template api` scaffold ships a root `middleware.ts` demonstrating it.

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
+import { withBasePath } from './base-path.js';
 
 // Local attribute escaper. Matches ssr.js's escapeAttr (the source
 // of truth for HTML attribute escaping in this package). Kept inline
@@ -25,6 +26,45 @@ function escapeAttr(s) {
 
 /** @type {Record<string, string>} */
 let _extraEntries = {};
+
+/**
+ * The normalized `webjs.basePath` for a sub-path deployment (issue #256),
+ * `''` (the default) for a root mount. When non-empty, every same-origin
+ * absolute importmap TARGET (the `/__webjs/core/*` core entries and any
+ * same-origin `/__webjs/vendor/*` local vendor target) is prefixed with it
+ * so module resolution works under the prefix. A cross-origin `https://`
+ * CDN vendor target is absolute and is left untouched. Set once at boot by
+ * `setBasePath`, which recomputes the importmap hash so `importMapHash()`
+ * stays synchronous on the hot path.
+ *
+ * @type {string}
+ */
+let _basePath = '';
+
+/**
+ * Bind the importmap to a sub-path deployment's base path (issue #256).
+ * Called once at boot by `dev.js`. With the empty default the map is
+ * byte-identical to a root mount. The importmap hash is recomputed eagerly
+ * (like `setCoreInstall` / `setVendorEntries`) so `importMapHash()` stays
+ * synchronous on the per-request SSR path.
+ *
+ * @param {string} basePath the normalized base path (`''` = root mount)
+ * @returns {Promise<void>}
+ */
+export async function setBasePath(basePath) {
+  _basePath = basePath || '';
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
+}
+
+/**
+ * The active base path, for callers that prefix their own emitted URLs
+ * against the same value (ssr.js's boot specifiers, preloads, reload src).
+ *
+ * @returns {string}
+ */
+export function basePath() {
+  return _basePath;
+}
 
 /**
  * SRI integrity hashes keyed by FINAL URL (post-importmap-rewrite).
@@ -292,7 +332,12 @@ export function buildImportMap() {
   // even though the content didn't actually change.
   /** @type {Record<string, string>} */
   const imports = {};
-  for (const k of Object.keys(merged).sort()) imports[k] = merged[k];
+  // Prefix every same-origin absolute target with the sub-path base
+  // (issue #256). `withBasePath` is a no-op when the base path is empty
+  // (so a root-mounted app's map is byte-identical) and leaves a
+  // cross-origin `https://` CDN vendor target untouched (only the
+  // framework's own `/__webjs/*` and same-origin vendor targets move).
+  for (const k of Object.keys(merged).sort()) imports[k] = withBasePath(merged[k], _basePath);
 
   // Emit `integrity` per the importmap-integrity spec (Chrome 132+,
   // Safari 18.4+, Firefox flagged). Browsers without support ignore
@@ -305,11 +350,17 @@ export function buildImportMap() {
   // unrelated pin file edits, and leak removed URLs to the wire.
   const out = { imports };
   const usedUrls = new Set(Object.values(imports));
-  const intKeys = Object.keys(_vendorIntegrity).filter(k => usedUrls.has(k)).sort();
+  // Integrity keys are the FINAL post-rewrite URLs, so prefix a same-origin
+  // local vendor key with the base path to match its (now prefixed) imports
+  // value. A cross-origin CDN key is untouched by `withBasePath` and lines
+  // up with its unprefixed imports value.
+  const intKeys = Object.keys(_vendorIntegrity)
+    .filter(k => usedUrls.has(withBasePath(k, _basePath)))
+    .sort();
   if (intKeys.length) {
     /** @type {Record<string, string>} */
     const integrity = {};
-    for (const k of intKeys) integrity[k] = _vendorIntegrity[k];
+    for (const k of intKeys) integrity[withBasePath(k, _basePath)] = _vendorIntegrity[k];
     out.integrity = integrity;
   }
   return out;

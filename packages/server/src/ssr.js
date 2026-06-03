@@ -1,7 +1,8 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor, publishedBuildId } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath } from './importmap.js';
+import { withBasePath } from './base-path.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
@@ -776,15 +777,36 @@ function wrapHead(opts) {
   // the request's CSP header by the caller.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
 
-  const imports = opts.moduleUrls.map((u) => `import ${jsonForScriptTag(u)};`).join('\n');
-  const lazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
+  // Sub-path deployment (issue #256): the boot script's per-route module
+  // specifiers and the dev reload `src` are framework-emitted same-origin
+  // absolute URLs, so prefix them with the base path (a no-op when empty).
+  // The lazy-loader import is a BARE specifier resolved through the importmap
+  // (whose target is already base-path-prefixed in importmap.js), so it is
+  // NOT prefixed here. The base path is the one set at boot via setBasePath
+  // (read from importmap.js's module state), the same value the importmap
+  // targets were prefixed with, so the boot specifiers and the map agree.
+  const bp = basePath();
+  const imports = opts.moduleUrls
+    .map((u) => `import ${jsonForScriptTag(withBasePath(u, bp))};`)
+    .join('\n');
+  const rawLazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
     ? opts.lazyComponents
     : null;
+  // The lazy map's values are same-origin module URLs `observeLazy` will
+  // dynamically import, so prefix them with the base path too (no-op when
+  // empty).
+  const lazyEntries = rawLazyEntries && bp
+    ? Object.fromEntries(
+        Object.entries(rawLazyEntries).map(([tag, u]) => [tag, withBasePath(u, bp)]),
+      )
+    : rawLazyEntries;
   const lazyBoot = lazyEntries
     ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${jsonForScriptTag(lazyEntries)});`
     : '';
   const boot = (imports || lazyBoot) ? `<script type="module"${n}>\n${imports}${lazyBoot}\n</script>` : '';
-  const reload = opts.dev ? `<script type="module"${n} src="/__webjs/reload.js"></script>` : '';
+  const reload = opts.dev
+    ? `<script type="module"${n} src="${escapeAttr(withBasePath('/__webjs/reload.js', bp))}"></script>`
+    : '';
   const suspenseBoot = opts.streaming
     ? `<script${n}>(function(){` +
       `function r(id){var t=document.querySelector('template[data-webjs-resolve="'+id+'"]');` +
@@ -1075,15 +1097,21 @@ function wrapHead(opts) {
   // importmap-rails) applies nonce on every modulepreload tag for
   // the same reason.
   const noncePreload = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
+  // Sub-path deployment (issue #256): the modulepreload href is prefixed with
+  // the base path (a no-op when empty), but `crossorigin` / `integrity` are
+  // decided on the ORIGINAL url, so the integrity lookup still keys on the
+  // unprefixed map url and a cross-origin CDN url (never prefixed) keeps its
+  // crossorigin attribute.
+  const bpPreload = basePath();
   for (const url of opts.moduleUrls) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `<link rel="modulepreload" href="${escapeAttr(withBasePath(url, bpPreload))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
   for (const url of opts.preloads || []) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `<link rel="modulepreload" href="${escapeAttr(withBasePath(url, bpPreload))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }

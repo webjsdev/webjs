@@ -17,7 +17,8 @@
  * functions MUST stay in sync. The readers are: readElideEnabled
  * (dev.js, elide), compileHeaderRules (headers.js, headers),
  * compileRedirectRules / readTrailingSlashPolicy (redirects.js,
- * redirects / trailingSlash), readCspConfig (csp.js, csp), and
+ * redirects / trailingSlash), readBasePath (base-path.js, basePath),
+ * readCspConfig (csp.js, csp), and
  * readBodyLimits / computeServerTimeouts (body-limit.js, the byte caps
  * and timeouts). Adding a `webjs.*` key means updating all three places.
  * See packages/server/AGENTS.md for the one documented procedure.
@@ -120,6 +121,19 @@ export interface WebjsConfig {
    * 308 redirect).
    */
   trailingSlash?: WebjsTrailingSlash;
+
+  /**
+   * Sub-path deployment prefix for an app mounted under
+   * `example.com/app/` behind a proxy that does NOT strip the prefix.
+   * `'app'`, `'/app'`, and `'/app/'` all normalize to `'/app'`; an empty
+   * value (the default) is a root mount and a pure no-op. The prefix is
+   * stripped from the incoming path at ingress and prepended to every
+   * framework-emitted URL (importmap targets, modulepreload hints, boot
+   * module specifiers, the dev reload src). Author-written `<a href>`
+   * links and client-router navigation are NOT auto-prefixed (a
+   * documented follow-up).
+   */
+  basePath?: string;
 
   /**
    * Content-Security-Policy config. Off by default. `true` enables a
