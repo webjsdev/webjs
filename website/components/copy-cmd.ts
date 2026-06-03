@@ -53,22 +53,22 @@ export class CopyCmd extends WebComponent {
   render() {
     const isCopied = this.copied.get();
     return html`
-      <span
-        role="button"
-        tabindex="0"
-        aria-label="Click to copy command"
-        class="group flex items-center gap-3 text-fg outline-none cursor-copy focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 rounded-sm"
-        @click=${this._copy}
-        @keydown=${this._onKey}
-      >
-        <span data-copy-text class="whitespace-nowrap">
-          <slot></slot>
-        </span>
+      <span class="group relative flex items-center min-w-0">
+        <span
+          class="scroll-thin flex-1 min-w-0 overflow-x-auto whitespace-nowrap cursor-copy pr-9 rounded-md outline-none focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          data-copy-text
+          role="button"
+          tabindex="0"
+          aria-label="Copy command to clipboard"
+          @click=${this._copy}
+          @keydown=${this._onKey}
+        ><slot></slot></span>
         <button
-          class="flex-shrink-0 inline-flex items-center justify-center w-[26px] h-[26px] p-0 border border-border rounded text-fg-muted bg-transparent cursor-copy opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 hover:text-fg hover:border-fg-muted"
+          class="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 p-0 rounded-[7px] border bg-bg-elev cursor-copy transition-[opacity,color,border-color] duration-[140ms] hover:text-fg hover:border-fg-muted group-hover:opacity-100 group-focus-within:opacity-100 ${isCopied ? 'opacity-100 text-[oklch(0.66_0.16_150)] border-accent-tint' : 'opacity-0 text-fg-muted border-border'}"
+          type="button"
           aria-hidden="true"
           tabindex="-1"
-          type="button"
+          @click=${this._copy}
         >${isCopied ? CHECK_ICON : COPY_ICON}</button>
       </span>
     `;
