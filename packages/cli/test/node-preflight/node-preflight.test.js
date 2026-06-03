@@ -27,6 +27,23 @@ test('checkNodeInline COUNTERFACTUAL: an older Node fails the check', () => {
   }
 });
 
+test('webjs.js imports @webjsdev/server dynamically, never statically (the guard structure)', async () => {
+  // The inline guard only wins on old Node if the server package is NOT a
+  // static top-level import (static imports link, and link-fail, before any
+  // body code runs). Pin that structure so the #238 link-fail bug cannot
+  // silently return: a static `import ... from '@webjsdev/server'` would
+  // defeat the inline check on Node below 24.
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const binPath = fileURLToPath(new URL('../../bin/webjs.js', import.meta.url));
+  const src = await readFile(binPath, 'utf8');
+  // No static `import ... from '@webjsdev/server...'` (a dynamic await import is fine).
+  const staticServerImport = /(^|\n)\s*import\b[^\n]*\bfrom\s*['"]@webjsdev\/server/;
+  assert.equal(staticServerImport.test(src), false, 'webjs.js must not statically import @webjsdev/server');
+  // It DOES reach the server via a dynamic import.
+  assert.ok(/await\s+import\(\s*['"]@webjsdev\/server/.test(src), 'webjs.js should dynamically import @webjsdev/server');
+});
+
 test('checkNodeInline sources the minimum from the engines range', () => {
   // Different engines ranges parse to their major; the requirement is DRY.
   assert.equal(checkNodeInline('20.0.0', '>=24.0.0').requiredMajor, 24);
