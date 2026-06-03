@@ -12,22 +12,7 @@ const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 const GH_URL = 'https://github.com/webjsdev/webjs';
 
-// No-JS newsletter capture. The closer renders a real `<form method="post">`
-// that posts back to this page. With JS off it round-trips natively: this
-// action runs server-side, then a 303 Post/Redirect/Get lands on
-// `/?subscribed=1` and the page renders the thanks state. With JS on the
-// client router enhances the submit into an in-place swap (no reload), and a
-// validation failure re-renders this page (422) with the error and the typed
-// value preserved. Preview only: no persistence, a real app would store it.
-export async function action(ctx: { formData: FormData }) {
-  const email = String(ctx.formData?.get('email') || '').trim();
-  if (!email || !email.includes('@') || email.length < 3) {
-    return { success: false, fieldErrors: { email: 'Please enter a valid email address.' }, values: { email } };
-  }
-  return { success: true, redirect: '/?subscribed=1#get-updates' };
-}
-
-const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Aider', 'Gemini CLI', 'OpenCode'];
+const AGENTS =['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Aider', 'Gemini CLI', 'OpenCode'];
 
 const ICON = {
   bolt: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
@@ -141,10 +126,7 @@ function codeWindow(title: string, sample: string) {
   `;
 }
 
-export default function LandingPage(ctx: { searchParams?: Record<string, string>; actionData?: any } = {}) {
-  const subscribed = ctx.searchParams?.subscribed === '1';
-  const emailErr = ctx.actionData?.fieldErrors?.email;
-  const emailVal = ctx.actionData?.values?.email || '';
+export default function LandingPage() {
   return html`
     <style>
       .t-com { color: var(--fg-subtle); font-style: italic; }
@@ -327,7 +309,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <section class="py-28 text-center" id="get-updates">
+    <section class="py-28 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
@@ -335,21 +317,13 @@ lib/session.server.ts</pre>
           <div class=${INSTALL}>
             <span class="text-accent select-none">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
           </div>
-          ${subscribed
-            ? html`
-                <p class="inline-flex items-center gap-[9px] mt-6 px-[22px] py-[13px] rounded-full font-semibold text-[15px] leading-none text-accent border border-accent-tint bg-accent-tint">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                  Thanks. You are on the list.
-                </p>`
-            : html`
-                <form class="flex gap-[10px] justify-center flex-wrap mt-6" method="post" action="/">
-                  <input type="email" name="email" required placeholder="you@company.com" aria-label="Email for updates" value=${emailVal}
-                    class="px-4 py-3 min-w-[240px] rounded-full border border-border-strong bg-bg text-fg font-sans text-sm leading-none focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]">
-                  <button class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" type="submit">Keep me posted</button>
-                  ${emailErr
-                    ? html`<span class="w-full font-mono text-[12px] leading-[1.5] text-[oklch(0.64_0.2_25)] mt-1">${emailErr}</span>`
-                    : html`<span class="w-full font-mono text-[12px] leading-[1.5] text-fg-subtle mt-1">No spam. Just shipping updates.</span>`}
-                </form>`}
+          <div class="flex gap-3 justify-center flex-wrap mt-7">
+            <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank">
+              Get started
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+            <a class="${BTN} text-fg border border-border-strong bg-[color-mix(in_oklch,var(--color-bg-elev)_60%,transparent)] hover:border-fg-muted hover:-translate-y-0.5" href=${DOCS_URL} target="_blank">Read the docs</a>
+          </div>
         </div>
       </div>
     </section>
