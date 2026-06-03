@@ -142,3 +142,36 @@ test('assertNodeVersion exits non-zero on an old Node (exit mode)', () => {
   assert.ok(logged.includes('20.0.0'));
   assert.ok(logged.includes('24'));
 });
+
+/* ---------------- link-safety regression (dev.js) ---------------- */
+
+test('dev.js does NOT NAMED-import stripTypeScriptTypes from node:module', async () => {
+  // Regression for the PR #282 defeat: a NAMED import of a missing builtin
+  // export (`import { stripTypeScriptTypes }`) is a LINK-TIME SyntaxError on
+  // Node < 22.13, which crashes the import of @webjsdev/server BEFORE
+  // assertNodeVersion can fire, so an embedded host (and the CLI's server-side
+  // belt) gets the cryptic error the guard exists to replace. dev.js must use a
+  // namespace import (`import * as nodeModule from 'node:module'`) so the module
+  // LINKS on every Node and the clean preflight message wins instead.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const src = readFileSync(
+    fileURLToPath(new URL('../../src/dev.js', import.meta.url)),
+    'utf8',
+  );
+  // No named import of stripTypeScriptTypes from node:module.
+  assert.equal(
+    /import\s*\{[^}]*\bstripTypeScriptTypes\b[^}]*\}\s*from\s*['"]node:module['"]/.test(src),
+    false,
+    'dev.js must not name-import stripTypeScriptTypes from node:module',
+  );
+  // And it must reach the API through a namespace binding instead.
+  assert.ok(
+    /import\s*\*\s*as\s+\w+\s+from\s*['"]node:module['"]/.test(src),
+    'dev.js must namespace-import node:module',
+  );
+  assert.ok(
+    /\bnodeModule\.stripTypeScriptTypes\(/.test(src),
+    'the strip call site must use the namespace binding',
+  );
+});
