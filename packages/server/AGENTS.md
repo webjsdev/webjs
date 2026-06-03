@@ -113,9 +113,11 @@ condition (FIRST in the object, as nodenext requires) wire the resolution; the
 top-level `index.d.ts` is added to the `files` allowlist (`src/*.d.ts` ships via
 the globbed `src`). **A new export added to `index.js` MUST get a declaration in
 `index.d.ts`,** enforced by the drift test
-`test/types/exports-drift.test.mjs` (asserts the declared set equals the runtime
-export set); the type fixture + TS7016 counterfactual live in
-`test/types/server-exports.test-d.ts` + `test/types/server-types.test.mjs`.
+`packages/server/test/types/exports-drift.test.mjs` (asserts the declared set
+equals the runtime export set); the type fixture + TS7016 counterfactual live at
+the repo-root `test/types/server-exports.test-d.ts` + `test/types/server-types.test.mjs`
+(every `.test-d.ts` lives there, outside `packages/`, so the buildless-no-`.ts`
+invariant does not flag it).
 
 ## The `webjs` package.json config block (typed surface, #259)
 

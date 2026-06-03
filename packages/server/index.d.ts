@@ -16,7 +16,7 @@
  * (scanner / importmap / module-graph / vendor) get reasonable structural
  * declarations.
  *
- * The drift guard `test/types/exports-drift.test.mjs` asserts the set of named
+ * The drift guard `packages/server/test/types/exports-drift.test.mjs` asserts the set of named
  * exports here exactly matches the runtime named exports of index.js, so a
  * future export added to index.js without a type is caught.
  */

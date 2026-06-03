@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const tscBin = join(repoRoot, 'node_modules/typescript/bin/tsc');
 const indexDts = join(repoRoot, 'packages/server/index.d.ts');
 
