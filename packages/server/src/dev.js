@@ -698,7 +698,9 @@ export async function createRequestHandler(opts) {
             // digests it into each app-module hash; '' when nothing is elidable,
             // so a no-elision app's hash stays exactly `sha256(bytes)`.
             {
-              const rel = (p) => (p.startsWith(appDir) ? p.slice(appDir.length) : p);
+              // `appDir + sep` boundary (matches asset-hash's containment guard)
+              // so a sibling-prefix dir cannot be mis-relativized.
+              const rel = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
               const elidedPaths = [
                 ...state.elidableComponents,
                 ...state.inertRouteModules,
@@ -1211,8 +1213,12 @@ export async function createRequestHandler(opts) {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
       const url = rel.split('\\').join('/').replace(/^\/?/, '/');
       // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
-      // the SAME url the body's modulepreload + boot specifiers request (#243);
-      // a bare url would warm a different url and waste the hint. No-op in dev.
+      // the SAME url the body's modulepreload + boot specifiers request (#243).
+      // A bare url would warm a different url and waste the hint. No-op in dev.
+      // Best-effort: a request landing in the narrow pre-warm window (before the
+      // elision verdict is set) hashes against an empty fingerprint, so the hint
+      // can mismatch the post-warm body for that one request, only a wasted
+      // speculative preload, never a stale body (the body url is authoritative).
       return withAssetHash(withBasePath(url, basePathValue), basePathValue);
     });
     return { moduleUrls };
