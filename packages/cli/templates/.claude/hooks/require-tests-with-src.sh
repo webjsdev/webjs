@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook (scaffolded by `webjs create`): block a `git commit`
+# PreToolUse hook (scaffolded by `webjs create`): WARN on a `git commit`
 # that adds or changes application code without any accompanying test.
 #
-# webjs is AI-first: most apps are built with an AI agent, and the
-# easiest corner to cut is shipping a feature with no test. This gate
-# makes "every change ships with a test" a hard floor, not a suggestion.
+# webjs is AI-first, and "every change ships with a test" is the right
+# default. But it is a CONVENTION, not a correctness check: a sensible
+# app can legitimately want a test-less commit (a spike, a vendored
+# file, a pure refactor). The convention-vs-check principle in this
+# app's AGENTS.md and CONVENTIONS.md says guidance like this WARNS, it
+# does not hard-block by default. So this hook surfaces a loud reminder
+# and lets the commit proceed.
 #
 # What a hook CANNOT do: judge WHICH test layer a change needs (a unit
-# test vs a browser/e2e test is a judgement call). So it enforces the
-# floor (some real test must accompany app code) and reminds you to add
-# browser/e2e coverage for interactive surfaces. `webjs test` runs the
-# actual suite in the commit hook.
+# test vs a browser/e2e test is a judgement call). So it nudges toward
+# the floor (some real test should accompany app code) and reminds you
+# to add browser/e2e coverage for interactive surfaces. The actual test
+# suite runs in CI (.github/workflows/ci.yml), which is the real gate.
 #
 # Scope: fires only on `git commit`. Inspects the STAGED diff.
 #
-# Blocks (exit 2) when the staged diff changes app code (app/, modules/,
-# components/, lib/) but stages no test (test/** or *.test.* / *.spec.*).
-# Allowed: commits with no app-code change, commits that stage a test
-# alongside, and WEBJS_NO_TEST_GATE=1 for a genuine non-code commit.
+# Behavior when the staged diff changes app code (app/, modules/,
+# components/, lib/) but stages no test (test/** or *.test.* / *.spec.*):
+#   - Default: WARN via additionalContext, then allow the commit (exit 0).
+#   - WEBJS_TEST_GATE=block: restore the old hard floor (print BLOCKED,
+#     exit 2), for a project that wants the strict gate. Set it in
+#     .claude/settings.json env, your shell, or CI.
+#   - WEBJS_NO_TEST_GATE=1: skip entirely (no warn, no block), for a
+#     genuine non-code commit (docs, config).
 #
 # Bypass (humans, emergencies): git commit --no-verify.
 
@@ -52,7 +60,9 @@ test_staged=$(printf '%s\n' "$staged" \
   | grep -E '(^|/)test/|\.test\.[mc]?[jt]sx?$|\.spec\.[mc]?[jt]sx?$' || true)
 
 if [ -z "$test_staged" ]; then
-  cat >&2 <<'EOF'
+  # Hard-mode opt-in: restore the old block when the project asks for it.
+  if [ "${WEBJS_TEST_GATE:-}" = "block" ] || [ "${WEBJS_TEST_GATE:-}" = "hard" ]; then
+    cat >&2 <<'EOF'
 BLOCKED: this commit changes app code but stages no test.
 
 You staged application code (app/, modules/, components/, lib/) with no
@@ -66,11 +76,21 @@ Pick the layer the change needs (a unit test is not always enough):
     real behaviour in a browser, not just the function in isolation.
 
 See `webjs test` and the testing guide. Genuine non-code commit (docs,
-config) that needs no test? Re-run with WEBJS_NO_TEST_GATE=1.
+config) that needs no test? Re-run with WEBJS_NO_TEST_GATE=1. Hard mode is
+on because WEBJS_TEST_GATE=block is set; unset it to fall back to a warning.
 
 Hook: .claude/hooks/require-tests-with-src.sh
 EOF
-  exit 2
+    exit 2
+  fi
+
+  # Default: warn loudly via additionalContext, then allow the commit.
+  # A missing test for app code subsumes the interactive-component
+  # reminder, so emit this warning alone and skip that reminder below.
+  jq -n --arg ctx "Heads up: this commit stages app code (app/, modules/, components/, lib/) with no test. Every change should ship with a test (it is a convention, not a hard gate). Pick the layer the change needs: a unit test for logic/actions/queries/utils, and a browser or e2e test for a component, hydration, the client router, or a server action called from the client. The suite runs in CI regardless. To enforce a hard block locally, set WEBJS_TEST_GATE=block. To silence this for a genuine non-code commit, set WEBJS_NO_TEST_GATE=1." '{
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: $ctx }
+  }'
+  exit 0
 fi
 
 # Reminder for interactive surfaces: a unit test alone rarely covers them.
