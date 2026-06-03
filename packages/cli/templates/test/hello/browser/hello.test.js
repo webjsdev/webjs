@@ -8,6 +8,9 @@
  * adoptedStyleSheets, IntersectionObserver, events, etc.
  */
 
+import { html } from '@webjsdev/core';
+import { ssrFixture, assertNoA11yViolations } from '@webjsdev/core/testing';
+
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy`); },
   equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
@@ -29,12 +32,30 @@ suite('Example browser tests', () => {
     assert.ok(!host.querySelector('p'), 'Shadow content not in light DOM');
   });
 
+  // ssrFixture() server-renders a template THEN hydrates it in this real
+  // browser, awaiting the component's native updateComplete (the real
+  // render-cycle promise), so the post-hydration DOM is observable. Use it
+  // for any component test where the SSR-then-hydrate round-trip matters.
+  test('ssrFixture hydrates a server-rendered button', async () => {
+    const el = await ssrFixture(html`<button type="button">Save</button>`);
+    assert.equal(el.tagName, 'BUTTON', 'button hydrated');
+    assert.ok(el.textContent.includes('Save'), 'rendered label survives hydration');
+  });
+
+  // assertNoA11yViolations() is the OPT-IN accessibility assertion. It runs
+  // the standard axe-core engine against the element subtree (axe-core is a
+  // test-only devDependency, dynamically imported, never shipped to the app
+  // runtime). Resolves on a clean element, throws a named violation otherwise.
+  test('a button with an accessible name has no a11y violations', async () => {
+    const el = await ssrFixture(html`<button type="button">Submit form</button>`);
+    await assertNoA11yViolations(el);
+  });
+
   // Replace with your component tests:
-  // test('my-widget renders correctly', () => {
-  //   import('../../components/my-widget.ts');
-  //   const el = document.createElement('my-widget');
-  //   document.body.appendChild(el);
-  //   assert.ok(el.shadowRoot);
-  //   el.remove();
+  // test('my-widget renders correctly', async () => {
+  //   await import('../../components/my-widget.ts');
+  //   const el = await ssrFixture(html`<my-widget></my-widget>`);
+  //   assert.ok(el.shadowRoot ?? el.firstElementChild);
+  //   await assertNoA11yViolations(el);   // opt-in a11y check
   // });
 });

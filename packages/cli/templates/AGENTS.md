@@ -469,7 +469,7 @@ import '@webjsdev/core/client-router';              // enable SPA nav
 import { unsafeHTML, live } from '@webjsdev/core/directives';
 import { createContext } from '@webjsdev/core/context';
 import { Task } from '@webjsdev/core/task';
-import { fixture, waitForUpdate } from '@webjsdev/core/testing';
+import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations } from '@webjsdev/core/testing';
 
 import { rateLimit, cors, cache, createAuth, Credentials, Session } from '@webjsdev/server';
 ```

@@ -116,6 +116,54 @@ package, it goes in that package's `test/`.
 
 ---
 
+## Component test helpers (`@webjsdev/core/testing`)
+
+`import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations, click, shadowQuery, shadowQueryAll } from '@webjsdev/core/testing'`. The mount + hydrate + a11y helpers run in the WTR Chromium session (real DOM), thin wrappers over the browser already running.
+
+### `fixture()` vs `ssrFixture()`
+
+Both server-render an `html\`…\`` template (via `renderToString`, with DSD) and set the markup into a container so the browser upgrades the custom element. The difference is how they wait:
+
+- **`fixture(template)`** waits two macrotasks. Use it for a quick mount where the SSR-then-hydrate distinction does not matter.
+- **`ssrFixture(template)`** awaits the element's NATIVE `updateComplete` promise (the real render-cycle resolution), not a timer, so the post-hydration DOM is observable deterministically. It is the documented SSR + hydrate entry. Its contract: the SSR'd markup and the post-hydration DOM agree, so a hydration mismatch (server renders one thing, client another) is observable by comparing the SSR'd inner HTML against `el.innerHTML` / `el.shadowRoot.innerHTML` after it resolves. The component class must already be registered (the test imports its module, same as `fixture()`).
+
+`waitForUpdate(el)` now also awaits the native `updateComplete` when present (falling back to a macrotask flush for a plain element), so a re-render after a property assignment or signal `set()` settles deterministically.
+
+```js
+import { html } from '@webjsdev/core';
+import { ssrFixture, waitForUpdate } from '@webjsdev/core/testing';
+
+const el = await ssrFixture(html`<my-counter count="5"></my-counter>`);
+assert.ok(el.innerHTML.includes('5'));          // post-hydration DOM
+
+el.count = 10;
+await waitForUpdate(el);                          // awaits the real cycle
+assert.ok(el.innerHTML.includes('10'));
+```
+
+**Hydration-mismatch pattern.** To assert SSR and the hydrated DOM agree, normalise the SSR string (strip the `<!--webjs-hydrate-->` marker, `data-webjs-prop-*` attributes, part comments) and compare against the live `el.innerHTML`. The counterfactual is a component whose `render()` is non-deterministic across the SSR call and the hydration render; `ssrFixture` returns the live hydrated element, so the divergence is detectable. The worked tests live in `packages/core/test/testing/browser/ssr-fixture.test.js`, alongside the broader SSR-vs-client parity corpus in `packages/core/test/rendering/browser/ssr-client-parity.test.js`.
+
+### `assertNoA11yViolations(el, opts?)` (opt-in)
+
+An OPT-IN accessibility assertion that runs the standard axe-core engine against an element's subtree in the WTR Chromium session. Nothing calls it for you, it is never a forced gate.
+
+axe-core is a TEST-ONLY peer, imported dynamically by the helper, so it is NOT a hard dependency of `@webjsdev/core`. Install it where you run the test (`npm install -D axe-core`; the scaffold and this repo already ship it). If it is missing, the helper throws a clear message: `assertNoA11yViolations needs axe-core. Install it: npm install -D axe-core`.
+
+On zero violations it resolves; on a violation it throws an Error whose message lists each violation's id, impact, a short help string, and the failing nodes' selectors, so the failure is actionable. `opts` passes through to `axe.run` (e.g. `{ rules: { 'color-contrast': { enabled: false } } }`).
+
+```js
+import { ssrFixture, assertNoA11yViolations } from '@webjsdev/core/testing';
+
+const el = await ssrFixture(html`<my-form></my-form>`);
+await assertNoA11yViolations(el);                // passes a clean subtree
+
+// a <button> with no accessible name, an <input> with no label, an <img>
+// with no alt: each throws a named violation. Worked both-direction tests
+// live in packages/core/test/testing/browser/a11y.test.js.
+```
+
+---
+
 ## The handle() test harness (`@webjsdev/server/testing`)
 
 `createRequestHandler({ appDir }).handle(request)` drives the FULL request
