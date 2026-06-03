@@ -282,6 +282,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `notFound()` | Throw to return 404 rendered via `not-found.js`. |
 | `redirect(url)` | Throw to return 307 (default) or 308 redirect. |
 | `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. **Server-side only**; import inside `.server.{js,ts}` files. The bare `@webjsdev/core` specifier resolves to the browser entry, which excludes `expose`; an import from a client-bound file silently reads `undefined`. |
+| `validateInput(fn, validate)` | Attach an input validator to a server action that runs on BOTH the RPC path and the `expose()` REST path, returning a structured `{ success: false, fieldErrors, status: 422 }` on failure (#245). **Server-side only**; excluded from the browser entry like `expose`. See the server-actions section. |
 | `repeat(items, k, t)` | Keyed list directive. Preserves DOM identity on reorder. |
 | `Suspense({fallback, children})` | Streaming boundary. |
 | `connectWS(url, handlers)` | Client WebSocket: auto-reconnect, JSON, queued sends. |
@@ -533,7 +534,16 @@ Two markers describe server-side files. The combination determines behaviour:
 
 - Server actions export named async functions. Args + return values must round-trip through webjs's serializer.
 - **Importing from a client component IS the API.** The dev server rewrites the import to an RPC stub.
-- **Expose as REST:** `expose('METHOD /path', fn, { validate?: parse })`. Same function powers both callers. `validate` runs only on the HTTP path (direct RPC bypasses it).
+- **Expose as REST:** `expose('METHOD /path', fn, { validate?: parse })`. Same function powers both callers.
+- **Input validation runs on BOTH call paths (#245).** A `validate` declared once runs SERVER-SIDE before the action body whether the action is invoked via the RPC path (a client component import) OR via its `expose()` REST route. Attach it two ways:
+  - `validateInput(fn, validate)` from `@webjsdev/core` (a pure-RPC action, no REST route), or
+  - `expose('METHOD /path', fn, { validate })` (also a REST route).
+  Both write the same metadata, so both call paths see the validator. The framework only CALLS the validator (it ships no validation library) and interprets the return:
+  - `{ success: true, data? }` -> valid; the action runs with `data` if present, else the original input;
+  - `{ success: false, fieldErrors, message? }` (an object with a boolean `success` of `false`, OR a `fieldErrors`) -> FAILED; the framework returns a structured `ActionResult` `{ success: false, fieldErrors, error: message?, status: 422 }` WITHOUT calling the action body. Over RPC this is a normal 200 result the client reads as `result.fieldErrors`; over REST it is a 422 JSON response. This is the new structured field-error path that matches the `ActionResult` envelope (so the no-JS page-action re-render and the client both understand it);
+  - a THROW -> a sanitized error (a 400 on REST keeping a schema lib's `issues`; on RPC the same sanitized error result as a thrown action body, prod-safe);
+  - any OTHER returned plain value -> treated as the transformed/coerced input (back-compat with `validate: Schema.parse`).
+  Disambiguation: a return is an envelope ONLY when it is an object with a boolean `success` OR a `fieldErrors`; otherwise it is a transformed input. The validator lives in the `.server` file and never ships to the client. Stay zod-free with a three-line adapter: `validate: (i) => { const r = Schema.safeParse(i); return r.success ? { success: true, data: r.data } : { success: false, fieldErrors: r.error.flatten().fieldErrors }; }`. The validator receives the action's FIRST argument (the conventional single input object).
 
 ### RPC security model
 

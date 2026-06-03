@@ -181,8 +181,8 @@ export const createPost = expose('POST /api/posts', async ({ title, body }: { ti
     <pre>expose('GET /api/posts/:slug', fn)       // :slug style
 expose('DELETE /api/posts/[slug]', fn)   // [slug] style: equivalent</pre>
 
-    <h3>expose() Validate Hook</h3>
-    <p>The optional <code>validate</code> function runs before the action when invoked over HTTP. It receives the merged input object and should return the validated/transformed input. Throw to reject with a 400 response.</p>
+    <h3>Validate Hook (both call paths)</h3>
+    <p>The optional <code>validate</code> function runs server-side before the action body on BOTH the internal RPC path (a client component import) AND the HTTP path (issue #245). It receives the action's first argument. Besides the throw-to-reject form below, it can return a structured <code>{ success: false, fieldErrors }</code> envelope (a <code>422</code> over HTTP, a <code>result.fieldErrors</code> object over RPC) or a transformed input value. To attach a validator to a pure-RPC action with no HTTP route, use <code>validateInput(fn, validate)</code> instead of <code>expose()</code>.</p>
 
     <pre>import { z } from 'zod';
 

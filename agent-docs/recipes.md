@@ -124,6 +124,81 @@ export async function updateProfile(input: { name: string }) {
 Call it from a client component via a normal import. The dev server
 rewrites the import to a typed RPC stub.
 
+## Validate a server action's input once, for both call paths (#245)
+
+`validateInput(fn, validate)` attaches an input validator that runs
+SERVER-SIDE before the action body on EVERY call path (the RPC path a
+client component import takes AND the `expose()` REST route if the action
+has one). On failure it returns a structured `ActionResult`
+(`{ success: false, fieldErrors, status: 422 }`) the client reads as
+`result.fieldErrors`. The framework ships no validation library; the
+validator is a plain function (or a three-line zod adapter).
+
+```ts
+// modules/posts/actions/create-post.server.ts
+'use server';
+import { validateInput } from '@webjsdev/core';
+import { prisma } from '../../../lib/prisma.server.ts';
+
+export const createPost = validateInput(
+  // the action body: runs ONLY when validation passes
+  async (input: { title: string; body: string }) => {
+    const row = await prisma.post.create({ data: input });
+    return { success: true, data: row };
+  },
+  // the validator: receives the action's FIRST argument
+  (input) => {
+    const fieldErrors: Record<string, string> = {};
+    const title = String(input?.title || '').trim();
+    if (!title) fieldErrors.title = 'Title is required';
+    if (String(input?.body || '').length < 10) fieldErrors.body = 'Too short';
+    if (Object.keys(fieldErrors).length) return { success: false, fieldErrors };
+    return { success: true, data: { title, body: String(input.body) } }; // coerced input
+  },
+);
+```
+
+Reading the structured failure in a client component is just a property
+read on the returned object (an invalid call resolves with the failure
+envelope, it does NOT throw):
+
+```ts
+// components/post-form.ts (browser)
+import { createPost } from '../modules/posts/actions/create-post.server.ts';
+
+const result = await createPost({ title: this.title, body: this.body });
+if (!result.success) {
+  this.errors = result.fieldErrors ?? {};   // { title: 'Title is required', ... }
+  return;
+}
+// result.data is the created row
+```
+
+**Zod adapter (keeps the framework zod-free):** wrap `safeParse` so its
+result becomes the contract envelope.
+
+```ts
+import { z } from 'zod';
+const Schema = z.object({ title: z.string().min(1), body: z.string().min(10) });
+
+export const createPost = validateInput(
+  async (input) => { /* ... */ },
+  (i) => {
+    const r = Schema.safeParse(i);
+    return r.success
+      ? { success: true, data: r.data }
+      : { success: false, fieldErrors: r.error.flatten().fieldErrors };
+  },
+);
+```
+
+To ALSO expose the action as REST with the SAME validator, pass `validate`
+to `expose()` instead of using `validateInput`:
+`expose('POST /api/posts', fn, { validate })`. A `{ success: false,
+fieldErrors }` return becomes a 422 JSON response there; a validator that
+THROWS (the classic `Schema.parse` style) becomes a 400, and a non-envelope
+return transforms the input (back-compat).
+
 ## Add a component
 
 ```ts
