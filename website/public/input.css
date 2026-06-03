@@ -29,8 +29,6 @@
   --text-h2:      clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
   --text-lede:    clamp(1.08rem, 0.98rem + 0.4vw, 1.28rem);
 
-  --shadow-card:  0 8px 30px oklch(0.5 0.08 55 / 0.10), 0 2px 6px oklch(0.5 0.06 55 / 0.06);
-
   --duration-fast: 140ms;
   --duration-slow: 220ms;
 }
