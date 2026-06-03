@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
       { href: '/docs/architecture', label: 'Architecture' },
       { href: '/docs/no-build', label: 'No-Build Model' },
       { href: '/docs/configuration', label: 'Configuration' },
+      { href: '/docs/migrating-from-nextjs', label: 'Migrating from Next.js' },
     ],
   },
   {

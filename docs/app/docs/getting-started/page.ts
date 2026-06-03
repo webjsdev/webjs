@@ -134,6 +134,7 @@ Counter.register('my-counter');</pre>
       <li><a href="/docs/components">Components</a>: web components with shadow DOM + scoped styles</li>
       <li><a href="/docs/server-actions">Server Actions</a>: type-safe server functions callable from client components</li>
       <li><a href="/docs/backend-only">Backend-Only Mode</a>: use webjs as a pure API framework</li>
+      <li><a href="/docs/migrating-from-nextjs">Migrating from Next.js</a>: a concept map for Next users (no RSC, isomorphic modules, the .server boundary)</li>
     </ul>
   `;
 }
