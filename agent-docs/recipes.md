@@ -4,6 +4,88 @@ Copy-paste patterns for the most common webjs tasks. Each recipe is the
 canonical shape, follow it rather than inventing a variant. The full API
 reference lives in the root `AGENTS.md`.
 
+## Schema-first: from scaffold to product (do this FIRST)
+
+A freshly scaffolded app ships an EXAMPLE `User` model, an example
+`app/page.ts`, and an example component. They are starting-point references,
+not the product. The first thing to do for a real app is replace the example
+schema with the real domain models, then build features on top. This is the
+transition agents most often get wrong, so it is the first recipe.
+
+> **Two non-negotiables.** NEVER leave the example `User` model in
+> `schema.prisma` if the app does not actually have users (delete or replace
+> it). NEVER persist app data in JSON files (`data/todos.json`, `db.json`), in
+> a module-scope array or `Map`, or in `localStorage`. Those reset on every
+> reload and cannot scale. Every piece of stored data is a Prisma model.
+
+1. **Edit `prisma/schema.prisma`** to the real domain. Replace the example
+   `User` model with the models the app needs.
+
+   ```prisma
+   // prisma/schema.prisma
+   model Post {
+     id        String   @id @default(cuid())
+     title     String
+     body      String
+     published Boolean  @default(false)
+     createdAt DateTime @default(now())
+   }
+   ```
+
+2. **Migrate.** Run the npm script (not the `webjs`/`prisma` binary directly,
+   so the `predev` / `db:*` hooks fire):
+
+   ```sh
+   npm run db:migrate -- --name add_post
+   ```
+
+   This creates the migration, applies it to the dev SQLite database, and
+   regenerates the Prisma client.
+
+3. **Generate one query and one action per operation**, one exported function
+   per file, named after the file, under the feature module. Reads go in
+   `queries/`, mutations in `actions/`. Both are `.server.ts` with
+   `'use server'`, so their browser imports become typed RPC stubs.
+
+   ```ts
+   // modules/posts/queries/list-posts.server.ts
+   'use server';
+   import { prisma } from '../../../lib/prisma.server.ts';
+   export async function listPosts() {
+     return prisma.post.findMany({ where: { published: true }, orderBy: { createdAt: 'desc' } });
+   }
+   ```
+
+   ```ts
+   // modules/posts/actions/create-post.server.ts
+   'use server';
+   import { prisma } from '../../../lib/prisma.server.ts';
+   export async function createPost(input: { title: string; body: string }) {
+     const title = String(input?.title || '').trim();
+     if (!title) return { success: false, error: 'title required', status: 400 };
+     const post = await prisma.post.create({ data: { title, body: String(input?.body || '') } });
+     return { success: true, data: post };
+   }
+   ```
+
+4. **Wire it into a page** by calling the query (the page runs on the server,
+   so it imports the `.server` query directly and awaits it). Never import
+   `@prisma/client` into a page; reach the database through the query.
+
+   ```ts
+   // app/posts/page.ts
+   import { html } from '@webjsdev/core';
+   import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
+   export default async function Posts() {
+     const posts = await listPosts();
+     return html`<ul>${posts.map((p) => html`<li>${p.title}</li>`)}</ul>`;
+   }
+   ```
+
+For the write path, pair `create-post.server.ts` with a `<form>` plus a page
+`action` or a `route.ts` POST handler (see the form-mutation recipe below), so
+it works without JavaScript and the client router upgrades it automatically.
+
 ## Add a page
 
 ```ts

@@ -297,6 +297,24 @@ API_KEY="sk-..."</pre>
     <p><code>AUTH_SECRET</code> signs session cookies and auth tokens, so treat it like any signing key: use 32 or more random characters, keep it only in the platform secret store, and rotate it periodically and immediately on any suspected exposure. Rotating it invalidates existing sessions and tokens (everyone is signed out), which is the point. For a zero-downtime rotation, deploy the new value during a low-traffic window and accept that active sessions end. The same applies to any <code>SESSION_SECRET</code> and to OAuth provider secrets.</p>
     <p>See the <a href="/docs/configuration">Configuration</a> page for the precedence rules and the optional <code>env.{js,ts}</code> boot-time validation that fails fast on a missing or malformed secret.</p>
 
+    <h2>Database connections (Prisma + Postgres)</h2>
+    <p>SQLite needs no pool tuning. When you move to Postgres in production, size the connection pool, because connection exhaustion is the most common scaling surprise and webjs gives no prior signal in dev (SQLite has no pool).</p>
+    <p>A webjs server is ONE Node process per instance, and Prisma opens its own connection pool inside that process. The default pool size is <code>num_cpus * 2 + 1</code>, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
+    <p><strong>Bound the per-instance pool with <code>connection_limit</code> in the <code>DATABASE_URL</code></strong>, sized so <code>instances * connection_limit</code> stays comfortably under the database's <code>max_connections</code> (leave headroom for migrations and admin tools):</p>
+    <pre># One pool of at most 10 connections per instance.
+DATABASE_URL="postgresql://user:pass@db.example.com:5432/app?connection_limit=10"</pre>
+    <p><strong>Front Postgres with a pooler when instance count is high or variable</strong> (autoscaling, many small instances, or a low <code>max_connections</code> plan). Point <code>DATABASE_URL</code> at a transaction-mode pooler (PgBouncer, or a managed pooler like Supabase, Neon, or PlanetScale) so many app connections share a small set of real database connections. With PgBouncer in transaction mode, tell Prisma so it disables prepared statements, and give migrations a DIRECT connection (the pooler does not support the session features migrations need):</p>
+    <pre># App traffic goes through the pooler (port 6543), migrations go direct (5432).
+DATABASE_URL="postgresql://user:pass@pooler.example.com:6543/app?pgbouncer=true&amp;connection_limit=1"
+DIRECT_URL="postgresql://user:pass@db.example.com:5432/app"</pre>
+    <pre>// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}</pre>
+    <p>Behind a transaction pooler, set <code>connection_limit=1</code> per instance (the pooler does the multiplexing). Without a pooler, set <code>connection_limit</code> to a per-instance budget and keep the instance count bounded. Either way, always import the Prisma client from the scaffolded <code>lib/prisma.server.ts</code> singleton, never <code>new PrismaClient()</code> per request, so a process opens one pool, not one per call.</p>
+
     <h2>Docker / Containerisation</h2>
     <p>A minimal Dockerfile for a webjs app:</p>
     <pre>FROM node:24-slim
