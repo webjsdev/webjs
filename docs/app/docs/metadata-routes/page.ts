@@ -34,18 +34,43 @@ export default function MetadataRoutes() {
     </table>
 
     <h2>sitemap.ts</h2>
+    <p>The <code>sitemap()</code> helper from <code>@webjsdev/server</code> turns an array of entries into spec-valid <code>&lt;urlset&gt;</code> XML for you (escaping each URL, formatting <code>lastModified</code> as a W3C datetime, validating <code>priority</code> and <code>changeFrequency</code>). Return its output from the default export.</p>
     <pre>// app/sitemap.ts
-import { prisma } from '../lib/prisma.server.ts';
+import { sitemap } from '@webjsdev/server';
+import { listPostSlugs } from '../modules/blog/queries/list-post-slugs.server.ts';
 
-export default async function sitemap() {
-  const posts = await prisma.post.findMany({ select: { slug: true, updatedAt: true } });
-  return [
-    { url: 'https://example.com/', lastModified: new Date() },
+export default async function () {
+  const posts = await listPostSlugs();
+  return sitemap([
+    { url: 'https://example.com/', lastModified: new Date(), changeFrequency: 'daily', priority: 1 },
     ...posts.map(p => ({
       url: ${'`https://example.com/blog/${p.slug}`'},
       lastModified: p.updatedAt,
     })),
-  ];
+  ]);
+}</pre>
+    <p>Each entry is <code>{ url, lastModified?, changeFrequency?, priority? }</code>. The <code>url</code> is REQUIRED and XML-escaped (a value with <code>&amp;</code> or <code>&lt;</code> cannot break the document). A malformed entry (no <code>url</code>), an out-of-range <code>priority</code>, or an unknown <code>changeFrequency</code> is dropped rather than emitted as broken XML. The helper is OPTIONAL: you can still return a raw string or a <code>Response</code> for full control.</p>
+
+    <h3>Sharding a large site (sitemap index)</h3>
+    <p>A single sitemap maxes out at 50,000 URLs. To shard past that, serve each chunk from a <code>route.ts</code> handler and point a root <code>sitemapIndex()</code> at them. Both helpers share the same escaping + date rules.</p>
+    <pre>// app/sitemaps/[shard]/route.ts
+import { sitemap } from '@webjsdev/server';
+import { listShardUrls } from '../../../modules/blog/queries/list-shard-urls.server.ts';
+
+export async function GET(req: Request, { params }: { params: { shard: string } }) {
+  const entries = await listShardUrls(params.shard);
+  return new Response(sitemap(entries), {
+    headers: { 'content-type': 'application/xml; charset=utf-8' },
+  });
+}</pre>
+    <pre>// app/sitemap.ts (the index)
+import { sitemapIndex } from '@webjsdev/server';
+
+export default function () {
+  return sitemapIndex([
+    { url: 'https://example.com/sitemaps/posts.xml', lastModified: new Date() },
+    { url: 'https://example.com/sitemaps/pages.xml' },
+  ]);
 }</pre>
 
     <h2>robots.ts</h2>
