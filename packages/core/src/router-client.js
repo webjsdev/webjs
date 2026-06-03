@@ -1242,6 +1242,88 @@ function refreshPrefetchObservers() {
 }
 
 /**
+ * Render the minimal default in-place error surface into the deepest
+ * shared layout children slot, so the SPA shell (outer chrome, nav,
+ * scroll, focus, client state) survives a failed navigation instead of
+ * being destroyed by a full reload. Returns true when it rendered into a
+ * slot, false when no shared layout marker exists (a cross-document nav).
+ * On a false return the caller may fall back to a hard load as a last
+ * resort.
+ *
+ * @param {number | null} status  HTTP status of the failed response, or null for a transport/parse failure.
+ * @returns {boolean}
+ */
+function renderInPlaceNavError(status) {
+  if (typeof document === 'undefined' || !document.body) return false;
+  const here = collectChildrenSlots(document.body);
+  // The deepest slot is the same swap target a normal partial swap writes
+  // to (longest path wins), so the outer chrome / nav are preserved.
+  /** @type {{ start: Comment, end: Comment } | undefined} */
+  let deepest;
+  let deepestPathLen = -1;
+  for (const [path, slot] of here) {
+    if (path.length > deepestPathLen) { deepestPathLen = path.length; deepest = slot; }
+  }
+  if (!deepest) return false;
+  const liveParent = deepest.start.parentNode;
+  if (!liveParent || deepest.start.parentNode !== deepest.end.parentNode) return false;
+
+  const alert = document.createElement('div');
+  alert.setAttribute('role', 'alert');
+  alert.setAttribute('data-webjs-nav-error', '');
+  const msg = status
+    ? `This page could not be loaded. (status ${status})`
+    : 'This page could not be loaded.';
+  alert.textContent = msg;
+
+  // Replace the slot contents with the alert.
+  const range = document.createRange();
+  range.setStartAfter(deepest.start);
+  range.setEndBefore(deepest.end);
+  range.deleteContents();
+  liveParent.insertBefore(alert, deepest.end);
+  return true;
+}
+
+/**
+ * Shared fallback for a non-HTML error response or a transport/parse
+ * failure during a client navigation. Dispatches a cancelable
+ * `webjs:navigation-error` event on `document` (matching the
+ * `webjs:frame-missing` / `webjs:prefetch` dispatch convention) so the
+ * app can recover in place. If the app calls `preventDefault()`, the
+ * router does NOTHING further and leaves the current page exactly as it
+ * is. Otherwise it renders a minimal in-place `role="alert"` surface into
+ * the deepest layout children slot (the SPA shell survives), and only
+ * hard-navigates as a last resort when no in-place target exists.
+ *
+ * Never call this for an AbortError: a superseding nav is a normal
+ * supersede, not an error, and must not surface a navigation-error.
+ *
+ * @param {string} href  The URL that failed to navigate to.
+ * @param {number | null} status  HTTP status when a response arrived, else null.
+ * @param {Error | null} error  The Error for a transport/parse failure, else null.
+ */
+function handleNavigationError(href, status, error) {
+  const evt = new CustomEvent('webjs:navigation-error', {
+    bubbles: true,
+    cancelable: true,
+    detail: { url: href, status: status == null ? null : status, error: error || null },
+  });
+  if (typeof document !== 'undefined') document.dispatchEvent(evt);
+  // The app owns recovery: leave the page untouched (shell, scroll, focus,
+  // client state all preserved). No reload, no render.
+  if (evt.defaultPrevented) return;
+  // Default: render a minimal in-place error surface so the SPA is not
+  // destroyed and the user is not sent to a second failing round-trip.
+  if (renderInPlaceNavError(status)) return;
+  // Last resort only: no shared layout marker to render into (a genuine
+  // cross-document nav). Fall back to a hard load so an unrecoverable case
+  // is not a silent dead-end. This is the exception, reached only after
+  // the event was not cancelled AND no in-place target exists.
+  if (typeof location !== 'undefined') location.href = href;
+}
+
+/**
  * Fetch the target URL and apply the swap.
  *
  * @param {string} href
@@ -1250,7 +1332,7 @@ function refreshPrefetchObservers() {
  * @param {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null} optimisticState
  * @param {string} [method]  HTTP verb (uppercase). Default 'GET'.
  * @param {BodyInit | null} [body]  Request body for non-GET methods.
- * @param {AbortSignal | null} [signal]  Abort signal - newer nav cancels this fetch.
+ * @param {AbortSignal | null} [signal]  Abort signal. A newer nav cancels this fetch.
  * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
  */
 async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
@@ -1311,12 +1393,17 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       return;
     }
 
-    // Non-HTML response (JSON error, file download, opaque): let the
-    // browser handle it. Same for non-OK responses that aren't HTML
-    // (a 500 returning `{"error": "..."}` shouldn't be rendered as a
-    // page).
+    // Non-HTML response (JSON error, file download, opaque): can't be
+    // rendered as a page (a 500 returning `{"error": "..."}` is not an
+    // HTML page). Instead of abandoning the SPA with a full reload (which
+    // discards the partial-swap shell, scroll, and in-flight state, and
+    // eats a second round-trip that may itself fail), dispatch a
+    // cancelable `webjs:navigation-error` so the app can recover in place;
+    // by default render a minimal in-place error surface. The adjacent
+    // HTML-status branch below already renders 4xx/5xx HTML bodies in
+    // place; this closes the same gap for a non-HTML error body.
     if (!isHTML) {
-      if (myToken === currentNavigationToken) location.href = href;
+      if (myToken === currentNavigationToken) handleNavigationError(href, resp.status, null);
       return;
     }
 
@@ -1335,13 +1422,19 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     html = await resp.text();
     }
   } catch (err) {
-    // Aborted by a newer navigation: let it run, don't fall back.
+    // Aborted by a newer navigation: let it run, don't fall back. An
+    // AbortError is a normal supersede, NOT a navigation error, so it must
+    // NEVER dispatch webjs:navigation-error (the key no-false-positive
+    // line).
     if (err && /** @type any */ (err).name === 'AbortError') return;
-    // Stale (a newer nav started before we got the network error) -
-    // the newer nav owns the page now; don't clobber it.
+    // Stale (a newer nav started before we got the network error): the
+    // newer nav owns the page now, so don't clobber it.
     if (myToken !== currentNavigationToken) return;
     restoreOptimistic(optimisticState);
-    location.href = href;
+    // Transport/parse failure (fetch rejected, e.g. offline / DNS / TLS).
+    // Surface a navigation-error so the app can recover in place instead
+    // of a destructive full reload.
+    handleNavigationError(href, null, err instanceof Error ? err : new Error(String(err)));
     return;
   }
 
@@ -1350,7 +1443,10 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   if (myToken !== currentNavigationToken) return;
 
   const doc = parseHTML(html);
-  if (!doc) { location.href = href; return; }
+  // The body claimed text/html but didn't parse into a document (a
+  // malformed/empty HTML body). Surface a navigation-error so the app can
+  // recover in place rather than a destructive full reload.
+  if (!doc) { handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return; }
 
   applySwap(doc, frameId, false, finalUrl, incomingBuild);
 

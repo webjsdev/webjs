@@ -790,6 +790,20 @@ event (detail `{ frameId, url, document }`) and leaves the frame unchanged
 rather than silently swapping the whole page; call `preventDefault()` to take
 over the outcome (e.g. `location.assign(e.detail.url)`).
 
+**Failed navigations recover in place, never a destructive full reload.** A
+successful swap and an HTML error body of any status (e.g. a `422` re-rendered
+form) both apply in place. For the remaining failure cases (a non-HTML error
+response like a `500` with a JSON body, or a transport/parse failure) the
+router fires a cancelable, bubbling `webjs:navigation-error` event on
+`document` (detail `{ url, status, error }`, where `status` is the HTTP status
+or `null`, and `error` is the `Error` or `null`). `preventDefault()` hands
+recovery to you and leaves the page exactly as it is (shell, scroll, focus,
+client state preserved); otherwise the router renders a minimal in-place
+`<div role="alert">` into the deepest layout children slot (outer chrome
+preserved), only hard-loading as a last resort when there is no shared layout
+marker. An AbortError (a superseding nav) is a normal supersede and never fires
+the event.
+
 ### 5. `loading.ts` for per-segment skeletons
 
 Drop a `loading.ts` in any route segment. The framework auto-wraps the

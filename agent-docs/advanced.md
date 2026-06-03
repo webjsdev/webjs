@@ -363,6 +363,49 @@ navigation automatically.
    URL, scrolls.
 6. Dispatches `webjs:navigate` event on `document`.
 
+### In-place navigation-error recovery (`webjs:navigation-error`)
+
+A successful swap (2xx/3xx) applies in place, and an HTML error body of any
+status (a 4xx/5xx page, e.g. a `422` re-rendered form) is ALSO applied in
+place. The remaining failure cases are a **non-HTML error response** (a
+`500` carrying a JSON body) and a **transport/parse failure** (the `fetch`
+rejected, or the body claimed HTML but did not parse). For those the router
+no longer abandons the SPA with a destructive full `location.href` reload
+(which would discard the partial-swap shell, scroll, focus, and in-flight
+client state, and eat a second round-trip that may itself fail to the
+browser's default error page).
+
+Instead the router dispatches a cancelable, bubbling
+`webjs:navigation-error` CustomEvent on `document`, with detail
+`{ url, status, error }`: `status` is the HTTP status when a response
+arrived (else `null`), and `error` is the `Error` for a transport/parse
+failure (else `null`).
+
+- **`preventDefault()` hands recovery to the app.** The router does NOTHING
+  further: the current page is left exactly as it is (shell, scroll, focus,
+  and client state all preserved), so the app can show its own toast, retry,
+  or navigate elsewhere.
+- **Not cancelled (the default)** renders a MINIMAL in-place error surface,
+  a `<div role="alert" data-webjs-nav-error>` carrying a generic message
+  plus the status, into the deepest layout children slot (the same target a
+  normal partial swap writes to, so outer chrome and nav are preserved). No
+  full reload, the shell survives, and the user sees the failure.
+- **Last-resort hard load** happens only when there is NO shared layout
+  marker to render into (a genuine cross-document nav), and only after the
+  event was not cancelled, so a truly unrecoverable case is not a silent
+  dead-end. This is the exception, not the default.
+
+An **AbortError** (a newer navigation superseding this one) is a normal
+supersede, NOT an error, and never dispatches `webjs:navigation-error`.
+
+```ts
+document.addEventListener('webjs:navigation-error', (e) => {
+  // e.detail = { url, status, error }
+  e.preventDefault();                 // app handles recovery; page left intact
+  showToast(`Could not load ${e.detail.url} (status ${e.detail.status})`);
+});
+```
+
 ### Wire-byte optimization
 
 The router sends `X-Webjs-Have: <paths>` listing the marker paths it
