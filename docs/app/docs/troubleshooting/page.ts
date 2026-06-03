@@ -39,7 +39,7 @@ export default function Troubleshooting() {
     <h2>A component's first paint is empty until JavaScript runs</h2>
     <p><strong>Symptom:</strong> a component shows a blank or skeleton state on first load and fills in only after hydration, and with JavaScript disabled it stays empty.</p>
     <p><strong>Cause:</strong> initial data is fetched in <code>connectedCallback</code> or <code>firstUpdated</code>, neither of which runs during SSR, so the server-rendered HTML is empty by design. This breaks progressive enhancement.</p>
-    <p><strong>Fix:</strong> fetch the data on the server in the page function and pass it down as a prop (<code>.prop=\${richObject}</code> for a custom element, which round-trips through SSR, or an attribute for a native element). Reserve <code>connectedCallback</code> for genuinely browser-only refinement. See <a href="/docs/progressive-enhancement">Progressive Enhancement</a>. This is framework invariant 7.</p>
+    <p><strong>Fix:</strong> fetch the data on the server in the page function and pass it down as a prop (<code>.prop=\${richObject}</code> for a custom element, which round-trips through SSR, or an attribute for a native element). Reserve <code>connectedCallback</code> for genuinely browser-only refinement. See <a href="/docs/progressive-enhancement">Progressive Enhancement</a>.</p>
 
     <h2>A whole page gets replaced on a frame navigation</h2>
     <p><strong>Symptom:</strong> clicking a link inside a <code>&lt;webjs-frame&gt;</code> replaces the entire document instead of just the frame (for example an auth redirect returning a login page).</p>
@@ -61,9 +61,9 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> the bare <code>@webjsdev/core</code> specifier resolves to the BROWSER entry, which excludes server-only exports like <code>expose</code>. Importing it from a client-bound file silently reads <code>undefined</code>.</p>
     <p><strong>Fix:</strong> only use <code>expose</code> inside a <code>.server.{js,ts}</code> file, where the import resolves to the full server surface. See <a href="/docs/expose">expose()</a>.</p>
 
-    <h2>Component styles leak across the page</h2>
-    <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block styles elements outside the component, and the framework warns at runtime.</p>
-    <p><strong>Cause:</strong> <code>static styles</code> scopes via shadow DOM, but the component is in light DOM (the default), so the styles apply globally.</p>
+    <h2>A component's <code>static styles</code> have no effect (and a console warning)</h2>
+    <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block does not style the component at all, and the framework warns at runtime.</p>
+    <p><strong>Cause:</strong> <code>static styles</code> is adopted through a shadow root, but the component is in light DOM (the default), which has no shadow root, so the stylesheet is never adopted and the framework warns.</p>
     <p><strong>Fix:</strong> add <code>static shadow = true</code> to scope the styles, or use Tailwind utilities (unique by construction), or, if you keep custom CSS in light DOM, prefix every class selector with the component tag name (framework invariant 7 for light-DOM CSS). See <a href="/docs/styling">Styling</a>.</p>
 
     <h2>Still stuck</h2>
