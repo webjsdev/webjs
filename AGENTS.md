@@ -857,6 +857,25 @@ webjs already has `redirect(url)` (an imperative, request-time throw sentinel). 
 
 ---
 
+## Trailing-slash policy: `webjs.trailingSlash` in package.json (#255)
+
+webjs's file router matches `/about` AND `/about/` against the same route (every route pattern ends with `/?$`, so both render IDENTICAL HTML). That is fine for serving but bad for SEO (search engines treat the two URLs as duplicate content that splits link equity) and for the client-router cache (two keys for one page). The trailing-slash policy picks ONE canonical form and 308-redirects the other to it. Declare it under `package.json` `"webjs": { "trailingSlash": ... }`, cohesive with `webjs.redirects` / `webjs.headers` / `webjs.csp`:
+
+```jsonc
+{ "webjs": { "trailingSlash": "never" } }    // /about/ -> /about (recommended)
+{ "webjs": { "trailingSlash": "always" } }   // /about  -> /about/
+{ "webjs": { "trailingSlash": "ignore" } }   // no canonicalization (the default)
+```
+
+- **Values.** `"never"` strips a trailing slash, `"always"` adds one, `"ignore"` (or absence, or any unrecognized value) does nothing.
+- **Default is `"ignore"` (non-breaking).** An app that set no policy keeps serving both forms exactly as before; the feature is purely opt-in. **The recommendation for most apps is `"never"`** (the cleaner canonical form), but webjs does not impose it, so adding the feature never silently starts 308-ing an existing app.
+- **Status is 308 Permanent Redirect**, so SEO link equity transfers and a redirected POST stays a POST.
+- **Exemptions.** The ROOT path `/` is always left alone under either policy. Under `"always"`, a path whose last segment looks like a FILE (contains a dot, e.g. `/foo.js`, `/image.png`) is NOT given a trailing slash, since a file is a leaf, not a page directory. Framework-internal `/__webjs/*` paths are exempt. The query string and hash are preserved on the redirect.
+
+**Order vs `webjs.redirects`.** The declarative redirects run FIRST, then the survivor is slash-canonicalized. So an explicit `webjs.redirects` rule always wins. This is NOT loop-free: a redirect whose `destination` CONTRADICTS the slash policy creates an infinite loop. For example `{ trailingSlash: 'never', redirects: [{ source: '/x', destination: '/x/' }] }` ping-pongs forever (`/x` -> 308 `/x/` -> 308 `/x` -> ...). There is no server-side loop guard (matching the `webjs.redirects` warning above); keeping a redirect destination consistent with the slash policy is the author's responsibility. Applied at the very START of request handling (in `dev.js`'s `produce()`, right after `applyRedirects`, before routing / SSR), so the canonical URL reaches the router. Mechanism: `readTrailingSlashPolicy` / `applyTrailingSlash` in `packages/server/src/redirects.js`.
+
+---
+
 ## Conditional GET: ETag + If-None-Match -> 304 (on by default) (#240)
 
 Every CACHEABLE response carries a content-hash `ETag`, and a repeat request whose `If-None-Match` matches it gets a `304 Not Modified` with no body (RFC 7232). So a client holding an identical copy revalidates with a tiny 304 instead of re-transferring the whole body. Wired once at the response funnel in `dev.js`'s `handle()` (mechanism: `applyConditionalGet` in `packages/server/src/conditional-get.js`), so it covers SSR HTML pages, static assets in `public/`, app source modules, and the core / vendor runtime modules uniformly.
