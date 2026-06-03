@@ -41,6 +41,76 @@ const store = getStore();
 setStore(redisStore({ url: process.env.REDIS_URL }));
 ```
 
+### Query result caching (`cache()`) + tag-based invalidation
+
+For DB query / expensive-computation results, wrap an async function with
+`cache(fn, { key, ttl })`. Same function + same args serve from the store
+until the TTL expires:
+
+```ts
+// modules/posts/queries/list-posts.server.ts
+'use server';
+import { cache } from '@webjsdev/server';
+import { prisma } from '../../../lib/prisma.server.ts';
+
+export const listPosts = cache(
+  async () => prisma.post.findMany({ orderBy: { createdAt: 'desc' } }),
+  { key: 'posts', ttl: 60 }
+);
+```
+
+To invalidate a read from an UNRELATED mutation (without importing the
+wrapper), add `tags`. It is either a static `string[]` or a function
+`(...args) => string[]` so a per-entity read tags with the id:
+
+```ts
+export const postById = cache(
+  async (id: string) => prisma.post.findUnique({ where: { id } }),
+  { key: 'post', ttl: 300, tags: (id) => ['post:' + id] } // per-entity tag
+);
+
+export const listPosts = cache(
+  async () => prisma.post.findMany(),
+  { key: 'posts', ttl: 60, tags: ['posts'] } // static tag
+);
+```
+
+A mutating server action then calls `revalidateTag` after the write. It
+works ACROSS modules (the comments module evicts a posts-module read with
+no import of the wrapper):
+
+```ts
+// modules/comments/actions/create-comment.server.ts
+'use server';
+import { revalidateTag, revalidatePath } from '@webjsdev/server';
+
+export async function createComment(input) {
+  await prisma.comment.create({ data: input });
+  await revalidateTag('post:' + input.postId); // postById(postId) recomputes
+  await revalidateTag('posts');                 // listPosts recomputes
+  await revalidatePath('/blog');                // also evict the cached HTML
+  return { success: true };
+}
+```
+
+`revalidateTag('post:5')` evicts ONLY the id-5 entry, leaving other ids
+cached; `revalidateTags([...])` clears several tags at once. This is the
+fix for the old arg-key leak: the no-args `wrapped.invalidate()` (still
+supported) only clears the base key, so tag a per-arg read and evict the
+exact id by tag. An untagged `cache()` is untouched by any `revalidateTag`.
+
+`revalidateTag` evicts cached `cache()` DATA; `revalidatePath` (below)
+evicts cached HTML. Together they are the **server cache invalidation
+surface**, both imported from `@webjsdev/server`.
+
+**Multi-instance note.** The tag index is a thin, non-atomic
+read-modify-write of a JSON array in the store. With a shared Redis store,
+`revalidateTag` reaches every instance for the keys it can see, but two
+instances appending to one tag concurrently can lose an append, so a
+freshly-stored key on a peer might miss eviction and live until its TTL.
+The index entry carries the cache TTL so it self-prunes. For strict
+cross-instance invalidation, prefer a short `ttl` as the floor.
+
 ### Server HTML response cache (`export const revalidate`, ISR for no-build)
 
 For a page that renders the same HTML for every visitor, opt into the

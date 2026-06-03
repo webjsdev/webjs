@@ -24,6 +24,7 @@
  */
 
 import { getStore } from './cache.js';
+import { addKeyToTags } from './cache-tags.js';
 
 /**
  * Wrap an async function with server-side caching.
@@ -33,9 +34,18 @@ import { getStore } from './cache.js';
  * @param {{
  *   key: string,
  *   ttl?: number,
+ *   tags?: string[] | ((...args: Parameters<T>) => string[]),
  * }} opts
  *   - `key`: cache key prefix. Combined with serialized args to form the full key.
  *   - `ttl`: time-to-live in seconds. Default: 60.
+ *   - `tags`: optional tags this cached result belongs to, for cross-module
+ *     invalidation via `revalidateTag(tag)`. Either a static `string[]`
+ *     (every cached entry of this function shares them) or a function
+ *     `(...args) => string[]` so a per-arg read tags with the entity id
+ *     (e.g. `tags: (id) => ['post:' + id]`). The result is also recorded
+ *     under each tag's thin key index so `revalidateTag` can find and
+ *     evict it later, including arg-specific entries that the no-args
+ *     `invalidate()` cannot reach.
  * @returns {T & { invalidate: () => Promise<void> }}
  *   The cached function with the same signature, plus an `invalidate()`
  *   method to manually clear the cache.
@@ -43,6 +53,19 @@ import { getStore } from './cache.js';
 export function cache(fn, opts) {
   const prefix = opts.key;
   const ttlMs = (opts.ttl ?? 60) * 1000;
+  const tagsOpt = opts.tags;
+
+  /**
+   * Resolve the tag list for one call. A function form receives the call
+   * args (so a per-entity read can tag with the id); a static array is
+   * returned as-is. Anything else yields no tags.
+   * @param {any[]} args
+   * @returns {string[]}
+   */
+  function tagsFor(args) {
+    const raw = typeof tagsOpt === 'function' ? tagsOpt(...args) : tagsOpt;
+    return Array.isArray(raw) ? raw.filter((t) => typeof t === 'string' && t) : [];
+  }
 
   const wrapped = /** @type {T & { invalidate: () => Promise<void> }} */ (
     async function (...args) {
@@ -58,6 +81,10 @@ export function cache(fn, opts) {
 
       const result = await fn(...args);
       await store.set(cacheKey, JSON.stringify(result), ttlMs);
+      // Record tag -> cacheKey in the thin tag index so a later
+      // revalidateTag can find and evict this entry (including
+      // arg-specific keys the no-args invalidate() cannot reach).
+      await addKeyToTags(tagsFor(args), cacheKey, ttlMs);
       return result;
     }
   );
