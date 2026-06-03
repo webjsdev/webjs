@@ -41,6 +41,55 @@ const store = getStore();
 setStore(redisStore({ url: process.env.REDIS_URL }));
 ```
 
+### Server HTML response cache (`export const revalidate`, ISR for no-build)
+
+For a page that renders the same HTML for every visitor, opt into the
+server HTML response cache so the SSR pipeline runs once per window
+instead of per request (webjs's no-build equivalent of Next.js's Full
+Route Cache + ISR). Declare a revalidation window on the page module:
+
+```ts
+// app/blog/page.ts
+export const revalidate = 60;   // seconds: cache this page's HTML for 60s
+
+export default async function Blog() {
+  const posts = await listPosts();   // via a server query
+  return html`...`;
+}
+```
+
+**SAFETY (read this).** Caching is OPT-IN and conservative because a
+wrongly-cached per-user page is a data leak. `export const revalidate`
+is you asserting **this page is the same for everyone for N seconds**.
+The cache is keyed by the FULL URL (path + search) only, with no per-user
+keying, so a page that reads `cookies()` / a session / per-user data MUST
+NOT set `revalidate`. The framework also refuses to cache (defense in
+depth) any response that is not a `200`, is a streamed Suspense body,
+sets a non-framework `Set-Cookie` (the framework `webjs_csrf` cookie is
+re-minted per response on a hit and does not block), or runs under CSP
+(its body carries a per-request nonce). A cached page served to a brand
+new visitor still gets a fresh CSRF cookie, so it stays correct.
+
+Evict on a write with `revalidatePath`:
+
+```ts
+// modules/blog/actions/publish-post.server.ts
+'use server';
+import { revalidatePath } from '@webjsdev/server';
+
+export async function publishPost(input) {
+  // ... persist via Prisma ...
+  await revalidatePath('/blog');   // next /blog request re-renders fresh
+  return { success: true };
+}
+```
+
+`revalidatePath(path)` evicts the SERVER HTML cache for one path;
+`revalidateAll()` clears everything. This is distinct from the
+client-side `revalidate()` from `@webjsdev/core`, which evicts the
+BROWSER snapshot cache used by client navigation. Time-based eviction is
+handled automatically by the store TTL (= the `revalidate` seconds).
+
 ## Sessions
 
 ```js

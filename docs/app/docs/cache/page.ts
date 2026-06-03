@@ -51,6 +51,33 @@ export const metadata = {
 
     <p>This sets the standard <code>Cache-Control</code> header on the HTTP response. Browsers and CDNs cache the rendered page without any server-side state.</p>
 
+    <h2>Server HTML Response Cache (export const revalidate)</h2>
+    <p>For a page that renders identical HTML for every visitor, opt into the server HTML response cache so the SSR pipeline runs once per window instead of once per request (webjs's no-build equivalent of Next.js's Full Route Cache and ISR). Declare a revalidation window on the page module:</p>
+
+    <pre>// app/blog/page.ts
+export const revalidate = 60;   // seconds: cache this page's HTML for 60s
+
+export default async function Blog() {
+  const posts = await listPosts();
+  return html\`...\`;
+}</pre>
+
+    <p><strong>Safety.</strong> Caching is opt-in and conservative, because a wrongly-cached per-user page is a data leak. Declaring <code>revalidate</code> asserts <strong>this page is the same for everyone for N seconds</strong>. The cache is keyed by the full URL (path plus search) only, with no per-user keying, so a page that reads <code>cookies()</code>, a session, or any per-user data MUST NOT set <code>revalidate</code>. The framework also refuses to cache any response that is not a <code>200</code>, is a streamed Suspense body, sets a non-framework <code>Set-Cookie</code>, or runs under CSP. A cached page served to a brand new visitor still receives a fresh CSRF cookie, so it stays correct.</p>
+
+    <p>Evict on a write with <code>revalidatePath</code> from a server action:</p>
+
+    <pre>// modules/blog/actions/publish-post.server.ts
+'use server';
+import { revalidatePath } from '@webjsdev/server';
+
+export async function publishPost(input) {
+  // ... persist via Prisma ...
+  await revalidatePath('/blog');   // next /blog request re-renders fresh
+  return { success: true };
+}</pre>
+
+    <p><code>revalidatePath(path)</code> evicts the server HTML cache for one path, and <code>revalidateAll()</code> clears everything. This is distinct from the client-side <code>revalidate()</code> from <code>@webjsdev/core</code>, which evicts the browser snapshot cache used by client navigation. Time-based eviction is handled automatically by the store TTL (the <code>revalidate</code> seconds).</p>
+
     <h2>Low-Level Cache Store</h2>
     <p>Both <code>cache()</code> and the rate limiter are built on a pluggable cache store. You can use it directly for custom caching needs:</p>
 

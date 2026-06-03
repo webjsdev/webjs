@@ -454,6 +454,7 @@ Add `@webjsdev/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugi
 - Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
 - Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). See `agent-docs/metadata.md`.
+- Optional named export `revalidate` (a positive number of seconds) OPTS the page into the server HTML response cache (#241): its rendered HTML is cached and served without re-running the page for that window. SAFETY: only set it on a page that is the SAME FOR EVERYONE (it must NOT read `cookies()` / a session / per-user data), since the cache is keyed by URL only. Evict on demand with `revalidatePath(path)` from `@webjsdev/server`. See the "Server HTML response cache" section below.
 - Optional named export `action`: a possibly-async function receiving `{ request, params, searchParams, url, formData }` that handles a non-GET/HEAD submission to the page's own URL (the no-JS form write-path, #244). It returns an `ActionResult`. On success the server responds `303` to a same-site `result.redirect` (a local `/path`; a cross-origin value is ignored to prevent an open redirect) or the page's own path (Post/Redirect/Get). On failure (`success: false`, or a `fieldErrors`, or an `error`) the SAME page re-renders with status `422` and the result on `ctx.actionData`, so the page reads `actionData.fieldErrors.<name>` for messages and `actionData.values.<name>` to repopulate inputs. A thrown `redirect()`/`notFound()` is honored (a thrown `redirect()` may target an external URL). A page with no `action` export 404s on a non-GET, unchanged. `actionData` is `undefined` on a plain GET. See the recipe in `agent-docs/recipes.md` and the client-router side in `agent-docs/advanced.md`.
 - Page modules also load on the client so transitively imported components register. Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything needing Node APIs) goes only in `.server.{js,ts}`, `route.ts`, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.
 
@@ -849,6 +850,59 @@ The ETag is WEAK (`W/"..."`). It hashes the UNCOMPRESSED body and the prod compr
 | Non-GET / non-HEAD, and any status other than 200 | A validator is only meaningful for a successful, replayable read |
 
 **Stable-body handling.** The ETag is computed over the response's OWN body bytes, so an identical body yields an identical ETag across requests. Per-response varying bits that ride RESPONSE HEADERS (the `x-webjs-build` id, the `set-cookie` CSRF token, the CSP nonce on the header) are NOT part of the body hash, so they do not destabilise the ETag. The one body-level varying input is the CSP nonce stamped INTO the inline boot script: with CSP enabled the HTML body changes every request, so its ETag changes every request and a 304 is simply never produced for that page (correct, not a bug). CSP is off by default, so the common cacheable-page case has a stable body and a stable ETag. The 304 preserves the validators and caching headers (`ETag`, `Cache-Control`, `Vary`, plus the framework's `X-Webjs-Build` / `X-Request-Id` and any `Set-Cookie`) and drops only the body-describing headers (`Content-Length`, `Content-Type`, `Content-Encoding`), so a shared cache and the client router behave identically to a 200.
+
+---
+
+## Server HTML response cache: `export const revalidate` + revalidatePath (OPT-IN) (#241)
+
+A fully-static / inert route re-runs the entire SSR pipeline (layout chain, `renderToString`, metadata merge, importmap splice) on every request even though it produces identical HTML each time. The server HTML cache stores that rendered HTML in the existing pluggable store (`memoryStore` in dev, `redisStore` when configured) and serves it on a hit WITHOUT re-running the page function. This is webjs's no-build equivalent of Next.js's Full Route Cache + ISR.
+
+**SAFETY: caching is OPT-IN and conservative.** A wrongly-cached per-user page served to the wrong visitor is a data leak, so nothing is cached unless the page author opts in, and several defense-in-depth guards run before anything is stored.
+
+### The author contract (read this before adding `revalidate`)
+
+A page opts in by declaring a revalidation window on the page module:
+
+```ts
+// app/blog/page.ts
+export const revalidate = 60;   // seconds: this page is the SAME FOR EVERYONE for 60s
+export default async function Blog() { /* ... */ }
+```
+
+**Declaring `revalidate` is you asserting "this page renders identically for every visitor for N seconds."** A page that reads `cookies()` / a session / anything per-user MUST NOT set `revalidate`. There is no per-user keying: the cache is keyed by the FULL URL (path + search string) only. `revalidate = 0` (or a negative / non-number) means "no caching" (always dynamic, the default). The trigger is the `export const revalidate` module export only.
+
+### Guards (defense in depth, all must pass to cache)
+
+Even with `revalidate` set, the framework refuses to cache a response unless every guard passes, re-checked against the FINAL response at the funnel (after segment middleware runs):
+
+| Guard | Why |
+|---|---|
+| status 200 | An error / redirect / 404 is request-specific |
+| not a streamed Suspense body | An unflushed stream has no stable bytes and cannot be buffered cheaply |
+| no non-framework `Set-Cookie` | A page that sets a session / per-user cookie is per-user output. The framework's own `webjs_csrf` cookie is allowed (it is re-minted per response on a cache hit) |
+| CSP is OFF | With CSP enabled the inline boot script carries a fresh per-request nonce, so the body varies per request; a cached body would replay a stale nonce its CSP header rejects |
+| no `X-Webjs-Have` (partial-nav) request | A partial-nav response's bytes depend on the request header, so it must not be shared under the full-URL key |
+
+### CSRF cookie + CSP on a cache hit
+
+The cached value is the stable per-page HTML body only. The per-response varying bits are RE-MINTED on every cache hit, so a brand-new visitor served from cache is still correct: the `webjs_csrf` cookie is freshly issued (it is a `Set-Cookie` header, never part of the cached body), and the published build id is re-read. CSP-enabled pages are simply never cached (see the guard table), so there is no stale-nonce risk. A cached page and its fresh render are observably identical within the window (differential correctness).
+
+### On-demand revalidation: `revalidatePath` (server-side)
+
+`import { revalidatePath, revalidateAll } from '@webjsdev/server'`. A server action that mutates the data a cached page renders calls `revalidatePath('/blog')` to evict that path's cached HTML so the next request re-renders; `revalidateAll()` clears everything. This is **distinct from** the client-side `revalidate()` from `@webjsdev/core` (which evicts the BROWSER snapshot cache for client navigation). `revalidatePath` evicts the SERVER HTML cache.
+
+```ts
+// modules/blog/actions/publish-post.server.ts
+'use server';
+import { revalidatePath } from '@webjsdev/server';
+export async function publishPost(input) {
+  // ... write to the DB ...
+  await revalidatePath('/blog');   // the next /blog request re-renders fresh
+  return { success: true };
+}
+```
+
+Time-based eviction is handled by the store TTL (= `revalidate` seconds). This PR does a simple TTL-evict + on-demand `revalidatePath`; stale-while-revalidate (serving stale once while refreshing in the background) is NOT implemented (a documented follow-up). Mechanism: `packages/server/src/html-cache.js`, the cache lookup + opt-in read live in `ssrPage` (`packages/server/src/ssr.js`), and the cache WRITE is a response-funnel step (`commitHtmlCache`) wired in `dev.js`'s `handle()` so it sees the final post-middleware response.
 
 ---
 
