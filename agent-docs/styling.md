@@ -47,8 +47,8 @@ exhaustive list; anything outside it should be a utility (or a
 - **complex `color-mix()` or gradient effects** a utility cannot spell.
 
 When custom CSS IS unavoidable inside a light-DOM component, the
-tag-prefix invariant still holds (see the next section): every class
-selector is prefixed with the component tag. **Shadow-DOM components
+tag-prefix invariant still holds (see the Vanilla CSS section below):
+every class selector is prefixed with the component tag. **Shadow-DOM components
 (`static shadow = true`) legitimately author `static styles = css\`\``,
 which is the right home for scoped CSS and is unchanged by this rule.**
 The Tailwind-first steer is about the LIGHT-DOM default, not about
