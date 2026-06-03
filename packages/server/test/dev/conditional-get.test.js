@@ -70,7 +70,7 @@ test('cacheable page gets an ETag and 304s on a matching If-None-Match', async (
   assert.equal(first.status, 200);
   const etag = first.headers.get('etag');
   assert.ok(etag, 'cacheable page response carries an ETag');
-  assert.match(etag, /^"[a-f0-9]{16}"$/, 'ETag is the quoted 16-char SHA-1 form');
+  assert.match(etag, /^W\/"[a-f0-9]{16}"$/, 'ETag is the WEAK quoted 16-char SHA-1 form (weak so it is valid across content-codings, RFC 7232 2.3.3)');
   const body = await first.text();
   assert.ok(body.includes('cacheable'), 'first response carries the full body');
 
@@ -121,6 +121,9 @@ test('a no-store (dynamic / per-user) page gets NO ETag and never 304s', async (
   const first = await app.handle(new Request('http://x/'));
   assert.equal(first.headers.get('cache-control'), 'no-store');
   assert.equal(first.headers.get('etag'), null, 'no-store response has no ETag');
+  // The funnel strips the internal buffered marker even when it skips a
+  // no-store body, so it never leaks to the client.
+  assert.equal(first.headers.get('x-webjs-buffered'), null, 'internal buffered marker never leaks');
 
   // Even if a client replays the page's prior body hash, a no-store page must
   // not 304 (no cross-session 304 on private content).
@@ -230,6 +233,124 @@ test('a streamed Suspense page is not ETagged and never 304s (marker stripped)',
   assert.equal(res.headers.get('x-webjs-stream'), null, 'internal stream marker never leaks to the client');
   const body = await res.text();
   assert.ok(body.includes('streamed'), 'the streamed content is delivered');
+});
+
+/* ---------------- a route.{js,ts} ReadableStream body is NEVER buffered ---------------- */
+
+/**
+ * Resolve a promise but reject if it has not settled within `ms`. Used to
+ * prove a streaming-route response returns PROMPTLY (the funnel never awaited
+ * its body), rather than hanging while `arrayBuffer()` drains a never-ending
+ * stream.
+ *
+ * @template T
+ * @param {Promise<T>} p
+ * @param {number} ms
+ * @param {string} label
+ * @returns {Promise<T>}
+ */
+function within(p, ms, label) {
+  return Promise.race([
+    p,
+    new Promise((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${label}`)), ms)
+    ),
+  ]);
+}
+
+test('a route handler returning a ReadableStream (public Cache-Control) is not buffered or ETagged and returns promptly', async () => {
+  // The handler returns a never-ending stream with a PUBLIC Cache-Control,
+  // which would otherwise satisfy the cacheable check. The funnel must NOT
+  // call arrayBuffer() on it (that would buffer it into memory / hang), so it
+  // returns promptly with no ETag and its stream intact.
+  const ROUTE =
+    `export async function GET() {\n` +
+    `  let count = 0;\n` +
+    `  const stream = new ReadableStream({\n` +
+    `    pull(controller) {\n` +
+    `      controller.enqueue(new TextEncoder().encode('chunk' + (count++) + '\\n'));\n` +
+    `      // never close: a genuinely open stream\n` +
+    `    },\n` +
+    `  });\n` +
+    `  return new Response(stream, {\n` +
+    `    headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=60' },\n` +
+    `  });\n` +
+    `}\n`;
+  const appDir = makeApp({ 'app/stream/route.js': ROUTE });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  const res = await within(
+    app.handle(new Request('http://x/stream')),
+    2000,
+    'route stream response did not return (funnel buffered the stream)'
+  );
+  assert.equal(res.status, 200, 'streaming route is served');
+  assert.equal(res.headers.get('etag'), null, 'a route ReadableStream is never ETagged');
+  assert.equal(res.headers.get('x-webjs-buffered'), null, 'internal buffered marker never leaks');
+  assert.ok(res.body, 'the stream body is intact (not consumed by the funnel)');
+  // Read just the first chunk to prove the stream still flows, then cancel so
+  // the test does not hang on the never-ending stream.
+  const reader = res.body.getReader();
+  const { value } = await within(reader.read(), 2000, 'first chunk read');
+  assert.ok(value && value.length > 0, 'the first chunk is readable');
+  await reader.cancel();
+});
+
+test('an SSE text/event-stream handler (no-cache) is not buffered and returns promptly (no hang)', async () => {
+  // An SSE stream uses Cache-Control: no-cache (which the funnel treats as
+  // cacheable) and NEVER ends. Buffering it would hang forever. The funnel
+  // must skip it on the unmarked-body rule and return at once.
+  const ROUTE =
+    `export async function GET() {\n` +
+    `  const stream = new ReadableStream({\n` +
+    `    start(controller) {\n` +
+    `      controller.enqueue(new TextEncoder().encode('data: hello\\n\\n'));\n` +
+    `      // never close: a live SSE channel\n` +
+    `    },\n` +
+    `  });\n` +
+    `  return new Response(stream, {\n` +
+    `    headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },\n` +
+    `  });\n` +
+    `}\n`;
+  const appDir = makeApp({ 'app/sse/route.js': ROUTE });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  const res = await within(
+    app.handle(new Request('http://x/sse')),
+    2000,
+    'SSE response hung (funnel awaited a never-ending stream)'
+  );
+  assert.equal(res.status, 200, 'SSE route is served');
+  assert.equal(res.headers.get('content-type'), 'text/event-stream');
+  assert.equal(res.headers.get('etag'), null, 'an SSE stream is never ETagged');
+  assert.ok(res.body, 'the SSE stream body is intact');
+  const reader = res.body.getReader();
+  const { value } = await within(reader.read(), 2000, 'first SSE event read');
+  assert.ok(value && value.length > 0, 'the first SSE event is readable');
+  await reader.cancel();
+});
+
+/* ---------------- weak-ETag / content-coding correctness ---------------- */
+
+test('the ETag is WEAK and a 200 keeps Vary: Accept-Encoding (compression-safe)', async () => {
+  const appDir = makeApp({ 'app/page.js': CACHEABLE_PAGE });
+  // Prod path so the compression negotiation (which shares the ETag across
+  // codings) is the live one; assert the validator is weak.
+  const app = await createRequestHandler({ appDir, dev: false });
+  const res = await app.handle(
+    new Request('http://x/', { headers: { 'accept-encoding': 'gzip, br' } })
+  );
+  const etag = res.headers.get('etag');
+  assert.ok(etag, 'cacheable page carries an ETag in prod');
+  assert.match(etag, /^W\//, 'the ETag is WEAK (valid when reused across content-codings, RFC 7232 2.3.3)');
+});
+
+test('a weak If-None-Match still 304s against the weak ETag (weak comparison)', () => {
+  // The validator we emit is weak; a conditional request echoing it (with or
+  // without the W/ prefix) must still satisfy. This is the weak-comparison
+  // contract If-None-Match requires.
+  assert.equal(ifNoneMatchSatisfied('W/"abc1234567890def"', 'W/"abc1234567890def"'), true, 'weak vs weak matches');
+  assert.equal(ifNoneMatchSatisfied('"abc1234567890def"', 'W/"abc1234567890def"'), true, 'strong-form request vs weak response matches');
 });
 
 /* ---------------- helper unit tests (matcher + counterfactual) ---------------- */

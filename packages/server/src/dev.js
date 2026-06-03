@@ -1,7 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { digestHex } from './crypto-utils.js';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -117,7 +116,7 @@ import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
-import { applyConditionalGet } from './conditional-get.js';
+import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -1721,16 +1720,15 @@ async function fileResponse(abs, opts) {
   try {
     const data = await readFile(abs);
     const type = MIME[extname(abs).toLowerCase()] || 'application/octet-stream';
-    const headers = { 'content-type': type };
-    if (opts.dev) {
-      headers['cache-control'] = 'no-cache';
-    } else {
-      const etag = `"${(await digestHex('SHA-1', data)).slice(0, 16)}"`;
-      headers['etag'] = etag;
-      headers['cache-control'] = opts.immutable
+    // The body is fully buffered (read into `data`), so opt it into the
+    // conditional-GET funnel, which is the single place that hashes the bytes
+    // into a weak ETag and honors If-None-Match -> 304 (dev + prod alike).
+    const headers = { 'content-type': type, [BUFFERED_MARKER]: '1' };
+    headers['cache-control'] = opts.dev
+      ? 'no-cache'
+      : opts.immutable
         ? 'public, max-age=31536000, immutable'
         : 'public, max-age=3600';
-    }
     return new Response(data, { status: 200, headers });
   } catch {
     return new Response('Not found', { status: 404 });
@@ -1755,13 +1753,13 @@ async function jsModuleResponse(abs, dev, elideOpts) {
   const code = elideImportsFromSource(
     source, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
   );
-  const headers = { 'content-type': 'application/javascript; charset=utf-8' };
-  if (dev) {
-    headers['cache-control'] = 'no-cache';
-  } else {
-    headers['etag'] = `"${(await digestHex('SHA-1', code)).slice(0, 16)}"`;
-    headers['cache-control'] = 'public, max-age=3600';
-  }
+  // Buffered (string) body, so opt into the conditional-GET funnel for the
+  // weak ETag + 304 (see fileResponse).
+  const headers = {
+    'content-type': 'application/javascript; charset=utf-8',
+    'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+    [BUFFERED_MARKER]: '1',
+  };
   return new Response(code, { status: 200, headers });
 }
 
@@ -1814,6 +1812,7 @@ async function tsResponse(abs, dev, elideOpts, cache) {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
         'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+        [BUFFERED_MARKER]: '1',
       },
     });
   }
@@ -1870,6 +1869,7 @@ async function tsResponse(abs, dev, elideOpts, cache) {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
       'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+      [BUFFERED_MARKER]: '1',
     },
   });
 }

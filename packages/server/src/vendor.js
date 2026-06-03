@@ -44,7 +44,8 @@ import { readFile, readdir, writeFile, mkdir, unlink, stat, rename } from 'node:
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
-import { digestBase64, digestHex } from './crypto-utils.js';
+import { digestBase64 } from './crypto-utils.js';
+import { BUFFERED_MARKER } from './conditional-get.js';
 
 /**
  * Set of package names whose importmap entries are populated by the
@@ -1410,15 +1411,17 @@ export async function serveDownloadedBundle(filename, appDir, dev) {
     // match if any byte didn't round-trip exactly (e.g. invalid
     // surrogate replacement). Keep the I/O binary end-to-end.
     const body = await readFile(join(pinDir(appDir), filename));
-    // ETag for downstream caches that strip the `immutable` directive.
-    // Bundle filenames already carry the version, so content + ETag
-    // round-trip is deterministic per filename.
-    const etag = `"${(await digestHex('SHA-1', body)).slice(0, 16)}"`;
+    // Buffered (bytes) body, so opt into the conditional-GET funnel, which
+    // hashes the bytes into a weak ETag (for downstream caches that strip the
+    // `immutable` directive) and honors If-None-Match -> 304. A WEAK validator
+    // is correct here because compression may re-encode the bytes per request
+    // (RFC 7232 2.3.3); the funnel is the single source for that. See
+    // conditional-get.js.
     return new Response(body, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
         'cache-control': dev ? 'no-cache' : 'public, max-age=31536000, immutable',
-        'etag': etag,
+        [BUFFERED_MARKER]: '1',
       },
     });
   } catch {

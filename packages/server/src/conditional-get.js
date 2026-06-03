@@ -13,14 +13,31 @@
  *   - `no-store` / `private` responses (the default for dynamic, per-user
  *     pages). Never enable a cross-session 304 on private content: a shared
  *     cache keyed on the URL could serve one user's validator to another.
- *   - Streaming bodies (a Suspense response with pending boundaries). The
- *     bytes are not yet materialised, so there is nothing cheap to hash; the
- *     stream is left untouched. Such a response is flagged with the
- *     `X-Webjs-Stream: 1` header by the SSR pipeline; this funnel skips it and
- *     strips the marker. Streaming responses are not conditional-GET cached,
- *     by design.
+ *   - Any body the framework did not positively mark as fully buffered. The
+ *     funnel only hashes a response that ALREADY carries an `ETag` (a serve
+ *     branch hashed its own bytes) OR carries the internal `X-Webjs-Buffered`
+ *     marker the buffered serve branches stamp on a string / bytes body. It
+ *     never calls `arrayBuffer()` on an unmarked body. This is the guard that
+ *     keeps a user `route.{js,ts}` handler returning a `ReadableStream` (and
+ *     especially an SSE `text/event-stream`, whose stream NEVER ends) from
+ *     being buffered into memory or, worse, awaited forever so the response
+ *     hangs. A web `Response` exposes a `ReadableStream` body for a string and
+ *     for a live stream alike, with no public way to tell them apart, so a
+ *     positive opt-in marker is the only safe discriminator.
+ *   - Streaming Suspense bodies, flagged with `X-Webjs-Stream: 1` by the SSR
+ *     pipeline (a stricter form of the unmarked-body rule: the marker is
+ *     stripped and the response returned untouched). Streaming responses are
+ *     not conditional-GET cached, by design.
  *   - Non-GET / non-HEAD methods, and any status other than 200. A validator
  *     is only meaningful for a successful, replayable read.
+ *
+ * The ETag is WEAK (`W/"..."`). It is computed over the UNCOMPRESSED body
+ * bytes, then the prod compression step (`sendWebResponse` in `dev.js`) may
+ * stamp `Content-Encoding: gzip` / `br` on the SAME response. A STRONG
+ * validator must be unique per content-coding (RFC 7232 2.3.3), so reusing one
+ * strong ETag across identity / gzip / br would be non-conformant; a WEAK
+ * validator is the conformant choice for a hash shared across codings, and
+ * `If-None-Match` already uses weak comparison so a `304` still fires.
  *
  * The ETag is computed over the response's OWN body bytes, so an identical
  * body yields an identical ETag across requests. Per-response varying bits
@@ -36,6 +53,19 @@
  */
 
 import { digestHex } from './crypto-utils.js';
+
+/**
+ * Internal header a buffered serve branch stamps to opt a response into
+ * conditional GET. Stripped at the funnel; it never reaches a client. A web
+ * `Response` exposes a `ReadableStream` body whether it was built from a
+ * string, bytes, or a live stream, so this explicit marker is how the funnel
+ * KNOWS a body is safe to hash without risking buffering a route handler's
+ * stream or hanging on an SSE response.
+ */
+export const BUFFERED_MARKER = 'x-webjs-buffered';
+
+/** Internal header the SSR pipeline stamps on a genuinely-streamed body. */
+export const STREAM_MARKER = 'x-webjs-stream';
 
 /**
  * Headers that must not ride a 304 response (it has no body). Everything
@@ -104,11 +134,14 @@ function stripWeak(tag) {
  */
 export async function applyConditionalGet(req, res) {
   const method = req.method.toUpperCase();
+  // Always consume the internal buffered marker so it never reaches a client.
+  const buffered = res.headers.has(BUFFERED_MARKER);
+  if (buffered) res.headers.delete(BUFFERED_MARKER);
   // A genuinely streamed Suspense response is flagged by the SSR pipeline.
-  // Strip the internal marker on the way out (it must never reach a client),
-  // and skip conditional-GET entirely so the live stream is never consumed.
-  if (res.headers.has('x-webjs-stream')) {
-    res.headers.delete('x-webjs-stream');
+  // Strip that marker too and skip conditional-GET so the live stream is
+  // never consumed.
+  if (res.headers.has(STREAM_MARKER)) {
+    res.headers.delete(STREAM_MARKER);
     return res;
   }
   if (method !== 'GET' && method !== 'HEAD') return res;
@@ -116,18 +149,28 @@ export async function applyConditionalGet(req, res) {
 
   let etag = res.headers.get('etag');
   if (!etag) {
-    // Read the body bytes WITHOUT consuming the caller's response: clone
-    // first. Every response reaching this point is buffered (the only
-    // streaming path is flagged and returned above), so the clone is cheap.
+    // Only hash a body the framework positively marked as fully buffered.
+    // Without the marker we must NOT read the body, because a user route
+    // handler returning a ReadableStream would be buffered into memory, and
+    // an SSE (text/event-stream) stream never ends so the await would hang
+    // forever. A web Response exposes a ReadableStream body for a string and
+    // for a live stream alike, so the marker is the only safe discriminator.
+    if (!buffered) return res;
     let bytes;
     try {
+      // Clone so the caller's body is never consumed. Safe here because a
+      // marked body is built from a string / bytes, so the clone resolves
+      // at once.
       bytes = new Uint8Array(await res.clone().arrayBuffer());
     } catch {
-      // A body that refuses to buffer (should not happen for the branches we
-      // gate to) is left without a validator rather than crashing the funnel.
+      // A body that refuses to buffer (should not happen for a marked branch)
+      // is left without a validator rather than crashing the funnel.
       return res;
     }
-    etag = `"${(await digestHex('SHA-1', bytes)).slice(0, 16)}"`;
+    // WEAK validator. The hash is over the uncompressed body and is reused
+    // across identity / gzip / br codings (compression runs after this), which
+    // a STRONG ETag may not do (RFC 7232 2.3.3). If-None-Match weak-compares.
+    etag = `W/"${(await digestHex('SHA-1', bytes)).slice(0, 16)}"`;
     res.headers.set('etag', etag);
   }
 
