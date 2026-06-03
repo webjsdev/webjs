@@ -301,7 +301,8 @@ export function serveServerOnlyStub(relPath) {
     `Cannot import "${relPath}" from browser code. ` +
     `This file is server-only (a .server.{js,ts} file with no 'use server' directive). ` +
     `Either add 'use server' at the top of the file to expose its exports as RPC, ` +
-    `or wrap the server-only logic in a separate *.server.{js,ts} action and import that instead.`;
+    `or wrap the server-only logic in a separate *.server.{js,ts} action and import that instead. ` +
+    `Docs: https://docs.webjs.com/docs/server-actions`;
   return `// webjs: server-only module stub for ${relPath} (no 'use server' directive)
 throw new Error(${JSON.stringify(msg)});
 `;
