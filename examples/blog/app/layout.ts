@@ -1,4 +1,4 @@
-import { html, cspNonce } from '@webjsdev/core';
+import { html, cspNonce, type Metadata } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 
@@ -13,7 +13,7 @@ const footerLink = (href: string, label: string) => html`
 const TITLE = 'webjs blog: live demo';
 const DESCRIPTION = 'A live, full-stack webjs example: posts, comments, auth, and WebSocket chat.';
 
-export function generateMetadata(ctx: { url: string }) {
+export function generateMetadata(ctx: { url: string }): Metadata {
   const origin = new URL(ctx.url).origin;
   const image = `${origin}/public/og.png`;
   return {

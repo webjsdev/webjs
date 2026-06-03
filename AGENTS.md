@@ -289,6 +289,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `navigate(url, opts?)` | Programmatic client-router nav. `{replace}` swaps in place. |
 | `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
 | `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
+| `Metadata` / `MetadataContext` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `import type { Metadata } from '@webjsdev/core'`. |
 
 ### Directives, from `import { … } from '@webjsdev/core/directives'`
 
@@ -453,7 +454,7 @@ Add `@webjsdev/ts-plugin` to `tsconfig.json` `plugins`. It bundles `ts-lit-plugi
 
 - Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`.
 - Runs **only on the server**. Throw `notFound()` or `redirect(url)` to short-circuit.
-- Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). See `agent-docs/metadata.md`.
+- Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). Type both with the exported `Metadata` type (`import type { Metadata, MetadataContext } from '@webjsdev/core'`) so a typo or wrong-typed field is a compile-time error instead of a silently dropped tag. See `agent-docs/metadata.md`.
 - Optional named export `revalidate` (a positive number of seconds) OPTS the page into the server HTML response cache (#241): its rendered HTML is cached and served without re-running the page for that window. SAFETY: only set it on a page that is the SAME FOR EVERYONE (it must NOT read `cookies()` / a session / per-user data), since the cache is keyed by URL only. Evict on demand with `revalidatePath(path)` from `@webjsdev/server`. See the "Server HTML response cache" section below.
 - Optional named export `action`: a possibly-async function receiving `{ request, params, searchParams, url, formData }` that handles a non-GET/HEAD submission to the page's own URL (the no-JS form write-path, #244). It returns an `ActionResult`. On success the server responds `303` to a same-site `result.redirect` (a local `/path`; a cross-origin value is ignored to prevent an open redirect) or the page's own path (Post/Redirect/Get). On failure (`success: false`, or a `fieldErrors`, or an `error`) the SAME page re-renders with status `422` and the result on `ctx.actionData`, so the page reads `actionData.fieldErrors.<name>` for messages and `actionData.values.<name>` to repopulate inputs. A thrown `redirect()`/`notFound()` is honored (a thrown `redirect()` may target an external URL). A page with no `action` export 404s on a non-GET, unchanged. `actionData` is `undefined` on a plain GET. See the recipe in `agent-docs/recipes.md` and the client-router side in `agent-docs/advanced.md`.
 - Page modules also load on the client so transitively imported components register. Keep top-level imports browser-safe. **Server-only code (`@prisma/client`, `node:*`, anything needing Node APIs) goes only in `.server.{js,ts}`, `route.ts`, or `middleware.ts`. Never in pages, layouts, or components.** Wrap the access in a `.server.{js,ts}` file; the framework rewrites the import into an RPC stub for the browser.

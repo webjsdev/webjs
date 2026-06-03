@@ -4,6 +4,33 @@ Page modules export `metadata` (static) or `generateMetadata(ctx)`
 (request-scoped). Values flow into `<head>` at SSR time and merge across
 nested layouts (deeper wins). Surface is Next.js-compatible.
 
+## Type it with `Metadata`
+
+webjs exports a `Metadata` type covering every field below, so a typo
+(`titel`, `descripton`), wrong nesting, or a wrong-typed value
+(`themeColor: 123`) is a tsserver / checkJs error instead of a silently
+dropped tag. Import it from `@webjsdev/core` (the same isomorphic surface
+a page already imports `html` from). `MetadataContext` types the
+`generateMetadata(ctx)` argument.
+
+```ts
+import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+// static
+export const metadata: Metadata = { title: 'Home', description: 'Welcome' };
+
+// request-scoped
+export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> {
+  return { title: `Post: ${ctx.params.slug}` };
+}
+```
+
+Every field is optional. Where the framework accepts a string OR an
+object (`title`, `viewport`, `robots`, `appleWebApp`, `icons`), the type
+is a union, so both forms type-check. The type lives in
+`packages/core/src/metadata.d.ts` (types-only, zero runtime, no build);
+it mirrors exactly what `packages/server/src/ssr.js` consumes.
+
 ```ts
 export const metadata = {
   // ----- Identity -----
@@ -115,7 +142,9 @@ export const metadata = {
 ## Request-scoped via `generateMetadata`
 
 ```ts
-export function generateMetadata(ctx: { url: string; params: Record<string,string> }) {
+import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+export function generateMetadata(ctx: MetadataContext): Metadata {
   return {
     title: `Post: ${ctx.params.slug}`,
     metadataBase: new URL(ctx.url).origin,

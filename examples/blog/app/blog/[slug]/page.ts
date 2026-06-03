@@ -1,4 +1,4 @@
-import { html, notFound } from '@webjsdev/core';
+import { html, notFound, type Metadata } from '@webjsdev/core';
 import '../../../components/muted-text.ts';
 import '../../../modules/comments/components/comments-thread.ts';
 
@@ -9,7 +9,7 @@ import { rubric, backLink, displayH1, stat } from '../../../lib/utils/ui.ts';
 
 type Ctx = { params: { slug: string } };
 
-export async function generateMetadata({ params }: Ctx) {
+export async function generateMetadata({ params }: Ctx): Promise<Metadata> {
   const post = await getPost({ slug: params.slug });
   return post
     ? { title: `${post.title}: webjs blog` }

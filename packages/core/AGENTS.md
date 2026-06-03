@@ -57,6 +57,15 @@ See the [package.json `exports` field](./package.json) for subpaths:
 re-exports. Keep this list in sync if you add or remove a barrel
 export.
 
+**Type-only exports.** `index.d.ts` (the overlay) re-exports the
+type-only public surface alongside the runtime exports. The component
+typing lives in `src/component.d.ts`; the page-metadata typing
+(`Metadata`, `MetadataContext`, and the nested shapes) lives in
+`src/metadata.d.ts`. Both are pure declaration files (erased at runtime,
+zero build cost). A page imports them with `import type { Metadata } from
+'@webjsdev/core'`. The `Metadata` shape MUST stay in lockstep with what
+`packages/server/src/ssr.js` actually reads, never Next.js's superset.
+
 ## Package-specific invariants
 
 1. **No build step in your edit-and-refresh loop.** `.js` only,
