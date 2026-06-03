@@ -62,6 +62,20 @@ export default async function PostPage({ params }) {
     <p>When the user clicks "Load more", the router's <code>closest('webjs-frame')</code> from the click target finds <code>#comments</code>. The fetched response is expected to contain a <code>&lt;webjs-frame id="comments"&gt;</code> too. Only its children swap into the live frame, leaving the article body (and any reading scroll position, video playback, etc.) fully intact.</p>
     <p>This takes precedence over the layout-marker mechanism. Most apps never need it. Only reach for it when you've identified that the auto-marker swap is wider than the actual change.</p>
 
+    <h3>External targeting (<code>data-webjs-frame</code>) and <code>_top</code></h3>
+    <p>A trigger does not have to be nested inside the frame it drives. Mirroring Turbo's <code>data-turbo-frame</code>, an <code>&lt;a&gt;</code> or <code>&lt;form&gt;</code> (or any ancestor of it) carrying <code>data-webjs-frame="&lt;id&gt;"</code> drives the frame with that id from anywhere in the document, resolved via <code>getElementById</code>. So an external nav/sidebar link or a filter form can drive a content frame it does not enclose.</p>
+    <pre>&lt;nav data-webjs-frame="results"&gt;
+  &lt;a href="/products?sort=new"&gt;Newest&lt;/a&gt;
+  &lt;a href="/products?sort=top"&gt;Top rated&lt;/a&gt;
+&lt;/nav&gt;
+&lt;form action="/products" data-webjs-frame="results"&gt;…filters…&lt;/form&gt;
+
+&lt;webjs-frame id="results"&gt;…current results…&lt;/webjs-frame&gt;</pre>
+    <p>An explicit <code>data-webjs-frame</code> WINS over the closest-enclosing-frame default. The reserved token <code>data-webjs-frame="_top"</code> on a trigger INSIDE a frame breaks OUT to a full-page navigation. An id that does not resolve to a live <code>&lt;webjs-frame&gt;</code> warns once and falls back to a normal navigation (it never throws). With JS disabled the attribute is inert on a plain <code>&lt;a href&gt;</code>, so the click is a normal full navigation, the correct progressive-enhancement fallback.</p>
+
+    <h3>Busy state (<code>aria-busy</code> + <code>webjs:frame-busy</code>)</h3>
+    <p>While a frame's navigation is in flight the router sets the native <code>aria-busy="true"</code> on the frame element and clears it (to <code>"false"</code>) on every exit, a successful swap, a frame-missing response, an HTTP/transport error, or an abort by a newer navigation. So assistive tech announces the loading state, and CSS can style the busy region with <code>webjs-frame[aria-busy="true"]</code>. The router also dispatches a bubbling <code>webjs:frame-busy</code> event on the frame at both edges (detail <code>{ frameId, busy }</code>, <code>true</code> at start then <code>false</code> at finish) for app-level hooks.</p>
+
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
     <p>After a server action mutates data that a cached page depends on, call <code>revalidate()</code>:</p>

@@ -1781,6 +1781,137 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(path, '/', 'must stay on the home page after sending a chat message');
   });
 
+  // --- <webjs-frame> external targeting + aria-busy lifecycle (#252) ---
+  //
+  // /frame-demo renders a <webjs-frame id="panel"> driven by EXTERNAL tab
+  // links (data-webjs-frame="panel", not nested in the frame) plus a _top
+  // breakout link nested inside it. These exercise the real wire: a frame
+  // nav issues an x-webjs-frame request, the response carries the frame, and
+  // the router swaps only the frame's children.
+
+  test('frame: an external data-webjs-frame link swaps only the frame, leaving the rest of the page', async () => {
+    await page.goto(`${baseUrl}/frame-demo`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(1500);
+
+    // Stamp a sentinel on a node OUTSIDE the frame so a full-body swap is
+    // detectable: a frame swap keeps the node (and the property), a full swap
+    // destroys it.
+    await page.evaluate(() => {
+      const o = document.getElementById('outside-sentinel');
+      if (o) o.dataset.e2eMarker = 'kept';
+      window.__e2eFrameNav = 'alive';
+    });
+
+    // Capture whether a frame-scoped request (x-webjs-frame header) was issued.
+    /** @type {string[]} */
+    const frameRequests = [];
+    const onReq = (req) => {
+      const h = req.headers();
+      if (h['x-webjs-frame']) frameRequests.push(h['x-webjs-frame']);
+    };
+    page.on('request', onReq);
+    try {
+      const before = await page.evaluate(() => document.getElementById('panel-body')?.getAttribute('data-tab'));
+      assert.equal(before, 'one', 'panel starts on tab one');
+
+      // Click the EXTERNAL "Two" tab link (data-webjs-frame="panel").
+      await page.evaluate(() => document.getElementById('tab-two')?.click());
+      await waitForCond(
+        () => page.evaluate(() => document.getElementById('panel-body')?.getAttribute('data-tab') === 'two'),
+        6000,
+        () => 'the external link should swap the frame content to tab two',
+      );
+
+      // The frame content changed.
+      const bodyText = await page.evaluate(() => document.getElementById('panel-body')?.textContent || '');
+      assert.ok(bodyText.includes('TWO'), `frame body should show panel TWO, got "${bodyText}"`);
+
+      // A frame-scoped request was issued (x-webjs-frame=panel).
+      assert.ok(frameRequests.includes('panel'),
+        'a frame-scoped request (x-webjs-frame: panel) must have been issued');
+
+      // The REST of the page is untouched: the outside sentinel + its marker
+      // survive (no full-body swap), and the window property persists.
+      const survived = await page.evaluate(() => {
+        const o = document.getElementById('outside-sentinel');
+        return { marker: o && o.dataset.e2eMarker, win: window.__e2eFrameNav };
+      });
+      assert.equal(survived.marker, 'kept', 'outside-frame node survived (no full-body swap)');
+      assert.equal(survived.win, 'alive', 'window state survived (a client swap, not a full reload)');
+
+      // The URL reflects the frame nav.
+      assert.ok(page.url().includes('tab=two'), `URL should reflect the frame nav, got ${page.url()}`);
+    } finally { page.off('request', onReq); }
+  });
+
+  test('frame: a _top link inside the frame breaks OUT to a full-page navigation', async () => {
+    await page.goto(`${baseUrl}/frame-demo?tab=three`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(1500);
+
+    // The _top link points at "/" and carries data-webjs-frame="_top": it
+    // must perform a normal navigation away (not a frame swap of "panel").
+    /** @type {string[]} */
+    const frameRequests = [];
+    const onReq = (req) => {
+      const h = req.headers();
+      if (h['x-webjs-frame']) frameRequests.push(h['x-webjs-frame']);
+    };
+    page.on('request', onReq);
+    try {
+      await page.evaluate(() => document.getElementById('top-link')?.click());
+      await waitForCond(
+        () => page.evaluate(() => location.pathname === '/'),
+        6000,
+        () => `_top should navigate to "/", got ${page.url()}`,
+      );
+      // The home page rendered (the frame-demo heading is gone).
+      const heading = await page.evaluate(() => document.getElementById('frame-demo-heading'));
+      assert.equal(heading, null, 'left /frame-demo: the frame-demo heading is gone (a real page change)');
+      // No frame-scoped request was issued for the _top breakout.
+      assert.ok(!frameRequests.includes('panel'),
+        '_top must NOT issue an x-webjs-frame: panel request (it is a full nav, not a frame swap)');
+    } finally { page.off('request', onReq); }
+  });
+
+  test('frame: aria-busy toggles true during the frame fetch and clears after, with start+finish events', async () => {
+    await page.goto(`${baseUrl}/frame-demo`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(1500);
+
+    // Record every webjs:frame-busy event's busy flag, and snapshot
+    // aria-busy synchronously inside the start event (when the fetch is
+    // genuinely in flight) so the assertion does not race the response.
+    await page.evaluate(() => {
+      window.__frameBusyEvents = [];
+      window.__ariaBusyAtStart = null;
+      document.addEventListener('webjs:frame-busy', (e) => {
+        window.__frameBusyEvents.push(e.detail.busy);
+        if (e.detail.busy === true) {
+          const f = document.getElementById('panel');
+          window.__ariaBusyAtStart = f && f.getAttribute('aria-busy');
+        }
+      });
+    });
+
+    await page.evaluate(() => document.getElementById('tab-three')?.click());
+    // Wait for the swap to complete (the finish event lands).
+    await waitForCond(
+      () => page.evaluate(() => (window.__frameBusyEvents || []).includes(false)),
+      6000,
+      () => 'a webjs:frame-busy finish (busy:false) event must fire',
+    );
+
+    const state = await page.evaluate(() => ({
+      events: window.__frameBusyEvents,
+      ariaAtStart: window.__ariaBusyAtStart,
+      ariaNow: document.getElementById('panel')?.getAttribute('aria-busy'),
+    }));
+
+    assert.equal(state.ariaAtStart, 'true', 'aria-busy was "true" while the frame fetch was in flight');
+    assert.equal(state.ariaNow, 'false', 'aria-busy is cleared to "false" after the swap completes');
+    assert.equal(state.events[0], true, 'the first webjs:frame-busy event is the start (busy:true)');
+    assert.equal(state.events[state.events.length - 1], false, 'the last webjs:frame-busy event is the finish (busy:false)');
+  });
+
   // --- Progressive enhancement: the no-JS baseline must hold (#183) ---
   //
   // "Progressive enhancement by default" is the foundational claim: with
