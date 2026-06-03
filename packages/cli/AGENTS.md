@@ -27,6 +27,14 @@ lib/
                          builtins) and would itself link-fail on old Node. So the
                          primary guard depends only on `process.versions.node`.
                          Tests: `test/node-preflight/`.
+  doctor.js              `webjs doctor` project-health checks (#266).
+                         `runDoctorChecks(appDir, opts?)` is PURE (reads files +
+                         optionally the network, never exits / prints) so each
+                         check is unit-testable. `opts.nodeVersion` overrides the
+                         running Node, `opts.vendor` injects the pin-freshness
+                         `{ hasVendorPin, findOutdated }` pair (offline tests).
+                         The bin renders + owns the non-zero exit on a hard fail.
+                         Tests: `test/cli/doctor.test.mjs`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Prisma schema,
@@ -53,6 +61,7 @@ README.md                npm-facing package readme.
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjsdev/server/check` |
+| `webjs doctor` | `runDoctorChecks()` from `lib/doctor.js`. A project-health checklist over existing signals (Node major, tsconfig `erasableSyntaxOnly`, `.env` drift vs `.env.example`, vendor-pin freshness, `@webjsdev/*` version coherence, git pre-commit hook). PURE checks render with a `[pass]` / `[warn]` / `[fail]` marker; non-zero exit iff a HARD check fails (Node below the floor, or `erasableSyntaxOnly` missing in an existing tsconfig), so CI can gate. Warns (drift / staleness) never fail the exit. The only network touch (pin freshness) is best-effort: a fetch failure is a warn, never a hard fail. An onboarding/setup-verify tool, NOT a scaffold-CI hard gate. Tests: `test/cli/doctor.test.mjs` |
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
