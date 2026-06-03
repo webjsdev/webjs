@@ -64,14 +64,23 @@ function makeApp({ basePath } = {}) {
       `import './widget.js';\n` +
       `export default () => html\`<x-widget></x-widget>\`;\n`,
     // A simple interactive component (an @click handler) so it is NOT elided
-    // and ships a module the boot path imports + a modulepreload hint.
+    // and ships a module the boot path imports + a modulepreload hint. It
+    // imports a server action so the served browser module carries the
+    // generated RPC stub, whose fetch() target must also be base-path-prefixed.
     'app/widget.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import { doThing } from './act.server.js';\n` +
       `export class XWidget extends WebComponent {\n` +
-      `  render() { return html\`<button @click=\${() => {}}>hi</button>\`; }\n` +
+      `  render() { return html\`<button @click=\${() => doThing()}>hi</button>\`; }\n` +
       `}\n` +
       `XWidget.register('x-widget');\n`,
+    // A server action. The browser import above is rewritten to an RPC stub
+    // that POSTs to /__webjs/action/<hash>/<fn>, a framework-emitted URL that
+    // must carry the base path under a sub-path deploy (#256).
+    'app/act.server.js':
+      `'use server';\n` +
+      `export async function doThing() { return { ok: true }; }\n`,
   };
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
@@ -151,6 +160,46 @@ test('every framework-emitted same-origin URL is prefixed AND resolves under /ap
     const r = await app.handle(new Request('http://x' + u));
     assert.ok(r.status < 400, `emitted URL ${u} must resolve, got ${r.status}`);
   }
+});
+
+test('a server-action RPC stub fetches a base-path-prefixed action URL (#256)', async () => {
+  // Regression: the generated RPC stub POSTs to /__webjs/action/<hash>/<fn>, a
+  // framework-emitted same-origin URL. Without the prefix, the stub hits a
+  // bare path that the ingress strip 404s, so EVERY server action breaks under
+  // a sub-path deploy. Use /myapp (distinct from the app/ dir name) so the
+  // prefix is unambiguous in the assertions.
+  const appDir = makeApp({ basePath: '/myapp' });
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+
+  // The browser-served module for the action is the generated stub.
+  const stubRes = await app.handle(new Request('http://x/myapp/app/act.server.js'));
+  assert.equal(stubRes.status, 200, 'the server-action stub is served under the prefix');
+  const src = await stubRes.text();
+
+  const fetchCall = (src.match(/fetch\([^,]+/) || [])[0] || '';
+  assert.ok(
+    /\/myapp\/__webjs\/action\//.test(src),
+    `RPC stub must fetch a /myapp-prefixed action URL, got: ${fetchCall}`,
+  );
+  assert.ok(
+    !/fetch\("\/__webjs\/action\//.test(src),
+    `RPC stub must not fetch a bare /__webjs/action/ URL, got: ${fetchCall}`,
+  );
+
+  // End-to-end: the bare action path 404s (the broken shape), while the
+  // prefixed path reaches the endpoint (it gets past routing; a 403 CSRF or
+  // similar non-404 proves the endpoint exists under the prefix).
+  const hash = (src.match(/\/__webjs\/action\/([0-9a-f]+)\//) || [])[1];
+  assert.ok(hash, 'stub carries an action hash');
+  const bare = await app.handle(
+    new Request(`http://x/__webjs/action/${hash}/doThing`, { method: 'POST', body: '{}' }),
+  );
+  assert.equal(bare.status, 404, 'the bare (un-prefixed) action path 404s under basePath');
+  const prefixed = await app.handle(
+    new Request(`http://x/myapp/__webjs/action/${hash}/doThing`, { method: 'POST', body: '{}' }),
+  );
+  assert.notEqual(prefixed.status, 404, 'the prefixed action path reaches the endpoint');
 });
 
 test('the route resolves WITH the prefix and 404s WITHOUT it', async () => {
