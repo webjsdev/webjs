@@ -618,7 +618,7 @@ Practical consequences for agents writing webjs code.
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
 | Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
 | `@property()` decorator | Banned by invariant 10 (erasable TS) | `static properties = { ... }` plus `declare` |
-| `static styles = css` block without `static shadow = true` | Styles leak globally; the framework warns at runtime | Add `static shadow = true`, or use Tailwind utilities |
+| Scoped `static styles = css` or an inline `<style>` with semantic class names (`.hero`, `.card`) in a light-DOM component | Scoped block does nothing without `static shadow = true`; inline `<style>` class names leak globally | Tailwind utilities (the light-DOM default); or `static shadow = true` for genuinely scoped CSS |
 | `willUpdate` computing SSR-visible derived state | Works (runs at SSR), but overriding it opts the component out of elision | Fine for interactive components; for display-only, derive inline in `render()` |
 | `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via a `static properties` + `declare` reactive prop |
 | `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
@@ -626,6 +626,30 @@ Practical consequences for agents writing webjs code.
 The full annotated catalog with code examples lives in the framework
 repo at
 [`agent-docs/lit-muscle-memory-gotchas.md`](https://github.com/webjsdev/webjs/blob/main/agent-docs/lit-muscle-memory-gotchas.md).
+
+### Styling: Tailwind-first (the most common lit reflex to unlearn)
+
+**Tailwind utilities are the strong default for pages AND light-DOM
+components (the default DOM mode).** Use them for layout, spacing, color
+(via the `@theme` tokens), typography, borders, radius, shadows, and
+interaction states (hover/focus/active/disabled, dark mode). Light DOM
+does not scope styles, so utilities apply directly.
+
+The lit habit is to scope CSS in a shadow root (`static styles =
+css\`\``) or write an inline `<style>` with semantic class names
+(`.hero`, `.card`). In a light-DOM webjs component the scoped block does
+nothing without `static shadow = true`, and the inline class names leak
+globally. Prefer Tailwind. When a utility bundle repeats, extract it into
+a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment, not a
+CSS class.
+
+Reserve raw CSS for what utilities cannot express: design-token `:root` /
+`@theme` definitions, `@property` + `@keyframes` animations,
+`::-webkit-scrollbar`, `prefers-reduced-motion` blocks, and complex
+`color-mix()` / gradient effects. When custom CSS is unavoidable in a
+light-DOM component, prefix every class selector with the component tag
+(invariant below). Shadow-DOM components (`static shadow = true`)
+legitimately use `static styles = css\`\`` for scoped CSS.
 
 ## Server action pattern
 

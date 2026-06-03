@@ -1,7 +1,58 @@
-# Styling: Tailwind default plus vanilla-CSS opt-out
+# Styling: Tailwind-first, plus vanilla-CSS opt-out
 
-The framework default is Tailwind. The conventions below describe how to
-opt out and use plain CSS everywhere. Fully supported.
+Tailwind is the strong default. The conventions below cover the
+Tailwind-first rule and the lit reflex it exists to counter, then how to
+opt out and use plain CSS everywhere (fully supported).
+
+## Tailwind-first is the strong default
+
+**Use Tailwind utilities for pages AND light-DOM components (the default
+DOM mode).** Layout, spacing, color (via the `@theme` tokens),
+typography, borders, radius, shadows, and interaction states
+(hover/focus/active/disabled, dark mode) are all utility-expressible.
+Light DOM does not scope styles, so a utility class on a light-DOM
+element resolves against the global stylesheet exactly as it does on a
+page. That is why utilities are the right tool there, not an exception.
+
+### The lit muscle-memory trap (read this first)
+
+AI agents with strong lit / web-components training carry one habit that
+fights this default: in lit, a component owns a shadow root and scopes
+its CSS with `static styles = css\`\``, so the reflex is to author scoped
+CSS or an inline `<style>` with semantic class names (`.hero`,
+`.feature`, `.card`, `.btn`) for every component.
+
+**In webjs the default is light DOM, which does NOT scope.** A scoped
+`css` block does nothing without `static shadow = true` (the framework
+warns at runtime), and an inline `<style>` with bare semantic class names
+leaks those names into the global namespace. So reaching for either in a
+light-DOM component is the reflex to resist. Prefer Tailwind utilities.
+When the same utility bundle repeats, extract it into a `lib/utils/ui.ts`
+helper that returns an `` html`...` `` fragment (the existing pattern,
+below), NOT a CSS class. The helper keeps the utilities visible at the
+definition site and runs at SSR time, so the output is identical to
+writing the classes inline.
+
+### The custom-CSS allowlist (the only things raw CSS is for)
+
+Reserve raw CSS for what utilities genuinely cannot express. This is the
+exhaustive list; anything outside it should be a utility (or a
+`lib/utils/ui.ts` helper):
+
+- **design-token `:root` + `@theme` definitions** (the palette, fonts,
+  fluid type scale, motion durations declared once in the root layout),
+- **`@property` animated custom properties** paired with `@keyframes`,
+- **`::-webkit-scrollbar` and `scrollbar-color`** (no utility surface),
+- **`prefers-reduced-motion` blocks**,
+- **complex `color-mix()` or gradient effects** a utility cannot spell.
+
+When custom CSS IS unavoidable inside a light-DOM component, the
+tag-prefix invariant still holds (see the Vanilla CSS section below):
+every class selector is prefixed with the component tag. **Shadow-DOM components
+(`static shadow = true`) legitimately author `static styles = css\`\``,
+which is the right home for scoped CSS and is unchanged by this rule.**
+The Tailwind-first steer is about the LIGHT-DOM default, not about
+shadow DOM.
 
 ## Tailwind + JS helpers (default convention)
 
