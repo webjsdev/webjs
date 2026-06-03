@@ -114,6 +114,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent:        oklch(0.58 0.16 52);
         --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
+        --heart:         oklch(0.64 0.22 6);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
@@ -127,6 +128,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
+          --heart: oklch(0.74 0.18 6);
           --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.56 0.02 60);
           --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
           --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
@@ -138,6 +140,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       }
       :root[data-theme='dark'] {
         color-scheme: dark;
+        --heart: oklch(0.74 0.18 6);
         --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.56 0.02 60);
         --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
         --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
@@ -160,6 +163,18 @@ export default function RootLayout({ children }: { children: unknown }) {
         transition: background var(--t) cubic-bezier(0.3,0,0.3,1), color var(--t) cubic-bezier(0.3,0,0.3,1);
       }
       ::selection { background: var(--accent-tint); color: var(--fg); }
+      @keyframes heart-pump {
+        0%, 40%, 100% { transform: scale(1); }
+        10% { transform: scale(1.3); }
+        20% { transform: scale(1); }
+        30% { transform: scale(1.18); }
+      }
+      .heart {
+        display: inline-block; width: 1.15em; height: 1.15em;
+        vertical-align: -0.18em; color: var(--heart);
+        animation: heart-pump 1.4s ease-in-out infinite;
+        transform-origin: center;
+      }
       .glow-layer {
         position: fixed; inset: 0; z-index: 0; pointer-events: none;
         background:
