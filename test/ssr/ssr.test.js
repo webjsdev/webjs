@@ -484,6 +484,11 @@ test('metadata.jsonLd: HTML-safe escaping prevents a </script> breakout AND stay
   const obj = {
     '@type': 'Thing',
     name: '</script><img src=x onerror=alert(1)>',
+    // A malicious payload in KEY position is escaped too (escapeJsonLd runs
+    // over the whole stringified blob, keys included), so a key cannot close
+    // the tag any more than a value can. A bare HTML comment opener is covered.
+    '</script><script>alert(2)</script>': 'k',
+    '<!-- c -->': 'c',
     desc: 'a & b',
     sep: 'x y z',
   };
@@ -503,6 +508,10 @@ test('metadata.jsonLd: HTML-safe escaping prevents a </script> breakout AND stay
     !inner.includes('</script>'),
     `escaped body must not contain a literal </script>: ${inner}`,
   );
+  // The strongest invariant: NO raw `<` survives anywhere in the body (value,
+  // key, or structural position), so `</script>`, `<script`, `<!--`, and any
+  // other tag/comment opener are all impossible to form.
+  assert.ok(!inner.includes('<'), `no raw < may survive in the body: ${inner}`);
   assert.ok(inner.includes('\\u003c'), '< is escaped to \\u003c');
   assert.ok(inner.includes('\\u003e'), '> is escaped to \\u003e');
   assert.ok(inner.includes('\\u0026'), '& is escaped to \\u0026');
