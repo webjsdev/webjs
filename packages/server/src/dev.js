@@ -113,7 +113,7 @@ function resolveRequestId(req) {
 function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
-import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
@@ -1301,8 +1301,11 @@ export async function startServer(opts) {
     try {
       const url = urlFromRequest(req);
 
-      // SSE: handled specially; doesn't fit the req→Response model.
-      if (url.pathname === '/__webjs/events') {
+      // SSE: handled specially; doesn't fit the req→Response model. Match the
+      // base-path-stripped pathname so the reload stream answers at
+      // `<basePath>/__webjs/events` under a sub-path deploy (#256). With no
+      // basePath this is a pure pass-through (the bare path still matches).
+      if (stripBasePath(url.pathname, basePath()) === '/__webjs/events') {
         if (!dev) { res.writeHead(404); res.end(); return; }
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -1421,7 +1424,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
   // Dev live-reload client.
   if (path === '/__webjs/reload.js') {
     if (!dev) return new Response('Not found', { status: 404 });
-    return new Response(RELOAD_CLIENT_JS, {
+    return new Response(reloadClientJs(basePath()), {
       headers: { 'content-type': 'application/javascript; charset=utf-8' },
     });
   }
@@ -2238,7 +2241,17 @@ function locatePackageDir(appDir, pkgName) {
   return null;
 }
 
-const RELOAD_CLIENT_JS = `// webjs dev reload client
-const es = new EventSource('/__webjs/events');
+/**
+ * The dev live-reload client. The `EventSource` URL is a framework-emitted
+ * same-origin path, so it must carry the base path under a sub-path deploy
+ * (#256), like the importmap targets and the RPC stub. No-op when basePath
+ * is empty.
+ * @param {string} bp the normalized base path (`''` = no-op)
+ * @returns {string}
+ */
+function reloadClientJs(bp) {
+  return `// webjs dev reload client
+const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
 es.addEventListener('reload', () => location.reload());
 `;
+}

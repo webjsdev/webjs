@@ -202,6 +202,43 @@ test('a server-action RPC stub fetches a base-path-prefixed action URL (#256)', 
   assert.notEqual(prefixed.status, 404, 'the prefixed action path reaches the endpoint');
 });
 
+test('the dev reload client EventSource URL is base-path-prefixed (#256)', async () => {
+  // Regression: reload.js opens an EventSource to /__webjs/events, a
+  // framework-emitted client URL. A bare path breaks dev live-reload under a
+  // sub-path proxy (the script src was prefixed but the URL inside it was not).
+  const appDir = makeApp({ basePath: '/myapp' });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const res = await app.handle(new Request('http://x/myapp/__webjs/reload.js'));
+  assert.equal(res.status, 200, 'reload.js is served under the prefix in dev');
+  const src = await res.text();
+  assert.match(
+    src,
+    /new EventSource\("\/myapp\/__webjs\/events"\)/,
+    'the EventSource URL must be prefixed with the base path',
+  );
+  assert.ok(
+    !/new EventSource\("\/__webjs\/events"\)/.test(src),
+    'the EventSource URL must not be a bare /__webjs/events',
+  );
+});
+
+test('the dev reload client EventSource URL is bare with no basePath (no-op)', async () => {
+  const appDir = makeApp({});
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const res = await app.handle(new Request('http://x/__webjs/reload.js'));
+  assert.equal(res.status, 200, 'reload.js is served at the bare path');
+  const src = await res.text();
+  assert.match(
+    src,
+    /new EventSource\("\/__webjs\/events"\)/,
+    'the EventSource URL is the bare path when no basePath is set (byte-identical)',
+  );
+});
+
 test('the route resolves WITH the prefix and 404s WITHOUT it', async () => {
   const appDir = makeApp({ basePath: '/app' });
   const app = await createRequestHandler({ appDir, dev: false });
