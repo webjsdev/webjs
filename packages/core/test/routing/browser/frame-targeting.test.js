@@ -216,6 +216,54 @@ suite('Client router: <webjs-frame> aria-busy lifecycle (#252)', () => {
     } finally { teardown(); }
   });
 
+  test('two rapid frame navs: busy stays true until the SECOND settles (no false mid-load)', async () => {
+    // The abort-race guard (#252): nav B supersedes nav A and re-sets busy; A's
+    // abort teardown must NOT clear the busy state the live nav B owns, and no
+    // spurious { busy: false } may fire while a nav is still in flight.
+    setup();
+    /** @type {boolean[]} */
+    const busyEvents = [];
+    const onBusy = (e) => busyEvents.push(e.detail.busy);
+    try {
+      let resolveLatest;
+      // Reject on abort (the router aborts the prior nav), else defer so the
+      // newest nav stays in flight under our control.
+      window.fetch = (_url, opts = {}) => new Promise((res, rej) => {
+        if (opts && opts.signal) {
+          opts.signal.addEventListener('abort', () =>
+            rej(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        }
+        resolveLatest = res;
+      });
+      document.addEventListener('webjs:frame-busy', onBusy);
+      const frame = document.getElementById('busyframe');
+
+      document.getElementById('busy-link').click(); // nav A
+      await settle();
+      assert.equal(frame.getAttribute('aria-busy'), 'true', 'nav A set busy');
+
+      document.getElementById('busy-link').click(); // nav B aborts A, re-sets busy
+      await settle();
+      assert.equal(frame.getAttribute('aria-busy'), 'true',
+        'busy stays true while B loads, A abort did not clear the live nav');
+      assert.ok(!busyEvents.includes(false),
+        'no { busy: false } event fired while a nav is still in flight');
+
+      resolveLatest(new Response(
+        '<!doctype html><html><head></head><body>' +
+        '<webjs-frame id="busyframe"><span id="busy-content">DONE</span></webjs-frame>' +
+        '</body></html>',
+        { headers: { 'content-type': 'text/html', 'x-webjs-build': '' } },
+      ));
+      await settle();
+      assert.equal(frame.getAttribute('aria-busy'), 'false', 'busy clears after B settles');
+      assert.equal(busyEvents[busyEvents.length - 1], false, 'the last event is the finish (false)');
+    } finally {
+      document.removeEventListener('webjs:frame-busy', onBusy);
+      teardown();
+    }
+  });
+
   test('aria-busy clears when the frame is MISSING from the response', async () => {
     setup();
     try {

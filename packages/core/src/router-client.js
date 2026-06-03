@@ -1266,7 +1266,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // outer try/finally guarantees the busy state is cleared on EVERY exit
   // (success swap, frame-missing, an HTTP/transport error, an abort by a
   // newer nav), never leaving a frame stuck busy.
-  const busyFrame = frameId ? markFrameBusy(frameId) : null;
+  const busyFrame = frameId ? markFrameBusy(frameId, token) : null;
   try {
   try {
     // Warm-cache fast path: a hover/focus/viewport prefetch may have
@@ -1381,35 +1381,56 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   } finally {
     // Clear the frame's busy state on every exit path (the early returns
     // above all unwind through here). No-op when this was not a frame nav.
-    if (busyFrame) clearFrameBusy(busyFrame);
+    if (busyFrame) clearFrameBusy(busyFrame, token);
   }
 }
 
 /**
+ * The nav token that currently OWNS each frame's busy state. Under two rapid
+ * frame navs the router aborts the first; its `finally` would otherwise clear
+ * `aria-busy` that the SECOND nav already re-set, leaving the frame falsely
+ * idle while still loading (and an unbalanced busy-event stream). A clear only
+ * fires when its token still owns the frame, so the superseding nav's busy
+ * state survives the aborted nav's teardown.
+ *
+ * @type {WeakMap<Element, number>}
+ */
+const frameBusyTokens = new WeakMap();
+
+/**
  * Set `aria-busy="true"` on the live `<webjs-frame id>` element and announce
  * the start of its load with a bubbling `webjs:frame-busy` event (detail
- * `{ frameId, busy: true }`), mirroring Turbo's `frame.markAsBusy`. Returns
- * the resolved frame element so `clearFrameBusy` can target the SAME node
- * even if the swap later replaces the frame's id lookup (the element
- * identity is stable across a child-only frame swap). Returns null when the
- * frame is not in the live DOM (e.g. a stale external `data-webjs-frame`
- * that slipped the resolve-time check), so nothing to mark.
+ * `{ frameId, busy: true }`), mirroring Turbo's `frame.markAsBusy`. Stamps the
+ * nav `token` as the frame's busy owner (see `frameBusyTokens`). Returns the
+ * resolved frame element so `clearFrameBusy` can target the SAME node even if
+ * the swap later replaces the frame's id lookup (the element identity is stable
+ * across a child-only frame swap). Returns null when the frame is not in the
+ * live DOM (e.g. a stale external `data-webjs-frame` that slipped the
+ * resolve-time check), so nothing to mark.
  *
  * @param {string} frameId
+ * @param {number} token
  * @returns {Element | null}
  */
-function markFrameBusy(frameId) {
+function markFrameBusy(frameId, token) {
   if (typeof document === 'undefined') return null;
   let frame = null;
   try {
     frame = document.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
   } catch { frame = document.getElementById(frameId); }
   if (!frame) return null;
+  // Dispatch the `true` edge only on a real idle -> busy transition, so a nav
+  // that supersedes an in-flight one (frame already busy) does not emit a
+  // redundant `true`. The token always advances to the newest owner.
+  const wasBusy = frameBusyTokens.has(frame);
+  frameBusyTokens.set(frame, token);
   frame.setAttribute('aria-busy', 'true');
-  frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
-    bubbles: true,
-    detail: { frameId, busy: true },
-  }));
+  if (!wasBusy) {
+    frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
+      bubbles: true,
+      detail: { frameId, busy: true },
+    }));
+  }
   return frame;
 }
 
@@ -1418,11 +1439,16 @@ function markFrameBusy(frameId) {
  * dispatch the matching `webjs:frame-busy` (detail `{ frameId, busy: false }`)
  * so app code sees a symmetric start/finish pair. Mirrors Turbo's
  * `frame.clearBusyState`. Operates on the element captured at start, so an
- * abort / error clears the same node the start marked.
+ * abort / error clears the same node the start marked. A clear whose token no
+ * longer owns the frame (a newer nav re-set busy) is a stale teardown from a
+ * superseded nav and is skipped, so the live nav stays busy.
  *
  * @param {Element} frame
+ * @param {number} token
  */
-function clearFrameBusy(frame) {
+function clearFrameBusy(frame, token) {
+  if (frameBusyTokens.get(frame) !== token) return;
+  frameBusyTokens.delete(frame);
   frame.setAttribute('aria-busy', 'false');
   const frameId = frame.id || null;
   frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
