@@ -42,6 +42,7 @@ const USAGE = `webjs commands:
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Run correctness checks on the app
+  webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, @webjsdev versions, git hook)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
@@ -275,6 +276,38 @@ async function main() {
           if (v.fix) console.log(`    Fix: ${v.fix}`);
           console.log();
         }
+        process.exit(1);
+      }
+      break;
+    }
+    case 'doctor': {
+      // Project-health checklist (#266). The checks are PURE (in lib/doctor.js);
+      // this branch only renders them and owns the exit code: non-zero iff any
+      // HARD check FAILS, so CI can gate on it. Warns are informational and do
+      // NOT fail the exit (env drift / pin staleness / version drift are the
+      // app's concern, not a broken toolchain).
+      const { runDoctorChecks } = await import('../lib/doctor.js');
+      const results = await runDoctorChecks(process.cwd());
+      const marker = { pass: '[pass]', warn: '[warn]', fail: '[fail]' };
+      console.log('webjs doctor: project-health checklist\n');
+      for (const r of results) {
+        console.log(`  ${marker[r.status]} ${r.name}`);
+        console.log(`    ${r.message}`);
+        if (r.fix && r.status !== 'pass') console.log(`    Fix: ${r.fix}`);
+        console.log();
+      }
+      const counts = results.reduce((acc, r) => {
+        acc[r.status] = (acc[r.status] || 0) + 1;
+        return acc;
+      }, /** @type {Record<string, number>} */ ({}));
+      const pass = counts.pass || 0;
+      const warn = counts.warn || 0;
+      const fail = counts.fail || 0;
+      console.log(`  ${pass} passed, ${warn} warning(s), ${fail} failed.`);
+      if (fail > 0) {
+        console.error(
+          `\nwebjs doctor: ${fail} hard check(s) failed. Fix the toolchain issue(s) above.`,
+        );
         process.exit(1);
       }
       break;

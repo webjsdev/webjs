@@ -287,6 +287,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'test:browser': 'webjs test --browser',
       check: 'webjs check',
       typecheck: 'webjs typecheck',
+      // Onboarding/setup-verify: a contributor runs `npm run doctor` after
+      // cloning to assert the toolchain (Node floor, tsconfig flag, env drift,
+      // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
+      // (its env-drift + network pin-freshness checks would make CI flaky).
+      doctor: 'webjs doctor',
       'db:migrate': 'prisma migrate dev',
       'db:generate': 'prisma generate',
       'db:studio': 'prisma studio',
