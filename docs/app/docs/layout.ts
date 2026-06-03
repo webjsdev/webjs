@@ -78,6 +78,7 @@ const NAV_SECTIONS = [
       { href: '/docs/deployment', label: 'Deployment' },
       { href: '/docs/testing', label: 'Testing' },
       { href: '/docs/conventions', label: 'Conventions & AI Workflow' },
+      { href: '/docs/troubleshooting', label: 'Troubleshooting' },
     ],
   },
 ];
