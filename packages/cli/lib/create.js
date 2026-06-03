@@ -346,6 +346,22 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         { name: '@webjsdev/ts-plugin' },
       ],
     },
+    // `.webjs/routes.d.ts` is the OPT-IN generated route-types overlay (#258):
+    // run `webjs types` (or `webjs dev`, which emits it) to narrow the
+    // @webjsdev/core `Route` href union + per-route `params`. Listed in
+    // `include` so tsserver picks it up; it is gitignored (regenerated per
+    // machine), so a fresh clone runs `webjs dev` / `webjs types` to recreate
+    // it, and the static @webjsdev/core types work even when it is absent.
+    include: [
+      'app/**/*',
+      'components/**/*',
+      'modules/**/*',
+      'lib/**/*',
+      'middleware.js',
+      'middleware.ts',
+      '.webjs/routes.d.ts',
+    ],
+    exclude: ['node_modules', '.webjs/vendor', 'prisma/migrations'],
   }, null, 2) + '\n');
 
   // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---

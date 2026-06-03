@@ -2,6 +2,8 @@
 node_modules/
 
 # webjs / framework caches.
+# `.webjs/routes.d.ts` (the generated route-types overlay, regenerated per
+# machine by `webjs types` / `webjs dev`) is correctly ignored by `.webjs/*`.
 # `.webjs/vendor/` is the EXCEPTION: it holds the committed importmap
 # manifest (.webjs/vendor/importmap.json) and optionally the vendored
 # bundle files (after `webjs vendor pin --download`). Both ship to

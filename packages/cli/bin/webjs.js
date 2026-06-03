@@ -42,6 +42,7 @@ const USAGE = `webjs commands:
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Run correctness checks on the app
+  webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir
@@ -275,6 +276,27 @@ async function main() {
         }
         process.exit(1);
       }
+      break;
+    }
+    case 'types': {
+      // Generate `.webjs/routes.d.ts` from the app's `app/` routes (#258),
+      // narrowing the @webjsdev/core `Route` href union + per-route `params`.
+      // Opt-in codegen: the static types in @webjsdev/core work without it
+      // (un-generated apps see `Route = string`).
+      const { generateRouteTypes } = await import('@webjsdev/server');
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      const appDir = process.cwd();
+      const text = await generateRouteTypes(appDir);
+      const outDir = join(appDir, '.webjs');
+      await mkdir(outDir, { recursive: true });
+      const outFile = join(outDir, 'routes.d.ts');
+      await writeFile(outFile, text);
+      // Count the typed routes (each `WebjsRoutes` key is one route literal).
+      const count = (text.match(/^\s+".*": true;$/gm) || []).length;
+      console.log(
+        `webjs types: wrote .webjs/routes.d.ts (${count} route${count === 1 ? '' : 's'} typed). ` +
+        `Ensure tsconfig "include" lists ".webjs/routes.d.ts" so tsserver picks it up.`,
+      );
       break;
     }
     case 'create': {

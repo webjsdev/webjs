@@ -61,10 +61,17 @@ export.
 type-only public surface alongside the runtime exports. The component
 typing lives in `src/component.d.ts`; the page-metadata typing
 (`Metadata`, `MetadataContext`, and the nested shapes) lives in
-`src/metadata.d.ts`. Both are pure declaration files (erased at runtime,
-zero build cost). A page imports them with `import type { Metadata } from
-'@webjsdev/core'`. The `Metadata` shape MUST stay in lockstep with what
-`packages/server/src/ssr.js` actually reads, never Next.js's superset.
+`src/metadata.d.ts`; the typed page / layout / route-handler props plus the
+opt-in route union (`PageProps`, `LayoutProps`, `RouteHandlerContext`, `Route`,
+`RouteParams`, and the `WebjsRoutes` / `RouteParamMap` augmentation targets,
+#258) live in `src/routes.d.ts`. All are pure declaration files (erased at
+runtime, zero build cost). A page imports them with `import type { Metadata,
+PageProps } from '@webjsdev/core'`. The `Metadata` and `PageProps` /
+`LayoutProps` shapes MUST stay in lockstep with what
+`packages/server/src/ssr.js` actually reads / constructs, never Next.js's
+superset. `routes.d.ts`'s `WebjsRoutes` / `RouteParamMap` are EMPTY by default
+(so `Route = string`); `webjs types` generates `.webjs/routes.d.ts` to augment
+them per app.
 
 ## Package-specific invariants
 

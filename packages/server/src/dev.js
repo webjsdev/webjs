@@ -47,6 +47,7 @@ process.emitWarning = function (warning, type, code, ctor) {
 };
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
+import { generateRouteTypes } from './route-types.js';
 import { ssrPage, ssrNotFound } from './ssr.js';
 import { loadPageAction, runPageAction } from './page-action.js';
 import { handleApi } from './api.js';
@@ -488,6 +489,32 @@ export async function createRequestHandler(opts) {
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
 
+  // Emit `.webjs/routes.d.ts` (typed Route union + per-route params, #258) in
+  // dev so an editor's tsserver always has up-to-date route types without the
+  // developer remembering to run `webjs types`. Best-effort and fire-and-
+  // forget: a failure logs and never blocks boot. Re-emitted after each route
+  // rebuild (see doRebuild) so adding/removing a route refreshes the types.
+  /** @returns {Promise<void>} */
+  async function emitRouteTypes() {
+    try {
+      const { mkdir, writeFile, rename } = await import('node:fs/promises');
+      const text = await generateRouteTypes(appDir);
+      const outDir = join(appDir, '.webjs');
+      await mkdir(outDir, { recursive: true });
+      // Write to a temp sibling then rename, so tsserver (which reads this
+      // file) never observes a half-written body if two rebuilds race. rename
+      // is atomic within the same dir. Both paths sit under the watcher-ignored
+      // .webjs/, so neither the temp write nor the rename re-triggers a rebuild.
+      const dest = join(outDir, 'routes.d.ts');
+      const tmp = join(outDir, `routes.d.ts.${process.pid}.tmp`);
+      await writeFile(tmp, text);
+      await rename(tmp, dest);
+    } catch (e) {
+      logger.warn?.(`[webjs] could not write .webjs/routes.d.ts (route types): ${e?.message || e}`);
+    }
+  }
+  if (dev) void emitRouteTypes();
+
   // Per-path response-header rules (issue #232), read once from the
   // app's package.json `webjs.headers`. Static config, so no rebuild
   // re-read; the secure defaults need no config and apply regardless.
@@ -773,6 +800,10 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    // Refresh the generated route types (#258) so adding/removing a route file
+    // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
+    // best-effort (see emitRouteTypes).
+    if (dev) void emitRouteTypes();
     clearVendorCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
@@ -1076,6 +1107,25 @@ export async function createRequestHandler(opts) {
  * etc.) sitting in front of this process. See the deployment docs for
  * the recommended topology.
  *
+/**
+ * Paths under the app root whose changes must NOT trigger a dev rebuild.
+ * `node_modules` / `.git` are noise. `.webjs/` is the framework's generated
+ * artefact dir (the #258 routes.d.ts and the vendor pin) that the dev server
+ * itself writes on startup and on every rebuild, so without this skip the
+ * write fires a watch event, triggers a rebuild, re-writes the file, and loops
+ * forever. `prisma/dev*` / `prisma/migrations` churn during db:migrate. The
+ * prisma branch is prefix-only (no trailing separator) so the SQLite sidecars
+ * `prisma/dev.db` / `prisma/dev.db-journal` match too; the others stay
+ * separator-anchored so an unrelated name like `node_modules.bak/foo` does not.
+ *
+ * @param {string} filename relative path from an fs.watch `event.filename`
+ * @returns {boolean} true when the change should be ignored
+ */
+export function shouldIgnoreWatchPath(filename) {
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/.test(filename || '');
+}
+
+/**
  * @param {{
  *   appDir: string,
  *   port?: number,
@@ -1111,18 +1161,9 @@ export async function startServer(opts) {
     // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
     // Node 24. No external dep needed.
     //
-    // fs.watch returns relative paths in event.filename. We apply
-    // the same ignore filter chokidar used before: skip
-    // node_modules, .git, and prisma's dev artefacts (dev.db,
-    // dev.db-journal, migrations/) which the dev server writes
-    // during db:migrate and would otherwise loop.
-    //
-    // The prisma branch uses prefix-only matching (no required
-    // trailing separator) so the SQLite sidecar files like
-    // `prisma/dev.db` and `prisma/dev.db-journal` are ignored too.
-    // node_modules / .git stay separator-anchored so unrelated
-    // names like `node_modules.bak/foo` don't get caught.
-    const IGNORE = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/;
+    // fs.watch returns relative paths in event.filename. `shouldIgnoreWatchPath`
+    // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
+    // prisma's dev artefacts so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
     (async () => {
@@ -1130,7 +1171,7 @@ export async function startServer(opts) {
         const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
-          if (IGNORE.test(filename)) continue;
+          if (shouldIgnoreWatchPath(filename)) continue;
           rebuild();
         }
       } catch (err) {

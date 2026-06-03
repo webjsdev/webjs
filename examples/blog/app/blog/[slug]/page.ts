@@ -1,4 +1,4 @@
-import { html, notFound, type Metadata } from '@webjsdev/core';
+import { html, notFound, type Metadata, type PageProps } from '@webjsdev/core';
 import '../../../components/muted-text.ts';
 import '../../../modules/comments/components/comments-thread.ts';
 
@@ -7,16 +7,19 @@ import { listComments } from '../../../modules/comments/queries/list-comments.se
 import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';
 import { rubric, backLink, displayH1, stat } from '../../../lib/utils/ui.ts';
 
-type Ctx = { params: { slug: string } };
-
-export async function generateMetadata({ params }: Ctx): Promise<Metadata> {
+// Typed against the generated route literal (#258). With `.webjs/routes.d.ts`
+// generated (via `webjs types` / `webjs dev`), `params` narrows to
+// `{ slug: string }`; without it (a JSDoc app, or a fresh clone before the
+// types are generated), `PageProps` falls back to `Record<string, string>`,
+// so this annotation is safe either way.
+export async function generateMetadata({ params }: PageProps<'/blog/[slug]'>): Promise<Metadata> {
   const post = await getPost({ slug: params.slug });
   return post
     ? { title: `${post.title}: webjs blog` }
     : { title: 'Not found: webjs blog' };
 }
 
-export default async function PostPage({ params }: Ctx) {
+export default async function PostPage({ params }: PageProps<'/blog/[slug]'>) {
   const post = await getPost({ slug: params.slug });
   if (!post) notFound();
 

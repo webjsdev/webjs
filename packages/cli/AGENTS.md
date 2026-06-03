@@ -53,6 +53,7 @@ README.md                npm-facing package readme.
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules\|--fix]` | `checkConventions()` from `@webjsdev/server/check` |
+| `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
 | `webjs db <generate\|migrate\|studio>` | Passthrough to `prisma` |
 | `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
