@@ -254,6 +254,41 @@ bundler. The mechanism is `generateRouteTypes(appDir)` in
 (`buildRouteTable`). Output is deterministic (sorted keys), so re-running
 yields a byte-identical file.
 
+### The `webjs` package.json config block: `WebjsConfig` + JSON Schema
+
+The `webjs` object in `package.json` (the `elide` / `headers` / `redirects` /
+`trailingSlash` / `csp` knobs plus the ingress body-size and timeout caps) has
+two typed references, so a typo'd key is diagnosed instead of silently dropped:
+
+- **A JSON Schema**, `packages/server/webjs-config.schema.json` (shipped in the
+  `@webjsdev/server` package). The scaffold's `.vscode/settings.json` associates
+  it with the `webjs` property of `package.json`, so VS Code flags an unknown
+  key natively while you edit the JSON. `additionalProperties: false` on the
+  block is what turns a typo into an editor warning.
+- **The `WebjsConfig` type**, exported from `@webjsdev/core`, a typed reference
+  for an agent or human authoring the block (with `WebjsHeaderRule`,
+  `WebjsRedirectRule`, `WebjsCspConfig`, `WebjsTrailingSlash` for the nested
+  shapes).
+
+```ts
+import type { WebjsConfig } from '@webjsdev/core';
+
+const config: WebjsConfig = {
+  trailingSlash: 'never',
+  csp: true,
+  redirects: [{ source: '/old', destination: '/new' }],
+};
+```
+
+The schema and the type mirror what the server readers actually consume
+(`readElideEnabled`, `compileHeaderRules`, `compileRedirectRules` /
+`readTrailingSlashPolicy`, `readCspConfig`, `readBodyLimits` /
+`computeServerTimeouts`). Adding a `webjs.*` key means updating the schema, the
+type, AND the reader in lockstep, the one procedure documented in
+`packages/server/AGENTS.md`. A drift test
+(`packages/server/test/config/webjs-config-schema.test.js`) fails if the schema
+and the reader key set diverge.
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language

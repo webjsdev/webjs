@@ -413,6 +413,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // to main, mirroring the webjs framework's own CI.
     '.github/workflows/ci.yml',
     '.editorconfig',
+    // VS Code: associate the published webjs-config JSON Schema with the
+    // package.json `webjs` block, so an unknown / typo'd key (#259) is
+    // flagged natively in the editor instead of silently dropped.
+    '.vscode/settings.json',
     // Production / deploy scaffolding. `docker compose up --build` runs
     // the app locally with the same Dockerfile production builds from.
     'Dockerfile',

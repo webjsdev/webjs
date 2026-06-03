@@ -72,7 +72,38 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 
 See [`index.js`](./index.js) and [`package.json` exports](./package.json).
 The `./check` subpath is exported separately so the CLI's `webjs check`
-can load it without booting the full server.
+can load it without booting the full server. The
+`./webjs-config.schema.json` subpath publishes the config JSON Schema
+(below) so an editor can resolve it from
+`node_modules/@webjsdev/server/webjs-config.schema.json`.
+
+## The `webjs` package.json config block (typed surface, #259)
+
+The `webjs.*` keys an app sets in `package.json` are typed and validated
+in THREE co-located places that MUST stay in lockstep:
+
+1. **The JSON Schema**, [`webjs-config.schema.json`](./webjs-config.schema.json)
+   (in this package's `files` allowlist + `exports`). `additionalProperties:
+   false` flags an unknown / typo'd key; the scaffold's `.vscode/settings.json`
+   associates it with the `webjs` property of `package.json` so VS Code
+   validates the block natively. This is the primary "fails-open -> diagnosed"
+   fix: a typo used to be silently dropped to the default.
+2. **The TS type** `WebjsConfig` in
+   `packages/core/src/webjs-config.d.ts` (re-exported from
+   `@webjsdev/core`), the typed reference an agent or human authors against.
+3. **The reader functions** that consume each key: `readElideEnabled`
+   (`dev.js`, `elide`), `compileHeaderRules` (`headers.js`, `headers`),
+   `compileRedirectRules` / `readTrailingSlashPolicy` (`redirects.js`,
+   `redirects` / `trailingSlash`), `readCspConfig` (`csp.js`, `csp`), and
+   `readBodyLimits` / `computeServerTimeouts` (`body-limit.js`, the byte
+   caps + timeouts).
+
+**To add or change a `webjs.*` key, update all three (schema + type +
+reader), and the `KNOWN_KEYS` list in the drift test.** The drift test
+`test/config/webjs-config-schema.test.js` asserts the schema property set
+and the reader key set never diverge (a counterfactual unknown key proves
+`additionalProperties:false` would flag it); the type fixture
+`test/types/webjs-config.test-d.ts` asserts the type matches.
 
 ## Package-specific invariants
 

@@ -112,6 +112,15 @@ layered on top:
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
 
+**Config validation in `package.json`.** The scaffold ships
+`.vscode/settings.json`, which associates the published webjs-config JSON
+Schema (`@webjsdev/server/webjs-config.schema.json`) with the `webjs` block
+of `package.json`. In VS Code an unknown / typo'd `webjs.*` key (`redirect`
+for `redirects`, say) is then flagged inline instead of silently dropped to
+the default. The same shape is typed by the `WebjsConfig` type from
+`@webjsdev/core` (`import type { WebjsConfig } from '@webjsdev/core'`) for a
+typed reference.
+
 ## UI components: Webjs UI (preinstalled)
 
 This scaffold ships with the standard Webjs UI component kit

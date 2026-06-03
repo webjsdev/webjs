@@ -64,7 +64,13 @@ typing lives in `src/component.d.ts`; the page-metadata typing
 `src/metadata.d.ts`; the typed page / layout / route-handler props plus the
 opt-in route union (`PageProps`, `LayoutProps`, `RouteHandlerContext`, `Route`,
 `RouteParams`, and the `WebjsRoutes` / `RouteParamMap` augmentation targets,
-#258) live in `src/routes.d.ts`. All are pure declaration files (erased at
+#258) live in `src/routes.d.ts`. The `webjs` package.json config-block typing
+(`WebjsConfig` plus the nested `WebjsHeaderRule` / `WebjsRedirectRule` /
+`WebjsCspConfig` / `WebjsTrailingSlash`, #259) lives in
+`src/webjs-config.d.ts`; it mirrors the `@webjsdev/server` config readers and
+the companion JSON Schema (`packages/server/webjs-config.schema.json`), and
+those three MUST stay in lockstep (the procedure is documented in
+`packages/server/AGENTS.md`). All are pure declaration files (erased at
 runtime, zero build cost). A page imports them with `import type { Metadata,
 PageProps } from '@webjsdev/core'`. The `Metadata` and `PageProps` /
 `LayoutProps` shapes MUST stay in lockstep with what
