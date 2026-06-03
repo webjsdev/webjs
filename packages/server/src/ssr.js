@@ -803,6 +803,8 @@ function wrapHead(opts) {
   // alternates, archives, etc.) AND by the preload block further down.
   // Hoist the declaration so the metadata block can push into it.
   const linkTags = [];
+  // scriptTags collects JSON-LD structured-data blocks (see m.jsonLd below).
+  const scriptTags = [];
 
   // Tiny URL resolver against metadataBase. If metadataBase is set and a
   // value looks like a relative URL (no scheme, no `//` prefix), resolve
@@ -1036,6 +1038,23 @@ function wrapHead(opts) {
     }
   }
 
+  // JSON-LD structured data (schema.org). `m.jsonLd` is a single object
+  // OR an array of objects. The author owns the schema.org shape; the
+  // framework only serializes and HTML-safe-escapes each object into a
+  // `<script type="application/ld+json">` block. A single object emits
+  // ONE script; an array emits one script PER element.
+  //
+  // The block is a NON-EXECUTABLE data island (type application/ld+json),
+  // so CSP script-src does not gate it and it carries NO nonce. Adding one
+  // would wrongly imply it is executable script.
+  if (m.jsonLd != null) {
+    const list = Array.isArray(m.jsonLd) ? m.jsonLd : [m.jsonLd];
+    for (const obj of list) {
+      const tag = jsonLdScript(obj);
+      if (tag) scriptTags.push(tag);
+    }
+  }
+
   // Preload hints: page modules themselves + every discovered component
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
   // (linkTags array was declared earlier so the metadata block above can
@@ -1168,7 +1187,7 @@ ${metaTags.join('\n')}
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
 ${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
-${boot}
+${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}
 ${reload}
 ${suspenseBoot}
 </head>
@@ -1423,6 +1442,60 @@ function escapeHtml(s) {
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
+
+/**
+ * HTML-safe-escape a JSON string for embedding inside a
+ * `<script type="application/ld+json">` element.
+ *
+ * This is NOT the HTML-entity escaper (escapeHtml / escapeAttr). A
+ * JSON parser reads the raw character, so turning `<` into `&lt;`
+ * would CORRUPT the JSON. Instead we emit the Unicode escape form
+ * (`<`), which a JSON parser decodes back to the original
+ * character while making the literal byte sequence `</script>`
+ * impossible to form in the served HTML. So the embedded data parses
+ * back to the author's exact object, AND a value containing
+ * `</script><img onerror=...>` can never break out of the script tag.
+ *
+ * U+2028 / U+2029 are escaped too: they are valid inside a JSON
+ * string but are line terminators in HTML/JS contexts, and some
+ * consumers choke on them. Escaping keeps the block robust.
+ *
+ * @param {string} json  the `JSON.stringify` output
+ * @returns {string}
+ */
+function escapeJsonLd(json) {
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * Serialize one schema.org object into a `<script type="application/ld+json">`
+ * block, HTML-safe-escaped via escapeJsonLd. Fails SAFE: a non-object
+ * input, or a circular reference that makes JSON.stringify throw, is
+ * skipped (returns the empty string) with a one-line warn, never breaking
+ * the whole render.
+ *
+ * @param {unknown} obj
+ * @returns {string}  the script tag, or '' to skip this element
+ */
+function jsonLdScript(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  try {
+    const json = JSON.stringify(obj);
+    if (typeof json !== 'string') return '';
+    return `<script type="application/ld+json">${escapeJsonLd(json)}</script>`;
+  } catch (err) {
+    console.warn('[webjs] metadata.jsonLd: skipped an entry that could not be serialized:', err && err.message);
+    return '';
+  }
+}
+
+// Internal helpers re-exported for unit testing.
+export { escapeJsonLd as _escapeJsonLd, jsonLdScript as _jsonLdScript };
 
 /**
  * Decide whether a `<link rel="modulepreload">` href needs a

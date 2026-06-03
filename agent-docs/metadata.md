@@ -136,6 +136,15 @@ export const metadata = {
     'msvalidate.01': 'bing-token',
     'mobile-web-app-capable': 'yes',
   },
+
+  // ----- JSON-LD structured data (schema.org) -----
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How webjs ships zero dead JS',
+    author: { '@type': 'Person', name: 'Vivek' },
+    datePublished: '2026-06-01',
+  },
 };
 ```
 
@@ -178,3 +187,104 @@ returns a `304 Not Modified` with no body. A `no-store` or `private` page
 gets NO ETag and never 304s, so private / per-user content is never
 revalidated across sessions. A streamed Suspense response is not ETagged.
 See the conditional-GET section in the framework root `AGENTS.md`.
+
+## JSON-LD structured data (`jsonLd`)
+
+`metadata.jsonLd` emits schema.org structured data as one or more
+`<script type="application/ld+json">` blocks in `<head>`. This is the
+highest-leverage modern SEO surface (Google's Article, Product,
+BreadcrumbList, Organization, and FAQ rich results all read it). webjs
+stays true to its no-build identity here. JSON-LD is a web standard
+rendered as a plain script tag, so the framework ONLY serializes and
+escapes. There is no schema library and no validation. **You own the
+schema.org object.**
+
+**Single object** emits one script:
+
+```ts
+import type { Metadata } from '@webjsdev/core';
+
+export const metadata: Metadata = {
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How webjs ships zero dead JS',
+    author: { '@type': 'Person', name: 'Vivek' },
+    datePublished: '2026-06-01',
+    image: 'https://example.com/og.png',
+  },
+};
+```
+
+renders:
+
+```html
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article",...}</script>
+```
+
+**An array** emits one script PER element. Use it to ship several graphs
+for one page (a Product alongside its BreadcrumbList, say):
+
+```ts
+export const metadata: Metadata = {
+  jsonLd: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: 'Acme Widget',
+      offers: { '@type': 'Offer', price: '19.99', priceCurrency: 'USD' },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Shop', item: 'https://example.com/shop' },
+        { '@type': 'ListItem', position: 2, name: 'Widget', item: 'https://example.com/shop/widget' },
+      ],
+    },
+  ],
+};
+```
+
+**Per-request data** works the same way through `generateMetadata`, so a
+dynamic route can build the Article from the loaded record:
+
+```ts
+import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> {
+  const post = await getPost(ctx.params.slug);   // via a server query
+  return {
+    title: post.title,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: post.title,
+      datePublished: post.publishedAt,
+      author: { '@type': 'Person', name: post.authorName },
+    },
+  };
+}
+```
+
+### Escaping guarantee
+
+The serialized JSON is HTML-safe-escaped automatically. `<`, `>`, `&`,
+and the line separators U+2028 / U+2029 are replaced with their JSON
+Unicode escapes (`<` and friends). A JSON parser decodes those back to
+the original characters, so the embedded data still parses to your exact
+object, while the literal byte sequence `</script>` can never form in the
+served HTML. So a value containing `</script><img src=x onerror=...>`
+cannot break out of the script tag. You do not escape anything yourself.
+
+The block is a NON-EXECUTABLE data island (`type="application/ld+json"`),
+so a Content-Security-Policy `script-src` does not gate it and it carries
+NO nonce.
+
+### Robustness
+
+The framework fails SAFE per element. An entry that is not a plain object,
+or an object with a circular reference that `JSON.stringify` cannot
+serialize, is skipped (with a one-line `console.warn`) and never breaks
+the rest of the head. Absent `jsonLd` emits nothing (the field is purely
+additive).

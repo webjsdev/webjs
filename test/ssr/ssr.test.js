@@ -466,6 +466,142 @@ test('title template: deeper layout can override the inherited template', async 
   assert.match(html, /<title>Post: Blog<\/title>/);
 });
 
+/* ------------ JSON-LD structured data (#260) ------------ */
+
+test('metadata.jsonLd: single object emits one <script type="application/ld+json">', () => {
+  const html = render({
+    jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: 'Hi' },
+  });
+  const matches = html.match(/<script type="application\/ld\+json">/g) || [];
+  assert.equal(matches.length, 1, 'exactly one ld+json script');
+  assert.match(
+    html,
+    /<script type="application\/ld\+json">\{"@context":"https:\/\/schema\.org","@type":"Article","headline":"Hi"\}<\/script>/,
+  );
+});
+
+test('metadata.jsonLd: HTML-safe escaping prevents a </script> breakout AND stays valid JSON', () => {
+  const obj = {
+    '@type': 'Thing',
+    name: '</script><img src=x onerror=alert(1)>',
+    desc: 'a & b',
+    sep: 'x y z',
+  };
+  const html = render({ jsonLd: obj });
+
+  // Pull the exact bytes between the opening and closing ld+json script tags.
+  const m = html.match(
+    /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+  );
+  assert.ok(m, 'ld+json script present');
+  const inner = m[1];
+
+  // SECURITY: the literal `</script>` must NOT appear inside the body, so a
+  // value carrying `</script><img ...>` can never close the tag and inject
+  // markup. The `<` is emitted as the JSON unicode escape <.
+  assert.ok(
+    !inner.includes('</script>'),
+    `escaped body must not contain a literal </script>: ${inner}`,
+  );
+  assert.ok(inner.includes('\\u003c'), '< is escaped to \\u003c');
+  assert.ok(inner.includes('\\u003e'), '> is escaped to \\u003e');
+  assert.ok(inner.includes('\\u0026'), '& is escaped to \\u0026');
+  assert.ok(inner.includes('\\u2028'), 'U+2028 is escaped');
+  assert.ok(inner.includes('\\u2029'), 'U+2029 is escaped');
+
+  // VALIDITY: the escaped body still parses back to the author's exact object
+  // (the unicode escapes decode to the original characters).
+  assert.deepEqual(JSON.parse(inner), obj);
+
+  // COUNTERFACTUAL: the raw, unescaped JSON.stringify output WOULD have broken
+  // out of the script tag (it contains a literal </script>). This is the gap
+  // the escaper closes.
+  assert.ok(
+    JSON.stringify(obj).includes('</script>'),
+    'raw stringify contains a literal </script> (the breakout the escaper prevents)',
+  );
+});
+
+test('metadata.jsonLd: array emits one script per element', () => {
+  const article = { '@type': 'Article', headline: 'Post' };
+  const crumbs = { '@type': 'BreadcrumbList', itemListElement: [] };
+  const html = render({ jsonLd: [article, crumbs] });
+  const matches = html.match(/<script type="application\/ld\+json">/g) || [];
+  assert.equal(matches.length, 2, 'two ld+json scripts for a two-element array');
+  assert.match(html, /"@type":"Article"/);
+  assert.match(html, /"@type":"BreadcrumbList"/);
+});
+
+test('metadata.jsonLd: a non-object array element is skipped, valid ones still emit', () => {
+  const html = render({ jsonLd: [{ '@type': 'Article' }, null, 'not-an-object', 42] });
+  const matches = html.match(/<script type="application\/ld\+json">/g) || [];
+  assert.equal(matches.length, 1, 'only the one plain object emits a script');
+});
+
+test('metadata.jsonLd: a circular reference fails safe (no script, no throw)', () => {
+  const obj = { '@type': 'Thing' };
+  obj.self = obj; // circular: JSON.stringify throws
+  // Must not throw; the whole render still succeeds.
+  const html = render({ jsonLd: obj });
+  assert.doesNotMatch(html, /application\/ld\+json/);
+  assert.match(html, /<title>/, 'the rest of the head still renders');
+});
+
+test('metadata.jsonLd via generateMetadata round-trips through the merge', async () => {
+  const { route, appDir } = await makeLayeredRoute(
+    `export async function generateMetadata(ctx) {\n` +
+      `  return { jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: 'From-' + ctx.params.slug } };\n` +
+      `}`,
+  );
+  const resp = await ssrPage(
+    route,
+    { slug: 'gen' },
+    new URL('http://localhost/'),
+    { dev: false, appDir },
+  );
+  const html = await resp.text();
+  assert.match(html, /<script type="application\/ld\+json">/);
+  assert.match(html, /"headline":"From-gen"/);
+});
+
+test('metadata.jsonLd: absent emits NO ld+json script (additive no-op)', () => {
+  const withLd = render({ title: 'X', jsonLd: { '@type': 'Article' } });
+  const withoutLd = render({ title: 'X' });
+  assert.match(withLd, /application\/ld\+json/);
+  assert.doesNotMatch(withoutLd, /application\/ld\+json/);
+  // The head sans the script line is otherwise unchanged by the feature.
+  assert.equal(
+    withLd.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\n?/g, ''),
+    withoutLd,
+    'head is byte-identical once the ld+json script is removed',
+  );
+});
+
+test('metadata.jsonLd: renders fine under CSP and carries NO nonce (data block, not script)', async () => {
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export const metadata = { jsonLd: { '@type': 'Article', headline: 'csp' } };\n` +
+      `export default function Page() { return html\`<p>ok</p>\`; }\n`,
+    metadata:
+      `export const metadata = { jsonLd: { '@type': 'Article', headline: 'csp' } };\n`,
+  });
+  const req = new Request('http://localhost/', {
+    headers: { 'content-security-policy': "script-src 'nonce-cspLdNonce1' 'self'" },
+  });
+  const resp = await withRequest(req, () =>
+    ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req }));
+  const body = await resp.text();
+  // The ld+json block is present and NOT broken by CSP.
+  assert.match(body, /<script type="application\/ld\+json">\{"@type":"Article","headline":"csp"\}<\/script>/);
+  // It is a non-executable data island, so it must NOT carry the nonce.
+  assert.doesNotMatch(
+    body,
+    /<script type="application\/ld\+json" nonce=/,
+    'ld+json data block must not carry a CSP nonce',
+  );
+});
+
 /* ------------ Metadata parity: icons + manifest ------------ */
 
 test('metadata.icons: string shorthand sets <link rel="icon">', () => {
