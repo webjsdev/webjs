@@ -1309,7 +1309,10 @@ function handleNavigationError(href, status, error) {
     cancelable: true,
     detail: { url: href, status: status == null ? null : status, error: error || null },
   });
-  if (typeof document !== 'undefined') document.dispatchEvent(evt);
+  // Guard the dispatch: a throwing app listener must not wedge the nav engine.
+  if (typeof document !== 'undefined') {
+    try { document.dispatchEvent(evt); } catch { /* a buggy listener cannot break recovery */ }
+  }
   // The app owns recovery: leave the page untouched (shell, scroll, focus,
   // client state all preserved). No reload, no render.
   if (evt.defaultPrevented) return;
@@ -1403,7 +1406,13 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // HTML-status branch below already renders 4xx/5xx HTML bodies in
     // place; this closes the same gap for a non-HTML error body.
     if (!isHTML) {
-      if (myToken === currentNavigationToken) handleNavigationError(href, resp.status, null);
+      if (myToken === currentNavigationToken) {
+        // Roll back any optimistic loading skeleton FIRST, so a
+        // preventDefault()-ing app sees the page exactly as it was (the catch
+        // block below does the same for a transport failure).
+        restoreOptimistic(optimisticState);
+        handleNavigationError(href, resp.status, null);
+      }
       return;
     }
 
@@ -1446,7 +1455,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // The body claimed text/html but didn't parse into a document (a
   // malformed/empty HTML body). Surface a navigation-error so the app can
   // recover in place rather than a destructive full reload.
-  if (!doc) { handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return; }
+  if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return; }
 
   applySwap(doc, frameId, false, finalUrl, incomingBuild);
 

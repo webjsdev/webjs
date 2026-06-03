@@ -129,6 +129,48 @@ suite('Client router: in-place navigation-error recovery (#249)', () => {
     } finally { teardown(); }
   });
 
+  test('a preventDefault-ed non-HTML error rolls back the optimistic loading skeleton (no stuck skeleton)', async () => {
+    setup();
+    try {
+      // An optimistic loading template, so the nav swaps a skeleton into the
+      // slot before the fetch resolves (the loading.ts mechanism).
+      const tpl = document.createElement('template');
+      tpl.id = 'wj-loading:/';
+      tpl.innerHTML = '<span id="skeleton">LOADING</span>';
+      container.appendChild(tpl);
+
+      // A deferred fetch so we can observe the skeleton mid-flight.
+      let resolveFetch;
+      window.fetch = () => new Promise((res) => { resolveFetch = res; });
+      const onErr = (e) => { e.preventDefault(); };
+      document.addEventListener('webjs:navigation-error', onErr);
+
+      document.getElementById('nav-link').click();
+      await settle();
+      // Mid-flight: the optimistic skeleton replaced the original content.
+      assert.ok(document.getElementById('skeleton'),
+        'optimistic loading swapped the skeleton into the slot');
+      assert.ok(!document.getElementById('slot-content'),
+        'the original content was replaced by the skeleton mid-flight');
+
+      // The non-HTML 500 arrives; the app handles it via preventDefault.
+      resolveFetch(new Response(JSON.stringify({ error: 'boom' }), {
+        status: 500, headers: { 'content-type': 'application/json' },
+      }));
+      await settle();
+      document.removeEventListener('webjs:navigation-error', onErr);
+
+      // The skeleton must be ROLLED BACK, not left stuck, and the original
+      // content restored: the page is exactly as it was before the failed nav.
+      assert.ok(!document.getElementById('skeleton'),
+        'the loading skeleton is rolled back when the app handles the error');
+      assert.ok(document.getElementById('slot-content'),
+        'the original slot content is restored');
+      assert.equal(document.getElementById('slot-content').textContent, 'ORIGINAL',
+        'the page is exactly as it was (no stuck skeleton)');
+    } finally { teardown(); }
+  });
+
   test('a transport error fires webjs:navigation-error with error set + renders the in-place surface', async () => {
     setup();
     try {
