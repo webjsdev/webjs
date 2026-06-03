@@ -81,6 +81,24 @@ webjs db studio       # prisma studio</pre>
     <p>Override per-invocation by passing values on the command line:</p>
     <pre>DATABASE_URL=postgres://... npm start</pre>
 
+    <h3>Validating env vars at boot (env.{js,ts})</h3>
+    <p>The auto-load populates <code>process.env</code> but does not check it, so a missing or misconfigured required var (an absent <code>DATABASE_URL</code>, a too-short <code>AUTH_SECRET</code>) fails late and cryptically: a Prisma connect error mid-request, an undefined secret signing a token. Add an optional <code>env.{js,ts}</code> module at the app root (a sibling of <code>middleware.js</code> and <code>readiness.js</code>) that default-exports a schema, and webjs validates the environment at boot and <strong>fails fast</strong> with one message listing every problem at once.</p>
+    <pre>// env.ts (app root)
+export default {
+  DATABASE_URL: 'string',                                   // required by default
+  AUTH_SECRET: { type: 'string', required: true, minLength: 16 },
+  PORT: { type: 'number', optional: true, default: 3000 },  // coerced + defaulted
+  NODE_ENV: { type: 'enum', values: ['development', 'production', 'test'] },
+};</pre>
+    <p>Each field is a type name (<code>'string'</code>) or an options object. Supported types: <code>string</code>, <code>number</code>, <code>boolean</code>, <code>url</code>, <code>enum</code>. A field is <strong>required by default</strong>; mark it <code>optional: true</code> (or give it a <code>default</code>) to allow it to be absent. String fields support <code>minLength</code> and a <code>pattern</code> (a RegExp or string); <code>enum</code> fields take a <code>values</code> array. Coerced values (a <code>number</code>, a <code>boolean</code>) and applied defaults are written back to <code>process.env</code>, so the app reads the coerced value.</p>
+    <p><strong>Fails fast, reports everything.</strong> On a validation failure the server does not start. It throws a clear, aggregated Error naming every offending var and what is wrong (missing, wrong type, failed constraint), so the CLI exits non-zero and an embedded host rejects at boot. The whole list is reported at once, never one error at a time.</p>
+    <p><strong>Escape hatch: a function validator.</strong> Instead of a schema object, default-export a function <code>(env) =&gt; void</code>. It runs at boot with the env object and any thrown Error becomes the boot failure. This is how an app uses zod (or any validator) without webjs depending on it:</p>
+    <pre>// env.ts (function form)
+import { z } from 'zod';
+const schema = z.object({ DATABASE_URL: z.string().url(), AUTH_SECRET: z.string().min(16) });
+export default (env) =&gt; { schema.parse(env); };</pre>
+    <p>The whole feature is opt-in: with no <code>env.{js,ts}</code> at the app root, nothing changes.</p>
+
     <h3>Server-only env vars (the default)</h3>
     <p>Any environment variable that does not start with <code>WEBJS_PUBLIC_</code> is <strong>server-only</strong>. It is never sent to the browser. <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, OAuth client secrets, third-party API keys: read them in server actions, route handlers, middleware, or page functions, and pass derived values (not the raw secret) to components.</p>
 

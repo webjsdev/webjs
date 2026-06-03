@@ -67,6 +67,7 @@ import {
 } from './actions.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
+import { applyEnvValidation } from './env-schema.js';
 import { withRequest, setCspNonce, setBodyLimits } from './context.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
@@ -310,6 +311,14 @@ export async function createRequestHandler(opts) {
   // to boot until the user discovered the missing env-load. See
   // tracker #37.
   loadAppEnv(appDir);
+  // Optional boot-time env validation (#236). If <appDir>/env.{js,ts} exists it
+  // default-exports a typed schema or a custom validator function; we run it
+  // against process.env (now populated by loadAppEnv) BEFORE buildActionIndex
+  // imports any server-only module. A failure throws a clear aggregated Error
+  // here, so an embedded host rejects at boot and the CLI exits non-zero,
+  // failing fast instead of crashing cryptically mid-request. Absent file is a
+  // no-op (opt-in). Coerced + defaulted values are written back to process.env.
+  await applyEnvValidation(appDir, { dev: !!opts.dev });
   const dev = !!opts.dev;
   const logger = opts.logger || defaultLogger({ dev });
   const coreDir = locateCoreDir(appDir);
