@@ -25,8 +25,17 @@ website/
                        Dockerfile's `COPY changelog ./changelog` line
                        is what ships it on Railway.
   components/
-    theme-toggle.ts    light/dark cycle
-  public/              favicon, og image, static assets
+    theme-toggle.ts    system/light/dark cycle
+    copy-cmd.ts        click-to-copy command line (light DOM, always-on button)
+    cursor-glow.ts     decorative cursor-follow glow (JS-opt-in motion)
+    scroll-reveal.ts   fade sections up on viewport entry (JS-opt-in motion)
+  lib/
+    highlight.ts       SSR syntax highlighter for the code samples
+    frontmatter.ts     parse changelog/blog markdown frontmatter
+  scripts/             manual dev tools, NOT part of build/deploy
+    fetch-fonts.mjs    download the self-hosted variable woff2 fonts
+    generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
+  public/              favicon, og image, self-hosted fonts, static assets
 ```
 
 The site is intentionally one page in long-form scroll. When you edit
