@@ -105,13 +105,13 @@ function renderValueSection(
   if (mode === 'cards') {
     return html`
       <section class="mb-12">
-        <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${heading}</h2>
+        <h2 class="text-base font-medium mb-3 text-fg-muted">${heading}</h2>
         <div class="grid gap-4">
           ${keys.map((k) =>
             examples[k]
               ? html`
                   <div>
-                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">${startCase(k)}</h3>
+                    <h3 class="text-sm font-medium mb-2 text-fg">${startCase(k)}</h3>
                     ${previewPane(examples[k])}
                   </div>
                 `
@@ -123,7 +123,7 @@ function renderValueSection(
   }
   return html`
     <section class="mb-12">
-      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">${heading}</h2>
+      <h2 class="text-base font-medium mb-3 text-fg-muted">${heading}</h2>
       ${previewPane(combineExamples(keys, examples))}
     </section>
   `;
@@ -151,12 +151,12 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     </a>
 
     <header class="mb-8">
-      <h1 class="text-3xl font-bold tracking-tight" style="color: var(--fg)">${item.name}</h1>
+      <h1 class="text-3xl font-bold tracking-tight text-fg">${item.name}</h1>
       ${item.description ? html`<p class="mt-2 text-base text-muted-foreground">${item.description}</p>` : ''}
       <div class="mt-4 flex flex-wrap gap-2 text-xs">
-        <span class="rounded-md border px-2 py-1" style="color: var(--fg-muted)">${item.type.replace('registry:', '')}</span>
-        ${registryDeps.map((d: string) => html`<a href="/docs/components/${d}" class="rounded-md border px-2 py-1 hover:bg-accent" style="color: var(--fg-muted)">↳ ${d}</a>`)}
-        ${npmDeps.map((d: string) => html`<code class="rounded-md px-2 py-1 text-[11px]" style="background: var(--bg-subtle); color: var(--fg-muted)">${d}</code>`)}
+        <span class="rounded-md border px-2 py-1 text-fg-muted">${item.type.replace('registry:', '')}</span>
+        ${registryDeps.map((d: string) => html`<a href="/docs/components/${d}" class="rounded-md border px-2 py-1 hover:bg-accent text-fg-muted">↳ ${d}</a>`)}
+        ${npmDeps.map((d: string) => html`<code class="rounded-md px-2 py-1 text-[11px] bg-bg-subtle text-fg-muted">${d}</code>`)}
       </div>
     </header>
 
@@ -165,7 +165,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
         ? html`
           <section class="mb-12">
             <div class="flex items-center justify-between mb-3">
-              <h2 class="text-base font-medium" style="color: var(--fg-muted)">Preview</h2>
+              <h2 class="text-base font-medium text-fg-muted">Preview</h2>
             </div>
             <!--
               The preview is injected client-side rather than SSR'd because the
@@ -181,7 +181,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
         `
         : html`
           <section class="mb-12">
-            <div class="rounded-lg border p-8 text-sm text-muted-foreground" style="background: var(--bg-subtle)">
+            <div class="rounded-lg border p-8 text-sm text-muted-foreground bg-bg-subtle">
               No live preview available for this component yet. The source code below shows
               the full implementation; <code>webjs ui add ${item.name}</code> copies it into your project.
             </div>
@@ -190,7 +190,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     }
 
     <section class="mb-12">
-      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Installation</h2>
+      <h2 class="text-base font-medium mb-3 text-fg-muted">Installation</h2>
       <pre class="rounded-lg p-4 overflow-x-auto"><code>npx webjsui add ${item.name}</code></pre>
       <p class="mt-3 text-sm text-muted-foreground">Webjs users, also available as:</p>
       <pre class="rounded-lg p-4 overflow-x-auto mt-1"><code>webjs ui add ${item.name}</code></pre>
@@ -233,19 +233,19 @@ export default async function ComponentDoc({ params }: { params: { name: string 
       api && (api.props?.length || api.subcomponents?.length || api.events?.length)
         ? html`
           <section class="mb-12">
-            <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">API Reference</h2>
+            <h2 class="text-base font-medium mb-3 text-fg-muted">API Reference</h2>
 
             ${
               api.subcomponents?.length
                 ? html`
                   <div class="mb-6">
-                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Parts</h3>
+                    <h3 class="text-sm font-medium mb-2 text-fg">Parts</h3>
                     <div class="rounded-lg border overflow-hidden">
                       <table class="w-full text-sm">
-                        <thead style="background: var(--bg-subtle)">
+                        <thead class="bg-bg-subtle">
                           <tr class="text-left">
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Name</th>
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Name</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Description</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -269,16 +269,16 @@ export default async function ComponentDoc({ params }: { params: { name: string 
               api.props?.length
                 ? html`
                   <div class="mb-6">
-                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Props</h3>
+                    <h3 class="text-sm font-medium mb-2 text-fg">Props</h3>
                     <div class="rounded-lg border overflow-hidden">
                       <table class="w-full text-sm">
-                        <thead style="background: var(--bg-subtle)">
+                        <thead class="bg-bg-subtle">
                           <tr class="text-left">
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Prop</th>
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Type</th>
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Default</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Prop</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Type</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Default</th>
                             ${api.props.some((p) => p.description)
-                              ? html`<th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>`
+                              ? html`<th class="px-3 py-2 font-medium text-fg-muted">Description</th>`
                               : ''}
                           </tr>
                         </thead>
@@ -307,14 +307,14 @@ export default async function ComponentDoc({ params }: { params: { name: string 
               api.events?.length
                 ? html`
                   <div>
-                    <h3 class="text-sm font-medium mb-2" style="color: var(--fg)">Events</h3>
+                    <h3 class="text-sm font-medium mb-2 text-fg">Events</h3>
                     <div class="rounded-lg border overflow-hidden">
                       <table class="w-full text-sm">
-                        <thead style="background: var(--bg-subtle)">
+                        <thead class="bg-bg-subtle">
                           <tr class="text-left">
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Name</th>
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Detail</th>
-                            <th class="px-3 py-2 font-medium" style="color: var(--fg-muted)">Description</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Name</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Detail</th>
+                            <th class="px-3 py-2 font-medium text-fg-muted">Description</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -340,7 +340,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
     }
 
     <section>
-      <h2 class="text-base font-medium mb-3" style="color: var(--fg-muted)">Source: <code class="text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-subtle)">components/ui/${item.name}.ts</code></h2>
+      <h2 class="text-base font-medium mb-3 text-fg-muted">Source: <code class="text-xs px-1.5 py-0.5 rounded bg-bg-subtle">components/ui/${item.name}.ts</code></h2>
       <pre class="rounded-lg p-4 overflow-x-auto text-xs max-h-[480px] overflow-y-auto"><code>${source}</code></pre>
     </section>
   `;
