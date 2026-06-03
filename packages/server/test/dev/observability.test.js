@@ -21,6 +21,9 @@ const HTML_URL = pathToFileURL(
 const SERVER_INDEX_URL = pathToFileURL(
   resolve(__dirname, '../../index.js')
 ).toString();
+const CORE_INDEX_URL = pathToFileURL(
+  resolve(__dirname, '../../../core/index.js')
+).toString();
 
 let tmpRoot;
 
@@ -223,6 +226,32 @@ test('onError: fires when a server action throws unexpectedly', async () => {
   assert.ok(captured.some((c) => c.error instanceof Error && c.error.message === 'action-died'),
     'onError received the original thrown action error');
   assert.ok(captured.some((c) => c.ctx.phase === 'action'), 'the action phase is labeled');
+});
+
+test('onError: fires when an expose()d REST handler throws (with the error + requestId)', async () => {
+  // Consistency with the RPC action path: an exposed first-class REST endpoint
+  // that throws must reach the same APM sink, else an app silently misses
+  // errors from its REST surface while catching the RPC ones.
+  const captured = [];
+  const onError = (error, ctx) => captured.push({ error, ctx });
+  const appDir = makeApp({
+    'app/page.js': PAGE,
+    'api.server.js':
+      `'use server';\n` +
+      `import { expose } from ${JSON.stringify(CORE_INDEX_URL)};\n` +
+      `export const boom = expose('GET /api/boom', async () => { throw new Error('rest-died'); });\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, onError });
+  const resp = await app.handle(new Request('http://x/api/boom', {
+    headers: { 'x-request-id': 'rest-trace-9' },
+  }));
+  assert.equal(resp.status, 500);
+  assert.ok(captured.some((c) => c.error instanceof Error && c.error.message === 'rest-died'),
+    'onError received the original thrown REST error');
+  const hit = captured.find((c) => c.ctx.phase === 'action');
+  assert.ok(hit, 'the action phase is labeled');
+  assert.equal(hit.ctx.requestId, 'rest-trace-9', 'the correlation id is passed so the sink can tie the report to the request');
+  assert.ok(hit.ctx.request instanceof Request);
 });
 
 /* ------------ /__webjs/version ------------ */

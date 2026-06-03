@@ -1278,7 +1278,12 @@ async function handleCore(req, ctx) {
   } else {
     const exposed = matchExposedAction(state.actionIndex, method, path);
     if (exposed) {
-      const resp = await invokeExposedAction(state.actionIndex, exposed.route, exposed.params, req);
+      // Pass the onError sink (issue #239): an exposed REST handler that throws
+      // unexpectedly is reported to the APM hook before the sanitized 500, the
+      // same as the RPC action path (phase 'action' covers both server-action
+      // invocation shapes).
+      const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
+      const resp = await invokeExposedAction(state.actionIndex, exposed.route, exposed.params, req, onActionError);
       return withCors(resp, exposed.route, req);
     }
   }

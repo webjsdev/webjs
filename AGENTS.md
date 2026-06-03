@@ -870,6 +870,8 @@ Every handled request emits ONE structured `info` line through the pluggable `lo
 {"level":"info","msg":"request","requestId":"4f1c…","method":"GET","path":"/dashboard","status":200,"durationMs":12.4}
 ```
 
+`durationMs` is time-to-response-headers (a TTFB-like measure), not full-stream completion, so for a streaming / Suspense response it reflects when the headers were produced, not when the last chunk flushed.
+
 ### Request id / correlation id (`X-Request-Id` + `requestId()`)
 
 Each request gets a correlation id, the native `crypto.randomUUID()`. An inbound `X-Request-Id` from a trusted upstream proxy is honored instead (one trace id across services); a missing or malformed inbound value falls back to a minted id (the inbound value is length-capped and token-charset validated, so a hostile value is never echoed back). The id is set on the response as `X-Request-Id` (never clobbering one the app already set), included in the access log and the error log, and readable in any server-side code with `requestId()` from `@webjsdev/server` (returns `null` outside a request scope), the same context-helper ergonomics as `headers()` / `cookies()`.
