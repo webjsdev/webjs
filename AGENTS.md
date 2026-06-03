@@ -487,6 +487,8 @@ Framework wraps the sibling page in `Suspense({ fallback: <loading>, children: <
 
 `sitemap.{js,ts}`, `robots.{js,ts}`, `manifest.{js,ts}`, `icon.{js,ts}`, `apple-icon.{js,ts}`, `opengraph-image.{js,ts}`, `twitter-image.{js,ts}` live at app root or static segments only (not inside `[dynamic]`). Each default-exports a possibly-async function.
 
+For `sitemap.{js,ts}`, the optional `sitemap(entries)` helper from `@webjsdev/server` serializes an array of `{ url, lastModified?, changeFrequency?, priority? }` into spec-valid `<urlset>` XML (XML-escaping each url so a `&`/`<` cannot break the document, formatting `lastModified` as a W3C datetime, validating `priority` 0..1 and the `changeFrequency` enum, skipping a urlless entry). For a site past the 50,000-URL per-file limit, `sitemapIndex(sitemaps)` builds a `<sitemapindex>`: serve each shard from a `route.{js,ts}` handler returning `sitemap(shardEntries)` and return `sitemapIndex([...])` from the root `app/sitemap.{js,ts}`. Both helpers are optional; the function can still return a raw string or `Response`.
+
 ### Route handlers (`app/**/route.{js,ts}`)
 
 - Export named async functions per method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. Each receives `(Request, { params })` and returns a `Response` or any value (auto-JSON).
