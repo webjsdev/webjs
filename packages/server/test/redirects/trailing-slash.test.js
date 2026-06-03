@@ -13,6 +13,8 @@
  *   - an explicit webjs.redirects rule wins first, then the survivor is
  *     slash-canonicalized, with no loop
  *   - /__webjs/* framework paths are exempt
+ *   - SECURITY: a network-path-reference path (`//attacker.com/`, `/\evil.com/`)
+ *     is NOT canonicalized into a protocol-relative cross-origin redirect
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -208,6 +210,59 @@ test('/__webjs/* framework paths are exempt from canonicalization', async () => 
   // The health probe path is infrastructure, not an app URL: it must not be
   // 308-redirected by the slash policy.
   assert.notEqual(resp.status, 308);
+});
+
+/* ------------------- SECURITY: open-redirect guard ------------------- */
+
+// A request path that is a network-path reference (`//host`, or `/\host` which
+// the URL parser normalizes to `//host`) must NOT be canonicalized: stripping
+// the trailing slash off `//attacker.com/` would emit `Location: //attacker.com`,
+// a protocol-relative URL the browser resolves to a FOREIGN origin (an open
+// redirect). The guard returns null so the path falls through to the router.
+
+test('never: //attacker.com/ does NOT produce a cross-origin redirect', async () => {
+  const appDir = makeApp({
+    'package.json': pkg({ trailingSlash: 'never' }),
+    'app/page.js': page('<h1>home</h1>'),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://victim.example//attacker.com/'));
+  // The headline assertion: no 3xx with a `//`-prefixed / cross-origin Location.
+  // COUNTERFACTUAL: drop the isSameOriginPath guard and this 308s to
+  // `//attacker.com`, an open redirect, so this fails.
+  assert.notEqual(resp.status, 308);
+  const loc = resp.headers.get('location');
+  if (loc) assert.ok(!loc.startsWith('//'), `unexpected protocol-relative Location: ${loc}`);
+});
+
+test('never: /\\evil.com/ (backslash) does NOT produce a cross-origin redirect', async () => {
+  const appDir = makeApp({
+    'package.json': pkg({ trailingSlash: 'never' }),
+    'app/page.js': page('<h1>home</h1>'),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  // The URL parser normalizes the backslash to `/`, so the path is `//evil.com/`.
+  const resp = await app.handle(new Request('http://victim.example/\\evil.com/'));
+  assert.notEqual(resp.status, 308);
+  const loc = resp.headers.get('location');
+  if (loc) assert.ok(!loc.startsWith('//'), `unexpected protocol-relative Location: ${loc}`);
+});
+
+test('applyTrailingSlash returns null for a network-path-reference path (no open redirect)', () => {
+  // Direct-call coverage of the guard under both active policies.
+  assert.equal(
+    applyTrailingSlash(new Request('http://victim.example//attacker.com/'), 'never'),
+    null
+  );
+  assert.equal(
+    applyTrailingSlash(new Request('http://victim.example//attacker.com'), 'always'),
+    null
+  );
+  // The backslash form (parser-normalized to `//evil.com/`) is rejected too.
+  assert.equal(
+    applyTrailingSlash(new Request('http://victim.example/\\evil.com/'), 'never'),
+    null
+  );
 });
 
 /* ----------------------------- unit-level ----------------------------- */

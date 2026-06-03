@@ -112,12 +112,26 @@ export function readTrailingSlashPolicy(pkg) {
  * path is non-canonical under the policy, else null so the request falls
  * through to normal routing (or to the declarative redirects). Runs AFTER
  * `applyRedirects` (see the wiring in `dev.js`): an explicit `webjs.redirects`
- * rule wins first, then the survivor is slash-canonicalized, so the two
- * never form a loop (a redirect destination is the app author's literal,
- * and they own keeping it consistent with the policy).
+ * rule wins first, then the survivor is slash-canonicalized. This does NOT
+ * guarantee loop-freedom. A redirect whose `destination` CONTRADICTS the slash
+ * policy (e.g. policy `never` with `{ destination: '/x/' }`) ping-pongs forever
+ * (`/x` -> 308 `/x/` -> 308 `/x` -> ...). There is no server-side loop guard
+ * (matching `applyRedirects`), so keeping a redirect destination consistent with
+ * the policy is the app author's responsibility.
  *
  * Framework-internal `/__webjs/*` paths are never canonicalized (the caller
  * also guards this, defense in depth here).
+ *
+ * SECURITY: the canonical path is built from `url.pathname` and emitted as the
+ * `Location`, so a request whose path is a NETWORK-PATH REFERENCE (begins with
+ * `//`, or `/\` which the URL parser normalizes to `//`) would otherwise emit a
+ * protocol-relative `Location` (`//attacker.com`) that the browser resolves to a
+ * FOREIGN origin, an open redirect. Such a path is not a normal route, so we
+ * REFUSE to canonicalize it (return null) and let the router 404 it, rather than
+ * emit a cross-origin redirect. The sibling `applyRedirects` avoids this by only
+ * ever emitting app-authored `destination` literals (and keeping user-controlled
+ * `:slug` captures percent-encoded so they cannot escape the origin); here the
+ * Location is derived from the request path, so the guard is on the path itself.
  *
  * @param {Request} req
  * @param {'never' | 'always' | 'ignore'} policy
@@ -135,6 +149,10 @@ export function applyTrailingSlash(req, policy) {
   // The root path is always canonical under either policy.
   if (path === '/') return null;
   if (path.startsWith('/__webjs/')) return null;
+  // Refuse a network-path reference (`//host`, or `/\host` normalized to
+  // `//host`): canonicalizing it would emit a protocol-relative, cross-origin
+  // Location (an open redirect). Let the router handle the weird path instead.
+  if (!isSameOriginPath(path)) return null;
 
   /** @type {string | null} */
   let canonical = null;
@@ -172,6 +190,23 @@ function lastSegmentLooksLikeFile(path) {
   const lastSlash = path.lastIndexOf('/');
   const segment = path.slice(lastSlash + 1);
   return segment.includes('.');
+}
+
+/**
+ * Whether a pathname is a SAFE same-origin path (a single leading slash, not a
+ * network-path reference). A path beginning with `//` or `/\` resolves to a
+ * foreign origin when emitted as a `Location`, so it is rejected. The URL parser
+ * normalizes a backslash to a forward slash in the pathname, so `/\evil.com` is
+ * seen here as `//evil.com`; the explicit backslash check is belt-and-braces in
+ * case a caller passes a raw, unparsed path.
+ *
+ * @param {string} path a pathname
+ * @returns {boolean}
+ */
+function isSameOriginPath(path) {
+  if (path[0] !== '/') return false;
+  const second = path[1];
+  return second !== '/' && second !== '\\';
 }
 
 /** Default status for `permanent: true` (the SEO permanent redirect). */
