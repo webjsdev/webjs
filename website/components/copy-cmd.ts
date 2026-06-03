@@ -70,6 +70,7 @@ export class CopyCmd extends WebComponent {
           tabindex="-1"
           @click=${this._copy}
         >${isCopied ? CHECK_ICON : COPY_ICON}</button>
+        <span class="sr-only" role="status" aria-live="polite">${isCopied ? 'Copied' : ''}</span>
       </span>
     `;
   }
