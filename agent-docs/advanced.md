@@ -564,7 +564,7 @@ document-level listener catches it) and returns.
 - **Default (not prevented):** the router emits a one-line `console.warn`
   and leaves the frame UNCHANGED (its current content stays, now stale).
   No full-page swap ever happens.
-- **`preventDefault()`:** the framework stays silent and does nothing
+- **Calling `preventDefault()`** keeps the framework silent and doing nothing
   further. The listener owns the outcome, e.g. it may call `navigate(url)`
   for a deliberate full swap, or `location.assign(url)` for a hard load.
 
