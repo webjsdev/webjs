@@ -55,6 +55,7 @@ const NAV_SECTIONS = [
       { href: '/docs/sessions', label: 'Sessions' },
       { href: '/docs/auth', label: 'Auth (Providers)' },
       { href: '/docs/rate-limiting', label: 'Rate Limiting' },
+      { href: '/docs/security', label: 'Security' },
       { href: '/docs/metadata-routes', label: 'Metadata Routes' },
     ],
   },
