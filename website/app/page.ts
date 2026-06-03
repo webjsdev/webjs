@@ -273,7 +273,7 @@ export default function LandingPage(ctx: { searchParams?: Record<string, string>
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough to read, fast enough to ship</h2>
-          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules; the browser gets a minified bundle.</p>
+          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules, and the browser gets a minified bundle.</p>
         </div>
         <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4">
           ${STATS.map(s => html`
