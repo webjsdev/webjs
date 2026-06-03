@@ -8,7 +8,7 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * element.
  *
  * Usage:
- *   <copy-cmd>npx create-webjs-app@latest my-app</copy-cmd>
+ *   <copy-cmd>npm create webjs@latest my-app</copy-cmd>
  *
  * On click (or Enter / Space), writes the trimmed text content to the
  * clipboard via navigator.clipboard.writeText and flips the icon to a

@@ -179,7 +179,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16 md:py-16" data-reveal>
+    <section class="py-16" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Built for agents</div>
@@ -208,7 +208,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16 md:py-16" data-reveal>
+    <section class="py-16" data-reveal>
       <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
@@ -232,7 +232,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16 md:py-16" data-reveal>
+    <section class="py-16" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Why webjs</div>
@@ -251,7 +251,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16 md:py-16" data-reveal>
+    <section class="py-16" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
@@ -272,7 +272,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16 md:py-16" data-reveal>
+    <section class="py-16" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>
@@ -310,7 +310,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <section class="py-16 md:py-16 text-center" id="get-started" data-reveal>
+    <section class="py-16 text-center" id="get-started" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
@@ -329,7 +329,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <footer class="mt-16 md:mt-16 border-t border-border py-12 px-6">
+    <footer class="mt-16 border-t border-border py-12 px-6">
       <div class="max-w-[1080px] mx-auto">
         <nav class="flex md:hidden gap-4 flex-wrap justify-center">
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank">GitHub</a>
