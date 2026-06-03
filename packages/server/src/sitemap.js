@@ -47,6 +47,12 @@ const MAX_URLS = 50000;
  */
 function escapeXml(value) {
   return String(value)
+    // Strip the C0 control characters XML 1.0 forbids (everything below 0x20
+    // except tab, newline, and carriage return). A stray one from a corrupt
+    // DB-derived URL would otherwise make the WHOLE sitemap document invalid
+    // and silently rejected by search engines, the exact failure this helper
+    // exists to prevent. Done before entity-escaping so it cannot interfere.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

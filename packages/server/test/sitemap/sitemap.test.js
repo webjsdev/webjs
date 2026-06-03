@@ -79,6 +79,20 @@ test('sitemap() XML-escapes the loc so a url with & < > " \' cannot break out', 
   assert.ok(tagsBalanced(xml), 'escaped output is still well-formed');
 });
 
+test('sitemap() strips XML-1.0-forbidden control chars so a bad url cannot invalidate the whole doc', () => {
+  // A corrupt DB-derived url with a NUL and another C0 control char. XML 1.0
+  // forbids these, so a single one would make the entire document invalid and
+  // silently rejected by search engines. The helper strips them.
+  const bad = 'https://x.com/a' + String.fromCharCode(0) + 'b' + String.fromCharCode(0x1f) + 'c';
+  const xml = sitemap([{ url: bad }]);
+  const loc = xml.match(/<loc>([\s\S]*?)<\/loc>/)[1];
+  // No control char below 0x20 (except tab/newline/CR) survives.
+  assert.ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(loc), 'no forbidden control char survives');
+  // The surrounding url text is preserved (only the control chars are removed).
+  assert.equal(loc, 'https://x.com/abc');
+  assert.ok(tagsBalanced(xml), 'output is well-formed');
+});
+
 /* ----------------------------- lastModified ----------------------------- */
 
 test('sitemap() formats a Date as ISO and passes a string through', () => {
