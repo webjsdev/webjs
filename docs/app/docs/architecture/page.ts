@@ -128,5 +128,7 @@ const resp = await app.handle(new Request('http://x/api/hello'));
 console.log(await resp.json());</pre>
 
     <p>This returns standard <code>Request → Response</code>, usable in Express, Fastify, Bun, Deno, Cloudflare Workers (with the file-system caveat documented in the deployment guide).</p>
+
+    <p>Coming from Next.js? The execution model above (isomorphic modules, no Server/Client Component split, the <code>.server</code> boundary as the one server boundary) is the biggest difference. The <a href="/docs/migrating-from-nextjs">Migrating from Next.js</a> guide maps each Next idiom to its webjs equivalent.</p>
   `;
 }
