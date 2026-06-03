@@ -497,11 +497,18 @@ export async function createRequestHandler(opts) {
   /** @returns {Promise<void>} */
   async function emitRouteTypes() {
     try {
-      const { mkdir, writeFile } = await import('node:fs/promises');
+      const { mkdir, writeFile, rename } = await import('node:fs/promises');
       const text = await generateRouteTypes(appDir);
       const outDir = join(appDir, '.webjs');
       await mkdir(outDir, { recursive: true });
-      await writeFile(join(outDir, 'routes.d.ts'), text);
+      // Write to a temp sibling then rename, so tsserver (which reads this
+      // file) never observes a half-written body if two rebuilds race. rename
+      // is atomic within the same dir. Both paths sit under the watcher-ignored
+      // .webjs/, so neither the temp write nor the rename re-triggers a rebuild.
+      const dest = join(outDir, 'routes.d.ts');
+      const tmp = join(outDir, `routes.d.ts.${process.pid}.tmp`);
+      await writeFile(tmp, text);
+      await rename(tmp, dest);
     } catch (e) {
       logger.warn?.(`[webjs] could not write .webjs/routes.d.ts (route types): ${e?.message || e}`);
     }
