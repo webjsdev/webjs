@@ -60,13 +60,6 @@ const STATS = [
   { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
 ];
 
-// Familiar surfaces. webjs mirrors the Next.js App Router for files and lit's
-// ergonomics for components, so the shapes transfer to agents and humans.
-const FAMILIAR = [
-  { from: 'Next.js App Router', title: 'File-based routing you already know', items: ['page.ts, layout.ts, route.ts', 'error.ts, loading.ts, not-found.ts', '[param], [...slug], (route groups)', 'middleware and metadata routes'] },
-  { from: 'lit', title: 'Web components, lit-style ergonomics', items: ['html and css tagged templates', 'static properties plus signals', 'willUpdate, updated, firstUpdated hooks', 'the lit-html directive set'] },
-];
-
 // Code samples. Plain strings so backticks and ${...} stay literal and never
 // enter an html`` body. The SSR highlighter colors them.
 const COMPONENT_SAMPLE = [
@@ -278,33 +271,6 @@ export default function LandingPage(ctx: { searchParams?: Record<string, string>
     <section class="py-28">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
-          <div class=${KICKER}>Familiar by design</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The APIs your agent already knows</h2>
-          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">webjs mirrors the Next.js App Router for files and lit's ergonomics for components. The shapes are familiar, so agents and humans write idiomatic code from the first prompt, with no translation layer to learn.</p>
-        </div>
-        <div class="grid gap-4 grid-cols-1 min-[820px]:grid-cols-2">
-          ${FAMILIAR.map(f => html`
-            <div class="flex flex-col gap-3 min-w-0 p-6 rounded-2xl border border-border bg-bg-elev">
-              <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">Familiar from ${f.from}</span>
-              <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">${f.title}</h3>
-              <ul class="m-0 p-0 list-none flex flex-col gap-2">
-                ${f.items.map(it => html`
-                  <li class="flex items-start gap-2 text-[14px] leading-[1.5] text-fg-muted">
-                    <svg class="mt-[3px] shrink-0 text-accent" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    <span>${it}</span>
-                  </li>`)}
-              </ul>
-            </div>
-          `)}
-        </div>
-        <p class="mt-8 mx-auto max-w-[760px] text-center text-[1.05rem] leading-[1.6] text-fg-muted">Not a fork or a wrapper. webjs reimplements the shapes you know as its own small, zero-dependency, no-build runtime, so you stay productive from day one, in <span class="${GRADTEXT} font-semibold">about 5% of Next.js's framework code</span>. It even adds what lit skips, like full light-DOM &lt;slot&gt; projection with SSR.</p>
-        <p class="mt-3 mx-auto max-w-[640px] text-center text-fg-subtle text-[12px] leading-[1.5]">~29k lines of webjs framework source vs ~530k lines of Next.js framework code (its JavaScript core plus its Rust compiler and bundler).</p>
-      </div>
-    </section>
-
-    <section class="py-28">
-      <div class="max-w-[1080px] mx-auto px-6">
-        <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough to read, fast enough to ship</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules; the browser gets a minified bundle.</p>
@@ -318,7 +284,8 @@ export default function LandingPage(ctx: { searchParams?: Record<string, string>
             </div>
           `)}
         </div>
-        <p class="mt-6 mx-auto max-w-[640px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom. The framework is JSDoc-typed JavaScript with no build step.</p>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. webjs uses Next.js-style file routing and lit-style web components, the proven ergonomics you and your AI agents already have the muscle memory for.</p>
+        <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js's. JSDoc-typed JavaScript, no build step.</p>
       </div>
     </section>
 
