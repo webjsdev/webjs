@@ -150,7 +150,7 @@ export default function LandingPage() {
       }
     </style>
 
-    <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-18">
+    <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
       <div class=${KICKER}>
         <span>AI-first</span><span class="text-fg-subtle">/</span>
         <span>web-components-first</span><span class="text-fg-subtle">/</span>
@@ -179,7 +179,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28" data-reveal>
+    <section class="py-16 md:py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Built for agents</div>
@@ -208,7 +208,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28" data-reveal>
+    <section class="py-16 md:py-28" data-reveal>
       <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
@@ -232,7 +232,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28" data-reveal>
+    <section class="py-16 md:py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Why webjs</div>
@@ -251,7 +251,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28" data-reveal>
+    <section class="py-16 md:py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
@@ -272,7 +272,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-28" data-reveal>
+    <section class="py-16 md:py-28" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>
@@ -310,7 +310,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <section class="py-28 text-center" id="get-started" data-reveal>
+    <section class="py-16 md:py-28 text-center" id="get-started" data-reveal>
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
@@ -329,7 +329,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <footer class="mt-28 border-t border-border py-12 px-6">
+    <footer class="mt-16 md:mt-28 border-t border-border py-12 px-6">
       <div class="max-w-[1080px] mx-auto flex items-center justify-between gap-6 flex-wrap">
         <a class="inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-base leading-none tracking-[-0.02em]" href="/">
           <span class="w-5 h-5 rounded-md bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))]"></span>webjs
