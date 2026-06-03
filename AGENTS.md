@@ -853,6 +853,8 @@ webjs already has `redirect(url)` (an imperative, request-time throw sentinel). 
 
 **Config robustness.** Patterns are compiled ONCE at boot, not per request. A malformed entry (bad pattern, missing/empty `destination`, invalid `statusCode`) is DROPPED at config-load with a one-line warning and never crashes the request pipeline (the same fail-safe posture `webjs.headers` / `webjs.csp` use), so a single typo never disables the valid rules around it. Mechanism: `compileRedirectRules` / `applyRedirects` in `packages/server/src/redirects.js`.
 
+**Avoiding redirect loops (your responsibility).** There is no server-side loop guard, matching Next.js. A rule whose `destination` matches another rule's (or its own) `source` redirects forever (the browser eventually aborts it). Make sure a `destination` does not land on a path that another rule moves again. Captured groups are kept percent-encoded by `URLPattern`, so a user-controlled `:slug` cannot escape the origin into an open redirect; only an app-authored `destination` literal controls the target.
+
 ---
 
 ## Conditional GET: ETag + If-None-Match -> 304 (on by default) (#240)
