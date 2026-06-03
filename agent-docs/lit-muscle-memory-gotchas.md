@@ -288,7 +288,7 @@ force the framework to depend on a build step.
 
 ## Patterns that produce different visual output
 
-### 7. Expecting shadow DOM by default
+### 7. Expecting shadow DOM by default (and reaching for scoped CSS instead of Tailwind)
 
 Lit components default to shadow DOM. `static styles = css` scoping
 works automatically. Webjs defaults to light DOM. A `static styles`
@@ -296,11 +296,27 @@ block without `static shadow = true` does nothing useful (the framework
 warns at runtime), and styles authored for the component bleed into
 the global namespace.
 
-Two correct paths. Add `static shadow = true` to the class and keep
-`static styles`. Or drop `static styles` and use Tailwind utilities,
-which webjs treats as the styling default. If authoring vanilla CSS in
-light-DOM mode, every selector must be prefixed with the component
-tag, per the styling invariant.
+This is also the **styling reflex** to unlearn, not just a config
+default. Because lit scopes, the lit habit is to author scoped CSS
+(`static styles = css\`\``) or an inline `<style>` with semantic class
+names (`.hero`, `.feature`, `.card`) for every component. In a webjs
+light-DOM component that CSS either does nothing (the scoped block) or
+leaks globally (the inline `<style>` with bare class names). **The
+webjs-shaped fix is Tailwind utilities, which apply directly in light
+DOM and are webjs's strong styling default.** Reach for raw CSS only for
+the short allowlist (design tokens, `@property` + `@keyframes`,
+`::-webkit-scrollbar`, `prefers-reduced-motion`, complex `color-mix()` /
+gradients); see `agent-docs/styling.md` for the full Tailwind-first rule
+and that allowlist.
+
+Three correct paths. Use Tailwind utilities in light DOM (the default,
+and the answer for the vast majority of components). Or add
+`static shadow = true` to the class and keep `static styles` (scoped CSS
+genuinely belongs in a shadow root). Or, if authoring vanilla CSS in
+light-DOM mode anyway, prefix every selector with the component tag, per
+the styling invariant. When a utility bundle repeats across light-DOM
+components, extract it into a `lib/utils/ui.ts` helper returning an
+`` html`...` `` fragment, never a shared CSS class.
 
 ### 8. `<slot>` timing differs across DOM modes
 
@@ -375,7 +391,7 @@ transient UI state).
 | Top-level `import` of browser-only library | Dynamic `import()` inside `connectedCallback` |
 | `student: Student = { ... }` field initializer | `declare student: Student` plus constructor default |
 | `@property()` decorator | `static properties = { ... }` plus `declare` |
-| `static styles = css` with default shadow | Add `static shadow = true`, or switch to Tailwind |
+| `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
 | `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |
 | `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim) |
 | `ContextProvider` for server-known data | Pass via props from the page function |

@@ -687,7 +687,7 @@ Both hydrate without flash on the client.
 
 ---
 
-## Styling: Tailwind + JS helpers
+## Styling: Tailwind-first + JS helpers
 
 <!-- OVERRIDE -->
 
@@ -696,6 +696,31 @@ design tokens defined in the root layout. Every colour, font family,
 fluid type scale value, and motion duration is declared once in `@theme`
 and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
 `font-serif`, `duration-fast`, `text-display`).
+
+**Tailwind-first is the strong default for pages AND light-DOM
+components (the default DOM mode).** Use utilities for layout, spacing,
+color (via the `@theme` tokens), typography, borders, radius, shadows,
+and interaction states (hover/focus/active/disabled, dark mode). Light
+DOM does not scope styles, so utilities apply directly.
+
+**The lit muscle-memory trap.** If you have written lit, the habit is to
+scope CSS in a shadow root (`static styles = css\`\``) or write an inline
+`<style>` with semantic class names (`.hero`, `.feature`, `.card`) for
+every component. In a webjs light-DOM component the scoped block does
+nothing without `static shadow = true`, and the inline class names leak
+into the global namespace. Prefer Tailwind utilities. When the same
+bundle repeats, extract a `lib/utils/ui.ts` helper (below), not a CSS
+class.
+
+**Custom-CSS allowlist (the only things raw CSS is for).** Reserve raw
+CSS for what utilities cannot express: design-token `:root` / `@theme`
+definitions, `@property` animated custom properties with `@keyframes`,
+`::-webkit-scrollbar` / `scrollbar-color`, `prefers-reduced-motion`
+blocks, and complex `color-mix()` or gradient effects. When custom CSS is
+unavoidable in a light-DOM component, the class-prefix rule (see the
+Components section above) still applies. Shadow-DOM components
+(`static shadow = true`) legitimately author `static styles = css\`\``;
+that is the right home for scoped CSS.
 
 **Dedup repeated Tailwind class bundles with JS helpers, not `@apply`.**
 When the same string of classes appears in 2+ places, extract it into a

@@ -648,9 +648,11 @@ export async function POST(req: Request) {
 
 ---
 
-## Styling: Tailwind + `lib/utils/ui.ts` helpers (default)
+## Styling: Tailwind-first, `lib/utils/ui.ts` helpers (strong default)
 
-Tailwind CSS browser runtime + `@theme` tokens declared in the root layout. Repeated class bundles → JS helpers in `lib/utils/ui.ts` returning `` html`...` `` fragments (SSR-time, no client runtime).
+**Tailwind is the strong default for pages AND light-DOM components (the default DOM mode).** Use Tailwind utilities for layout, spacing, color (via the `@theme` tokens), typography, borders, radius, shadows, and interaction states (hover/focus/active/disabled, dark mode). Light DOM does not scope styles, so utilities apply directly and are the right tool.
+
+**The lit muscle-memory trap.** The lit reflex is to scope CSS in a shadow root with `static styles = css\`\``. In webjs the default is light DOM, which does NOT scope, so reaching for a scoped `css` block or an inline `<style>` with semantic class names (`.hero`, `.feature`, `.card`) in a light-DOM component is the habit to resist. Prefer Tailwind utilities. When a class bundle repeats, extract it into a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment (SSR-time, no client runtime), NOT a CSS class.
 
 ```ts
 // lib/utils/ui.ts
@@ -662,7 +664,9 @@ export function rubric(label: string) {
 
 Extraction rule: 1× inline. 2-3× identical → helper. 1-2 prop variation → parameterised helper. Radically different → keep inline. (No `@apply`: hides utilities from the reader.)
 
-Custom CSS is fully supported. Light-DOM components MUST follow the class-prefix rule. See `agent-docs/styling.md` for vanilla-CSS-only opt-out.
+**The custom-CSS allowlist (the only things raw CSS is for).** Reserve raw CSS for what utilities genuinely cannot express: design-token `:root` + `@theme` definitions, `@property` animated custom properties with `@keyframes`, `::-webkit-scrollbar` and `scrollbar-color`, `prefers-reduced-motion` blocks, and complex `color-mix()` or gradient effects. When custom CSS IS unavoidable in a light-DOM component, the tag-prefix invariant (#7) still holds: prefix every class selector with the component tag. **Shadow-DOM components (`static shadow = true`) legitimately use `static styles = css\`\``, which is the right home for scoped CSS, unchanged.**
+
+See `agent-docs/styling.md` for the full Tailwind-first treatment and the vanilla-CSS-only opt-out.
 
 ---
 
