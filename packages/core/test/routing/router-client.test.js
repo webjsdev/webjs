@@ -26,7 +26,7 @@ import { parseHTML } from 'linkedom';
 
 let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _addNewHead, _merge, _isNonHtmlPath, navigate,
-  _reactivateScripts, _findAnchorInPath, _activeFrameId, _onPopState,
+  _reactivateScripts, _findAnchorInPath, _activeFrameId, _resolveTargetFrameId, _onPopState,
   _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
@@ -82,6 +82,7 @@ before(async () => {
     _reactivateScripts,
     _findAnchorInPath,
     _activeFrameId,
+    _resolveTargetFrameId,
     _onPopState,
     _snapshotCache,
     _LIVE_ATTRS,
@@ -210,6 +211,94 @@ test('longestSharedPath: no overlap → null', () => {
 
 test('longestSharedPath: empty maps → null', () => {
   assert.equal(_longest(new Map(), new Map()), null);
+});
+
+/* ====================================================================
+ * resolveTargetFrameId: external data-webjs-frame targeting + _top (#252)
+ * ==================================================================== */
+
+/** Build a detached subtree in the live document and return helpers. */
+function frameFixture(markup) {
+  const root = document.createElement('div');
+  root.innerHTML = markup;
+  document.body.appendChild(root);
+  return {
+    root,
+    get: (id) => document.getElementById(id),
+    cleanup: () => root.remove(),
+  };
+}
+
+test('resolveTargetFrameId: explicit data-webjs-frame on the trigger targets that frame by id', () => {
+  const f = frameFixture(
+    '<webjs-frame id="content"></webjs-frame>' +
+    '<a id="ext" href="/x" data-webjs-frame="content">go</a>'
+  );
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('ext')), 'content');
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: the attribute may sit on an ANCESTOR of the trigger', () => {
+  const f = frameFixture(
+    '<webjs-frame id="content"></webjs-frame>' +
+    '<nav data-webjs-frame="content"><a id="ext" href="/x">go</a></nav>'
+  );
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('ext')), 'content');
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: _top returns null (full nav) even nested inside a frame', () => {
+  const f = frameFixture(
+    '<webjs-frame id="content"><a id="top" href="/x" data-webjs-frame="_top">out</a></webjs-frame>'
+  );
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('top')), null);
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: precedence: explicit external id WINS over the enclosing frame', () => {
+  // The link is INSIDE frame "inner" but explicitly targets "outer".
+  const f = frameFixture(
+    '<webjs-frame id="outer"></webjs-frame>' +
+    '<webjs-frame id="inner"><a id="lnk" href="/x" data-webjs-frame="outer">go</a></webjs-frame>'
+  );
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('lnk')), 'outer',
+      'the explicit attribute overrides closest-enclosing-frame');
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: no attribute falls back to the closest enclosing frame', () => {
+  const f = frameFixture(
+    '<webjs-frame id="content"><a id="nested" href="/x">go</a></webjs-frame>'
+  );
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('nested')), 'content');
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: a plain external trigger (no frame context) returns null', () => {
+  const f = frameFixture('<a id="plain" href="/x">go</a>');
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('plain')), null);
+  } finally { f.cleanup(); }
+});
+
+test('resolveTargetFrameId: an unresolvable id falls back to null and warns once (no throw)', () => {
+  const f = frameFixture('<a id="bad" href="/x" data-webjs-frame="nope">go</a>');
+  const origWarn = console.warn;
+  const warnings = [];
+  console.warn = (...a) => { warnings.push(a.join(' ')); };
+  try {
+    assert.equal(_resolveTargetFrameId(f.get('bad')), null);
+    assert.ok(warnings.some((w) => w.includes('nope')), 'warns about the unresolved id');
+  } finally { console.warn = origWarn; f.cleanup(); }
+});
+
+test('resolveTargetFrameId: null trigger → null (no crash)', () => {
+  assert.equal(_resolveTargetFrameId(null), null);
 });
 
 /* ====================================================================

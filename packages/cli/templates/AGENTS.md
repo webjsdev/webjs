@@ -765,12 +765,30 @@ return html`
 
 The router's `closest('webjs-frame')` detection takes precedence over
 layout markers. Only the frame's content swaps. Use this sparingly,
-folder-based layouts handle 99% of cases. When a frame nav's response
-lacks the matching `<webjs-frame id>` (e.g. an auth redirect), the router
-fires a cancelable, bubbling `webjs:frame-missing` event (detail
-`{ frameId, url, document }`) and leaves the frame unchanged rather than
-silently swapping the whole page; call `preventDefault()` to take over
-the outcome (e.g. `location.assign(e.detail.url)`).
+folder-based layouts handle 99% of cases.
+
+**External targeting + `_top` (Turbo-style).** A trigger does not have to be
+nested in the frame it drives. An `<a>` or `<form>` (or any ancestor)
+carrying `data-webjs-frame="<id>"` drives the frame with that id from
+anywhere (an external sidebar/nav link, a filter form), resolved via
+`getElementById`. The reserved token `data-webjs-frame="_top"` on a trigger
+INSIDE a frame breaks OUT to a full-page navigation. An id that does not
+resolve to a live `<webjs-frame>` warns once and falls back to a normal nav
+(never throws). With JS disabled a `data-webjs-frame` link is an inert
+attribute on a plain `<a href>`, so the click is a normal full navigation.
+
+**Busy state.** While a frame nav is in flight the router sets the native
+`aria-busy="true"` on the frame (cleared to `"false"` on any exit: success,
+error, abort, or a missing frame), so AT announces it and CSS can style
+`webjs-frame[aria-busy="true"]`. It also dispatches a bubbling
+`webjs:frame-busy` event on the frame at start and finish (detail
+`{ frameId, busy }`).
+
+When a frame nav's response lacks the matching `<webjs-frame id>` (e.g. an
+auth redirect), the router fires a cancelable, bubbling `webjs:frame-missing`
+event (detail `{ frameId, url, document }`) and leaves the frame unchanged
+rather than silently swapping the whole page; call `preventDefault()` to take
+over the outcome (e.g. `location.assign(e.detail.url)`).
 
 ### 5. `loading.ts` for per-segment skeletons
 

@@ -288,10 +288,11 @@ function onClick(e) {
   if (NON_HTML_EXTENSIONS.test(url.pathname)) return;
 
   e.preventDefault();
-  // Identify the active <webjs-frame> via closest(), returning null if the
-  // click wasn't inside any frame. The frame escape-hatch takes precedence
-  // over the auto-derived layout markers when both are present.
-  const frameId = activeFrameId(anchor);
+  // Resolve the target frame. An explicit `data-webjs-frame` on (or above)
+  // the anchor drives a frame by id from anywhere in the document (an
+  // external sidebar/nav link), `_top` breaks out to a full-page nav, and
+  // absence falls back to the closest enclosing frame (today's default).
+  const frameId = resolveTargetFrameId(anchor);
   performNavigation(href, false, frameId);
 }
 
@@ -355,7 +356,10 @@ function onSubmit(e) {
   const body = buildSubmitFormData(form, submitter);
 
   e.preventDefault();
-  const frameId = activeFrameId(form);
+  // Resolve the target frame for the submit, same precedence as a link:
+  // an explicit `data-webjs-frame` on (or above) the form or its submitter
+  // wins, `_top` breaks out, absence falls back to the enclosing frame.
+  const frameId = resolveTargetFrameId(submitter || form);
   performSubmission(url.href, method, body, frameId);
 }
 
@@ -449,6 +453,89 @@ function activeFrameId(el) {
     }
   }
   return null;
+}
+
+/**
+ * The reserved `data-webjs-frame` token that forces a full-page navigation,
+ * breaking OUT of any enclosing frame (Turbo's `data-turbo-frame="_top"`).
+ * `resolveTargetFrameId` returns this sentinel; callers treat it exactly
+ * like "no frame" (a normal layout-marker / full-body swap), so a trigger
+ * physically nested in a frame escapes the frame swap. Distinct from `null`
+ * only inside `resolveTargetFrameId` (where `null` would otherwise fall back
+ * to the enclosing frame); both reach `performNavigation` as a frameless
+ * nav, so they behave identically downstream.
+ */
+const FRAME_TOP = '_top';
+
+/**
+ * Resolve which `<webjs-frame>` (if any) a trigger drives, honoring an
+ * explicit `data-webjs-frame` attribute before the closest-enclosing-frame
+ * default. Models Turbo's `data-turbo-frame` external targeting:
+ *
+ *   - `data-webjs-frame="<id>"` on (or above) the trigger drives the frame
+ *     with that id, resolved via `getElementById` in the CURRENT document.
+ *     This lets an EXTERNAL link / form (a sidebar, a filter form) drive a
+ *     content frame it is NOT DOM-nested in. If the id does not resolve to a
+ *     live `<webjs-frame>`, we warn ONCE and fall back to a normal full nav
+ *     (the fail-safe posture: never throw, never silently swap the wrong
+ *     region).
+ *   - `data-webjs-frame="_top"` forces a full-page navigation even when the
+ *     trigger is inside a frame, returning `null` so the swap escapes to the
+ *     layout-marker / full-body path.
+ *   - No `data-webjs-frame` keeps today's behavior: the innermost enclosing
+ *     frame via `activeFrameId`.
+ *
+ * Resolution precedence: explicit `data-webjs-frame` > closest enclosing
+ * frame. The attribute is read with `closest('[data-webjs-frame]')` so it
+ * may live on the trigger itself or any ancestor (e.g. a `<nav>` wrapping a
+ * set of links that all target one frame).
+ *
+ * @param {Element | null} trigger
+ * @returns {string | null}  A frame id to swap, or null for a full nav.
+ */
+function resolveTargetFrameId(trigger) {
+  if (!trigger) return null;
+  const carrier = trigger.closest && trigger.closest('[data-webjs-frame]');
+  const explicit = carrier
+    ? (/** @type {HTMLElement} */ (carrier).dataset
+        ? /** @type {HTMLElement} */ (carrier).dataset.webjsFrame
+        : carrier.getAttribute('data-webjs-frame'))
+    : null;
+  if (explicit != null && explicit !== '') {
+    if (explicit === FRAME_TOP) {
+      // Break out: a full-page nav, never a frame swap.
+      return null;
+    }
+    // External targeting by id. Resolve in the current document.
+    const el = typeof document !== 'undefined' ? document.getElementById(explicit) : null;
+    if (el && el.tagName && el.tagName.toLowerCase() === 'webjs-frame') {
+      return explicit;
+    }
+    // Unresolvable id: warn once, fall back to a normal full nav so the
+    // click still works rather than swapping nothing or the wrong region.
+    warnOnce(
+      `webjs:frame-unresolved:${explicit}`,
+      `[webjs] data-webjs-frame="${explicit}" did not match a live <webjs-frame id="${explicit}">; performing a normal navigation instead.`,
+    );
+    return null;
+  }
+  // No explicit target: today's closest-enclosing-frame default.
+  return activeFrameId(trigger);
+}
+
+/**
+ * Emit a `console.warn` at most once per `key` for the lifetime of the
+ * page, so a repeated misconfiguration (a stale `data-webjs-frame` clicked
+ * many times) does not spam the console.
+ *
+ * @type {Set<string>}
+ */
+const warnedKeys = new Set();
+/** @param {string} key @param {string} message */
+function warnOnce(key, message) {
+  if (warnedKeys.has(key)) return;
+  warnedKeys.add(key);
+  if (typeof console !== 'undefined' && console.warn) console.warn(message);
 }
 
 /* ====================================================================
@@ -1173,6 +1260,14 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   let incomingBuild = null;
   /** @type {string} */
   let finalUrl = href;
+  // aria-busy lifecycle: when this nav targets a <webjs-frame>, mark the
+  // live frame busy for the duration of its fetch+apply so assistive tech
+  // can announce it and CSS can style `webjs-frame[aria-busy="true"]`. The
+  // outer try/finally guarantees the busy state is cleared on EVERY exit
+  // (success swap, frame-missing, an HTTP/transport error, an abort by a
+  // newer nav), never leaving a frame stuck busy.
+  const busyFrame = frameId ? markFrameBusy(frameId) : null;
+  try {
   try {
     // Warm-cache fast path: a hover/focus/viewport prefetch may have
     // already fetched this exact page (same X-Webjs-Have shell). Consume
@@ -1283,6 +1378,57 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   }
 
   document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
+  } finally {
+    // Clear the frame's busy state on every exit path (the early returns
+    // above all unwind through here). No-op when this was not a frame nav.
+    if (busyFrame) clearFrameBusy(busyFrame);
+  }
+}
+
+/**
+ * Set `aria-busy="true"` on the live `<webjs-frame id>` element and announce
+ * the start of its load with a bubbling `webjs:frame-busy` event (detail
+ * `{ frameId, busy: true }`), mirroring Turbo's `frame.markAsBusy`. Returns
+ * the resolved frame element so `clearFrameBusy` can target the SAME node
+ * even if the swap later replaces the frame's id lookup (the element
+ * identity is stable across a child-only frame swap). Returns null when the
+ * frame is not in the live DOM (e.g. a stale external `data-webjs-frame`
+ * that slipped the resolve-time check), so nothing to mark.
+ *
+ * @param {string} frameId
+ * @returns {Element | null}
+ */
+function markFrameBusy(frameId) {
+  if (typeof document === 'undefined') return null;
+  let frame = null;
+  try {
+    frame = document.querySelector(`webjs-frame#${CSS.escape(frameId)}`);
+  } catch { frame = document.getElementById(frameId); }
+  if (!frame) return null;
+  frame.setAttribute('aria-busy', 'true');
+  frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
+    bubbles: true,
+    detail: { frameId, busy: true },
+  }));
+  return frame;
+}
+
+/**
+ * Clear the busy state set by `markFrameBusy`: set `aria-busy="false"` and
+ * dispatch the matching `webjs:frame-busy` (detail `{ frameId, busy: false }`)
+ * so app code sees a symmetric start/finish pair. Mirrors Turbo's
+ * `frame.clearBusyState`. Operates on the element captured at start, so an
+ * abort / error clears the same node the start marked.
+ *
+ * @param {Element} frame
+ */
+function clearFrameBusy(frame) {
+  frame.setAttribute('aria-busy', 'false');
+  const frameId = frame.id || null;
+  frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
+    bubbles: true,
+    detail: { frameId, busy: false },
+  }));
 }
 
 /**
@@ -2133,6 +2279,10 @@ export {
   reactivateScripts as _reactivateScripts,
   findAnchorInPath as _findAnchorInPath,
   activeFrameId as _activeFrameId,
+  resolveTargetFrameId as _resolveTargetFrameId,
+  FRAME_TOP as _FRAME_TOP,
+  markFrameBusy as _markFrameBusy,
+  clearFrameBusy as _clearFrameBusy,
   collectChildrenSlots as _collectChildrenSlots,
   longestSharedPath as _longestSharedPath,
   keyOf as _keyOf,

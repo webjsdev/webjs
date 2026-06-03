@@ -646,6 +646,62 @@ target. If a frame is found AND the response contains a matching
 `<webjs-frame id="...">`, the swap is scoped to that frame's children,
 which takes precedence over the layout-marker mechanism.
 
+#### External targeting (`data-webjs-frame`) and `_top` breakout
+
+A trigger does NOT have to be nested inside the frame it drives. Mirroring
+Turbo's `data-turbo-frame`, an `<a>` or `<form>` (or any ancestor of it)
+carrying `data-webjs-frame="<id>"` drives the frame with that id, resolved
+via `getElementById` in the current document. So an external nav/sidebar
+link or a filter form can drive a content frame it does not enclose:
+
+```ts
+html`
+  <nav data-webjs-frame="results">
+    <a href="/products?sort=new">Newest</a>
+    <a href="/products?sort=top">Top rated</a>
+  </nav>
+  <form action="/products" data-webjs-frame="results">…filters…</form>
+
+  <webjs-frame id="results">…current results…</webjs-frame>
+`
+```
+
+Resolution precedence: an explicit `data-webjs-frame` WINS over the
+closest-enclosing-frame default. So a link physically inside frame A that
+carries `data-webjs-frame="b"` drives frame B.
+
+- **`data-webjs-frame="_top"`** is a reserved token: it forces a full-page
+  navigation (the normal layout/marker swap or a full nav), breaking OUT of
+  the enclosing frame. Put it on a link inside a frame that should escape it.
+- **An id that does not resolve** to a live `<webjs-frame>` emits a one-time
+  `console.warn` and falls back to a normal navigation (fail-safe; the
+  router never throws and never swaps the wrong region).
+- **With JS disabled** a `data-webjs-frame` link is an inert attribute on a
+  plain `<a href>`, so the click is a normal full-page navigation, the
+  correct progressive-enhancement fallback.
+
+#### Busy state (`aria-busy` + `webjs:frame-busy`)
+
+While a frame's navigation is in flight the router sets the native
+`aria-busy="true"` on the frame element and clears it (to `"false"`) on
+completion, on EVERY exit (a successful swap, a frame-missing response, an
+HTTP/transport error, or an abort by a newer nav). So assistive tech
+announces the loading state for free, and CSS can style the busy region:
+
+```css
+webjs-frame[aria-busy="true"] { opacity: 0.6; }
+```
+
+The router also dispatches a bubbling `webjs:frame-busy` event on the frame
+at both edges, so app code can hook the start and finish:
+
+```ts
+document.addEventListener('webjs:frame-busy', (e) => {
+  const { frameId, busy } = e.detail; // busy: true at start, false at finish
+  spinner.toggle(frameId, busy);
+});
+```
+
 #### `webjs:frame-missing` (response lacks the requested frame)
 
 When a frame-scoped navigation's response does NOT carry a matching
