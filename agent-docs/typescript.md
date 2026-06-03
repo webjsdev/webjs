@@ -183,7 +183,8 @@ export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> 
 fields (`title`, `viewport`, `robots`, `appleWebApp`, `icons`) are unions.
 It is a pure type in `packages/core/src/metadata.d.ts`, so it is erased at
 runtime with zero build cost. `MetadataContext` types the
-`generateMetadata` argument (`{ params, searchParams, url }`).
+`generateMetadata` argument (`{ params, searchParams, url, actionData }`,
+where `actionData` is set only on a failed-page-action re-render).
 
 ### TypeScript is not required
 

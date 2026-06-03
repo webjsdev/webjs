@@ -117,8 +117,19 @@ void wrong5;
 /* ------------- generateMetadata return + context typing ------------- */
 
 async function generateMetadata(ctx: MetadataContext): Promise<Metadata> {
-  return { title: `Post: ${ctx.params.slug}`, metadataBase: new URL(ctx.url).origin };
+  // Every runtime-passed context field reads cleanly: params, searchParams,
+  // url, and actionData (the failed-page-action re-render payload).
+  const failed = ctx.actionData != null;
+  const q = ctx.searchParams?.tab ?? '';
+  return {
+    title: failed ? 'Fix the errors' : `Post: ${ctx.params.slug} ${q}`,
+    metadataBase: new URL(ctx.url).origin,
+  };
 }
 void generateMetadata;
+
+// @ts-expect-error `body` is not a context field the runtime ever passes.
+function badContext(ctx: MetadataContext): unknown { return ctx.body; }
+void badContext;
 
 export {};

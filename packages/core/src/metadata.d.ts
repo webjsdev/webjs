@@ -244,10 +244,16 @@ export interface Metadata {
 
 /**
  * The argument `generateMetadata(ctx)` receives. Mirrors the page context
- * (the same `{ params, searchParams, url }` a page function gets).
+ * (the same `{ params, searchParams, url, actionData }` a page function gets).
  */
 export interface MetadataContext {
   params: Record<string, string>;
   searchParams?: Record<string, string | string[]>;
   url: string;
+  /**
+   * Present only on the re-render after a failed page `action` submission.
+   * `undefined` on a normal GET render. Read it to vary the title on a
+   * validation-error re-render.
+   */
+  actionData?: unknown;
 }
