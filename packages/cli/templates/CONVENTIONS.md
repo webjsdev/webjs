@@ -439,6 +439,40 @@ test/
 - `webjs test --browser` (or `npx wtr`) runs the browser tests.
 - `WEBJS_E2E=1 webjs test` adds the e2e tests.
 
+### The handle() test harness (full-pipeline node tests)
+
+For a node test that needs the REAL request pipeline (middleware, routing,
+SSR, page actions, server-action RPC, auth + CSRF), drive
+`createRequestHandler({ appDir }).handle(request)` and assert on the
+`Response`. `@webjsdev/server/testing` ships thin builders over it:
+
+```ts
+import { createRequestHandler } from '@webjsdev/server';
+import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+  from '@webjsdev/server/testing';
+
+const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
+
+// fire a request, assert the response
+const res = await testRequest(app.handle, '/about');
+
+// real login, reuse the captured session cookie on a protected route
+const { cookies } = await loginAndGetCookies(app.handle, { email, password });
+const dash = await testRequest(app.handle, '/dashboard', withSessionCookie({}, cookies));
+
+// round-trip a server action through the REAL /__webjs/action/<hash>/<fn> path
+const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);
+```
+
+Prefer `invokeActionForTest` over a direct import of the action when you want
+to verify the production contract: it exercises the wire serializer (a `Date` /
+`Map` arg survives), CSRF, and prod error sanitization, which a direct call
+bypasses. The saas template's `test/auth/auth.test.ts` is a worked example.
+
+This is also why the auth test lives at `test/auth/auth.test.ts` (the
+feature-folder convention), NOT `test/unit/auth.test.ts`. Test KIND is a
+subfolder inside a feature, never the top level.
+
 **Every change ships with a test.** For Claude Code, a commit that
 stages app code (`app/`, `modules/`, `components/`, `lib/`) without
 staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`.

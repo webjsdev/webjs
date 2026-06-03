@@ -261,6 +261,16 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     assert.match(signup, /fieldErrors/, 'signup action returns field errors');
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
     assert.doesNotMatch(signup, /id="signup-form"/, 'old inert JS-only form id is gone');
+
+    // The auth test is a REAL handle()-driven flow at the convention-correct
+    // path test/auth/auth.test.ts (#267), not the old type-shape stub at
+    // test/unit/auth.test.ts.
+    assert.ok(existsSync(join(appDir, 'test', 'auth', 'auth.test.ts')), 'test/auth/auth.test.ts present');
+    assert.ok(!existsSync(join(appDir, 'test', 'unit', 'auth.test.ts')), 'old test/unit/auth.test.ts stub is gone');
+    const authTest = readFileSync(join(appDir, 'test', 'auth', 'auth.test.ts'), 'utf8');
+    assert.match(authTest, /@webjsdev\/server\/testing/, 'auth test uses the handle() test harness');
+    assert.match(authTest, /redirects to \/login when unauthenticated/, 'auth test asserts the protected-route gate');
+    assert.match(authTest, /loginAndGetCookies/, 'auth test drives the real login flow');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });
