@@ -12,7 +12,7 @@ const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 const GH_URL = 'https://github.com/webjsdev/webjs';
 
-const AGENTS =['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Aider', 'Gemini CLI', 'OpenCode'];
+const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Gemini CLI', 'OpenCode'];
 
 const ICON = {
   bolt: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
