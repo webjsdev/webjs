@@ -41,7 +41,7 @@ the same output in all three.
 | `registry.js` | Custom-element bookkeeping (`register`, `lookup`, `allTags`, `tagOf`, `isLazy`, `primeModuleUrl`) |
 | `lazy-loader.js` | IntersectionObserver-based lazy module loading for `static lazy = true` |
 | `nav.js` | `notFound()`, `redirect()` sentinels for page/action handlers |
-| `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging |
+| `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging, plus `validateInput(fn, validate)` (#245): attaches an input validator through the SAME `__webjsHttp` metadata `expose` writes (so `getExposed(fn)` surfaces it) WITHOUT creating a REST route, so the validator runs on the RPC path too. Both are server-only (stripped from `index-browser.js`). `getExposed` reads the metadata back |
 | `escape.js` | HTML attribute / text escaping (the only sanitiser) |
 | `csp-nonce.js` | Isomorphic CSP nonce reader: `cspNonce()` (returns the request nonce, `''` in the browser) + `setCspNonceProvider` (server-only wiring). The provider is installed by `@webjsdev/server`'s `context.js`; as of #233 it returns a freshly-MINTED per-request nonce (not just an inbound-header parse). `setCspNonceProvider` is stripped from the browser surface |
 | `rich-fetch.js` | Content-negotiated fetch helper |

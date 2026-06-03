@@ -22,10 +22,22 @@
  *   - For methods with a body (POST/PUT/PATCH/DELETE), the parsed JSON body
  *     is merged on top of params/query. The function receives ONE argument:
  *     the merged object.
- *   - If `opts.validate` is provided, it runs BEFORE the function and can
- *     transform / reject the input. Throw to fail (→ 400 response). Return
- *     value replaces the input. Works cleanly with zod, valibot, or any
- *     parser that throws: `expose('...', fn, { validate: Schema.parse })`.
+ *   - If `opts.validate` is provided, it runs BEFORE the function on EVERY
+ *     call path (the REST path here AND the internal RPC path), so a single
+ *     validator declared once guards both. The framework calls `validate(input)`
+ *     and interprets the return (see the validator contract below):
+ *       - a `{ success: true, data? }` envelope passes (the action receives
+ *         `data` when present, else the original input);
+ *       - a `{ success: false, fieldErrors, message? }` envelope FAILS with a
+ *         structured field-error result (422), without calling the action;
+ *       - a THROW fails (→ 400 on REST, sanitized error on RPC), preserving the
+ *         classic `Schema.parse`-style contract;
+ *       - any OTHER returned plain value is treated as the transformed input
+ *         (back-compat with the `validate: Schema.parse` transform style).
+ *     The zod adapter is three lines and keeps the framework zod-free:
+ *       `validate: (i) => { const r = Schema.safeParse(i);
+ *          return r.success ? { success: true, data: r.data }
+ *            : { success: false, fieldErrors: r.error.flatten().fieldErrors }; }`
  *   - Return value becomes a JSON `Response`; throw or return a `Response`
  *     directly for full control.
  *
@@ -82,6 +94,79 @@ function normaliseCors(c) {
     maxAge: typeof c.maxAge === 'number' ? c.maxAge : 86400,
     headers: Array.isArray(c.headers) ? c.headers : null,
   };
+}
+
+/**
+ * Attach an input validator to a server action WITHOUT exposing it as a REST
+ * endpoint. The validator runs SERVER-SIDE before the action body on BOTH call
+ * paths: the internal RPC path (a client component importing the action) AND
+ * the `expose()` REST path (if the action is also exposed). This is the shared,
+ * declare-once validation surface (#245).
+ *
+ * It reuses the EXACT same `__webjsHttp` storage `expose()` writes, so the
+ * action index's `getExposed(fn)` already surfaces the validator with no new
+ * plumbing. The action stays a plain callable function (a direct unit-test
+ * import still works, just without the framework running validate).
+ *
+ * If the action is already `expose()`d, prefer passing `{ validate }` to
+ * `expose()` directly; calling both keeps the LAST validator attached.
+ *
+ * ```js
+ * // actions/posts.server.js
+ * 'use server';
+ * import { validateInput } from '@webjsdev/core';
+ *
+ * export const createPost = validateInput(
+ *   async ({ title }) => { ... },
+ *   (input) => {
+ *     const errs = {};
+ *     if (!input?.title?.trim()) errs.title = 'Title is required';
+ *     return Object.keys(errs).length
+ *       ? { success: false, fieldErrors: errs }
+ *       : { success: true };
+ *   },
+ * );
+ * ```
+ *
+ * The validator contract (the framework calls `validate(input)`):
+ *   - returns `{ success: true, data? }` → valid; the action is called with
+ *     `data` if present, else the original input;
+ *   - returns `{ success: false, fieldErrors, message? }` (an object with a
+ *     boolean `success` of `false`, or with a `fieldErrors`) → FAILED; the
+ *     framework returns a structured `ActionResult`
+ *     `{ success: false, fieldErrors, error: message?, status: 422 }` without
+ *     calling the action body;
+ *   - THROWS → mapped to a sanitized failure result (the classic
+ *     `Schema.parse` contract);
+ *   - returns ANY OTHER plain value → treated as the validated/coerced input
+ *     and passed to the action (the `validate: Schema.parse` transform style).
+ *
+ * Disambiguation: a return is a result-envelope ONLY when it is an object with
+ * a boolean `success` property OR a `fieldErrors` property; otherwise it is a
+ * transformed input value.
+ *
+ * Server-side only; import inside `.server.{js,ts}` files. The bare
+ * `@webjsdev/core` specifier resolves to the browser entry, which excludes
+ * `validateInput` (like `expose`), so an import from client-bound code reads
+ * `undefined`. The validator itself lives in the `.server` file and never
+ * reaches the client.
+ *
+ * @template {Function} F
+ * @param {F} fn the async action implementation
+ * @param {(input: any) => any} validate the validator (a plain function or a
+ *   zod-`safeParse` adapter)
+ * @returns {F} the same function, tagged with the validator
+ */
+export function validateInput(fn, validate) {
+  if (typeof fn !== 'function') {
+    throw new Error('validateInput(): first argument must be the action function');
+  }
+  if (typeof validate !== 'function') {
+    throw new Error('validateInput(): second argument must be a validator function');
+  }
+  const existing = /** @type any */ (fn).__webjsHttp || {};
+  /** @type any */ (fn).__webjsHttp = { ...existing, validate };
+  return fn;
 }
 
 /** @param {unknown} fn */

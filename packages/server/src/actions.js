@@ -33,6 +33,60 @@ function jsonBodyLimit() {
  */
 export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 
+/**
+ * Run an attached input validator against an action's input, shared by the RPC
+ * path (`invokeAction`) and the `expose()` REST path (`invokeExposedAction`) so
+ * the contract is identical across transports (#245). The framework only CALLS
+ * the validator and shapes the result; it ships no validation library.
+ *
+ * @param {(input: any) => any} validate the attached validator
+ * @param {any} input the value handed to the validator (the action's first arg
+ *   on RPC, the merged query/params/body object on REST)
+ * @returns {{ ok: true, value: any } | { ok: false, result: { success: false, fieldErrors?: Record<string,string>, error?: string, status: number }, thrown?: unknown }}
+ *   `ok: true` carries the value to pass to the action (the validated `data`,
+ *   the transformed return, or the original input). `ok: false` carries the
+ *   structured failure result the caller serializes back; on a THROWN validator
+ *   it also carries the original error on `thrown` so a caller can salvage a
+ *   schema lib's structured `issues` (the REST path does, for back-compat).
+ */
+export function runValidate(validate, input) {
+  let out;
+  try {
+    out = validate(input);
+  } catch (e) {
+    // Throw-to-reject (the classic `Schema.parse` contract). Map to a sanitized
+    // failure result; a thrown validator is a 400 (bad input), not a 500.
+    // Surface only the message; `thrown` lets the REST caller recover `issues`.
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, result: { success: false, error: msg, status: 400 }, thrown: e };
+  }
+  // Disambiguate an ActionResult envelope from a plain transformed value: a
+  // return is an envelope ONLY when it is an object carrying a boolean
+  // `success` OR a `fieldErrors`. Anything else is a transformed input.
+  if (out && typeof out === 'object' && !Array.isArray(out) &&
+      (typeof (/** @type any */ (out).success) === 'boolean' || 'fieldErrors' in out)) {
+    const env = /** @type any */ (out);
+    if (env.success === true) {
+      // `{ success: true, data? }` → valid; use `data` when present, else input.
+      return { ok: true, value: 'data' in env ? env.data : input };
+    }
+    // Failure: `{ success: false, ... }` or `{ fieldErrors }` (no literal
+    // success). Shape the structured field-error result.
+    return {
+      ok: false,
+      result: {
+        success: false,
+        ...(env.fieldErrors ? { fieldErrors: env.fieldErrors } : {}),
+        ...(env.message || env.error ? { error: env.message || env.error } : {}),
+        status: typeof env.status === 'number' ? env.status : 422,
+      },
+    };
+  }
+  // A non-envelope return transforms the input (back-compat with
+  // `validate: Schema.parse`); `undefined` means "no transform", keep input.
+  return { ok: true, value: out === undefined ? input : out };
+}
+
 /** Build a serialized Response with webjs content-type. */
 async function rpcResponse(payload, init = {}) {
   const s = getSerializer();
@@ -145,6 +199,12 @@ export async function buildActionIndex(appDir, dev) {
         if (typeof fn !== 'function') continue;
         const http = getExposed(fn);
         if (!http) continue;
+        // A `validateInput(fn, ...)` attachment writes `__webjsHttp` with a
+        // `validate` but NO `method`/`path` (it does not create a REST route),
+        // so it is not an exposed route. Only `expose()` sets a path; skip a
+        // validate-only attachment here (its validator is read at RPC call
+        // time via getExposed in invokeAction).
+        if (!http.path || !http.method) continue;
         const { pattern, paramNames } = pathToPattern(http.path);
         httpRoutes.push({
           method: http.method,
@@ -335,6 +395,30 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
   const mod = await loadModule(file, idx.dev);
   const fn = fnName === 'default' ? mod.default : mod[fnName];
   if (typeof fn !== 'function') return rpcResponse({ error: `Unknown action ${fnName}` }, { status: 404 });
+  // Input validation (#245): a validator attached via `validateInput(fn, ...)`
+  // or `expose(spec, fn, { validate })` runs SERVER-SIDE before the body on
+  // this RPC path too, not just the REST path. The RPC stub sends an args
+  // array; an action conventionally takes one input object, so validate the
+  // FIRST arg (matching how the REST path validates its single merged object).
+  const attached = getExposed(fn);
+  if (attached && typeof attached.validate === 'function') {
+    const v = runValidate(attached.validate, args[0]);
+    if (!v.ok) {
+      if (v.thrown !== undefined) {
+        // A THROWN validator behaves like a thrown action: a sanitized error
+        // response (non-200, so the client stub throws), with prod stack
+        // sanitization. The onError sink sees the original error too.
+        if (typeof onError === 'function') onError(v.thrown);
+        return actionErrorResponse(v.thrown, idx.dev);
+      }
+      // A structured `{ success: false, fieldErrors }` envelope is a NORMAL
+      // result the action author renders (`result.fieldErrors`): serialized as
+      // a 200 RPC payload so the client stub returns it as a real object rather
+      // than throwing, the failure status riding inside the envelope.
+      return rpcResponse(v.result);
+    }
+    args = [v.value, ...args.slice(1)];
+  }
   try {
     const result = await fn(...args);
     return rpcResponse(result ?? null);
@@ -470,17 +554,26 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   }
   let arg = { ...query, ...params, ...body };
   if (route.validate) {
-    try {
-      arg = route.validate(arg);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // Many schema libs (zod, valibot) throw structured errors: pass their
-      // `issues` array through when present for easier client-side handling.
-      const issues = e && typeof e === 'object' && 'issues' in e
-        ? /** @type any */ (e).issues
-        : undefined;
-      return Response.json({ error: msg, issues }, { status: 400 });
+    // Run the validator through the SHARED contract (#245) so the REST path and
+    // the RPC path interpret a `{ success, fieldErrors }` envelope, a throw, and
+    // a transform-return identically. A structured failure becomes a 422 JSON
+    // `{ error?, fieldErrors }` (not just a thrown 400); a throw stays a 400; a
+    // transform-return keeps replacing the input (back-compat).
+    const v = runValidate(route.validate, arg);
+    if (!v.ok) {
+      if (v.thrown !== undefined) {
+        // A thrown validator (the classic `Schema.parse` style): keep the exact
+        // legacy REST shape, including a schema lib's structured `issues` array.
+        const msg = v.result.error || 'Invalid input';
+        const issues = v.thrown && typeof v.thrown === 'object' && 'issues' in v.thrown
+          ? /** @type any */ (v.thrown).issues
+          : undefined;
+        return Response.json({ error: msg, issues }, { status: 400 });
+      }
+      const { status, ...payload } = v.result;
+      return Response.json(payload, { status });
     }
+    arg = v.value;
   }
   const mod = await loadModule(route.file, idx.dev);
   const fn = mod[route.fnName];
