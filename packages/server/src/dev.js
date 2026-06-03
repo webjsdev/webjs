@@ -716,6 +716,10 @@ export async function createRequestHandler(opts) {
             // handles staleness. Computed AFTER the elision fingerprint, so each
             // per-file hash already reflects the elision verdict (an elision
             // flip changes the served output, so it moves this fingerprint too).
+            // This eagerly hashes the WHOLE browser-bound set once (not just the
+            // first route's files), but `assetHashFor` is memoized and already
+            // runs for `?v` emission in prod, so it stays a one-time bounded cost
+            // inside the lazy analysis (never at boot).
             if (!dev && state.browserBoundFiles) {
               const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
               const lines = [...state.browserBoundFiles]

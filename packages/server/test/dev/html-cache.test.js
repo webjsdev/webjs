@@ -557,3 +557,46 @@ test('#318: an app-module byte change re-renders a cached revalidate page (prod,
     rmSync(appDir, { recursive: true, force: true });
   }
 });
+
+test('#318: two deploys of IDENTICAL source at different paths produce the SAME key (no spurious invalidation)', async () => {
+  // The location-independence property: the app-source fingerprint is a digest
+  // of RELATIVIZED paths + content hashes, so two prod boots of byte-identical
+  // source at different absolute tmpdirs (a redeploy to a fresh container)
+  // compute the SAME cache key, and a Redis-backed warm cache survives the
+  // redeploy instead of being spuriously invalidated. The fp is module-global,
+  // so each key is captured right after its OWN warmup.
+  const files = {
+    'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
+    'app/layout.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import './widget.js';\n` +
+      `export const revalidate = 60;\n` +
+      `export default () => html\`<x-w></x-w>\`;\n`,
+    'app/widget.js':
+      `import { WebComponent } from ${JSON.stringify(HTML_URL.replace('html.js', 'component.js'))};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XW extends WebComponent { render() { return html\`<button @click=\${() => 1}>v1</button>\`; } }\n` +
+      `XW.register('x-w');\n`,
+  };
+  const url = new URL('http://x/');
+  const dirA = makeApp(files);
+  const dirB = makeApp(files); // identical source, different tmpdir
+  try {
+    const a = await createRequestHandler({ appDir: dirA, dev: false });
+    await a.warmup();
+    const keyA = htmlCacheKey(url);
+
+    const b = await createRequestHandler({ appDir: dirB, dev: false });
+    await b.warmup();
+    const keyB = htmlCacheKey(url);
+
+    assert.match(keyA, /:[0-9a-f]{16}:/, 'the key carries an app-source fingerprint segment');
+    assert.equal(keyB, keyA, 'identical source at different paths yields the SAME key (location-independent, no spurious invalidation)');
+  } finally {
+    rmSync(dirA, { recursive: true, force: true });
+    rmSync(dirB, { recursive: true, force: true });
+  }
+});
