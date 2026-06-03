@@ -1266,7 +1266,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // outer try/finally guarantees the busy state is cleared on EVERY exit
   // (success swap, frame-missing, an HTTP/transport error, an abort by a
   // newer nav), never leaving a frame stuck busy.
-  const busyFrame = frameId ? markFrameBusy(frameId, token) : null;
+  const busyFrame = frameId ? markFrameBusy(frameId, myToken) : null;
   try {
   try {
     // Warm-cache fast path: a hover/focus/viewport prefetch may have
@@ -1381,7 +1381,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   } finally {
     // Clear the frame's busy state on every exit path (the early returns
     // above all unwind through here). No-op when this was not a frame nav.
-    if (busyFrame) clearFrameBusy(busyFrame, token);
+    if (busyFrame) clearFrameBusy(busyFrame, myToken);
   }
 }
 
