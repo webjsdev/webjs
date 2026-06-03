@@ -208,9 +208,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       .mobile-menu .close-icon { display: none; }
       .mobile-menu[open] .open-icon { display: none; }
       .mobile-menu[open] .close-icon { display: inline-block; }
-      /* Host sizing for the <copy-cmd> custom element (utilities cannot
+      /* Host sizing for the copy-cmd custom element (utilities cannot
          target the host from inside the component). Everything else in
-         copy-cmd is Tailwind. */
+         copy-cmd is Tailwind. The tag name is written without angle
+         brackets on purpose: a literal element tag inside this style
+         block is rendered as a real component by the SSR pass. */
       copy-cmd { display: block; flex: 1; min-width: 0; max-width: 100%; }
       /* Template-card commands hide the horizontal scrollbar entirely (no
          track, no gutter, even on hover), so all three sit flush at the same
