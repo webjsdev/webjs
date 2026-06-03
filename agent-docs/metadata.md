@@ -141,3 +141,11 @@ export const viewport = {
 
 Emitted as a **response header**, not a `<meta>` tag. Pages default to
 `no-store` for safety. Opt into caching by setting this explicitly.
+
+A **public** value (e.g. `public, max-age=60`) also enables conditional
+GET on the page (#240): the buffered HTML response gets a weak content-hash
+`ETag` (`W/"..."`) and a repeat request whose `If-None-Match` matches it
+returns a `304 Not Modified` with no body. A `no-store` or `private` page
+gets NO ETag and never 304s, so private / per-user content is never
+revalidated across sessions. A streamed Suspense response is not ETagged.
+See the conditional-GET section in the framework root `AGENTS.md`.

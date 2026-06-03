@@ -455,7 +455,10 @@ test('handle: prod responses on user source include ETag + max-age', async () =>
   const resp = await app.handle(new Request('http://x/public/hello.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
-  assert.ok(etag && etag.startsWith('"'));
+  // The ETag is WEAK (W/"..."): it is computed over the uncompressed body and
+  // shared across content-codings, which a strong validator may not do
+  // (RFC 7232 2.3.3). See conditional-get.js.
+  assert.ok(etag && etag.startsWith('W/"'));
   assert.ok(/max-age/.test(resp.headers.get('cache-control')));
 });
 
@@ -1288,7 +1291,10 @@ test('handle: /__webjs/vendor/ sets ETag for downstream cache revalidation', asy
   const resp = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
   const etag = resp.headers.get('etag');
   assert.ok(etag, 'etag header must be present');
-  assert.match(etag, /^"[0-9a-f]{16}"$/, 'etag is a 16-char hex string in quotes');
+  // WEAK validator (W/"..."): the bundle is compressible, so the same ETag
+  // can ride identity / gzip / br, which a strong validator may not do
+  // (RFC 7232 2.3.3). See conditional-get.js.
+  assert.match(etag, /^W\/"[0-9a-f]{16}"$/, 'etag is a weak 16-char hex string in quotes');
   // Same content must produce the same ETag (deterministic).
   const resp2 = await app.handle(new Request('http://x/__webjs/vendor/fake@1.0.0.js'));
   assert.equal(resp2.headers.get('etag'), etag);
@@ -1401,12 +1407,13 @@ test('startServer dev=true: fs.watch fires reload event on file change', async (
   }
 });
 
-test('fileResponse prod: ETag is 16-char SHA-1 hex digest in quotes', async () => {
+test('fileResponse prod: ETag is a WEAK 16-char SHA-1 hex digest in quotes', async () => {
   // Regression coverage for the createHash → crypto.subtle.digest
-  // migration. The Web Crypto path must produce the same shape as
-  // the old createHash('sha1') ETag: a 16-character hex slice in
-  // double quotes. (Browser/proxy ETag matching is byte-exact, so
-  // any shape drift would break revalidation.)
+  // migration. The Web Crypto path must produce a 16-character hex slice in
+  // double quotes, now carried as a WEAK validator (W/"...") so the same hash
+  // can ride identity / gzip / br codings (RFC 7232 2.3.3); see
+  // conditional-get.js. (Browser/proxy ETag matching is byte-exact, so any
+  // shape drift would break revalidation.)
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'public/static.txt': 'fixed body for etag check',
@@ -1415,8 +1422,8 @@ test('fileResponse prod: ETag is 16-char SHA-1 hex digest in quotes', async () =
   const resp = await app.handle(new Request('http://x/public/static.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
-  assert.match(etag, /^"[0-9a-f]{16}"$/,
-    `ETag must be a 16-char hex slice in quotes; got ${etag}`);
+  assert.match(etag, /^W\/"[0-9a-f]{16}"$/,
+    `ETag must be a weak 16-char hex slice in quotes; got ${etag}`);
   // Second request must produce identical ETag (stable hash).
   const resp2 = await app.handle(new Request('http://x/public/static.txt'));
   assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');

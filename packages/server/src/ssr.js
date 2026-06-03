@@ -5,6 +5,7 @@ import { importMapTag, vendorIntegrityFor, publishedBuildId } from './importmap.
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
+import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
 
 /**
  * SSR a matched page route to a Response.
@@ -203,6 +204,11 @@ function htmlResponse(html, status, req, url, metadata) {
     const secure = url ? url.protocol === 'https:' : false;
     headers.append('set-cookie', cookieHeader(newToken(), { secure }));
   }
+  // Buffered (string) body: opt into the conditional-GET funnel so a
+  // PUBLIC-cacheable page (metadata.cacheControl) gets a weak ETag + 304.
+  // The funnel still excludes the no-store default, so a private page is
+  // never ETagged. See conditional-get.js.
+  headers.set(BUFFERED_MARKER, '1');
   return new Response(html, { status, headers });
 }
 
@@ -1222,8 +1228,17 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
   }
 
   if (!ctx.pending.length) {
+    // No pending boundaries: this degrades to a single buffered (string)
+    // flush, so opt it into the conditional-GET funnel like htmlResponse.
+    headers.set(BUFFERED_MARKER, '1');
     return new Response(prefix + bodyHtml + closer, { status, headers });
   }
+
+  // Flag a genuinely streamed body so the conditional-GET funnel skips it
+  // (an unflushed stream cannot be hashed without buffering, which would
+  // defeat streaming). The marker is internal and stripped at the funnel
+  // before the response reaches the client. See conditional-get.js.
+  headers.set(STREAM_MARKER, '1');
 
   const stream = new ReadableStream({
     async start(controller) {
