@@ -20,6 +20,13 @@ bin/
                          is enforced here; --template validation rejects
                          anything else with a guidance message.
 lib/
+  node-preflight.js      Inline, DEPENDENCY-FREE Node-version guard (#238).
+                         `checkNodeInline(current, engines)` + `nodeInlineMessage`.
+                         The bin runs it BEFORE any `import @webjsdev/server`,
+                         because importing the server links dev.js (Node 24+
+                         builtins) and would itself link-fail on old Node. So the
+                         primary guard depends only on `process.versions.node`.
+                         Tests: `test/node-preflight/`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Prisma schema,

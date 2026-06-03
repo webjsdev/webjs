@@ -2,9 +2,35 @@
 import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
+
+// Node-version preflight (issue #238), INLINE and dependency-free.
+// This MUST run before any `import @webjsdev/server`: importing the server
+// package links `src/dev.js`, which references Node 24+ builtins, so on an old
+// Node that import would LINK-fail before any preflight inside the server
+// package could run. The primary guard is therefore `checkNodeInline` (from
+// `../lib/node-preflight.js`, which imports nothing), depending only on
+// `process.versions.node`. The richer `assertNodeVersion` import inside main()
+// stays as belt-and-suspenders for the link-ok (>= 22.13) cases.
+// `help` / no-arg is exempt so a user on an old Node can still read usage.
+if (cmd !== 'help' && cmd !== undefined) {
+  let engines = '>=24.0.0';
+  try {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(
+      readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+    );
+    engines = pkg?.engines?.node || engines;
+  } catch {}
+  const r = checkNodeInline(process.versions.node, engines);
+  if (!r.ok) {
+    console.error(nodeInlineMessage(r));
+    process.exit(1);
+  }
+}
 
 // Exactly three scaffolds exist. Keep this list as the single source of
 // truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
@@ -41,6 +67,15 @@ function flag(args, name, def) {
 }
 
 async function main() {
+  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // Run before any subcommand so an older Node fails fast with a clear,
+  // actionable message naming the found + required version, exiting non-zero
+  // instead of crashing cryptically later. `help` is exempt so a user on an
+  // old Node can still read usage.
+  if (cmd !== 'help' && cmd !== undefined) {
+    const { assertNodeVersion } = await import('@webjsdev/server');
+    assertNodeVersion({ onFail: 'exit' });
+  }
   switch (cmd) {
     case 'dev': {
       // If we're already inside the --watch child, start the server directly.

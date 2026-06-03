@@ -4,7 +4,16 @@ import { existsSync } from 'node:fs';
 import { digestHex } from './crypto-utils.js';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
-import { createRequire, stripTypeScriptTypes } from 'node:module';
+import { createRequire } from 'node:module';
+// Namespace import, NOT `import { stripTypeScriptTypes }`. On Node < 22.13 the
+// `stripTypeScriptTypes` named export does not exist, and a NAMED import of a
+// missing builtin export is a LINK-TIME SyntaxError that fires before any
+// module body runs, which would defeat the Node-version preflight (issue #238)
+// by crashing the import of @webjsdev/server itself. A namespace import links
+// on every Node (the property is just `undefined` at runtime on old Node), so
+// importing @webjsdev/server succeeds and `assertNodeVersion()` at the top of
+// createRequestHandler throws the clean "you need Node 24+" message instead.
+import * as nodeModule from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
@@ -57,6 +66,7 @@ import {
   hashFile,
 } from './actions.js';
 import { defaultLogger } from './logger.js';
+import { assertNodeVersion } from './node-version.js';
 import { withRequest, setCspNonce, setBodyLimits } from './context.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
@@ -287,6 +297,10 @@ export async function readServerTimeoutsFromApp(appDir) {
  * }} opts
  */
 export async function createRequestHandler(opts) {
+  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // Throw a clear Error here so an embedded host (Express/Fastify/Bun/Deno)
+  // gets the actionable message at boot, not a cryptic API failure mid-request.
+  assertNodeVersion({ onFail: 'throw' });
   const appDir = resolve(opts.appDir);
   // Load <appDir>/.env into process.env BEFORE anything else.
   // buildActionIndex below imports server-only files (lib/*.server.ts,
@@ -1622,7 +1636,7 @@ async function exists(p) {
  * @returns {Promise<string>}
  */
 async function stripTs(source, _abs) {
-  return stripTypeScriptTypes(source);
+  return nodeModule.stripTypeScriptTypes(source);
 }
 
 /**
