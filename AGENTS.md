@@ -235,6 +235,10 @@ middleware.js               root-level middleware (runs on every request)
 readiness.js                optional readiness check; default-exports an async
                             fn that /__webjs/ready runs once warm (return false
                             or throw = 503, to gate on live DB/dependency health)
+env.js                      optional boot-time env-var validation; default-exports
+                            a typed schema (or a validator function) that webjs
+                            runs against process.env at boot, failing fast with a
+                            clear message listing every missing/invalid var
 sitemap.js                  metadata route → /sitemap.xml
 robots.js                   metadata route → /robots.txt
 manifest.js                 metadata route → /manifest.json
@@ -490,6 +494,25 @@ Framework wraps the sibling page in `Suspense({ fallback: <loading>, children: <
 - Optional top-level + per-segment files. Default export `async (req, next) => Response`.
 - Return a Response to short-circuit (redirect, 401). Call `next()` then post-process to add headers, log, etc.
 - Per-segment middleware applies to its subtree, outermost → innermost.
+
+### Env validation (`env.{js,ts}`)
+
+- Optional file at the app root (sibling of `middleware.js` / `readiness.js`). Default-exports either a **schema object** or a **validator function**. The whole feature is opt-in: with no `env.{js,ts}`, nothing changes.
+- **Schema object.** Keys are env-var names; each value is a type name (`'string'`) or an options object. Supported types: `string`, `number`, `boolean`, `url`, `enum`. A field is **required by default**; `optional: true` or `required: false` or a `default` makes it absent-ok. String fields support `minLength` and `pattern` (RegExp or string); `enum` fields take `values`.
+
+  ```ts
+  // env.ts
+  export default {
+    DATABASE_URL: 'string',
+    AUTH_SECRET: { type: 'string', required: true, minLength: 16 },
+    PORT: { type: 'number', optional: true, default: 3000 },
+    NODE_ENV: { type: 'enum', values: ['development', 'production', 'test'] },
+  };
+  ```
+
+- **Function escape hatch.** Default-export `(env) => void`; a thrown Error becomes the boot failure. Use it to validate with zod or anything else without webjs depending on it.
+- **Runs at boot**, after `.env` is loaded into `process.env` and before any server-only module is imported. Coerced values (number / boolean) and applied defaults are written back to `process.env`, so the app reads the coerced value.
+- **Fails fast.** A validation failure throws a clear, aggregated Error naming EVERY missing / wrong-type / failed-constraint var at once. The CLI exits non-zero; an embedded host's `createRequestHandler` rejects. The server never comes up on a bad env.
 
 ### Server actions (`**/*.server.{js,ts}` + `'use server'`)
 

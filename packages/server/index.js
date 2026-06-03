@@ -1,5 +1,6 @@
 export { startServer, createRequestHandler } from './src/dev.js';
 export { assertNodeVersion, checkNodeVersion, requiredNodeMajor, parseMajor, parseRequiredMajor } from './src/node-version.js';
+export { validateEnv, formatEnvErrors, loadEnvSchema, applyEnvValidation } from './src/env-schema.js';
 export { buildRouteTable, matchPage, matchApi } from './src/router.js';
 export { ssrPage, ssrNotFound } from './src/ssr.js';
 export { handleApi } from './src/api.js';
