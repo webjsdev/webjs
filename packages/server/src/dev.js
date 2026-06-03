@@ -117,6 +117,7 @@ import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
+import { commitHtmlCache } from './html-cache.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -786,7 +787,7 @@ export async function createRequestHandler(opts) {
       // handlers, and `expose` headers (already on `res`) always win.
       // Applied to every served response (documents, assets, the core
       // runtime, probes), since the defaults are universally safe.
-      const merged = applySecurityHeaders(res, {
+      let merged = applySecurityHeaders(res, {
         pathname,
         https: webRequestIsHttps(req),
         prod: !dev,
@@ -816,6 +817,17 @@ export async function createRequestHandler(opts) {
           /* a malformed policy must not take the request down: serve without CSP */
         }
       }
+
+      // Server HTML cache write (#241): if the SSR marked this response as a
+      // cache candidate (an opted-in `revalidate` page), store the FINAL body
+      // now, after segment middleware has added any per-user Set-Cookie (which
+      // the funnel's guard re-checks, so a per-user response is not cached) and
+      // before conditional-GET can swap it for a bodiless 304. The marker is
+      // stripped here regardless. Best-effort: a store failure is swallowed.
+      try {
+        const reqUrl = new URL(req.url);
+        merged = await commitHtmlCache(req, merged, reqUrl);
+      } catch { /* never let the cache write crash the response */ }
 
       // Conditional GET (RFC 7232, issue #240): attach a content-hash ETag to
       // a cacheable response missing one, and turn a matching If-None-Match
@@ -919,7 +931,7 @@ export async function createRequestHandler(opts) {
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
-      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError });
+      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, cspEnabled: cspConfig.enabled });
       if (state.middleware) {
         try {
           return await state.middleware(req, next);
@@ -1242,7 +1254,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
 }
 
 async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError } = ctx;
+  const { state, appDir, coreDir, dev, reportError, cspEnabled } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -1449,6 +1461,11 @@ async function handleCore(req, ctx) {
         elidableComponents: state.elidableComponents,
         inertRouteModules: state.inertRouteModules,
         notFoundFile: state.routeTable.notFound,
+        // Server HTML cache (#241): a CSP-enabled page emits a fresh
+        // per-request nonce into its body, so its bytes vary per request and
+        // it must never be HTML-cached. Pass the flag so the cache guard skips
+        // it. CSP is off by default, so the common case stays cacheable.
+        cspEnabled,
         // onError sink (issue #239): a page render error that becomes a 500 is
         // reported to the APM hook with the active request's correlation id.
         onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,

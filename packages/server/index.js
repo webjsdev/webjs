@@ -40,6 +40,7 @@ export { rateLimit, parseWindow, clientIp, stampRemoteIp } from './src/rate-limi
 export { cors, resolveOrigin, applyCorsHeaders } from './src/cors.js';
 export { memoryStore, redisStore, getStore, setStore } from './src/cache.js';
 export { cache } from './src/cache-fn.js';
+export { revalidatePath, revalidateAll } from './src/html-cache.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';
 export { broadcast } from './src/broadcast.js';
 export { json, readBody } from './src/json.js';

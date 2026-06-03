@@ -6,6 +6,11 @@ import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
+import {
+  readRevalidate,
+  readHtmlCache,
+  HTML_CACHE_MARKER,
+} from './html-cache.js';
 
 /**
  * SSR a matched page route to a Response.
@@ -21,10 +26,43 @@ import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
  * @param {import('./router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown> }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('./module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean }} opts
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
+  // Server HTML response cache (ISR for no-build, #241). OPT-IN: only a page
+  // that declares `export const revalidate = N` is ever cached (the page
+  // module export is the single trigger). The page module is loaded ONCE up
+  // front to read that window
+  // and is threaded back through `opts.pageModule` so renderChain reuses the
+  // same evaluation (no double-load). A cache HIT serves the stored HTML
+  // without re-running the page function. Skipped entirely (no opt-in read,
+  // no double behaviour) for the page-action re-render (actionData / a non-200
+  // status) and for a partial-nav request (X-Webjs-Have), whose bytes depend
+  // on the request and must not be shared under the full-URL key.
+  const cacheEligible =
+    !opts.actionData &&
+    !opts.status &&
+    !opts.pageModule &&
+    !(opts.req && opts.req.headers.get('x-webjs-have'));
+  let revalidateSeconds = null;
+  if (cacheEligible) {
+    try {
+      const pageMod = await loadModule(route.file, opts.dev);
+      opts = { ...opts, pageModule: pageMod };
+      revalidateSeconds = readRevalidate(pageMod);
+      if (revalidateSeconds !== null) {
+        const hit = await readHtmlCache(url);
+        if (hit) return cachedHtmlResponse(hit, opts.req, url);
+      }
+    } catch {
+      // A load / store failure falls through to a normal fresh render: the
+      // cache is an optimization, never a correctness dependency. Leave
+      // revalidateSeconds as read so the write path still applies when the
+      // page loaded but only the store lookup failed.
+    }
+  }
+
   const ctx = {
     params,
     searchParams: Object.fromEntries(url.searchParams.entries()),
@@ -104,7 +142,7 @@ export async function ssrPage(route, params, url, opts) {
     // shell. Either way the returned `prefix` ends just past the open <body>
     // and `closer` is the matching `</body></html>`.
     const { prefix, streamBody, closer } = buildDocumentParts(body, wrapOpts);
-    return streamingHtmlResponse(
+    const res = streamingHtmlResponse(
       prefix,
       streamBody,
       closer,
@@ -118,6 +156,17 @@ export async function ssrPage(route, params, url, opts) {
       metadata,
       nonce,
     );
+    // Server HTML cache write (#241). The page opted in via `revalidate`, so
+    // FLAG this candidate for the response funnel rather than writing here: the
+    // store decision must see the FINAL response (after segment middleware,
+    // which may append a per-user Set-Cookie this code can't see yet). The
+    // funnel re-checks every guard via isCacheableResponse, writes the cache,
+    // and strips this internal marker. The CSP guard is decided here (the SSR
+    // side knows whether a nonce was stamped into the body).
+    if (revalidateSeconds !== null && !opts.cspEnabled) {
+      res.headers.set(HTML_CACHE_MARKER, String(revalidateSeconds));
+    }
+    return res;
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);
@@ -210,6 +259,33 @@ function htmlResponse(html, status, req, url, metadata) {
   // never ETagged. See conditional-get.js.
   headers.set(BUFFERED_MARKER, '1');
   return new Response(html, { status, headers });
+}
+
+/**
+ * Rebuild a Response from a cached HTML record (#241). The stored body is
+ * the stable per-page HTML; the per-response varying bits are re-minted
+ * here so a new visitor still gets them: the CSRF cookie is freshly issued
+ * when the request lacks one (it is a Set-Cookie header, never part of the
+ * cached body), and the published build id is re-read so a post-deploy
+ * client sees the current id. The BUFFERED marker opts the cached body into
+ * the conditional-GET funnel exactly as a fresh render does, so a cached
+ * PUBLIC-cacheable page still 304s. Output is observably identical to the
+ * fresh render of the same route within the window.
+ *
+ * @param {{ body: string, contentType: string, cacheControl: string, status: number }} rec
+ * @param {Request | undefined} req
+ * @param {URL | undefined} url
+ */
+function cachedHtmlResponse(rec, req, url) {
+  const headers = new Headers({ 'content-type': rec.contentType });
+  headers.set('cache-control', rec.cacheControl);
+  headers.set('x-webjs-build', publishedBuildId());
+  if (req && !readToken(req)) {
+    const secure = url ? url.protocol === 'https:' : false;
+    headers.append('set-cookie', cookieHeader(newToken(), { secure }));
+  }
+  headers.set(BUFFERED_MARKER, '1');
+  return new Response(rec.body, { status: rec.status, headers });
 }
 
 /* ------------ internals ------------ */

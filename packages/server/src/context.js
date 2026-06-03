@@ -27,7 +27,15 @@ import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
  * stamp it on its own logs / outbound calls, and the framework includes it in
  * the access log, the error log, and the `X-Request-Id` response header.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string }} Store
+ * `dynamicAccess` is set the moment the render reads per-user request state
+ * through a framework helper (`cookies()`, `headers()`, `getSession()`),
+ * mirroring Next.js auto-marking a route dynamic on a `cookies()` / `headers()`
+ * read (#241). The server HTML cache reads it at commit time and REFUSES to
+ * cache a page that opted into `revalidate` but actually varies per user, so a
+ * wrong `revalidate` on a cookie-reading page fails safe (uncached) instead of
+ * leaking one visitor's view to another.
+ *
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -115,6 +123,30 @@ export function requestId() {
 }
 
 /**
+ * Mark the in-flight request as having read per-user state (issue #241). The
+ * framework's request-state readers (`cookies()`, `headers()`, `getSession()`)
+ * call this, so the server HTML cache can tell at commit time that the render
+ * actually depends on the visitor and refuse to cache it even when the page
+ * declared `revalidate`. A no-op outside a request scope.
+ */
+export function markDynamicAccess() {
+  const store = als.getStore();
+  if (store) store.dynamicAccess = true;
+}
+
+/**
+ * True when the in-flight render read per-user request state via a framework
+ * helper (issue #241). Read by the server HTML cache's commit step to fail
+ * safe (do not cache) on a per-user page that wrongly set `revalidate`.
+ * Returns false outside a request scope.
+ *
+ * @returns {boolean}
+ */
+export function dynamicAccessed() {
+  return als.getStore()?.dynamicAccess === true;
+}
+
+/**
  * Server-only implementation of the CSP nonce reader. Returns the
  * per-request nonce that the handler MINTED and stored (issue #233) when
  * CSP is enabled. Falls back to parsing an INBOUND
@@ -158,6 +190,10 @@ export { cspNonce };
 export function headers() {
   const req = getRequest();
   if (!req) throw new Error('headers(): called outside a request scope');
+  // Reading request headers makes the render per-user (an Authorization /
+  // Accept-Language / Cookie read varies the output), so mark the request
+  // dynamic so the HTML cache excludes it even under `revalidate` (#241).
+  markDynamicAccess();
   return req.headers;
 }
 
@@ -172,6 +208,10 @@ export function headers() {
 export function cookies() {
   const req = getRequest();
   if (!req) throw new Error('cookies(): called outside a request scope');
+  // Reading cookies makes the render per-user (a logged-in vs logged-out body
+  // keys off an auth cookie), so mark the request dynamic so the HTML cache
+  // excludes it even under `revalidate`, the core leak defense (#241).
+  markDynamicAccess();
   const map = parseCookies(req);
   return {
     get: (name) => map[name],
