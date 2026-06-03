@@ -8,7 +8,8 @@
  */
 
 import { getStore } from './cache.js';
-import { getRequest } from './context.js';
+import { getRequest, getBodyLimits } from './context.js';
+import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -409,10 +410,24 @@ export function createAuth(config) {
       const provider = providers.get(seg[1]);
       if (!provider) return new Response('Unknown provider', { status: 404 });
       if (provider.type === 'credentials') {
+        // Bounded body read (issue #237): the credentials sign-in endpoint is
+        // public and unauthenticated, so cap its body to defend against
+        // memory exhaustion. Credentials are small fixed-shape JSON / form
+        // data, so the JSON / RPC limit applies. An over-limit body is a 413
+        // before any parse, and is never buffered whole (see body-limit.js).
+        const limits = getBodyLimits();
+        const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
         let body = {};
         const ct = req.headers.get('content-type') || '';
-        if (ct.includes('json')) body = await req.json();
-        else if (ct.includes('form')) { const fd = await req.formData(); for (const [k, v] of fd.entries()) body[k] = v; }
+        if (ct.includes('json')) {
+          const { tooLarge, text } = await readTextBounded(req, limit);
+          if (tooLarge) return payloadTooLarge();
+          body = text ? JSON.parse(text) : {};
+        } else if (ct.includes('form')) {
+          const { tooLarge, formData } = await readFormDataBounded(req, limit);
+          if (tooLarge) return payloadTooLarge();
+          for (const [k, v] of formData.entries()) body[k] = v;
+        }
         return signInFn('credentials', body, { req });
       }
       if (provider.type === 'oauth') return oauthRedirect(provider, { req });
