@@ -37,7 +37,7 @@ export default function NoBuild() {
       <li>Server receives the request. Reads the file from disk.</li>
       <li>If the file is <code>.ts</code> / <code>.mts</code>, runs Node 24+'s built-in <code>module.stripTypeScriptTypes</code>. This is whitespace replacement: every <code>(line, column)</code> in the source maps to the same position in the output, so no sourcemap is needed and stack traces are byte-exact. Only erasable TypeScript is supported. <code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators, and <code>import = require</code> fail at strip time and the dev server returns a 500 naming the file. The scaffolded <code>tsconfig.json</code> turns on <code>erasableSyntaxOnly: true</code> by default so the compiler rejects these in your own code at edit time. Almost no npm package ships <code>.ts</code> source anyway: published packages compile to <code>.js</code> with sidecar <code>.d.ts</code> type files, which the runtime serves as plain JavaScript with no transform.</li>
       <li>Result is cached in memory keyed by <code>(absolute path, mtime)</code>. A file edit invalidates naturally.</li>
-      <li>Response is served as <code>application/javascript</code> with appropriate cache headers (no-cache in dev, ETag + 1h max-age in prod).</li>
+      <li>Response is served as <code>application/javascript</code> with appropriate cache headers. In dev: <code>no-cache</code> (always revalidate, so an edit shows up immediately). In prod: a request that carries the content-hash <code>?v=&lt;digest&gt;</code> query the framework emits (see below) is served <code>public, max-age=31536000, immutable</code>; a bare un-fingerprinted request falls back to <code>public, max-age=3600</code>. Either way a weak ETag rides along for conditional GET.</li>
       <li>Browser executes the module, encounters its imports, repeat from step 1 for each.</li>
     </ol>
 
@@ -152,11 +152,12 @@ $ webjs vendor update</pre>
     <h2>Granular cache invalidation</h2>
     <p>The killer feature of the no-build model is what happens between two deploys. With a bundler, edit one component and the entire bundle's content hash changes, so every user re-downloads everything. With per-file ESM:</p>
     <ul>
-      <li>The file you edited has new content. Its URL stays the same; the ETag changes.</li>
-      <li>Every other file in your app is byte-identical to the previous deploy. The browser's HTTP cache validates with a 304 and serves the cached copy.</li>
-      <li>npm package URLs (jspm.io URLs include <code>@&lt;version&gt;</code>) change only when you bump the package, so browser caches invalidate automatically on version bump. Older versions stay cached for users who haven't visited since.</li>
+      <li>In prod the framework appends a per-file content hash to every same-origin asset URL it emits (the importmap targets, the <code>&lt;link rel="modulepreload"&gt;</code> hrefs, the boot module specifiers) as a <code>?v=&lt;digest&gt;</code> query, computed at serve time from the file bytes. A fingerprinted URL is served <code>public, max-age=31536000, immutable</code>, so the browser / CDN holds it for a year without revalidating.</li>
+      <li>The file you edited has new bytes, so its digest changes, so its emitted URL changes, so a returning client fetches the new URL instead of serving the stale immutable copy. This is what makes <code>immutable</code> safe with no build step: the hash IS the version. The framework's own <code>@webjsdev/core</code> runtime is fingerprinted too, which fixes the exact regression an un-versioned <code>immutable</code> would cause (a year-pinned old core renderer running against a server emitting the new SSR shape after a version bump).</li>
+      <li>Every other file is byte-identical to the previous deploy, so its digest (and URL) is unchanged and the browser serves the cached copy with no request at all.</li>
+      <li>npm package URLs (jspm.io URLs include <code>@&lt;version&gt;</code>) change only when you bump the package, so browser caches invalidate automatically on version bump. A cross-origin vendor URL is NEVER fingerprinted (jspm already versions it; #235's SRI integrity is keyed by the un-hashed URL).</li>
     </ul>
-    <p>Result: a typo fix in one component re-downloads exactly one file. A dependency upgrade re-downloads exactly one vendor bundle. A full deploy that touches two components costs two file downloads, not a megabyte of cache-busted bundle.</p>
+    <p>Result: a typo fix in one component re-downloads exactly one file. A dependency upgrade re-downloads exactly one vendor bundle. A full deploy that touches two components costs two file downloads, not a megabyte of cache-busted bundle. Dev is unaffected: <code>webjs dev</code> emits no <code>?v</code> and serves every module <code>no-cache</code> so an edit shows up immediately.</p>
 
     <h2>HTTP/2 at the edge</h2>
     <p>Per-file ESM is competitive with bundling only over HTTP/2 (or HTTP/3). On HTTP/1.1 the browser limits concurrent connections per origin to six, so a hundred-file page serializes into sixteen waves. On HTTP/2 the same hundred files multiplex over one TCP connection, with header compression amortizing the per-request overhead.</p>
@@ -171,7 +172,7 @@ $ webjs vendor update</pre>
         <tr><td>TS stripping</td><td>Same: <code>module.stripTypeScriptTypes</code></td><td>Same</td></tr>
         <tr><td>Mtime cache</td><td>Cleared on file change via <code>fs.watch</code></td><td>Persists for process lifetime</td></tr>
         <tr><td>Vendor resolution</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request (re-resolved after rebuild). Never at boot.</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request, once. Never at boot.</td></tr>
-        <tr><td>Cache-Control</td><td><code>no-cache</code></td><td><code>max-age=3600</code> (source), <code>immutable</code> (<code>--download</code> bundles); jspm.io controls headers for direct CDN fetches</td></tr>
+        <tr><td>Cache-Control</td><td><code>no-cache</code></td><td><code>max-age=31536000, immutable</code> for a content-hashed <code>?v=&lt;digest&gt;</code> URL (the form the framework emits) and for <code>--download</code> bundles; <code>max-age=3600</code> for a bare un-fingerprinted request; jspm.io controls headers for direct CDN fetches</td></tr>
         <tr><td>103 Early Hints</td><td>Disabled (stale URL risk)</td><td>Enabled</td></tr>
         <tr><td>Compression</td><td>Off</td><td>Brotli/Gzip negotiated</td></tr>
         <tr><td>Live reload</td><td>SSE-driven full page reload</td><td>n/a</td></tr>

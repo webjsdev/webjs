@@ -99,6 +99,71 @@ Content-hashed cache-busting and granular cache invalidation come from
 the same per-file model: edit one file, only that file's URL hash
 changes, only that one re-downloads.
 
+## Content-hash asset caching: `?v=<digest>` immutable URLs (prod) (#243)
+
+In PRODUCTION the framework appends a per-file content hash to every
+SAME-ORIGIN asset URL it emits (the importmap targets, the
+`<link rel="modulepreload">` hrefs, the boot script's module specifiers).
+The hash is a short prefix of a sha-256 over the file's BYTES, computed at
+serve time (no build step) and memoized. A request whose URL carries that
+`?v=<digest>` query is served `Cache-Control: public, max-age=31536000,
+immutable` instead of the 1-hour fallback, so a browser / CDN holds it for
+a year without revalidating.
+
+This is safe precisely because the hash IS the version: a deploy that
+changes a module's bytes changes its hash, so its emitted URL changes, so a
+returning client fetches the NEW URL rather than serving a stale immutable
+copy. The framework's own `@webjsdev/core` runtime (`/__webjs/core/*`) is
+fingerprinted too, which fixes the exact regression an un-versioned
+`immutable` would otherwise cause (a year-pinned old core renderer running
+against a server emitting the new SSR shape after a version bump).
+
+- **Per-file digest, not the build id.** The importmap build id
+  (`data-webjs-build`) does not change on an app-module byte change, so it
+  cannot be the per-asset fingerprint; each file carries its own hash.
+- **Cross-origin URLs are NEVER fingerprinted.** A `https://ga.jspm.io/...`
+  vendor target keeps its exact URL: jspm already versions it, and #235's
+  SRI integrity is keyed by the un-hashed cross-origin URL. A downloaded
+  `/__webjs/vendor/<pkg>@<ver>.js` bundle is already version-named, so it is
+  left unchanged too.
+- **Composes with `webjs.basePath` (#256).** A sub-path deploy emits
+  `<basePath>/app/foo.js?v=<digest>`: the base path is prefixed first, the
+  `?v` query appended after, and the ingress base-path strip never touches a
+  query.
+- **DEV is byte-identical to before.** Fingerprinting is enabled only in
+  `webjs start` (prod). `webjs dev` emits no `?v` and serves every module
+  `no-cache`, so the dev wire is unchanged.
+- **Un-fingerprinted requests keep the 1-hour fallback.** Only the presence
+  of a `?v` query flips the cache header; a hand-typed bare URL still
+  resolves and serves `public, max-age=3600`.
+
+## Connection-warming hints: `preconnect` / `dnsPrefetch` + auto vendor preconnect (#243)
+
+A page can warm a cross-origin connection it is about to use (an API host,
+a font / image CDN) by declaring it in `metadata`:
+
+```ts
+export const metadata = {
+  preconnect: ['https://api.example.com', { url: 'https://fonts.gstatic.com', crossorigin: true }],
+  dnsPrefetch: 'https://analytics.example.com',
+};
+```
+
+Each emits a head hint: `<link rel="preconnect" href="..." [crossorigin]>`
+(warms DNS + TLS + TCP) and `<link rel="dns-prefetch" href="...">` (DNS
+only). Each field takes a URL string, `{ url, crossorigin? }`, or an array;
+hrefs are HTML-escaped. See `agent-docs/metadata.md`.
+
+**Auto vendor preconnect.** For an UNPINNED app resolving vendors live from
+a cross-origin CDN, the framework auto-emits ONE
+`<link rel="preconnect" href="<cdn-origin>" crossorigin>` (the resolved
+vendor CDN origin, e.g. `https://ga.jspm.io`, derived from the importmap, so
+a `--from jsdelivr` app preconnects to jsdelivr) so the browser warms that
+connection before the importmap resolves. It is DEDUPED against an
+author-declared preconnect to the same origin, and emits NOTHING for a
+same-origin pinned app (vendors served from the app's own origin) or an app
+with no cross-origin vendors.
+
 
 ## Rate limiting via `rateLimit()`
 

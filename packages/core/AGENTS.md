@@ -60,7 +60,9 @@ export.
 **Type-only exports.** `index.d.ts` (the overlay) re-exports the
 type-only public surface alongside the runtime exports. The component
 typing lives in `src/component.d.ts`; the page-metadata typing
-(`Metadata`, `MetadataContext`, and the nested shapes) lives in
+(`Metadata`, `MetadataContext`, and the nested shapes, including
+`PreconnectHint` for the `metadata.preconnect` / `metadata.dnsPrefetch`
+connection-warming hints, #243) lives in
 `src/metadata.d.ts`; the typed page / layout / route-handler props plus the
 opt-in route union (`PageProps`, `LayoutProps`, `RouteHandlerContext`, `Route`,
 `RouteParams`, and the `WebjsRoutes` / `RouteParamMap` augmentation targets,

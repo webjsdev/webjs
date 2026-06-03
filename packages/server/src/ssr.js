@@ -1,8 +1,9 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins } from './importmap.js';
 import { withBasePath } from './base-path.js';
+import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
@@ -786,8 +787,14 @@ function wrapHead(opts) {
   // (read from importmap.js's module state), the same value the importmap
   // targets were prefixed with, so the boot specifiers and the map agree.
   const bp = basePath();
+  // Content-hash asset URLs (issue #243): after base-path-prefixing, append
+  // `?v=<hash>` to a same-origin module specifier for immutable caching. A
+  // no-op in dev (so the boot script is byte-identical) and for a bare/
+  // cross-origin specifier; same compose order as the importmap targets
+  // (basePath then `?v`).
+  const fp = (u) => withAssetHash(withBasePath(u, bp), bp);
   const imports = opts.moduleUrls
-    .map((u) => `import ${jsonForScriptTag(withBasePath(u, bp))};`)
+    .map((u) => `import ${jsonForScriptTag(fp(u))};`)
     .join('\n');
   const rawLazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
     ? opts.lazyComponents
@@ -795,9 +802,14 @@ function wrapHead(opts) {
   // The lazy map's values are same-origin module URLs `observeLazy` will
   // dynamically import, so prefix them with the base path too (no-op when
   // empty).
-  const lazyEntries = rawLazyEntries && bp
+  // The lazy map's values are same-origin module URLs `observeLazy` will
+  // dynamically import, so base-path-prefix AND content-hash them (#243), the
+  // same as the eager boot specifiers. `fp` is a pure no-op in dev and at the
+  // root mount with fingerprinting off, so the mapped map equals the raw one
+  // byte-for-byte there; only prod fingerprinting / a sub-path mount changes it.
+  const lazyEntries = rawLazyEntries
     ? Object.fromEntries(
-        Object.entries(rawLazyEntries).map(([tag, u]) => [tag, withBasePath(u, bp)]),
+        Object.entries(rawLazyEntries).map(([tag, u]) => [tag, fp(u)]),
       )
     : rawLazyEntries;
   const lazyBoot = lazyEntries
@@ -1102,16 +1114,20 @@ function wrapHead(opts) {
   // decided on the ORIGINAL url, so the integrity lookup still keys on the
   // unprefixed map url and a cross-origin CDN url (never prefixed) keeps its
   // crossorigin attribute.
-  const bpPreload = basePath();
+  // Content-hash (#243): the href additionally gets a `?v=<hash>` after the
+  // base-path prefix (a no-op in dev / for a cross-origin url), but
+  // `crossorigin` / `integrity` are still decided on the ORIGINAL url, so the
+  // integrity lookup keys on the unprefixed/unhashed map url and a cross-origin
+  // CDN url (never prefixed, never hashed) keeps its crossorigin attribute.
   for (const url of opts.moduleUrls) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(withBasePath(url, bpPreload))}"` +
+      `<link rel="modulepreload" href="${escapeAttr(fp(url))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
   for (const url of opts.preloads || []) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(withBasePath(url, bpPreload))}"` +
+      `<link rel="modulepreload" href="${escapeAttr(fp(url))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
@@ -1123,6 +1139,58 @@ function wrapHead(opts) {
         .join(' ');
       linkTags.push(`<link rel="preload" ${attrs}>`);
     }
+  }
+
+  // preconnect / dns-prefetch hints (issue #243). `metadata.preconnect` and
+  // `metadata.dnsPrefetch` each take a URL string, `{ url, crossorigin? }`, or
+  // an array of those. A preconnect warms DNS + TLS + TCP; dns-prefetch only
+  // resolves DNS (no crossorigin). The framework ALSO auto-emits ONE preconnect
+  // to the resolved vendor CDN origin for an unpinned cross-origin app, so the
+  // browser warms that connection before the importmap resolves. The author's
+  // declared origins are tracked so the auto one is not a duplicate.
+  /** @type {Set<string>} the origins the author already declared a preconnect to */
+  const declaredPreconnectOrigins = new Set();
+  /** @param {unknown} hint @returns {{ url: string, crossorigin?: string|boolean } | null} */
+  const normalizeHint = (hint) => {
+    if (typeof hint === 'string') return hint ? { url: hint } : null;
+    if (hint && typeof hint === 'object' && typeof (/** @type {any} */ (hint).url) === 'string') {
+      return /** @type {any} */ (hint);
+    }
+    return null;
+  };
+  /** @param {unknown} value @returns {Array<{ url: string, crossorigin?: string|boolean }>} */
+  const toHints = (value) => {
+    if (value == null) return [];
+    const list = Array.isArray(value) ? value : [value];
+    const out = [];
+    for (const h of list) {
+      const n = normalizeHint(h);
+      if (n) out.push(n);
+    }
+    return out;
+  };
+  /** @param {string|boolean|undefined} co @returns {string} */
+  const crossoriginAttr = (co) => {
+    if (co === undefined || co === false) return '';
+    if (co === true || co === '') return ' crossorigin';
+    return ` crossorigin="${escapeAttr(String(co))}"`;
+  };
+  for (const h of toHints(m.preconnect)) {
+    try { declaredPreconnectOrigins.add(new URL(h.url).origin); } catch { /* relative / opaque; track by raw href instead */ declaredPreconnectOrigins.add(h.url); }
+    linkTags.push(`<link rel="preconnect" href="${escapeAttr(h.url)}"${crossoriginAttr(h.crossorigin)}>`);
+  }
+  for (const h of toHints(m.dnsPrefetch)) {
+    // dns-prefetch never carries crossorigin (it only resolves DNS).
+    linkTags.push(`<link rel="dns-prefetch" href="${escapeAttr(h.url)}">`);
+  }
+  // Auto vendor preconnect: warm the cross-origin vendor CDN connection for an
+  // unpinned app. Deduped against an author-declared preconnect to the same
+  // origin; emits none for a same-origin pinned app or one with no cross-origin
+  // vendors (vendorPreconnectOrigins returns []). crossorigin is required (the
+  // importmap fetches the module as a CORS request).
+  for (const origin of vendorPreconnectOrigins()) {
+    if (declaredPreconnectOrigins.has(origin)) continue;
+    linkTags.push(`<link rel="preconnect" href="${escapeAttr(origin)}" crossorigin>`);
   }
 
   // icons: { icon, apple, shortcut, other }. Each entry can be a string

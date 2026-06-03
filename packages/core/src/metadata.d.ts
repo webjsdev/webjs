@@ -152,6 +152,14 @@ export type AppleWebAppMetadata =
  */
 export type JsonLd = Record<string, unknown>;
 
+/**
+ * A `metadata.preconnect` / `metadata.dnsPrefetch` hint. A bare URL string,
+ * or an object form. `crossorigin` (preconnect only) emits the `crossorigin`
+ * attribute; `true` / `''` -> a bare `crossorigin`, a string -> its value
+ * (e.g. `'anonymous'`, `'use-credentials'`).
+ */
+export type PreconnectHint = string | { url: string; crossorigin?: string | boolean };
+
 /** A `metadata.preload` link descriptor (emitted as `<link rel="preload">`). */
 export interface PreloadDescriptor {
   href: MetadataUrl;
@@ -246,6 +254,23 @@ export interface Metadata {
   cacheControl?: string;
   /** `<link rel="preload">` hints (fonts, images, etc.). */
   preload?: PreloadDescriptor[];
+
+  /**
+   * `<link rel="preconnect">` hints: warm DNS + TLS + TCP to a cross-origin
+   * the page is about to talk to (an API host, a font / image CDN). Each
+   * entry is a URL string or `{ url, crossorigin? }` (a font CDN needs
+   * `crossorigin`). A single value or an array. webjs ALSO auto-emits one
+   * preconnect to the resolved vendor CDN origin for an unpinned app (deduped
+   * against an author-declared one).
+   */
+  preconnect?: PreconnectHint | PreconnectHint[];
+
+  /**
+   * `<link rel="dns-prefetch">` hints: resolve a cross-origin's DNS ahead of
+   * use (a lighter-weight precursor to `preconnect`). A URL string,
+   * `{ url }`, or an array.
+   */
+  dnsPrefetch?: PreconnectHint | PreconnectHint[];
 
   /**
    * JSON-LD structured data (schema.org), emitted as one or more

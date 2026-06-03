@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { withBasePath } from './base-path.js';
+import { withAssetHash } from './asset-hash.js';
 
 // Local attribute escaper. Matches ssr.js's escapeAttr (the source
 // of truth for HTML attribute escaping in this package). Kept inline
@@ -53,7 +54,7 @@ let _basePath = '';
  */
 export async function setBasePath(basePath) {
   _basePath = basePath || '';
-  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
 /**
@@ -87,7 +88,7 @@ let _vendorIntegrity = {};
 export async function setVendorEntries(entries, integrity) {
   _extraEntries = entries;
   _vendorIntegrity = integrity || {};
-  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
 /**
@@ -228,7 +229,7 @@ let _coreEntries = {
  */
 export async function setCoreInstall(coreDir, distMode) {
   _coreEntries = buildCoreEntries(coreDir, !!distMode);
-  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap()));
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
 /**
@@ -319,7 +320,21 @@ export function buildCoreEntries(coreDir, distMode) {
   return out;
 }
 
-export function buildImportMap() {
+/**
+ * Build the import map object.
+ *
+ * @param {{ fingerprint?: boolean }} [opts]  When `fingerprint` is true (the
+ *   default, used by the SERVED map in `importMapTag`), same-origin targets
+ *   get a `?v=<content-hash>` suffix for immutable caching (issue #243); a
+ *   cross-origin CDN target is left untouched (`withAssetHash` skips it, so
+ *   its SRI key is unchanged). When false (used by the internal
+ *   `importMapHash()` computation), no `?v` is appended, so the published
+ *   build id stays a STABLE deploy fingerprint independent of per-file
+ *   content hashes (the build id only needs to be stable within a deploy).
+ *   In dev, `withAssetHash` is a no-op regardless, so both forms are equal.
+ */
+export function buildImportMap(opts = {}) {
+  const fingerprint = opts.fingerprint !== false;
   const merged = {
     ..._coreEntries,
     ..._extraEntries,
@@ -333,11 +348,18 @@ export function buildImportMap() {
   /** @type {Record<string, string>} */
   const imports = {};
   // Prefix every same-origin absolute target with the sub-path base
-  // (issue #256). `withBasePath` is a no-op when the base path is empty
-  // (so a root-mounted app's map is byte-identical) and leaves a
-  // cross-origin `https://` CDN vendor target untouched (only the
-  // framework's own `/__webjs/*` and same-origin vendor targets move).
-  for (const k of Object.keys(merged).sort()) imports[k] = withBasePath(merged[k], _basePath);
+  // (issue #256), THEN (issue #243) append `?v=<content-hash>` to a
+  // same-origin target for immutable caching. The order is basePath then
+  // `?v`, so a sub-path app emits `<basePath>/app/foo.js?v=hash`.
+  // `withBasePath` is a no-op when the base path is empty and leaves a
+  // cross-origin `https://` CDN vendor target untouched; `withAssetHash`
+  // is a no-op in dev / when disabled and also leaves a cross-origin target
+  // untouched (only the framework's own `/__webjs/*` core + same-origin
+  // app/public targets get a `?v`).
+  for (const k of Object.keys(merged).sort()) {
+    const based = withBasePath(merged[k], _basePath);
+    imports[k] = fingerprint ? withAssetHash(based, _basePath) : based;
+  }
 
   // Emit `integrity` per the importmap-integrity spec (Chrome 132+,
   // Safari 18.4+, Firefox flagged). Browsers without support ignore
@@ -364,6 +386,43 @@ export function buildImportMap() {
     out.integrity = integrity;
   }
   return out;
+}
+
+/**
+ * Derive the cross-origin vendor CDN origins from the resolved vendor
+ * importmap, most-common first (issue #243, auto vendor preconnect). For an
+ * UNPINNED app resolving vendors live from a cross-origin CDN (ga.jspm.io,
+ * or jsdelivr / unpkg / skypack with `--from`), this returns that origin so
+ * the head can warm DNS + TLS + TCP before the importmap resolves. A
+ * same-origin PINNED app (vendors served from `/__webjs/vendor/*` on the
+ * app's own origin), or an app with no cross-origin vendors, returns `[]`.
+ *
+ * Derived from the resolved targets (`_extraEntries`, the vendor map), NOT a
+ * hardcoded string, so a `--from jsdelivr` app preconnects to jsdelivr. The
+ * origins are deduped + sorted by frequency (the primary CDN first) and the
+ * list is bounded so a map spanning several CDNs cannot emit an unbounded
+ * preconnect set.
+ *
+ * @param {number} [max]  cap on the number of origins returned (default 2)
+ * @returns {string[]}  e.g. `['https://ga.jspm.io']`
+ */
+export function vendorPreconnectOrigins(max = 2) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const target of Object.values(_extraEntries)) {
+    if (typeof target !== 'string') continue;
+    // Only an absolute `scheme://host` cross-origin url has an origin to
+    // preconnect. A same-origin `/__webjs/vendor/*` (downloaded-pin) target
+    // is `/`-rooted and skipped (no cross-origin to warm).
+    if (!/^https?:\/\//i.test(target)) continue;
+    let origin;
+    try { origin = new URL(target).origin; } catch { continue; }
+    counts.set(origin, (counts.get(origin) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, Math.max(0, max))
+    .map(([origin]) => origin);
 }
 
 /**
