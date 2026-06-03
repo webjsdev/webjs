@@ -1381,6 +1381,13 @@ const INTEGRITY_FETCH_TIMEOUT_MS = 10_000;
 // vendor.js (the jspm resolve is per-package but the network is the shared
 // constraint).
 const INTEGRITY_FETCH_CONCURRENCY = 6;
+// Total wall-clock budget for the whole live-integrity hashing phase. It runs
+// inside the readiness-gating warmup, so even a CDN that serves the importmap
+// then hangs on every bundle GET must not stall the first request for the sum
+// of per-fetch timeouts. Once the budget passes, the remaining URLs are left
+// without integrity (the same fail-open fallback as a fetch failure) instead of
+// waiting out a 10s timeout each. A healthy CDN finishes in well under this.
+const INTEGRITY_TOTAL_BUDGET_MS = 15_000;
 
 /**
  * Fetch a single cross-origin URL with a bounded timeout and return its
@@ -1445,8 +1452,11 @@ async function computeLiveIntegrity(imports) {
 
   const failed = [];
   let next = 0;
+  const deadline = Date.now() + INTEGRITY_TOTAL_BUDGET_MS;
   async function worker() {
-    while (next < urls.length) {
+    // Stop claiming new URLs once the total budget passes; a URL already
+    // in flight still settles under its own per-fetch timeout.
+    while (next < urls.length && Date.now() < deadline) {
       const url = urls[next++];
       const sri = await fetchLiveIntegrity(url);
       if (sri) integrity[url] = sri;
@@ -1455,6 +1465,9 @@ async function computeLiveIntegrity(imports) {
   }
   const workerCount = Math.min(INTEGRITY_FETCH_CONCURRENCY, urls.length);
   await Promise.all(Array.from({ length: workerCount }, worker));
+  // Any URL never claimed because the budget passed also fails open (served
+  // without integrity), the same outcome as a fetch failure.
+  while (next < urls.length) failed.push(urls[next++]);
 
   if (failed.length) {
     // One-time, count-based warning. The app still boots and the imports
@@ -1464,8 +1477,9 @@ async function computeLiveIntegrity(imports) {
     console.warn(
       `[webjs] could not compute SRI for ${failed.length} live-resolved ` +
       `vendor URL(s) (e.g. ${failed[0]}); they will load WITHOUT integrity. ` +
-      `This is a fail-open fallback for a CDN fetch failure; the app still ` +
-      `works. Run \`webjs vendor pin\` to lock in SRI hashes.`,
+      `This is a fail-open fallback for a CDN fetch failure or the warmup ` +
+      `time budget; the app still works. Run \`webjs vendor pin\` to lock in ` +
+      `SRI hashes.`,
     );
   }
   return integrity;
