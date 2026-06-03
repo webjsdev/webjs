@@ -60,4 +60,53 @@ suite('scroll-reveal', () => {
     await mount('<section id="plain">no reveal here</section>');
     assert.ok(!revealReady(), 'reveal-ready is not added when there is nothing to reveal');
   });
+
+  test('an out-of-view section is observed, then revealed when it intersects', async () => {
+    const realIO = window.IntersectionObserver;
+    let cb, opts;
+    const observed = new Set();
+    const unobserved = new Set();
+    window.IntersectionObserver = class {
+      constructor(c, o) { cb = c; opts = o; }
+      observe(el) { observed.add(el); }
+      unobserve(el) { unobserved.add(el); }
+      disconnect() {}
+    };
+    try {
+      // A tall spacer pushes the section below the viewport so it takes the
+      // IntersectionObserver branch instead of the synchronous in-view one.
+      host.innerHTML = '<div style="height:3000px"></div><section data-reveal id="io">io</section><scroll-reveal></scroll-reveal>';
+      await host.querySelector('scroll-reveal').updateComplete;
+      const el = document.getElementById('io');
+      assert.ok(observed.has(el), 'the out-of-view section is observed, not revealed synchronously');
+      assert.ok(!el.classList.contains('is-revealed'), 'it is not revealed before it intersects');
+      assert.ok(opts && typeof opts.threshold === 'number', 'the observer is configured with a threshold');
+      cb([{ target: el, isIntersecting: true }]);
+      assert.ok(el.classList.contains('is-revealed'), 'it is revealed when it intersects');
+      assert.ok(unobserved.has(el), 'it is unobserved once revealed');
+    } finally { window.IntersectionObserver = realIO; }
+  });
+
+  test('a non-intersecting entry keeps the section hidden (counterfactual)', async () => {
+    const realIO = window.IntersectionObserver;
+    let cb;
+    window.IntersectionObserver = class { constructor(c) { cb = c; } observe() {} unobserve() {} disconnect() {} };
+    try {
+      host.innerHTML = '<div style="height:3000px"></div><section data-reveal id="io2">io2</section><scroll-reveal></scroll-reveal>';
+      await host.querySelector('scroll-reveal').updateComplete;
+      cb([{ target: document.getElementById('io2'), isIntersecting: false }]);
+      assert.ok(!document.getElementById('io2').classList.contains('is-revealed'), 'stays hidden when not intersecting');
+    } finally { window.IntersectionObserver = realIO; }
+  });
+
+  test('under prefers-reduced-motion nothing is gated (no reveal-ready, content stays visible)', async () => {
+    const realMM = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /reduce/.test(q), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } });
+    try {
+      host.innerHTML = '<section data-reveal id="rm">rm</section><scroll-reveal></scroll-reveal>';
+      await host.querySelector('scroll-reveal').updateComplete;
+      assert.ok(!revealReady(), 'reveal-ready is not added under reduced motion');
+      assert.ok(!document.getElementById('rm').classList.contains('is-revealed'), 'the section is left untouched and visible');
+    } finally { window.matchMedia = realMM; }
+  });
 });

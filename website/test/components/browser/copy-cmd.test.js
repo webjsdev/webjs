@@ -50,11 +50,11 @@ suite('copy-cmd', () => {
   teardown(() => restoreClipboard && restoreClipboard());
 
   test('renders the slotted command and a copy affordance', async () => {
-    const el = await mount('npm create webjs-app@latest my-app');
+    const el = await mount('npm create webjs@latest my-app');
     const textEl = el.querySelector('[data-copy-text]');
     assert.ok(textEl, 'a [data-copy-text] click target is rendered');
     assert.ok(
-      textEl.textContent.includes('npm create webjs-app@latest my-app'),
+      textEl.textContent.includes('npm create webjs@latest my-app'),
       'the slotted command text is projected into the click target',
     );
     assert.ok(el.querySelector('button'), 'a copy button is rendered');
@@ -69,12 +69,12 @@ suite('copy-cmd', () => {
   });
 
   test('clicking the command copies the trimmed text and flips to a checkmark', async () => {
-    const el = await mount('   npm create webjs-app@latest my-app   ');
+    const el = await mount('   npm create webjs@latest my-app   ');
     el.querySelector('[data-copy-text]').click();
     await tick(10);          // let the async _copy + clipboard stub resolve
     await el.updateComplete;  // and the copied-signal re-render commit
 
-    assert.equal(written, 'npm create webjs-app@latest my-app', 'trimmed text was written to the clipboard');
+    assert.equal(written, 'npm create webjs@latest my-app', 'trimmed text was written to the clipboard');
     assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark');
     assert.equal(el.querySelector('button rect'), null, 'copy icon is gone after copy');
     assert.ok(
@@ -85,18 +85,18 @@ suite('copy-cmd', () => {
   });
 
   test('keyboard activation (Enter) copies too', async () => {
-    const el = await mount('npm create webjs-app@latest my-app');
+    const el = await mount('npm create webjs@latest my-app');
     const target = el.querySelector('[data-copy-text]');
     target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await tick(10);
     await el.updateComplete;
-    assert.equal(written, 'npm create webjs-app@latest my-app', 'Enter triggers a copy');
+    assert.equal(written, 'npm create webjs@latest my-app', 'Enter triggers a copy');
     assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark on Enter');
     document.body.removeChild(el);
   });
 
   test('the checkmark resets back to the copy icon', async () => {
-    const el = await mount('npm create webjs-app@latest my-app');
+    const el = await mount('npm create webjs@latest my-app');
     el.querySelector('[data-copy-text]').click();
     await tick(10);
     await el.updateComplete;

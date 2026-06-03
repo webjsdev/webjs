@@ -57,4 +57,28 @@ suite('cursor-glow', () => {
     await nextFrame();
     assert.equal(el.style.getPropertyValue('--cg-x'), '100px', 'no updates after disconnect');
   });
+
+  test('disconnecting cancels a pending rAF (no write queued after removal)', async () => {
+    const fresh = document.createElement('cursor-glow');
+    document.body.appendChild(fresh);
+    await fresh.updateComplete;
+    move(55, 66);        // schedules a rAF on fresh
+    fresh.remove();       // disconnectedCallback must cancelAnimationFrame it
+    await nextFrame();
+    assert.equal(fresh.style.getPropertyValue('--cg-x'), '', 'the queued rAF was cancelled, no CSS var written');
+  });
+
+  test('under prefers-reduced-motion the glow never turns on', async () => {
+    const realMM = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /reduce/.test(q), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } });
+    let rm;
+    try {
+      rm = document.createElement('cursor-glow');
+      document.body.appendChild(rm);
+      await rm.updateComplete;   // connectedCallback sees reduced motion, attaches no listener
+      move(150, 150);
+      await nextFrame();
+      assert.equal(rm.style.getPropertyValue('--cg-on'), '', 'no glow under reduced motion');
+    } finally { if (rm) rm.remove(); window.matchMedia = realMM; }
+  });
 });
