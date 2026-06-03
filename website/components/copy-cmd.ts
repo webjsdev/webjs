@@ -59,7 +59,6 @@ export class CopyCmd extends WebComponent {
           data-copy-text
           role="button"
           tabindex="0"
-          aria-label="Copy command to clipboard"
           @click=${this._copy}
           @keydown=${this._onKey}
         ><slot></slot></span>
