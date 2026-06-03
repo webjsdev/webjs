@@ -1,0 +1,15 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["/package.json"],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "webjs": {
+            "$ref": "./node_modules/@webjsdev/server/webjs-config.schema.json"
+          }
+        }
+      }
+    }
+  ]
+}

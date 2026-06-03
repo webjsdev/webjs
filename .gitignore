@@ -39,6 +39,11 @@ Thumbs.db
 # editors
 .vscode/
 .idea/
+# Exception: the scaffold ships a VS Code settings file (the webjs-config
+# JSON Schema association, #259) that MUST be committed so `webjs create`
+# copies it into new apps. The repo's own top-level .vscode/ stays ignored.
+!packages/cli/templates/.vscode/
+!packages/cli/templates/.vscode/settings.json
 
 # AI assistants - local session state, scheduled-task locks, etc.
 # Keep repo-shared config (settings.json + hooks scripts) tracked so

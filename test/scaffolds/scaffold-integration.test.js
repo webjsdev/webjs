@@ -58,6 +58,19 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
 
+    // #259: the VS Code settings that associate the webjs-config JSON Schema
+    // with package.json's `webjs` block must reach the scaffolded app. This
+    // file is under a `.vscode/` dir that .gitignore would normally exclude, so
+    // it is a regression guard against the template silently not shipping.
+    const vscodePath = join(appDir, '.vscode', 'settings.json');
+    assert.ok(existsSync(vscodePath), '.vscode/settings.json should exist');
+    const vscode = JSON.parse(readFileSync(vscodePath, 'utf8'));
+    const webjsSchema = vscode['json.schemas']?.[0]?.schema?.properties?.webjs;
+    assert.ok(
+      webjsSchema && String(webjsSchema.$ref || '').includes('webjs-config.schema.json'),
+      '.vscode/settings.json should $ref the webjs-config schema for the webjs block'
+    );
+
     // Full-stack template-specific
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
