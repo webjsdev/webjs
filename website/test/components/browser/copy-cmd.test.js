@@ -66,6 +66,11 @@ suite('copy-cmd', () => {
       !el.querySelector('button').className.includes('opacity-0'),
       'the idle button is not hover-gated (no opacity-0)',
     );
+    assert.equal(
+      el.querySelector('[data-copy-text]').getAttribute('aria-label'),
+      null,
+      'no aria-label hides the command; the command text is the accessible name',
+    );
     // Pre-copy the button shows the copy (clipboard) icon, not the check.
     assert.ok(el.querySelector('button rect'), 'copy icon is shown initially');
     assert.equal(el.querySelector('button polyline'), null, 'no checkmark initially');
@@ -84,6 +89,11 @@ suite('copy-cmd', () => {
     assert.ok(
       el.querySelector('button').className.includes('opacity-100'),
       'the button is made visible (opacity-100) in the copied state',
+    );
+    assert.equal(
+      el.querySelector('[role="status"]').textContent.trim(),
+      'Copied',
+      'the live region announces "Copied" to assistive tech',
     );
     document.body.removeChild(el);
   });
@@ -121,6 +131,7 @@ suite('copy-cmd', () => {
     await el.updateComplete;
     assert.ok(el.querySelector('button rect'), 'copy icon is restored after the reset window');
     assert.equal(el.querySelector('button polyline'), null, 'checkmark is gone after the reset window');
+    assert.equal(el.querySelector('[role="status"]').textContent.trim(), '', 'the live region clears on reset');
     document.body.removeChild(el);
   });
 });
