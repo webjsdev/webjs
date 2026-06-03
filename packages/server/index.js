@@ -27,6 +27,7 @@ export {
   listPinned,
   auditPinned,
   findOutdated,
+  hasVendorPin,
   updatePinned,
   readPinFile,
   serveDownloadedBundle,

@@ -279,3 +279,30 @@ test('CLI exits non-zero when a hard check fails (bad tsconfig)', () => {
   assert.notEqual(r.status, 0, 'a hard fail must produce a non-zero exit');
   assert.match(r.stdout + r.stderr, /\[fail\] tsconfig-erasable/);
 });
+
+// Regression: the doctor pin check imports hasVendorPin from @webjsdev/server on
+// the REAL (un-stubbed) path. If it is not re-exported, the check silently
+// reports "no pin file" for a pinned app and the freshness check is inert. The
+// other vendor tests inject opts.vendor, so they never caught this.
+test('@webjsdev/server re-exports hasVendorPin so the un-stubbed pin check works', async () => {
+  const mod = await import('@webjsdev/server');
+  assert.equal(typeof mod.hasVendorPin, 'function', 'hasVendorPin must be exported');
+  assert.equal(typeof mod.findOutdated, 'function', 'findOutdated must be exported');
+});
+
+test('the pin check detects a pin on the real import path (no vendor stub)', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  // A pin file with no imports: hasVendorPin sees it, findOutdated has nothing
+  // to check (no network call), so the check recognizes the pin and does NOT
+  // report "no pin file". Run WITHOUT opts.vendor to exercise the real import.
+  mkdirSync(join(dir, '.webjs', 'vendor'), { recursive: true });
+  writeFileSync(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({ imports: {} }));
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', vendor: undefined }));
+  const pin = results.find((r) => r.name === 'vendor-pin');
+  assert.ok(pin, 'a vendor-pin result is present');
+  assert.ok(
+    !/No vendor pin file/.test(pin.message),
+    `the real pin check must detect the pin, got: ${pin.status} ${pin.message}`,
+  );
+});
