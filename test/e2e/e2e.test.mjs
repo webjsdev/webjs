@@ -1692,6 +1692,61 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('navigation-error: a JSON 500 nav fires webjs:navigation-error and recovers in place (no full reload) (#249)', async () => {
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(2000);
+
+    // Inject an internal link to /boom (a route.ts that always 500s with a
+    // JSON body). The router intercepts the document-level click, fetches,
+    // sees a non-HTML error response, and (the #249 fix) dispatches
+    // webjs:navigation-error + recovers in place instead of a full reload.
+    // A window sentinel proves no full-page navigation happened: a reload
+    // discards it, an in-place recovery keeps it.
+    await page.evaluate(() => {
+      const a = document.createElement('a');
+      a.href = '/boom';
+      a.id = 'e2e-naverror-link';
+      a.textContent = 'boom (e2e)';
+      (document.querySelector('main') || document.body).appendChild(a);
+      window.__e2eNavErrorSentinel = 'alive';
+      window.__e2eNavErrorEvent = null;
+      document.addEventListener('webjs:navigation-error', (e) => {
+        window.__e2eNavErrorEvent = {
+          url: e.detail && e.detail.url,
+          status: e.detail && e.detail.status,
+          hasError: !!(e.detail && e.detail.error),
+        };
+      });
+    });
+
+    await page.evaluate(() => {
+      document.getElementById('e2e-naverror-link')?.click();
+    });
+
+    // Poll for the navigation-error event the router dispatched.
+    await waitForCond(
+      () => page.evaluate(() => window.__e2eNavErrorEvent !== null),
+      5000,
+      () => 'a /boom (JSON 500) client nav should fire webjs:navigation-error',
+    );
+
+    const evt = await page.evaluate(() => window.__e2eNavErrorEvent);
+    assert.ok(String(evt.url).endsWith('/boom'), 'detail.url is the failed URL');
+    assert.equal(evt.status, 500, 'detail.status is the HTTP status (500)');
+    assert.equal(evt.hasError, false, 'detail.error is null when a response arrived');
+
+    // No full reload: the window sentinel survived, proving the router
+    // recovered in place rather than abandoning the SPA with location.href.
+    const sentinel = await page.evaluate(() => window.__e2eNavErrorSentinel);
+    assert.equal(sentinel, 'alive',
+      'navigation-error must recover in place (sentinel survived), not full-reload');
+
+    // The default in-place error surface (role="alert") was rendered.
+    const hasAlert = await page.evaluate(() =>
+      !!document.querySelector('[data-webjs-nav-error][role="alert"]'));
+    assert.ok(hasAlert, 'a role="alert" in-place error surface was rendered');
+  });
+
   test('prefetch: a normal link prefetches on hover, but cross-origin and data-prefetch="none" do not', async () => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await sleep(2000);

@@ -41,9 +41,24 @@ export default function ClientRouter() {
       <li><strong>4xx (e.g. 422)</strong>: server re-renders the form with <code>value</code> attributes preserving what the user typed, inline error messages visible, no full-page reload. The Rails / Django / Laravel / Phoenix server-side validation flow.</li>
       <li><strong>5xx with HTML</strong>: error page rendered in place (not a flash of blank then reload).</li>
     </ul>
-    <p>Non-HTML responses (JSON error envelopes, downloads, opaque types) fall back to <code>location.href = url</code> and let the browser handle them.</p>
+    <p>Non-HTML <em>error</em> responses (a JSON error envelope from a 500), and transport/parse failures, recover in place via the <code>webjs:navigation-error</code> event below rather than a destructive full reload.</p>
     <p><strong>204 No Content</strong>: DOM untouched. History records the requested URL ("stay on current page" pattern for autosave-style submissions).</p>
     <p><strong>3xx redirects</strong>: <code>fetch()</code> follows them automatically. The <em>final</em> URL after redirects is recorded in history (Post-Redirect-Get pattern works correctly).</p>
+
+    <h2>Failed navigations recover in place (<code>webjs:navigation-error</code>)</h2>
+    <p>A successful swap and an HTML error body of any status both apply in place (above). The remaining failure cases are a <strong>non-HTML error response</strong> (a 500 carrying a JSON body) and a <strong>transport/parse failure</strong> (the <code>fetch</code> rejected, or the body claimed HTML but did not parse). For those the router no longer abandons the SPA with a destructive full <code>location.href</code> reload (which would discard the partial-swap shell, scroll, focus, and in-flight client state, and eat a second round-trip that may itself fail to the browser's default error page).</p>
+    <p>Instead the router dispatches a cancelable, bubbling <code>webjs:navigation-error</code> event on <code>document</code>, with detail <code>{ url, status, error }</code>: <code>status</code> is the HTTP status when a response arrived (else <code>null</code>), and <code>error</code> is the <code>Error</code> for a transport/parse failure (else <code>null</code>).</p>
+    <ul>
+      <li><strong><code>preventDefault()</code></strong> hands recovery to your app. The router does nothing further, so the current page is left exactly as it is (shell, scroll, focus, and client state preserved). Show a toast, retry, or navigate elsewhere.</li>
+      <li><strong>Not cancelled (the default)</strong> renders a minimal in-place error surface, a <code>&lt;div role="alert"&gt;</code> carrying a generic message plus the status, into the deepest layout children slot (the same target a normal partial swap writes to, so outer chrome and nav are preserved).</li>
+      <li><strong>Last-resort hard load</strong> happens only when there is no shared layout marker to render into (a genuine cross-document nav), and only after the event was not cancelled.</li>
+    </ul>
+    <p>An <strong>AbortError</strong> (a newer navigation superseding this one) is a normal supersede, not an error, and never fires <code>webjs:navigation-error</code>.</p>
+    <pre>document.addEventListener('webjs:navigation-error', (e) =&gt; {
+  // e.detail = { url, status, error }
+  e.preventDefault();                 // app handles recovery; page left intact
+  showToast(\`Could not load \${e.detail.url} (status \${e.detail.status})\`);
+});</pre>
 
     <h2><code>&lt;webjs-frame&gt;</code>: escape hatch for non-layout regions</h2>
     <p>The marker mechanism scopes swaps to the deepest shared <strong>layout</strong>. When you need a swap region <em>smaller</em> than the deepest layout (typically a widget inside a page that should swap independently of the rest of the page) wrap it in <code>&lt;webjs-frame id="..."&gt;</code>.</p>
