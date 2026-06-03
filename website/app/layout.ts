@@ -197,11 +197,12 @@ export default function RootLayout({ children }: { children: unknown }) {
          target the host from inside the component). Everything else in
          copy-cmd is Tailwind. */
       copy-cmd { display: block; flex: 1; min-width: 0; max-width: 100%; }
-      /* Template-card commands all reserve the same thin horizontal scroll
-         gutter (overflow-x scroll), so the three sit at one baseline whether
-         or not a command overflows, in browsers that reserve scrollbar space.
-         scroll-thin keeps the gutter transparent until hover. */
-      .cmd-foot copy-cmd [data-copy-text] { overflow-x: scroll; }
+      /* Template-card commands hide the horizontal scrollbar entirely (no
+         track, no gutter, even on hover), so all three sit flush at the same
+         bottom baseline with no reserved strip. The command stays scrollable
+         (wheel / touch / drag) and the copy button copies the full text. */
+      .cmd-foot copy-cmd [data-copy-text] { overflow-x: auto; scrollbar-width: none; }
+      .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
     </style>
 
     <div class="glow-layer" aria-hidden="true"></div>
