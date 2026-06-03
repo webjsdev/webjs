@@ -88,3 +88,17 @@ test('signedUrl requires a key and a secret', () => {
   assert.throws(() => signedUrl('', { secret: SECRET }), /key is required/);
   assert.throws(() => signedUrl('a.png', {}), /secret is required/);
 });
+
+test('an explicit non-positive expiresIn fails CLOSED (not a silent 1-hour grant)', () => {
+  // expiresIn: 0 / negative must mint an already-expired url, never default to
+  // 3600s (the old footgun where "no access" became a 1-hour grant).
+  for (const expiresIn of [0, -100]) {
+    const url = signedUrl('e.png', { secret: SECRET, base: '/uploads/e.png', expiresIn });
+    const r = verifySignedUrl(url, SECRET);
+    assert.equal(r.valid, false, `expiresIn=${expiresIn} must be expired`);
+    assert.equal(r.reason, 'expired');
+  }
+  // Omitting expiresIn still gets the 1-hour default (valid now).
+  const def = signedUrl('e.png', { secret: SECRET, base: '/uploads/e.png' });
+  assert.equal(verifySignedUrl(def, SECRET).valid, true);
+});

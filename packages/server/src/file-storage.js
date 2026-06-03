@@ -92,6 +92,9 @@ import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
 /** Default storage root, relative to the app's cwd. gitignore-friendly. */
 export const DEFAULT_UPLOAD_DIR = '.webjs/uploads';
 
+/** Reserved suffix for the per-object content-type sidecar (`<key>.meta`). */
+const META_SUFFIX = '.meta';
+
 /**
  * The extension whitelist for `generateKey`. Only these (lowercased) extensions
  * are preserved on a generated key; anything else yields an extensionless key.
@@ -145,6 +148,13 @@ export function assertSafeKey(dir, key) {
   const segments = key.split('/');
   if (segments.some((s) => s === '..')) {
     throw new Error('file-storage: key must not contain a ".." segment');
+  }
+  // The `.meta` suffix is RESERVED for the content-type sidecar `put` writes
+  // (`<key>.meta`). Rejecting it eliminates the only namespace collision: a user
+  // storing both `foo` and `foo.meta` would otherwise have `foo`'s sidecar
+  // clobber the `foo.meta` object. `generateKey` never produces a `.meta` key.
+  if (key.endsWith(META_SUFFIX)) {
+    throw new Error(`file-storage: key must not end in "${META_SUFFIX}" (reserved for metadata)`);
   }
   // Final containment guard: resolve to an absolute path and confirm it stays
   // strictly under `dir`. This is the authoritative check (the rules above are
@@ -216,13 +226,21 @@ export function diskStore(opts = {}) {
       await mkdir(dirname(abs), { recursive: true });
       // Streaming write: pipe the source through to disk. `pipeline` handles
       // backpressure + teardown, so memory stays bounded regardless of size.
-      await pipeline(stream, createWriteStream(abs));
+      try {
+        await pipeline(stream, createWriteStream(abs));
+      } catch (err) {
+        // A mid-stream failure (source error, disk full) leaves a truncated
+        // file. Remove it so a later read never serves a partial object under a
+        // key the caller never received, then re-throw.
+        try { await unlink(abs); } catch {}
+        throw err;
+      }
       const { size } = await stat(abs);
       // Record the content type alongside the bytes so `get` can return it. A
       // sidecar `<file>.meta` JSON keeps the object itself byte-for-byte the
       // upload (so it serves cleanly) while still capturing the type.
       try {
-        const metaAbs = abs + '.meta';
+        const metaAbs = abs + META_SUFFIX;
         await pipeline(
           Readable.from([JSON.stringify({ contentType })]),
           createWriteStream(metaAbs),
@@ -244,7 +262,7 @@ export function diskStore(opts = {}) {
       if (!info.isFile()) return null;
       let contentType = 'application/octet-stream';
       try {
-        const metaAbs = abs + '.meta';
+        const metaAbs = abs + META_SUFFIX;
         const metaInfo = await stat(metaAbs);
         if (metaInfo.isFile()) {
           // The meta sidecar is tiny (a JSON object with a content type), so a
@@ -269,7 +287,7 @@ export function diskStore(opts = {}) {
       const abs = assertSafeKey(dir, key);
       // Idempotent: a missing file is not an error.
       try { await unlink(abs); } catch {}
-      try { await unlink(abs + '.meta'); } catch {}
+      try { await unlink(abs + META_SUFFIX); } catch {}
     },
 
     async has(key) {
@@ -377,7 +395,13 @@ function signKeyExp(key, exp, secret) {
 export function signedUrl(key, opts) {
   if (!opts || !opts.secret) throw new Error('signedUrl: a secret is required');
   if (typeof key !== 'string' || !key) throw new Error('signedUrl: a key is required');
-  const expiresIn = typeof opts.expiresIn === 'number' && opts.expiresIn > 0 ? opts.expiresIn : 3600;
+  // Default to 1 hour ONLY when expiresIn is omitted. An explicit value is
+  // honored literally, so `0` / a negative number fails CLOSED (the minted exp
+  // is at or before now, so the URL is already expired) instead of silently
+  // granting a 1-hour URL.
+  const expiresIn = typeof opts.expiresIn === 'number' && Number.isFinite(opts.expiresIn)
+    ? opts.expiresIn
+    : 3600;
   const exp = Math.floor(Date.now() / 1000) + Math.floor(expiresIn);
   const sig = signKeyExp(key, exp, opts.secret);
   const base = opts.base != null ? opts.base : getFileStore().url(key);
@@ -426,7 +450,10 @@ export function verifySignedUrl(input, secret) {
   if (!key || !exp || !sig) return { valid: false, key: null, reason: 'missing params' };
   const expNum = Number(exp);
   if (!Number.isFinite(expNum)) return { valid: false, key: null, reason: 'bad expiry' };
-  if (Math.floor(Date.now() / 1000) > expNum) return { valid: false, key, reason: 'expired' };
+  // `>=` so an exp at the current second is expired: a URL minted with
+  // `expiresIn: 0` (exp === now) fails closed instead of being valid for the
+  // remainder of the current second.
+  if (Math.floor(Date.now() / 1000) >= expNum) return { valid: false, key, reason: 'expired' };
   // Recompute the expected signature over the SAME key + exp and compare in
   // constant time. A tampered key changes the expected signature, so it fails.
   const expected = signKeyExp(key, expNum, secret);

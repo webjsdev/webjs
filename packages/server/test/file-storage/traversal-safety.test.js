@@ -42,6 +42,21 @@ test('assertSafeKey rejects every adversarial key', () => {
   }
 });
 
+test('the reserved `.meta` suffix is rejected (no sidecar/object collision)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-fs-meta-'));
+  try {
+    // A key ending in `.meta` would collide with another object's content-type
+    // sidecar (`<key>.meta`), so it is rejected up front.
+    assert.throws(() => assertSafeKey(dir, 'notes.meta'), /reserved/);
+    assert.throws(() => assertSafeKey(dir, 'a/b.meta'), /reserved/);
+    // A non-`.meta` key with `meta` elsewhere is fine.
+    assert.ok(assertSafeKey(dir, 'metadata.json'));
+    assert.ok(assertSafeKey(dir, 'a.meta.txt'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('put/get/delete reject traversal keys and touch no file outside dir', async () => {
   // A parent dir holding both the storage root AND a sibling secret file.
   const parent = mkdtempSync(join(tmpdir(), 'webjs-fs-parent-'));

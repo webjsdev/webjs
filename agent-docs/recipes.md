@@ -395,7 +395,18 @@ export async function GET(request: Request, { params }: { params: { key: string 
   const handle = await getFileStore().get(params.key);
   if (!handle) return new Response('Not Found', { status: 404 });
   return new Response(handle.body, {            // streams; never reads the file into memory
-    headers: { 'content-type': handle.contentType, 'content-length': String(handle.size) },
+    headers: {
+      'content-type': handle.contentType,
+      'content-length': String(handle.size),
+      // SECURITY (do NOT drop these for user-uploaded bytes). The stored
+      // content-type came from the UPLOAD, which is client-controlled, so an
+      // attacker can upload HTML/SVG tagged `text/html` under an innocent key.
+      // `nosniff` stops the browser MIME-sniffing it into HTML, and
+      // `attachment` forces a download instead of rendering it in your origin,
+      // which is what turns an upload into stored XSS.
+      'x-content-type-options': 'nosniff',
+      'content-disposition': 'attachment',
+    },
   });
 }
 ```
@@ -407,8 +418,21 @@ import { signedUrl } from '@webjsdev/server';
 const href = signedUrl(user.avatarKey, { secret: process.env.AUTH_SECRET!, expiresIn: 3600 });
 ```
 
-For a public asset that needs no gating, drop the signature and serve
-`getFileStore().get(key)` directly. To point storage at a custom directory or an
+> **Serving user uploads safely (the canonical upload vulnerability).** The
+> content-type a store records is the one the BROWSER sent at upload time, so it
+> is attacker-controlled. Serving it inline lets an attacker run script in your
+> origin (stored XSS) via an HTML or `image/svg+xml` payload under an innocent
+> key. ALWAYS send `X-Content-Type-Options: nosniff`, and prefer
+> `Content-Disposition: attachment` for anything a user uploaded. Only serve a
+> user upload INLINE (no `attachment`) when you have validated the bytes
+> server-side and are emitting a content-type from a strict inert allowlist
+> (e.g. `image/png`, `image/jpeg`), never reflecting `text/html` or
+> `image/svg+xml`. Best of all, serve user uploads from a SEPARATE origin / cookieless
+> subdomain so even a sniffing bypass cannot reach your session.
+
+For a public asset you control, you may drop the signature and serve
+`getFileStore().get(key)` directly, but keep `nosniff` + `attachment` for
+anything a user supplied. To point storage at a custom directory or an
 S3-compatible backend, call `setFileStore(diskStore({ dir, baseUrl }))` (or a
 custom adapter) once at startup; the call sites above do not change. The default
 uploads directory is `<cwd>/.webjs/uploads`, which the app should `.gitignore`.

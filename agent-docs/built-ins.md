@@ -274,7 +274,7 @@ The default store is a `diskStore` rooted at `<cwd>/.webjs/uploads`. Add the upl
 
 ### Traversal-safe keys (security guarantee)
 
-Every key is resolved to an absolute path under `dir` and REJECTED if it escapes, using the same `resolve` + `startsWith(dir + sep)` containment guard the `/public/*` serve path uses. A key with `..`, an absolute path, a leading slash, a NUL byte, or a backslash throws (`assertSafeKey`) BEFORE any filesystem operation. Never trust a user-supplied filename as a key; use `generateKey`:
+Every key is resolved to an absolute path under `dir` and REJECTED if it escapes, using the same `resolve` + `startsWith(dir + sep)` containment guard the `/public/*` serve path uses. A key with `..`, an absolute path, a leading slash, a NUL byte, a backslash, or the reserved `.meta` suffix (used for the content-type sidecar) throws (`assertSafeKey`) BEFORE any filesystem operation. Never trust a user-supplied filename as a key; use `generateKey`:
 
 ```js
 const key = generateKey(file.name);   // <uuid>.<ext>, opaque + safe
@@ -292,6 +292,12 @@ const url = signedUrl(key, { secret: process.env.AUTH_SECRET, expiresIn: 3600 })
 const check = verifySignedUrl(new URL(request.url).searchParams, process.env.AUTH_SECRET);
 if (!check.valid) return new Response('Forbidden', { status: 403 });
 ```
+
+An explicit `expiresIn` of `0` or a negative number fails CLOSED (the minted URL is already expired), so a "no access" intent never silently becomes a 1-hour grant. The 1-hour default applies only when `expiresIn` is omitted.
+
+### Serving user uploads safely (content-type XSS)
+
+The content-type a store records is the one the BROWSER sent at upload time, so it is ATTACKER-CONTROLLED. A serving route that reflects it inline lets an attacker run script in your origin (stored XSS) by uploading HTML or `image/svg+xml` tagged `text/html` under an innocent-looking key. The serving route MUST send `X-Content-Type-Options: nosniff`, and SHOULD send `Content-Disposition: attachment` for anything a user uploaded (the recipe does both). Only serve a user upload inline when you have validated the bytes server-side and emit a content-type from a strict inert allowlist (`image/png`, `image/jpeg`, ...), never `text/html` / `image/svg+xml`. Serving uploads from a separate cookieless origin is the strongest mitigation. See the recipe for the hardened route.
 
 ### S3-pluggability (call-site stability)
 

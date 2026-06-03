@@ -167,3 +167,28 @@ test('STRUCTURAL: put streams (createWriteStream + pipeline, no arrayBuffer)', a
   assert.doesNotMatch(src, /\.arrayBuffer\(\)/, 'never calls arrayBuffer() on the put path');
   assert.doesNotMatch(src, /writeFile\(/, 'never uses writeFile for the object body');
 });
+
+test('a mid-stream write failure leaves NO partial file behind', async () => {
+  const dir = tmpDir();
+  try {
+    const store = diskStore({ dir });
+    // A source stream that emits one chunk on the first pull then errors on the
+    // next, simulating a truncated upload / disk error mid-write. Erroring in
+    // `pull` (not `start`) keeps it asynchronous, so it propagates through the
+    // pipeline to `put` rather than throwing at construction time.
+    let pulls = 0;
+    const failing = new ReadableStream({
+      pull(controller) {
+        if (pulls++ === 0) controller.enqueue(new Uint8Array([1, 2, 3]));
+        else controller.error(new Error('boom mid-stream'));
+      },
+    });
+    await assert.rejects(() => store.put('partial.bin', failing), /boom/);
+    // The truncated object must have been removed (no orphan under a key the
+    // caller never received).
+    assert.equal(await store.has('partial.bin'), false, 'partial file was cleaned up');
+    assert.equal(await store.get('partial.bin'), null, 'get returns null, no partial bytes');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
