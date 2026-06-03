@@ -115,7 +115,12 @@ function shouldAccessLog(pathname) {
 import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
-import { compileRedirectRules, applyRedirects } from './redirects.js';
+import {
+  compileRedirectRules,
+  applyRedirects,
+  readTrailingSlashPolicy,
+  applyTrailingSlash,
+} from './redirects.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
 import { commitHtmlCache } from './html-cache.js';
@@ -277,6 +282,24 @@ export async function readRedirectRules(appDir) {
     return compileRedirectRules(pkg);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Read the trailing-slash policy (`webjs.trailingSlash`) from the app's
+ * package.json (issue #255). A missing, malformed, or unreadable config
+ * yields `'ignore'` (no canonicalization), never a throw, so an
+ * unconfigured app is unchanged.
+ *
+ * @param {string} appDir
+ * @returns {Promise<'never' | 'always' | 'ignore'>}
+ */
+export async function readTrailingSlashFromApp(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return readTrailingSlashPolicy(pkg);
+  } catch {
+    return 'ignore';
   }
 }
 
@@ -477,6 +500,14 @@ export async function createRequestHandler(opts) {
   // before routing / SSR / asset serving, so a moved URL returns a 308/307
   // immediately.
   const redirectRules = await readRedirectRules(appDir);
+
+  // Trailing-slash policy (issue #255), read once from the app's package.json
+  // `webjs.trailingSlash`. Default `'ignore'` (no canonicalization), so an
+  // unconfigured app is unchanged; `'never'` (recommended) strips a trailing
+  // slash and `'always'` adds one, each via a 308 to the canonical form.
+  // Applied in produce() AFTER the declarative redirects, so an explicit
+  // redirect rule wins first and the two never loop.
+  const trailingSlashPolicy = await readTrailingSlashFromApp(appDir);
 
   // CSP config (issue #233), read once from the app's package.json
   // `webjs.csp`. OFF by default: when disabled no nonce is minted and no
@@ -903,6 +934,16 @@ export async function createRequestHandler(opts) {
       // funnel in handle() still wraps this Response, like any other.
       const redirectResp = applyRedirects(req, redirectRules);
       if (redirectResp) return redirectResp;
+
+      // Trailing-slash canonicalization (issue #255): after the explicit
+      // redirects above (so an explicit rule wins first and the two never
+      // form a loop), 308-redirect a non-canonical path to the policy's
+      // canonical form (`never` strips a trailing slash, `always` adds one).
+      // Default `'ignore'` is a no-op. The root `/` and file paths are
+      // exempt; `/__webjs/*` is exempt too (defense in depth, the redirects
+      // above already skip it). The funnel in handle() still wraps this.
+      const slashResp = applyTrailingSlash(req, trailingSlashPolicy);
+      if (slashResp) return slashResp;
 
       // Health and readiness probes are answered BEFORE ensureReady so a probe
       // never blocks on the analysis. `/__webjs/health` is liveness (the
