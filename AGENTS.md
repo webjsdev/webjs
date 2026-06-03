@@ -731,6 +731,7 @@ webjs start  [--port N]                               # prod server. No build st
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
 webjs check  [--fix]                                  # convention validator
 webjs types                                           # generate .webjs/routes.d.ts (typed Route union + per-route params; #258). Opt-in; webjs dev emits it automatically
+webjs typecheck [tsc args...]                         # type-check the app with the project's own tsc --noEmit (non-zero on errors; needs typescript installed)
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to prisma
 webjs ui init                                         # @webjsdev/ui CLI

@@ -43,6 +43,7 @@ const USAGE = `webjs commands:
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check                                     Run correctness checks on the app
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
+  webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir
@@ -297,6 +298,32 @@ async function main() {
         `webjs types: wrote .webjs/routes.d.ts (${count} route${count === 1 ? '' : 's'} typed). ` +
         `Ensure tsconfig "include" lists ".webjs/routes.d.ts" so tsserver picks it up.`,
       );
+      break;
+    }
+    case 'typecheck': {
+      // Type-check the app with the project's OWN tsc (it reads the app's
+      // tsconfig: strict + noEmit + erasableSyntaxOnly). The framework runs the
+      // standard compiler, it does not embed one. Extra args after `typecheck`
+      // pass through (e.g. `webjs typecheck --watch`). Exits non-zero on a type
+      // error, so it works as a CI gate and the scaffolded `typecheck` script.
+      const cwd = process.cwd();
+      const { createRequire } = await import('node:module');
+      let tscPath;
+      try {
+        const req = createRequire(join(cwd, 'package.json'));
+        tscPath = req.resolve('typescript/bin/tsc');
+      } catch {
+        console.error(
+          'webjs typecheck: TypeScript is not installed in this project.\n' +
+          'Install it with `npm install -D typescript`, then re-run `webjs typecheck`.',
+        );
+        process.exit(1);
+      }
+      const child = spawn(process.execPath, [tscPath, '--noEmit', ...rest], {
+        stdio: 'inherit',
+        cwd,
+      });
+      child.on('exit', (code) => process.exit(code ?? 1));
       break;
     }
     case 'create': {

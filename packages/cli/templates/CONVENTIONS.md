@@ -86,6 +86,12 @@ even if the user doesn't explicitly ask.**
 4. **Convention check.** Run `webjs check` after changes and fix
    any violations before reporting the task as done.
 
+5. **Type check.** Run `npm run typecheck` (which runs `webjs typecheck`,
+   a `tsc --noEmit` over the app) and fix any type errors. `webjs check` is
+   correctness-only and does NOT type-check, so this is the separate
+   is-my-TypeScript-valid gate. It exits non-zero on a type error, so add it
+   to CI once the app type-checks cleanly.
+
 ### Definition of done (MUST be addressed BEFORE opening the PR)
 
 This is the per-PR contract. Before running `gh pr create`, walk through
