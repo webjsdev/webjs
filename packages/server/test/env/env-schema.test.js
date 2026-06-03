@@ -108,6 +108,44 @@ test('enum type rejects a value outside the set and names the options', () => {
   assert.match(bad.errors[0], /"development", "production", "test"/);
 });
 
+test('SECURITY: a failing value is NEVER echoed into the error message', () => {
+  // A secret given the wrong type (a common misconfiguration) must not have its
+  // raw value leaked into boot logs. Every typed path (number/boolean/url/enum)
+  // names the var + the problem but redacts the value.
+  const secret = 'super-secret-token-value';
+
+  // AUTH_SECRET (a real secret) mistakenly typed as url.
+  const asUrl = validateEnv({ AUTH_SECRET: 'url' }, { AUTH_SECRET: secret });
+  assert.equal(asUrl.ok, false);
+  assert.match(asUrl.errors[0], /AUTH_SECRET/, 'still names the offending var');
+  assert.equal(asUrl.errors[0].includes(secret), false, 'must not echo the secret');
+
+  // A DATABASE_URL whose password fails url parsing must not dump the DSN.
+  // (Use a value new URL() rejects so we exercise the url failure path.)
+  const badDsn = 'postgres://admin:hunter2@ db.internal';
+  const asDsn = validateEnv({ DATABASE_URL: 'url' }, { DATABASE_URL: badDsn });
+  assert.equal(asDsn.ok, false);
+  assert.match(asDsn.errors[0], /DATABASE_URL/);
+  assert.equal(asDsn.errors[0].includes('hunter2'), false, 'must not echo the password');
+  assert.equal(asDsn.errors[0].includes(badDsn), false, 'must not echo the DSN');
+
+  // number / boolean / enum paths redact too.
+  const num = validateEnv({ API_KEY: 'number' }, { API_KEY: secret });
+  assert.equal(num.errors[0].includes(secret), false);
+  const bool = validateEnv({ API_KEY: 'boolean' }, { API_KEY: secret });
+  assert.equal(bool.errors[0].includes(secret), false);
+  const en = validateEnv({ TIER: { type: 'enum', values: ['free', 'pro'] } }, { TIER: secret });
+  assert.equal(en.errors[0].includes(secret), false);
+  assert.match(en.errors[0], /"free", "pro"/, 'enum still names the allowed values');
+
+  // And the aggregated message the CLI prints stays clean end to end.
+  const msg = formatEnvErrors([...asUrl.errors, ...asDsn.errors]);
+  assert.equal(msg.includes(secret), false);
+  assert.equal(msg.includes('hunter2'), false);
+  assert.match(msg, /AUTH_SECRET/);
+  assert.match(msg, /DATABASE_URL/);
+});
+
 test('string pattern constraint', () => {
   const schema = { SLUG: { type: 'string', pattern: /^[a-z]+$/ } };
   assert.equal(validateEnv(schema, { SLUG: 'abc' }).ok, true);

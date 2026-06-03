@@ -86,7 +86,8 @@ function coerce(name, rule, raw) {
     case 'number': {
       const n = Number(raw);
       if (raw.trim() === '' || Number.isNaN(n)) {
-        return { error: `${name} must be a number (got ${JSON.stringify(raw)})` };
+        // Never echo the value: a secret given the wrong type would leak to logs.
+        return { error: `${name} must be a number` };
       }
       return { value: n };
     }
@@ -94,7 +95,8 @@ function coerce(name, rule, raw) {
       const v = raw.trim().toLowerCase();
       if (['1', 'true', 'yes', 'on'].includes(v)) return { value: true };
       if (['0', 'false', 'no', 'off'].includes(v)) return { value: false };
-      return { error: `${name} must be a boolean (true/false/1/0/yes/no/on/off, got ${JSON.stringify(raw)})` };
+      // Never echo the value: list the accepted spellings, not what was given.
+      return { error: `${name} must be a boolean (one of true/false/1/0/yes/no/on/off)` };
     }
     case 'url': {
       try {
@@ -102,13 +104,15 @@ function coerce(name, rule, raw) {
         new URL(raw);
         return { value: raw };
       } catch {
-        return { error: `${name} must be a valid URL (got ${JSON.stringify(raw)})` };
+        // Never echo the value: a DSN with embedded credentials must not leak.
+        return { error: `${name} must be a valid URL` };
       }
     }
     case 'enum': {
       const values = Array.isArray(rule.values) ? rule.values : [];
       if (!values.includes(raw)) {
-        return { error: `${name} must be one of ${values.map((v) => JSON.stringify(v)).join(', ')} (got ${JSON.stringify(raw)})` };
+        // Name the ALLOWED values (from the schema, safe), never the provided one.
+        return { error: `${name} must be one of ${values.map((v) => JSON.stringify(v)).join(', ')}` };
       }
       return { value: raw };
     }
