@@ -404,11 +404,38 @@ test('jspmGenerate: second call with same installs hits in-process cache', { ski
   assert.deepEqual(first, second, 'cached call returns the same URLs');
 });
 
-test('jspmGenerate: install order does not affect output', { skip: !NETWORK_OK }, async () => {
-  clearVendorCache();
-  const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
-  const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
-  assert.deepEqual(a, b, 'output should be order-independent');
+test('jspmGenerate: install order does not affect OUR merged output (deterministic mock, no live CDN)', async () => {
+  // The property under test is OUR per-package resolve + merge being
+  // order-independent, NOT the live CDN's transitive-resolution stability. The
+  // old test hit ga.jspm.io twice and `deepEqual`d the results, which flaked
+  // (#312): the live CDN occasionally resolved a transitive in one ordering but
+  // not the other. Mock the generate endpoint so each install resolves to a
+  // FIXED fragment, isolating our code from the live CDN.
+  const fragment = (pkg) => {
+    const name = pkg.replace(/@[^@]*$/, ''); // strip the trailing @version
+    return { [name]: `https://ga.jspm.io/npm:${pkg}/mock.js` };
+  };
+  const mock = async (_url, opts) => {
+    const { install } = JSON.parse(opts.body); // jspmResolveOne sends one install per call
+    const imports = {};
+    for (const i of install) Object.assign(imports, fragment(i));
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  await withMockedFetch(mock, async () => {
+    clearVendorCache();
+    const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
+    clearVendorCache(); // force b to re-resolve through the mock, not the in-process cache
+    const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
+    assert.deepEqual(a, b, 'merged output must be order-independent');
+    assert.deepEqual(
+      a,
+      {
+        picocolors: 'https://ga.jspm.io/npm:picocolors@1.1.1/mock.js',
+        clsx: 'https://ga.jspm.io/npm:clsx@2.1.1/mock.js',
+      },
+      'each requested package resolved to its fixed fragment',
+    );
+  });
 });
 
 /* ---------- jspmGenerate failure modes (mocked fetch, no network) ---------- */
