@@ -143,6 +143,15 @@ export type AppleWebAppMetadata =
       startupImage?: AppleStartupImage | AppleStartupImage[];
     };
 
+/**
+ * A single JSON-LD structured-data object (schema.org). The author owns the
+ * shape (Article, Product, BreadcrumbList, Organization, FAQPage, etc.), so
+ * this is intentionally permissive. The framework serializes it with
+ * `JSON.stringify` and HTML-safe-escapes the output into a
+ * `<script type="application/ld+json">` block.
+ */
+export type JsonLd = Record<string, unknown>;
+
 /** A `metadata.preload` link descriptor (emitted as `<link rel="preload">`). */
 export interface PreloadDescriptor {
   href: MetadataUrl;
@@ -237,6 +246,17 @@ export interface Metadata {
   cacheControl?: string;
   /** `<link rel="preload">` hints (fonts, images, etc.). */
   preload?: PreloadDescriptor[];
+
+  /**
+   * JSON-LD structured data (schema.org), emitted as one or more
+   * `<script type="application/ld+json">` blocks in `<head>`. A single
+   * object emits ONE script; an array emits one script PER element. The
+   * author owns the schema.org shape; the framework serializes with
+   * `JSON.stringify` and HTML-safe-escapes the output automatically (a
+   * value containing `</script>` can never break out of the tag). Works in
+   * `generateMetadata(ctx)` for per-request data (a per-post Article, etc.).
+   */
+  jsonLd?: JsonLd | JsonLd[];
 
   /** Catch-all `<meta name="…">` entries. Value may be a list. */
   other?: Record<string, string | number | Array<string | number>>;
