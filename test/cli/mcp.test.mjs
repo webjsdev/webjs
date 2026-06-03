@@ -270,3 +270,37 @@ test('extractRouteMethods: only exported HTTP method names', () => {
   const src = `export async function GET() {}\nexport async function POST() {}\nexport function helper() {}\n`;
   assert.deepEqual(extractRouteMethods(src).sort(), ['GET', 'POST']);
 });
+
+test('mcp: a falsy id (0) and a string id are echoed, not dropped', async () => {
+  const dir = tmpDir();
+  write(dir, 'app/page.ts', `export default function P() {}\n`);
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 0, method: 'tools/list' },
+    { jsonrpc: '2.0', id: 'abc', method: 'tools/list' },
+  ]);
+  assert.equal(frames.length, 2);
+  assert.equal(frames[0].id, 0, 'a 0 id must be echoed (no falsy drop)');
+  assert.equal(frames[1].id, 'abc', 'a string id must be echoed');
+});
+
+test('mcp: a request split across stdin chunks (mid-line) still parses', async () => {
+  const dir = tmpDir();
+  write(dir, 'app/page.ts', `export default function P() {}\n`);
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let out = '';
+  stdout.on('data', (c) => { out += c.toString(); });
+  const done = runMcpServer({ stdin, stdout, stderr, cwd: dir, version: '9.9.9' });
+  // Write a single JSON-RPC request in TWO chunks split mid-line. A line-based
+  // reader must buffer until the newline rather than parsing each chunk.
+  stdin.write('{"jsonrpc":"2.0","id":7,"method":"too');
+  await new Promise((r) => setTimeout(r, 10));
+  stdin.write('ls/list"}\n');
+  stdin.end();
+  await done;
+  const frames = out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].id, 7, 'the chunk-split request parsed once the full line arrived');
+  assert.ok(frames[0].result.tools, 'and dispatched correctly');
+});

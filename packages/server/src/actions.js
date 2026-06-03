@@ -151,9 +151,17 @@ async function rpcResponse(payload, init = {}) {
  *
  * @param {string} appDir
  * @param {boolean} dev
+ * @param {{ skipExposeLoad?: boolean }} [opts]
+ *   `skipExposeLoad: true` builds the (load-free) `fileToHash` / `hashToFile`
+ *   maps WITHOUT importing any `expose()`-referencing module, so `httpRoutes`
+ *   stays empty. A read-only introspection caller (the MCP `list_actions` tool,
+ *   #262) uses this to derive RPC endpoint hashes without running a server
+ *   module's top-level side effects (Prisma init, DB connect) or risking a
+ *   stray stdout write. The request pipeline keeps the default (loads expose
+ *   routes, which the router must know before a request can hit them).
  * @returns {Promise<ActionIndex>}
  */
-export async function buildActionIndex(appDir, dev) {
+export async function buildActionIndex(appDir, dev, opts = {}) {
   /** @type {Map<string,string>} */
   const hashToFile = new Map();
   /** @type {Map<string,string>} */
@@ -190,6 +198,9 @@ export async function buildActionIndex(appDir, dev) {
     // mention in a comment or string only over-matches, costing one harmless
     // extra module load; the common pure-RPC file never names `expose` and so
     // still defers entirely.
+    // A read-only caller (MCP introspection) only needs the file -> hash maps
+    // above, so skip the expose-load entirely (no module side effects).
+    if (opts.skipExposeLoad) continue;
     let src = '';
     try { src = await readFile(file, 'utf8'); } catch {}
     if (!/\bexpose\b/.test(src)) continue;

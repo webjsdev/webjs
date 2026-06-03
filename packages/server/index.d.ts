@@ -247,7 +247,7 @@ export declare function handleApi(
 // ---------------------------------------------------------------------------
 
 /** Scan the app for `.server.{js,ts}` files and build the RPC + expose index. */
-export declare function buildActionIndex(appDir: string, dev: boolean): Promise<unknown>;
+export declare function buildActionIndex(appDir: string, dev: boolean, opts?: { skipExposeLoad?: boolean }): Promise<unknown>;
 /** Whether a file path is a `.server.{js,ts,mjs,mts}` server file. */
 export declare function isServerFile(file: string): boolean;
 /** SHA-256 hash of an action file's absolute path (the RPC endpoint addressing scheme). */

@@ -113,15 +113,16 @@ export function extractExportNames(src) {
 
 /**
  * Lexically extract the HTTP method exports of a route.{js,ts} file. The webjs
- * router dispatches on named `GET` / `POST` / `PUT` / `PATCH` / `DELETE` /
- * `HEAD` / `OPTIONS` / `WS` exports, so we report exactly those that are
- * exported. Read-only: no module load.
+ * API router (`api.js`) dispatches the five standard verbs, plus `WS` for a
+ * WebSocket upgrade. We report exactly those that are exported, NOT `HEAD` /
+ * `OPTIONS` (the router does not dispatch a named handler for them, so listing
+ * them would imply a route the framework ignores). Read-only: no module load.
  *
  * @param {string} src
  * @returns {string[]}
  */
 export function extractRouteMethods(src) {
-  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS'];
+  const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'WS'];
   const exported = new Set(extractExportNames(src));
   return METHODS.filter((m) => exported.has(m));
 }
@@ -194,7 +195,11 @@ export function makeToolRunners(deps) {
     },
 
     async list_actions(appDir) {
-      const idx = await buildActionIndex(appDir, true);
+      // `skipExposeLoad` builds the file -> hash maps WITHOUT importing any
+      // `expose()` module, so this stays truly read-only (no Prisma/DB init, and
+      // no stray stdout from a loaded module corrupting the JSON-RPC channel).
+      // The RPC hash is over the file path only, so no module load is needed.
+      const idx = await buildActionIndex(appDir, false, { skipExposeLoad: true });
       /** @type {Array<{ file: string, fn: string, endpoint: string }>} */
       const actions = [];
       for (const [file, hash] of idx.fileToHash) {
