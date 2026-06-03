@@ -70,6 +70,19 @@ re-minted per response on a hit and does not block), or runs under CSP
 (its body carries a per-request nonce). A cached page served to a brand
 new visitor still gets a fresh CSRF cookie, so it stays correct.
 
+**Framework defense, not just the contract.** When the render reads
+per-user state through a framework helper (`cookies()`, `headers()`, or
+`getSession()`), the framework auto-marks the request dynamic and refuses
+to cache it even if you set `revalidate`, warning you once with the page
+path. So a wrong `revalidate` on a cookie-reading page fails safe (served
+fresh) instead of leaking. **The loud caveat:** this only catches reads
+THROUGH those helpers. A page that varies its body by an inbound auth
+cookie / `Authorization` header but reads it RAW (not via `cookies()` /
+`headers()` / `getSession()`) and sets no new `Set-Cookie` WILL be cached
+and served to a logged-out visitor. Read per-user request state through
+the framework helpers (which auto-exclude the page), or never set
+`revalidate` on a per-user page.
+
 Evict on a write with `revalidatePath`:
 
 ```ts
@@ -89,6 +102,15 @@ export async function publishPost(input) {
 client-side `revalidate()` from `@webjsdev/core`, which evicts the
 BROWSER snapshot cache used by client navigation. Time-based eviction is
 handled automatically by the store TTL (= the `revalidate` seconds).
+
+**Multi-instance note.** `revalidatePath(path)` deletes a store key, so it
+reaches every instance sharing a Redis store. `revalidateAll()` bumps an
+in-process counter, so on a multi-instance deploy it only flushes the
+instance it ran on; peers keep serving until their own TTL expires. For a
+multi-instance (Redis) deploy, prefer a short `revalidate` TTL (the
+time-based floor that always holds cross-instance), use `revalidatePath`
+per mutation as the reliable cross-instance primitive, and treat
+`revalidateAll()` as a single-instance / dev convenience.
 
 ## Sessions
 

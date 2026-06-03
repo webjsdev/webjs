@@ -43,10 +43,16 @@ import {
   revalidateAll,
 } from '../../src/html-cache.js';
 import { STREAM_MARKER } from '../../src/conditional-get.js';
+import { setVendorEntries, publishBuildId, publishedBuildId } from '../../src/importmap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML_URL = pathToFileURL(
   resolve(__dirname, '../../../core/src/html.js')
+).toString();
+// File URL of the server context module, so a page fixture can import the
+// real `cookies()` helper (which marks the request dynamic, the #241 defense).
+const CONTEXT_URL = pathToFileURL(
+  resolve(__dirname, '../../src/context.js')
 ).toString();
 
 let tmpRoot;
@@ -81,6 +87,25 @@ function counterPage(counterKey, { revalidate } = {}) {
     `  globalThis.__renders = globalThis.__renders || {};\n` +
     `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
     `  return html\`<h1>render #\${globalThis.__renders[k]}</h1>\`;\n` +
+    `}\n`
+  );
+}
+
+// A page that reads cookies() (the real framework helper, which marks the
+// request dynamic) during render AND declares `revalidate`. This is the wrong
+// combination the #241 dynamicAccess defense must catch: the page varies per
+// user but opted into caching, so the framework must refuse to cache it.
+function cookieReadingPage(counterKey, { revalidate } = {}) {
+  return (
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import { cookies } from ${JSON.stringify(CONTEXT_URL)};\n` +
+    (revalidate != null ? `export const revalidate = ${revalidate};\n` : '') +
+    `export default function P() {\n` +
+    `  const k = ${JSON.stringify(counterKey)};\n` +
+    `  globalThis.__renders = globalThis.__renders || {};\n` +
+    `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
+    `  const who = cookies().get('uid') || 'anon';\n` +
+    `  return html\`<h1>render #\${globalThis.__renders[k]} for \${who}</h1>\`;\n` +
     `}\n`
   );
 }
@@ -303,4 +328,93 @@ test('isCacheableResponse gates on status, streaming, CSP, and non-framework coo
   const sessionCookie = new Response('x', { status: 200 });
   sessionCookie.headers.append('set-cookie', 'sid=xyz; Path=/');
   assert.equal(isCacheableResponse(sessionCookie), false, 'a non-framework Set-Cookie blocks caching');
+});
+
+/* ---------------- dynamicAccess defense: cookie-reading page (#241) ---------------- */
+
+test('a page that reads cookies() AND sets revalidate is NOT cached (dynamicAccess defense)', async () => {
+  freshStore();
+  // This page reads cookies() during render (per-user output) but wrongly
+  // declared `revalidate` and sets NO new Set-Cookie, so the Set-Cookie guard
+  // alone would not catch it. The framework's dynamicAccess flag must, so the
+  // page re-renders every request (never cached) and a logged-out visitor can
+  // never be served a logged-in body.
+  const appDir = makeApp({ 'app/page.js': cookieReadingPage('dyn', { revalidate: 60 }) });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
+  try {
+    // A logged-in visitor (uid cookie) warms first. If this were cached, the
+    // NEXT (logged-out) visitor would see "for alice".
+    const first = await (await app.handle(
+      new Request('http://x/', { headers: { cookie: 'uid=alice' } })
+    )).text();
+    assert.ok(first.includes('render #1 for alice'), 'first render reads the cookie');
+
+    // A second, logged-OUT visitor: a fresh render (#2 for anon), proving the
+    // logged-in body was never cached and never leaked.
+    const second = await (await app.handle(new Request('http://x/'))).text();
+    assert.ok(second.includes('render #2 for anon'), 'logged-out visitor gets a fresh render, not the cached logged-in body');
+    assert.ok(!second.includes('alice'), 'the logged-in body never leaks to a logged-out visitor');
+  } finally {
+    console.warn = origWarn;
+  }
+
+  // The author is warned once, naming the offending path.
+  assert.ok(
+    warnings.some((w) => w.includes('/') && w.includes('revalidate') && w.toLowerCase().includes('per-user')),
+    'a one-time warning names the per-user revalidate page'
+  );
+});
+
+/* ---------------- build-id key folding: a deploy invalidates (#241) ---------------- */
+
+test('the cache key changes when the published build id changes (a deploy invalidates)', () => {
+  const url = new URL('http://x/blog');
+  const before = htmlCacheKey(url);
+  assert.ok(before.includes(publishedBuildId() || 'nobuild'), 'the key embeds the published build id');
+
+  // Simulate a deploy: a new importmap hash promoted to the published build id.
+  return (async () => {
+    try {
+      await setVendorEntries({ 'deploy-marker-pkg': 'https://cdn.example/deploy-marker.js' });
+      publishBuildId();
+      const after = htmlCacheKey(url);
+      assert.notEqual(after, before, 'a new published build id yields a different cache key');
+      assert.ok(after.includes(publishedBuildId()), 'the new key embeds the new build id');
+    } finally {
+      // Restore the empty vendor map so other tests are unaffected.
+      await setVendorEntries({});
+      publishBuildId();
+    }
+  })();
+});
+
+/* ---------------- getSetCookie-absent fallback fails safe (#241) ---------------- */
+
+test('isCacheableResponse fails safe when getSetCookie is unavailable', () => {
+  // Simulate an older runtime lacking Headers.prototype.getSetCookie: a
+  // combined "webjs_csrf=..., sid=..." must be judged non-cacheable rather
+  // than parsing only the first cookie and wrongly passing.
+  const res = new Response('x', { status: 200 });
+  res.headers.set('set-cookie', 'webjs_csrf=abc, sid=xyz');
+  const orig = res.headers.getSetCookie;
+  // Remove the method on this instance to exercise the fallback branch.
+  res.headers.getSetCookie = undefined;
+  try {
+    assert.equal(
+      isCacheableResponse(res),
+      false,
+      'a response with a Set-Cookie is non-cacheable when getSetCookie is unavailable (fail safe)'
+    );
+  } finally {
+    res.headers.getSetCookie = orig;
+  }
+
+  // And a response with NO Set-Cookie is still cacheable under the fallback.
+  const clean = new Response('x', { status: 200, headers: { 'content-type': 'text/html' } });
+  clean.headers.getSetCookie = undefined;
+  assert.equal(isCacheableResponse(clean), true, 'no Set-Cookie stays cacheable under the fallback');
 });

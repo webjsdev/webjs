@@ -64,6 +64,8 @@ export default async function Blog() {
 
     <p><strong>Safety.</strong> Caching is opt-in and conservative, because a wrongly-cached per-user page is a data leak. Declaring <code>revalidate</code> asserts <strong>this page is the same for everyone for N seconds</strong>. The cache is keyed by the full URL (path plus search) only, with no per-user keying, so a page that reads <code>cookies()</code>, a session, or any per-user data MUST NOT set <code>revalidate</code>. The framework also refuses to cache any response that is not a <code>200</code>, is a streamed Suspense body, sets a non-framework <code>Set-Cookie</code>, or runs under CSP. A cached page served to a brand new visitor still receives a fresh CSRF cookie, so it stays correct.</p>
 
+    <p><strong>Framework defense, not just the contract.</strong> When the render reads per-user state through a framework helper (<code>cookies()</code>, <code>headers()</code>, or <code>getSession()</code>), the framework auto-marks the request dynamic and refuses to cache it even if you set <code>revalidate</code>, warning you once with the page path. So a wrong <code>revalidate</code> on a cookie-reading page fails safe (served fresh) instead of leaking. The loud caveat is that this only catches reads THROUGH those helpers. A page that varies its body by an inbound auth cookie or <code>Authorization</code> header but reads it raw (not via <code>cookies()</code> / <code>headers()</code> / <code>getSession()</code>) and sets no new <code>Set-Cookie</code> WILL be cached and served to a logged-out visitor. Read per-user request state through the framework helpers, which auto-exclude the page, or never set <code>revalidate</code> on a per-user page.</p>
+
     <p>Evict on a write with <code>revalidatePath</code> from a server action:</p>
 
     <pre>// modules/blog/actions/publish-post.server.ts
@@ -77,6 +79,8 @@ export async function publishPost(input) {
 }</pre>
 
     <p><code>revalidatePath(path)</code> evicts the server HTML cache for one path, and <code>revalidateAll()</code> clears everything. This is distinct from the client-side <code>revalidate()</code> from <code>@webjsdev/core</code>, which evicts the browser snapshot cache used by client navigation. Time-based eviction is handled automatically by the store TTL (the <code>revalidate</code> seconds).</p>
+
+    <p><strong>Multi-instance note.</strong> <code>revalidatePath(path)</code> deletes a store key, so it reaches every instance sharing a Redis store. <code>revalidateAll()</code> bumps an in-process counter, so on a multi-instance deploy it only flushes the instance it ran on, and peers keep serving until their own TTL expires. For a multi-instance (Redis) deploy, prefer a short <code>revalidate</code> TTL (the time-based floor that always holds cross-instance), use <code>revalidatePath</code> per mutation as the reliable cross-instance primitive, and treat <code>revalidateAll()</code> as a single-instance or dev convenience.</p>
 
     <h2>Low-Level Cache Store</h2>
     <p>Both <code>cache()</code> and the rate limiter are built on a pluggable cache store. You can use it directly for custom caching needs:</p>

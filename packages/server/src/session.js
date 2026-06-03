@@ -21,6 +21,7 @@
  */
 
 import { getStore } from './cache.js';
+import { markDynamicAccess } from './context.js';
 
 // -- Web Crypto helpers ------------------------------------------------------
 // Same shape as auth.js. We duplicate here rather than share a module
@@ -378,5 +379,8 @@ export function session(opts = {}) {
 export function getSession(req) {
   const s = sessionMap.get(req);
   if (!s) throw new Error('getSession() called outside of session middleware');
+  // A session read is per-user, so mark the request dynamic so the server HTML
+  // cache excludes it even when the page declared `revalidate` (#241).
+  markDynamicAccess();
   return s;
 }

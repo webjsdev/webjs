@@ -31,8 +31,9 @@ import {
  */
 export async function ssrPage(route, params, url, opts) {
   // Server HTML response cache (ISR for no-build, #241). OPT-IN: only a page
-  // that declares `export const revalidate = N` (or `metadata.revalidate`) is
-  // ever cached. The page module is loaded ONCE up front to read that window
+  // that declares `export const revalidate = N` is ever cached (the page
+  // module export is the single trigger). The page module is loaded ONCE up
+  // front to read that window
   // and is threaded back through `opts.pageModule` so renderChain reuses the
   // same evaluation (no double-load). A cache HIT serves the stored HTML
   // without re-running the page function. Skipped entirely (no opt-in read,

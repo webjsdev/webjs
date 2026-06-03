@@ -26,6 +26,8 @@
 
 import { getStore } from './cache.js';
 import { STREAM_MARKER } from './conditional-get.js';
+import { publishedBuildId } from './importmap.js';
+import { dynamicAccessed } from './context.js';
 
 /** Namespace prefix for every cached-HTML key, so a flush can target it. */
 const KEY_PREFIX = 'webjs:html:';
@@ -75,9 +77,17 @@ export function readRevalidate(pageModule) {
 /**
  * The cache key for a request: the FULL URL (path + search string), since
  * `searchParams` change page output. Normalized to path + sorted query so
- * `?a=1&b=2` and `?b=2&a=1` share an entry. The current generation is
- * folded into the namespace so `revalidateAll()` (a generation bump) makes
- * every prior key unreachable in one step.
+ * `?a=1&b=2` and `?b=2&a=1` share an entry. Two more discriminators are
+ * folded into the namespace:
+ *
+ *  - the in-process generation, so `revalidateAll()` (a generation bump)
+ *    makes every prior key unreachable in one step;
+ *  - the published build id (the importmap fingerprint), so a NEW DEPLOY
+ *    naturally writes and reads under fresh keys. The cached HTML bakes the
+ *    deploy's `data-webjs-build` importmap into its boot script, so a Redis
+ *    store that survives a deploy must NOT let a v2 process serve a v1-body
+ *    (resolving modules against stale vendor URLs). Folding the build id in
+ *    means a deploy effectively invalidates all cached HTML for free.
  *
  * @param {URL} url
  * @returns {string}
@@ -89,7 +99,8 @@ export function htmlCacheKey(url) {
   const search = params.length
     ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&')
     : '';
-  return `${KEY_PREFIX}${_generation}:${url.pathname}${search}`;
+  const build = publishedBuildId() || 'nobuild';
+  return `${KEY_PREFIX}${build}:${_generation}:${url.pathname}${search}`;
 }
 
 /**
@@ -158,24 +169,24 @@ export function isCacheableResponse(res, guards = {}) {
 
 /**
  * True when the response carries a Set-Cookie OTHER than the framework's
- * own CSRF cookie. A getSetCookie()-capable runtime is read directly; a
- * fallback parses the single combined header. Conservative: an
- * unparseable cookie counts as non-framework (do not cache).
+ * own CSRF cookie. Reads each cookie individually via `getSetCookie()`, the
+ * only correct way to enumerate multiple Set-Cookie values (a combined
+ * `get('set-cookie')` cannot be split safely, since a cookie value or an
+ * Expires date can contain a comma). When `getSetCookie` is unavailable
+ * (a runtime older than Node 24) this FAILS SAFE: it reports a
+ * non-framework cookie (do not cache) rather than parsing only the first of
+ * a combined header and wrongly judging it framework-only.
  *
  * @param {Response} res
  * @returns {boolean}
  */
 function hasNonFrameworkSetCookie(res) {
-  /** @type {string[]} */
-  let cookies = [];
   const h = res.headers;
-  if (typeof h.getSetCookie === 'function') {
-    cookies = h.getSetCookie();
-  } else {
-    const single = h.get('set-cookie');
-    if (single) cookies = [single];
+  if (typeof h.getSetCookie !== 'function') {
+    // No reliable per-cookie enumeration: fail safe (treat as per-user).
+    return h.has('set-cookie');
   }
-  for (const c of cookies) {
+  for (const c of h.getSetCookie()) {
     const name = c.split('=', 1)[0].trim().toLowerCase();
     if (name !== 'webjs_csrf') return true;
   }
@@ -233,6 +244,16 @@ export async function commitHtmlCache(req, res, url) {
   res.headers.delete(HTML_CACHE_MARKER);
   const revalidateSeconds = Number(marker);
   if (!Number.isFinite(revalidateSeconds) || revalidateSeconds <= 0) return res;
+  // Per-user leak defense (#241). The page set `revalidate` (asserting "same
+  // for everyone"), but if the render actually read per-user request state
+  // (cookies() / headers() / getSession()), its body varies by visitor and
+  // must NOT be cached, even though it set no new Set-Cookie. Fail safe (skip
+  // caching) and warn the author ONCE per path so the wrong `revalidate` is
+  // visible without spamming the log.
+  if (dynamicAccessed()) {
+    warnDynamicRevalidateOnce(url.pathname);
+    return res;
+  }
   // Re-check status / streaming / cookie guards against the final response.
   if (!isCacheableResponse(res)) return res;
   try {
@@ -251,6 +272,26 @@ export async function commitHtmlCache(req, res, url) {
     /* a buffer / store failure must never affect the live response */
   }
   return res;
+}
+
+/**
+ * Paths already warned about a `revalidate` on a per-user page, so the
+ * console.warn fires once per offending route rather than once per request.
+ * @type {Set<string>}
+ */
+const _warnedDynamicPaths = new Set();
+
+/** @param {string} pathname */
+function warnDynamicRevalidateOnce(pathname) {
+  if (_warnedDynamicPaths.has(pathname)) return;
+  _warnedDynamicPaths.add(pathname);
+  console.warn(
+    `[webjs] not caching ${pathname}: it exported \`revalidate\` but read ` +
+    `per-user request state (cookies() / headers() / getSession()) during ` +
+    `render, so its output varies by visitor. Remove \`revalidate\` from a ` +
+    `per-user page, or stop reading request state if it is the same for ` +
+    `everyone. The page is being served fresh (uncached) to avoid a leak.`
+  );
 }
 
 /** Evict ALL cached HTML for this process. @returns {void} */

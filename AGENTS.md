@@ -871,6 +871,10 @@ export default async function Blog() { /* ... */ }
 
 **Declaring `revalidate` is you asserting "this page renders identically for every visitor for N seconds."** A page that reads `cookies()` / a session / anything per-user MUST NOT set `revalidate`. There is no per-user keying: the cache is keyed by the FULL URL (path + search string) only. `revalidate = 0` (or a negative / non-number) means "no caching" (always dynamic, the default). The trigger is the `export const revalidate` module export only.
 
+**Framework defense (not just the contract).** When the render reads per-user request state through a framework helper (`cookies()`, `headers()`, or `getSession()`), the framework auto-marks the request dynamic and REFUSES to cache it even when the page set `revalidate` (mirroring Next.js auto-marking a route dynamic on a `cookies()` / `headers()` read), and emits a one-time `console.warn` naming the page. So a wrong `revalidate` on a cookie-reading page fails SAFE (served fresh, uncached) instead of leaking.
+
+**LOUD failure mode to know.** This defense only fires for state read THROUGH the framework helpers. A page that varies its body by an inbound auth cookie / `Authorization` header but reads it RAW (e.g. `getRequest().headers.get('cookie')` directly, or a third-party middleware that branches on the header without going through `cookies()` / `headers()` / `getSession()`) AND sets no new `Set-Cookie` WILL be cached and served to a logged-out visitor unless it reads that request state through the framework `cookies()` / `headers()` / `getSession()` helpers (which auto-exclude it). The fix is to read per-user state through those helpers (or simply do not set `revalidate` on any per-user page).
+
 ### Guards (defense in depth, all must pass to cache)
 
 Even with `revalidate` set, the framework refuses to cache a response unless every guard passes, re-checked against the FINAL response at the funnel (after segment middleware runs):
@@ -879,6 +883,7 @@ Even with `revalidate` set, the framework refuses to cache a response unless eve
 |---|---|
 | status 200 | An error / redirect / 404 is request-specific |
 | not a streamed Suspense body | An unflushed stream has no stable bytes and cannot be buffered cheaply |
+| no per-user request read | The render did not call `cookies()` / `headers()` / `getSession()`. If it did, the output varies per visitor and is NEVER cached (the auto-dynamic defense above), regardless of `Set-Cookie` |
 | no non-framework `Set-Cookie` | A page that sets a session / per-user cookie is per-user output. The framework's own `webjs_csrf` cookie is allowed (it is re-minted per response on a cache hit) |
 | CSP is OFF | With CSP enabled the inline boot script carries a fresh per-request nonce, so the body varies per request; a cached body would replay a stale nonce its CSP header rejects |
 | no `X-Webjs-Have` (partial-nav) request | A partial-nav response's bytes depend on the request header, so it must not be shared under the full-URL key |
@@ -886,6 +891,8 @@ Even with `revalidate` set, the framework refuses to cache a response unless eve
 ### CSRF cookie + CSP on a cache hit
 
 The cached value is the stable per-page HTML body only. The per-response varying bits are RE-MINTED on every cache hit, so a brand-new visitor served from cache is still correct: the `webjs_csrf` cookie is freshly issued (it is a `Set-Cookie` header, never part of the cached body), and the published build id is re-read. CSP-enabled pages are simply never cached (see the guard table), so there is no stale-nonce risk. A cached page and its fresh render are observably identical within the window (differential correctness).
+
+**Build id is folded into the cache key, so a deploy invalidates for free.** The cached HTML bakes the deploy's `data-webjs-build` importmap into its boot script. With a Redis store that survives a deploy, a v2 process serving a v1-body would resolve modules against stale vendor URLs. To prevent that, the cache key embeds the published build id (the importmap fingerprint) alongside the path + query, so a new deploy naturally writes and reads under fresh keys and never serves a stale-importmap body. The old-deploy entries expire via their TTL.
 
 ### On-demand revalidation: `revalidatePath` (server-side)
 
@@ -903,6 +910,8 @@ export async function publishPost(input) {
 ```
 
 Time-based eviction is handled by the store TTL (= `revalidate` seconds). This PR does a simple TTL-evict + on-demand `revalidatePath`; stale-while-revalidate (serving stale once while refreshing in the background) is NOT implemented (a documented follow-up). Mechanism: `packages/server/src/html-cache.js`, the cache lookup + opt-in read live in `ssrPage` (`packages/server/src/ssr.js`), and the cache WRITE is a response-funnel step (`commitHtmlCache`) wired in `dev.js`'s `handle()` so it sees the final post-middleware response.
+
+**Multi-instance (Redis) limitation.** `revalidatePath(path)` deletes a store key, so it reaches every instance that shares a Redis store. But `revalidateAll()` bumps an IN-PROCESS generation counter folded into the key namespace, so on a multi-instance deploy it only flushes the instance it ran on; peers keep serving until their own TTL expires (or their own `revalidateAll()` runs). Because the generation is per process, a targeted `revalidatePath` issued AFTER a divergent `revalidateAll` on another instance computes a different namespaced key and may not reach a peer. For a multi-instance deploy, prefer a SHORT `revalidate` TTL (the time-based floor that always holds cross-instance) and treat `revalidateAll()` as a single-instance / dev convenience, or assume a single instance. Per-path `revalidatePath` after a mutation is the reliable cross-instance primitive.
 
 ---
 
