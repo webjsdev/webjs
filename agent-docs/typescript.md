@@ -289,6 +289,21 @@ type, AND the reader in lockstep, the one procedure documented in
 (`packages/server/test/config/webjs-config-schema.test.js`) fails if the schema
 and the reader key set diverge.
 
+### Both runtime packages ship a type overlay
+
+Both `@webjsdev/core` AND `@webjsdev/server` ship a hand-authored `.d.ts`
+overlay plus a `types` export condition, so a `strict` + `nodenext` app
+resolves real types for either import with no TS7016 ("could not find a
+declaration file") error. The server overlay (`packages/server/index.d.ts`,
+with `src/check.d.ts` and `src/testing.d.ts` for the `./check` / `./testing`
+subpaths) types the full public surface (`createRequestHandler`, `startServer`,
+`cors`, `cache`, `createAuth`, `rateLimit`, `sitemap`, `Session`, `json`,
+`readBody`, the `revalidate*` family, the context helpers, the cache stores, the
+auth providers, the test harness, and the convention validator), reusing the
+core prop / metadata types rather than redefining them. The runtime stays plain
+`.js` + JSDoc; the overlay is types-only with zero runtime cost. A drift test
+keeps `index.d.ts` in lockstep with `index.js`'s runtime exports.
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language
