@@ -73,6 +73,15 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="preload" href="/public/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/inter-600.woff2" as="font" type="font/woff2" crossorigin>
 
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
+    <script nonce="${nonce}">
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-3RC87HXJ3P');
+    </script>
+
     <script nonce="${nonce}">
       (function(){
         try {
@@ -104,14 +113,14 @@ export default function RootLayout({ children }: { children: unknown }) {
         color-scheme: light dark;
         --fg:            oklch(0.20 0.018 60);
         --fg-muted:      oklch(0.44 0.02 60);
-        --fg-subtle:     oklch(0.60 0.018 65);
+        --fg-subtle:     oklch(0.50 0.02 65);
         --bg:            oklch(0.985 0.008 75);
         --bg-elev:       oklch(1 0 0);
         --bg-subtle:     oklch(0.96 0.008 75);
         --bg-sunken:     oklch(0.93 0.01 70);
         --border:        oklch(0.88 0.012 70 / 0.9);
         --border-strong: oklch(0.78 0.014 70 / 0.95);
-        --accent:        oklch(0.58 0.16 52);
+        --accent:        oklch(0.54 0.16 52);
         --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
         --heart:         oklch(0.64 0.22 6);
@@ -129,7 +138,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
           --heart: oklch(0.74 0.18 6);
-          --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.56 0.02 60);
+          --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
           --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
           --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
           --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
@@ -141,7 +150,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       :root[data-theme='dark'] {
         color-scheme: dark;
         --heart: oklch(0.74 0.18 6);
-        --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.56 0.02 60);
+        --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
         --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
         --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
         --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
@@ -226,8 +235,8 @@ export default function RootLayout({ children }: { children: unknown }) {
     <cursor-glow aria-hidden="true"></cursor-glow>
 
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
-      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent bg-accent-tint rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent font-semibold no-underline hover:underline">Introducing the AI-first component library &rarr;</a>
+      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-accent-tint rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
+      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library &rarr;</a>
     </div>
 
     <header class="sticky top-0 z-20 backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
