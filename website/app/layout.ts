@@ -66,12 +66,11 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="apple-touch-icon" href="/public/favicon.png">
 
     <!-- Self-hosted fonts (declared via @font-face in input.css). Preload the
-         above-the-fold weights so they fetch in parallel with the stylesheet:
-         the hero headline (Inter Tight 800), body text (Inter 400), and the
-         nav / button weight (Inter 600). -->
-    <link rel="preload" href="/public/fonts/inter-tight-800.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/inter-600.woff2" as="font" type="font/woff2" crossorigin>
+         two above-the-fold families so they fetch in parallel with the
+         stylesheet: the display face (Inter Tight, hero headline) and the body
+         face (Inter). Each is one variable file covering all weights. -->
+    <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
@@ -89,6 +88,11 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
+      // Pause the infinite accent-drift (a fixed full-viewport gradient) while
+      // the tab is hidden so it stops repainting in the background.
+      document.addEventListener('visibilitychange', function () {
+        document.documentElement.style.animationPlayState = document.hidden ? 'paused' : 'running';
+      });
       document.addEventListener('click', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
@@ -128,6 +132,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
         --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-serif:   ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
         --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
         --shadow-sm: 0 1px 2px oklch(0.5 0.06 55 / 0.08);
         --shadow:    0 8px 30px oklch(0.5 0.08 55 / 0.10), 0 2px 6px oklch(0.5 0.06 55 / 0.06);
