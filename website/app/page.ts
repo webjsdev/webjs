@@ -268,7 +268,7 @@ export default function LandingPage() {
           `)}
         </div>
         <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. webjs uses Next.js-style file routing and lit-style web components, the proven DX AI agents already have the muscle memory for.</p>
-        <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js's. JSDoc-typed JavaScript, no build step.</p>
+        <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js. JSDoc-typed JavaScript, no build step.</p>
       </div>
     </section>
 
