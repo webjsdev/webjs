@@ -47,6 +47,7 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `broadcast.js` | `broadcast(topic, msg)` for fan-out messaging |
 | `context.js` | AsyncLocalStorage per-request context (`getRequest`, `withRequest`, `headers`, `cookies`). Also wires the server-side `cspNonce()` provider: returns the per-request nonce `setCspNonce` stored (minted when CSP is on, #233), else falls back to parsing an inbound `Content-Security-Policy` request header |
 | `csp.js` | CSP nonce minting + `Content-Security-Policy` header building (#233). `readCspConfig` normalizes the `webjs.csp` package.json key (off by default; `true` = strict default policy, object = custom directives + `reportOnly`); `mintNonce` is the per-request CSPRNG nonce; `buildCspHeader` substitutes the nonce into the policy. Plugs into the #232 `applySecurityHeaders` seam in `dev.js`'s `handle()` |
+| `body-limit.js` | Request body-size limits (413) + node:http server timeouts (#237). `readBodyLimits` resolves the JSON/RPC (`webjs.maxBodyBytes`, default 1 MiB) and form/multipart (`webjs.maxMultipartBytes`, default 10 MiB) caps from package.json + the `WEBJS_MAX_BODY_BYTES` / `WEBJS_MAX_MULTIPART_BYTES` env overrides (env wins, `0` disables). `computeServerTimeouts` resolves `requestTimeout` (30s) / `headersTimeout` (20s) / `keepAliveTimeout` (5s), clamping `headersTimeout` strictly under `requestTimeout` per node semantics. `readBytesBounded` / `readTextBounded` / `readFormDataBounded` are the single bounded-read funnel every body-read site (RPC in `actions.js`, `readBody` in `json.js`, the page-action form in `page-action.js`) routes through: a `Content-Length` over the limit is a fast reject, a chunked body is counted while streaming and abandoned past the cap, so an over-limit body is never buffered whole. `BodyLimitError` (caught and mapped to 413 by `api.js`) is how `readBody` inside a route handler signals over-limit; the RPC / page-action paths return `payloadTooLarge()` inline |
 | `serializer.js` | Default serializer + `setSerializer` / `getSerializer` for the RPC wire format |
 | `json.js` | `json()` + `readBody()` content-negotiation helpers |
 | `check.js` | Convention validator backing `webjs check`. Correctness-only; rules include `no-browser-globals-in-render`, `no-non-erasable-typescript` |
@@ -272,7 +273,7 @@ organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 `session/`, `cache/`, `rate-limit/`, `csrf/`, `cors/`,
 `broadcast/`, `websocket/`, `check/`, `guardrails/`,
 `module-graph/`, `scanner/`, `elision/`, `vendor/`, `env/`, `dev/`,
-`forwarded/`.
+`forwarded/`, `body-limit/`.
 
 Cross-package tests that exercise the SSR pipeline, scaffolds,
 or full app boots live at the repo root in `test/ssr/`,

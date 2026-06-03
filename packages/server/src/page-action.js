@@ -1,5 +1,7 @@
 import { isNotFound, isRedirect } from '@webjsdev/core';
 import { ssrPage, ssrNotFound, loadModule } from './ssr.js';
+import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
+import { getBodyLimits } from './context.js';
 
 /**
  * Page server actions: a `page.{js,ts}` may export an `action` function that
@@ -106,24 +108,50 @@ export async function loadPageAction(file, dev) {
 }
 
 /**
- * Parse the submitted form body into a `FormData`, handed to the action as
- * `formData`. A non-form content type (e.g. a JSON fetch) yields an empty
- * FormData so the action signature stays stable; the action can still read the
- * raw `request` for the JSON body.
+ * Read the submitted body ONCE, bounded by the form/multipart limit (issue
+ * #237), and return both a `FormData` (handed to the action as `formData`) and a
+ * rebuilt `Request` carrying the already-read bytes (handed to the action as
+ * `request`, so it can still call `request.json()` / `request.formData()`). The
+ * body is consumed off the ORIGINAL request directly, NOT via `req.clone()`: a
+ * tee'd clone whose reader is cancelled mid-stream (the over-limit case)
+ * deadlocks the untaken branch, hanging the response.
+ *
+ * An over-limit body is reported as `tooLarge` (the caller returns 413) and is
+ * never buffered whole. A form posts more than a JSON RPC call (textarea, small
+ * upload), so it uses the higher `multipart` cap. A non-form content type yields
+ * an empty FormData so the action signature stays stable; the rebuilt request
+ * still carries the raw bytes for the action to parse however it likes.
  *
  * @param {Request} req
- * @returns {Promise<{ formData: FormData }>}
+ * @returns {Promise<{ tooLarge: boolean, formData: FormData, request: Request }>}
  */
 async function parseFormBody(req) {
   const ct = req.headers.get('content-type') || '';
-  /** @type {FormData} */
-  let formData;
-  if (/multipart\/form-data|application\/x-www-form-urlencoded/i.test(ct)) {
-    formData = await req.formData();
-  } else {
-    formData = new FormData();
+  const limits = getBodyLimits();
+  const limit = limits ? limits.multipart : DEFAULT_MAX_MULTIPART_BYTES;
+  const { tooLarge, bytes } = await readBytesBounded(req, limit);
+  if (tooLarge) return { tooLarge: true, formData: new FormData(), request: req };
+
+  // Rebuild a fresh Request from the bytes so the action can re-read the body.
+  const headers = new Headers(req.headers);
+  const rebuilt = new Request(req.url, {
+    method: req.method,
+    headers,
+    body: bytes && bytes.byteLength ? bytes : undefined,
+  });
+
+  const isForm = /multipart\/form-data|application\/x-www-form-urlencoded/i.test(ct);
+  let formData = new FormData();
+  if (isForm) {
+    // Parse a SECOND fresh Request (the rebuilt one is reserved for the action).
+    const forParse = new Request(req.url, {
+      method: 'POST',
+      headers: ct ? { 'content-type': ct } : undefined,
+      body: bytes && bytes.byteLength ? bytes : undefined,
+    });
+    formData = await forParse.formData();
   }
-  return { formData };
+  return { tooLarge: false, formData, request: rebuilt };
 }
 
 /**
@@ -147,9 +175,16 @@ async function parseFormBody(req) {
 export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
   const { action, module: pageModule } = loaded;
   const searchParams = Object.fromEntries(url.searchParams.entries());
-  let formData;
+  let formData = new FormData();
+  // The body is read ONCE here (bounded). `actionReq` is a rebuilt request the
+  // action can re-read; on a parse failure it falls back to the original `req`.
+  let actionReq = req;
   try {
-    ({ formData } = await parseFormBody(req.clone()));
+    const parsed = await parseFormBody(req);
+    // Over the form/multipart limit (issue #237): 413 before the action runs.
+    if (parsed.tooLarge) return payloadTooLarge();
+    formData = parsed.formData;
+    actionReq = parsed.request;
   } catch {
     formData = new FormData();
   }
@@ -157,7 +192,7 @@ export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
   /** @type {ActionResult | undefined} */
   let result;
   try {
-    result = await action({ request: req, params, searchParams, url, formData });
+    result = await action({ request: actionReq, params, searchParams, url, formData });
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);

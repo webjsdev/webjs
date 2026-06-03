@@ -57,7 +57,7 @@ import {
   hashFile,
 } from './actions.js';
 import { defaultLogger } from './logger.js';
-import { withRequest, setCspNonce } from './context.js';
+import { withRequest, setCspNonce, setBodyLimits } from './context.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
@@ -72,6 +72,7 @@ function kebab(name) {
 import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
+import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -234,6 +235,45 @@ export async function readCspConfigFromApp(appDir) {
 }
 
 /**
+ * Resolve the request body-size limits (issue #237) from the app's package.json
+ * `webjs.maxBodyBytes` / `webjs.maxMultipartBytes` plus the env overrides
+ * (`WEBJS_MAX_BODY_BYTES` / `WEBJS_MAX_MULTIPART_BYTES`). A missing or
+ * unreadable package.json falls through to the secure defaults (env still wins),
+ * never a throw.
+ *
+ * @param {string} appDir
+ * @returns {Promise<{ json: number, multipart: number }>}
+ */
+export async function readBodyLimitsFromApp(appDir) {
+  let pkg;
+  try {
+    pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  } catch {
+    pkg = undefined;
+  }
+  return readBodyLimits(pkg);
+}
+
+/**
+ * Resolve the node:http server timeouts (issue #237) from the app's
+ * package.json `webjs.requestTimeoutMs` / `webjs.headersTimeoutMs` /
+ * `webjs.keepAliveTimeoutMs` plus the env overrides. A missing or unreadable
+ * package.json falls through to the secure defaults (env still wins).
+ *
+ * @param {string} appDir
+ * @returns {Promise<{ requestTimeout: number, headersTimeout: number, keepAliveTimeout: number }>}
+ */
+export async function readServerTimeoutsFromApp(appDir) {
+  let pkg;
+  try {
+    pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  } catch {
+    pkg = undefined;
+  }
+  return computeServerTimeouts(pkg);
+}
+
+/**
  * Create a reusable, framework-agnostic request handler for a webjs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
@@ -337,10 +377,19 @@ export async function createRequestHandler(opts) {
   // carry it), and sets the matching header carrying the same nonce.
   const cspConfig = await readCspConfigFromApp(appDir);
 
+  // Request body-size limits (issue #237), read once from the app's
+  // package.json `webjs.maxBodyBytes` / `webjs.maxMultipartBytes` plus the env
+  // overrides. The secure defaults (1 MiB JSON/RPC, 10 MiB form) apply when
+  // unconfigured. Stamped on every request via `setBodyLimits` so `readBody`
+  // (used inside route handlers) enforces the same cap the RPC and page-action
+  // paths do.
+  const bodyLimits = await readBodyLimitsFromApp(appDir);
+
   const state = {
     routeTable,
     actionIndex: null,
     middleware: null,
+    bodyLimits,
     logger,
     moduleGraph: null,
     elidableComponents: new Set(),
@@ -615,6 +664,11 @@ export async function createRequestHandler(opts) {
       // unchanged. One minted value flows mint -> store -> SSR -> header.
       const nonce = cspConfig.enabled ? mintNonce() : '';
       if (nonce) setCspNonce(nonce);
+
+      // Make the resolved body-size limits (issue #237) readable from the
+      // request scope, so `readBody` inside a route handler enforces the same
+      // cap the framework's own RPC / page-action body reads do.
+      setBodyLimits(state.bodyLimits);
 
       const res = await produce(req);
       // Merge in the secure-by-default headers plus the per-path config
@@ -899,6 +953,20 @@ export async function startServer(opts) {
       res.end(dev && e instanceof Error ? `webjs error: ${e.stack}` : 'Internal server error');
     }
   });
+
+  // Inbound server timeouts (issue #237), node:http built-ins. Defends against
+  // slowloris and hung connections: `requestTimeout` bounds the time to receive
+  // the WHOLE request, `headersTimeout` the time to receive just the headers
+  // (node measures both from the same request start, so it is kept strictly
+  // under requestTimeout to actually fire), and `keepAliveTimeout` the idle
+  // window before a kept-alive socket is closed. Secure production defaults,
+  // overridable via `webjs.requestTimeoutMs` / `headersTimeoutMs` /
+  // `keepAliveTimeoutMs` in package.json or the matching WEBJS_*_MS env vars.
+  // A value of 0 disables that timeout (node's own no-limit sentinel).
+  const timeouts = await readServerTimeoutsFromApp(app.appDir);
+  server.requestTimeout = timeouts.requestTimeout;
+  server.headersTimeout = timeouts.headersTimeout;
+  server.keepAliveTimeout = timeouts.keepAliveTimeout;
 
   // WebSocket upgrade handling: any route.js that exports `WS` becomes a
   // WebSocket endpoint at its URL.

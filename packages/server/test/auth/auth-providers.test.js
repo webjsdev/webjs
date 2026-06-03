@@ -16,6 +16,7 @@ import {
   GitHub,
 } from '../../src/auth.js';
 import { memoryStore, setStore } from '../../src/cache.js';
+import { withRequest, setBodyLimits } from '../../src/context.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -439,6 +440,72 @@ test('POST /api/auth/signin/credentials (form body)', async () => {
   const resp = await handlers.POST(new Request('http://localhost/api/auth/signin/credentials', {
     method: 'POST', body: fd,
   }));
+  assert.equal(resp.status, 302);
+});
+
+/* -- credentials sign-in body-size limit (413), issue #237 -- */
+
+/** Run `fn` with a stamped per-request body limit, the way the handler does. */
+function withLimit(json, req, fn) {
+  return withRequest(req, () => { setBodyLimits({ json, multipart: json }); return fn(); });
+}
+
+test('POST signin/credentials: over-limit JSON body → 413, never authenticates', async () => {
+  const { handlers } = createAuth({
+    secret: 's',
+    providers: [Credentials({ authorize: async (c) => ({ id: 'id', name: 'n', email: c.email }) })],
+  });
+  const req = new Request('http://localhost/api/auth/signin/credentials', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'x@y', password: 'z'.repeat(500) }),
+  });
+  const resp = await withLimit(50, req, () => handlers.POST(req));
+  assert.equal(resp.status, 413);
+  // 413 short-circuits before signInFn, so no auth cookie is ever minted.
+  assert.equal(resp.headers.get('set-cookie'), null);
+});
+
+test('POST signin/credentials: under-limit JSON body still authenticates (302 + cookie)', async () => {
+  const { handlers } = createAuth({
+    secret: 's',
+    providers: [Credentials({ authorize: async (c) => ({ id: 'id', name: 'n', email: c.email }) })],
+  });
+  const req = new Request('http://localhost/api/auth/signin/credentials', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'x@y' }),
+  });
+  const resp = await withLimit(50, req, () => handlers.POST(req));
+  assert.equal(resp.status, 302);
+  assert.ok(resp.headers.get('set-cookie').includes('webjs.auth='));
+});
+
+test('POST signin/credentials: over-limit FORM body → 413', async () => {
+  const { handlers } = createAuth({
+    secret: 's',
+    providers: [Credentials({ authorize: async (c) => (c.email ? { id: 'i', name: 'n', email: c.email } : null) })],
+  });
+  const req = new Request('http://localhost/api/auth/signin/credentials', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'email=f@y&password=' + 'z'.repeat(500),
+  });
+  const resp = await withLimit(50, req, () => handlers.POST(req));
+  assert.equal(resp.status, 413);
+});
+
+test('POST signin/credentials: under-limit FORM body still authenticates', async () => {
+  const { handlers } = createAuth({
+    secret: 's',
+    providers: [Credentials({ authorize: async (c) => (c.email ? { id: 'i', name: 'n', email: c.email } : null) })],
+  });
+  const req = new Request('http://localhost/api/auth/signin/credentials', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'email=f@y',
+  });
+  const resp = await withLimit(50, req, () => handlers.POST(req));
   assert.equal(resp.status, 302);
 });
 

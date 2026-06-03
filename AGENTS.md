@@ -802,6 +802,39 @@ CSP is OFF by default and opt-in via a `webjs.csp` key in `package.json`. When e
 
 ---
 
+## Request ingress hardening: body-size limit (413) + server timeouts (on by default)
+
+The server caps inbound request bodies and bounds connection lifetimes by default, so an uncapped RPC / route / form body is not a memory-exhaustion vector and a slow / hung connection is not a slowloris vector. Both are web-standard / node:http-native, configurable, and apply with secure defaults when unset (issue #237).
+
+### Body-size limit (413 Payload Too Large)
+
+Every path that READS a request body enforces a size cap: the server-action RPC endpoint, `route.{js,ts}` handlers that call `readBody`, the exposed-action REST path, and the no-JS page-action form path. All route through one bounded-read helper (`packages/server/src/body-limit.js`), so the limit is uniform.
+
+| Limit | Default | Config key | Env override | Applies to |
+|---|---|---|---|---|
+| JSON / RPC | 1 MiB | `webjs.maxBodyBytes` | `WEBJS_MAX_BODY_BYTES` | RPC endpoint, `readBody`, exposed-action body |
+| Form / multipart | 10 MiB | `webjs.maxMultipartBytes` | `WEBJS_MAX_MULTIPART_BYTES` | page-action form submissions |
+
+```jsonc
+{ "webjs": { "maxBodyBytes": 262144, "maxMultipartBytes": 5242880 } }
+```
+
+Precedence is env override > package.json > default. A value of `0` disables that cap (the deliberate opt-out, e.g. an edge already caps bodies). An over-limit body responds **413** and is NOT buffered whole: a `Content-Length` over the limit is a fast reject (the body is never read), and a chunked / streamed body with no declared length is counted while it streams and abandoned the instant it crosses the limit (never holding more than roughly one chunk past the cap). Large file uploads are a separate concern (#247); the multipart cap stays bounded.
+
+### Server timeouts (slowloris / hung-connection defense)
+
+`startServer` sets three node:http built-ins on the server. Secure production defaults, overridable.
+
+| Timeout | Default | Config key | Env override | Meaning |
+|---|---|---|---|---|
+| `requestTimeout` | 30s | `webjs.requestTimeoutMs` | `WEBJS_REQUEST_TIMEOUT_MS` | Max time to receive the ENTIRE request (headers + body) |
+| `headersTimeout` | 20s | `webjs.headersTimeoutMs` | `WEBJS_HEADERS_TIMEOUT_MS` | Max time to receive just the headers |
+| `keepAliveTimeout` | 5s | `webjs.keepAliveTimeoutMs` | `WEBJS_KEEP_ALIVE_TIMEOUT_MS` | Idle window before a kept-alive socket is closed |
+
+node semantics: `headersTimeout` MUST be strictly less than `requestTimeout` to ever fire (node measures both deadlines from the same request start), so a config that sets them inconsistently has `headersTimeout` clamped to just under `requestTimeout`. A value of `0` disables that timeout (node's own no-limit sentinel). Mechanism: `computeServerTimeouts` / `readBodyLimits` in `packages/server/src/body-limit.js`, read once at boot in `dev.js` (`readServerTimeoutsFromApp` / `readBodyLimitsFromApp`) and, for the body limits, stamped on every request scope so `readBody` enforces them too.
+
+---
+
 ## CONVENTIONS.md and webjs check: two surfaces, split by nature
 
 Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. It is the source of truth for **project conventions**: how code is organized, named, and tested (modules layout, action placement, one-function-per-file, the testing approach, styling, git workflow). These are preferences a reasonable project could do differently, so they are guidance, customizable directly in the prose (sections marked `<!-- OVERRIDE -->`), not enforced by any tool.
