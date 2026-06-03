@@ -68,6 +68,27 @@ let _appDir = '';
 let _coreDir = '';
 
 /**
+ * A fingerprint of the current elision verdict (the elidable-component +
+ * inert-route set), folded into an APP MODULE's hash. An app module's SERVED
+ * body is not its raw source: `dev.js` runs `elideImportsFromSource` over it,
+ * stripping a side-effect import of a display-only component. That strip is a
+ * property of the IMPORTED component's verdict, not of the importer's own
+ * bytes, so when a component flips display-only <-> interactive the importer's
+ * served body changes while its source is byte-identical. Hashing the source
+ * alone would keep the same `?v`, and a returning client would hold the stale
+ * immutable copy (the now-interactive component never imported, so never
+ * hydrated) for the full immutable TTL. Folding the verdict fingerprint into
+ * the hash busts every app module's url on a verdict change, so the stale-copy
+ * window cannot open. Empty when no module is elidable (then an app module's
+ * hash is exactly `sha256(bytes)`), and only mixed for files under `_appDir`
+ * (core / public assets are never elision-transformed). Set by `dev.js`'s
+ * `ensureReady` after `analyzeElision`, re-set on every rebuild.
+ *
+ * @type {string}
+ */
+let _elisionFp = '';
+
+/**
  * Memoized per-file content hash. Keyed by absolute path. Cleared on the
  * fs.watch rebuild so a changed file re-hashes.
  *
@@ -88,6 +109,24 @@ export function setAssetRoots(opts) {
   _appDir = opts.appDir || '';
   _coreDir = opts.coreDir || '';
   _enabled = !!opts.enabled && !!_appDir && !!_coreDir;
+}
+
+/**
+ * Set the elision-verdict fingerprint folded into app-module hashes (see
+ * `_elisionFp`). A no-op when the value is unchanged; on a change it clears the
+ * hash cache so every app module re-hashes against the new verdict. `dev.js`
+ * calls this from `ensureReady` after `analyzeElision` (and again on each
+ * rebuild), passing a stable digest of the elidable-component + inert-route set
+ * (or `''` when nothing is elidable).
+ *
+ * @param {string} fp
+ * @returns {void}
+ */
+export function setElisionFingerprint(fp) {
+  const next = fp || '';
+  if (next === _elisionFp) return;
+  _elisionFp = next;
+  _hashCache.clear();
 }
 
 /**
@@ -114,15 +153,26 @@ export function clearAssetHashCache() {
 export function assetHashFor(absPath) {
   const cached = _hashCache.get(absPath);
   if (cached !== undefined) return cached;
-  let hash = '';
   try {
     const bytes = readFileSync(absPath);
-    hash = createHash('sha256').update(bytes).digest('hex').slice(0, HASH_LEN);
+    const h = createHash('sha256').update(bytes);
+    // An app module's served body is elision-transformed, so fold the verdict
+    // fingerprint in (see `_elisionFp`). Core / public files are never
+    // transformed, so they hash over their bytes alone. Empty fp leaves an app
+    // module's hash at exactly `sha256(bytes)`.
+    if (_elisionFp && _appDir && absPath.startsWith(_appDir + sep)) {
+      h.update('\0');
+      h.update(_elisionFp);
+    }
+    const hash = h.digest('hex').slice(0, HASH_LEN);
+    _hashCache.set(absPath, hash);
+    return hash;
   } catch {
-    hash = '';
+    // A transient read failure is NOT memoized (returning '' fails safe to the
+    // 1h fallback), so a later emit re-attempts instead of pinning the file to
+    // the fallback for the process lifetime.
+    return '';
   }
-  _hashCache.set(absPath, hash);
-  return hash;
 }
 
 /**

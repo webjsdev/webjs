@@ -66,10 +66,18 @@ function maskJsSet(html) {
     .trim();
 }
 
-/** The set of module URLs the page preloads (the JS-loaded set). */
+/**
+ * The set of module URLs the page preloads (the JS-loaded set), keyed by
+ * PATHNAME with the content-hash `?v` query (#243) stripped. The `?v` of a
+ * module that imports a display-only component legitimately DIFFERS on vs off,
+ * because elision strips that import from the served body, so the body bytes
+ * (and thus the content hash) differ. That hash difference is part of the same
+ * JS-loaded set the differential invariant masks; the subset check here is
+ * about WHICH modules are preloaded, not their cache-busting query.
+ */
 function preloadSet(html) {
   return new Set(
-    [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1]),
+    [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1].split('?')[0]),
   );
 }
 

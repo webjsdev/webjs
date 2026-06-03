@@ -115,7 +115,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
-import { setAssetRoots, clearAssetHashCache } from './asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -688,6 +688,23 @@ export async function createRequestHandler(opts) {
               : { elidableComponents: new Set(), inertRouteModules: new Set() };
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
+            // Fold the elision verdict into app-module content hashes (#243): an
+            // app module's served body is elision-transformed, so a verdict flip
+            // must bust its `?v` even when its source is byte-identical. A stable
+            // string of the sorted elidable + inert paths, RELATIVIZED to appDir
+            // so the fingerprint is a property of the app's STRUCTURE, not its
+            // filesystem location (two deploys at different absolute paths, or
+            // two identical apps, produce the same fingerprint). asset-hash
+            // digests it into each app-module hash; '' when nothing is elidable,
+            // so a no-elision app's hash stays exactly `sha256(bytes)`.
+            {
+              const rel = (p) => (p.startsWith(appDir) ? p.slice(appDir.length) : p);
+              const elidedPaths = [
+                ...state.elidableComponents,
+                ...state.inertRouteModules,
+              ].map(rel).sort();
+              setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
+            }
             t.elision = now() - m;
             if (dev) {
               for (const { className, file } of await findOrphanComponents(appDir)) {
@@ -1193,7 +1210,10 @@ export async function createRequestHandler(opts) {
     const moduleUrls = [page.route.file, ...page.route.layouts].map((f) => {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
       const url = rel.split('\\').join('/').replace(/^\/?/, '/');
-      return withBasePath(url, basePathValue);
+      // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
+      // the SAME url the body's modulepreload + boot specifiers request (#243);
+      // a bare url would warm a different url and waste the hint. No-op in dev.
+      return withAssetHash(withBasePath(url, basePathValue), basePathValue);
     });
     return { moduleUrls };
   }

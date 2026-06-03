@@ -227,6 +227,116 @@ test('DEV vs PROD HTML differs ONLY by the ?v query (dev is the un-fingerprinted
   assert.equal(norm(devHtml), norm(prodHtml), 'dev and prod bodies match once the ?v is stripped');
 });
 
+/* ---------------- elision-verdict flip busts the importer's ?v ---------------- */
+
+test('ELISION-FLIP: a display-only -> interactive flip busts the IMPORTER ?v, not just the flipped module', async () => {
+  // page.js imports an always-interactive component (so page.js always ships +
+  // appears in the boot script) AND a `flip` component that starts DISPLAY-ONLY
+  // (elided, so its side-effect import is stripped from page.js's served body).
+  // When `flip` becomes interactive, page.js's served body changes (the import
+  // is restored) while its SOURCE is byte-identical. The importer's ?v MUST
+  // change, or a returning client holds the stale immutable page.js and the
+  // now-interactive component never imports / hydrates.
+  const appDir = mkdtempSync(join(tmpRoot, 'elide-'));
+  const files = {
+    'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
+    'app/layout.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import './always.js';\n` +
+      `import './flip.js';\n` +
+      `export default () => html\`<x-always></x-always><x-flip></x-flip>\`;\n`,
+    'app/always.js':
+      `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XAlways extends WebComponent {\n` +
+      `  render() { return html\`<button @click=\${() => 1}>a</button>\`; }\n` +
+      `}\nXAlways.register('x-always');\n`,
+    // DISPLAY-ONLY: no @click / signal / lifecycle, so it is elided.
+    'app/flip.js':
+      `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export class XFlip extends WebComponent {\n` +
+      `  render() { return html\`<span>display</span>\`; }\n` +
+      `}\nXFlip.register('x-flip');\n`,
+  };
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(appDir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, body);
+  }
+
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+
+  const pageV = async () => {
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const u = [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)]
+      .find((x) => x.includes('/app/page.js'));
+    assert.ok(u, 'page.js is emitted in the boot/preload set');
+    return (u.match(/\?v=([0-9a-f]+)/) || [])[1];
+  };
+  const vBefore = await pageV();
+  assert.ok(vBefore, 'page.js carries a ?v while x-flip is display-only');
+
+  // Flip x-flip to interactive WITHOUT touching page.js's bytes.
+  writeFileSync(
+    join(appDir, 'app', 'flip.js'),
+    `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `export class XFlip extends WebComponent {\n` +
+    `  render() { return html\`<button @click=\${() => 2}>now interactive</button>\`; }\n` +
+    `}\nXFlip.register('x-flip');\n`,
+  );
+  await app.rebuild();
+
+  const vAfter = await pageV();
+  assert.ok(vAfter, 'page.js still carries a ?v after the flip');
+  assert.notEqual(
+    vAfter, vBefore,
+    'the IMPORTER (page.js) ?v changed when its imported component flipped, even though page.js source is unchanged',
+  );
+});
+
+/* ---------------- 103 Early Hints preload the SAME fingerprinted url ---------------- */
+
+test('EARLY-HINTS: routeFor() module urls match the body fingerprinted urls (no double-fetch)', async () => {
+  const appDir = makeApp({});
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  const bodyUrls = new Set([
+    ...bootImportSpecifiers(html),
+    ...modulepreloadHrefs(html),
+    ...importmapTargets(html),
+  ]);
+
+  const pathOf = (u) => u.split('?')[0];
+  const bodyByPath = new Map([...bodyUrls].map((u) => [pathOf(u), u]));
+
+  const route = app.routeFor('/');
+  assert.ok(route && route.moduleUrls.length, 'routeFor yields module urls');
+  let shared = 0;
+  for (const u of route.moduleUrls) {
+    // Every Early-Hint url is fingerprinted (the prod default; never a bare url
+    // that would warm a different cache entry than the body fetches).
+    assert.match(u, /\?v=[0-9a-f]{6,}$/, `Early-Hint url is fingerprinted: ${u}`);
+    // For a module the body ALSO emits (page.js here; an inert layout is elided
+    // from the boot and legitimately absent, a pre-existing routeFor difference
+    // out of #243 scope), the FULL url including ?v must match, so the 103 hint
+    // warms exactly the url the body requests (no double-fetch).
+    const bodyUrl = bodyByPath.get(pathOf(u));
+    if (bodyUrl) {
+      shared++;
+      assert.equal(u, bodyUrl, `Early-Hint ?v matches the body ?v for ${pathOf(u)}`);
+    }
+  }
+  assert.ok(shared > 0, 'at least one Early-Hint url (page.js) is shared with the body and parity-checked');
+});
+
 /* ---------------- basePath composes ---------------- */
 
 test('basePath composes: <basePath>/app/widget.js?v=hash serves immutable', async () => {
