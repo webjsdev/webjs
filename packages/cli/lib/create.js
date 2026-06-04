@@ -846,11 +846,19 @@ ${SHADCN_THEME}
         <span>${name}</span>
       </a>
       <nav class="flex gap-4 items-center">
+        <!-- Example nav. Replace with the real navigation for your app. -->
         \${navLink('/', 'Home')}
         <theme-toggle></theme-toggle>
       </nav>
     </header>
 
+    <!--
+      Content shell. The max-w-[760px] cap is a comfortable READING width,
+      right for prose, forms, and marketing. For a full-bleed app, dashboard,
+      or board, REPLACE it: widen the cap (for example max-w-[1400px]) or
+      drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
+      inside the 760px reading column overflows into a horizontal scrollbar.
+    -->
     <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12 min-h-screen">
       \${children}
     </main>

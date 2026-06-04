@@ -94,6 +94,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
+    // Layout-chrome guidance (#356): the scaffolded layout must steer the
+    // agent to adapt the content-width container instead of dropping a
+    // full-bleed app into the narrow reading column (which overflows into a
+    // horizontal scrollbar). Counterfactual: dropping the comment fails here.
+    assert.match(layoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
+      'layout must carry the content-width steering comment so a full-bleed app widens it');
+    assert.match(layoutSrc, /Example nav\. Replace with the real navigation/,
+      'layout must flag the example nav as replace-me');
+
     // Prisma + lib singleton wired up
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');
@@ -253,6 +262,13 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     // Core scaffold still in place
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
+
+    // #356: saas shares the same layout template, so it must carry the
+    // content-width steering comment too (saas is a full-bleed dashboard,
+    // the case most likely to overflow the narrow reading column).
+    const saasLayoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
+    assert.match(saasLayoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
+      'saas layout must carry the content-width steering comment');
 
     // #271: saas is a UI scaffold, so it ships the opt-in service worker.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');

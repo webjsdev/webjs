@@ -14,7 +14,13 @@ now (`app/page.ts` printing "Hello from {{APP_NAME}}", the example `User`
 model in `prisma/schema.prisma`, the `theme-toggle` component, the
 example users module in api/saas templates) are **starting-point
 references, not the final product**. Your job is to replace them with
-the app the user actually asked for.
+the app the user actually asked for. That includes adapting
+`app/layout.ts`, not just the page. Set the real brand, replace the
+example `Home` nav, and pick a content-width container that fits. The
+default `<main class="max-w-[760px]">` is a reading column for prose and
+forms, so for a full-bleed app, dashboard, or board, widen the cap or
+remove it (keep the theme tokens). A wide layout left in the 760px
+reading column overflows into a horizontal scrollbar.
 
 **Non-negotiables for every webjs app:**
 
