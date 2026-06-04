@@ -83,14 +83,14 @@ test('the layout ships an Escape-to-close handler for the mobile menu', async ()
   assert.ok(out.includes("'Escape'") && out.includes('.mobile-menu[open]'), 'an Escape keydown closes the open mobile menu');
 });
 
-test('the layout CSS still consumes the cursor-glow / scroll-reveal contract names', () => {
-  // The JS writes these names (cursor-glow: --cg-x/--cg-on/.cg-blob;
-  // scroll-reveal: reveal-ready/is-revealed) and the layout's inline CSS is the
-  // only consumer. A rename on EITHER side passes every component + SSR test but
-  // breaks the visual (data-reveal sections stay at opacity:0 = content loss),
-  // so pin the contract: a rename must update both sides and this assertion.
+test('the layout CSS still consumes the scroll-reveal contract names', () => {
+  // scroll-reveal writes the reveal-ready class and is-revealed, and the
+  // layout's inline CSS is the only consumer. A rename on EITHER side passes
+  // every component + SSR test but breaks the visual (data-reveal sections stay
+  // at opacity:0 = content loss), so pin the contract: a rename must update both
+  // sides and this assertion.
   const layoutSrc = readFileSync(fileURLToPath(new URL('../../app/layout.ts', import.meta.url)), 'utf8');
-  for (const name of ['--cg-x', '--cg-y', '--cg-on', 'cursor-glow .cg-blob', '.reveal-ready [data-reveal]', 'is-revealed']) {
+  for (const name of ['.reveal-ready [data-reveal]', 'is-revealed']) {
     assert.ok(layoutSrc.includes(name), `layout CSS must still reference the contract name "${name}"`);
   }
 });

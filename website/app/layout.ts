@@ -1,7 +1,6 @@
 import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
-import '../components/cursor-glow.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 
 /**
@@ -12,8 +11,8 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/link
  * and exposed to Tailwind via @theme in public/input.css. Only the
  * genuinely un-utility-expressible pieces stay as CSS: the glow cross-fade
  * and heart-pump keyframes, the prefers-reduced-motion clamp, the fixed glow
- * layer and cursor-glow blob, the hover-only scrollbar (`.scroll-thin`), and
- * the <details> icon swap. Everything else is Tailwind.
+ * layer, the hover-only scrollbar (`.scroll-thin`), and the <details> icon
+ * swap. Everything else is Tailwind.
  *
  * Shared link config (DOCS_URL / UI_URL / EXAMPLE_BLOG_URL / GH_URL / NEW_TAB) lives in
  * lib/links.ts, imported here and by app/page.ts.
@@ -231,20 +230,9 @@ export default function RootLayout({ children }: { children: unknown }) {
           radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
         animation: glow-fade-b 16s ease-in-out infinite;
       }
-      /* JS-opt-in motion. The host of cursor-glow is the layer, and its
-         move handler sets --cg-x / --cg-y / --cg-on. scroll-reveal adds the
-         reveal-ready class, so a data-reveal section is hidden only when JS
-         is present, and visible otherwise. */
-      cursor-glow {
-        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-        opacity: var(--cg-on, 0); transition: opacity 500ms ease;
-      }
-      cursor-glow .cg-blob {
-        position: absolute; top: 0; left: 0; width: 920px; height: 920px; margin: -460px;
-        border-radius: 50%;
-        background: radial-gradient(circle at center, color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 70%);
-        transform: translate3d(var(--cg-x, -9999px), var(--cg-y, -9999px), 0);
-      }
+      /* JS-opt-in motion: scroll-reveal adds the reveal-ready class, so a
+         data-reveal section is hidden only when JS is present, and visible
+         otherwise. */
       /* Skip rendering off-screen sections until they near the viewport. The
          intrinsic-size keeps the scrollbar stable, and the auto keyword
          remembers each real size after first render. Pure CSS, no JS, PE-safe. */
@@ -252,7 +240,6 @@ export default function RootLayout({ children }: { children: unknown }) {
       .reveal-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
       .reveal-ready [data-reveal].is-revealed { opacity: 1; transform: none; }
       @media (prefers-reduced-motion: reduce) {
-        cursor-glow { display: none; }
         .reveal-ready [data-reveal] { opacity: 1; transform: none; transition: none; }
       }
       .scroll-thin { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color var(--t); }
@@ -284,7 +271,6 @@ export default function RootLayout({ children }: { children: unknown }) {
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
 
     <div class="glow-layer" aria-hidden="true"></div>
-    <cursor-glow aria-hidden="true"></cursor-glow>
 
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>

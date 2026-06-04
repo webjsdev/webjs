@@ -22,7 +22,7 @@ test('every token class highlight() emits is styled in app/page.ts', () => {
   // highlight.ts emits t-* classes; the only consumer that styles them is the
   // inline <style> in app/page.ts. A rename/drop on EITHER side passes the
   // whole suite while shipping plain (unstyled) code samples, so pin the
-  // contract (mirrors the cursor-glow/scroll-reveal pin in layout-ssr.test.ts).
+  // contract (mirrors the scroll-reveal pin in layout-ssr.test.ts).
   const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
   const classes = [...read('../../lib/highlight.ts').matchAll(/'(t-[a-z]+)'/g)].map((m) => m[1]);
   const page = read('../../app/page.ts');
