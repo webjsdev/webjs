@@ -325,7 +325,7 @@ lib/session.server.ts</pre>
               Get started
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </a>
-            <a class="${BTN} text-fg border border-border-strong bg-[color-mix(in_oklch,var(--color-bg-elev)_60%,transparent)] hover:border-fg-muted hover:-translate-y-0.5" href=${DOCS_URL} target="_blank" rel="noopener noreferrer">Read the docs</a>
+            <a class="${BTN} text-fg border-border-strong bg-[color-mix(in_oklch,var(--color-bg-elev)_60%,transparent)] hover:border-fg-muted hover:-translate-y-0.5" href=${DOCS_URL} target="_blank" rel="noopener noreferrer">Read the docs</a>
           </div>
         </div>
       </div>
