@@ -3,10 +3,11 @@ import '../components/copy-cmd.ts';
 import '../components/scroll-reveal.ts';
 import { highlight } from '../lib/highlight.ts';
 
-export const metadata = {
-  title: 'webjs: the framework your AI agent already knows how to use',
-  description: 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Built for AI agents to read, write, and ship.',
-};
+// The home page intentionally has no `metadata` export. The root layout's
+// generateMetadata is the single source for the <title>, description, and the
+// og/twitter tags, so they stay consistent (a page-level title override would
+// win for <title> but leave og:/twitter: showing the layout's title, splitting
+// the canonical share target's name across the tab and the social card).
 
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';

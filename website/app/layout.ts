@@ -23,8 +23,8 @@ const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 const GH_URL = 'https://github.com/webjsdev/webjs';
 
-const TITLE = 'webjs: the AI-first, web-components-first, no-build web framework';
-const DESCRIPTION = 'The framework your AI agent already knows how to use. Native web components, server actions, streaming SSR, on web standards. No build step, no bundler, no guesswork.';
+const TITLE = 'webjs: the framework your AI agent already knows how to use';
+const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Built for AI agents to read, write, and ship.';
 
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
