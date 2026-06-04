@@ -37,8 +37,12 @@ import {
  *   - Event listeners are attached once and retargeted when the handler
  *     reference changes (swap-in-place via a dispatch closure, so `addEventListener`
  *     isn't churned every render).
- *   - This is a conservative implementation; no keyed list diffing yet: array
- *     changes rebuild the whole text part.
+ *   - A plain `.map()` array reconciles POSITIONALLY (non-keyed), matching
+ *     lit-html: each index updates its item instance in place when the
+ *     template shape is unchanged, so DOM node identity (and the focus,
+ *     selection, scroll, and in-progress native drag it carries) survives an
+ *     item-level update. See `reconcileArray`. Keyed reordering still needs
+ *     the `repeat()` directive.
  */
 
 /** @type {WeakMap<TemplateStringsArray | string[], { templateEl: HTMLTemplateElement, parts: PartDescriptor[] }>} */
@@ -911,11 +915,34 @@ function applyChildInner(part, value) {
     return;
   }
 
+  // Plain array (a `.map()` / list interpolation): positional, non-keyed
+  // reconciliation. Update each position's instance IN PLACE when its
+  // template shape is unchanged, so DOM node identity survives an item
+  // update (focus, selection, scroll, and an in-progress native drag all
+  // survive). Mirrors lit-html's non-keyed array child part. Without this,
+  // flipping one item's binding rebuilt the WHOLE list and detached every
+  // node, which cancels a native drag mid-gesture. Use `repeat()` for keyed
+  // reordering.
+  if (Array.isArray(value)) {
+    if (part.child && /** @type any */ (part.child).kind === 'array') {
+      reconcileArray(part, value);
+      return;
+    }
+    teardownChild(part);
+    const arrState = { kind: 'array', items: [] };
+    part.child = arrState;
+    applyArrayFresh(marker, /** @type any */ (arrState), value);
+    return;
+  }
+
   // Remove previously rendered nodes between marker and its next sibling we own.
   if (part.child) {
     const c = /** @type any */ (part.child);
     if (c.kind === 'repeat') {
       teardownRepeat(c);
+      part.child = undefined;
+    } else if (c.kind === 'array') {
+      teardownArray(/** @type any */ (c));
       part.child = undefined;
     } else if (c.kind === 'async-stream') {
       teardownAsyncStream(c);
@@ -963,29 +990,6 @@ function applyChildInner(part, value) {
       if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
     }
     part.child = { strings: tr.strings, bound, lastValues, startNode, endNode };
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    const list = [];
-    for (const v of value) {
-      if (isTemplate(v)) {
-        // Create an inline instance. No keyed reconciliation yet.
-        const tr = /** @type any */ (v);
-        const { templateEl, parts } = compile(tr);
-        const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
-        const bound = parts.map((p) => bindPart(p, frag));
-        for (let i = 0; i < tr.values.length; i++) {
-          applyPart(bound[i], tr.values[i], undefined, tr.values);
-        }
-        list.push(...frag.childNodes);
-      } else if (v != null && v !== false && v !== true) {
-        list.push(document.createTextNode(String(v)));
-      }
-    }
-    const frag = nodesToFrag(list);
-    marker.parentNode?.insertBefore(frag, marker);
-    part.child = list;
     return;
   }
 
@@ -1150,6 +1154,151 @@ function teardownRepeat(state) {
   state.map.clear();
 }
 
+/* ================================================================
+ * Plain array (.map) support: positional, non-keyed reconciliation
+ * ================================================================ */
+
+/**
+ * One rendered slot of a plain array. A `tpl` carries a detached template
+ * instance (bookended by its own markers), a `text` carries a single text
+ * node, and an `empty` slot (a nullish / boolean element) renders nothing
+ * but still holds the position so index-based reconciliation stays aligned.
+ * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'empty' }} ArrayItem
+ */
+
+/** @param {ArrayItem} item @returns {ChildNode | null} */
+function arrayItemFirstNode(item) {
+  if (item.type === 'tpl') return item.inst.startNode;
+  if (item.type === 'text') return item.node;
+  return null;
+}
+
+/** @param {ArrayItem} item */
+function removeArrayItem(item) {
+  if (item.type === 'tpl') {
+    disposeInstance(item.inst);
+    removeBetween(item.inst.startNode, item.inst.endNode);
+  } else if (item.type === 'text') {
+    item.node.parentNode?.removeChild(item.node);
+  }
+}
+
+/**
+ * Build the slot for one array element, plus the fragment to insert (null
+ * for an empty slot). A TemplateResult becomes a detached instance, a
+ * primitive becomes a text node, and nullish / boolean renders nothing.
+ * @param {unknown} v
+ * @returns {{ item: ArrayItem, frag: Node | null }}
+ */
+function buildArrayItem(v) {
+  if (isTemplate(v)) {
+    const { inst, frag } = buildDetached(/** @type any */ (v));
+    return { item: { type: 'tpl', inst }, frag };
+  }
+  if (v != null && v !== false && v !== true) {
+    const node = document.createTextNode(String(v));
+    return { item: { type: 'text', node }, frag: node };
+  }
+  return { item: { type: 'empty' }, frag: null };
+}
+
+/**
+ * Initial render of a plain array: insert every slot's nodes before the marker.
+ * @param {Comment} marker
+ * @param {{ kind: 'array', items: ArrayItem[] }} state
+ * @param {unknown[]} value
+ */
+function applyArrayFresh(marker, state, value) {
+  const parent = marker.parentNode;
+  if (!parent) return;
+  const bulk = document.createDocumentFragment();
+  /** @type {ArrayItem[]} */
+  const items = [];
+  for (const v of value) {
+    const { item, frag } = buildArrayItem(v);
+    if (frag) bulk.appendChild(frag);
+    items.push(item);
+  }
+  parent.insertBefore(bulk, marker);
+  state.items = items;
+}
+
+/**
+ * Positional (non-keyed) reconciliation. For each index, update the slot
+ * in place when its shape is unchanged (preserving DOM node identity),
+ * otherwise replace it; grow or shrink at the tail. There is no key
+ * matching, so a reorder reduces to a series of in-place value updates;
+ * reach for `repeat()` when element identity must follow a moved key.
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown[]} value
+ */
+function reconcileArray(part, value) {
+  const marker = part.marker;
+  const parent = marker.parentNode;
+  if (!parent) return;
+  const state = /** @type {{ kind: 'array', items: ArrayItem[] }} */ (part.child);
+  const old = state.items;
+  /** @type {ArrayItem[]} */
+  const next = [];
+
+  for (let i = 0; i < value.length; i++) {
+    const v = value[i];
+    const o = old[i];
+    if (isTemplate(v)) {
+      const tr = /** @type any */ (v);
+      if (o && o.type === 'tpl' && o.inst.strings === tr.strings) {
+        updateInstance(o.inst, tr.values);
+        next.push(o);
+        continue;
+      }
+    } else if (v != null && v !== false && v !== true) {
+      if (o && o.type === 'text') {
+        const str = String(v);
+        if (o.node.data !== str) o.node.data = str;
+        next.push(o);
+        continue;
+      }
+    } else {
+      // Empty slot: drop any prior nodes that occupied this position.
+      if (o) removeArrayItem(o);
+      next.push({ type: 'empty' });
+      continue;
+    }
+    // Shape changed, or the array grew past the old length. Build fresh,
+    // insert at this position (before the current / next still-attached
+    // old node, else the marker), then drop the old slot it replaced.
+    const { item, frag } = buildArrayItem(v);
+    if (frag) parent.insertBefore(frag, nextArrayAnchor(old, i, marker));
+    if (o) removeArrayItem(o);
+    next.push(item);
+  }
+
+  // Shrink: remove slots beyond the new length.
+  for (let i = value.length; i < old.length; i++) removeArrayItem(old[i]);
+  state.items = next;
+}
+
+/**
+ * The node a freshly-built slot at index `i` inserts before: the first
+ * node of the current or next still-attached old slot, else the part
+ * marker (a tail append).
+ * @param {ArrayItem[]} old @param {number} i @param {Comment} marker
+ * @returns {ChildNode}
+ */
+function nextArrayAnchor(old, i, marker) {
+  for (let j = i; j < old.length; j++) {
+    const f = arrayItemFirstNode(old[j]);
+    if (f && f.parentNode) return f;
+  }
+  return marker;
+}
+
+/** @param {{ kind: 'array', items: ArrayItem[] }} state */
+function teardownArray(state) {
+  for (const it of state.items) removeArrayItem(it);
+  state.items = [];
+}
+
 /**
  * Collect [start .. end] (inclusive) and insert immediately before `anchor`.
  * Browsers treat insertBefore of an already-connected node as a move and
@@ -1208,6 +1357,8 @@ function teardownChild(part) {
   const c = /** @type any */ (part.child);
   if (c.kind === 'repeat') {
     teardownRepeat(c);
+  } else if (c.kind === 'array') {
+    teardownArray(c);
   } else if (c.kind === 'async-stream') {
     teardownAsyncStream(c);
   } else if ('strings' in c) {

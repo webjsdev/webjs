@@ -186,6 +186,95 @@ test('repeat() removal drops only removed keys', async () => {
   assert.equal(preB.parentNode, null);
 });
 
+// Plain `.map()` arrays reconcile in place (positional, non-keyed), the way
+// lit-html does. The headline case below (an item's own binding changes, node
+// identity must survive) is the #353 fix: the old renderer rebuilt the whole
+// list on any change, which detached a dragging node mid-gesture and cancelled
+// native drag-and-drop.
+test('.map() item keeps node identity when only its own binding changes', () => {
+  const el = document.createElement('div');
+  // The dragged card flips a class on @dragstart; the list must NOT rebuild.
+  const view = (draggingId) =>
+    html`<ul>${[1, 2, 3].map((id) => html`<li class=${id === draggingId ? 'dragging' : 'idle'}>card ${id}</li>`)}</ul>`;
+
+  render(view(0), el);
+  const [pre1, pre2, pre3] = Array.from(el.querySelectorAll('li'));
+  // Flip card 2 into the dragging state (its class binding changes).
+  render(view(2), el);
+  const [post1, post2, post3] = Array.from(el.querySelectorAll('li'));
+
+  assert.strictEqual(post1, pre1, 'card 1 node preserved');
+  assert.strictEqual(post2, pre2, 'the dragged card node is patched, NOT replaced');
+  assert.strictEqual(post3, pre3, 'card 3 node preserved');
+  assert.equal(post2.getAttribute('class'), 'dragging');
+  assert.equal(pre2.parentNode, post2.parentNode, 'dragged card stays attached');
+});
+
+test('.map() in-place value update reuses item nodes', () => {
+  const el = document.createElement('div');
+  const view = (labels) => html`<ul>${labels.map((l) => html`<li>${l}</li>`)}</ul>`;
+  render(view(['a', 'b', 'c']), el);
+  const pre = Array.from(el.querySelectorAll('li'));
+  render(view(['x', 'y', 'z']), el);
+  const post = Array.from(el.querySelectorAll('li'));
+  assert.strictEqual(post[0], pre[0]);
+  assert.strictEqual(post[1], pre[1]);
+  assert.strictEqual(post[2], pre[2]);
+  assert.deepEqual(post.map((li) => li.textContent), ['x', 'y', 'z']);
+});
+
+test('.map() grow appends without disturbing existing item nodes', () => {
+  const el = document.createElement('div');
+  const view = (n) => html`<ul>${Array.from({ length: n }, (_, i) => html`<li>${i}</li>`)}</ul>`;
+  render(view(2), el);
+  const [pre0, pre1] = Array.from(el.querySelectorAll('li'));
+  render(view(4), el);
+  const post = Array.from(el.querySelectorAll('li'));
+  assert.equal(post.length, 4);
+  assert.strictEqual(post[0], pre0);
+  assert.strictEqual(post[1], pre1);
+  assert.deepEqual(post.map((li) => li.textContent), ['0', '1', '2', '3']);
+});
+
+test('.map() shrink removes the tail, keeps survivor nodes', () => {
+  const el = document.createElement('div');
+  const view = (n) => html`<ul>${Array.from({ length: n }, (_, i) => html`<li>${i}</li>`)}</ul>`;
+  render(view(3), el);
+  const [pre0, pre1, pre2] = Array.from(el.querySelectorAll('li'));
+  render(view(1), el);
+  const post = Array.from(el.querySelectorAll('li'));
+  assert.equal(post.length, 1);
+  assert.strictEqual(post[0], pre0);
+  assert.equal(pre1.parentNode, null);
+  assert.equal(pre2.parentNode, null);
+});
+
+test('.map() replaces a slot whose template shape changed, keeps order + siblings', () => {
+  const el = document.createElement('div');
+  // Middle item flips between an <li> and a <p>: that slot must be replaced,
+  // the neighbours kept, and order preserved.
+  const view = (asP) =>
+    html`<div>${[html`<li>a</li>`, asP ? html`<p>b</p>` : html`<li>b</li>`, html`<li>c</li>`]}</div>`;
+  render(view(false), el);
+  const preFirst = el.querySelector('li');
+  render(view(true), el);
+  const root = el.querySelector('div');
+  const tags = Array.from(root.children).map((c) => c.tagName.toLowerCase());
+  assert.deepEqual(tags, ['li', 'p', 'li'], 'shape-changed slot replaced, order preserved');
+  assert.strictEqual(el.querySelector('li'), preFirst, 'first sibling node preserved');
+});
+
+test('.map() primitive array updates reuse the text nodes', () => {
+  const el = document.createElement('div');
+  const view = (a, b) => html`<p>${[a, ' ', b]}</p>`;
+  render(view('one', 'two'), el);
+  const p = el.querySelector('p');
+  const preText = p.firstChild;
+  render(view('uno', 'dos'), el);
+  assert.strictEqual(p.firstChild, preText, 'text node reused');
+  assert.equal(p.textContent, 'uno dos');
+});
+
 test('mixed attr: single hole with surrounding static text composes correctly', () => {
   const el = document.createElement('div');
   const view = (cls) => html`<div class="prefix ${cls} suffix">x</div>`;
