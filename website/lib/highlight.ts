@@ -17,11 +17,15 @@ import type { TemplateResult } from '@webjsdev/core';
 
 type Tok = { t: string; v: string };
 
+// 'get'/'set' are deliberately NOT keywords: they are contextual (only
+// keywords in a getter/setter declaration), and the keyword check runs before
+// the call heuristic, so listing them would mis-color a `.get(` / `.set(`
+// method call (e.g. the signal API on the flagship sample) as a keyword.
 const KEYWORDS = new Set([
   'import', 'from', 'export', 'default', 'async', 'function', 'return',
   'const', 'let', 'var', 'await', 'new', 'class', 'extends', 'if', 'else',
   'for', 'of', 'in', 'true', 'false', 'null', 'undefined', 'this', 'typeof',
-  'throw', 'try', 'catch', 'void', 'static', 'get', 'set', 'as',
+  'throw', 'try', 'catch', 'void', 'static', 'as',
 ]);
 
 function tokenize(src: string): Tok[] {

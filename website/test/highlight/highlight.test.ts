@@ -31,6 +31,15 @@ test('a call expression is classified as a function', async () => {
   assert.match(out, /<span class="t-id">html<\/span>/);
 });
 
+test('.get( / .set( method calls are functions, not keywords', async () => {
+  // The flagship component sample calls the signal API (this.likes.set(...)/
+  // .get()); get/set must NOT be colored as language keywords.
+  const out = await render('this.likes.set(this.likes.get() + 1)');
+  assert.match(out, /<span class="t-fn">set<\/span>/, 'set( is a function call');
+  assert.match(out, /<span class="t-fn">get<\/span>/, 'get( is a function call');
+  assert.ok(!/<span class="t-kw">(get|set)<\/span>/.test(out), 'neither is a keyword');
+});
+
 test('capitalized identifiers are classified as types', async () => {
   const out = await render('class StudentCard extends WebComponent {');
   assert.match(out, /<span class="t-type">StudentCard<\/span>/);
