@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-import { checkConventions } from '../../src/check.js';
+import { checkConventions, RULES } from '../../src/check.js';
 
 async function makeTempApp() {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-check-'));
@@ -1147,6 +1147,15 @@ test('no-scaffold-placeholder: flags a file that still carries the marker', asyn
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
+});
+
+test('no-scaffold-placeholder: --rules description names the real token, not a placeholder form', () => {
+  const rule = RULES.find((r) => r.name === 'no-scaffold-placeholder');
+  assert.ok(rule, 'the rule must be registered');
+  // The description is printed verbatim by `webjs check --rules`, so it must
+  // show the exact token an agent greps for, not an obfuscated form.
+  assert.ok(rule.description.includes(SCAFFOLD_TOKEN), 'description must name the literal token');
+  assert.ok(!rule.description.includes('{placeholder}'), 'description must not show an obfuscated braced token');
 });
 
 test('no-scaffold-placeholder: a file with the marker removed is clean', async () => {

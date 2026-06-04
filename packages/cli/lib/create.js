@@ -1086,6 +1086,10 @@ For AI agents, read this before editing scaffolded files:
     Replace them with the app the user actually asked for. Don't ship
     the scaffold's example User model or "Hello from …" page as the
     final product.
+  • This fresh app intentionally FAILS \`webjs check\` with two
+    no-scaffold-placeholder violations (app/page.ts, app/layout.ts).
+    That is the signal to replace the example content. Delete each
+    marker comment line as you do, and the check goes green.
   • Use Prisma + SQLite for app data. It's already wired up. Define
     real models in prisma/schema.prisma and run \`webjs db migrate\`.
     NEVER store app data in JSON files, in-memory arrays, or

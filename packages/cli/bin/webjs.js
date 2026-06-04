@@ -255,10 +255,12 @@ async function main() {
 
       if (rest.includes('--rules')) {
         console.log('webjs check, correctness rules:');
-        console.log('  Every rule catches objectively broken code (a crash, a');
-        console.log('  security leak, or a build/type-strip failure) and always');
-        console.log('  runs. Project conventions (layout, style, process) are');
-        console.log('  guidance in CONVENTIONS.md, not rules here.\n');
+        console.log('  Every rule catches code that is wrong to ship: a crash, a');
+        console.log('  security leak, a build/type-strip failure, or (the one');
+        console.log('  sentinel-based rule, no-scaffold-placeholder) unreplaced');
+        console.log('  scaffold example content. They always run. Project');
+        console.log('  conventions (layout, style, process) are guidance in');
+        console.log('  CONVENTIONS.md, not rules here.\n');
         for (const r of RULES) {
           console.log(`  ${r.name.padEnd(30)} ${r.description}`);
         }
