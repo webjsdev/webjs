@@ -1,30 +1,35 @@
 import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
+import '../components/cursor-glow.ts';
+import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 
 /**
- * Root layout: Tailwind CSS browser runtime + @theme design tokens,
- * matching the blog example's architecture. Light DOM everywhere.
+ * Root layout for the redesigned marketing site.
  *
- * Sibling app URLs are read from env so the same code works across
- * `webjs dev` and any deployment target. Fallbacks are the canonical
- * localhost ports (matching each app's dev script + compose.yaml);
- * the .env file in this directory sets the same defaults explicitly
- * for visibility. Override DOCS_URL / BLOG_URL / UI_URL at deploy time
- * (e.g. in Railway's service env vars).
+ * Styling is Tailwind-first: chrome and structure use utility classes,
+ * with the design tokens declared once in the foundation <style> below
+ * and exposed to Tailwind via @theme in public/input.css. Only the
+ * genuinely un-utility-expressible pieces stay as CSS: the glow cross-fade
+ * and heart-pump keyframes, the prefers-reduced-motion clamp, the fixed glow
+ * layer and cursor-glow blob, the hover-only scrollbar (`.scroll-thin`), and
+ * the <details> icon swap. Everything else is Tailwind.
+ *
+ * Shared link config (DOCS_URL / UI_URL / DEMO_URL / GH_URL / NEW_TAB) lives in
+ * lib/links.ts, imported here and by app/page.ts.
  */
-// Guarded against `process` being undefined because this file also
-// loads on the client during hydration.
-const env = (globalThis as any).process?.env ?? {};
-const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
-const BLOG_URL = env.BLOG_URL || 'http://localhost:5004';
-const UI_URL = env.UI_URL || 'http://localhost:5003';
 
-// Site-wide Open Graph + Twitter card metadata. `generateMetadata`
-// receives the request context so we can derive an absolute og:image
-// URL (OG scrapers require absolute http(s) URLs).
-const TITLE = 'webjs: AI-first, web-components-first, no-build web framework';
-const DESCRIPTION = 'Web components, server actions, streaming SSR: on web standards. Designed for AI agents to read, write, and ship.';
+const TITLE = 'webjs: the framework your AI agent already knows how to use';
+const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Built for AI agents to read, write, and ship.';
+
+const NAV = [
+  { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
+  { label: 'UI', href: UI_URL, ext: true },
+  { label: 'Demo', href: DEMO_URL, ext: true },
+  { label: 'Blog', href: '/blog', ext: false },
+  { label: 'Changelog', href: '/changelog', ext: false },
+  { label: 'GitHub', href: GH_URL, ext: true },
+];
 
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
@@ -40,25 +45,40 @@ export function generateMetadata(ctx: { url: string }) {
       image,
       'image:width': '1200',
       'image:height': '630',
-      'image:alt': 'webjs: AI-first, web-components-first, no-build web framework',
+      'image:alt': TITLE,
       'site_name': 'webjs',
     },
-    twitter: {
-      card: 'summary_large_image',
-      title: TITLE,
-      description: DESCRIPTION,
-      image,
-    },
+    twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, image },
   };
 }
 
+const navLink = 'text-fg-muted no-underline font-medium text-sm px-[11px] py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-bg-subtle';
+const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px] rounded-[9px] hover:text-fg hover:bg-bg-subtle';
+
 export default function RootLayout({ children }: { children: unknown }) {
-  // CSP nonce for inline scripts. Empty when no nonce in CSP.
   const nonce = cspNonce();
   return html`
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/public/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/public/favicon.png">
+
+    <!-- Self-hosted fonts (declared via @font-face in input.css). Preload the
+         two above-the-fold families so they fetch in parallel with the
+         stylesheet: the display face (Inter Tight, hero headline) and the body
+         face (Inter). Each is one variable file covering all weights. The hero
+         install command is the one above-the-fold monospace text, but JetBrains
+         Mono is deliberately not preloaded. The preload budget stays on the two
+         LCP text faces, and the ui-monospace fallback is close enough that the
+         late swap on a single command line is negligible. -->
+    <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+
+    <!-- Warm the analytics connection so the async gtag handshake (and the
+         beacon to google-analytics.com it then opens) overlaps head parse
+         instead of starting cold when the script tag is discovered. -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.google-analytics.com">
+
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
     <script nonce="${nonce}">
@@ -67,228 +87,238 @@ export default function RootLayout({ children }: { children: unknown }) {
       gtag('js', new Date());
       gtag('config', 'G-3RC87HXJ3P');
     </script>
+
     <script nonce="${nonce}">
       (function(){
         try {
           var t = localStorage.getItem('webjs_theme');
-          if (t === 'light' || t === 'dark') {
-            document.documentElement.dataset.theme = t;
-          }
+          if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // Mobile menu auto-close: close on link click (inside the panel)
-      // AND on any click outside the menu. <details> stays open by
-      // default until you click summary again, which feels wrong on
-      // a phone, where a tap anywhere else should dismiss it.
+      // Pause every infinite animation (the two cross-fading glow layers and
+      // the footer heart) while the tab is hidden so nothing repaints in the
+      // background. A class is used because animation-play-state does not
+      // inherit, so an inline style on <html> would miss descendant animations.
+      document.addEventListener('visibilitychange', function () {
+        document.documentElement.classList.toggle('paused', document.hidden);
+      });
       document.addEventListener('click', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
-        // 1) Click on a link inside the menu, close the menu.
         var a = t.closest('.mobile-menu a');
-        if (a) {
-          var d = a.closest('details');
-          if (d) d.removeAttribute('open');
-          return;
-        }
-        // 2) Click anywhere OUTSIDE any open .mobile-menu, close it.
+        if (a) { var d = a.closest('details'); if (d) d.removeAttribute('open'); return; }
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) if (!open[i].contains(t)) open[i].removeAttribute('open');
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
         var open = document.querySelectorAll('.mobile-menu[open]');
         for (var i = 0; i < open.length; i++) {
-          if (!open[i].contains(t)) open[i].removeAttribute('open');
+          open[i].removeAttribute('open');
+          var s = open[i].querySelector('summary');
+          if (s) s.focus();
         }
       });
     </script>
+
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
+      /* Foundation tokens + effects that Tailwind utilities cannot express. */
+      /* The breathing glow is two static-gradient layers cross-faded via
+         opacity (a compositor-only property), so it never triggers a repaint.
+         The accent color itself is static, so its consumers (tints, shadows,
+         the gradient text) do not repaint either. */
+      @keyframes glow-fade-a { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      @keyframes glow-fade-b { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
       :root {
         color-scheme: light dark;
-
-        /* Light theme (default) */
-        --fg:            oklch(0.18 0.015 60);
-        --fg-muted:      oklch(0.42 0.02 65);
-        --fg-subtle:     oklch(0.62 0.015 70);
-        --bg:            oklch(0.985 0.008 80);
+        --fg:            oklch(0.20 0.018 60);
+        --fg-muted:      oklch(0.44 0.02 60);
+        --fg-subtle:     oklch(0.50 0.02 65);
+        --bg:            oklch(0.985 0.008 75);
         --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 80);
-        --bg-sunken:     oklch(0.94 0.008 80);
-        --border:        oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.58 0.15 55);
-        --accent-hover:  oklch(0.5 0.15 55);
+        --bg-subtle:     oklch(0.96 0.008 75);
+        --bg-sunken:     oklch(0.93 0.01 70);
+        --border:        oklch(0.88 0.012 70 / 0.9);
+        --border-strong: oklch(0.78 0.014 70 / 0.95);
+        --accent:        oklch(0.54 0.16 52);
+        --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
-        --accent-tint:   oklch(0.58 0.15 55 / 0.08);
-
-        --font-sans:  -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        --font-serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
-        --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
-
-        /* spacing + radii + shadows: consumed by the home page's <style> block */
-        --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
-        --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 72px;
-        --rad-sm: 4px; --rad: 8px; --rad-lg: 12px; --rad-xl: 16px;
-        --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.05);
-        --shadow:    0 4px 24px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.04);
-
-        --fs-display: clamp(2.6rem, 1.6rem + 3vw, 4rem);
-        --fs-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.6rem);
-        --fs-h2:      clamp(1.3rem, 1.1rem + 0.7vw, 1.6rem);
-        --fs-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.18rem);
-
-        --t-fast: 140ms;
-        --t:      220ms;
+        --heart:         oklch(0.64 0.22 6);
+        --accent-live:   oklch(0.63 0.17 50);
+        --glow-a:        oklch(0.63 0.17 44);
+        --glow-b:        oklch(0.62 0.18 60);
+        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --glow-strength: 0.16;
+        --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+        --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --font-serif:   ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
+        --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        --shadow-sm: 0 1px 2px oklch(0.5 0.06 55 / 0.08);
+        --shadow:    0 8px 30px oklch(0.5 0.08 55 / 0.10), 0 2px 6px oklch(0.5 0.06 55 / 0.06);
+        --shadow-glow: 0 0 0 1px var(--accent-tint), 0 14px 50px color-mix(in oklch, var(--accent-live) 18%, transparent);
+        --t: 240ms;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
-          --fg:            oklch(0.96 0.015 60);
-          --fg-muted:      oklch(0.72 0.02 60);
-          --fg-subtle:     oklch(0.55 0.02 60);
-          --bg:            oklch(0.14 0.01 55);
-          --bg-elev:       oklch(0.18 0.01 55);
-          --bg-subtle:     oklch(0.16 0.01 55);
-          --bg-sunken:     oklch(0.11 0.008 55);
-          --border:        oklch(0.26 0.012 55 / 0.9);
-          --border-strong: oklch(0.38 0.012 55 / 0.9);
-          --accent:        oklch(0.78 0.14 55);
-          --accent-hover:  oklch(0.85 0.14 55);
-          --accent-fg:     oklch(0.15 0.01 55);
-          --accent-tint:   oklch(0.78 0.14 55 / 0.12);
-          --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
-          --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
+          --heart: oklch(0.74 0.18 6);
+          --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
+          --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
+          --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
+          --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
+          --glow-strength: 0.32;
+          --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
+          --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
         }
       }
-      /* Explicit dark toggle MUST also flip color-scheme so the browser
-         paints UA-controlled chrome (native select popups, scrollbars,
-         system-color keywords Canvas/CanvasText/Highlight, native
-         validation bubbles) in dark. Without this the page-level CSS
-         tokens darken but every browser-painted UI element stays in the
-         OS-preferred scheme. */
       :root[data-theme='dark'] {
         color-scheme: dark;
-        --fg:            oklch(0.96 0.015 60);
-        --fg-muted:      oklch(0.72 0.02 60);
-        --fg-subtle:     oklch(0.55 0.02 60);
-        --bg:            oklch(0.14 0.01 55);
-        --bg-elev:       oklch(0.18 0.01 55);
-        --bg-subtle:     oklch(0.16 0.01 55);
-        --bg-sunken:     oklch(0.11 0.008 55);
-        --border:        oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --accent:        oklch(0.78 0.14 55);
-        --accent-hover:  oklch(0.85 0.14 55);
-        --accent-fg:     oklch(0.15 0.01 55);
-        --accent-tint:   oklch(0.78 0.14 55 / 0.12);
-        --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
-        --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
+        --heart: oklch(0.74 0.18 6);
+        --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
+        --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
+        --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
+        --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
+        --glow-strength: 0.32;
+        --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
+        --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
       }
-
-      /* Explicit light toggle on a dark OS: same UA-chrome problem in
-         the other direction. */
-      :root[data-theme='light'] {
-        color-scheme: light;
+      :root[data-theme='light'] { color-scheme: light; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
-
       html, body { margin: 0; }
+      html { scroll-behavior: smooth; }
       body {
-        background: var(--bg);
-        color: var(--fg);
-        font: 16px/1.65 var(--font-sans);
-        -webkit-font-smoothing: antialiased;
-        transition: background var(--t) cubic-bezier(0.3, 0, 0.3, 1),
-                    color var(--t) cubic-bezier(0.3, 0, 0.3, 1);
+        background: var(--bg); color: var(--fg);
+        font: 400 16px/1.65 var(--font-sans);
+        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
+        transition: background var(--t) cubic-bezier(0.3,0,0.3,1), color var(--t) cubic-bezier(0.3,0,0.3,1);
       }
       ::selection { background: var(--accent-tint); color: var(--fg); }
-
-      .announce {
-        background: var(--accent-tint);
-        border-bottom: 1px solid var(--border);
-        color: var(--fg);
-        font: 500 13px/1.4 var(--font-sans);
-        text-align: center;
-        padding: 8px 16px;
+      @keyframes heart-pump {
+        0%, 40%, 100% { transform: scale(1); }
+        10% { transform: scale(1.3); }
+        20% { transform: scale(1); }
+        30% { transform: scale(1.18); }
       }
-      .announce a {
-        color: var(--accent);
-        text-decoration: none;
-        font-weight: 600;
+      .heart {
+        display: inline-block; width: 1.15em; height: 1.15em;
+        vertical-align: -0.18em; color: var(--heart);
+        animation: heart-pump 1.4s ease-in-out infinite;
+        transform-origin: center;
       }
-      .announce a:hover { text-decoration: underline; }
-      .announce .tag {
-        display: inline-block;
-        font: 700 10px/1 var(--font-mono);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--accent);
-        background: color-mix(in oklch, var(--accent) 15%, transparent);
-        padding: 3px 7px;
-        border-radius: 999px;
-        margin-right: 8px;
-        vertical-align: middle;
+      /* Hidden-tab pause (the .paused class is toggled on a visibilitychange).
+         Covers the heart and the two cross-fading glow layers. */
+      :root.paused .heart,
+      :root.paused .glow-layer::before,
+      :root.paused .glow-layer::after { animation-play-state: paused; }
+      .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      /* No will-change: the running opacity animation already promotes these
+         to their own layer, so a permanent hint would just be the MDN
+         long-lived-will-change anti-pattern. */
+      .glow-layer::before, .glow-layer::after {
+        content: ''; position: absolute; inset: 0;
       }
-
-      /* Mobile menu: native <details> + <summary> for progressive
-         enhancement. Strip the default disclosure triangle and swap
-         the hamburger / close icons on toggle. */
+      .glow-layer::before {
+        background:
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
+        animation: glow-fade-a 16s ease-in-out infinite;
+      }
+      .glow-layer::after {
+        background:
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
+        animation: glow-fade-b 16s ease-in-out infinite;
+      }
+      /* JS-opt-in motion. The host of cursor-glow is the layer, and its
+         move handler sets --cg-x / --cg-y / --cg-on. scroll-reveal adds the
+         reveal-ready class, so a data-reveal section is hidden only when JS
+         is present, and visible otherwise. */
+      cursor-glow {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+        opacity: var(--cg-on, 0); transition: opacity 500ms ease;
+      }
+      cursor-glow .cg-blob {
+        position: absolute; top: 0; left: 0; width: 920px; height: 920px; margin: -460px;
+        border-radius: 50%;
+        background: radial-gradient(circle at center, color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 70%);
+        transform: translate3d(var(--cg-x, -9999px), var(--cg-y, -9999px), 0);
+      }
+      /* Skip rendering off-screen sections until they near the viewport. The
+         intrinsic-size keeps the scrollbar stable, and the auto keyword
+         remembers each real size after first render. Pure CSS, no JS, PE-safe. */
+      [data-reveal] { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+      .reveal-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
+      .reveal-ready [data-reveal].is-revealed { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) {
+        cursor-glow { display: none; }
+        .reveal-ready [data-reveal] { opacity: 1; transform: none; transition: none; }
+      }
+      .scroll-thin { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color var(--t); }
+      .scroll-thin:hover { scrollbar-color: color-mix(in oklch, var(--fg-subtle) 70%, transparent) transparent; }
+      .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+      .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+      .scroll-thin::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; transition: background var(--t); }
+      .scroll-thin:hover::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--fg-subtle) 60%, transparent); }
+      .scroll-thin::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
       .mobile-menu > summary { list-style: none; }
       .mobile-menu > summary::-webkit-details-marker { display: none; }
-      .mobile-menu > summary .close-icon { display: none; }
-      .mobile-menu[open] > summary .open-icon { display: none; }
-      .mobile-menu[open] > summary .close-icon { display: inline-block; }
+      .mobile-menu .close-icon { display: none; }
+      .mobile-menu[open] .open-icon { display: none; }
+      .mobile-menu[open] .close-icon { display: inline-block; }
+      /* Host sizing for the copy-cmd custom element (utilities cannot
+         target the host from inside the component). Everything else in
+         copy-cmd is Tailwind. The tag name is written without angle
+         brackets on purpose: a literal element tag inside this style
+         block is rendered as a real component by the SSR pass. */
+      copy-cmd { display: block; flex: 1; min-width: 0; max-width: 100%; }
+      /* Template-card commands hide the horizontal scrollbar entirely (no
+         track, no gutter, even on hover), so all three sit flush at the same
+         bottom baseline with no reserved strip. The command stays scrollable
+         (wheel / touch / drag) and the copy button copies the full text. */
+      .cmd-foot copy-cmd [data-copy-text] { overflow-x: auto; scrollbar-width: none; }
+      .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
     </style>
 
-    <div class="announce">
-      <span class="tag">New</span>
-      <a href="https://ui.webjs.dev" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5">
-        Introducing AI-first component library
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
-        </svg>
-      </a>
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
+
+    <div class="glow-layer" aria-hidden="true"></div>
+    <cursor-glow aria-hidden="true"></cursor-glow>
+
+    <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
+      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
+      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
 
-    <header class="flex items-center justify-between gap-4 max-w-[960px] mx-auto px-4 sm:px-6 py-4">
-      <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
-        <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
-        webjs
-      </a>
+    <header class="sticky top-0 z-20 backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
+      <div class="max-w-[1080px] mx-auto px-6 py-[13px] flex items-center gap-4">
+        <a class="mr-auto inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em]" href="/">
+          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+          webjs
+        </a>
 
-      <!-- Inline nav, md and up -->
-      <nav class="hidden md:flex items-center gap-4">
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${UI_URL} target="_blank">UI</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/blog">Blog</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/changelog">Changelog</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${BLOG_URL} target="_blank">Demo</a>
-        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-        <theme-toggle></theme-toggle>
-      </nav>
+        <nav class="hidden md:flex items-center gap-0.5" aria-label="Primary">
+          ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
+        </nav>
 
-      <!-- Mobile cluster: hamburger first (LEFT), theme-toggle second
-           (RIGHT), matching the convention across docs, blog, and ui.
-           Native <details>/<summary> for progressive enhancement. -->
-      <div class="flex items-center gap-2 md:hidden">
-        <details class="mobile-menu relative">
-          <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
-            <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
-            </svg>
-            <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-            </svg>
-          </summary>
-          <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${DOCS_URL + '/docs/getting-started'} target="_blank">Docs</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${UI_URL} target="_blank">UI</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/blog">Blog</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/changelog">Changelog</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${BLOG_URL} target="_blank">Demo</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-          </nav>
-        </details>
-        <theme-toggle></theme-toggle>
+        <div class="flex items-center gap-3">
+          <theme-toggle></theme-toggle>
+          <details class="mobile-menu relative md:hidden">
+            <summary class="cursor-pointer w-[38px] h-[38px] inline-flex items-center justify-center rounded-[9px] text-fg-muted hover:bg-bg-subtle hover:text-fg" aria-label="Toggle navigation">
+              <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+              <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </summary>
+            <nav class="absolute right-0 top-[calc(100%+10px)] min-w-[210px] flex flex-col gap-0.5 bg-bg-elev border border-border rounded-[14px] shadow-[var(--shadow)] p-2 z-50" aria-label="Mobile">
+              ${NAV.map(n => html`<a class=${panelLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
+            </nav>
+          </details>
+        </div>
       </div>
     </header>
 
-    ${children}
+    <div class="relative z-[1]">
+      ${children}
+    </div>
   `;
 }
-
-// Touch to force a Railway redeploy of this app for the workspace router fixes in #151 and #157 (the watch path skips framework-only changes in packages/core).

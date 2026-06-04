@@ -37,7 +37,7 @@ export default async function BlogPost({ params }: { params: { slug: string } })
   if (!post) notFound();
 
   return html`
-    <main class="max-w-[840px] mx-auto px-[24px] py-[64px]">
+    <main id="main" tabindex="-1" class="max-w-[840px] mx-auto px-[24px] py-[64px] focus:outline-none">
       <nav class="mb-[48px]">
         <a href="/blog" class="font-mono text-[12px] text-fg-subtle no-underline hover:text-fg tracking-wide">← All posts</a>
       </nav>

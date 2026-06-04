@@ -7,6 +7,8 @@
     "prestart": "npm run css:build",
     "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
     "start": "webjs start",
+    "test": "webjs test",
+    "test:browser": "webjs test --browser",
     "webjs:dev": "webjs dev --port ${PORT:-5001}",
     "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
@@ -15,6 +17,11 @@
     "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0"
+  },
+  "devDependencies": {
+    "@web/test-runner": "^0.20.0",
+    "@web/test-runner-playwright": "^0.11.0",
+    "playwright": "^1.59.0"
   },
   "engines": {
     "node": ">=24.0.0"

@@ -1,0 +1,223 @@
+/**
+ * Browser tests for the <copy-cmd> element covering click-to-copy and
+ * the icon flip.
+ *
+ * The component is light DOM and progressively enhanced: the slotted
+ * command text is the click target, clicking writes the trimmed text to
+ * the clipboard, and the copy icon flips to a checkmark for ~1.5s.
+ *
+ * navigator.clipboard.writeText is stubbed so the test is deterministic
+ * regardless of the headless browser's clipboard permission (the real
+ * component swallows a rejected write, so without the stub the flip would
+ * never happen and there would be nothing to assert).
+ */
+import '../../../components/copy-cmd.ts';
+
+const assert = {
+  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
+  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
+};
+
+const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
+suite('copy-cmd', () => {
+  let written;
+  let restoreClipboard;
+
+  const stubClipboard = () => {
+    written = null;
+    const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'clipboard')
+      || Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (t) => { written = t; } },
+    });
+    restoreClipboard = () => {
+      delete navigator.clipboard;
+      if (desc) Object.defineProperty(navigator, 'clipboard', desc);
+    };
+  };
+
+  const mount = async (text) => {
+    const el = document.createElement('copy-cmd');
+    el.textContent = text;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  setup(() => stubClipboard());
+  teardown(() => restoreClipboard && restoreClipboard());
+
+  test('renders the slotted command and a copy affordance', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const textEl = el.querySelector('[data-copy-text]');
+    assert.ok(textEl, 'a [data-copy-text] click target is rendered');
+    assert.ok(
+      textEl.textContent.includes('npm create webjs@latest my-app'),
+      'the slotted command text is projected into the click target',
+    );
+    assert.ok(el.querySelector('button'), 'a copy button is rendered');
+    assert.ok(
+      el.querySelector('button').className.includes('opacity-100'),
+      'the copy button is always visible (not hover-only)',
+    );
+    assert.ok(
+      !el.querySelector('button').className.includes('opacity-0'),
+      'the idle button is not hover-gated (no opacity-0)',
+    );
+    assert.equal(
+      el.querySelector('[data-copy-text]').getAttribute('aria-label'),
+      null,
+      'no aria-label hides the command; the command text is the accessible name',
+    );
+    // Pre-copy the button shows the copy (clipboard) icon, not the check.
+    assert.ok(el.querySelector('button rect'), 'copy icon is shown initially');
+    assert.equal(el.querySelector('button polyline'), null, 'no checkmark initially');
+    document.body.removeChild(el);
+  });
+
+  test('describes the copy action via aria-describedby without hiding the command', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    // The command stays the accessible NAME (slotted text, no aria-label)...
+    assert.equal(target.getAttribute('aria-label'), null, 'no aria-label overrides the command name');
+    assert.ok(target.textContent.includes('npm create webjs@latest my-app'), 'the command is the accessible name');
+    // ...and an sr-only describedby hint adds the copy ACTION as the description.
+    const hintId = target.getAttribute('aria-describedby');
+    assert.ok(hintId, 'the button references a description via aria-describedby');
+    const hint = el.querySelector('#' + hintId);
+    assert.ok(hint, 'the referenced hint element exists in the same subtree');
+    assert.ok(/copy/i.test(hint.textContent) && /clipboard/i.test(hint.textContent),
+      'the hint describes the copy-to-clipboard action');
+    assert.ok(hint.className.includes('sr-only'), 'the hint is visually hidden (screen-reader only)');
+    document.body.removeChild(el);
+  });
+
+  test('two copy-cmd on a page get distinct describedby hint ids', async () => {
+    const a = await mount('npm create webjs@latest one');
+    const b = await mount('npm create webjs@latest two');
+    const idA = a.querySelector('[data-copy-text]').getAttribute('aria-describedby');
+    const idB = b.querySelector('[data-copy-text]').getAttribute('aria-describedby');
+    assert.ok(idA && idB, 'both buttons carry a describedby id');
+    assert.ok(idA !== idB, 'the two hint ids are unique so neither shadows the other');
+    a.remove(); b.remove();
+  });
+
+  test('clicking the command copies the trimmed text and flips to a checkmark', async () => {
+    const el = await mount('   npm create webjs@latest my-app   ');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);          // let the async _copy + clipboard stub resolve
+    await el.updateComplete;  // and the copied-signal re-render commit
+
+    assert.equal(written, 'npm create webjs@latest my-app', 'trimmed text was written to the clipboard');
+    assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark');
+    assert.equal(el.querySelector('button rect'), null, 'copy icon is gone after copy');
+    assert.ok(
+      el.querySelector('button').className.includes('opacity-100'),
+      'the button is made visible (opacity-100) in the copied state',
+    );
+    assert.equal(
+      el.querySelector('[role="status"]').textContent.trim(),
+      'Copied',
+      'the live region announces "Copied" to assistive tech',
+    );
+    document.body.removeChild(el);
+  });
+
+  test('re-announces "Copied" on a repeat copy within the reset window', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    const live = el.querySelector('[role="status"]');
+    target.click();
+    await tick(10);
+    await el.updateComplete;
+    const first = live.textContent;
+    assert.equal(first.trim(), 'Copied', 'announces Copied on the first copy');
+    // Copy again BEFORE the 1.5s reset fires (copied is still true).
+    target.click();
+    await tick(10);
+    await el.updateComplete;
+    const second = live.textContent;
+    assert.equal(second.trim(), 'Copied', 'still reads Copied on the repeat copy');
+    // The text node must differ so an aria-live region re-announces. If the
+    // text were a constant 'Copied', this would fail (the counterfactual).
+    assert.ok(first !== second, 'the live-region text changes so aria-live re-fires');
+    document.body.removeChild(el);
+  });
+
+  test('keyboard activation (Enter) copies too', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await tick(10);
+    await el.updateComplete;
+    assert.equal(written, 'npm create webjs@latest my-app', 'Enter triggers a copy');
+    assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark on Enter');
+    document.body.removeChild(el);
+  });
+
+  test('keyboard activation (Space) copies too', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    target.dispatchEvent(ev);
+    // Space must be preventDefaulted so the page does not scroll on the keypress
+    // (the counterfactual the copy/flip assertions alone do not provide).
+    assert.ok(ev.defaultPrevented, 'Space is preventDefaulted so the page does not scroll');
+    await tick(10);
+    await el.updateComplete;
+    assert.equal(written, 'npm create webjs@latest my-app', 'Space triggers a copy');
+    assert.ok(el.querySelector('button polyline'), 'icon flipped to the checkmark on Space');
+    document.body.removeChild(el);
+  });
+
+  test('a rejected clipboard write fails silently (no flip, empty live region)', async () => {
+    navigator.clipboard.writeText = async () => { throw new Error('denied'); };
+    const el = await mount('npm create webjs@latest my-app');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    assert.ok(el.querySelector('button rect'), 'copy icon stays (no flip) when the write is rejected');
+    assert.equal(el.querySelector('button polyline'), null, 'no checkmark on a rejected write');
+    assert.equal(el.querySelector('[role="status"]').textContent.trim(), '', 'the live region stays empty');
+    document.body.removeChild(el);
+  });
+
+  test('disconnecting clears the pending auto-reset timer', async () => {
+    // After a copy, a 1.5s timer is armed to flip the icon back. Removing the
+    // element before it fires must clearTimeout it (disconnectedCallback). Spy
+    // on clearTimeout so deleting that cleanup makes this test fail (the
+    // counterfactual the firing-path test on its own does not provide).
+    const realClear = window.clearTimeout;
+    const cleared = [];
+    window.clearTimeout = (id) => { cleared.push(id); return realClear(id); };
+    try {
+      const el = await mount('npm create webjs@latest my-app');
+      el.querySelector('[data-copy-text]').click();
+      await tick(10);
+      await el.updateComplete;          // copied=true, the 1.5s reset timer is armed
+      assert.ok(el.querySelector('button polyline'), 'flipped to the checkmark, so a timer is pending');
+      const before = cleared.length;
+      el.remove();                       // disconnectedCallback must cancel the pending timer
+      assert.ok(cleared.length > before, 'disconnecting cleared the pending auto-reset timer');
+    } finally {
+      window.clearTimeout = realClear;
+    }
+  });
+
+  test('the checkmark resets back to the copy icon', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    assert.ok(el.querySelector('button polyline'), 'checkmark shown right after copy');
+
+    await tick(1700);         // the component resets after ~1.5s
+    await el.updateComplete;
+    assert.ok(el.querySelector('button rect'), 'copy icon is restored after the reset window');
+    assert.equal(el.querySelector('button polyline'), null, 'checkmark is gone after the reset window');
+    assert.equal(el.querySelector('[role="status"]').textContent.trim(), '', 'the live region clears on reset');
+    document.body.removeChild(el);
+  });
+});

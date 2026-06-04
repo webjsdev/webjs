@@ -4,11 +4,14 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * `<copy-cmd>` wraps a shell-command line with a copy-to-clipboard
  * affordance. Light DOM, Tailwind utilities throughout. The whole
  * inner wrapper is the click target (text or icon both trigger copy);
- * the icon is a hover-revealed visual hint, not a separate focusable
- * element.
+ * the icon is an always-visible visual hint, not a separate focusable
+ * element. The command text is the button's accessible NAME, and an
+ * sr-only aria-describedby hint adds "Copy command to clipboard" as its
+ * description, so a screen reader announces both the payload and the
+ * action without the label hiding the command.
  *
  * Usage:
- *   <copy-cmd>npx create-webjs-app@latest my-app</copy-cmd>
+ *   <copy-cmd>npm create webjs@latest my-app</copy-cmd>
  *
  * On click (or Enter / Space), writes the trimmed text content to the
  * clipboard via navigator.clipboard.writeText and flips the icon to a
@@ -19,9 +22,19 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * addEventListener in lifecycle hooks. Cleanup of the auto-reset
  * timer happens in disconnectedCallback.
  */
+let HINT_SEQ = 0;
+
 export class CopyCmd extends WebComponent {
   copied = signal(false);
+  // Increments on every successful copy. The live-region text is keyed off its
+  // parity so a repeat copy within the reset window still changes the text node
+  // (an aria-live region only announces on a content CHANGE), re-announcing
+  // "Copied" even though `copied` is already true.
+  private _copies = signal(0);
   private _resetTimer: number | undefined;
+  // Per-instance id so aria-describedby points at this button's own hint
+  // (multiple copy-cmd can share a page; the value is document-unique).
+  private _hintId = `copy-cmd-hint-${HINT_SEQ++}`;
 
   disconnectedCallback() {
     if (this._resetTimer) clearTimeout(this._resetTimer);
@@ -35,6 +48,7 @@ export class CopyCmd extends WebComponent {
     try {
       await navigator.clipboard.writeText(text);
       this.copied.set(true);
+      this._copies.set(this._copies.get() + 1);
       if (this._resetTimer) clearTimeout(this._resetTimer);
       this._resetTimer = (setTimeout(() => this.copied.set(false), 1500) as unknown as number);
     } catch {
@@ -52,24 +66,30 @@ export class CopyCmd extends WebComponent {
 
   render() {
     const isCopied = this.copied.get();
+    // Trailing space toggles per copy so the live-region text differs on a
+    // repeat copy (forcing a re-announce). trim() still yields "Copied", so a
+    // screen reader reads the same word and assertions stay simple.
+    const announce = isCopied ? (this._copies.get() % 2 ? 'Copied ' : 'Copied') : '';
     return html`
-      <span
-        role="button"
-        tabindex="0"
-        aria-label="Click to copy command"
-        class="group flex items-center gap-3 text-fg outline-none cursor-copy focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 rounded-sm"
-        @click=${this._copy}
-        @keydown=${this._onKey}
-      >
-        <span data-copy-text class="whitespace-nowrap">
-          <slot></slot>
-        </span>
+      <span class="group relative flex items-center min-w-0">
+        <span
+          class="scroll-thin flex-1 min-w-0 overflow-x-auto whitespace-nowrap cursor-copy pr-9 rounded-md outline-none focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          data-copy-text
+          role="button"
+          tabindex="0"
+          aria-describedby=${this._hintId}
+          @click=${this._copy}
+          @keydown=${this._onKey}
+        ><slot></slot></span>
         <button
-          class="flex-shrink-0 inline-flex items-center justify-center w-[26px] h-[26px] p-0 border border-border rounded text-fg-muted bg-transparent cursor-copy opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 hover:text-fg hover:border-fg-muted"
+          class="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 p-0 rounded-[7px] border bg-bg-elev cursor-copy opacity-100 transition-[opacity,color,border-color] duration-[140ms] hover:text-fg hover:border-fg-muted ${isCopied ? 'text-[oklch(0.66_0.16_150)] border-accent-tint' : 'text-fg-muted border-border'}"
+          type="button"
           aria-hidden="true"
           tabindex="-1"
-          type="button"
+          @click=${this._copy}
         >${isCopied ? CHECK_ICON : COPY_ICON}</button>
+        <span id=${this._hintId} class="sr-only">Copy command to clipboard</span>
+        <span class="sr-only" role="status" aria-live="polite">${announce}</span>
       </span>
     `;
   }

@@ -25,8 +25,17 @@ website/
                        Dockerfile's `COPY changelog ./changelog` line
                        is what ships it on Railway.
   components/
-    theme-toggle.ts    light/dark cycle
-  public/              favicon, og image, static assets
+    theme-toggle.ts    system/light/dark cycle
+    copy-cmd.ts        click-to-copy command line (light DOM, always-on button)
+    cursor-glow.ts     decorative cursor-follow glow (JS-opt-in motion)
+    scroll-reveal.ts   fade sections up on viewport entry (JS-opt-in motion)
+  lib/
+    highlight.ts       SSR syntax highlighter for the code samples
+    frontmatter.ts     parse changelog/blog markdown frontmatter
+  scripts/             manual dev tools, NOT part of build/deploy
+    fetch-fonts.mjs    download the self-hosted variable woff2 fonts
+    generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
+  public/              favicon, og image, self-hosted fonts, static assets
 ```
 
 The site is intentionally one page in long-form scroll. When you edit
@@ -35,23 +44,20 @@ that needs to change) and update inline.
 
 ## How to add a feature card
 
-The features grid is driven by the `FEATURES` array near the top of
-`app/page.ts`. Each entry is `{ icon, title, desc }`. Add a new entry
-in the correct order; the layout reflows automatically.
-
-The grid currently includes a card for **Webjs UI** (the AI-first
-component library at https://ui.webjs.dev). When shipping major UI-kit
-changes, update that card's copy or pin a companion card highlighting
-the new components.
+The features grid is driven by the `PILLARS` array near the top of
+`app/page.ts`. Each entry is `{ icon, title, desc }`, where `icon` is a
+key into the local `ICON` map (for example `ICON.bolt`). Add a new entry
+in the correct order and the grid reflows automatically. If no existing
+icon fits, add one to the `ICON` map first.
 
 ## Announcement banner
 
-The layout (`app/layout.ts`) renders a top-of-page announcement strip,
-a `<div class="announce">` block, typically pointing at the current
-release or shipping highlight (e.g. "v1: @webjsdev/ui is live"). To
-swap the announcement target, edit the layout's `<div class="announce">`
-block. The banner shows on every page. Remove the block entirely to
-hide it.
+The layout (`app/layout.ts`) renders a top-of-page announcement strip
+just above the sticky header: a small utility-class `<div>` with a "New"
+badge and a link (currently the `UI_URL` link, "Introducing the AI-first
+component library"). To swap the announcement, edit that `<div>` (its copy
+and the link `href`). The banner shows on every page. Remove the `<div>`
+to hide it.
 
 ## How to update headline / hero copy
 
@@ -79,9 +85,11 @@ applied (the navbar and most of the layout look broken). Same in prod:
 prefer `npm start` over `webjs start` so the `prestart: css:build` hook
 fires.
 
-Set `DOCS_URL` / `BLOG_URL` / `UI_URL` env vars to point the header links
-at the right hosts when deploying. Locally, `.env` in this directory
-sets them to the sibling apps' localhost ports.
+Set `DOCS_URL` / `UI_URL` / `DEMO_URL` env vars to point the header links at
+the right hosts when deploying. `DEMO_URL` is the live example-blog app
+surfaced as the "Demo" link. Locally, `.env` in this directory sets them to
+the sibling apps' localhost ports. Blog and Changelog are in-app routes, so
+they need no env var.
 
 ---
 

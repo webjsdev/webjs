@@ -18,16 +18,27 @@
   --color-accent-hover:  var(--accent-hover);
   --color-accent-fg:     var(--accent-fg);
   --color-accent-tint:   var(--accent-tint);
+  --color-accent-live:   var(--accent-live);
 
-  --font-sans:  var(--font-sans);
-  --font-serif: var(--font-serif);
-  --font-mono:  var(--font-mono);
+  --font-display: var(--font-display);
+  --font-sans:    var(--font-sans);
+  --font-serif:   var(--font-serif);
+  --font-mono:    var(--font-mono);
 
-  --text-display: clamp(2.6rem, 1.6rem + 3vw, 4rem);
-  --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.6rem);
-  --text-h2:      clamp(1.3rem, 1.1rem + 0.7vw, 1.6rem);
-  --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.18rem);
-
-  --duration-fast: 140ms;
-  --duration-slow: 220ms;
+  --text-display: clamp(2.7rem, 1.5rem + 3.6vw, 4.6rem);
+  --text-h2:      clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
+  --text-lede:    clamp(1.08rem, 0.98rem + 0.4vw, 1.28rem);
 }
+
+/*
+ * Self-hosted fonts (latin subset woff2 in public/fonts/, fetched by
+ * scripts/fetch-fonts.mjs). One VARIABLE file per family covers its whole
+ * weight range, so a font-weight range here means every used weight resolves
+ * from a single download (no per-weight duplicates). No Google Fonts CDN: no
+ * render-blocking third-party stylesheet and no third-party request.
+ * font-display:swap paints immediately with the fallback, then swaps. The two
+ * critical families are preloaded in app/layout.ts.
+ */
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter-tight.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url('/public/fonts/jetbrains-mono.woff2') format('woff2');}

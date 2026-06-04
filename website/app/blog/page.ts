@@ -17,7 +17,7 @@ export const metadata = {
 export default async function Blog() {
   const posts = await listPosts();
   return html`
-    <main class="max-w-[840px] mx-auto px-6 py-12">
+    <main id="main" tabindex="-1" class="max-w-[840px] mx-auto px-6 py-12 focus:outline-none">
       <header class="mb-10">
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Blog</p>
         <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">Notes from building webjs</h1>
