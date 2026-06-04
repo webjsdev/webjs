@@ -1667,10 +1667,24 @@ function clearFormBusy(form, token, url, ok) {
   if (formBusyTokens.get(form) !== token) return;
   formBusyTokens.delete(form);
   form.setAttribute('aria-busy', 'false');
-  form.dispatchEvent(new CustomEvent('webjs:submit-end', {
+  const evt = new CustomEvent('webjs:submit-end', {
     bubbles: true,
     detail: { form, url, ok: !!ok },
-  }));
+  });
+  // A successful submission swaps the page in place, and a full-body swap
+  // (or a swap whose region contained the form) detaches the form before
+  // this teardown runs. A bubbling event dispatched on a DISCONNECTED node
+  // never reaches a `document`-level listener, so a synchronous swap (the
+  // no-view-transition default) would silently drop `submit-end`. Dispatch
+  // on `document` when the form is no longer connected so the symmetric
+  // start/end pair always lands, regardless of swap timing.
+  if (form.isConnected) {
+    form.dispatchEvent(evt);
+  } else if (typeof document !== 'undefined') {
+    document.dispatchEvent(evt);
+  } else {
+    form.dispatchEvent(evt);
+  }
 }
 
 /**
@@ -1735,6 +1749,207 @@ function trackedReloadSignature(root) {
   let sig = '';
   for (const el of tracked) sig += outerHTMLForDiff(el);
   return sig;
+}
+
+/* ====================================================================
+ * View Transitions (opt-in) + permanent-element persistence
+ * ==================================================================== */
+
+/**
+ * Whether the current page opts into the native View Transitions API for
+ * client-router swaps. OFF by default (no animation surprise, no
+ * regression for browsers without the API): a transition is purely
+ * opt-in via a `<meta name="view-transition" content="same-origin">` in
+ * the document head, mirroring Turbo's `<meta name="view-transition">`
+ * convention. The accepted opt-in value is `same-origin` (every
+ * client-router swap is same-origin by construction, so it reads as "yes,
+ * animate these in-app navigations"). Any other value, or the meta being
+ * absent, keeps transitions off.
+ *
+ * Re-read per navigation rather than cached: the meta can be added or
+ * removed by a swap (the head merge brings in the new page's head), so a
+ * page can turn transitions on or off as the user navigates.
+ *
+ * @returns {boolean}
+ */
+function viewTransitionsEnabled() {
+  if (typeof document === 'undefined') return false;
+  const meta = document.querySelector('meta[name="view-transition"]');
+  if (!meta) return false;
+  const content = (meta.getAttribute('content') || '').trim().toLowerCase();
+  return content === 'same-origin';
+}
+
+/**
+ * Run a synchronous DOM-mutation thunk, wrapping it in
+ * `document.startViewTransition()` when the page has opted in AND the
+ * browser supports the API. Otherwise the thunk runs synchronously,
+ * byte-identical to the pre-View-Transitions behaviour (no flash, no
+ * regression). The thunk is the SAME swap code in both branches; the
+ * transition only captures the before/after around the mutation (the
+ * fetch already happened, so it is never inside the callback).
+ *
+ * @param {() => void} thunk  The synchronous DOM swap to perform.
+ * @param {() => void} [afterFinished]  Optional post-transition work
+ *   (e.g. re-upgrade custom elements) run when the transition settles; for
+ *   the synchronous fallback it runs immediately after the thunk.
+ */
+function runWithTransition(thunk, afterFinished) {
+  const start = typeof document !== 'undefined'
+    ? /** @type any */ (document).startViewTransition
+    : undefined;
+  if (viewTransitionsEnabled() && typeof start === 'function') {
+    const t = start.call(document, thunk);
+    if (t && t.finished && typeof t.finished.then === 'function') {
+      t.finished.then(() => { if (afterFinished) afterFinished(); }).catch(() => {});
+    } else if (afterFinished) {
+      afterFinished();
+    }
+    return;
+  }
+  thunk();
+  if (afterFinished) afterFinished();
+}
+
+/**
+ * Persist `data-webjs-permanent` elements across a swap by NODE IDENTITY.
+ *
+ * Mirrors Turbo's permanent-element behaviour: an element the author
+ * marks `data-webjs-permanent` (and which carries an `id`) survives a
+ * destructive swap as the SAME live DOM node, so a playing
+ * `<audio>` / `<video>`, a live widget, an open menu, or any element with
+ * accumulated JS state keeps running across the navigation instead of
+ * being destroyed and re-created from the incoming HTML.
+ *
+ * The mechanism runs BEFORE the destructive `replaceChildren` / range
+ * delete: for each `[data-webjs-permanent][id]` in the CURRENT subtree, if
+ * the INCOMING tree has a matching `#id`, the live current node is MOVED
+ * into the incoming tree's position (replacing the incoming placeholder).
+ * The subsequent swap then ADOPTS the live node (it is already part of the
+ * incoming tree) rather than destroying the current one. The keyed
+ * reconciler matches it by id afterwards and leaves it in place.
+ *
+ * Guards (correctness):
+ *   - both-exist: only regraft an id present in BOTH the current and
+ *     incoming subtree. An id in the current but NOT the incoming is being
+ *     removed; leave it (do not force it to persist).
+ *   - current-is-permanent: only move when the CURRENT node actually
+ *     carries `data-webjs-permanent` (an incoming `#id` that resolves to a
+ *     non-permanent current element is left untouched).
+ *   - boundary-respecting: the live node is placed exactly where the
+ *     incoming document puts it, so it never escapes a frame/region.
+ *
+ * @param {ParentNode} currentRoot   The live subtree being swapped out.
+ * @param {ParentNode} incomingRoot  The incoming subtree being swapped in.
+ */
+function regraftPermanentElements(currentRoot, incomingRoot) {
+  if (!currentRoot || !incomingRoot) return;
+  if (typeof currentRoot.querySelectorAll !== 'function') return;
+  const permanents = currentRoot.querySelectorAll('[data-webjs-permanent][id]');
+  for (const live of permanents) {
+    const id = live.id;
+    if (!id) continue;
+    // both-exist guard: the incoming subtree must carry a matching #id.
+    let placeholder = null;
+    try {
+      placeholder = incomingRoot.querySelector(`#${CSS.escape(id)}`);
+    } catch { placeholder = null; }
+    if (!placeholder) continue;
+    // current-is-permanent guard is implicit in the selector above, but
+    // re-assert defensively (the live node is the one we move).
+    if (!live.hasAttribute || !live.hasAttribute('data-webjs-permanent')) continue;
+    const parent = placeholder.parentNode;
+    if (!parent) continue;
+    // Move the LIVE node into the incoming tree's position, replacing the
+    // incoming placeholder. The swap then adopts the live node.
+    if (placeholder === live) continue;
+    parent.replaceChild(live, placeholder);
+  }
+}
+
+/**
+ * Permanent-element regraft for the marker-range path, where the two
+ * sides are ARRAYS of sibling nodes (the live slice between markers, and
+ * the imported-but-detached incoming slice) rather than single roots.
+ *
+ * For each `[data-webjs-permanent][id]` reachable from the LIVE slice, if
+ * a matching `#id` exists anywhere in the INCOMING slice, replace the
+ * incoming (freshly-imported) copy with the LIVE node so the reconciler
+ * adopts the live node by identity. Searches both top-level slice members
+ * and their descendants. The same both-exist + current-is-permanent
+ * guards as `regraftPermanentElements` apply.
+ *
+ * @param {Node[]} liveSlice
+ * @param {Node[]} incomingSlice
+ */
+function regraftPermanentInSlice(liveSlice, incomingSlice) {
+  /** @type {Element[]} */
+  const livePermanents = [];
+  for (const n of liveSlice) {
+    if (n.nodeType !== 1) continue;
+    const el = /** @type {Element} */ (n);
+    if (el.hasAttribute && el.hasAttribute('data-webjs-permanent') && el.id) {
+      livePermanents.push(el);
+    }
+    if (typeof el.querySelectorAll === 'function') {
+      for (const d of el.querySelectorAll('[data-webjs-permanent][id]')) livePermanents.push(d);
+    }
+  }
+  if (!livePermanents.length) return;
+
+  for (const live of livePermanents) {
+    const id = live.id;
+    if (!id) continue;
+    const placeholder = findInSlice(incomingSlice, id);
+    if (!placeholder) continue; // both-exist guard
+    if (placeholder === live) continue;
+    const parent = placeholder.parentNode;
+    if (parent) {
+      parent.replaceChild(live, placeholder);
+    } else {
+      // Placeholder is a top-level slice member with no parent (detached):
+      // replace it in the incomingSlice array so the reconciler inserts the
+      // live node in that position.
+      const idx = incomingSlice.indexOf(placeholder);
+      if (idx !== -1) incomingSlice[idx] = live;
+    }
+  }
+}
+
+/**
+ * Find an element with `#id` within an array of (possibly detached)
+ * sibling nodes, searching each member and its descendants.
+ *
+ * @param {Node[]} slice
+ * @param {string} id
+ * @returns {Element | null}
+ */
+function findInSlice(slice, id) {
+  for (const n of slice) {
+    if (n.nodeType !== 1) continue;
+    const el = /** @type {Element} */ (n);
+    if (el.id === id) return el;
+    if (typeof el.querySelector === 'function') {
+      let match = null;
+      try { match = el.querySelector(`#${CSS.escape(id)}`); } catch { match = null; }
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
+/**
+ * Re-upgrade custom elements between a marker pair after a transitioned
+ * swap settles. The View Transitions API snapshots and replaces DOM, so
+ * elements can need a re-upgrade once the animation finishes.
+ *
+ * @param {{ start: Comment, end: Comment } | undefined} range
+ */
+function upgradeCustomElementsInRange(range) {
+  if (!range || !range.start) return;
+  for (let n = range.start.nextSibling; n && n !== range.end; n = n.nextSibling) {
+    if (n.nodeType === 1) upgradeCustomElements(/** @type {Element} */ (n));
+  }
 }
 
 function applySwap(doc, frameId, revalidating, href, incomingBuild) {
@@ -1854,11 +2069,17 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
       // (Tailwind CSS injection, etc.) that the outer layout's scripts
       // already produced.
       addNewHeadElements(doc.head);
-      diffChildren(target, source);
-      reactivateScripts(target);
-      upgradeCustomElements(target);
+      // `diffChildren` -> `reconcileChildren` regrafts permanent elements
+      // by node identity (it imports the incoming children first, then
+      // swaps the live permanent node into the imported tree), so the live
+      // `<audio>`/widget keeps running across the frame swap.
+      runWithTransition(() => {
+        diffChildren(target, source);
+        reactivateScripts(target);
+        upgradeCustomElements(target);
+        blurOutgoingFocus();
+      }, () => upgradeCustomElements(target));
       forwardSuspenseResolvers(doc.body);
-      blurOutgoingFocus();
       return;
     }
     // The response did not carry the requested frame (source null), or the
@@ -1889,15 +2110,22 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
     // ADD-ONLY head merge for the same reason: outer layout stays
     // mounted, its head-bound runtime state must not be invalidated.
     addNewHeadElements(doc.head);
-    swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
+    runWithTransition(() => {
+      swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
+      blurOutgoingFocus();
+    }, () => upgradeCustomElementsInRange(here.get(sharedPath)));
     forwardSuspenseResolvers(doc.body);
-    blurOutgoingFocus();
     return;
   }
 
   // 3. Full body swap fallback. Use full head merge: different root
   // layout, so stale head elements should be removed.
   mergeHead(doc.head);
+  // Persist permanent elements by node identity across the full-body
+  // swap: move each live [data-webjs-permanent][id] node into the matching
+  // position in the incoming body BEFORE replaceChildren reads it, so the
+  // live node is adopted rather than destroyed.
+  regraftPermanentElements(document.body, doc.body);
   const newChildren = [...doc.body.childNodes];
   const doSwap = () => {
     document.body.replaceChildren(...newChildren);
@@ -1905,12 +2133,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
     upgradeCustomElements(document.body);
     blurOutgoingFocus();
   };
-  if (/** @type any */ (document).startViewTransition) {
-    const t = /** @type any */ (document).startViewTransition(doSwap);
-    t.finished.then(() => upgradeCustomElements(document.body)).catch(() => {});
-  } else {
-    doSwap();
-  }
+  runWithTransition(doSwap, () => upgradeCustomElements(document.body));
 }
 
 /**
@@ -1975,6 +2198,12 @@ function swapMarkerRange(target, source, _doc) {
   for (let n = source.start.nextSibling; n && n !== source.end; n = n.nextSibling) {
     incomingSlice.push(document.importNode(n, true));
   }
+
+  // Persist permanent elements by node identity: regraft each live
+  // [data-webjs-permanent][id] node into the matching position in the
+  // imported incoming slice, replacing the freshly-imported copy, so the
+  // keyed reconciler adopts the live node instead of destroying it.
+  regraftPermanentInSlice(liveSlice, incomingSlice);
 
   // Run the keyed diff.
   reconcileSiblings(liveParent, target.start, target.end, liveSlice, incomingSlice);
@@ -2063,6 +2292,12 @@ function reconcileSiblings(parent, startMarker, endMarker, live, incoming) {
  * @param {Element} src  The element to copy from (incoming HTML).
  */
 function diffElementInPlace(dst, src) {
+  // A regrafted `data-webjs-permanent` node is the SAME node on both
+  // sides (the live node was moved into the incoming tree). Diffing it
+  // against itself would recurse into its own children and re-import
+  // them; instead leave it exactly as the user left it (that is the whole
+  // point of permanence).
+  if (dst === src) return;
   if (dst.tagName !== src.tagName) {
     dst.replaceWith(src);
     return;
@@ -2100,6 +2335,15 @@ function diffElementInPlace(dst, src) {
 function reconcileChildren(dst, src) {
   const liveChildren = [...dst.childNodes];
   const incomingChildren = [...src.childNodes].map((n) => document.importNode(n, true));
+
+  // Persist `data-webjs-permanent` elements by node identity: regraft each
+  // live permanent node into the matching position in the freshly-imported
+  // incoming children (replacing the imported copy), so the keyed match
+  // below adopts the LIVE node and the reconciler never recreates it. This
+  // is the in-region (frame + nested) counterpart of the full-body and
+  // marker-range regrafts; running it here covers permanents nested below
+  // the top keyed level too.
+  regraftPermanentInSlice(liveChildren, incomingChildren);
 
   // Build keyed map of live children for reuse.
   /** @type {Map<string, Element>} */
@@ -2542,6 +2786,10 @@ export {
   buildSubmitFormData as _buildSubmitFormData,
   restoreOptimistic as _restoreOptimistic,
   eligibleAnchorHref as _eligibleAnchorHref,
+  viewTransitionsEnabled as _viewTransitionsEnabled,
+  runWithTransition as _runWithTransition,
+  regraftPermanentElements as _regraftPermanentElements,
+  regraftPermanentInSlice as _regraftPermanentInSlice,
   prefetchSuppressed as _prefetchSuppressed,
   prefetchMode as _prefetchMode,
   prefetch as _prefetch,

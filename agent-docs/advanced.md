@@ -578,6 +578,75 @@ document.addEventListener('webjs:prefetch', (e) => {
 });
 ```
 
+### View Transitions (opt-in, all three swap paths)
+
+The router can wrap a client navigation's DOM mutation in the native
+[View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API)
+(`document.startViewTransition`), so a same-shell partial swap cross-fades
+(or runs your `::view-transition-*` CSS) instead of snapping. It is OFF by
+default and purely OPT-IN, so an unconfigured app behaves exactly as
+before (no animation surprise, no regression in a browser without the
+API). Opt in by adding a meta to the page head, mirroring Turbo's
+`<meta name="view-transition">` convention:
+
+```html
+<!-- in the root layout's <head>, or any page's head -->
+<meta name="view-transition" content="same-origin">
+```
+
+The accepted opt-in value is `same-origin` (every client-router swap is
+same-origin by construction, so it reads as "animate these in-app
+navigations"); any other value, or the meta being absent, keeps
+transitions off. The meta is re-read PER navigation, so a page can turn
+transitions on or off as the user moves through the app (the head merge
+brings in the new page's head).
+
+When enabled and supported, the transition wraps ALL THREE swap paths,
+the deepest-marker layout swap, the `<webjs-frame>` swap, AND the
+full-body fallback, not just the full-body case (the inverse of what an
+author expects, since the marker + frame swaps are the common
+designed-for paths). The transition wraps the DOM MUTATION ONLY, never
+the fetch (which already happened); the browser captures the
+before/after around the synchronous swap. When `startViewTransition` is
+unavailable (Firefox / older Safari), the swap runs synchronously,
+byte-identical to the no-transition path, with no flash and no throw.
+
+### Persisting elements across a swap (`data-webjs-permanent`)
+
+An element marked `data-webjs-permanent` (it MUST also carry an `id`)
+survives a navigation as the SAME live DOM node, by node identity, so a
+playing `<audio>` / `<video>`, a live widget, an open menu, or any element
+with accumulated JS state keeps running across the swap instead of being
+destroyed and re-created from the incoming HTML. Mirrors Turbo's
+permanent-element behaviour.
+
+```html
+<audio id="player" data-webjs-permanent controls src="/track.mp3"></audio>
+```
+
+Mechanism: before the destructive swap, for each `[data-webjs-permanent]
+[id]` in the CURRENT DOM the router looks for a matching `#id` in the
+INCOMING document; when BOTH exist, the LIVE node is moved into the
+incoming tree's position (replacing the incoming placeholder), so the swap
+adopts the live node rather than recreating it. It works for the
+full-body path AND the in-region (marker / frame) paths, and is a STRONGER
+guarantee than the keyed reconciler (which preserves identity for matched
+keyed children): a permanent node keeps EXACT identity even where the
+reconciler would otherwise recreate it. Rules:
+
+- The element must have an `id` (the match key) and the attribute on BOTH
+  the current and incoming render of the page.
+- An id present in the current but ABSENT from the incoming doc is NOT
+  force-persisted (it is being removed; the swap removes it as usual).
+- Only a CURRENT node actually carrying `data-webjs-permanent` is moved
+  (an incoming `#id` that resolves to a non-permanent current element is
+  left untouched).
+- The node is placed exactly where the incoming document puts it, so it
+  never escapes a frame / region boundary.
+
+Progressive enhancement: with JS off, `data-webjs-permanent` is an inert
+attribute and the navigation is a normal full-page load.
+
 ### Per-segment loading skeletons
 
 Each `loading.{js,ts}` in the route chain is rendered into a hidden
