@@ -160,7 +160,11 @@ suite('copy-cmd', () => {
   test('keyboard activation (Space) copies too', async () => {
     const el = await mount('npm create webjs@latest my-app');
     const target = el.querySelector('[data-copy-text]');
-    target.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    target.dispatchEvent(ev);
+    // Space must be preventDefaulted so the page does not scroll on the keypress
+    // (the counterfactual the copy/flip assertions alone do not provide).
+    assert.ok(ev.defaultPrevented, 'Space is preventDefaulted so the page does not scroll');
     await tick(10);
     await el.updateComplete;
     assert.equal(written, 'npm create webjs@latest my-app', 'Space triggers a copy');
