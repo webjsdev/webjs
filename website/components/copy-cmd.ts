@@ -26,6 +26,11 @@ let HINT_SEQ = 0;
 
 export class CopyCmd extends WebComponent {
   copied = signal(false);
+  // Increments on every successful copy. The live-region text is keyed off its
+  // parity so a repeat copy within the reset window still changes the text node
+  // (an aria-live region only announces on a content CHANGE), re-announcing
+  // "Copied" even though `copied` is already true.
+  private _copies = signal(0);
   private _resetTimer: number | undefined;
   // Per-instance id so aria-describedby points at this button's own hint
   // (multiple copy-cmd can share a page; the value is document-unique).
@@ -43,6 +48,7 @@ export class CopyCmd extends WebComponent {
     try {
       await navigator.clipboard.writeText(text);
       this.copied.set(true);
+      this._copies.set(this._copies.get() + 1);
       if (this._resetTimer) clearTimeout(this._resetTimer);
       this._resetTimer = (setTimeout(() => this.copied.set(false), 1500) as unknown as number);
     } catch {
@@ -60,6 +66,10 @@ export class CopyCmd extends WebComponent {
 
   render() {
     const isCopied = this.copied.get();
+    // Trailing space toggles per copy so the live-region text differs on a
+    // repeat copy (forcing a re-announce). trim() still yields "Copied", so a
+    // screen reader reads the same word and assertions stay simple.
+    const announce = isCopied ? (this._copies.get() % 2 ? 'Copied ' : 'Copied') : '';
     return html`
       <span class="group relative flex items-center min-w-0">
         <span
@@ -79,7 +89,7 @@ export class CopyCmd extends WebComponent {
           @click=${this._copy}
         >${isCopied ? CHECK_ICON : COPY_ICON}</button>
         <span id=${this._hintId} class="sr-only">Copy command to clipboard</span>
-        <span class="sr-only" role="status" aria-live="polite">${isCopied ? 'Copied' : ''}</span>
+        <span class="sr-only" role="status" aria-live="polite">${announce}</span>
       </span>
     `;
   }

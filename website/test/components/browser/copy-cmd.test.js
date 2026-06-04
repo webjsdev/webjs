@@ -125,6 +125,27 @@ suite('copy-cmd', () => {
     document.body.removeChild(el);
   });
 
+  test('re-announces "Copied" on a repeat copy within the reset window', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    const live = el.querySelector('[role="status"]');
+    target.click();
+    await tick(10);
+    await el.updateComplete;
+    const first = live.textContent;
+    assert.equal(first.trim(), 'Copied', 'announces Copied on the first copy');
+    // Copy again BEFORE the 1.5s reset fires (copied is still true).
+    target.click();
+    await tick(10);
+    await el.updateComplete;
+    const second = live.textContent;
+    assert.equal(second.trim(), 'Copied', 'still reads Copied on the repeat copy');
+    // The text node must differ so an aria-live region re-announces. If the
+    // text were a constant 'Copied', this would fail (the counterfactual).
+    assert.ok(first !== second, 'the live-region text changes so aria-live re-fires');
+    document.body.removeChild(el);
+  });
+
   test('keyboard activation (Enter) copies too', async () => {
     const el = await mount('npm create webjs@latest my-app');
     const target = el.querySelector('[data-copy-text]');
