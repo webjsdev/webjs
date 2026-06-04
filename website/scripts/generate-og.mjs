@@ -126,7 +126,11 @@ try {
   await browser.close();
 }
 
-// Downscale the 2400x1260 capture to an exact 1200x630 for crisp text.
-execFileSync('magick', [big, '-resize', '1200x630', OUT], { stdio: 'inherit' });
+// Downscale the 2400x1260 capture to an exact 1200x630 for crisp text, and
+// losslessly optimize: strip metadata and use max PNG compression. Lossy
+// quantization / WebP are deliberately avoided here: the card is gradient-heavy
+// (low color counts band the soft radials) and PNG is the safe og:image format
+// for every social unfurler.
+execFileSync('magick', [big, '-resize', '1200x630', '-strip', '-define', 'png:compression-level=9', OUT], { stdio: 'inherit' });
 rmSync(tmp, { recursive: true, force: true });
 console.log('wrote', OUT);
