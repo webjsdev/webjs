@@ -58,6 +58,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
 
+    // #271: the opt-in progressive-enhancement service worker + its offline
+    // fallback ship into the UI scaffolds (full-stack / saas; api has no UI),
+    // dormant until the app registers it. This test covers full-stack.
+    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'public/sw.js should exist');
+    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'public/offline.html should exist');
+
     // #259: the VS Code settings that associate the webjs-config JSON Schema
     // with package.json's `webjs` block must reach the scaffolded app. This
     // file is under a `.vscode/` dir that .gitignore would normally exclude, so
@@ -212,6 +218,12 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
     // Never demonstrate the invalid wildcard + credentials combination.
     assert.doesNotMatch(mw, /origin:\s*'\*'/, 'no wildcard origin with credentials');
 
+    // #271: the api template has no UI, so it must NOT ship the service worker
+    // (this locks the corrected UI-only scoping; the copy lives in create.js's
+    // !isApi block).
+    assert.ok(!existsSync(join(appDir, 'public', 'sw.js')), 'api ships no sw.js');
+    assert.ok(!existsSync(join(appDir, 'public', 'offline.html')), 'api ships no offline.html');
+
     // Module skeleton
     assert.ok(existsSync(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts')));
     assert.ok(existsSync(join(appDir, 'modules', 'users', 'actions', 'create-user.server.ts')));
@@ -241,6 +253,10 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     // Core scaffold still in place
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
+
+    // #271: saas is a UI scaffold, so it ships the opt-in service worker.
+    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');
+    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'saas ships public/offline.html');
 
     // SaaS-specific lib files
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts present');

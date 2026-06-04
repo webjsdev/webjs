@@ -15,6 +15,7 @@ recipes for common tasks. Keep it in sync whenever behaviour changes.
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router, WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
 | `agent-docs/deployment.md` | Production, runtime targets, embedded use |
+| `agent-docs/service-worker.md` | The opt-in progressive-enhancement service worker (`public/sw.js`): offline fallback, asset caching, the `data-webjs-build` version tie, the registration snippet |
 | `agent-docs/testing.md` | Unit, browser, convention validation, the `handle()` test harness (`@webjsdev/server/testing`) |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself) |
 | `agent-docs/recipes.md` | Page / route / action / component recipes |
