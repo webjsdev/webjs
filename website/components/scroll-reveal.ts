@@ -50,12 +50,18 @@ export class ScrollReveal extends WebComponent {
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.04 });
 
     const vh = window.innerHeight || doc.documentElement.clientHeight;
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
+    const io = this._io;
+    // Read every rect BEFORE writing any class. Adding `reveal-ready` above
+    // already restyled the sections, so a class write here dirties layout for
+    // the next getBoundingClientRect. Batching the reads collapses N forced
+    // reflows into one.
+    const rects = els.map((el) => el.getBoundingClientRect());
+    els.forEach((el, i) => {
+      const r = rects[i];
       // Already in view: reveal in this same frame so it does not flash.
       if (r.top < vh && r.bottom > 0) el.classList.add('is-revealed');
-      else this._io.observe(el);
-    }
+      else io.observe(el);
+    });
   }
 
   disconnectedCallback() {
