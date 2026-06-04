@@ -2,7 +2,7 @@ import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 import '../components/cursor-glow.ts';
-import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
+import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 
 /**
  * Root layout for the redesigned marketing site.
@@ -15,7 +15,7 @@ import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
  * layer and cursor-glow blob, the hover-only scrollbar (`.scroll-thin`), and
  * the <details> icon swap. Everything else is Tailwind.
  *
- * Shared link config (DOCS_URL / UI_URL / DEMO_URL / GH_URL / NEW_TAB) lives in
+ * Shared link config (DOCS_URL / UI_URL / EXAMPLE_BLOG_URL / GH_URL / NEW_TAB) lives in
  * lib/links.ts, imported here and by app/page.ts.
  */
 
@@ -25,7 +25,7 @@ const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framewo
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
   { label: 'UI', href: UI_URL, ext: true },
-  { label: 'Demo', href: DEMO_URL, ext: true },
+  { label: 'Demo', href: EXAMPLE_BLOG_URL, ext: true },
   { label: 'Blog', href: '/blog', ext: false },
   { label: 'Changelog', href: '/changelog', ext: false },
   { label: 'GitHub', href: GH_URL, ext: true },
