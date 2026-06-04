@@ -25,6 +25,13 @@ test('the root layout SSR emits no phantom copy-cmd element or copy button', asy
   assert.ok(!/<copy-cmd[\s>]/.test(out), 'no phantom copy-cmd element rendered from the layout');
 });
 
+test('warms the analytics origin with a connection hint', async () => {
+  // The async gtag script is the one cross-origin runtime dependency; a
+  // preconnect lets its handshake overlap head parse instead of starting cold.
+  const out = await renderToString(RootLayout({ children: html`<main>x</main>` }));
+  assert.ok(out.includes('rel="preconnect" href="https://www.googletagmanager.com"'), 'preconnects the gtag origin');
+});
+
 test('every nav landmark carries a distinguishing aria-label', async () => {
   // Multiple <nav> landmarks (header desktop, header mobile-menu, footer)
   // must each have an accessible name so a screen reader's landmark list can

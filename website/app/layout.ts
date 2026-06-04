@@ -73,6 +73,12 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
 
+    <!-- Warm the analytics connection so the async gtag handshake (and the
+         beacon to google-analytics.com it then opens) overlaps head parse
+         instead of starting cold when the script tag is discovered. -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.google-analytics.com">
+
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
     <script nonce="${nonce}">
