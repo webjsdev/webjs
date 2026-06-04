@@ -2,6 +2,15 @@
 // `import '@webjsdev/core/client-router'` get the escape-hatch element
 // available without a second import.
 import './webjs-frame.js';
+// Same for the <webjs-stream> element. Registering it here means the surgical
+// stream-action applier (and `renderStream`) is available app-wide wherever
+// the client router is active, for both the HTTP form path (below) and a
+// live-channel `connectWS` handler.
+import './webjs-stream.js';
+import { renderStream } from './webjs-stream.js';
+
+/** The content type a content-negotiated stream-action response carries (#248). */
+const STREAM_MIME = 'text/vnd.webjs-stream.html';
 
 /**
  * Client router for webjs: nested-layout-aware partial swap.
@@ -1464,6 +1473,13 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     const have = buildHaveHeader();
     if (have) headers['x-webjs-have'] = have;
     if (frameId) headers['x-webjs-frame'] = frameId;
+    // Content-negotiate a stream-action response on a write submission (a
+    // non-GET body). The server returns the stream MIME only when this Accept
+    // is present, so with JS off (no router, no Accept) the same form gets a
+    // normal render/redirect: the grammar is additive and PE-safe (#248).
+    if (body != null && method !== 'GET' && method !== 'HEAD') {
+      headers['accept'] = STREAM_MIME + ', text/html';
+    }
 
     /** @type {RequestInit} */
     const init = { method, headers, credentials: 'same-origin' };
@@ -1475,6 +1491,22 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     respOk = resp.ok;
     const ctype = resp.headers.get('content-type') || '';
     const isHTML = /^text\/html\b/i.test(ctype);
+    const isStream = ctype.toLowerCase().indexOf(STREAM_MIME) === 0;
+    // Stream-action response (#248): the body is `<webjs-stream>` elements
+    // applied surgically to the live DOM, NOT a region swap. Apply them and
+    // return; do not parse the body as a page document (it has no shell). A
+    // stream body of any status is fine. This runs BEFORE the !isHTML branch
+    // so the non-text/html stream MIME is not treated as a navigation error.
+    if (isStream) {
+      const text = await resp.text();
+      if (myToken === currentNavigationToken) {
+        // Roll back any optimistic loading skeleton: a stream response patches
+        // the page in place, it does not swap the region the skeleton covered.
+        restoreOptimistic(optimisticState);
+        renderStream(text);
+      }
+      return { ok: respOk, status: respStatus, aborted: false };
+    }
     // Server-side redirect (PRG, auth-gate, etc.): fetch followed it
     // automatically. Record the FINAL URL in history, not the
     // originally-requested one, so back/forward + bookmarking work.
