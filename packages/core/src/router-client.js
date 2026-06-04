@@ -360,7 +360,7 @@ function onSubmit(e) {
   // an explicit `data-webjs-frame` on (or above) the form or its submitter
   // wins, `_top` breaks out, absence falls back to the enclosing frame.
   const frameId = resolveTargetFrameId(submitter || form);
-  performSubmission(url.href, method, body, frameId);
+  performSubmission(url.href, method, body, frameId, form);
 }
 
 /**
@@ -780,12 +780,29 @@ async function performNavigation(href, isPopState, frameId) {
  * been server-side-mutated by this submission; refusing to clear would
  * serve stale content on subsequent back/forward.
  *
+ * Submission-state events + aria-busy: while the enhanced submission fetch
+ * is in flight the router sets `aria-busy="true"` on the FORM element and
+ * dispatches `webjs:submit-start` (detail `{ form, url }`); on EVERY settle
+ * path (success swap, validation re-render, navigation error, abort by a
+ * superseding submit/nav) it clears `aria-busy` and dispatches
+ * `webjs:submit-end` (detail `{ form, url, ok }`, `ok` = the submission was
+ * not an error outcome). The toggle uses the same nav-token guard the
+ * `<webjs-frame>` busy state uses (`formBusyTokens` / `markFormBusy` /
+ * `clearFormBusy`): a superseded submit's teardown never clears the busy
+ * state a NEWER submit already set, so a rapid re-submit stays busy until the
+ * live submission settles. The native `aria-busy` attribute on the form is
+ * the readable "is this form submitting" primitive (any component can read
+ * it); the events are the push-notification counterpart. Progressive
+ * enhancement: with JS off this whole code path is skipped and the form is a
+ * plain POST.
+ *
  * @param {string} href     Absolute target URL.
  * @param {string} method   Lowercased HTTP verb.
  * @param {FormData} body
  * @param {string | null} frameId
+ * @param {HTMLFormElement | null} [form]  The submitted form, for busy + events.
  */
-async function performSubmission(href, method, body, frameId) {
+async function performSubmission(href, method, body, frameId, form) {
   if (activeAbortController) activeAbortController.abort();
   activeAbortController = new AbortController();
   const signal = activeAbortController.signal;
@@ -816,8 +833,17 @@ async function performSubmission(href, method, body, frameId) {
 
   const optimisticState = applyOptimisticLoading();
 
+  // Submission-state lifecycle: mark the form busy + announce the start, then
+  // clear + announce the settle in the finally so EVERY exit (success,
+  // validation re-render, navigation error, abort by a superseding submit)
+  // balances the pair. `ok` is filled from the fetch outcome; an abort or a
+  // teardown that never reached the fetch settles ok:false. The token guard
+  // (markFormBusy/clearFormBusy) keeps a superseded submit's teardown from
+  // clearing the busy state a newer submit set.
+  const busyForm = form ? markFormBusy(form, myToken, url.href) : null;
+  let outcomeOk = false;
   try {
-    await fetchAndApply(
+    const outcome = await fetchAndApply(
       url.href,
       frameId,
       /* recordHistory */ true,
@@ -827,6 +853,7 @@ async function performSubmission(href, method, body, frameId) {
       signal,
       myToken,
     );
+    outcomeOk = !!(outcome && outcome.ok);
     // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is
     // snapshotted on the next nav, not pre-emptively wiped. Clear the
@@ -837,6 +864,7 @@ async function performSubmission(href, method, body, frameId) {
       prefetchCache.clear();
     }
   } finally {
+    if (busyForm) clearFormBusy(busyForm, myToken, url.href, outcomeOk);
     if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
     if (myToken === currentNavigationToken) {
       document.documentElement.removeAttribute('data-navigating');
@@ -1337,12 +1365,23 @@ function handleNavigationError(href, status, error) {
  * @param {BodyInit | null} [body]  Request body for non-GET methods.
  * @param {AbortSignal | null} [signal]  Abort signal. A newer nav cancels this fetch.
  * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
+ * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean }>}
+ *   The fetch outcome, so a caller (the form-submission busy/event lifecycle)
+ *   can report whether the submission settled as a success, an error, or an
+ *   abort. `ok` mirrors `response.ok` for an HTTP response (a 422 validation
+ *   re-render is `ok:false`), `false` for a transport/parse error, and `false`
+ *   for an abort (which also sets `aborted:true`). `status` is the HTTP status
+ *   or `null` when the request never produced one.
  */
 async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
   let incomingBuild = null;
+  /** @type {number | null} */
+  let respStatus = null;
+  /** @type {boolean} */
+  let respOk = false;
   /** @type {string} */
   let finalUrl = href;
   // aria-busy lifecycle: when this nav targets a <webjs-frame>, mark the
@@ -1365,6 +1404,9 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       html = prefetched.html;
       incomingBuild = prefetched.build;
       finalUrl = prefetched.finalUrl;
+      // A consumed prefetch is a successful 200 GET fragment.
+      respStatus = 200;
+      respOk = true;
     } else {
     const headers = { 'x-webjs-router': '1' };
     const have = buildHaveHeader();
@@ -1377,6 +1419,8 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     if (body != null && method !== 'GET' && method !== 'HEAD') init.body = body;
 
     const resp = await fetch(href, init);
+    respStatus = resp.status;
+    respOk = resp.ok;
     const ctype = resp.headers.get('content-type') || '';
     const isHTML = /^text\/html\b/i.test(ctype);
     // Server-side redirect (PRG, auth-gate, etc.): fetch followed it
@@ -1393,7 +1437,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       if (myToken === currentNavigationToken && recordHistory) {
         history.pushState(null, '', finalUrl);
       }
-      return;
+      return { ok: respOk, status: respStatus, aborted: false };
     }
 
     // Non-HTML response (JSON error, file download, opaque): can't be
@@ -1413,7 +1457,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
         restoreOptimistic(optimisticState);
         handleNavigationError(href, resp.status, null);
       }
-      return;
+      return { ok: false, status: respStatus, aborted: false };
     }
 
     // HTML body of ANY status: 2xx, 4xx validation errors, 5xx error
@@ -1435,27 +1479,27 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // AbortError is a normal supersede, NOT a navigation error, so it must
     // NEVER dispatch webjs:navigation-error (the key no-false-positive
     // line).
-    if (err && /** @type any */ (err).name === 'AbortError') return;
+    if (err && /** @type any */ (err).name === 'AbortError') return { ok: false, status: null, aborted: true };
     // Stale (a newer nav started before we got the network error): the
     // newer nav owns the page now, so don't clobber it.
-    if (myToken !== currentNavigationToken) return;
+    if (myToken !== currentNavigationToken) return { ok: false, status: null, aborted: true };
     restoreOptimistic(optimisticState);
     // Transport/parse failure (fetch rejected, e.g. offline / DNS / TLS).
     // Surface a navigation-error so the app can recover in place instead
     // of a destructive full reload.
     handleNavigationError(href, null, err instanceof Error ? err : new Error(String(err)));
-    return;
+    return { ok: false, status: null, aborted: false };
   }
 
   // A newer navigation started while we awaited the response body -
   // bail before we overwrite its work.
-  if (myToken !== currentNavigationToken) return;
+  if (myToken !== currentNavigationToken) return { ok: false, status: respStatus, aborted: true };
 
   const doc = parseHTML(html);
   // The body claimed text/html but didn't parse into a document (a
   // malformed/empty HTML body). Surface a navigation-error so the app can
   // recover in place rather than a destructive full reload.
-  if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return; }
+  if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
   applySwap(doc, frameId, false, finalUrl, incomingBuild);
 
@@ -1483,6 +1527,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   }
 
   document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
+  return { ok: respOk, status: respStatus, aborted: false };
   } finally {
     // Clear the frame's busy state on every exit path (the early returns
     // above all unwind through here). No-op when this was not a frame nav.
@@ -1559,6 +1604,72 @@ function clearFrameBusy(frame, token) {
   frame.dispatchEvent(new CustomEvent('webjs:frame-busy', {
     bubbles: true,
     detail: { frameId, busy: false },
+  }));
+}
+
+/**
+ * The nav token that currently OWNS each form's submission-busy state. Same
+ * role as `frameBusyTokens` for frames: under two rapid submits the router
+ * aborts the first, and its `finally` would otherwise clear `aria-busy` /
+ * dispatch `webjs:submit-end` for a submission the SECOND submit already
+ * re-set, leaving the form falsely idle while still submitting (and an
+ * unbalanced start/end event stream). A clear only fires when its token still
+ * owns the form, so the superseding submit's busy state survives the aborted
+ * submit's teardown.
+ *
+ * @type {WeakMap<Element, number>}
+ */
+const formBusyTokens = new WeakMap();
+
+/**
+ * Mark a submitting `<form>` busy: set the native `aria-busy="true"` (the
+ * readable "is this form submitting" primitive any component can poll) and
+ * dispatch a bubbling `webjs:submit-start` event (detail `{ form, url }`).
+ * Stamps `token` as the form's busy owner (see `formBusyTokens`). The `true`
+ * edge fires only on a real idle -> busy transition, so a submit that
+ * supersedes an in-flight one (form already busy) does not emit a redundant
+ * start; the token always advances to the newest owner. Returns the form so
+ * `clearFormBusy` targets the same node.
+ *
+ * @param {HTMLFormElement} form
+ * @param {number} token
+ * @param {string} url   Resolved action URL the submission targets.
+ * @returns {HTMLFormElement}
+ */
+function markFormBusy(form, token, url) {
+  const wasBusy = formBusyTokens.has(form);
+  formBusyTokens.set(form, token);
+  form.setAttribute('aria-busy', 'true');
+  if (!wasBusy) {
+    form.dispatchEvent(new CustomEvent('webjs:submit-start', {
+      bubbles: true,
+      detail: { form, url },
+    }));
+  }
+  return form;
+}
+
+/**
+ * Clear the busy state set by `markFormBusy`: set `aria-busy="false"` and
+ * dispatch the matching `webjs:submit-end` (detail `{ form, url, ok }`, `ok` =
+ * the submission settled as a success / not an error outcome) so app code sees
+ * a symmetric start/finish pair. Operates on the element captured at start, so
+ * an abort / error clears the same node the start marked. A clear whose token
+ * no longer owns the form (a newer submit re-set busy) is a stale teardown
+ * from a superseded submit and is skipped, so the live submit stays busy.
+ *
+ * @param {HTMLFormElement} form
+ * @param {number} token
+ * @param {string} url
+ * @param {boolean} ok
+ */
+function clearFormBusy(form, token, url, ok) {
+  if (formBusyTokens.get(form) !== token) return;
+  formBusyTokens.delete(form);
+  form.setAttribute('aria-busy', 'false');
+  form.dispatchEvent(new CustomEvent('webjs:submit-end', {
+    bubbles: true,
+    detail: { form, url, ok: !!ok },
   }));
 }
 
@@ -2414,6 +2525,8 @@ export {
   FRAME_TOP as _FRAME_TOP,
   markFrameBusy as _markFrameBusy,
   clearFrameBusy as _clearFrameBusy,
+  markFormBusy as _markFormBusy,
+  clearFormBusy as _clearFormBusy,
   collectChildrenSlots as _collectChildrenSlots,
   longestSharedPath as _longestSharedPath,
   keyOf as _keyOf,
