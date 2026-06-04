@@ -58,6 +58,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
 
+    // #271: the opt-in progressive-enhancement service worker + its offline
+    // fallback ship into every scaffold (dormant until the app registers it).
+    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'public/sw.js should exist');
+    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'public/offline.html should exist');
+
     // #259: the VS Code settings that associate the webjs-config JSON Schema
     // with package.json's `webjs` block must reach the scaffolded app. This
     // file is under a `.vscode/` dir that .gitignore would normally exclude, so

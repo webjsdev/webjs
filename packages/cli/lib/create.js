@@ -636,6 +636,14 @@ export type ActionResult<T> =
     if (existsSync(tailwindSrc)) {
       await cp(tailwindSrc, join(publicDir, 'tailwind-browser.js'));
     }
+    // Progressive-enhancement service worker (#271): ship the opt-in offline
+    // primitive (the worker + its offline fallback). Dormant until the app
+    // registers it (see agent-docs/service-worker.md); it never changes the
+    // JS-disabled baseline.
+    for (const swFile of ['sw.js', 'offline.html']) {
+      const swSrc = join(TEMPLATES, 'public', swFile);
+      if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
+    }
 
     const utilsDir = join(appDir, 'lib', 'utils');
     await mkdir(utilsDir, { recursive: true });
