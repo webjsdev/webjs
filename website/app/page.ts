@@ -45,9 +45,11 @@ const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,va
 
 // Framework-weight stats. Measured: gzipped production browser bundle,
 // npm package metadata, and framework source line counts. Kept honest
-// and comparative against react + react-dom.
+// and comparative against a Next.js app's first-load JS (react + react-dom
+// alone is ~44 KB. The ~99 KB is the full Next baseline, react + react-dom
+// plus the Next runtime plus the app-router client).
 const STATS = [
-  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'react + react-dom ship ~99 KB. webjs core is about 4.5x lighter on the wire.' },
+  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. webjs core is about 4.5x lighter on the wire.' },
   { big: '0', label: 'Runtime dependencies', sub: '@webjsdev/core has none. The whole stack adds only ws, for WebSockets.' },
   { big: '~15k', label: 'Lines of framework code', sub: 'Small enough that an AI agent can read and grep the whole framework, not guess.' },
   { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
