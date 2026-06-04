@@ -127,6 +127,7 @@ import {
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
 import { commitHtmlCache, setAppSourceFingerprint } from './html-cache.js';
+import { buildDevErrorFrame } from './dev-error.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -394,6 +395,7 @@ export async function readServerTimeoutsFromApp(appDir) {
  *   logger?: import('./logger.js').Logger,
  *   onError?: (error: unknown, ctx: { request: Request, requestId: string|null, phase: string }) => void,
  *   onReload?: () => void,
+ *   onDevError?: (frame: object) => void,
  * }} opts
  */
 export async function createRequestHandler(opts) {
@@ -607,7 +609,29 @@ export async function createRequestHandler(opts) {
     // settings (a multi-tenant embedder, or the differential elision test)
     // must not share it, or the second would serve the first's elided source.
     tsCache: new Map(),
+    // The most recent unresolved dev error frame (#264), or null. Pushed to the
+    // SSE channel for the live overlay and replayed to a freshly-connected tab.
+    // Dev-only (never populated when !dev); cleared on a successful rebuild.
+    lastDevError: null,
   };
+
+  /**
+   * Report a dev error (#264): build a frame and push it to the open tab via
+   * the SSE overlay channel. DEV-ONLY and best-effort, so it can never affect a
+   * response or crash the server (a frame-build failure is swallowed). No file
+   * path or source is ever built in prod (the early return), so nothing leaks.
+   *
+   * @param {unknown} error
+   * @param {{ kind?: 'render'|'ts-strip'|'rebuild', file?: string, line?: number, column?: number, hint?: string }} [info]
+   */
+  function reportDevError(error, info = {}) {
+    if (!dev) return;
+    try {
+      const frame = buildDevErrorFrame(error, { ...info, appDir });
+      state.lastDevError = frame;
+      opts.onDevError?.(frame);
+    } catch { /* a frame-build failure must never affect the request path */ }
+  }
 
   // All whole-app analysis is built lazily on the first request, memoized so
   // boot does none of it. It runs in two stages. The deterministic analysis
@@ -872,6 +896,9 @@ export async function createRequestHandler(opts) {
   async function rebuild() {
     rebuildInFlight = rebuildInFlight.then(() => doRebuild()).catch((e) => {
       logger.error?.(`[webjs] rebuild failed:`, e);
+      // Push the failure to the open tab so the overlay appears live after a
+      // breaking edit, not only on the next manual navigation (#264).
+      reportDevError(e, { kind: 'rebuild' });
     });
     return rebuildInFlight;
   }
@@ -906,6 +933,11 @@ export async function createRequestHandler(opts) {
     readyDone = false;
     readyError = null;
     readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
+    // The edit that triggered this rebuild parsed + analysed cleanly, so any
+    // prior dev error is resolved: clear it so a freshly-connecting tab is not
+    // replayed a stale overlay, then fire onReload (the client reloads, which
+    // also dismisses any overlay already on screen). #264.
+    state.lastDevError = null;
     opts.onReload?.();
   }
 
@@ -1197,7 +1229,7 @@ export async function createRequestHandler(opts) {
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
-      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, cspEnabled: cspConfig.enabled });
+      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled: cspConfig.enabled });
       if (state.middleware) {
         try {
           return await state.middleware(req, next);
@@ -1267,6 +1299,10 @@ export async function createRequestHandler(opts) {
     warmup: () => ensureReady().catch((e) => logger.error?.(`[webjs] background warm-up failed (will retry on the next request):`, e)),
     /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
+    /** Current unresolved dev error frame (#264), or null. Replayed by
+     * startServer to a freshly-connected SSE client so the overlay shows even
+     * after a navigation, not only on the breaking edit. Always null in prod. */
+    getLastDevError: () => state.lastDevError,
     appDir,
     dev,
     logger,
@@ -1326,6 +1362,15 @@ export async function startServer(opts) {
         try { res.write(`event: reload\ndata: now\n\n`); } catch {}
       }
     },
+    // Dev error overlay (#264): push a frame to every open tab over the SAME
+    // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
+    // EventSource's native connection-error event) carries the JSON frame.
+    onDevError: (frame) => {
+      const data = JSON.stringify(frame);
+      for (const res of sseClients) {
+        try { res.write(`event: webjs-error\ndata: ${data}\n\n`); } catch {}
+      }
+    },
   });
 
   /** @type {AbortController | null} */
@@ -1382,6 +1427,13 @@ export async function startServer(opts) {
         });
         res.write(`event: hello\ndata: webjs\n\n`);
         sseClients.add(res);
+        // Replay an unresolved dev error (#264) so a tab that connects AFTER the
+        // breaking edit (e.g. opened via a fresh navigation) still shows the
+        // overlay, not only the tab that was open when the error fired.
+        const pending = app.getLastDevError?.();
+        if (pending) {
+          try { res.write(`event: webjs-error\ndata: ${JSON.stringify(pending)}\n\n`); } catch {}
+        }
         res.socket?.on('close', () => sseClients.delete(res));
         return;
       }
@@ -1559,7 +1611,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
 }
 
 async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError, cspEnabled } = ctx;
+  const { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -1716,7 +1768,7 @@ async function handleCore(req, ctx) {
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned);
+        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned, reportDevError);
       }
       if (/\.m?js$/.test(abs)) {
         return jsModuleResponse(abs, dev, elideOpts, versioned);
@@ -1782,6 +1834,10 @@ async function handleCore(req, ctx) {
         // onError sink (issue #239): a page render error that becomes a 500 is
         // reported to the APM hook with the active request's correlation id.
         onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,
+        // Dev error overlay (#264): a render crash pushes a frame to the open
+        // tab. Dev-only (reportDevError early-returns in prod), so no source
+        // leaks. Distinct from onError (the APM sink), which always fires.
+        onDevError: dev ? (e) => reportDevError(e, { kind: 'render' }) : undefined,
       };
       if (method === 'GET' || method === 'HEAD') {
         const handler = () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });
@@ -2139,7 +2195,7 @@ async function stripTs(source, _abs) {
  *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
  *   the same bytes regardless; only the cache header varies. Dev stays `no-cache`.
  */
-async function tsResponse(abs, dev, elideOpts, cache, immutable) {
+async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDevError) {
   // The body bytes are identical with or without `?v`; only the cache header
   // changes, so the per-mtime cache stays a single entry.
   const cacheControl = dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
@@ -2170,6 +2226,15 @@ async function tsResponse(abs, dev, elideOpts, cache, immutable) {
       // see what went wrong in their logs.
       // eslint-disable-next-line no-console
       console.error(`[webjs] non-erasable TypeScript in ${abs}: ${err.message}`);
+      // Dev error overlay (#264): a TS strip failure breaks only the CLIENT
+      // module fetch (the page still SSRs, so hydration is silently dead and
+      // the hint below is buried in a JS comment). Push a frame so the open tab
+      // shows the overlay with the offending file + the no-non-erasable hint.
+      reportDevError?.(err, {
+        kind: 'ts-strip',
+        file: abs,
+        hint: 'webjs is buildless: only erasable TypeScript is supported. Replace enum / namespace-with-values / parameter-property / legacy-decorator / import = require with their erasable equivalents. Run `webjs check` (no-non-erasable-typescript rule).',
+      });
       const msg = dev
         // Dev: include the file path and Node's error message so the
         // developer's browser tooling can point them at the offending
@@ -2343,8 +2408,52 @@ function locatePackageDir(appDir, pkgName) {
  * @returns {string}
  */
 function reloadClientJs(bp) {
+  // The client uses textContent throughout (never innerHTML), so the error
+  // message / code frame can never inject markup into the overlay (#264). It is
+  // served only in dev (the /__webjs/reload.js branch 404s in prod), so the
+  // overlay code never reaches a production page.
   return `// webjs dev reload client
 const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
+let __wjOverlay = null;
+function __wjDismiss() { if (__wjOverlay) { __wjOverlay.remove(); __wjOverlay = null; } }
 es.addEventListener('reload', () => location.reload());
+es.addEventListener('webjs-error', (e) => {
+  let f; try { f = JSON.parse(e.data); } catch (_) { return; }
+  __wjRender(f);
+});
+function __wjRow(parent, css, text) {
+  const d = document.createElement('div');
+  d.style.cssText = css;
+  d.textContent = text;
+  parent.appendChild(d);
+  return d;
+}
+function __wjRender(f) {
+  __wjDismiss();
+  const o = document.createElement('div');
+  o.setAttribute('data-webjs-error-overlay', '');
+  o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(10,10,12,.92);color:#e6e6e6;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;padding:32px;overflow:auto';
+  const card = document.createElement('div');
+  card.style.cssText = 'max-width:920px;margin:0 auto;background:#1a1a1f;border:1px solid #5b2330;border-radius:8px;padding:24px';
+  const kind = f.kind === 'ts-strip' ? 'TypeScript error (hydration is dead until fixed)' : f.kind === 'rebuild' ? 'Rebuild failed' : 'Server render error';
+  __wjRow(card, 'color:#ff6b6b;font-weight:700;font-size:15px;margin-bottom:8px', kind);
+  __wjRow(card, 'white-space:pre-wrap;margin-bottom:12px', f.message || '');
+  if (f.file) __wjRow(card, 'color:#9aa3ad;margin-bottom:12px', f.file + (f.line ? ':' + f.line + (f.column ? ':' + f.column : '') : ''));
+  if (f.codeFrame) {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'background:#0d0d10;border-radius:6px;padding:12px;overflow:auto;margin:0 0 12px;white-space:pre';
+    pre.textContent = f.codeFrame;
+    card.appendChild(pre);
+  }
+  if (f.hint) __wjRow(card, 'color:#ffd479;border-top:1px solid #333;padding-top:12px;white-space:pre-wrap', f.hint);
+  const btn = document.createElement('button');
+  btn.textContent = 'Dismiss';
+  btn.style.cssText = 'margin-top:16px;background:#333;color:#eee;border:0;border-radius:4px;padding:6px 12px;cursor:pointer';
+  btn.addEventListener('click', __wjDismiss);
+  card.appendChild(btn);
+  o.appendChild(card);
+  (document.body || document.documentElement).appendChild(o);
+  __wjOverlay = o;
+}
 `;
 }

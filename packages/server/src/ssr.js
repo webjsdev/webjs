@@ -213,6 +213,11 @@ export async function ssrPage(route, params, url, opts) {
     if (typeof opts.onError === 'function') {
       try { opts.onError(err); } catch { /* a throwing sink must not affect the response */ }
     }
+    // Dev error overlay (#264): push a rich frame to the open tab so the
+    // overlay appears live. Dev-only + best-effort; never affects the response.
+    if (typeof opts.onDevError === 'function') {
+      try { opts.onDevError(err); } catch { /* a throwing sink must not affect the response */ }
+    }
     // Error paths still need to honor the request's CSP nonce so the
     // error page's boot scripts (when moduleUrls is non-empty) and
     // the meta csp-nonce tag both pass strict-CSP enforcement.
