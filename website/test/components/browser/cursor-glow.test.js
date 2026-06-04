@@ -89,6 +89,33 @@ suite('cursor-glow', () => {
     assert.equal(fresh.style.getPropertyValue('--cg-x'), '', 'the queued rAF was cancelled, no CSS var written');
   });
 
+  test('honors a mid-session switch to reduced motion', async () => {
+    const realMM = window.matchMedia;
+    let reduced = false;
+    let changeHandler = null;
+    window.matchMedia = (q) => ({
+      get matches() { return /reduce/.test(q) && reduced; },
+      media: q, onchange: null,
+      addEventListener(_t, h) { changeHandler = h; },
+      removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; },
+    });
+    let cg;
+    try {
+      cg = document.createElement('cursor-glow');
+      document.body.appendChild(cg);
+      await cg.updateComplete;        // motion allowed at connect: tracking attached
+      move(100, 100);
+      await nextFrame();
+      assert.equal(cg.style.getPropertyValue('--cg-x'), '100px', 'tracks while motion is allowed');
+      // Flip the OS preference to reduced and fire the media-query change.
+      reduced = true;
+      if (changeHandler) changeHandler();
+      move(300, 300);
+      await nextFrame();
+      assert.equal(cg.style.getPropertyValue('--cg-x'), '100px', 'stops tracking once reduced motion turns on');
+    } finally { if (cg) cg.remove(); window.matchMedia = realMM; }
+  });
+
   test('under prefers-reduced-motion the glow never turns on', async () => {
     const realMM = window.matchMedia;
     window.matchMedia = (q) => ({ matches: /reduce/.test(q), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } });

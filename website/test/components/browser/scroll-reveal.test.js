@@ -103,6 +103,26 @@ suite('scroll-reveal', () => {
     } finally { window.IntersectionObserver = realIO; }
   });
 
+  test('tears down when reduced motion is turned on mid-session', async () => {
+    const realMM = window.matchMedia;
+    let reduced = false;
+    let changeHandler = null;
+    window.matchMedia = (q) => ({
+      get matches() { return /reduce/.test(q) && reduced; },
+      media: q, onchange: null,
+      addEventListener(_t, h) { changeHandler = h; },
+      removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; },
+    });
+    try {
+      await mount('<section data-reveal id="ms">ms</section>');
+      assert.ok(revealReady(), 'reveal-ready is added while motion is allowed');
+      // Flip the OS preference to reduced and fire the media-query change.
+      reduced = true;
+      if (changeHandler) changeHandler();
+      assert.ok(!revealReady(), 'reveal-ready is dropped when reduced motion turns on');
+    } finally { window.matchMedia = realMM; }
+  });
+
   test('under prefers-reduced-motion nothing is gated (no reveal-ready, content stays visible)', async () => {
     const realMM = window.matchMedia;
     window.matchMedia = (q) => ({ matches: /reduce/.test(q), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } });

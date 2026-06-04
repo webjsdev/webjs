@@ -16,10 +16,25 @@ import { WebComponent, html } from '@webjsdev/core';
  */
 export class ScrollReveal extends WebComponent {
   _io?: IntersectionObserver;
+  private _mql?: MediaQueryList;
+
+  // If the OS reduced-motion preference turns ON mid-session, stop observing
+  // and drop the hidden-state class so nothing stays gated behind a reveal
+  // that will not run. Re-enabling it does nothing: the sections are already
+  // visible, and re-hiding them to re-animate would flash.
+  _onMotionPref = () => {
+    if (this._mql?.matches) {
+      this._io?.disconnect();
+      this._io = undefined;
+      this.ownerDocument.documentElement.classList.remove('reveal-ready');
+    }
+  };
 
   connectedCallback() {
     super.connectedCallback();
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this._mql = matchMedia('(prefers-reduced-motion: reduce)');
+    this._mql.addEventListener('change', this._onMotionPref);
+    if (this._mql.matches) return;
     const doc = this.ownerDocument;
     const els = Array.from(doc.querySelectorAll('[data-reveal]'));
     if (!els.length) return;
@@ -44,6 +59,7 @@ export class ScrollReveal extends WebComponent {
   }
 
   disconnectedCallback() {
+    this._mql?.removeEventListener('change', this._onMotionPref);
     this._io?.disconnect();
     this._io = undefined;
     this.ownerDocument.documentElement.classList.remove('reveal-ready');

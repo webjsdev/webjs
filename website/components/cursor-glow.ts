@@ -17,6 +17,7 @@ export class CursorGlow extends WebComponent {
   private _raf = 0;
   private _x = 0;
   private _y = 0;
+  private _mql?: MediaQueryList;
 
   _onMove = (e: PointerEvent) => {
     // Mouse only. Touch / pen pointermove would drag the halo under the
@@ -33,13 +34,24 @@ export class CursorGlow extends WebComponent {
     });
   };
 
+  // Re-evaluate when the OS reduced-motion preference flips mid-session, so
+  // turning it ON detaches the tracker and turning it OFF re-attaches it
+  // (addEventListener with the same handler is idempotent, removeEventListener
+  // when absent is a no-op).
+  _onMotionPref = () => {
+    if (this._mql?.matches) window.removeEventListener('pointermove', this._onMove);
+    else window.addEventListener('pointermove', this._onMove, { passive: true });
+  };
+
   connectedCallback() {
     super.connectedCallback();
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    window.addEventListener('pointermove', this._onMove, { passive: true });
+    this._mql = matchMedia('(prefers-reduced-motion: reduce)');
+    this._mql.addEventListener('change', this._onMotionPref);
+    if (!this._mql.matches) window.addEventListener('pointermove', this._onMove, { passive: true });
   }
 
   disconnectedCallback() {
+    this._mql?.removeEventListener('change', this._onMotionPref);
     window.removeEventListener('pointermove', this._onMove);
     if (this._raf) cancelAnimationFrame(this._raf);
     super.disconnectedCallback?.();
