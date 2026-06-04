@@ -73,6 +73,18 @@ test('the nav links to the live example-blog app via a Demo link', async () => {
   assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
 });
 
+test('the layout CSS still consumes the cursor-glow / scroll-reveal contract names', () => {
+  // The JS writes these names (cursor-glow: --cg-x/--cg-on/.cg-blob;
+  // scroll-reveal: reveal-ready/is-revealed) and the layout's inline CSS is the
+  // only consumer. A rename on EITHER side passes every component + SSR test but
+  // breaks the visual (data-reveal sections stay at opacity:0 = content loss),
+  // so pin the contract: a rename must update both sides and this assertion.
+  const layoutSrc = readFileSync(fileURLToPath(new URL('../../app/layout.ts', import.meta.url)), 'utf8');
+  for (const name of ['--cg-x', '--cg-on', 'cursor-glow .cg-blob', '.reveal-ready [data-reveal]', 'is-revealed']) {
+    assert.ok(layoutSrc.includes(name), `layout CSS must still reference the contract name "${name}"`);
+  }
+});
+
 test('every <main id="main"> skip-link target in app/ is focusable', () => {
   // The layout's skip link lands on the #main of EVERY route, so every page
   // declaring the target must make it focusable (tabindex="-1"), not just the
