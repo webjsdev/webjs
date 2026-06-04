@@ -34,6 +34,12 @@ export function parseStackLocation(stack, appDir) {
   // loader appends a `?t=<mtime>` cache-bust, which would otherwise be glued to
   // the path and break the readFileSync that builds the code frame), then
   // `:line:col`. The path class excludes `?` so the query is split off.
+  //
+  // POSIX-first: this anchors on a leading `/`, so a Windows `C:\...` bare-path
+  // frame yields no location and the overlay degrades to a message-only card
+  // (the `file:///` URL form, whose path uses forward slashes, still resolves).
+  // That matches the framework's POSIX-first dev posture; it degrades, never
+  // crashes.
   const re = /(?:file:\/\/)?(\/[^\s:()?]+)(?:\?[^\s:()]*)?:(\d+):(\d+)/g;
   /** @type {{ file: string, line: number, column: number }[]} */
   const frames = [];

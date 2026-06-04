@@ -933,10 +933,14 @@ export async function createRequestHandler(opts) {
     readyDone = false;
     readyError = null;
     readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
-    // The edit that triggered this rebuild parsed + analysed cleanly, so any
-    // prior dev error is resolved: clear it so a freshly-connecting tab is not
-    // replayed a stale overlay, then fire onReload (the client reloads, which
-    // also dismisses any overlay already on screen). #264.
+    // Optimistically clear the dev error (#264): the rebuild itself only
+    // re-scans the route table and INVALIDATES the lazy analysis (the real
+    // re-parse / re-strip / re-render happens on the next request), so we do
+    // not yet know the edit fixed the error. Clearing it here means a tab that
+    // connects now is not replayed a possibly-stale overlay; `onReload` then
+    // reloads every open tab, and if the underlying error is still present the
+    // reloaded request re-pushes a fresh frame (a brief dismiss-then-reappear
+    // flicker on an unrelated edit, self-correcting to the right end state).
     state.lastDevError = null;
     opts.onReload?.();
   }

@@ -23,7 +23,7 @@ suite('dev error overlay renderer (#264)', () => {
     document.querySelectorAll('[data-webjs-error-overlay]').forEach((e) => e.remove());
   }
 
-  test('renders an overlay carrying the message, file:line, code frame, and hint', () => {
+  test('renders an overlay carrying the message, file:line, code frame, hint, and stack', () => {
     renderDevOverlay({
       kind: 'ts-strip',
       message: 'enum is not erasable',
@@ -32,6 +32,7 @@ suite('dev error overlay renderer (#264)', () => {
       column: 1,
       codeFrame: '> 2 | enum Color { Red }',
       hint: 'use erasable equivalents',
+      stack: 'Error: enum\n    at strip (/app/components/bad.ts:2:1)',
     });
     const overlay = document.querySelector('[data-webjs-error-overlay]');
     assert.ok(overlay, 'an overlay element is in the DOM');
@@ -42,6 +43,8 @@ suite('dev error overlay renderer (#264)', () => {
     assert.ok(text.includes('use erasable equivalents'), 'the hint renders (in the UI, not only a console comment)');
     assert.ok(text.includes('TypeScript error'), 'the kind label renders for a ts-strip');
     assert.ok(overlay.querySelector('pre'), 'the code frame is in a <pre>');
+    assert.ok(overlay.querySelector('details'), 'the stack is in a collapsible <details>');
+    assert.ok(text.includes('Stack trace'), 'the stack section renders');
     teardown();
   });
 

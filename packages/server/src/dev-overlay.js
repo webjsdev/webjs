@@ -51,6 +51,19 @@ export function renderDevOverlay(f) {
     card.appendChild(pre);
   }
   if (f.hint) __wjRow(card, 'color:#ffd479;border-top:1px solid #333;padding-top:12px;white-space:pre-wrap', f.hint);
+  if (f.stack) {
+    const det = document.createElement('details');
+    det.style.cssText = 'margin-top:12px;color:#9aa3ad';
+    const sum = document.createElement('summary');
+    sum.textContent = 'Stack trace';
+    sum.style.cssText = 'cursor:pointer';
+    det.appendChild(sum);
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'background:#0d0d10;border-radius:6px;padding:12px;overflow:auto;margin:8px 0 0;white-space:pre;font-size:12px';
+    pre.textContent = f.stack;
+    det.appendChild(pre);
+    card.appendChild(det);
+  }
   const btn = document.createElement('button');
   btn.textContent = 'Dismiss';
   btn.style.cssText = 'margin-top:16px;background:#333;color:#eee;border:0;border-radius:4px;padding:6px 12px;cursor:pointer';
