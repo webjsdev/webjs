@@ -1183,6 +1183,14 @@ Returns JSON describing the live build, alongside the `/__webjs/health` and `/__
 
 ---
 
+## Dev error overlay: rich, pushed live over SSE (dev-only) (#264)
+
+In development, three error sources push a structured error frame to the open tab over the existing live-reload SSE channel (a distinct `webjs-error` event, NOT EventSource's native `error`), and a small dev-only client renders a plain-DOM overlay without a manual reload: an SSR render crash (a page / layout throws, or the no-browser-globals walker trips), a non-erasable-TypeScript strip failure (which breaks only the CLIENT module fetch, so the page still SSRs but hydration is silently dead, the exact gap this closes), and a failed rebuild (previously only logged server-side). The overlay carries the message, the parsed `file:line:column`, a source code frame of the offending line with context, and for a TS strip the no-non-erasable hint surfaced in the UI rather than buried in a JS comment. A successful rebuild clears it (the reload also dismisses any on-screen overlay), and the current frame is replayed to a tab connecting after the breaking edit.
+
+The overlay client uses `textContent` throughout (never `innerHTML`), so the error content cannot inject markup. It is **strictly dev-only**: `reportDevError` early-returns when `!dev`, `/__webjs/reload.js` 404s in prod, and the prod 500 stays terse (only `error.message`, never the stack or a file path), so no source leaks. An embedding host can observe the same frames via the `onDevError` option on `createRequestHandler` / `startServer`. Mechanism: `buildDevErrorFrame` in `packages/server/src/dev-error.js`, `reportDevError` + the SSE push in `packages/server/src/dev.js`, the SSR-catch hook in `packages/server/src/ssr.js`.
+
+---
+
 ## CONVENTIONS.md and webjs check: two surfaces, split by nature
 
 Every webjs app ships a `CONVENTIONS.md` at root. AI agents MUST read it before writing code. It is the source of truth for **project conventions**: how code is organized, named, and tested (modules layout, action placement, one-function-per-file, the testing approach, styling, git workflow). These are preferences a reasonable project could do differently, so they are guidance, customizable directly in the prose (sections marked `<!-- OVERRIDE -->`), not enforced by any tool.
