@@ -108,13 +108,12 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
-      @property --accent-live { syntax: '<color>'; inherits: true; initial-value: oklch(0.63 0.17 50); }
-      @keyframes accent-drift {
-        0%   { --accent-live: oklch(0.63 0.17 44); }
-        34%  { --accent-live: oklch(0.67 0.17 60); }
-        67%  { --accent-live: oklch(0.60 0.18 33); }
-        100% { --accent-live: oklch(0.63 0.17 44); }
-      }
+      /* The breathing glow is two static-gradient layers cross-faded via
+         opacity (a compositor-only property), so it never triggers a repaint.
+         The accent color itself is static, so its consumers (tints, shadows,
+         the gradient text) do not repaint either. */
+      @keyframes glow-fade-a { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      @keyframes glow-fade-b { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
       :root {
         color-scheme: light dark;
         --fg:            oklch(0.20 0.018 60);
@@ -130,6 +129,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
         --heart:         oklch(0.64 0.22 6);
+        --accent-live:   oklch(0.63 0.17 50);
+        --glow-a:        oklch(0.63 0.17 44);
+        --glow-b:        oklch(0.62 0.18 60);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
@@ -140,7 +142,6 @@ export default function RootLayout({ children }: { children: unknown }) {
         --shadow:    0 8px 30px oklch(0.5 0.08 55 / 0.10), 0 2px 6px oklch(0.5 0.06 55 / 0.06);
         --shadow-glow: 0 0 0 1px var(--accent-tint), 0 14px 50px color-mix(in oklch, var(--accent-live) 18%, transparent);
         --t-fast: 140ms; --t: 240ms;
-        animation: accent-drift 16s ease-in-out infinite;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
@@ -192,13 +193,25 @@ export default function RootLayout({ children }: { children: unknown }) {
         transform-origin: center;
       }
       /* Hidden-tab pause (the .paused class is toggled on a visibilitychange).
-         Covers both the :root accent-drift and the descendant heart. */
-      :root.paused, :root.paused .heart { animation-play-state: paused; }
-      .glow-layer {
-        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+         Covers the heart and the two cross-fading glow layers. */
+      :root.paused .heart,
+      :root.paused .glow-layer::before,
+      :root.paused .glow-layer::after { animation-play-state: paused; }
+      .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      .glow-layer::before, .glow-layer::after {
+        content: ''; position: absolute; inset: 0; will-change: opacity;
+      }
+      .glow-layer::before {
         background:
-          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--accent-live) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
-          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--accent-live) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
+        animation: glow-fade-a 16s ease-in-out infinite;
+      }
+      .glow-layer::after {
+        background:
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
+        animation: glow-fade-b 16s ease-in-out infinite;
       }
       /* JS-opt-in motion. The host of cursor-glow is the layer, and its
          move handler sets --cg-x / --cg-y / --cg-on. scroll-reveal adds the
