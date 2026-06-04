@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
 import RootLayout from '../../app/layout.ts';
+import LandingPage from '../../app/page.ts';
 
 test('the root layout SSR emits no phantom copy-cmd element or copy button', async () => {
   const out = await renderToString(RootLayout({ children: html`<main>content</main>` }));
@@ -20,4 +21,13 @@ test('the root layout SSR emits no phantom copy-cmd element or copy button', asy
   assert.ok(!out.includes('cursor-copy'), 'no phantom copy button rendered from the layout');
   // An actual <copy-cmd ...> tag (not the CSS selector text "copy-cmd {").
   assert.ok(!/<copy-cmd[\s>]/.test(out), 'no phantom copy-cmd element rendered from the layout');
+});
+
+test('the skip-to-content link targets the page main landmark (paired)', async () => {
+  // Compose the layout around the real page, the way the SSR pipeline does,
+  // so the skip-link href and the landmark id are checked as a matching pair.
+  const out = await renderToString(RootLayout({ children: LandingPage() }));
+  const m = out.match(/href="#([\w-]+)"[^>]*>\s*Skip to content/);
+  assert.ok(m, 'a skip-to-content link with an href fragment is rendered');
+  assert.ok(out.includes(`<main id="${m[1]}"`), `the #${m[1]} target landmark exists on the page`);
 });

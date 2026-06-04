@@ -44,6 +44,21 @@ suite('cursor-glow', () => {
     assert.equal(el.style.getPropertyValue('--cg-on'), '1');
   });
 
+  test('coalesces rapid moves into a single rAF flushing the latest coords', async () => {
+    const realRAF = window.requestAnimationFrame.bind(window);
+    let scheduled = 0;
+    window.requestAnimationFrame = (cb) => { scheduled++; return realRAF(cb); };
+    try {
+      move(10, 10);
+      move(20, 20);
+      move(30, 30);
+      // The `if (this._raf) return` guard must coalesce the burst into one frame.
+      assert.equal(scheduled, 1, 'three rapid moves schedule exactly one rAF');
+    } finally { window.requestAnimationFrame = realRAF; }
+    await nextFrame();
+    assert.equal(el.style.getPropertyValue('--cg-x'), '30px', 'the latest coords win');
+  });
+
   test('touch and pen pointers are ignored', async () => {
     move(240, 120);
     await nextFrame();
