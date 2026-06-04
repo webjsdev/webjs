@@ -49,6 +49,19 @@ test('@event binding forces interactive', () => {
   assert.match(r.reason, /@event/);
 });
 
+test('importing renderStream forces interactive (it does client DOM work, #248)', () => {
+  const src = `
+    import { WebComponent, html, renderStream } from '@webjsdev/core';
+    class P extends WebComponent {
+      render() { return html\`<button @click=\${() => renderStream('')}>x</button>\`; }
+    }
+    P.register('stream-el');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /renderStream/);
+});
+
 test('a side-effect npm import forces interactive (runs on module load)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';

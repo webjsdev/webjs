@@ -132,7 +132,7 @@ if (typeof customElements !== 'undefined' && WebjsStream && !customElements.get(
  * `broadcast` message handler so a live channel reuses the same applier as the
  * HTTP path.
  *
- *   connectWS('/feed', { message: (m) => renderStream(m) });
+ *   connectWS('/feed', { onMessage: (m) => renderStream(m) });
  *
  * @param {string | DocumentFragment | Node} input  The stream HTML (or parsed nodes).
  * @param {Document} [doc]  The document to apply into (defaults to `document`).
@@ -140,23 +140,31 @@ if (typeof customElements !== 'undefined' && WebjsStream && !customElements.get(
 function renderStream(input, doc) {
   const d = doc || (typeof document !== 'undefined' ? document : null);
   if (!d) return;
-  let nodes;
+  /** @type {DocumentFragment | Node | null} */
+  let frag = null;
   if (typeof input === 'string') {
     const tpl = d.createElement('template');
     tpl.innerHTML = input;
-    nodes = tpl.content;
-  } else if (input && /** @type any */ (input).nodeType === 11) {
-    nodes = input; // a DocumentFragment
+    frag = tpl.content;
   } else if (input && /** @type any */ (input).nodeType) {
-    nodes = input; // a single Node
+    frag = input; // a DocumentFragment or a single Node
   } else {
     return;
   }
-  // Appending to the body inserts + upgrades each <webjs-stream>, which applies
-  // and removes itself synchronously on connect. A non-stream node appended
-  // here is harmless (the caller controls the payload), but in practice the
-  // payload is only <webjs-stream> elements.
-  d.body.append(nodes);
+  // Append ONLY the <webjs-stream> elements (each self-applies + self-removes on
+  // connect). Skipping the intervening whitespace text nodes a multi-action
+  // payload carries (the parts are joined by newlines) avoids accreting stray
+  // text nodes in <body> on a long-lived live channel.
+  const found = /** @type any */ (frag).querySelectorAll
+    ? Array.from(/** @type any */ (frag).querySelectorAll('webjs-stream'))
+    : [];
+  if (found.length) {
+    for (const s of found) d.body.append(s);
+  } else {
+    // No nested <webjs-stream> found (e.g. a single element passed directly):
+    // append the input verbatim so the caller's node still reaches the DOM.
+    d.body.append(frag);
+  }
 }
 
 export { WebjsStream, renderStream };

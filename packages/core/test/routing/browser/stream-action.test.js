@@ -134,6 +134,23 @@ suite('<webjs-stream> applier (#248)', () => {
     assert.equal(host.querySelector('#n').textContent, '1', 'second action applied');
     teardown();
   });
+
+  test('a newline-joined multi-action payload leaves no stray text nodes in <body>', async () => {
+    setup();
+    host.innerHTML = '<ul id="list"></ul>';
+    // The server joins parts with "\n" (streamResponse). renderStream must NOT
+    // accrete the intervening whitespace text nodes in <body>.
+    const before = document.body.childNodes.length;
+    renderStream(
+      '<webjs-stream action="append" target="list"><template><li>a</li></template></webjs-stream>\n' +
+      '<webjs-stream action="append" target="list"><template><li>b</li></template></webjs-stream>\n' +
+      '<webjs-stream action="append" target="list"><template><li>c</li></template></webjs-stream>'
+    );
+    await settle();
+    assert.equal([...host.querySelectorAll('#list li')].map((l) => l.textContent).join(''), 'abc', 'all three applied');
+    assert.equal(document.body.childNodes.length, before, 'no net <body> children added (no stray text nodes)');
+    teardown();
+  });
 });
 
 suite('Client router: content-negotiated stream-action form response (#248)', () => {
