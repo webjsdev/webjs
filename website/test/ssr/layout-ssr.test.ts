@@ -83,7 +83,7 @@ test('the layout ships an Escape-to-close handler for the mobile menu', async ()
   assert.ok(out.includes("'Escape'") && out.includes('.mobile-menu[open]'), 'an Escape keydown closes the open mobile menu');
 });
 
-test('the layout ships no animations (static page, smooth scroll)', () => {
+test('the layout ships no animations (static page, no smooth-scroll)', () => {
   // The landing page was stripped of all motion to fix janky scroll: no
   // scroll-reveal, no breathing-glow or heart-pump keyframes, no smooth-scroll.
   // Pin it so a re-introduced animation is caught here.
