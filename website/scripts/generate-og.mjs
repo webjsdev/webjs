@@ -2,15 +2,16 @@
  * Regenerate public/og.png, the 1200x630 social card.
  *
  * Manual dev tool, not part of the build or deploy. It renders an on-brand
- * dark card with headless Chromium (Playwright, resolved from the monorepo)
- * at 2x, then downscales to an exact 1200x630 with ImageMagick for crisp
- * text. Run it whenever the headline or look changes:
+ * dark card with headless Chromium (Playwright) at 2x, then downscales to an
+ * exact 1200x630 with ImageMagick for crisp text. Run it whenever the headline
+ * or look changes:
  *
  *   node scripts/generate-og.mjs
  *
- * Prerequisites: ImageMagick (the `magick` binary) on PATH, and playwright
- * resolvable from the monorepo (neither is a website dependency, since this is
- * a manual tool). The card mirrors the dark-theme design tokens declared in
+ * Prerequisites: ImageMagick (the `magick` binary) on PATH. Playwright is a
+ * website devDependency (shared with the browser-test toolchain) and resolves
+ * from node_modules. ImageMagick is the only external, non-npm tool. The card
+ * mirrors the dark-theme design tokens declared in
  * app/layout.ts
  * (background, foreground, accent, the warm accent glow) and the hero
  * headline, so a regenerated card always matches the live site.
