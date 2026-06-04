@@ -23,6 +23,22 @@ test('the root layout SSR emits no phantom copy-cmd element or copy button', asy
   assert.ok(!/<copy-cmd[\s>]/.test(out), 'no phantom copy-cmd element rendered from the layout');
 });
 
+test('every nav landmark carries a distinguishing aria-label', async () => {
+  // Multiple <nav> landmarks (header desktop, header mobile-menu, footer)
+  // must each have an accessible name so a screen reader's landmark list can
+  // tell them apart. Assert no <nav> ships without an aria-label, and that
+  // the header and footer names are distinct (both can sit in the a11y tree
+  // on a mobile viewport at once).
+  const out = await renderToString(RootLayout({ children: LandingPage() }));
+  const navs = out.match(/<nav\b[^>]*>/g) || [];
+  assert.ok(navs.length >= 2, 'the composed document renders multiple nav landmarks');
+  for (const tag of navs) {
+    assert.ok(/aria-label="[^"]+"/.test(tag), `nav landmark is unlabeled: ${tag}`);
+  }
+  assert.ok(out.includes('aria-label="Primary"'), 'the header nav is labeled Primary');
+  assert.ok(out.includes('aria-label="Footer"'), 'the footer nav is labeled Footer');
+});
+
 test('the skip-to-content link targets the page main landmark (paired)', async () => {
   // Compose the layout around the real page, the way the SSR pipeline does,
   // so the skip-link href and the landmark id are checked as a matching pair.

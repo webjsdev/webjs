@@ -334,7 +334,7 @@ lib/session.server.ts</pre>
 
     <footer class="mt-16 border-t border-border py-12 px-6">
       <div class="max-w-[1080px] mx-auto">
-        <nav class="flex md:hidden gap-4 flex-wrap justify-center">
+        <nav class="flex md:hidden gap-4 flex-wrap justify-center" aria-label="Footer">
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI</a>
