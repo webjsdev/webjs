@@ -7,10 +7,11 @@ import { WebComponent, html } from '@webjsdev/core';
  * Pure progressive enhancement. With no JS, under prefers-reduced-motion,
  * or from a touch / pen pointer, the element stays fully transparent and the
  * static background glow (.glow-layer in app/layout.ts) carries the page. The
- * host element IS the layer: the move handler writes CSS custom properties on
- * it (no per-frame re-render, the correct pattern for a high-frequency pointer
- * update), and the gradient itself is declared by the `cursor-glow` rule in
- * app/layout.ts. render() is intentionally empty.
+ * move handler writes CSS custom properties on the host (no per-frame
+ * re-render, the correct pattern for a high-frequency pointer update), and
+ * render() outputs a .cg-blob gradient that the `cursor-glow .cg-blob` rule in
+ * app/layout.ts translates to the pointer via transform, a compositor-only
+ * property, so the cursor-follow never triggers a repaint.
  */
 export class CursorGlow extends WebComponent {
   private _raf = 0;

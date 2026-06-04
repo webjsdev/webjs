@@ -9,10 +9,10 @@ import '../components/cursor-glow.ts';
  * Styling is Tailwind-first: chrome and structure use utility classes,
  * with the design tokens declared once in the foundation <style> below
  * and exposed to Tailwind via @theme in public/input.css. Only the
- * genuinely un-utility-expressible pieces stay as CSS: the @property
- * animated accent + keyframes, the prefers-reduced-motion clamp, the
- * fixed glow layer, the hover-only scrollbar (`.scroll-thin`), and the
- * <details> icon swap. Everything else is Tailwind.
+ * genuinely un-utility-expressible pieces stay as CSS: the glow cross-fade
+ * and heart-pump keyframes, the prefers-reduced-motion clamp, the fixed glow
+ * layer and cursor-glow blob, the hover-only scrollbar (`.scroll-thin`), and
+ * the <details> icon swap. Everything else is Tailwind.
  *
  * Sibling app URLs are read from env so the same code works across
  * `webjs dev` and any deployment target. Guarded against `process` being
@@ -198,8 +198,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       :root.paused .glow-layer::before,
       :root.paused .glow-layer::after { animation-play-state: paused; }
       .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      /* No will-change: the running opacity animation already promotes these
+         to their own layer, so a permanent hint would just be the MDN
+         long-lived-will-change anti-pattern. */
       .glow-layer::before, .glow-layer::after {
-        content: ''; position: absolute; inset: 0; will-change: opacity;
+        content: ''; position: absolute; inset: 0;
       }
       .glow-layer::before {
         background:
@@ -226,7 +229,6 @@ export default function RootLayout({ children }: { children: unknown }) {
         border-radius: 50%;
         background: radial-gradient(circle at center, color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 70%);
         transform: translate3d(var(--cg-x, -9999px), var(--cg-y, -9999px), 0);
-        will-change: transform;
       }
       /* Skip rendering off-screen sections until they near the viewport. The
          intrinsic-size keeps the scrollbar stable, and the auto keyword
