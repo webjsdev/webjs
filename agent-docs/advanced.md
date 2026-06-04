@@ -952,6 +952,74 @@ the lazy-content use case. For content that MUST exist without JS, render it
 server-side into the frame instead of using `src` (the self-load then replaces
 those fallback children).
 
+### Stream actions: surgical element-level updates (#248)
+
+A region swap (a layout marker or a `<webjs-frame>`) is the right tool for "this
+part of the page changed". It is too coarse for "append ONE comment", "remove
+ONE row", "bump a count", or "insert a toast". For those, a server response can
+declare per-element actions, carried as plain HTML, a `<webjs-stream action
+target>` wrapping one `<template>`:
+
+```html
+<webjs-stream action="append" target="comments">
+  <template><li>Nice post!</li></template>
+</webjs-stream>
+```
+
+The `<webjs-stream>` element clones its `<template>` content on connect, applies
+the action against the target by native DOM, then removes itself. Actions
+(Turbo's set): `append` / `prepend` (last / first child of the target id),
+`before` / `after` (sibling of the target), `replace` (the target element
+itself), `update` (the target's children), `remove` (delete the target, no
+template). A `targets="<css-selector>"` applies to every match instead of a
+single `target` id.
+
+**One applier, two delivery paths.**
+
+1. **HTTP (content-negotiated form).** A `<form>` submission rides the client
+   router, which adds `Accept: text/vnd.webjs-stream.html`. The server returns a
+   stream ONLY when that Accept is present; the router then applies the
+   `<webjs-stream>` body surgically (no region swap). With JS OFF the browser
+   sends no such Accept, so the SAME endpoint returns a normal render/redirect
+   and the form is a plain full-page POST. The grammar is additive and
+   progressive-enhancement-safe.
+
+2. **Live channel (`broadcast()` / `connectWS`).** `renderStream(message)` parses
+   a server-pushed payload and inserts the `<webjs-stream>` elements (which
+   self-apply), so chat / notifications / presence reuse the SAME applier:
+
+   ```js
+   import { connectWS, renderStream } from '@webjsdev/core';
+   connectWS('/feed', { onMessage: (m) => renderStream(m) });
+   ```
+
+**Server-side, build the payload with the `@webjsdev/server` helpers:**
+
+```ts
+// app/post/[id]/route.ts (or a page `action`)
+import { stream, streamResponse, acceptsStream } from '@webjsdev/server';
+import { broadcast } from '@webjsdev/server';
+
+export async function POST(req: Request, { params }) {
+  const comment = await addComment(params.id, await req.formData());
+  const html = stream.append('comments', `<li>${escapeHtml(comment.text)}</li>`);
+  // Fan the SAME action out to every other connected viewer.
+  broadcast(`post:${params.id}`, html);
+  // Negotiate: a stream for the JS client, a redirect for the no-JS form.
+  if (acceptsStream(req)) return streamResponse(html);
+  return Response.redirect(`/post/${params.id}`, 303);
+}
+```
+
+`stream.*` returns the `<webjs-stream>` string (the target id is
+attribute-escaped; the CONTENT is server-authored and NOT escaped, so escape any
+user substring yourself, like an `html` hole). `streamResponse(...)` wraps one or
+more parts in a `Response` with the stream content type. A page `action` may
+return `streamResponse(...)` directly (it is honored verbatim); on the no-JS
+branch return a normal `ActionResult` instead. `renderStream` is auto-registered
+by the client router, so it (and the `<webjs-stream>` element) is available
+wherever a layout imports `@webjsdev/core/client-router`.
+
 ### Opt out per link
 
 ```html

@@ -814,6 +814,54 @@ event (detail `{ frameId, url, document }`) and leaves the frame unchanged
 rather than silently swapping the whole page; call `preventDefault()` to take
 over the outcome (e.g. `location.assign(e.detail.url)`).
 
+### 5. Stream actions for surgical element-level updates
+
+When a region swap is too coarse (append ONE comment, remove ONE row, bump a
+count, insert a toast), a server response can declare per-element actions as
+plain HTML, a `<webjs-stream action target>` wrapping one `<template>`:
+
+```html
+<webjs-stream action="append" target="comments">
+  <template><li>Nice post!</li></template>
+</webjs-stream>
+```
+
+Actions (Turbo's set): `append` / `prepend` (last / first child of the target
+id), `before` / `after` (sibling), `replace` (the target element), `update`
+(its children), `remove` (delete it). The `<webjs-stream>` element self-applies
+on connect and removes itself. ONE applier serves two paths:
+
+- **A content-negotiated `<form>`.** The router adds `Accept:
+  text/vnd.webjs-stream.html` on a JS-driven submission, so the server returns a
+  stream only then (apply it surgically) and a JS-OFF form gets a normal
+  render/redirect. Additive and progressive-enhancement-safe.
+- **A live channel.** `renderStream(message)` from a `connectWS` handler applies
+  a `broadcast()`ed payload, so chat / notifications reuse the same applier.
+
+Build the payload server-side and apply it client-side:
+
+```ts
+// app/posts/[id]/route.ts
+import { stream, streamResponse, acceptsStream, broadcast } from '@webjsdev/server';
+export async function POST(req: Request, { params }) {
+  const c = await addComment(params.id, await req.formData());
+  const html = stream.append('comments', `<li>${escapeHtml(c.text)}</li>`);
+  broadcast(`post:${params.id}`, html);              // fan out to other viewers
+  if (acceptsStream(req)) return streamResponse(html); // JS client: surgical
+  return Response.redirect(`/posts/${params.id}`, 303); // no-JS: normal render
+}
+```
+
+```ts
+// a component, for the live channel
+import { connectWS, renderStream } from '@webjsdev/core';
+connectWS(`/posts/${id}/feed`, { onMessage: (m) => renderStream(m) });
+```
+
+`stream.*` escapes the target id but NOT the content (server-authored HTML, like
+an `html` hole, so escape any user substring yourself). `renderStream` is
+auto-registered by the client router.
+
 **Failed navigations recover in place, never a destructive full reload.** A
 successful swap and an HTML error body of any status (e.g. a `422` re-rendered
 form) both apply in place. For the remaining failure cases (a non-HTML error

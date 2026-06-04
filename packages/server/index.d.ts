@@ -641,6 +641,28 @@ export declare function sitemap(entries: SitemapEntry[]): string;
 export declare function sitemapIndex(sitemaps: SitemapIndexEntry[]): string;
 
 // ---------------------------------------------------------------------------
+// stream.js (#248): stream-action helpers (the `<webjs-stream>` HTML the
+// client `renderStream` / element applies surgically)
+// ---------------------------------------------------------------------------
+
+/** The content type that negotiates and carries a stream-action response. */
+export declare const STREAM_MIME: string;
+/** Report whether a request opted into a stream-action response (its `Accept` carries the stream MIME). */
+export declare function acceptsStream(req: Request | { headers?: Headers }): boolean;
+/** The stream-action builder; each method returns one `<webjs-stream>` HTML string. */
+export declare const stream: {
+  append(target: string, content: string): string;
+  prepend(target: string, content: string): string;
+  before(target: string, content: string): string;
+  after(target: string, content: string): string;
+  replace(target: string, content: string): string;
+  update(target: string, content: string): string;
+  remove(target: string): string;
+};
+/** Wrap one or more stream-action strings in a `Response` carrying the stream content type. */
+export declare function streamResponse(...parts: string[]): Response;
+
+// ---------------------------------------------------------------------------
 // websocket.js
 // ---------------------------------------------------------------------------
 

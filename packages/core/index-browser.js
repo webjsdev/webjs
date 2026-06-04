@@ -44,6 +44,7 @@ export {
 } from './src/serialize.js';
 export { enableClientRouter, disableClientRouter, navigate, revalidate } from './src/router-client.js';
 export { WebjsFrame } from './src/webjs-frame.js';
+export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
 export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
