@@ -66,6 +66,8 @@ test('tokenizer edge cases: block comments, backtick strings, hex/underscore num
   assert.match(await render('/* block */ x'), /<span class="t-com">\/\* block \*\/<\/span>/);
   // a whole backtick string is one t-str token (the reason samples avoid html`` bodies)
   assert.match(await render('const s = `hi`;'), /<span class="t-str">`hi`<\/span>/);
+  // an escaped quote inside a string does not end the token early (escape-skip)
+  assert.match(await render("const s = 'a\\'b';"), /<span class="t-str">'a\\'b'<\/span>/);
   // hex and underscore-grouped numbers stay a single t-num
   assert.match(await render('0xFF'), /<span class="t-num">0xFF<\/span>/);
   assert.match(await render('1_000'), /<span class="t-num">1_000<\/span>/);
