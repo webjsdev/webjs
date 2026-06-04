@@ -10,6 +10,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
 import RootLayout from '../../app/layout.ts';
@@ -69,6 +71,31 @@ test('the nav links to the live example-blog app via a Demo link', async () => {
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   assert.ok(out.includes('>Demo<'), 'a Demo nav link is rendered');
   assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
+});
+
+test('every <main id="main"> skip-link target in app/ is focusable', () => {
+  // The layout's skip link lands on the #main of EVERY route, so every page
+  // declaring the target must make it focusable (tabindex="-1"), not just the
+  // landing/404/error pages. Walk app/ source so blog, [slug], and changelog
+  // are covered without rendering their data deps, and future pages too.
+  const appDir = fileURLToPath(new URL('../../app', import.meta.url));
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = `${dir}/${e.name}`;
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.ts')) files.push(p);
+    }
+  };
+  walk(appDir);
+  let targets = 0;
+  for (const f of files) {
+    for (const tag of readFileSync(f, 'utf8').match(/<main id="main"[^>]*>/g) || []) {
+      targets++;
+      assert.ok(tag.includes('tabindex="-1"'), `${f}: skip-link target must be focusable, got ${tag}`);
+    }
+  }
+  assert.ok(targets >= 5, `expected the skip-link target on several pages, found ${targets}`);
 });
 
 test('the skip-to-content link resolves on the 404 and error pages too', async () => {
