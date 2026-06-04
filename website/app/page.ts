@@ -157,7 +157,7 @@ export default function LandingPage() {
       }
     </style>
 
-    <main id="main">
+    <main id="main" tabindex="-1" class="focus:outline-none">
     <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
       <div class=${KICKER}>
         <span>AI-first</span><span class="text-fg-subtle">/</span>

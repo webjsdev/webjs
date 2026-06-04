@@ -72,7 +72,7 @@ test('the skip-to-content link resolves on the 404 and error pages too', async (
     const out = await renderToString(RootLayout({ children: page }));
     const m = out.match(/href="#([\w-]+)"[^>]*>\s*Skip to content/);
     assert.ok(m, `${name}: a skip-to-content link is rendered`);
-    assert.ok(out.includes(`<main id="${m[1]}"`), `${name}: the #${m[1]} target landmark exists`);
+    assert.ok(out.includes(`<main id="${m[1]}" tabindex="-1"`), `${name}: the #${m[1]} target is a focusable main landmark`);
   }
 });
 
@@ -82,5 +82,7 @@ test('the skip-to-content link targets the page main landmark (paired)', async (
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   const m = out.match(/href="#([\w-]+)"[^>]*>\s*Skip to content/);
   assert.ok(m, 'a skip-to-content link with an href fragment is rendered');
-  assert.ok(out.includes(`<main id="${m[1]}"`), `the #${m[1]} target landmark exists on the page`);
+  // The target must be programmatically focusable (tabindex="-1") or activating
+  // the skip link only scrolls; focus must actually land in the content.
+  assert.ok(out.includes(`<main id="${m[1]}" tabindex="-1"`), `the #${m[1]} target is a focusable main landmark`);
 });
