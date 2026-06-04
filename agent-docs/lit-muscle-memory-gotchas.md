@@ -380,6 +380,55 @@ page function rather than through context. Reserve `ContextProvider`
 for client-time concerns (interaction state, focus management,
 transient UI state).
 
+## List rendering
+
+### 11. Reordering a `.map()` list needs a keyed `repeat()`
+
+A plain `.map()` list reconciles in place, matching lit-html's non-keyed
+child-part behaviour. When one item's binding changes (a card flips its
+`dragging` class on `@dragstart`, a row's input is edited), the framework
+patches that item's existing nodes instead of rebuilding the whole list,
+so DOM node identity survives. That is what makes native drag-and-drop,
+focus, caret, text selection, scroll position, and uncontrolled input
+value all survive an item-level update, no `repeat()` required. (This
+used to be a real gotcha. Before the fix, any change to a `.map()`'s
+output tore down and replaced every node, which silently aborted a
+drag-in-progress and lost focus and input state.)
+
+```ts
+// Item updates preserve node identity. Drag-and-drop, focus, and
+// input state all survive. No repeat() needed.
+render() {
+  return html`<ul>${this.cards.map((c) => html`
+    <li class=${c.id === this.draggingId ? 'dragging' : 'idle'}
+        draggable="true"
+        @dragstart=${() => (this.draggingId = c.id)}>${c.text}</li>`)}</ul>`;
+}
+```
+
+What plain `.map()` still does NOT do is **keyed reordering**.
+Reconciliation is positional (by index): if the array is reordered or an
+item is inserted/removed in the MIDDLE, index *i* is patched from the new
+item at *i*, so the nodes stay put and their contents are rewritten
+rather than the nodes themselves moving. For an item carrying live state
+(a focused input, a playing media element, an in-flight CSS transition)
+across a reorder, that state stays with the old position. When a list
+**reorders** or splices in the middle and node identity must follow the
+item, reach for the keyed directive, exactly as in lit:
+
+```ts
+import { repeat } from '@webjsdev/core/directives';
+render() {
+  return html`<ul>${repeat(this.cards, (c) => c.id, (c) => html`
+    <li>${c.text}</li>`)}</ul>`;
+}
+```
+
+Rule of thumb. Append-only or update-in-place list, where items keep
+their position, plain `.map()` is fine and preserves identity. List that
+**reorders or splices in the middle** and each item owns DOM state that
+must move with it, use `repeat()` with a stable key.
+
 ## Quick reference
 
 | Lit pattern | Webjs equivalent |
@@ -392,6 +441,7 @@ transient UI state).
 | `student: Student = { ... }` field initializer | `declare student: Student` plus constructor default |
 | `@property()` decorator | `static properties = { ... }` plus `declare` |
 | `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
+| Plain `.map()` for an interactive/stateful list | Works (reconciles in place, keeps node identity); use `repeat(items, key, t)` only when the list **reorders** |
 | `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |
 | `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim) |
 | `ContextProvider` for server-known data | Pass via props from the page function |
