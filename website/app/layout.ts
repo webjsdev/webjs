@@ -110,6 +110,15 @@ export default function RootLayout({ children }: { children: unknown }) {
         var open = document.querySelectorAll('.mobile-menu[open]');
         for (var i = 0; i < open.length; i++) if (!open[i].contains(t)) open[i].removeAttribute('open');
       });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var open = document.querySelectorAll('.mobile-menu[open]');
+        for (var i = 0; i < open.length; i++) {
+          open[i].removeAttribute('open');
+          var s = open[i].querySelector('summary');
+          if (s) s.focus();
+        }
+      });
     </script>
 
     <link rel="stylesheet" href="/public/tailwind.css">

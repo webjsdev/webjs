@@ -73,6 +73,13 @@ test('the nav links to the live example-blog app via a Demo link', async () => {
   assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
 });
 
+test('the layout ships an Escape-to-close handler for the mobile menu', async () => {
+  // Native <details> has no Escape dismissal; the inline layout script adds one
+  // (it has no component harness, so guard that it ships in the served HTML).
+  const out = await renderToString(RootLayout({ children: html`<main>x</main>` }));
+  assert.ok(out.includes("'Escape'") && out.includes('.mobile-menu[open]'), 'an Escape keydown closes the open mobile menu');
+});
+
 test('the layout CSS still consumes the cursor-glow / scroll-reveal contract names', () => {
   // The JS writes these names (cursor-glow: --cg-x/--cg-on/.cg-blob;
   // scroll-reveal: reveal-ready/is-revealed) and the layout's inline CSS is the
