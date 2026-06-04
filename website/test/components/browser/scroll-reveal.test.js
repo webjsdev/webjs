@@ -81,6 +81,10 @@ suite('scroll-reveal', () => {
       assert.ok(observed.has(el), 'the out-of-view section is observed, not revealed synchronously');
       assert.ok(!el.classList.contains('is-revealed'), 'it is not revealed before it intersects');
       assert.ok(opts && typeof opts.threshold === 'number', 'the observer is configured with a threshold');
+      // The reveal trigger margin materially changes WHEN a section counts as
+      // in-view (the negative bottom pulls the trigger up). Assert it so a
+      // regression that dropped or changed it is caught.
+      assert.equal(opts.rootMargin, '0px 0px -8% 0px', 'the observer keeps the bottom-margin reveal trigger');
       cb([{ target: el, isIntersecting: true }]);
       assert.ok(el.classList.contains('is-revealed'), 'it is revealed when it intersects');
       assert.ok(unobserved.has(el), 'it is unobserved once revealed');
