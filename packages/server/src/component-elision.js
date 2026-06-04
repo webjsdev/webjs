@@ -70,6 +70,10 @@ export const REACTIVE_IMPORTS = new Set([
   'ContextProvider',
   'ContextConsumer',
   'connectWS',
+  // `renderStream(payload)` applies a server stream-action payload to the live
+  // DOM (append/replace/remove), so a component importing it does client work
+  // and must ship (#248).
+  'renderStream',
   // Client-only directives. `ref` / `createRef` fire a callback against the
   // live element (focus, measure, third-party mount); `live` syncs an input
   // value against the DOM. All produce identical SSR HTML but do real work

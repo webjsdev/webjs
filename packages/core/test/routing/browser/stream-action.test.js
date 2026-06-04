@@ -16,6 +16,7 @@
 import { renderStream } from '../../../src/webjs-stream.js';
 import '../../../src/webjs-stream.js';
 import { enableClientRouter } from '../../../src/router-client.js';
+import { connectWS } from '../../../src/websocket-client.js';
 
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
@@ -170,6 +171,46 @@ suite('Client router: content-negotiated stream-action form response (#248)', ()
     const accept = (calls[0].init.headers && calls[0].init.headers['accept']) || '';
     assert.ok(accept.indexOf('text/vnd.webjs-stream.html') === 0, 'the stream MIME leads the Accept header');
     assert.equal(host.querySelector('#comments li').textContent, 'hi', 'the comment was appended surgically');
+    teardown();
+  });
+});
+
+suite('Live channel: connectWS message applied by the same applier (#248)', () => {
+  let host, OrigWS, sockets;
+  function setup() {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    OrigWS = window.WebSocket;
+    sockets = [];
+    // A fake WebSocket: connectWS calls `new WebSocket(url)` and sets onmessage;
+    // we capture the instance so the test can fire a server message.
+    class FakeWS {
+      constructor() { this.readyState = 1; sockets.push(this); }
+      send() {}
+      close() { this.readyState = 3; }
+    }
+    FakeWS.OPEN = 1;
+    window.WebSocket = FakeWS;
+  }
+  function teardown() {
+    window.WebSocket = OrigWS;
+    host.remove();
+    document.querySelectorAll('webjs-stream').forEach((e) => e.remove());
+  }
+
+  test('a broadcast/WS stream message patches the live DOM via renderStream', async () => {
+    setup();
+    host.innerHTML = '<ul id="feed"></ul>';
+    // The canonical live-channel wiring: a stream payload arrives and is applied
+    // by the SAME applier the HTTP path uses.
+    const conn = connectWS('/feed', { reconnect: false, onMessage: (m) => renderStream(m) });
+    await settle();
+    // The server pushes a stream-action string (not JSON, so connectWS leaves
+    // it as a string and hands it to onMessage).
+    sockets[0].onmessage({ data: '<webjs-stream action="append" target="feed"><template><li>ping</li></template></webjs-stream>' });
+    await settle();
+    assert.equal(host.querySelector('#feed li').textContent, 'ping', 'the live message appended surgically');
+    conn.close();
     teardown();
   });
 });
