@@ -1044,6 +1044,41 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(survived, 'same-layout nav should keep the <header> DOM element mounted');
   });
 
+  test('client nav: data-webjs-permanent element survives a partial swap by node identity (#250)', async () => {
+    // Both `/` and `/about` render a `<span id="perm-probe" data-webjs-permanent>`
+    // INSIDE the swapped `<main>` region. A normal partial swap would
+    // recreate it from the incoming HTML; the permanent regraft must move
+    // the LIVE node into the incoming tree so it keeps its identity (a
+    // playing media element / live widget would keep running). Proven by
+    // stamping a unique JS property before the nav and asserting it
+    // survives, which only holds if the SAME DOM node was kept.
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+    const stamped = await page.evaluate(() => {
+      const el = document.getElementById('perm-probe');
+      if (!el) return false;
+      /** @type any */ (el).__permProbe = 'kept-alive';
+      return true;
+    });
+    assert.ok(stamped, 'the permanent probe element is present on the home page');
+
+    await clickNavLink(page, 'About');
+    await sleep(2000);
+
+    const result = await page.evaluate(() => {
+      const el = document.getElementById('perm-probe');
+      return {
+        present: !!el,
+        identityKept: !!el && /** @type any */ (el).__permProbe === 'kept-alive',
+        onAbout: location.pathname === '/about',
+      };
+    });
+    assert.ok(result.onAbout, 'navigated to /about via the client router');
+    assert.ok(result.present, 'the permanent element is present after the swap');
+    assert.ok(result.identityKept,
+      'the permanent element kept its NODE IDENTITY across the partial swap (regrafted, not recreated)');
+  });
+
   // ---------------------------------------------------------------------------
   // Rate limiting: 6th rapid auth request → 429
   // ---------------------------------------------------------------------------

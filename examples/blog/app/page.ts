@@ -23,6 +23,7 @@ async function slowStat() {
 export default async function HomePage() {
   const [me, posts] = await Promise.all([currentUser(), listPosts()]);
   return html`
+    <span id="perm-probe" data-webjs-permanent hidden></span>
     <section class="mb-18">
       ${rubric('the webjs demo')}
       <h1 class="font-serif text-display leading-[1.02] tracking-[-0.035em] font-bold m-0 mb-4 text-balance">

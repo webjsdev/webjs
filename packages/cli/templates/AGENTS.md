@@ -784,6 +784,17 @@ error, abort, or a missing frame), so AT announces it and CSS can style
 `webjs:frame-busy` event on the frame at start and finish (detail
 `{ frameId, busy }`).
 
+**View Transitions + persistent elements (opt-in).** Add
+`<meta name="view-transition" content="same-origin">` to the page head and the
+router wraps every swap (the layout-marker swap, the `<webjs-frame>` swap, and
+the full-body fallback) in `document.startViewTransition` for an animated
+crossfade. OFF by default (no animation surprise); a browser without the API
+falls back to the identical synchronous swap. To keep a live element running
+across a navigation (a playing `<audio>` / `<video>`, a map, a stateful
+widget), mark it `data-webjs-permanent` AND give it an `id`: the router keeps
+the SAME DOM node by identity across the swap instead of recreating it (Turbo's
+permanent-element behaviour). Inert with JS off.
+
 When a frame nav's response lacks the matching `<webjs-frame id>` (e.g. an
 auth redirect), the router fires a cancelable, bubbling `webjs:frame-missing`
 event (detail `{ frameId, url, document }`) and leaves the frame unchanged

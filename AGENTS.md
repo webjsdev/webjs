@@ -689,6 +689,8 @@ Wire-byte optimization is automatic: the router sends `X-Webjs-Have` listing mar
 
 For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. A nested trigger drives it; an EXTERNAL `<a>` / `<form>` carrying `data-webjs-frame="<id>"` drives it by id from anywhere (Turbo-style), and `data-webjs-frame="_top"` breaks OUT to a full nav. The router sets `aria-busy="true"` on the frame during its fetch (cleared on any exit) and fires a bubbling `webjs:frame-busy` event at start + finish. A frame nav whose response lacks the frame fires a cancelable `webjs:frame-missing` event and leaves the frame unchanged (no silent full-page swap). See `agent-docs/advanced.md` for the full mechanism.
 
+**View Transitions are opt-in (#250).** Add `<meta name="view-transition" content="same-origin">` to the page head and the router wraps EVERY swap path (the deepest-marker layout swap, the `<webjs-frame>` swap, and the full-body fallback) in `document.startViewTransition`. OFF by default (no animation surprise), re-read per nav, and a browser without the API falls back to the identical synchronous swap. **Persist a live element across a nav with `data-webjs-permanent`** (the element MUST also have an `id`): the router keeps the SAME DOM node by identity across a full-body OR in-region swap, so a playing `<audio>` / `<video>` or a live widget keeps running instead of being recreated (Turbo's permanent-element behaviour). Inert server-side. See `agent-docs/advanced.md`.
+
 ---
 
 ## Invariants (for both humans and agents)

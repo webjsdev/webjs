@@ -16,6 +16,7 @@ const FEATURES = [
 
 export default function About() {
   return html`
+    <span id="perm-probe" data-webjs-permanent hidden></span>
     ${rubric('about')}
     ${displayH1('A full-stack demo, at framework scale.')}
     <p class="text-[1.15rem] leading-[1.5] font-sans text-fg-muted max-w-[56ch] m-0 mb-18">
