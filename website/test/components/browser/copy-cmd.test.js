@@ -159,6 +159,28 @@ suite('copy-cmd', () => {
     document.body.removeChild(el);
   });
 
+  test('disconnecting clears the pending auto-reset timer', async () => {
+    // After a copy, a 1.5s timer is armed to flip the icon back. Removing the
+    // element before it fires must clearTimeout it (disconnectedCallback). Spy
+    // on clearTimeout so deleting that cleanup makes this test fail (the
+    // counterfactual the firing-path test on its own does not provide).
+    const realClear = window.clearTimeout;
+    const cleared = [];
+    window.clearTimeout = (id) => { cleared.push(id); return realClear(id); };
+    try {
+      const el = await mount('npm create webjs@latest my-app');
+      el.querySelector('[data-copy-text]').click();
+      await tick(10);
+      await el.updateComplete;          // copied=true, the 1.5s reset timer is armed
+      assert.ok(el.querySelector('button polyline'), 'flipped to the checkmark, so a timer is pending');
+      const before = cleared.length;
+      el.remove();                       // disconnectedCallback must cancel the pending timer
+      assert.ok(cleared.length > before, 'disconnecting cleared the pending auto-reset timer');
+    } finally {
+      window.clearTimeout = realClear;
+    }
+  });
+
   test('the checkmark resets back to the copy icon', async () => {
     const el = await mount('npm create webjs@latest my-app');
     el.querySelector('[data-copy-text]').click();
