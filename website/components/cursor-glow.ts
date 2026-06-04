@@ -45,7 +45,9 @@ export class CursorGlow extends WebComponent {
   }
 
   render() {
-    return html``;
+    // A fixed-size blob translated to the pointer. Moving it is a transform
+    // (compositor-only), so the cursor-follow never triggers a repaint.
+    return html`<div class="cg-blob"></div>`;
   }
 }
 CursorGlow.register('cursor-glow');

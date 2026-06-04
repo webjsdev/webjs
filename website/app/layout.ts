@@ -218,10 +218,20 @@ export default function RootLayout({ children }: { children: unknown }) {
          reveal-ready class, so a data-reveal section is hidden only when JS
          is present, and visible otherwise. */
       cursor-glow {
-        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
         opacity: var(--cg-on, 0); transition: opacity 500ms ease;
-        background: radial-gradient(460px 460px at var(--cg-x, 50%) var(--cg-y, 26%), color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 72%);
       }
+      cursor-glow .cg-blob {
+        position: absolute; top: 0; left: 0; width: 920px; height: 920px; margin: -460px;
+        border-radius: 50%;
+        background: radial-gradient(circle at center, color-mix(in oklch, var(--accent-live) 13%, transparent), transparent 70%);
+        transform: translate3d(var(--cg-x, -9999px), var(--cg-y, -9999px), 0);
+        will-change: transform;
+      }
+      /* Skip rendering off-screen sections until they near the viewport. The
+         intrinsic-size keeps the scrollbar stable, and the auto keyword
+         remembers each real size after first render. Pure CSS, no JS, PE-safe. */
+      [data-reveal] { content-visibility: auto; contain-intrinsic-size: auto 600px; }
       .reveal-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
       .reveal-ready [data-reveal].is-revealed { opacity: 1; transform: none; }
       @media (prefers-reduced-motion: reduce) {
