@@ -33,6 +33,7 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _currentPageUrl, _setCurrentPageUrl,
   _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetch, _prefetchTake,
   _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
+  _viewTransitionsEnabled, _runWithTransition, _regraftPermanentElements,
   enableClientRouter, disableClientRouter, revalidate,
   WebComponent, html;
 
@@ -105,6 +106,9 @@ before(async () => {
     _prefetchPeek,
     _prefetchInflightSize,
     _resetPrefetch,
+    _viewTransitionsEnabled,
+    _runWithTransition,
+    _regraftPermanentElements,
     navigate,
     revalidate,
     enableClientRouter,
@@ -2781,4 +2785,116 @@ test('revalidate evicts the prefetch cache, not just the snapshot cache', async 
     revalidate();
     assert.equal(_prefetchPeek('http://localhost/items'), null, 'revalidate() cleared the prefetch cache');
   });
+});
+
+/* ====================================================================
+ * View Transitions opt-in gate + permanent-element regraft (#250)
+ * ==================================================================== */
+
+test('viewTransitionsEnabled: off by default, on only for content="same-origin"', () => {
+  // No meta: off.
+  for (const m of document.head.querySelectorAll('meta[name="view-transition"]')) m.remove();
+  assert.equal(_viewTransitionsEnabled(), false, 'default off without the meta');
+
+  const meta = document.createElement('meta');
+  meta.setAttribute('name', 'view-transition');
+  document.head.appendChild(meta);
+
+  meta.setAttribute('content', 'same-origin');
+  assert.equal(_viewTransitionsEnabled(), true, 'same-origin opts in');
+
+  meta.setAttribute('content', 'SAME-ORIGIN');
+  assert.equal(_viewTransitionsEnabled(), true, 'case-insensitive');
+
+  meta.setAttribute('content', 'true');
+  assert.equal(_viewTransitionsEnabled(), false, 'an unrecognized value stays off');
+
+  meta.setAttribute('content', '');
+  assert.equal(_viewTransitionsEnabled(), false, 'empty content stays off');
+
+  meta.remove();
+});
+
+test('runWithTransition: synchronous fallback when the API is unavailable', () => {
+  const orig = document.startViewTransition;
+  delete document.startViewTransition;
+  document.startViewTransition = undefined;
+  try {
+    let ran = false, after = false;
+    _runWithTransition(() => { ran = true; }, () => { after = true; });
+    assert.ok(ran, 'thunk ran synchronously');
+    assert.ok(after, 'afterFinished ran synchronously in the fallback');
+  } finally {
+    if (orig) document.startViewTransition = orig; else delete document.startViewTransition;
+  }
+});
+
+test('runWithTransition: calls startViewTransition only when opted in AND supported', () => {
+  const origSVT = document.startViewTransition;
+  // Ensure opt-in meta is present.
+  for (const m of document.head.querySelectorAll('meta[name="view-transition"]')) m.remove();
+  const meta = document.createElement('meta');
+  meta.setAttribute('name', 'view-transition');
+  meta.setAttribute('content', 'same-origin');
+  document.head.appendChild(meta);
+
+  const calls = [];
+  document.startViewTransition = (cb) => { calls.push(cb); cb(); return { finished: Promise.resolve() }; };
+  try {
+    let ran = false;
+    _runWithTransition(() => { ran = true; });
+    assert.equal(calls.length, 1, 'startViewTransition invoked under opt-in + support');
+    assert.ok(ran, 'the swap thunk ran (callback invoked)');
+
+    // Opt OUT: same API present, but meta absent -> NOT called.
+    meta.remove();
+    calls.length = 0;
+    let ran2 = false;
+    _runWithTransition(() => { ran2 = true; });
+    assert.equal(calls.length, 0, 'not called when not opted in');
+    assert.ok(ran2, 'swap still ran synchronously');
+  } finally {
+    if (origSVT) document.startViewTransition = origSVT; else delete document.startViewTransition;
+    meta.remove();
+  }
+});
+
+test('regraftPermanentElements: moves the live permanent node into the incoming tree (both-exist)', () => {
+  const current = bodyFrom('<div id="p" data-webjs-permanent>LIVE</div><span>x</span>');
+  const incoming = bodyFrom('<div id="p" data-webjs-permanent>PLACEHOLDER</div><h1>new</h1>');
+  const liveNode = current.querySelector('#p');
+  liveNode.__probe = {};
+  const placeholder = incoming.querySelector('#p');
+
+  _regraftPermanentElements(current, incoming);
+
+  // The live node is now in the incoming tree, replacing the placeholder.
+  assert.equal(incoming.querySelector('#p'), liveNode, 'incoming #p is now the live node');
+  assert.equal(incoming.querySelector('#p').__probe, liveNode.__probe, 'identity (JS state) preserved');
+  assert.equal(incoming.querySelector('#p').textContent, 'LIVE', 'live content kept, not the placeholder');
+  assert.ok(!incoming.contains(placeholder), 'the imported placeholder was replaced');
+});
+
+test('regraftPermanentElements: leaves a permanent node absent from incoming (no force-persist)', () => {
+  const current = bodyFrom('<div id="gone" data-webjs-permanent>HERE</div>');
+  const incoming = bodyFrom('<h1>new</h1>');
+  const liveNode = current.querySelector('#gone');
+
+  _regraftPermanentElements(current, incoming);
+
+  assert.equal(incoming.querySelector('#gone'), null, 'incoming unchanged (no #gone synthesized)');
+  assert.equal(current.querySelector('#gone'), liveNode, 'live node not moved (will be removed by the swap)');
+});
+
+test('regraftPermanentElements: only moves when the CURRENT node is actually permanent', () => {
+  // Current #w is NOT permanent; incoming #w IS marked. The current node must
+  // NOT be moved (the selector only matches permanent current nodes).
+  const current = bodyFrom('<div id="w">PLAIN</div>');
+  const incoming = bodyFrom('<div id="w" data-webjs-permanent>INCOMING</div>');
+  const incomingNode = incoming.querySelector('#w');
+
+  _regraftPermanentElements(current, incoming);
+
+  assert.equal(incoming.querySelector('#w'), incomingNode, 'incoming node untouched');
+  assert.equal(incoming.querySelector('#w').textContent, 'INCOMING', 'non-permanent current node not regrafted');
 });
