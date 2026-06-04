@@ -18,6 +18,7 @@ import RootLayout from '../../app/layout.ts';
 import LandingPage from '../../app/page.ts';
 import NotFound from '../../app/not-found.ts';
 import ErrorBoundary from '../../app/error.ts';
+import { DEMO_URL } from '../../lib/links.ts';
 
 test('the root layout SSR emits no phantom copy-cmd element or copy button', async () => {
   const out = await renderToString(RootLayout({ children: html`<main>content</main>` }));
@@ -70,7 +71,9 @@ test('the nav links to the live example-blog app via a Demo link', async () => {
   // set. Guards against the link being dropped again.
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   assert.ok(out.includes('>Demo<'), 'a Demo nav link is rendered');
-  assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
+  // Assert against the value the code resolved (env override or the production
+  // fallback), not a hardcoded URL, so exporting DEMO_URL cannot break the test.
+  assert.ok(out.includes(DEMO_URL), `the Demo link points at the configured DEMO_URL (${DEMO_URL})`);
 });
 
 test('the layout ships an Escape-to-close handler for the mobile menu', async () => {
@@ -87,7 +90,7 @@ test('the layout CSS still consumes the cursor-glow / scroll-reveal contract nam
   // breaks the visual (data-reveal sections stay at opacity:0 = content loss),
   // so pin the contract: a rename must update both sides and this assertion.
   const layoutSrc = readFileSync(fileURLToPath(new URL('../../app/layout.ts', import.meta.url)), 'utf8');
-  for (const name of ['--cg-x', '--cg-on', 'cursor-glow .cg-blob', '.reveal-ready [data-reveal]', 'is-revealed']) {
+  for (const name of ['--cg-x', '--cg-y', '--cg-on', 'cursor-glow .cg-blob', '.reveal-ready [data-reveal]', 'is-revealed']) {
     assert.ok(layoutSrc.includes(name), `layout CSS must still reference the contract name "${name}"`);
   }
 });
