@@ -94,6 +94,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
+    // Layout-chrome guidance (#356): the scaffolded layout must steer the
+    // agent to adapt the content-width container instead of dropping a
+    // full-bleed app into the narrow reading column (which overflows into a
+    // horizontal scrollbar). Counterfactual: dropping the comment fails here.
+    assert.match(layoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
+      'layout must carry the content-width steering comment so a full-bleed app widens it');
+    assert.match(layoutSrc, /Example nav\. Replace with the real navigation/,
+      'layout must flag the example nav as replace-me');
+
     // Prisma + lib singleton wired up
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');

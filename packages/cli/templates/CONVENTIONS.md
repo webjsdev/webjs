@@ -308,7 +308,15 @@ When the user asks the agent to build their actual app:
    need a theme picker.
 4. **Delete the example users module** (api/saas templates) if the app
    doesn't use it.
-5. **Keep:** the Prisma setup, the test config, the agent config files
+5. **Adapt `app/layout.ts` to the app, not just the page.** Set the real
+   brand, replace the example `Home` nav with the app's navigation, and
+   pick a content-width container that fits. The default
+   `<main class="max-w-[760px]">` is a reading column for prose, forms,
+   and marketing. Widen it or drop the cap for a full-bleed app,
+   dashboard, or board, or a wide layout overflows into an unnecessary
+   horizontal scrollbar. Keep the design tokens and theme setup, those
+   are infrastructure.
+6. **Keep:** the Prisma setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
    `lib/prisma.server.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
