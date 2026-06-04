@@ -98,6 +98,11 @@ export const RULES = [
     description:
       'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
   },
+  {
+    name: 'no-scaffold-placeholder',
+    description:
+      'The one sentinel-based check, and the deliberate exception to the "objectively broken code" framing of the other rules: it flags scaffold example content that has not been replaced, so a delivered app contains only what the user intended and never leftover scaffold code. `webjs create` marks its example/demo files (the example homepage in app/page.ts, the example app chrome in app/layout.ts) with a one-line marker comment carrying the literal token `webjs-scaffold-placeholder`. The rule scans raw source (the marker lives in a comment, which the redacted scan view would hide) and fails for every file that still carries the token. A freshly scaffolded app fails this rule BY DESIGN until its placeholders are addressed: replace the example content, or deliberately keep it, and in either case delete the marker line. No finished app legitimately ships a literal remove-me marker, so this still qualifies as a check rather than a convention. The marker is acknowledge-and-remove, so keeping a piece is a one-line deletion rather than a forced rewrite.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -462,6 +467,27 @@ export async function checkConventions(appDir) {
           }
         }
       }
+    }
+  }
+
+  // --- Rule: no-scaffold-placeholder ---
+  // `webjs create` marks its example/demo files (app/page.ts, app/layout.ts)
+  // with a one-line marker comment so a delivered app cannot silently ship
+  // leftover scaffold content. Scan RAW `content`: the marker lives in a
+  // comment, which the `scan` view redacts to whitespace. One violation per
+  // still-marked file. The token is assembled here so this source does not
+  // itself carry the contiguous literal.
+  {
+    const MARKER = 'webjs-scaffold-' + 'placeholder';
+    for (const { rel, content } of files) {
+      if (!content.includes(MARKER)) continue;
+      violations.push({
+        rule: 'no-scaffold-placeholder',
+        file: rel,
+        message:
+          'Scaffold placeholder marker still present. This file is unmodified example content from `webjs create`, and the delivered app should contain only what the user intended, not leftover scaffold code.',
+        fix: `Replace the example content (or deliberately keep it), then delete the marker comment line carrying the ${MARKER} token.`,
+      });
     }
   }
 

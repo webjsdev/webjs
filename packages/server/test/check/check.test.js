@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-import { checkConventions } from '../../src/check.js';
+import { checkConventions, RULES } from '../../src/check.js';
 
 async function makeTempApp() {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-check-'));
@@ -1121,6 +1121,56 @@ test('tag-name-has-hyphen: tagged template with ASI-style newline between tag an
     const v = violations.find((v) => v.rule === 'tag-name-has-hyphen' && v.message.includes('nohyphen'));
     assert.equal(v, undefined,
       'tagged template with newline before backtick must be blanked');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// --- no-scaffold-placeholder ---
+// The token is assembled so this test file does not carry the contiguous
+// literal that the rule scans for.
+const SCAFFOLD_TOKEN = 'webjs-scaffold-' + 'placeholder';
+
+test('no-scaffold-placeholder: flags a file that still carries the marker', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'app', 'page.ts'),
+      `// ${SCAFFOLD_TOKEN}. Example homepage, replace it then delete this line.\n` +
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function Home() { return html`<h1>hi</h1>`; }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-scaffold-placeholder' && v.file.includes('page.ts'));
+    assert.ok(v, 'expected the unmodified scaffold marker to be flagged');
+    assert.ok(v.fix.includes(SCAFFOLD_TOKEN), 'fix should name the token to delete');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-scaffold-placeholder: --rules description names the real token, not a placeholder form', () => {
+  const rule = RULES.find((r) => r.name === 'no-scaffold-placeholder');
+  assert.ok(rule, 'the rule must be registered');
+  // The description is printed verbatim by `webjs check --rules`, so it must
+  // show the exact token an agent greps for, not an obfuscated form.
+  assert.ok(rule.description.includes(SCAFFOLD_TOKEN), 'description must name the literal token');
+  assert.ok(!rule.description.includes('{placeholder}'), 'description must not show an obfuscated braced token');
+});
+
+test('no-scaffold-placeholder: a file with the marker removed is clean', async () => {
+  const appDir = await makeTempApp();
+  try {
+    // Same file with the marker line gone (the agent replaced or kept the
+    // content). The rule keys on the token, so its absence is clean.
+    await writeFileEnsureDir(
+      join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      'export default function Home() { return html`<h1>my real app</h1>`; }\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-scaffold-placeholder');
+    assert.equal(v, undefined, 'a customized file without the marker must not be flagged');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

@@ -685,7 +685,8 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
+import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 // Webjs UI components are tiered:
@@ -866,7 +867,8 @@ ${SHADCN_THEME}
 }
 `);
 
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
+import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
@@ -1084,6 +1086,10 @@ For AI agents, read this before editing scaffolded files:
     Replace them with the app the user actually asked for. Don't ship
     the scaffold's example User model or "Hello from …" page as the
     final product.
+  • This fresh app intentionally FAILS \`webjs check\` with two
+    no-scaffold-placeholder violations (app/page.ts, app/layout.ts).
+    That is the signal to replace the example content. Delete each
+    marker comment line as you do, and the check goes green.
   • Use Prisma + SQLite for app data. It's already wired up. Define
     real models in prisma/schema.prisma and run \`webjs db migrate\`.
     NEVER store app data in JSON files, in-memory arrays, or
