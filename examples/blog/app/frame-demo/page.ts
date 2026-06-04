@@ -54,6 +54,22 @@ export default function FrameDemo({ searchParams }: PageProps) {
         <!-- A _top breakout link INSIDE the frame: a full-page nav home. -->
         <a id="top-link" href="/" data-webjs-frame="_top" class="text-fg-subtle text-xs underline">Exit to home (full nav)</a>
       </webjs-frame>
+
+      <!-- Deferred self-loading frame (#253). A lazy <webjs-frame src> that
+           self-fetches its content (with the x-webjs-frame header) when it
+           scrolls into view, the lazy-content use case. With JS off it shows
+           only the placeholder below (src is JS-dependent), the acceptable
+           progressive-enhancement baseline for deferred content. A big spacer
+           pushes it below the fold so the lazy load is observable. -->
+      <div style="height: 1200px" aria-hidden="true"></div>
+      <webjs-frame
+        id="deferred"
+        src="/frame-demo/deferred"
+        loading="lazy"
+        class="block rounded-md border border-border bg-bg-elev p-4"
+      >
+        <p id="deferred-placeholder" class="text-fg-muted text-sm">Loading deferred content...</p>
+      </webjs-frame>
     </section>
   `;
 }

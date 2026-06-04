@@ -105,3 +105,59 @@ function onIntersect(entries) {
     observer?.unobserve(entry.target);
   }
 }
+
+/* ====================================================================
+ * Per-element viewport observation (shared with <webjs-frame loading="lazy">)
+ * ==================================================================== */
+
+/**
+ * A separate IntersectionObserver keyed by ELEMENT (not by tag) so a single
+ * element can fire a one-shot callback when it scrolls into view. Reuses the
+ * same `rootMargin: '200px'` warm-up budget as the tag-based lazy-component
+ * observer above, so a `<webjs-frame loading="lazy">` self-loads with the same
+ * timing as a `static lazy = true` component module.
+ *
+ * @type {IntersectionObserver | null}
+ */
+let elementObserver = null;
+
+/** @type {WeakMap<Element, () => void>} element → its one-shot callback */
+const elementCallbacks = new WeakMap();
+
+/** @param {IntersectionObserverEntry[]} entries */
+function onElementIntersect(entries) {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const cb = elementCallbacks.get(entry.target);
+    elementCallbacks.delete(entry.target);
+    elementObserver?.unobserve(entry.target);
+    if (cb) cb();
+  }
+}
+
+/**
+ * Fire `callback` once when `el` first enters the viewport (within the
+ * shared 200px margin). When IntersectionObserver is unavailable (very old
+ * browser, or a non-DOM test env) the callback fires immediately, so a lazy
+ * frame still self-loads rather than staying blank. Returns a teardown that
+ * stops observing (the frame calls it on disconnect / a `src` change).
+ *
+ * @param {Element} el
+ * @param {() => void} callback
+ * @returns {() => void}  Teardown that unobserves `el`.
+ */
+export function observeViewportOnce(el, callback) {
+  if (typeof IntersectionObserver === 'undefined') {
+    callback();
+    return () => {};
+  }
+  if (!elementObserver) {
+    elementObserver = new IntersectionObserver(onElementIntersect, { rootMargin: '200px' });
+  }
+  elementCallbacks.set(el, callback);
+  elementObserver.observe(el);
+  return () => {
+    elementCallbacks.delete(el);
+    elementObserver?.unobserve(el);
+  };
+}

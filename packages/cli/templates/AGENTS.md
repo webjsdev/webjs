@@ -784,6 +784,19 @@ error, abort, or a missing frame), so AT announces it and CSS can style
 `webjs:frame-busy` event on the frame at start and finish (detail
 `{ frameId, busy }`).
 
+**Self-loading (`src` + `loading`).** A frame can fetch its OWN content:
+`<webjs-frame id="comments" src="/posts/42/comments" loading="lazy">` self-fetches
+that URL as a frame nav and applies the matching `<webjs-frame id>` subtree into
+itself, through the same frame-swap path (so the busy lifecycle + navigation-error
+recovery + frame-missing fallback all apply). `loading="eager"` (or absent)
+fetches on connect; `loading="lazy"` fetches on viewport entry. The request sends
+the `x-webjs-frame` header, so the SERVER returns ONLY the matched subtree (not
+the full page), falling back to the full page when the frame is absent. A `src` is
+JS-DEPENDENT (the browser does not natively fetch a `<webjs-frame src>`), so with
+JS off the frame shows only the children rendered into it; use it for DEFERRED
+content (comments, a recommendations rail) where a no-JS placeholder is fine, and
+render content server-side into the frame when it must exist without JS.
+
 **View Transitions + persistent elements (opt-in).** Add
 `<meta name="view-transition" content="same-origin">` to the page head and the
 router wraps every swap (the layout-marker swap, the `<webjs-frame>` swap, and

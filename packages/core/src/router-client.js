@@ -228,6 +228,58 @@ export async function navigate(url, opts) {
 }
 
 /**
+ * Self-load a `<webjs-frame src>`: fetch `url` as a frame nav and apply the
+ * matching `<webjs-frame id>` subtree into `frameEl` through the EXACT same
+ * frame-swap path a click-driven frame nav uses (`fetchAndApply` with the
+ * frame's id). So the #252 `aria-busy` lifecycle + `webjs:frame-busy` events,
+ * the #249 `webjs:navigation-error` recovery, the keyed reconciler, and the
+ * `webjs:frame-missing` fallback all apply for free; a `src` self-load and a
+ * click that targets the same frame produce identical DOM.
+ *
+ * This is NOT a page navigation: it records no history entry, takes no page
+ * snapshot, and shows no optimistic loading skeleton (it swaps one region, not
+ * the page). It runs under a fresh nav token + AbortController so it interleaves
+ * safely with real navigations and with a superseding `src` change on the same
+ * frame (the later load's token wins; the earlier one's teardown never clears
+ * the newer load's busy state, see `frameBusyTokens`).
+ *
+ * Called only by `<webjs-frame>` itself (`webjs-frame.js`), which owns the
+ * no-double-load guard (eager connect vs lazy-viewport vs a `src` mutation).
+ *
+ * @param {Element} frameEl  The live `<webjs-frame>` element to fill.
+ * @param {string} url  The `src` value, resolved against `location.href`.
+ * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean }>}
+ */
+export async function loadFrame(frameEl, url) {
+  if (typeof location === 'undefined') return { ok: false, status: null, aborted: false };
+  const id = frameEl && /** @type any */ (frameEl).id;
+  if (!id) return { ok: false, status: null, aborted: false };
+  const target = new URL(url, location.href);
+  // Cross-origin can't be a same-document frame swap (and a frame fetch must
+  // send a same-origin credentialed request). Leave the frame unchanged.
+  if (target.origin !== location.origin) return { ok: false, status: null, aborted: false };
+
+  // A frame self-load shares the global abort + token machinery so a real
+  // navigation that starts mid-load supersedes it (and vice versa), exactly
+  // like a click-driven frame nav routed through performNavigation.
+  if (activeAbortController) activeAbortController.abort();
+  activeAbortController = new AbortController();
+  const signal = activeAbortController.signal;
+  const myToken = ++currentNavigationToken;
+
+  return fetchAndApply(
+    target.href,
+    id,
+    /* recordHistory */ false,
+    /* optimisticState */ null,
+    'GET',
+    /* body */ null,
+    signal,
+    myToken,
+  );
+}
+
+/**
  * Invalidate a cached snapshot. Call after a server action mutates data
  * that affects a cached page so the next visit refetches.
  *
