@@ -1,6 +1,7 @@
 import { html } from '@webjsdev/core';
 import '../components/copy-cmd.ts';
 import '../components/scroll-reveal.ts';
+import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
 // in the browser to register copy-cmd / scroll-reveal, and that pulls in its
@@ -18,16 +19,6 @@ import { highlight } from '../lib/highlight.ts';
 // og/twitter tags, so they stay consistent (a page-level title override would
 // win for <title> but leave og:/twitter: showing the layout's title, splitting
 // the canonical share target's name across the tab and the social card).
-
-const env = (globalThis as any).process?.env ?? {};
-const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
-const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
-const DEMO_URL = env.DEMO_URL || 'https://demo.webjs.dev';
-const GH_URL = 'https://github.com/webjsdev/webjs';
-
-// Visually-hidden cue appended inside target="_blank" links so a screen reader
-// announces that activation opens a new tab.
-const NEW_TAB = html`<span class="sr-only"> (opens in a new tab)</span>`;
 
 const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Codex', 'OpenCode'];
 

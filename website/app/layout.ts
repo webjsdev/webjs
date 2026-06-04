@@ -2,6 +2,7 @@ import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 import '../components/cursor-glow.ts';
+import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 
 /**
  * Root layout for the redesigned marketing site.
@@ -14,18 +15,9 @@ import '../components/cursor-glow.ts';
  * layer and cursor-glow blob, the hover-only scrollbar (`.scroll-thin`), and
  * the <details> icon swap. Everything else is Tailwind.
  *
- * Sibling app URLs are read from env so the same code works across
- * `webjs dev` and any deployment target. Guarded against `process` being
- * undefined because this module also loads on the client during hydration.
+ * Shared link config (DOCS_URL / UI_URL / DEMO_URL / GH_URL / NEW_TAB) lives in
+ * lib/links.ts, imported here and by app/page.ts.
  */
-const env = (globalThis as any).process?.env ?? {};
-const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
-const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
-// DEMO_URL points at the live example-blog app (a real webjs app), surfaced
-// as the "Demo" nav link. Falls back to the production domain like the docs
-// and UI links; .env overrides it to the localhost dev port.
-const DEMO_URL = env.DEMO_URL || 'https://demo.webjs.dev';
-const GH_URL = 'https://github.com/webjsdev/webjs';
 
 const TITLE = 'webjs: the framework your AI agent already knows how to use';
 const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Built for AI agents to read, write, and ship.';
@@ -62,10 +54,6 @@ export function generateMetadata(ctx: { url: string }) {
 
 const navLink = 'text-fg-muted no-underline font-medium text-sm px-[11px] py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-bg-subtle';
 const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px] rounded-[9px] hover:text-fg hover:bg-bg-subtle';
-
-// Appended inside every target="_blank" link so a screen reader announces the
-// context change. Visually hidden, so sighted users see no extra text.
-const NEW_TAB = html`<span class="sr-only"> (opens in a new tab)</span>`;
 
 export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
