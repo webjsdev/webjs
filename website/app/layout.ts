@@ -77,7 +77,11 @@ export default function RootLayout({ children }: { children: unknown }) {
     <!-- Self-hosted fonts (declared via @font-face in input.css). Preload the
          two above-the-fold families so they fetch in parallel with the
          stylesheet: the display face (Inter Tight, hero headline) and the body
-         face (Inter). Each is one variable file covering all weights. -->
+         face (Inter). Each is one variable file covering all weights. The hero
+         install command is the one above-the-fold monospace text, but JetBrains
+         Mono is deliberately not preloaded. The preload budget stays on the two
+         LCP text faces, and the ui-monospace fallback is close enough that the
+         late swap on a single command line is negligible. -->
     <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
 
