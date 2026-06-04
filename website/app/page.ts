@@ -150,6 +150,7 @@ export default function LandingPage() {
       }
     </style>
 
+    <main id="main">
     <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
       <div class=${KICKER}>
         <span>AI-first</span><span class="text-fg-subtle">/</span>
@@ -157,7 +158,7 @@ export default function LandingPage() {
         <span>no build</span>
       </div>
       <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-6 mb-4 max-w-[16ch] text-balance">
-        The framework your <span class="bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,var(--accent-live)_72%,var(--fg)))] bg-clip-text text-transparent">AI agent</span> already knows how to use
+        The framework your <span class=${GRADTEXT}>AI agent</span> already knows how to use
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[58ch] mx-auto mb-8 text-pretty">
         webjs is built for AI agents from the ground up. Native web components,
@@ -256,7 +257,7 @@ export default function LandingPage() {
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough to read, fast enough to ship</h2>
-          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules, and the browser gets a minified bundle.</p>
+          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules, and the browser loads a small, pre-minified core.</p>
         </div>
         <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4">
           ${STATS.map(s => html`
@@ -328,6 +329,8 @@ lib/session.server.ts</pre>
         </div>
       </div>
     </section>
+
+    </main>
 
     <footer class="mt-16 border-t border-border py-12 px-6">
       <div class="max-w-[1080px] mx-auto">
