@@ -279,7 +279,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <cursor-glow aria-hidden="true"></cursor-glow>
 
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
-      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-accent-tint rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
+      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
       <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
 

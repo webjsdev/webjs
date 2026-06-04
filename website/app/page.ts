@@ -142,18 +142,21 @@ export default function LandingPage() {
       .t-kw  { color: oklch(0.55 0.18 25); font-weight: 600; }
       .t-fn  { color: var(--accent); }
       .t-type{ color: oklch(0.55 0.13 250); }
-      .t-num { color: oklch(0.58 0.14 70); }
+      .t-num { color: oklch(0.55 0.14 70); }
+      .t-ok  { color: oklch(0.52 0.16 150); }
       .t-punc{ color: var(--fg-muted); }
       .t-id  { color: var(--fg); }
       :root[data-theme='dark'] .t-str { color: oklch(0.80 0.15 145); }
       :root[data-theme='dark'] .t-kw  { color: oklch(0.78 0.16 25); }
       :root[data-theme='dark'] .t-type{ color: oklch(0.78 0.13 250); }
       :root[data-theme='dark'] .t-num { color: oklch(0.82 0.14 80); }
+      :root[data-theme='dark'] .t-ok  { color: oklch(0.66 0.16 150); }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.15 145); }
         :root:not([data-theme='light']) .t-kw  { color: oklch(0.78 0.16 25); }
         :root:not([data-theme='light']) .t-type{ color: oklch(0.78 0.13 250); }
         :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.14 80); }
+        :root:not([data-theme='light']) .t-ok  { color: oklch(0.66 0.16 150); }
       }
     </style>
 
@@ -207,7 +210,7 @@ export default function LandingPage() {
             <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>agent session</span></figcaption>
             <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${TRANSCRIPT.map(l => l.k === 'cmd'
               ? html`<div class="text-fg"><span class="text-accent">$ </span>${l.t}</div>`
-              : html`<div class="text-fg-muted"><span class="text-[oklch(0.66_0.16_150)]">✓ </span>${l.t}</div>`)}</code></pre>
+              : html`<div class="text-fg-muted"><span class="t-ok">✓ </span>${l.t}</div>`)}</code></pre>
           </figure>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
