@@ -899,6 +899,59 @@ document.addEventListener('webjs:frame-missing', (e) => {
 });
 ```
 
+#### Self-loading frames (`src` + `loading`, #253)
+
+A `<webjs-frame>` can fetch its OWN content instead of waiting for a click
+or a form. Give it a `src` and it self-fetches that URL as a frame nav and
+applies the matching `<webjs-frame id>` subtree from the response into itself,
+through the SAME frame-swap path a click-driven frame nav uses (so the busy
+lifecycle, the navigation-error recovery, the keyed reconciler, and the
+frame-missing fallback all apply for free).
+
+```html
+<!-- Eager (default): fetches on connect. -->
+<webjs-frame id="rail" src="/widgets/rail"></webjs-frame>
+
+<!-- Lazy: fetches when the frame first scrolls into view. -->
+<webjs-frame id="comments" src="/posts/42/comments" loading="lazy">
+  <p>Loading comments...</p>
+</webjs-frame>
+```
+
+The `loading` attribute picks WHEN:
+
+- **`loading="eager"`** (or absent, the default) fetches on `connectedCallback`.
+- **`loading="lazy"`** fetches when the frame first enters the viewport, reusing
+  the same IntersectionObserver budget (`rootMargin: '200px'`) as a
+  `static lazy = true` component.
+
+A `src` change after connect re-loads. Eager connect, the lazy observer, and a
+`src` mutation never double-fetch the same URL (a per-element loaded/loading
+guard keyed on the resolved URL coalesces them). The request carries the same
+`x-webjs-frame: <id>` header a click-driven frame nav sends, so a `src` self-load
+and a click that targets the same frame produce identical DOM.
+
+**The server returns ONLY the requested subtree.** When a request carries
+`x-webjs-frame: <id>` and the route renders a `<webjs-frame id>` with that id,
+the server returns JUST that frame subtree (extracted from the full render, so
+byte-equivalent to what the client would slice from a full-page response) rather
+than the whole page. So a region swap pays only for the region, not the full
+document shell and every other region, the same spirit as the `X-Webjs-Have`
+partial-nav optimization. When the requested frame is NOT in the rendered output
+(an auth redirect to a login page, a route that dropped the frame), the server
+falls back to the full page and the client handles the absence via
+`webjs:frame-missing`. A request with no `x-webjs-frame` header is unaffected
+(byte-identical full-page render).
+
+**PROGRESSIVE ENHANCEMENT CAVEAT: a `src`-driven frame is JS-DEPENDENT.** The
+browser does NOT natively fetch `<webjs-frame src>` (unlike `<iframe>`), so with
+JS off the frame shows only whatever children were server-rendered into it. Use
+`src`/`loading` for DEFERRED content (comments, a recommendations rail, an
+expensive card) where a JS-off placeholder / empty state is acceptable, exactly
+the lazy-content use case. For content that MUST exist without JS, render it
+server-side into the frame instead of using `src` (the self-load then replaces
+those fallback children).
+
 ### Opt out per link
 
 ```html

@@ -2002,6 +2002,77 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(state.events[state.events.length - 1], false, 'the last webjs:frame-busy event is the finish (busy:false)');
   });
 
+  // --- <webjs-frame src loading="lazy"> self-load (#253) ---
+  //
+  // The deferred frame on /frame-demo carries `src` + `loading="lazy"`, so it
+  // self-fetches its content (with the x-webjs-frame header) ONLY when it
+  // scrolls into view. The e2e proves the real wire: no fetch before the
+  // frame is on-screen, then a single x-webjs-frame request once scrolled,
+  // and the deferred content appears (the lazy-content use case). It also
+  // proves the SERVER subtree render (#253): the self-load response is JUST
+  // the frame subtree, not the full /frame-demo/deferred page.
+  test('frame: a lazy <webjs-frame src> self-loads on viewport entry, sending x-webjs-frame', async () => {
+    // Track frame-scoped requests + the response bodies they get back.
+    /** @type {string[]} */
+    const frameRequests = [];
+    /** @type {{ url: string, body: string }[]} */
+    const frameResponses = [];
+    const onReq = (req) => {
+      const h = req.headers();
+      if (h['x-webjs-frame']) frameRequests.push(h['x-webjs-frame']);
+    };
+    const onResp = async (resp) => {
+      const h = resp.request().headers();
+      if (h['x-webjs-frame'] === 'deferred') {
+        try { frameResponses.push({ url: resp.url(), body: await resp.text() }); } catch { /* ignore */ }
+      }
+    };
+    page.on('request', onReq);
+    page.on('response', onResp);
+    try {
+      await page.goto(`${baseUrl}/frame-demo`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(1500);
+
+      // Before scrolling: the deferred frame is far below the fold, so its
+      // lazy self-load must NOT have fired yet.
+      assert.ok(!frameRequests.includes('deferred'),
+        'a lazy frame must NOT self-fetch before it enters the viewport');
+      const placeholder = await page.evaluate(() => !!document.getElementById('deferred-placeholder'));
+      assert.ok(placeholder, 'the deferred frame still shows its JS-off placeholder before loading');
+
+      // Scroll the deferred frame into view to trigger the lazy load.
+      await page.evaluate(() => document.getElementById('deferred')?.scrollIntoView());
+
+      // The self-load fires (x-webjs-frame: deferred) and the content appears.
+      await waitForCond(
+        () => page.evaluate(() => !!document.getElementById('deferred-loaded')),
+        6000,
+        () => 'the deferred frame must self-load its content once scrolled into view',
+      );
+
+      // Network probe: a frame-scoped request for "deferred" was issued.
+      assert.ok(frameRequests.includes('deferred'),
+        'a lazy frame self-load must issue an x-webjs-frame: deferred request');
+      // The placeholder was replaced by the server-rendered deferred content.
+      const loaded = await page.evaluate(() => ({
+        hasLoaded: !!document.getElementById('deferred-loaded'),
+        hasPlaceholder: !!document.getElementById('deferred-placeholder'),
+        text: document.getElementById('deferred-loaded')?.textContent || '',
+      }));
+      assert.ok(loaded.hasLoaded, 'the deferred content swapped in');
+      assert.ok(!loaded.hasPlaceholder, 'the placeholder was replaced by the self-load');
+      assert.match(loaded.text, /Deferred content loaded/, 'the swapped-in content is the server-rendered deferred body');
+
+      // Server subtree render (#253): the self-load response body is JUST the
+      // frame subtree, NOT the full /frame-demo/deferred document.
+      assert.ok(frameResponses.length >= 1, 'captured the deferred self-load response');
+      const respBody = frameResponses[frameResponses.length - 1].body;
+      assert.match(respBody, /<webjs-frame id="deferred"/, 'the response carries the requested frame subtree');
+      assert.ok(!/<html|<head\b|importmap/i.test(respBody),
+        'the self-load response is the frame subtree only (no full document shell), the server subtree-render optimization');
+    } finally { page.off('request', onReq); page.off('response', onResp); }
+  });
+
   // --- Progressive enhancement: the no-JS baseline must hold (#183) ---
   //
   // "Progressive enhancement by default" is the foundational claim: with

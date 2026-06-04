@@ -13,6 +13,7 @@ import {
   readHtmlCache,
   HTML_CACHE_MARKER,
 } from './html-cache.js';
+import { requestedFrameId, extractFrameSubtree } from './frame-render.js';
 
 /**
  * SSR a matched page route to a Response.
@@ -94,6 +95,31 @@ export async function ssrPage(route, params, url, opts) {
       ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
       : null;
     const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+
+    // Frame subtree render (#253). A `<webjs-frame src>` self-load (or a
+    // click-driven frame nav) sends `x-webjs-frame: <id>` and applies ONLY the
+    // matching `<webjs-frame id>` subtree from the response, discarding the rest
+    // of the page. So when that header is present AND the requested frame is in
+    // the rendered output (the "isolable" case), return JUST that subtree: the
+    // bytes are extracted verbatim from the same full render, so the result is
+    // BYTE-EQUIVALENT to what the client would slice from a full-page response,
+    // but the full document shell + all the other regions never go on the wire.
+    // The frame swap path (applySwap in router-client.js) parses this body and
+    // does `doc.querySelector('webjs-frame#<id>')`, which finds the lone
+    // subtree exactly as it would in the full page. A streamed (Suspense)
+    // render is skipped (its bytes are not yet final). When the frame id is NOT
+    // found (an auth redirect to a login page, a route that dropped the frame),
+    // we fall through to the normal full-page render, where the client's
+    // existing `webjs:frame-missing` fallback handles the absence. A request
+    // with NO `x-webjs-frame` header never reaches this branch, so a normal
+    // page request is byte-identical to before this feature.
+    const frameId = requestedFrameId(opts.req);
+    if (frameId && suspenseCtx.pending.length === 0) {
+      const subtree = extractFrameSubtree(body, frameId);
+      if (subtree !== null) {
+        return htmlResponse(subtree, opts.status || 200, opts.req, url);
+      }
+    }
     // Module URLs for the page + every layout in its chain. These ride
     // the importmap; the browser fetches each file as it walks the
     // import graph. Combined with the modulepreload hints below, this
