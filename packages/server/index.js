@@ -49,6 +49,7 @@ export { broadcast } from './src/broadcast.js';
 export { diskStore, setFileStore, getFileStore, generateKey, signedUrl, verifySignedUrl, assertSafeKey, DEFAULT_UPLOAD_DIR } from './src/file-storage.js';
 export { json, readBody } from './src/json.js';
 export { sitemap, sitemapIndex } from './src/sitemap.js';
+export { stream, streamResponse, acceptsStream, STREAM_MIME } from './src/stream.js';
 export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
