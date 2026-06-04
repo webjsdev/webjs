@@ -217,4 +217,49 @@ suite('Shadow DOM (real browser)', () => {
     assert.ok(shadow.querySelector('p'));
     el.remove();
   });
+
+  // #353: a .map() list item that changes its own binding must keep its DOM
+  // node, not get replaced. Replacing the node mid-drag is what cancelled
+  // native drag-and-drop (the browser drags the original node; if a re-render
+  // detaches it, the drag aborts and `drop` never fires).
+  test('.map() dragged item keeps the SAME node when @dragstart flips its class', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const view = (draggingId) =>
+      html`<div>${[1, 2, 3].map((id) => html`<div class="card ${id === draggingId ? 'dragging' : ''}" data-id=${id} draggable="true">card ${id}</div>`)}</div>`;
+
+    render(view(0), el);
+    const card2 = el.querySelector('[data-id="2"]');
+    // Simulate what @dragstart does: flip a signal that changes this card's class.
+    render(view(2), el);
+    const card2After = el.querySelector('[data-id="2"]');
+
+    assert.strictEqual(card2After, card2, 'the dragged card is the SAME node after the re-render');
+    assert.ok(document.body.contains(card2), 'the dragged card is still attached (drag survives)');
+    assert.ok(card2.className.includes('dragging'), 'class updated in place');
+    assert.ok(card2.getAttribute('draggable') === 'true');
+    el.remove();
+  });
+
+  test('.map() update keeps focus + caret in an input while a sibling re-renders', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const view = (highlightId) =>
+      html`<div>${[1, 2].map((id) => html`<div class=${id === highlightId ? 'on' : 'off'}><input data-id=${id} value="row ${id}"></div>`)}</div>`;
+
+    render(view(0), el);
+    const input2 = el.querySelector('input[data-id="2"]');
+    input2.focus();
+    input2.setSelectionRange(2, 2);
+    assert.strictEqual(document.activeElement, input2, 'precondition: input 2 is focused');
+
+    // Re-render flipping item 1's class (item 2's input must be untouched).
+    render(view(1), el);
+    const input2After = el.querySelector('input[data-id="2"]');
+
+    assert.strictEqual(input2After, input2, 'the focused input is the same node');
+    assert.strictEqual(document.activeElement, input2, 'focus is retained across the sibling re-render');
+    assert.equal(input2.selectionStart, 2, 'caret position retained');
+    el.remove();
+  });
 });
