@@ -16,7 +16,7 @@ export const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 export const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 // DEMO_URL points at the live example-blog app (a real webjs app), surfaced as
 // the "Demo" nav link.
-export const DEMO_URL = env.DEMO_URL || 'https://demo.webjs.dev';
+export const DEMO_URL = env.DEMO_URL || 'https://example-blog.webjs.dev';
 export const GH_URL = 'https://github.com/webjsdev/webjs';
 
 // Visually-hidden cue appended inside target="_blank" links so a screen reader
