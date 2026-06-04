@@ -1,6 +1,16 @@
 import { html } from '@webjsdev/core';
 import '../components/copy-cmd.ts';
 import '../components/scroll-reveal.ts';
+// highlight() runs only at SSR (codeWindow renders its output into the served
+// HTML), but it does ship to the client as a small dead module: the page loads
+// in the browser to register copy-cmd / scroll-reveal, and that pulls in its
+// top-level imports. This is an accepted cost. It cannot move to a .server.ts
+// util (a server-only stub throws at load, and this is a page top-level import)
+// and it is not elision-eligible (only display-only components are elided, and
+// an elision-eligible component cannot take a reactive property, so routing the
+// code through one would just duplicate the raw sample in the HTML). Its only
+// dependency, html, is already loaded by the components, so the real cost is a
+// single tiny module fetch.
 import { highlight } from '../lib/highlight.ts';
 
 // The home page intentionally has no `metadata` export. The root layout's
