@@ -34,11 +34,14 @@ test('every nav landmark carries a distinguishing aria-label', async () => {
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   const navs = out.match(/<nav\b[^>]*>/g) || [];
   assert.ok(navs.length >= 2, 'the composed document renders multiple nav landmarks');
-  for (const tag of navs) {
-    assert.ok(/aria-label="[^"]+"/.test(tag), `nav landmark is unlabeled: ${tag}`);
+  const labels = navs.map((tag) => (tag.match(/aria-label="([^"]+)"/) || [])[1]);
+  for (let i = 0; i < navs.length; i++) {
+    assert.ok(labels[i], `nav landmark is unlabeled: ${navs[i]}`);
   }
-  assert.ok(out.includes('aria-label="Primary"'), 'the header nav is labeled Primary');
-  assert.ok(out.includes('aria-label="Footer"'), 'the footer nav is labeled Footer');
+  // Every nav landmark needs a UNIQUE name so the landmark list can tell them
+  // apart (two same-named navs read as ambiguous duplicates).
+  assert.equal(new Set(labels).size, labels.length, `nav labels must be unique, saw: ${labels.join(', ')}`);
+  assert.ok(labels.includes('Footer'), 'the footer nav is labeled Footer');
 });
 
 test('external new-tab links announce the context change and hide decorative glyphs', async () => {
