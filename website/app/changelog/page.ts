@@ -19,7 +19,7 @@ export const metadata = {
 export default async function Changelog() {
   const entries = await listEntries();
   return html`
-    <main class="max-w-[840px] mx-auto px-6 py-12">
+    <main id="main" class="max-w-[840px] mx-auto px-6 py-12">
       <header class="mb-10">
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Changelog</p>
         <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">What shipped</h1>

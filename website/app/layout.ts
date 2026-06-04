@@ -264,6 +264,8 @@ export default function RootLayout({ children }: { children: unknown }) {
       .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
     </style>
 
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
+
     <div class="glow-layer" aria-hidden="true"></div>
     <cursor-glow aria-hidden="true"></cursor-glow>
 
