@@ -120,6 +120,18 @@ suite('copy-cmd', () => {
     document.body.removeChild(el);
   });
 
+  test('a rejected clipboard write fails silently (no flip, empty live region)', async () => {
+    navigator.clipboard.writeText = async () => { throw new Error('denied'); };
+    const el = await mount('npm create webjs@latest my-app');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    assert.ok(el.querySelector('button rect'), 'copy icon stays (no flip) when the write is rejected');
+    assert.equal(el.querySelector('button polyline'), null, 'no checkmark on a rejected write');
+    assert.equal(el.querySelector('[role="status"]').textContent.trim(), '', 'the live region stays empty');
+    document.body.removeChild(el);
+  });
+
   test('the checkmark resets back to the copy icon', async () => {
     const el = await mount('npm create webjs@latest my-app');
     el.querySelector('[data-copy-text]').click();

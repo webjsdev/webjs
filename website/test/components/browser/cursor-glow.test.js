@@ -30,6 +30,12 @@ suite('cursor-glow', () => {
     assert.equal(el.style.getPropertyValue('--cg-on'), '', 'glow is off before any pointer movement');
   });
 
+  test('renders the .cg-blob the glow paints into', () => {
+    // The visible halo is painted on .cg-blob and translated by --cg-x/--cg-y;
+    // an empty render() would keep the host vars working but show nothing.
+    assert.ok(el.querySelector('.cg-blob'), 'the .cg-blob element is rendered');
+  });
+
   test('a mouse move positions and turns on the glow', async () => {
     move(240, 120);
     await nextFrame();
