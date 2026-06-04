@@ -193,6 +193,18 @@ In Docker / Railway, prefer `npm start` as the CMD over `node ...
 webjs.js start ...`. The npm form fires `prestart` (which runs
 `prisma migrate deploy`); the direct binary form skips it.
 
+## Tests
+
+The blog's own tests live under `test/` (`auth`, `posts`, `comments`, `chat`)
+and run via `npm test` (the `webjs test --server` script; the blog has no
+browser tests). They touch the Prisma DB, so run `npm run db:migrate` (and the
+seed) first, exactly like running the app. These tests are NOT discovered by the
+framework's root `npm test`; CI runs them in the dedicated **In-repo app tests
+(website + blog)** job (issue #342), which prepares the DB the same way the
+e2e job does. The separate root-level `test/e2e/e2e.test.mjs` exercises the blog
+in a real browser (the framework's `e2e` CI job), and `test/examples/blog/`
+holds its smoke + browser probes.
+
 ## Conventions
 
 - **One exported function per action/query file.** Name the file after the function.
