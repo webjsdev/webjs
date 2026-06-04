@@ -1,6 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -2407,53 +2407,25 @@ function locatePackageDir(appDir, pkgName) {
  * @param {string} bp the normalized base path (`''` = no-op)
  * @returns {string}
  */
+// The overlay renderer source, read once + `export`-stripped so it inlines as
+// plain functions into the classic reload-client script. Sharing the one source
+// (`dev-overlay.js`, which the browser test imports directly) means the test
+// drives the EXACT code that ships, with no drift (#264).
+const DEV_OVERLAY_SRC = readFileSync(new URL('./dev-overlay.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 function reloadClientJs(bp) {
-  // The client uses textContent throughout (never innerHTML), so the error
-  // message / code frame can never inject markup into the overlay (#264). It is
-  // served only in dev (the /__webjs/reload.js branch 404s in prod), so the
-  // overlay code never reaches a production page.
+  // The overlay renderer uses textContent throughout (never innerHTML), so the
+  // error message / code frame can never inject markup (#264). Served only in
+  // dev (the /__webjs/reload.js branch 404s in prod), so it never reaches a
+  // production page.
   return `// webjs dev reload client
+${DEV_OVERLAY_SRC}
 const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
-let __wjOverlay = null;
-function __wjDismiss() { if (__wjOverlay) { __wjOverlay.remove(); __wjOverlay = null; } }
 es.addEventListener('reload', () => location.reload());
 es.addEventListener('webjs-error', (e) => {
   let f; try { f = JSON.parse(e.data); } catch (_) { return; }
-  __wjRender(f);
+  renderDevOverlay(f);
 });
-function __wjRow(parent, css, text) {
-  const d = document.createElement('div');
-  d.style.cssText = css;
-  d.textContent = text;
-  parent.appendChild(d);
-  return d;
-}
-function __wjRender(f) {
-  __wjDismiss();
-  const o = document.createElement('div');
-  o.setAttribute('data-webjs-error-overlay', '');
-  o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(10,10,12,.92);color:#e6e6e6;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;padding:32px;overflow:auto';
-  const card = document.createElement('div');
-  card.style.cssText = 'max-width:920px;margin:0 auto;background:#1a1a1f;border:1px solid #5b2330;border-radius:8px;padding:24px';
-  const kind = f.kind === 'ts-strip' ? 'TypeScript error (hydration is dead until fixed)' : f.kind === 'rebuild' ? 'Rebuild failed' : 'Server render error';
-  __wjRow(card, 'color:#ff6b6b;font-weight:700;font-size:15px;margin-bottom:8px', kind);
-  __wjRow(card, 'white-space:pre-wrap;margin-bottom:12px', f.message || '');
-  if (f.file) __wjRow(card, 'color:#9aa3ad;margin-bottom:12px', f.file + (f.line ? ':' + f.line + (f.column ? ':' + f.column : '') : ''));
-  if (f.codeFrame) {
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'background:#0d0d10;border-radius:6px;padding:12px;overflow:auto;margin:0 0 12px;white-space:pre';
-    pre.textContent = f.codeFrame;
-    card.appendChild(pre);
-  }
-  if (f.hint) __wjRow(card, 'color:#ffd479;border-top:1px solid #333;padding-top:12px;white-space:pre-wrap', f.hint);
-  const btn = document.createElement('button');
-  btn.textContent = 'Dismiss';
-  btn.style.cssText = 'margin-top:16px;background:#333;color:#eee;border:0;border-radius:4px;padding:6px 12px;cursor:pointer';
-  btn.addEventListener('click', __wjDismiss);
-  card.appendChild(btn);
-  o.appendChild(card);
-  (document.body || document.documentElement).appendChild(o);
-  __wjOverlay = o;
-}
 `;
 }
