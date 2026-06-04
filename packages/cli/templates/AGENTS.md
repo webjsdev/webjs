@@ -904,6 +904,31 @@ default export, scoped to that boundary (outer layouts stay alive).
 
 Full reference: see the [Client Router docs](https://docs.webjs.dev/docs/client-router) and the framework AGENTS.md "Client navigation" section.
 
+## Offline support (opt-in service worker)
+
+This scaffold ships a progressive-enhancement service worker at `public/sw.js`
+plus a `public/offline.html` fallback. They are **dormant until you register
+them**, so the JS-disabled baseline is unchanged. To enable offline support, add
+the opt-in registration snippet to the root layout `<head>`:
+
+```html
+<script>
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => {
+      const tag = document.querySelector('script[type="importmap"]');
+      const build = (tag && tag.dataset.webjsBuild) || '';
+      navigator.serviceWorker.register('/sw.js' + (build ? '?v=' + build : ''));
+    });
+  }
+</script>
+```
+
+Navigations become network-first (fresh server HTML, with an offline fallback to
+a cached page or `/offline.html`); same-origin assets are stale-while-revalidate.
+The cache version ties to the deploy via the `?v=<build>` id, so a new deploy
+evicts the old cache automatically. `sw.js` is YOUR file, so edit the strategy as
+needed. Full reference: `agent-docs/service-worker.md`.
+
 ## Metadata (per-page)
 
 The `metadata` export is Next.js-compatible. Common fields shown below;
