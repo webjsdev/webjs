@@ -28,9 +28,6 @@
   --text-display: clamp(2.7rem, 1.5rem + 3.6vw, 4.6rem);
   --text-h2:      clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
   --text-lede:    clamp(1.08rem, 0.98rem + 0.4vw, 1.28rem);
-
-  --duration-fast: 140ms;
-  --duration-slow: 220ms;
 }
 
 /*

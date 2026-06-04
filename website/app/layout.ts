@@ -154,7 +154,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --shadow-sm: 0 1px 2px oklch(0.5 0.06 55 / 0.08);
         --shadow:    0 8px 30px oklch(0.5 0.08 55 / 0.10), 0 2px 6px oklch(0.5 0.06 55 / 0.06);
         --shadow-glow: 0 0 0 1px var(--accent-tint), 0 14px 50px color-mix(in oklch, var(--accent-live) 18%, transparent);
-        --t-fast: 140ms; --t: 240ms;
+        --t: 240ms;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
