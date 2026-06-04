@@ -30,10 +30,10 @@ const T = {
   bgDeep: 'oklch(0.115 0.01 55)',
   fg: 'oklch(0.95 0.012 70)',
   fgMuted: 'oklch(0.74 0.02 65)',
-  fgSubtle: 'oklch(0.56 0.02 60)',
+  fgSubtle: 'oklch(0.66 0.02 60)',
   accent: 'oklch(0.74 0.15 55)',
   accentLive: 'oklch(0.63 0.17 50)',
-  border: 'oklch(0.32 0.016 58 / 0.85)',
+  border: 'oklch(0.30 0.016 58 / 0.85)',
 };
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
