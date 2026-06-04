@@ -39,12 +39,23 @@ test('every nav landmark carries a distinguishing aria-label', async () => {
   assert.ok(out.includes('aria-label="Footer"'), 'the footer nav is labeled Footer');
 });
 
+test('external new-tab links announce the context change and hide decorative glyphs', async () => {
+  const out = await renderToString(RootLayout({ children: LandingPage() }));
+  // Every target="_blank" link carries a visually-hidden new-tab cue.
+  assert.ok(out.includes('class="sr-only"> (opens in a new tab)'), 'external links carry an sr-only new-tab cue');
+  // The banner's decorative arrow is hidden from the accessible name.
+  assert.ok(out.includes('aria-hidden="true">&rarr;</span>'), 'the banner arrow glyph is aria-hidden');
+  // The cue rides multiple external links (nav + CTAs + footer), not a single one.
+  const count = (out.match(/\(opens in a new tab\)/g) || []).length;
+  assert.ok(count >= 5, `the new-tab cue appears on multiple external links (saw ${count})`);
+});
+
 test('the nav links to the live example-blog app via a Demo link', async () => {
   // The "Demo" link surfaces the deployed example-blog app (DEMO_URL). It
   // falls back to the production domain, so it renders even with no env var
   // set. Guards against the link being dropped again.
   const out = await renderToString(RootLayout({ children: LandingPage() }));
-  assert.ok(out.includes('>Demo</a>'), 'a Demo nav link is rendered');
+  assert.ok(out.includes('>Demo<'), 'a Demo nav link is rendered');
   assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
 });
 

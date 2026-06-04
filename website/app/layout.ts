@@ -63,6 +63,10 @@ export function generateMetadata(ctx: { url: string }) {
 const navLink = 'text-fg-muted no-underline font-medium text-sm px-[11px] py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-bg-subtle';
 const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px] rounded-[9px] hover:text-fg hover:bg-bg-subtle';
 
+// Appended inside every target="_blank" link so a screen reader announces the
+// context change. Visually hidden, so sighted users see no extra text.
+const NEW_TAB = html`<span class="sr-only"> (opens in a new tab)</span>`;
+
 export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
   return html`
@@ -278,7 +282,7 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-accent-tint rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library &rarr;</a>
+      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
 
     <header class="sticky top-0 z-20 backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
@@ -289,7 +293,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         </a>
 
         <nav class="hidden md:flex items-center gap-0.5" aria-label="Primary">
-          ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}</a>`)}
+          ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
         </nav>
 
         <div class="flex items-center gap-3">
@@ -300,7 +304,7 @@ export default function RootLayout({ children }: { children: unknown }) {
               <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </summary>
             <nav class="absolute right-0 top-[calc(100%+10px)] min-w-[210px] flex flex-col gap-0.5 bg-bg-elev border border-border rounded-[14px] shadow-[var(--shadow)] p-2 z-50" aria-label="Primary">
-              ${NAV.map(n => html`<a class=${panelLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}</a>`)}
+              ${NAV.map(n => html`<a class=${panelLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
             </nav>
           </details>
         </div>
