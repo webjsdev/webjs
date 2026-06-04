@@ -26,6 +26,9 @@ const assert = {
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
 async function settle() { for (let i = 0; i < 6; i++) await tick(); }
+/** Poll until `cond()` is truthy (or a generous timeout), for a step gated on
+ *  an async dynamic import whose timing varies under full-suite concurrency. */
+async function waitUntil(cond) { for (let i = 0; i < 100 && !cond(); i++) await tick(); }
 
 /** A frame-bearing HTML response carrying the matched frame subtree. */
 const frameResponse = (id, inner) => Promise.resolve(new Response(
@@ -145,7 +148,10 @@ suite('Client router: <webjs-frame src loading> self-load (#253)', () => {
         '<webjs-frame id="self" src="/frames/lazy" loading="lazy">' +
           '<span class="placeholder">PLACEHOLDER</span>' +
         '</webjs-frame>';
-      await settle();
+      // The lazy observe registers via a dynamic import('./lazy-loader.js'), so
+      // wait until the frame is actually observed rather than a fixed tick count
+      // (the import can resolve slower than `settle()` under full-suite load).
+      await waitUntil(() => observed != null);
 
       assert.equal(calls.length, 0, 'a lazy frame issues NO request before entering the viewport');
       assert.ok(observed, 'the frame was registered with the IntersectionObserver');
