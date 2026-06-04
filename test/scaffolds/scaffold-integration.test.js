@@ -103,6 +103,16 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(layoutSrc, /Example nav\. Replace with the real navigation/,
       'layout must flag the example nav as replace-me');
 
+    // Scaffold-removal enforcement (#359): the example homepage and the
+    // example app chrome carry a `webjs-scaffold-placeholder` marker, which
+    // the no-scaffold-placeholder check fails on until the agent replaces the
+    // content and deletes the marker. Token assembled so this test file does
+    // not carry the contiguous literal the rule scans for.
+    const marker = 'webjs-scaffold-' + 'placeholder';
+    const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
+    assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
+    assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
+
     // Prisma + lib singleton wired up
     assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
     assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');

@@ -685,7 +685,8 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
+import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 // Webjs UI components are tiered:
@@ -866,7 +867,8 @@ ${SHADCN_THEME}
 }
 `);
 
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
+import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
 import { buttonClass } from '../components/ui/button.ts';
 import { badgeClass } from '../components/ui/badge.ts';
