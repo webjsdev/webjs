@@ -99,6 +99,28 @@ export default async function PostPage({ params }) {
     <p>A <code>src</code> change after connect re-loads; eager connect, the lazy observer, and a <code>src</code> mutation never double-fetch the same URL. Because the request carries the <code>x-webjs-frame</code> header, the <strong>server returns only the matched subtree</strong> (byte-equivalent to what the client would slice from a full-page render, but far fewer bytes), falling back to the full page when the frame is absent.</p>
     <p><strong>Progressive-enhancement caveat:</strong> a <code>src</code>-driven frame is JS-dependent. The browser does not natively fetch a <code>&lt;webjs-frame src&gt;</code> (unlike an <code>&lt;iframe&gt;</code>), so with JS off the frame shows only whatever children were server-rendered into it. Use <code>src</code> / <code>loading</code> for deferred content (comments, a recommendations rail, an expensive card) where a JS-off placeholder is acceptable; for content that must exist without JS, render it server-side into the frame instead.</p>
 
+    <h2>Stream actions (surgical element updates)</h2>
+    <p>A region swap is the right tool for "this part of the page changed". It is too coarse for "append ONE comment", "remove ONE row", or "bump a count". For those, a server response declares per-element actions as plain HTML, a <code>&lt;webjs-stream action target&gt;</code> wrapping one <code>&lt;template&gt;</code>:</p>
+    <pre>&lt;webjs-stream action="append" target="comments"&gt;
+  &lt;template&gt;&lt;li&gt;Nice post!&lt;/li&gt;&lt;/template&gt;
+&lt;/webjs-stream&gt;</pre>
+    <p>The element clones its template on connect, applies the action by native DOM, then removes itself. Actions mirror Turbo's set: <code>append</code> / <code>prepend</code> (last / first child of the target id), <code>before</code> / <code>after</code> (sibling of the target), <code>replace</code> (the target element), <code>update</code> (its children), <code>remove</code> (delete it, no template). A <code>targets</code> CSS selector applies to every match instead of a single <code>target</code> id.</p>
+    <p>One applier serves two delivery paths. Over HTTP, a <code>&lt;form&gt;</code> submission rides the router, which adds <code>Accept: text/vnd.webjs-stream.html</code>; the server returns a stream only then and the router applies it surgically. With JS off the browser sends no such header, so the same endpoint returns a normal render and the form is a plain full-page POST (progressive-enhancement-safe). Over a live channel, <code>renderStream(message)</code> from a <code>connectWS</code> handler applies a <code>broadcast()</code>ed payload, so chat and notifications reuse the same applier.</p>
+    <p>Build the payload server-side and apply it client-side:</p>
+    <pre>// app/posts/[id]/route.ts
+import { stream, streamResponse, acceptsStream, broadcast } from '@webjsdev/server';
+export async function POST(req, { params }) {
+  const c = await addComment(params.id, await req.formData());
+  const html = stream.append('comments', '&lt;li&gt;' + escapeHtml(c.text) + '&lt;/li&gt;');
+  broadcast('post:' + params.id, html);              // fan out to other viewers
+  if (acceptsStream(req)) return streamResponse(html); // JS client: surgical
+  return Response.redirect('/posts/' + params.id, 303); // no-JS: normal render
+}</pre>
+    <pre>// a component, for the live channel
+import { connectWS, renderStream } from '@webjsdev/core';
+connectWS('/posts/' + id + '/feed', { onMessage: (m) =&gt; renderStream(m) });</pre>
+    <p><code>stream.*</code> escapes the target id but NOT the content (server-authored HTML, like an <code>html</code> hole, so escape any user substring yourself). <code>renderStream</code> and the <code>&lt;webjs-stream&gt;</code> element are auto-registered by the client router.</p>
+
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
     <p>After a server action mutates data that a cached page depends on, call <code>revalidate()</code>:</p>
