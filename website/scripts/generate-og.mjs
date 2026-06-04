@@ -101,7 +101,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     <div class="brand"><div class="mark"></div><div class="word">webjs</div></div>
     <div class="mid">
       <h1>The framework your <span class="accent">AI agent</span> already knows how to use</h1>
-      <p class="lede">AI‑first, web‑components‑first, no‑build. Native web components, server actions, streaming SSR, on web standards.</p>
+      <p class="lede">AI-first, web-components-first, no-build. Native web components, server actions, streaming SSR, on web standards.</p>
     </div>
     <div>
       <hr>
