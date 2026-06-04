@@ -20,7 +20,13 @@ example `Home` nav, and pick a content-width container that fits. The
 default `<main class="max-w-[760px]">` is a reading column for prose and
 forms, so for a full-bleed app, dashboard, or board, widen the cap or
 remove it (keep the theme tokens). A wide layout left in the 760px
-reading column overflows into a horizontal scrollbar.
+reading column overflows into a horizontal scrollbar. This is ENFORCED:
+the example `app/page.ts` and `app/layout.ts` carry a
+`webjs-scaffold-placeholder` marker comment, and `webjs check` fails
+while any marker remains, so this freshly scaffolded app fails the check
+until you replace the example content (or deliberately keep it) and
+delete the marker line. The delivered app must contain only what the
+user asked for, never leftover scaffold code.
 
 **Non-negotiables for every webjs app:**
 

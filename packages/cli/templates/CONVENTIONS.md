@@ -321,6 +321,15 @@ When the user asks the agent to build their actual app:
    `lib/prisma.server.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
 
+This is enforced, not just advised. The example `app/page.ts` and
+`app/layout.ts` carry a `webjs-scaffold-placeholder` marker comment, and
+the `no-scaffold-placeholder` check fails while any marker remains, so a
+freshly scaffolded app fails `webjs check` until you address each
+placeholder. The marker is acknowledge-and-remove: replace the example
+content, or deliberately keep it, and in either case delete the marker
+line. So the delivered app contains only what the user asked for, never
+leftover scaffold code.
+
 The scaffold exists so the agent doesn't reinvent the directory layout,
 the Prisma wiring, the test runner config, or the convention files. It
 does NOT exist so the agent ships the example homepage.
