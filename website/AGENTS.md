@@ -88,10 +88,11 @@ applied (the navbar and most of the layout look broken). Same in prod:
 prefer `npm start` over `webjs start` so the `prestart: css:build` hook
 fires.
 
-Set `DOCS_URL` / `UI_URL` env vars to point the header links at the right
-hosts when deploying. Locally, `.env` in this directory sets them to the
-sibling apps' localhost ports. (Blog and Changelog are routes in this app,
-so they need no env var.)
+Set `DOCS_URL` / `UI_URL` / `DEMO_URL` env vars to point the header links at
+the right hosts when deploying. `DEMO_URL` is the live example-blog app
+surfaced as the "Demo" link. Locally, `.env` in this directory sets them to
+the sibling apps' localhost ports. Blog and Changelog are in-app routes, so
+they need no env var.
 
 ---
 

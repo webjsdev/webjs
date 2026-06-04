@@ -12,6 +12,7 @@ import { highlight } from '../lib/highlight.ts';
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
+const DEMO_URL = env.DEMO_URL || 'https://demo.webjs.dev';
 const GH_URL = 'https://github.com/webjsdev/webjs';
 
 const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Codex', 'OpenCode'];
@@ -339,6 +340,7 @@ lib/session.server.ts</pre>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI</a>
+          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DEMO_URL} target="_blank" rel="noopener noreferrer">Demo</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/blog">Blog</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/changelog">Changelog</a>
         </nav>

@@ -21,6 +21,10 @@ import '../components/cursor-glow.ts';
 const env = (globalThis as any).process?.env ?? {};
 const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
 const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
+// DEMO_URL points at the live example-blog app (a real webjs app), surfaced
+// as the "Demo" nav link. Falls back to the production domain like the docs
+// and UI links; .env overrides it to the localhost dev port.
+const DEMO_URL = env.DEMO_URL || 'https://demo.webjs.dev';
 const GH_URL = 'https://github.com/webjsdev/webjs';
 
 const TITLE = 'webjs: the framework your AI agent already knows how to use';
@@ -29,6 +33,7 @@ const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framewo
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
   { label: 'UI', href: UI_URL, ext: true },
+  { label: 'Demo', href: DEMO_URL, ext: true },
   { label: 'Blog', href: '/blog', ext: false },
   { label: 'Changelog', href: '/changelog', ext: false },
   { label: 'GitHub', href: GH_URL, ext: true },

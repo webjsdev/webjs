@@ -39,6 +39,15 @@ test('every nav landmark carries a distinguishing aria-label', async () => {
   assert.ok(out.includes('aria-label="Footer"'), 'the footer nav is labeled Footer');
 });
 
+test('the nav links to the live example-blog app via a Demo link', async () => {
+  // The "Demo" link surfaces the deployed example-blog app (DEMO_URL). It
+  // falls back to the production domain, so it renders even with no env var
+  // set. Guards against the link being dropped again.
+  const out = await renderToString(RootLayout({ children: LandingPage() }));
+  assert.ok(out.includes('>Demo</a>'), 'a Demo nav link is rendered');
+  assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
+});
+
 test('the skip-to-content link targets the page main landmark (paired)', async () => {
   // Compose the layout around the real page, the way the SSR pipeline does,
   // so the skip-link href and the landmark id are checked as a matching pair.
