@@ -95,8 +95,8 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // Pause every infinite animation (the accent-drift gradient and the
-      // footer heart) while the tab is hidden so nothing repaints in the
+      // Pause every infinite animation (the two cross-fading glow layers and
+      // the footer heart) while the tab is hidden so nothing repaints in the
       // background. A class is used because animation-play-state does not
       // inherit, so an inline style on <html> would miss descendant animations.
       document.addEventListener('visibilitychange', function () {
@@ -184,7 +184,6 @@ export default function RootLayout({ children }: { children: unknown }) {
       }
       :root[data-theme='light'] { color-scheme: light; }
       @media (prefers-reduced-motion: reduce) {
-        :root { animation: none; --accent-live: oklch(0.63 0.17 50); }
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
