@@ -207,7 +207,7 @@ export default function LandingPage() {
             docs come with every change, enforced, not requested.
           </p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        <div class="grid grid-cols-1 min-[900px]:grid-cols-2 gap-4 items-stretch">
           <figure class=${WIN}>
             <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>AGENTS.md</span></figcaption>
             <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${AGENTS_MD.map(l => html`<div class=${l.k === 'h' ? 'text-accent font-semibold' : 'text-fg-muted'}>${l.t || ' '}</div>`)}</code></pre>
