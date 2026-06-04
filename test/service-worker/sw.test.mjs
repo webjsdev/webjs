@@ -1,7 +1,8 @@
 /**
  * Tests for the progressive-enhancement service worker template (#271).
  *
- * The worker (`packages/cli/templates/public/sw.js`) ships into every scaffold.
+ * The worker (`packages/cli/templates/public/sw.js`) ships into the UI scaffolds
+ * (full-stack / saas; the api template has no UI).
  * These tests run the REAL worker source in a `node:vm` sandbox with mocked
  * service-worker globals (self / caches / fetch / Request / Response / URL),
  * capture its event handlers, and drive them to prove the headline behaviours:
