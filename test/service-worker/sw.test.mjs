@@ -28,7 +28,10 @@ function makeCaches() {
     if (!stores.has(name)) stores.set(name, new Map());
     const m = stores.get(name);
     return {
-      add: async (req) => { m.set(keyOf(req), new Resp('PRECACHED ' + keyOf(req))); },
+      // A real cache.add fetches + stores the response; the mock stores a
+      // DISTINGUISHABLE sentinel body so the offline-fallback test asserts on
+      // real offline content, not just a URL substring.
+      add: async (req) => { m.set(keyOf(req), new Resp('OFFLINE_FALLBACK_CONTENT')); },
       put: async (req, res) => { m.set(keyOf(req), res); },
       match: async (req) => m.get(keyOf(req)) || undefined,
     };
@@ -138,7 +141,38 @@ test('an OFFLINE navigation to an UNVISITED page serves the offline fallback', a
   const w = []; handlers.install({ waitUntil: (p) => w.push(p) }); await Promise.all(w);
   sandbox.fetch = async () => { throw new Error('offline'); };
   const res = await dispatchFetch(handlers, sandbox, new Req('/never-seen', { mode: 'navigate' }));
-  assert.match(res.body, /offline\.html/, 'the offline fallback is served');
+  assert.equal(res.body, 'OFFLINE_FALLBACK_CONTENT', 'the precached offline page is served (not a cached page)');
+});
+
+test('a non-200 navigation response is NOT cached (offline then serves the fallback, not the error)', async () => {
+  const { handlers, sandbox, cachesMock } = loadWorker();
+  const w = []; handlers.install({ waitUntil: (p) => w.push(p) }); await Promise.all(w);
+  // Online: the server returns a 500 error page for /broken.
+  sandbox.fetch = async () => new Resp('<html>ERROR 500</html>', { ok: false, status: 500 });
+  const online = await dispatchFetch(handlers, sandbox, new Req('/broken', { mode: 'navigate' }));
+  assert.equal(online.body, '<html>ERROR 500</html>', 'the error page is still shown online');
+  const store = cachesMock.stores.get('webjs-build123');
+  assert.ok(!store.has('https://app.test/broken'), 'the error page was NOT cached');
+  // Offline: a later visit serves the offline fallback, NOT the cached error.
+  sandbox.fetch = async () => { throw new Error('offline'); };
+  const offline = await dispatchFetch(handlers, sandbox, new Req('/broken', { mode: 'navigate' }));
+  assert.equal(offline.body, 'OFFLINE_FALLBACK_CONTENT', 'offline serves the fallback, not a cached error');
+});
+
+test('a non-ok static asset response is NOT cached (no cache poisoning)', async () => {
+  const { handlers, sandbox, cachesMock } = loadWorker();
+  sandbox.fetch = async () => new Resp('NOT FOUND', { ok: false, status: 404 });
+  await dispatchFetch(handlers, sandbox, new Req('/app/missing.js?v=x', { mode: 'cors' }));
+  const store = cachesMock.stores.get('webjs-build123') || new Map();
+  assert.ok(!store.has('https://app.test/app/missing.js?v=x'), 'a 404 asset is not cached');
+});
+
+test('the dev SSE + reload client are never cached', async () => {
+  const { handlers, sandbox } = loadWorker();
+  const sse = await dispatchFetch(handlers, sandbox, new Req('/__webjs/events', { mode: 'cors' }));
+  assert.equal(sse, undefined, '/__webjs/events is not intercepted');
+  const reload = await dispatchFetch(handlers, sandbox, new Req('/__webjs/reload.js', { mode: 'cors' }));
+  assert.equal(reload, undefined, '/__webjs/reload.js is not intercepted');
 });
 
 test('a non-GET request is NOT intercepted (writes never cached)', async () => {

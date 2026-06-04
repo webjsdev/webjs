@@ -71,8 +71,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
-        const cache = await caches.open(CACHE);
-        cache.put(req, fresh.clone());
+        // Cache ONLY a successful page (never a 404/500 error page, or an
+        // offline visit would serve the cached error instead of the fallback).
+        // waitUntil keeps the worker alive until the write lands (a worker can
+        // be terminated the moment respondWith settles).
+        if (fresh && fresh.ok) {
+          const copy = fresh.clone();
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, copy)));
+        }
         return fresh;
       } catch (_err) {
         const cache = await caches.open(CACHE);
@@ -91,6 +97,9 @@ self.addEventListener('fetch', (event) => {
       const network = fetch(req)
         .then((res) => { if (res && res.ok) cache.put(req, res.clone()); return res; })
         .catch(() => cached);
+      // Keep the worker alive for the background revalidation + write, which
+      // would otherwise be a floating promise lost on worker termination.
+      event.waitUntil(network.catch(() => {}));
       return cached || network;
     })());
   }
