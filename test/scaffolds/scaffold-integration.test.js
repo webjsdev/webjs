@@ -263,6 +263,13 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
 
+    // #356: saas shares the same layout template, so it must carry the
+    // content-width steering comment too (saas is a full-bleed dashboard,
+    // the case most likely to overflow the narrow reading column).
+    const saasLayoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
+    assert.match(saasLayoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
+      'saas layout must carry the content-width steering comment');
+
     // #271: saas is a UI scaffold, so it ships the opt-in service worker.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');
     assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'saas ships public/offline.html');
