@@ -77,6 +77,33 @@ suite('copy-cmd', () => {
     document.body.removeChild(el);
   });
 
+  test('describes the copy action via aria-describedby without hiding the command', async () => {
+    const el = await mount('npm create webjs@latest my-app');
+    const target = el.querySelector('[data-copy-text]');
+    // The command stays the accessible NAME (slotted text, no aria-label)...
+    assert.equal(target.getAttribute('aria-label'), null, 'no aria-label overrides the command name');
+    assert.ok(target.textContent.includes('npm create webjs@latest my-app'), 'the command is the accessible name');
+    // ...and an sr-only describedby hint adds the copy ACTION as the description.
+    const hintId = target.getAttribute('aria-describedby');
+    assert.ok(hintId, 'the button references a description via aria-describedby');
+    const hint = el.querySelector('#' + hintId);
+    assert.ok(hint, 'the referenced hint element exists in the same subtree');
+    assert.ok(/copy/i.test(hint.textContent) && /clipboard/i.test(hint.textContent),
+      'the hint describes the copy-to-clipboard action');
+    assert.ok(hint.className.includes('sr-only'), 'the hint is visually hidden (screen-reader only)');
+    document.body.removeChild(el);
+  });
+
+  test('two copy-cmd on a page get distinct describedby hint ids', async () => {
+    const a = await mount('npm create webjs@latest one');
+    const b = await mount('npm create webjs@latest two');
+    const idA = a.querySelector('[data-copy-text]').getAttribute('aria-describedby');
+    const idB = b.querySelector('[data-copy-text]').getAttribute('aria-describedby');
+    assert.ok(idA && idB, 'both buttons carry a describedby id');
+    assert.ok(idA !== idB, 'the two hint ids are unique so neither shadows the other');
+    a.remove(); b.remove();
+  });
+
   test('clicking the command copies the trimmed text and flips to a checkmark', async () => {
     const el = await mount('   npm create webjs@latest my-app   ');
     el.querySelector('[data-copy-text]').click();

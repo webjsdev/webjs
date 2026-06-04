@@ -5,7 +5,10 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * affordance. Light DOM, Tailwind utilities throughout. The whole
  * inner wrapper is the click target (text or icon both trigger copy);
  * the icon is an always-visible visual hint, not a separate focusable
- * element.
+ * element. The command text is the button's accessible NAME, and an
+ * sr-only aria-describedby hint adds "Copy command to clipboard" as its
+ * description, so a screen reader announces both the payload and the
+ * action without the label hiding the command.
  *
  * Usage:
  *   <copy-cmd>npm create webjs@latest my-app</copy-cmd>
@@ -19,9 +22,14 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * addEventListener in lifecycle hooks. Cleanup of the auto-reset
  * timer happens in disconnectedCallback.
  */
+let HINT_SEQ = 0;
+
 export class CopyCmd extends WebComponent {
   copied = signal(false);
   private _resetTimer: number | undefined;
+  // Per-instance id so aria-describedby points at this button's own hint
+  // (multiple copy-cmd can share a page; the value is document-unique).
+  private _hintId = `copy-cmd-hint-${HINT_SEQ++}`;
 
   disconnectedCallback() {
     if (this._resetTimer) clearTimeout(this._resetTimer);
@@ -59,6 +67,7 @@ export class CopyCmd extends WebComponent {
           data-copy-text
           role="button"
           tabindex="0"
+          aria-describedby=${this._hintId}
           @click=${this._copy}
           @keydown=${this._onKey}
         ><slot></slot></span>
@@ -69,6 +78,7 @@ export class CopyCmd extends WebComponent {
           tabindex="-1"
           @click=${this._copy}
         >${isCopied ? CHECK_ICON : COPY_ICON}</button>
+        <span id=${this._hintId} class="sr-only">Copy command to clipboard</span>
         <span class="sr-only" role="status" aria-live="polite">${isCopied ? 'Copied' : ''}</span>
       </span>
     `;
