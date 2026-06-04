@@ -15,7 +15,7 @@ import { WebComponent, html } from '@webjsdev/core';
  * a reveal observer can never be left with hidden content.
  */
 export class ScrollReveal extends WebComponent {
-  _io?: IntersectionObserver;
+  private _io?: IntersectionObserver;
   private _mql?: MediaQueryList;
 
   // If the OS reduced-motion preference turns ON mid-session, stop observing
