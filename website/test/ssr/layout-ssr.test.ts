@@ -14,6 +14,8 @@ import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
 import RootLayout from '../../app/layout.ts';
 import LandingPage from '../../app/page.ts';
+import NotFound from '../../app/not-found.ts';
+import ErrorBoundary from '../../app/error.ts';
 
 test('the root layout SSR emits no phantom copy-cmd element or copy button', async () => {
   const out = await renderToString(RootLayout({ children: html`<main>content</main>` }));
@@ -57,6 +59,18 @@ test('the nav links to the live example-blog app via a Demo link', async () => {
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   assert.ok(out.includes('>Demo<'), 'a Demo nav link is rendered');
   assert.ok(out.includes('https://demo.webjs.dev'), 'the Demo link points at the demo app');
+});
+
+test('the skip-to-content link resolves on the 404 and error pages too', async () => {
+  // The skip link lives in the layout and wraps EVERY page, so the 404 and
+  // error-boundary pages must also expose a #main target, not just the landing
+  // page. Compose the layout around each and assert the fragment resolves.
+  for (const [name, page] of [['not-found', NotFound()], ['error', ErrorBoundary({ error: new Error('boom') })]] as const) {
+    const out = await renderToString(RootLayout({ children: page }));
+    const m = out.match(/href="#([\w-]+)"[^>]*>\s*Skip to content/);
+    assert.ok(m, `${name}: a skip-to-content link is rendered`);
+    assert.ok(out.includes(`<main id="${m[1]}"`), `${name}: the #${m[1]} target landmark exists`);
+  }
 });
 
 test('the skip-to-content link targets the page main landmark (paired)', async () => {

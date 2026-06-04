@@ -19,12 +19,12 @@ import { html } from '@webjsdev/core';
 export default function ErrorBoundary({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : String(error);
   return html`
-    <section class="min-h-[60vh] flex flex-col items-start justify-center max-w-2xl mx-auto px-6 py-20">
+    <main id="main" class="min-h-[60vh] flex flex-col items-start justify-center max-w-2xl mx-auto px-6 py-20">
       <div class="text-xs font-mono uppercase tracking-widest text-accent mb-4">500 &middot; server error</div>
       <h1 class="font-serif text-5xl md:text-6xl font-bold tracking-tight text-fg mb-4" style="letter-spacing: -0.03em">Something went wrong.</h1>
       <p class="text-fg-muted text-lg mb-6 max-w-prose">We hit an unexpected error while rendering this page. The full stack is logged on the server; only the short message is shown here.</p>
       <pre class="w-full mb-8 text-sm overflow-x-auto" style="background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 8px; padding: 16px"><code>${message}</code></pre>
       <a href="/" class="inline-flex items-center gap-1.5 text-accent no-underline font-medium hover:underline">&larr; Back home</a>
-    </section>
+    </main>
   `;
 }
