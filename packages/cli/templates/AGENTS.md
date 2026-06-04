@@ -906,10 +906,11 @@ Full reference: see the [Client Router docs](https://docs.webjs.dev/docs/client-
 
 ## Offline support (opt-in service worker)
 
-This scaffold ships a progressive-enhancement service worker at `public/sw.js`
-plus a `public/offline.html` fallback. They are **dormant until you register
-them**, so the JS-disabled baseline is unchanged. To enable offline support, add
-the opt-in registration snippet to the root layout `<head>`:
+The UI scaffolds (full-stack and saas) ship a progressive-enhancement service
+worker at `public/sw.js` plus a `public/offline.html` fallback (the api template
+has no UI, so it omits them). They are **dormant until you register them**, so
+the JS-disabled baseline is unchanged. To enable offline support, add the opt-in
+registration snippet to the root layout `<head>`:
 
 ```html
 <script>

@@ -59,7 +59,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
-    // fallback ship into every scaffold (dormant until the app registers it).
+    // fallback ship into the UI scaffolds (full-stack / saas; api has no UI),
+    // dormant until the app registers it. This test covers full-stack.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'public/sw.js should exist');
     assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'public/offline.html should exist');
 

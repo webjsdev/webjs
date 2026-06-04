@@ -1,7 +1,8 @@
 # Service worker / offline primitive (opt-in, #271)
 
-webjs ships a hand-authored service worker and an offline fallback into every
-scaffold (`public/sw.js`, `public/offline.html`). It adds an offline experience
+webjs ships a hand-authored service worker and an offline fallback into the UI
+scaffolds (`public/sw.js`, `public/offline.html`; the full-stack and saas
+templates, since the api template has no UI). It adds an offline experience
 and an asset cache **without changing the JavaScript-disabled baseline**: the
 worker only ever registers from JavaScript, so with JS off no worker exists and
 pages, links, and forms behave exactly as before. It is **opt-in**: the files
