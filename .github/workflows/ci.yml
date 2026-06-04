@@ -135,3 +135,34 @@ jobs:
       # by the prepare hook at publish). Build them in CI so a bundling
       # break is caught on the PR, not at release time.
       - run: npm run build:dist --workspace=@webjsdev/core
+
+  apps:
+    name: In-repo app tests (website + blog)
+    runs-on: ubuntu-latest
+    # The framework jobs above cover packages/* and the root cross-package
+    # suite. This job runs each IN-REPO app's OWN test suite (its `webjs test`
+    # script), which the root runners do not discover, so a regression in an
+    # app's tests gates the merge (issue #342). The website's `test` runs both
+    # its node + browser suites (hence Playwright); the blog is node-only and
+    # touches its Prisma DB (the same setup the unit + e2e jobs do). docs and
+    # the ui-website ship no test suite yet, so they are not listed.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium (for the website browser tests)
+        run: npx playwright install --with-deps chromium
+      - name: Prepare the blog example database
+        working-directory: examples/blog
+        run: |
+          cp .env.example .env
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma db seed
+      - name: website tests (node + browser)
+        run: npm test --workspace=@webjsdev/website
+      - name: blog tests (node)
+        run: npm test --workspace=@webjsdev/example-blog
