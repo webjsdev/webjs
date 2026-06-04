@@ -186,7 +186,7 @@ export default function LandingPage() {
         </a>
       </div>
       <div class=${INSTALL}>
-        <span class="text-accent select-none">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
+        <span class="text-accent select-none" aria-hidden="true">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
       </div>
     </section>
 
@@ -327,7 +327,7 @@ lib/session.server.ts</pre>
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
           <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, point your agent at it, and go.</p>
           <div class=${INSTALL}>
-            <span class="text-accent select-none">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
+            <span class="text-accent select-none" aria-hidden="true">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
           </div>
           <div class="flex gap-3 justify-center flex-wrap mt-7">
             <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
