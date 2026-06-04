@@ -9,10 +9,9 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/link
  * Styling is Tailwind-first: chrome and structure use utility classes,
  * with the design tokens declared once in the foundation <style> below
  * and exposed to Tailwind via @theme in public/input.css. Only the
- * genuinely un-utility-expressible pieces stay as CSS: the glow cross-fade
- * and heart-pump keyframes, the prefers-reduced-motion clamp, the fixed glow
- * layer, the hover-only scrollbar (`.scroll-thin`), and the <details> icon
- * swap. Everything else is Tailwind.
+ * genuinely un-utility-expressible pieces stay as CSS: the prefers-reduced-motion
+ * clamp, the fixed static glow layer, the hover-only scrollbar (`.scroll-thin`),
+ * and the <details> icon swap. Everything else is Tailwind.
  *
  * Shared link config (DOCS_URL / UI_URL / EXAMPLE_BLOG_URL / GH_URL / NEW_TAB) lives in
  * lib/links.ts, imported here and by app/page.ts.
@@ -94,13 +93,6 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // Pause every infinite animation (the two cross-fading glow layers and
-      // the footer heart) while the tab is hidden so nothing repaints in the
-      // background. A class is used because animation-play-state does not
-      // inherit, so an inline style on <html> would miss descendant animations.
-      document.addEventListener('visibilitychange', function () {
-        document.documentElement.classList.toggle('paused', document.hidden);
-      });
       document.addEventListener('click', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
@@ -123,12 +115,8 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
-      /* The breathing glow is two static-gradient layers cross-faded via
-         opacity (a compositor-only property), so it never triggers a repaint.
-         The accent color itself is static, so its consumers (tints, shadows,
-         the gradient text) do not repaint either. */
-      @keyframes glow-fade-a { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-      @keyframes glow-fade-b { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+      /* A single static gradient glow layer. It used to breathe (two layers
+         cross-faded on a 16s loop), removed so nothing animates on the page. */
       :root {
         color-scheme: light dark;
         --fg:            oklch(0.20 0.018 60);
@@ -146,7 +134,6 @@ export default function RootLayout({ children }: { children: unknown }) {
         --heart:         oklch(0.64 0.22 6);
         --accent-live:   oklch(0.63 0.17 50);
         --glow-a:        oklch(0.63 0.17 44);
-        --glow-b:        oklch(0.62 0.18 60);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
@@ -186,7 +173,6 @@ export default function RootLayout({ children }: { children: unknown }) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      html { scroll-behavior: smooth; }
       body {
         background: var(--bg); color: var(--fg);
         font: 400 16px/1.65 var(--font-sans);
@@ -194,53 +180,16 @@ export default function RootLayout({ children }: { children: unknown }) {
         transition: background var(--t) cubic-bezier(0.3,0,0.3,1), color var(--t) cubic-bezier(0.3,0,0.3,1);
       }
       ::selection { background: var(--accent-tint); color: var(--fg); }
-      @keyframes heart-pump {
-        0%, 40%, 100% { transform: scale(1); }
-        10% { transform: scale(1.3); }
-        20% { transform: scale(1); }
-        30% { transform: scale(1.18); }
-      }
       .heart {
         display: inline-block; width: 1.15em; height: 1.15em;
         vertical-align: -0.18em; color: var(--heart);
-        animation: heart-pump 1.4s ease-in-out infinite;
-        transform-origin: center;
       }
-      /* Hidden-tab pause (the .paused class is toggled on a visibilitychange).
-         Covers the heart and the two cross-fading glow layers. */
-      :root.paused .heart,
-      :root.paused .glow-layer::before,
-      :root.paused .glow-layer::after { animation-play-state: paused; }
       .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-      /* No will-change: the running opacity animation already promotes these
-         to their own layer, so a permanent hint would just be the MDN
-         long-lived-will-change anti-pattern. */
-      .glow-layer::before, .glow-layer::after {
-        content: ''; position: absolute; inset: 0;
-      }
       .glow-layer::before {
+        content: ''; position: absolute; inset: 0;
         background:
           radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
           radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
-        animation: glow-fade-a 16s ease-in-out infinite;
-      }
-      .glow-layer::after {
-        background:
-          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
-          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-b) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
-        animation: glow-fade-b 16s ease-in-out infinite;
-      }
-      /* JS-opt-in motion: scroll-reveal adds the reveal-ready class, so a
-         data-reveal section is hidden only when JS is present, and visible
-         otherwise. */
-      /* Skip rendering off-screen sections until they near the viewport. The
-         intrinsic-size keeps the scrollbar stable, and the auto keyword
-         remembers each real size after first render. Pure CSS, no JS, PE-safe. */
-      [data-reveal] { content-visibility: auto; contain-intrinsic-size: auto 600px; }
-      .reveal-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity 600ms ease, transform 600ms ease; }
-      .reveal-ready [data-reveal].is-revealed { opacity: 1; transform: none; }
-      @media (prefers-reduced-motion: reduce) {
-        .reveal-ready [data-reveal] { opacity: 1; transform: none; transition: none; }
       }
       .scroll-thin { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color var(--t); }
       .scroll-thin:hover { scrollbar-color: color-mix(in oklch, var(--fg-subtle) 70%, transparent) transparent; }

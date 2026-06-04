@@ -83,15 +83,15 @@ test('the layout ships an Escape-to-close handler for the mobile menu', async ()
   assert.ok(out.includes("'Escape'") && out.includes('.mobile-menu[open]'), 'an Escape keydown closes the open mobile menu');
 });
 
-test('the layout CSS still consumes the scroll-reveal contract names', () => {
-  // scroll-reveal writes the reveal-ready class and is-revealed, and the
-  // layout's inline CSS is the only consumer. A rename on EITHER side passes
-  // every component + SSR test but breaks the visual (data-reveal sections stay
-  // at opacity:0 = content loss), so pin the contract: a rename must update both
-  // sides and this assertion.
+test('the layout ships no animations (static page, no smooth-scroll)', () => {
+  // The landing page was stripped of all motion to fix janky scroll: no
+  // scroll-reveal, no breathing-glow or heart-pump keyframes, no smooth-scroll.
+  // Pin it so a re-introduced animation is caught here.
   const layoutSrc = readFileSync(fileURLToPath(new URL('../../app/layout.ts', import.meta.url)), 'utf8');
-  for (const name of ['.reveal-ready [data-reveal]', 'is-revealed']) {
-    assert.ok(layoutSrc.includes(name), `layout CSS must still reference the contract name "${name}"`);
+  // (the prefers-reduced-motion clamp legitimately forces scroll-behavior: auto,
+  // so ban the smooth variant specifically, not the bare property.)
+  for (const banned of ['@keyframes', 'scroll-behavior: smooth', 'reveal-ready', 'data-reveal', 'content-visibility']) {
+    assert.ok(!layoutSrc.includes(banned), `layout must not reintroduce "${banned}"`);
   }
 });
 

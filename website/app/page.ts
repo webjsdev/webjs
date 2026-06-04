@@ -1,10 +1,9 @@
 import { html } from '@webjsdev/core';
 import '../components/copy-cmd.ts';
-import '../components/scroll-reveal.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
-// in the browser to register copy-cmd / scroll-reveal, and that pulls in its
+// in the browser to register copy-cmd, and that pulls in its
 // top-level imports. This is an accepted cost. It cannot move to a .server.ts
 // util (a server-only stub throws at load, and this is a page top-level import)
 // and it is not elision-eligible (only display-only components are elided, and
@@ -192,7 +191,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16" data-reveal>
+    <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Built for agents</div>
@@ -221,7 +220,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16" data-reveal>
+    <section class="py-16">
       <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
@@ -245,7 +244,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16" data-reveal>
+    <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Why webjs</div>
@@ -264,7 +263,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16" data-reveal>
+    <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
@@ -285,7 +284,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16" data-reveal>
+    <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>
@@ -323,7 +322,7 @@ lib/session.server.ts</pre>
       </div>
     </section>
 
-    <section class="py-16 text-center" id="get-started" data-reveal>
+    <section class="py-16 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
@@ -357,7 +356,5 @@ lib/session.server.ts</pre>
       </div>
       <div class="w-full text-center mt-6 md:mt-0 text-fg-subtle text-sm">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
     </footer>
-
-    <scroll-reveal></scroll-reveal>
   `;
 }

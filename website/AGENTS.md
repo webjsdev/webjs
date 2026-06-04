@@ -27,7 +27,6 @@ website/
   components/
     theme-toggle.ts    system/light/dark cycle
     copy-cmd.ts        click-to-copy command line (light DOM, always-on button)
-    scroll-reveal.ts   fade sections up on viewport entry (JS-opt-in motion)
   lib/
     highlight.ts       SSR syntax highlighter for the code samples
     frontmatter.ts     parse changelog/blog markdown frontmatter
