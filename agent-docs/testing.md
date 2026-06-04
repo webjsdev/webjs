@@ -103,6 +103,25 @@ package, it goes in that package's `test/`.
 - `npm run test:e2e` → `WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs`.
 - `npm run test:all` runs node + browser (not e2e).
 
+The root drivers above ONLY discover the framework packages and the root
+cross-package suite (`packages/*/test/` + `test/`). They do NOT walk the in-repo
+apps' own test dirs (`website/test/`, `examples/blog/test/`), so those run from
+each app's OWN `webjs test` script, not the root runner.
+
+### In-repo app tests in CI (#342)
+
+Each in-repo app (`website`, `examples/blog`) carries its own test suite under
+its `test/` dir and runs it through its own `webjs test` script (the website's
+`test` runs node + browser; the blog's `test` is node-only). The root runners do
+not discover these, so a dedicated `.github/workflows/ci.yml` job, **In-repo app
+tests (website + blog)**, runs `npm test --workspace=@webjsdev/website` and
+`npm test --workspace=@webjsdev/example-blog` (with Playwright installed for the
+website browser tests and the Prisma DB prepared for the blog, the same setup
+the `unit` + `e2e` jobs use). It is a required status check, so a regression in
+an app's tests gates the merge. The app test dirs are not walked by the root
+runner, so the framework-package tests never double-run. `docs` and the
+ui-website ship no test suite yet, so they are not in the job.
+
 ### Adding a new test
 
 1. Find the feature folder that matches what you're testing
