@@ -113,14 +113,42 @@ function readIdAttr(openTag) {
  * @param {number} from  Index just past the opening tag's `>`.
  * @returns {number}  Index just past the matching `</webjs-frame>`, or -1.
  */
+/**
+ * Find the next `needle` (`<webjs-frame` or `</webjs-frame`) in `lower` from
+ * `start` that is a REAL tag, i.e. the char right after the tag name is a tag
+ * boundary (whitespace, `>`, or `/`). This skips a prefix-collision tag such as
+ * `<webjs-frame-nav>` / `</webjs-frame-nav>`, which `indexOf` alone would match
+ * and miscount (an unbalanced one would corrupt the depth scan). Returns -1
+ * when no real tag remains.
+ *
+ * @param {string} lower
+ * @param {string} needle
+ * @param {number} start
+ * @returns {number}
+ */
+function findRealTag(lower, needle, start) {
+  let at = start;
+  while (at < lower.length) {
+    const idx = lower.indexOf(needle, at);
+    if (idx === -1) return -1;
+    const after = lower[idx + needle.length];
+    if (after === undefined || after === ' ' || after === '\t' || after === '\n'
+      || after === '\r' || after === '>' || after === '/') {
+      return idx;
+    }
+    at = idx + needle.length; // a prefix-collision tag, keep scanning
+  }
+  return -1;
+}
+
 function findMatchingClose(html, lower, from) {
   const open = '<' + FRAME_TAG;
   const close = '</' + FRAME_TAG;
   let depth = 1;
   let i = from;
   while (i < lower.length) {
-    const nextOpen = lower.indexOf(open, i);
-    const nextClose = lower.indexOf(close, i);
+    const nextOpen = findRealTag(lower, open, i);
+    const nextClose = findRealTag(lower, close, i);
     if (nextClose === -1) return -1;
     if (nextOpen !== -1 && nextOpen < nextClose) {
       // A nested frame open. Skip past its opening tag, and only increase

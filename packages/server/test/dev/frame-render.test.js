@@ -158,6 +158,33 @@ test('extractFrameSubtree finds the exact subtree, balancing nested frames', () 
   );
 });
 
+test('extractFrameSubtree ignores prefix-collision tags inside the frame (balanced + unbalanced)', () => {
+  // A hyphenated child whose name STARTS with "webjs-frame" must not be
+  // miscounted as a nested frame. Balanced cancels; an unbalanced/void one used
+  // to corrupt the depth scan.
+  const balanced =
+    '<webjs-frame id="x">A<webjs-frame-nav>nav</webjs-frame-nav>B</webjs-frame>';
+  assert.equal(
+    extractFrameSubtree(balanced, 'x'),
+    '<webjs-frame id="x">A<webjs-frame-nav>nav</webjs-frame-nav>B</webjs-frame>',
+    'a balanced webjs-frame-* child is left intact, not counted as a nested frame',
+  );
+  // An ORPHAN close-prefix tag (no matching open) must not decrement depth.
+  const orphanClose = '<webjs-frame id="x">A</webjs-frame-x>B</webjs-frame>after';
+  assert.equal(
+    extractFrameSubtree(orphanClose, 'x'),
+    '<webjs-frame id="x">A</webjs-frame-x>B</webjs-frame>',
+    'an orphan </webjs-frame-x> does not close the real frame early',
+  );
+  // A VOID open-prefix tag (no close) must not inflate depth and lose the close.
+  const voidOpen = '<webjs-frame id="x">A<webjs-frame-spacer>B</webjs-frame>after';
+  assert.equal(
+    extractFrameSubtree(voidOpen, 'x'),
+    '<webjs-frame id="x">A<webjs-frame-spacer>B</webjs-frame>',
+    'a void <webjs-frame-spacer> does not consume the real close',
+  );
+});
+
 test('extractFrameSubtree returns null when the id is absent', () => {
   assert.equal(extractFrameSubtree('<webjs-frame id="a">x</webjs-frame>', 'b'), null);
   assert.equal(extractFrameSubtree('<div>no frames here</div>', 'a'), null);
