@@ -207,6 +207,13 @@ export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
     throw err;
   }
 
+  // A page action MAY return a `Response` directly (e.g. a content-negotiated
+  // `streamResponse`, #248). Honor it verbatim, so the action owns the status +
+  // content type and the router applies it (a stream body surgically). With JS
+  // off the same action returns a normal ActionResult instead, so the PRG /
+  // re-render paths below still drive the no-JS form.
+  if (result instanceof Response) return result;
+
   if (!isFailureResult(result)) {
     // SUCCESS: Post/Redirect/Get. A user-controlled `result.redirect` is only
     // honored when it is a same-site local path; otherwise fall back to the
