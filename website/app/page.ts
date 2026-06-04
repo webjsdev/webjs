@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 import '../components/copy-cmd.ts';
 import '../components/scroll-reveal.ts';
-import { DOCS_URL, UI_URL, DEMO_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
+import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
 // in the browser to register copy-cmd / scroll-reveal, and that pulls in its
@@ -348,7 +348,7 @@ lib/session.server.ts</pre>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DEMO_URL} target="_blank" rel="noopener noreferrer">Demo${NEW_TAB}</a>
+          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Demo${NEW_TAB}</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/blog">Blog</a>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/changelog">Changelog</a>
         </nav>

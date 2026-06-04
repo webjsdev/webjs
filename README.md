@@ -144,7 +144,7 @@ WEBSITE_PORT=8001 DOCS_PORT=8002 UI_PORT=8003 BLOG_PORT=8004 npm run dev
 
 The apps cross-link by URL (the landing site links to docs/demo/UI,
 the UI site links back). Those default to the localhost ports above and
-are overridable via `DOCS_URL` / `DEMO_URL` / `UI_URL` / `WEBSITE_URL`
+are overridable via `DOCS_URL` / `EXAMPLE_BLOG_URL` / `UI_URL` / `WEBSITE_URL`
 (this is also how deploys point them at real domains).
 
 ## Example

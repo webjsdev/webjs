@@ -18,7 +18,7 @@ import RootLayout from '../../app/layout.ts';
 import LandingPage from '../../app/page.ts';
 import NotFound from '../../app/not-found.ts';
 import ErrorBoundary from '../../app/error.ts';
-import { DEMO_URL } from '../../lib/links.ts';
+import { EXAMPLE_BLOG_URL } from '../../lib/links.ts';
 
 test('the root layout SSR emits no phantom copy-cmd element or copy button', async () => {
   const out = await renderToString(RootLayout({ children: html`<main>content</main>` }));
@@ -66,14 +66,14 @@ test('external new-tab links announce the context change and hide decorative gly
 });
 
 test('the nav links to the live example-blog app via a Demo link', async () => {
-  // The "Demo" link surfaces the deployed example-blog app (DEMO_URL). It
+  // The "Demo" link surfaces the deployed example-blog app (EXAMPLE_BLOG_URL). It
   // falls back to the production domain, so it renders even with no env var
   // set. Guards against the link being dropped again.
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   assert.ok(out.includes('>Demo<'), 'a Demo nav link is rendered');
   // Assert against the value the code resolved (env override or the production
-  // fallback), not a hardcoded URL, so exporting DEMO_URL cannot break the test.
-  assert.ok(out.includes(DEMO_URL), `the Demo link points at the configured DEMO_URL (${DEMO_URL})`);
+  // fallback), not a hardcoded URL, so exporting EXAMPLE_BLOG_URL cannot break the test.
+  assert.ok(out.includes(EXAMPLE_BLOG_URL), `the Demo link points at the configured EXAMPLE_BLOG_URL (${EXAMPLE_BLOG_URL})`);
 });
 
 test('the layout ships an Escape-to-close handler for the mobile menu', async () => {
