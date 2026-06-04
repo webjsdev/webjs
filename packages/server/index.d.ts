@@ -91,6 +91,15 @@ export interface RequestHandlerOptions {
     error: unknown,
     ctx: { request: Request; requestId: string | null; phase: string },
   ) => void;
+  /** Called when a dev source change has been applied (the live-reload trigger). */
+  onReload?: () => void;
+  /**
+   * Dev error overlay sink (#264): called with a structured error frame when a
+   * dev render crash, a non-erasable-TS strip failure, or a failed rebuild
+   * occurs. `startServer` wires this to the SSE overlay channel. Dev-only and
+   * best-effort; never fires in prod.
+   */
+  onDevError?: (frame: object) => void;
 }
 
 /** A matched page route for a path, as returned by `routeFor`. */
@@ -110,6 +119,8 @@ export interface RequestHandler {
   warmup: () => Promise<void>;
   /** Current route table getter (used by the WebSocket subsystem). */
   getRouteTable: () => unknown;
+  /** Current unresolved dev error frame (#264), or null (always null in prod). */
+  getLastDevError: () => object | null;
   /** The resolved app root. */
   appDir: string;
   /** Whether the handler is in dev mode. */

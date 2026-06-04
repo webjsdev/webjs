@@ -1,6 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -127,6 +127,7 @@ import {
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
 import { commitHtmlCache, setAppSourceFingerprint } from './html-cache.js';
+import { buildDevErrorFrame } from './dev-error.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -394,6 +395,7 @@ export async function readServerTimeoutsFromApp(appDir) {
  *   logger?: import('./logger.js').Logger,
  *   onError?: (error: unknown, ctx: { request: Request, requestId: string|null, phase: string }) => void,
  *   onReload?: () => void,
+ *   onDevError?: (frame: object) => void,
  * }} opts
  */
 export async function createRequestHandler(opts) {
@@ -607,7 +609,29 @@ export async function createRequestHandler(opts) {
     // settings (a multi-tenant embedder, or the differential elision test)
     // must not share it, or the second would serve the first's elided source.
     tsCache: new Map(),
+    // The most recent unresolved dev error frame (#264), or null. Pushed to the
+    // SSE channel for the live overlay and replayed to a freshly-connected tab.
+    // Dev-only (never populated when !dev); cleared on a successful rebuild.
+    lastDevError: null,
   };
+
+  /**
+   * Report a dev error (#264): build a frame and push it to the open tab via
+   * the SSE overlay channel. DEV-ONLY and best-effort, so it can never affect a
+   * response or crash the server (a frame-build failure is swallowed). No file
+   * path or source is ever built in prod (the early return), so nothing leaks.
+   *
+   * @param {unknown} error
+   * @param {{ kind?: 'render'|'ts-strip'|'rebuild', file?: string, line?: number, column?: number, hint?: string }} [info]
+   */
+  function reportDevError(error, info = {}) {
+    if (!dev) return;
+    try {
+      const frame = buildDevErrorFrame(error, { ...info, appDir });
+      state.lastDevError = frame;
+      opts.onDevError?.(frame);
+    } catch { /* a frame-build failure must never affect the request path */ }
+  }
 
   // All whole-app analysis is built lazily on the first request, memoized so
   // boot does none of it. It runs in two stages. The deterministic analysis
@@ -872,6 +896,9 @@ export async function createRequestHandler(opts) {
   async function rebuild() {
     rebuildInFlight = rebuildInFlight.then(() => doRebuild()).catch((e) => {
       logger.error?.(`[webjs] rebuild failed:`, e);
+      // Push the failure to the open tab so the overlay appears live after a
+      // breaking edit, not only on the next manual navigation (#264).
+      reportDevError(e, { kind: 'rebuild' });
     });
     return rebuildInFlight;
   }
@@ -906,6 +933,15 @@ export async function createRequestHandler(opts) {
     readyDone = false;
     readyError = null;
     readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
+    // Optimistically clear the dev error (#264): the rebuild itself only
+    // re-scans the route table and INVALIDATES the lazy analysis (the real
+    // re-parse / re-strip / re-render happens on the next request), so we do
+    // not yet know the edit fixed the error. Clearing it here means a tab that
+    // connects now is not replayed a possibly-stale overlay; `onReload` then
+    // reloads every open tab, and if the underlying error is still present the
+    // reloaded request re-pushes a fresh frame (a brief dismiss-then-reappear
+    // flicker on an unrelated edit, self-correcting to the right end state).
+    state.lastDevError = null;
     opts.onReload?.();
   }
 
@@ -1197,7 +1233,7 @@ export async function createRequestHandler(opts) {
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
-      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, cspEnabled: cspConfig.enabled });
+      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled: cspConfig.enabled });
       if (state.middleware) {
         try {
           return await state.middleware(req, next);
@@ -1267,6 +1303,10 @@ export async function createRequestHandler(opts) {
     warmup: () => ensureReady().catch((e) => logger.error?.(`[webjs] background warm-up failed (will retry on the next request):`, e)),
     /** current route table getter: used by the WebSocket subsystem */
     getRouteTable: () => state.routeTable,
+    /** Current unresolved dev error frame (#264), or null. Replayed by
+     * startServer to a freshly-connected SSE client so the overlay shows even
+     * after a navigation, not only on the breaking edit. Always null in prod. */
+    getLastDevError: () => state.lastDevError,
     appDir,
     dev,
     logger,
@@ -1326,6 +1366,15 @@ export async function startServer(opts) {
         try { res.write(`event: reload\ndata: now\n\n`); } catch {}
       }
     },
+    // Dev error overlay (#264): push a frame to every open tab over the SAME
+    // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
+    // EventSource's native connection-error event) carries the JSON frame.
+    onDevError: (frame) => {
+      const data = JSON.stringify(frame);
+      for (const res of sseClients) {
+        try { res.write(`event: webjs-error\ndata: ${data}\n\n`); } catch {}
+      }
+    },
   });
 
   /** @type {AbortController | null} */
@@ -1382,6 +1431,13 @@ export async function startServer(opts) {
         });
         res.write(`event: hello\ndata: webjs\n\n`);
         sseClients.add(res);
+        // Replay an unresolved dev error (#264) so a tab that connects AFTER the
+        // breaking edit (e.g. opened via a fresh navigation) still shows the
+        // overlay, not only the tab that was open when the error fired.
+        const pending = app.getLastDevError?.();
+        if (pending) {
+          try { res.write(`event: webjs-error\ndata: ${JSON.stringify(pending)}\n\n`); } catch {}
+        }
         res.socket?.on('close', () => sseClients.delete(res));
         return;
       }
@@ -1559,7 +1615,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
 }
 
 async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError, cspEnabled } = ctx;
+  const { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -1716,7 +1772,7 @@ async function handleCore(req, ctx) {
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned);
+        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned, reportDevError);
       }
       if (/\.m?js$/.test(abs)) {
         return jsModuleResponse(abs, dev, elideOpts, versioned);
@@ -1782,6 +1838,10 @@ async function handleCore(req, ctx) {
         // onError sink (issue #239): a page render error that becomes a 500 is
         // reported to the APM hook with the active request's correlation id.
         onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,
+        // Dev error overlay (#264): a render crash pushes a frame to the open
+        // tab. Dev-only (reportDevError early-returns in prod), so no source
+        // leaks. Distinct from onError (the APM sink), which always fires.
+        onDevError: dev ? (e) => reportDevError(e, { kind: 'render' }) : undefined,
       };
       if (method === 'GET' || method === 'HEAD') {
         const handler = () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });
@@ -2139,7 +2199,7 @@ async function stripTs(source, _abs) {
  *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
  *   the same bytes regardless; only the cache header varies. Dev stays `no-cache`.
  */
-async function tsResponse(abs, dev, elideOpts, cache, immutable) {
+async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDevError) {
   // The body bytes are identical with or without `?v`; only the cache header
   // changes, so the per-mtime cache stays a single entry.
   const cacheControl = dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
@@ -2170,6 +2230,15 @@ async function tsResponse(abs, dev, elideOpts, cache, immutable) {
       // see what went wrong in their logs.
       // eslint-disable-next-line no-console
       console.error(`[webjs] non-erasable TypeScript in ${abs}: ${err.message}`);
+      // Dev error overlay (#264): a TS strip failure breaks only the CLIENT
+      // module fetch (the page still SSRs, so hydration is silently dead and
+      // the hint below is buried in a JS comment). Push a frame so the open tab
+      // shows the overlay with the offending file + the no-non-erasable hint.
+      reportDevError?.(err, {
+        kind: 'ts-strip',
+        file: abs,
+        hint: 'webjs is buildless: only erasable TypeScript is supported. Replace enum / namespace-with-values / parameter-property / legacy-decorator / import = require with their erasable equivalents. Run `webjs check` (no-non-erasable-typescript rule).',
+      });
       const msg = dev
         // Dev: include the file path and Node's error message so the
         // developer's browser tooling can point them at the offending
@@ -2342,9 +2411,25 @@ function locatePackageDir(appDir, pkgName) {
  * @param {string} bp the normalized base path (`''` = no-op)
  * @returns {string}
  */
+// The overlay renderer source, read once + `export`-stripped so it inlines as
+// plain functions into the classic reload-client script. Sharing the one source
+// (`dev-overlay.js`, which the browser test imports directly) means the test
+// drives the EXACT code that ships, with no drift (#264).
+const DEV_OVERLAY_SRC = readFileSync(new URL('./dev-overlay.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 function reloadClientJs(bp) {
+  // The overlay renderer uses textContent throughout (never innerHTML), so the
+  // error message / code frame can never inject markup (#264). Served only in
+  // dev (the /__webjs/reload.js branch 404s in prod), so it never reaches a
+  // production page.
   return `// webjs dev reload client
+${DEV_OVERLAY_SRC}
 const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
 es.addEventListener('reload', () => location.reload());
+es.addEventListener('webjs-error', (e) => {
+  let f; try { f = JSON.parse(e.data); } catch (_) { return; }
+  renderDevOverlay(f);
+});
 `;
 }
