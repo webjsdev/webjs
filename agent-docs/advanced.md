@@ -406,6 +406,62 @@ document.addEventListener('webjs:navigation-error', (e) => {
 });
 ```
 
+### Form submission state (`webjs:submit-start` / `webjs:submit-end` + `aria-busy`)
+
+When a `<form>` submits through the JS-enhanced router, the form gets a
+submission lifecycle a component can read to disable the submit button, show a
+spinner, or set a pending style:
+
+- The router sets the native `aria-busy="true"` on the form for the in-flight
+  duration (cleared on settle). This IS the readable "is this form submitting"
+  primitive: any component can poll `form.getAttribute('aria-busy')` or style
+  `form[aria-busy="true"]` in CSS.
+- It dispatches a bubbling `webjs:submit-start` (detail `{ form, url }`) when the
+  submission fetch starts, and `webjs:submit-end` (detail `{ form, url, ok }`,
+  `ok` is whether the submission settled as a success) on EVERY settle (success,
+  a 4xx/5xx validation re-render, a navigation error, or an abort by a
+  superseding submit). The pair is balanced even under a rapid re-submit (a
+  nav-token guard keeps a superseded submit's teardown from clearing the busy
+  state a newer submit set, the same guard `<webjs-frame>` uses).
+
+```ts
+// A submit button that disables itself while its form is submitting.
+form.addEventListener('webjs:submit-start', () => { button.disabled = true; });
+form.addEventListener('webjs:submit-end', (e) => {
+  button.disabled = false;            // e.detail = { form, url, ok }
+});
+/* or purely in CSS, no JS: */
+/* form[aria-busy="true"] button[type="submit"] { opacity: .5; pointer-events: none; } */
+```
+
+Progressive enhancement is unaffected: with JS off the form is a normal POST;
+the events + `aria-busy` are a client-only enhancement.
+
+### Optimistic mutations (`optimistic()`)
+
+`optimistic(signal, value, action)` from `@webjsdev/core` shows a mutation's
+expected result IMMEDIATELY (the UI feels instant), runs the real server action,
+and ROLLS BACK on failure. It is a thin wrapper over the signal primitive, no
+state machine.
+
+```ts
+import { signal, optimistic } from '@webjsdev/core';
+import { likePost } from '../actions/like-post.server.js';
+
+const liked = signal(false);
+// in an @click handler:
+const result = await optimistic(liked, true, () => likePost(postId));
+// `liked` flips to true instantly. If likePost THROWS or returns
+// { success: false }, `liked` rolls back to its prior value; the throw
+// re-throws and the { success: false } result is returned (read its
+// error / fieldErrors). On success the optimistic value stays; reconcile
+// to the authoritative value from `result` if you need it.
+```
+
+It rolls back on a thrown error OR an `ActionResult` `{ success: false }`
+envelope, and never on success. Client-only (it mutates a signal), so a
+component importing it is never elided as display-only.
+
 ### Wire-byte optimization
 
 The router sends `X-Webjs-Have: <paths>` listing the marker paths it

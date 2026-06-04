@@ -77,3 +77,12 @@ export function navigate(url: Route, opts?: { replace?: boolean }): Promise<void
 export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
 export { Task, TaskStatus } from './src/task.js';
+
+// Optimistic-mutation helper: set a signal to an expected value immediately,
+// run the action, roll back on a thrown error or a `{ success: false }`
+// ActionResult, keep the value on success. Returns the action's result.
+export function optimistic<T, R>(
+  signal: { get(): T; set(v: T): void },
+  value: T,
+  action: () => Promise<R> | R,
+): Promise<R>;

@@ -59,6 +59,10 @@ export const REACTIVE_IMPORTS = new Set([
   'computed',
   'effect',
   'watch',
+  // `optimistic(signal, value, action)` mutates a signal (client work) and
+  // settles after a server round-trip, so a component importing it is not
+  // display-only and must ship.
+  'optimistic',
   'Task',
   'until',
   'asyncAppend',
