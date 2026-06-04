@@ -2,6 +2,8 @@
 node_modules/
 
 # webjs / framework caches.
+# `.webjs/routes.d.ts` (the generated route-types overlay, regenerated per
+# machine by `webjs types` / `webjs dev`) is correctly ignored by `.webjs/*`.
 # `.webjs/vendor/` is the EXCEPTION: it holds the committed importmap
 # manifest (.webjs/vendor/importmap.json) and optionally the vendored
 # bundle files (after `webjs vendor pin --download`). Both ship to
@@ -38,7 +40,13 @@ npm-debug.log*
 Thumbs.db
 
 # editors
-.vscode/
+# `.vscode/*` ignored, but `.vscode/settings.json` (the webjs-config JSON
+# Schema association, #259) is committed so the editor validates package.json's
+# webjs block out of the box. Same gitignore shape as `.webjs/*` above: a bare
+# `.vscode/` would exclude the directory and no negation could re-include a
+# child, so the settings file would silently never ship.
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # test artifacts

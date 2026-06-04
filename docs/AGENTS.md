@@ -41,6 +41,30 @@ docs/
 
 That's it. No separate manifest, no rebuild.
 
+## Machine-readable agent entrypoints (llms.txt)
+
+The docs site serves the open llms.txt standard (llmstxt.org) so AI
+agents can read the docs as plain text. Three surfaces, all generated
+**live at request time** from the doc pages under `app/docs/**`, so they
+stay in sync with zero build step (add a doc page and it appears
+automatically):
+
+| URL | What it serves |
+|---|---|
+| `/llms.txt` | A structured INDEX. An `# webjs documentation` H1, a one-line blurb, then a markdown bullet list of every doc page (title, blurb, absolute link). Ordered to match the sidebar nav. |
+| `/llms-full.txt` | The full prose CORPUS. Every doc page concatenated as lightweight markdown. In the monorepo it also folds in `agent-docs/*.md`; a standalone deploy that lacks the repo root simply skips that (try/catch read). |
+| `/docs/<topic>/llms.txt` | One page's raw markdown. Every topic gets one via the `app/docs/[topic]/llms.txt/route.ts` dynamic route. |
+
+The generators live in `lib/llms.server.ts` (server-only `.server.ts`
+infix, reads doc pages with node:fs, reuses the search route's title /
+heading / template-stripping approach). The routes are thin
+`route.ts` GET handlers under `app/llms.txt/`, `app/llms-full.txt/`, and
+`app/docs/[topic]/llms.txt/`. The folder named `llms.txt` maps to the
+`/llms.txt` URL because a `route.ts` handler matches before the
+static-asset gate. Absolute links derive from the request origin (so
+they are correct in dev and prod). Integration test:
+`../test/docs/llms.test.mjs`.
+
 ## Style
 
 - Light DOM throughout. Tailwind utilities. Design tokens via `@theme`

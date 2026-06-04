@@ -1,7 +1,9 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor, publishedBuildId } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins } from './importmap.js';
+import { withBasePath } from './base-path.js';
+import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
@@ -776,15 +778,47 @@ function wrapHead(opts) {
   // the request's CSP header by the caller.
   const n = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
 
-  const imports = opts.moduleUrls.map((u) => `import ${jsonForScriptTag(u)};`).join('\n');
-  const lazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
+  // Sub-path deployment (issue #256): the boot script's per-route module
+  // specifiers and the dev reload `src` are framework-emitted same-origin
+  // absolute URLs, so prefix them with the base path (a no-op when empty).
+  // The lazy-loader import is a BARE specifier resolved through the importmap
+  // (whose target is already base-path-prefixed in importmap.js), so it is
+  // NOT prefixed here. The base path is the one set at boot via setBasePath
+  // (read from importmap.js's module state), the same value the importmap
+  // targets were prefixed with, so the boot specifiers and the map agree.
+  const bp = basePath();
+  // Content-hash asset URLs (issue #243): after base-path-prefixing, append
+  // `?v=<hash>` to a same-origin module specifier for immutable caching. A
+  // no-op in dev (so the boot script is byte-identical) and for a bare/
+  // cross-origin specifier; same compose order as the importmap targets
+  // (basePath then `?v`).
+  const fp = (u) => withAssetHash(withBasePath(u, bp), bp);
+  const imports = opts.moduleUrls
+    .map((u) => `import ${jsonForScriptTag(fp(u))};`)
+    .join('\n');
+  const rawLazyEntries = opts.lazyComponents && Object.keys(opts.lazyComponents).length
     ? opts.lazyComponents
     : null;
+  // The lazy map's values are same-origin module URLs `observeLazy` will
+  // dynamically import, so prefix them with the base path too (no-op when
+  // empty).
+  // The lazy map's values are same-origin module URLs `observeLazy` will
+  // dynamically import, so base-path-prefix AND content-hash them (#243), the
+  // same as the eager boot specifiers. `fp` is a pure no-op in dev and at the
+  // root mount with fingerprinting off, so the mapped map equals the raw one
+  // byte-for-byte there; only prod fingerprinting / a sub-path mount changes it.
+  const lazyEntries = rawLazyEntries
+    ? Object.fromEntries(
+        Object.entries(rawLazyEntries).map(([tag, u]) => [tag, fp(u)]),
+      )
+    : rawLazyEntries;
   const lazyBoot = lazyEntries
     ? `\nimport { observeLazy } from '@webjsdev/core/lazy-loader';\nobserveLazy(${jsonForScriptTag(lazyEntries)});`
     : '';
   const boot = (imports || lazyBoot) ? `<script type="module"${n}>\n${imports}${lazyBoot}\n</script>` : '';
-  const reload = opts.dev ? `<script type="module"${n} src="/__webjs/reload.js"></script>` : '';
+  const reload = opts.dev
+    ? `<script type="module"${n} src="${escapeAttr(withBasePath('/__webjs/reload.js', bp))}"></script>`
+    : '';
   const suspenseBoot = opts.streaming
     ? `<script${n}>(function(){` +
       `function r(id){var t=document.querySelector('template[data-webjs-resolve="'+id+'"]');` +
@@ -803,6 +837,8 @@ function wrapHead(opts) {
   // alternates, archives, etc.) AND by the preload block further down.
   // Hoist the declaration so the metadata block can push into it.
   const linkTags = [];
+  // scriptTags collects JSON-LD structured-data blocks (see m.jsonLd below).
+  const scriptTags = [];
 
   // Tiny URL resolver against metadataBase. If metadataBase is set and a
   // value looks like a relative URL (no scheme, no `//` prefix), resolve
@@ -1036,6 +1072,23 @@ function wrapHead(opts) {
     }
   }
 
+  // JSON-LD structured data (schema.org). `m.jsonLd` is a single object
+  // OR an array of objects. The author owns the schema.org shape; the
+  // framework only serializes and HTML-safe-escapes each object into a
+  // `<script type="application/ld+json">` block. A single object emits
+  // ONE script; an array emits one script PER element.
+  //
+  // The block is a NON-EXECUTABLE data island (type application/ld+json),
+  // so CSP script-src does not gate it and it carries NO nonce. Adding one
+  // would wrongly imply it is executable script.
+  if (m.jsonLd != null) {
+    const list = Array.isArray(m.jsonLd) ? m.jsonLd : [m.jsonLd];
+    for (const obj of list) {
+      const tag = jsonLdScript(obj);
+      if (tag) scriptTags.push(tag);
+    }
+  }
+
   // Preload hints: page modules themselves + every discovered component
   // module, then any custom `metadata.preload` entries (fonts, images, etc.)
   // (linkTags array was declared earlier so the metadata block above can
@@ -1056,15 +1109,25 @@ function wrapHead(opts) {
   // importmap-rails) applies nonce on every modulepreload tag for
   // the same reason.
   const noncePreload = opts.nonce ? ` nonce="${escapeAttr(opts.nonce)}"` : '';
+  // Sub-path deployment (issue #256): the modulepreload href is prefixed with
+  // the base path (a no-op when empty), but `crossorigin` / `integrity` are
+  // decided on the ORIGINAL url, so the integrity lookup still keys on the
+  // unprefixed map url and a cross-origin CDN url (never prefixed) keeps its
+  // crossorigin attribute.
+  // Content-hash (#243): the href additionally gets a `?v=<hash>` after the
+  // base-path prefix (a no-op in dev / for a cross-origin url), but
+  // `crossorigin` / `integrity` are still decided on the ORIGINAL url, so the
+  // integrity lookup keys on the unprefixed/unhashed map url and a cross-origin
+  // CDN url (never prefixed, never hashed) keeps its crossorigin attribute.
   for (const url of opts.moduleUrls) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `<link rel="modulepreload" href="${escapeAttr(fp(url))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
   for (const url of opts.preloads || []) {
     linkTags.push(
-      `<link rel="modulepreload" href="${escapeAttr(url)}"` +
+      `<link rel="modulepreload" href="${escapeAttr(fp(url))}"` +
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
@@ -1076,6 +1139,58 @@ function wrapHead(opts) {
         .join(' ');
       linkTags.push(`<link rel="preload" ${attrs}>`);
     }
+  }
+
+  // preconnect / dns-prefetch hints (issue #243). `metadata.preconnect` and
+  // `metadata.dnsPrefetch` each take a URL string, `{ url, crossorigin? }`, or
+  // an array of those. A preconnect warms DNS + TLS + TCP; dns-prefetch only
+  // resolves DNS (no crossorigin). The framework ALSO auto-emits ONE preconnect
+  // to the resolved vendor CDN origin for an unpinned cross-origin app, so the
+  // browser warms that connection before the importmap resolves. The author's
+  // declared origins are tracked so the auto one is not a duplicate.
+  /** @type {Set<string>} the origins the author already declared a preconnect to */
+  const declaredPreconnectOrigins = new Set();
+  /** @param {unknown} hint @returns {{ url: string, crossorigin?: string|boolean } | null} */
+  const normalizeHint = (hint) => {
+    if (typeof hint === 'string') return hint ? { url: hint } : null;
+    if (hint && typeof hint === 'object' && typeof (/** @type {any} */ (hint).url) === 'string') {
+      return /** @type {any} */ (hint);
+    }
+    return null;
+  };
+  /** @param {unknown} value @returns {Array<{ url: string, crossorigin?: string|boolean }>} */
+  const toHints = (value) => {
+    if (value == null) return [];
+    const list = Array.isArray(value) ? value : [value];
+    const out = [];
+    for (const h of list) {
+      const n = normalizeHint(h);
+      if (n) out.push(n);
+    }
+    return out;
+  };
+  /** @param {string|boolean|undefined} co @returns {string} */
+  const crossoriginAttr = (co) => {
+    if (co === undefined || co === false) return '';
+    if (co === true || co === '') return ' crossorigin';
+    return ` crossorigin="${escapeAttr(String(co))}"`;
+  };
+  for (const h of toHints(m.preconnect)) {
+    try { declaredPreconnectOrigins.add(new URL(h.url).origin); } catch { /* relative / opaque; track by raw href instead */ declaredPreconnectOrigins.add(h.url); }
+    linkTags.push(`<link rel="preconnect" href="${escapeAttr(h.url)}"${crossoriginAttr(h.crossorigin)}>`);
+  }
+  for (const h of toHints(m.dnsPrefetch)) {
+    // dns-prefetch never carries crossorigin (it only resolves DNS).
+    linkTags.push(`<link rel="dns-prefetch" href="${escapeAttr(h.url)}">`);
+  }
+  // Auto vendor preconnect: warm the cross-origin vendor CDN connection for an
+  // unpinned app. Deduped against an author-declared preconnect to the same
+  // origin; emits none for a same-origin pinned app or one with no cross-origin
+  // vendors (vendorPreconnectOrigins returns []). crossorigin is required (the
+  // importmap fetches the module as a CORS request).
+  for (const origin of vendorPreconnectOrigins()) {
+    if (declaredPreconnectOrigins.has(origin)) continue;
+    linkTags.push(`<link rel="preconnect" href="${escapeAttr(origin)}" crossorigin>`);
   }
 
   // icons: { icon, apple, shortcut, other }. Each entry can be a string
@@ -1168,7 +1283,7 @@ ${metaTags.join('\n')}
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
 ${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
-${boot}
+${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}
 ${reload}
 ${suspenseBoot}
 </head>
@@ -1423,6 +1538,60 @@ function escapeHtml(s) {
 function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
+
+/**
+ * HTML-safe-escape a JSON string for embedding inside a
+ * `<script type="application/ld+json">` element.
+ *
+ * This is NOT the HTML-entity escaper (escapeHtml / escapeAttr). A
+ * JSON parser reads the raw character, so turning `<` into `&lt;`
+ * would CORRUPT the JSON. Instead we emit the Unicode escape form
+ * (`<`), which a JSON parser decodes back to the original
+ * character while making the literal byte sequence `</script>`
+ * impossible to form in the served HTML. So the embedded data parses
+ * back to the author's exact object, AND a value containing
+ * `</script><img onerror=...>` can never break out of the script tag.
+ *
+ * U+2028 / U+2029 are escaped too: they are valid inside a JSON
+ * string but are line terminators in HTML/JS contexts, and some
+ * consumers choke on them. Escaping keeps the block robust.
+ *
+ * @param {string} json  the `JSON.stringify` output
+ * @returns {string}
+ */
+function escapeJsonLd(json) {
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * Serialize one schema.org object into a `<script type="application/ld+json">`
+ * block, HTML-safe-escaped via escapeJsonLd. Fails SAFE: a non-object
+ * input, or a circular reference that makes JSON.stringify throw, is
+ * skipped (returns the empty string) with a one-line warn, never breaking
+ * the whole render.
+ *
+ * @param {unknown} obj
+ * @returns {string}  the script tag, or '' to skip this element
+ */
+function jsonLdScript(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  try {
+    const json = JSON.stringify(obj);
+    if (typeof json !== 'string') return '';
+    return `<script type="application/ld+json">${escapeJsonLd(json)}</script>`;
+  } catch (err) {
+    console.warn('[webjs] metadata.jsonLd: skipped an entry that could not be serialized:', err && err.message);
+    return '';
+  }
+}
+
+// Internal helpers re-exported for unit testing.
+export { escapeJsonLd as _escapeJsonLd, jsonLdScript as _jsonLdScript };
 
 /**
  * Decide whether a `<link rel="modulepreload">` href needs a

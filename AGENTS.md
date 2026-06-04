@@ -11,11 +11,11 @@ recipes for common tasks. Keep it in sync whenever behaviour changes.
 | `agent-docs/metadata.md` | Full `metadata` / `generateMetadata` field reference |
 | `agent-docs/components.md` | WebComponent deep-dive (controllers, hooks, light/shadow DOM, slots) |
 | `agent-docs/styling.md` | Tailwind helpers + vanilla-CSS opt-out conventions |
-| `agent-docs/built-ins.md` | Auth, sessions, cache, rate-limit, broadcast |
+| `agent-docs/built-ins.md` | Auth, sessions, cache, rate-limit, broadcast, file storage |
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router, WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
 | `agent-docs/deployment.md` | Production, runtime targets, embedded use |
-| `agent-docs/testing.md` | Unit, browser, convention validation |
+| `agent-docs/testing.md` | Unit, browser, convention validation, the `handle()` test harness (`@webjsdev/server/testing`) |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself) |
 | `agent-docs/recipes.md` | Page / route / action / component recipes |
 | `agent-docs/lit-muscle-memory-gotchas.md` | **READ FIRST** when writing components. Lit patterns that break webjs SSR or reactivity, with the webjs-shaped fix for each |
@@ -78,7 +78,7 @@ Every code change MUST include, automatically:
    - **browser** (`*/test/**/browser/*`, run via `npm run test:browser`): anything touching hydration, client render, DOM, slots, the client router, custom-element upgrade.
    - **e2e** (`test/e2e/*.test.mjs`, run via `WEBJS_E2E=1`): full-stack behaviour observable only in a real browser, including **network probes** (was a request issued or not), navigation, streaming.
    - **smoke** (`test/examples/*/smoke/*`): the example apps still boot and serve.
-   A unit test is NECESSARY BUT NOT SUFFICIENT for any client-router / component / browser-facing change: the headline behaviour ("a prefetch fired on hover", "the click avoided a second fetch", "the component hydrated") is a browser/e2e assertion, and shipping unit-only there is the exact gap this rule closes. `npm test` does NOT run the browser or e2e layers; run them yourself and report the result. Never report work done with failing or missing tests. See `agent-docs/testing.md`. Enforced for Claude Code by `.claude/hooks/require-tests-with-src.sh` (blocks a commit that stages `packages/*/src/**` with no test, and a commit that net-removes test lines); the same gate ships to scaffolded apps via `webjs create`.
+   A unit test is NECESSARY BUT NOT SUFFICIENT for any client-router / component / browser-facing change: the headline behaviour ("a prefetch fired on hover", "the click avoided a second fetch", "the component hydrated") is a browser/e2e assertion, and shipping unit-only there is the exact gap this rule closes. `npm test` does NOT run the browser or e2e layers; run them yourself and report the result. Never report work done with failing or missing tests. See `agent-docs/testing.md`. Enforced for Claude Code by `.claude/hooks/require-tests-with-src.sh` (blocks a commit that stages `packages/*/src/**` with no test, and a commit that net-removes test lines). That is the framework repo's own STRICT self-gate. The gate that SHIPS to scaffolded apps via `webjs create` is a softer variant: it WARNS by default (every change should still ship with a test, but that is a convention, matching the convention-vs-check principle), and a scaffolded project opts into the same hard block by setting `WEBJS_TEST_GATE=block`.
 2. **Documentation.** Update `AGENTS.md` for new API surface, `CONVENTIONS.md` for new conventions, `docs/` or `website/` for user-facing features.
 3. **Convention validation.** Run `webjs check` and fix violations.
 
@@ -152,7 +152,7 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 **Why lit-style web components specifically?** AI coding agents have substantial training data on lit. Aligning webjs's component runtime API (reactive properties via `static properties`, lifecycle hooks like `shouldUpdate` / `willUpdate` / `updated` / `firstUpdated` / `updateComplete`, ReactiveController hooks `hostConnected` / `hostDisconnected` / `hostUpdate` / `hostUpdated`, the full `lit-html` directive set, `html` / `css` tagged templates) lets agents emit idiomatic webjs code without framework-specific translation. Webjs ships its own implementation under `packages/core/src/` (clean JSDoc-typed JS, no-build), but the public API surface matches lit so the ecosystem's collective lit knowledge transfers directly. Decorators are the one exception (banned by invariant 10, non-erasable TS); the `declare` + `static properties` pattern replaces them.
 
 - **Sensible defaults, overridable.** Memory store in dev, Redis when configured. HTTP caching via standard `Cache-Control`.
-- **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, all with pluggable adapters.
+- **Built-in essentials.** Auth, sessions, caching, cache store, rate limiting, file storage, all with pluggable adapters.
 - **No build step.** Source files are served as native ES modules.
 - **JSDoc or erasable TypeScript.** Plain `.js` with JSDoc is default. `.ts` / `.mts` is stripped via Node 24+'s built-in `module.stripTypeScriptTypes` (position-preserving, no sourcemap). See invariant 10 + `agent-docs/typescript.md`.
 - **Node 24+ required** for default strip-types behaviour. Enforced by an early preflight: the CLI and the server entry call `assertNodeVersion()` (from `@webjsdev/server`, sourced from `engines.node`), so an older Node fails fast with a clear "you need Node 24+" message naming the found + required version, instead of a cryptic late strip / `fs.watch` failure.
@@ -206,7 +206,7 @@ node_modules/@webjsdev/
 
 Starting points: SSR pipeline → `@webjsdev/server/src/ssr.js`. Client hydration → `@webjsdev/core/src/render-client.js`. Client router → `@webjsdev/core/src/router-client.js`. Convention rules → `@webjsdev/server/src/check.js`.
 
-For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts.
+For UI debugging, use the Playwright MCP server (configured in `.claude.json`) instead of one-shot Bash scripts. For live app introspection, the scaffold also wires a read-only **`webjs` MCP server** (`webjs mcp`, in `.claude.json` next to Playwright) exposing four tools (`list_routes`, `list_actions`, `list_components`, `check`) over the same data functions documented here. It mutates nothing, so it is the safe way to ask "what routes / actions / components does this app expose, and does it pass `webjs check`?" without grepping.
 
 ---
 
@@ -282,14 +282,18 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle that drops serv
 | `notFound()` | Throw to return 404 rendered via `not-found.js`. |
 | `redirect(url)` | Throw to return 307 (default) or 308 redirect. |
 | `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. **Server-side only**; import inside `.server.{js,ts}` files. The bare `@webjsdev/core` specifier resolves to the browser entry, which excludes `expose`; an import from a client-bound file silently reads `undefined`. |
+| `validateInput(fn, validate)` | Attach an input validator to a server action that runs on BOTH the RPC path and the `expose()` REST path, returning a structured `{ success: false, fieldErrors, status: 422 }` on failure (#245). **Server-side only**; excluded from the browser entry like `expose`. See the server-actions section. |
 | `repeat(items, k, t)` | Keyed list directive. Preserves DOM identity on reorder. |
 | `Suspense({fallback, children})` | Streaming boundary. |
 | `connectWS(url, handlers)` | Client WebSocket: auto-reconnect, JSON, queued sends. |
 | `richFetch<T>(url, init?)` | Content-negotiated fetch with rich-type encoding. |
 | `navigate(url, opts?)` | Programmatic client-router nav. `{replace}` swaps in place. |
+| `optimistic(signal, value, action)` | Optimistic-UI helper: set `signal` to `value` immediately, run the async `action`, and roll the signal back on a thrown error or an `ActionResult` `{ success: false }`. Returns the result. A thin wrapper over the signal primitive. |
 | `revalidate(url?)` | Evict snapshot-cache for one URL or all. Call after mutations. |
-| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. |
-| `Metadata` / `MetadataContext` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `import type { Metadata } from '@webjsdev/core'`. |
+| `WebjsFrame` (`<webjs-frame id="...">`) | Escape-hatch partial-swap region. A trigger nested inside it drives it; an EXTERNAL `<a>` / `<form>` (or an ancestor) carrying `data-webjs-frame="<id>"` drives it by id from anywhere (Turbo-style), and `data-webjs-frame="_top"` on a nested trigger breaks OUT to a full nav. While a frame nav is in flight the router sets `aria-busy="true"` on the frame (cleared to `"false"` on any exit) and dispatches a bubbling `webjs:frame-busy` event (detail `{ frameId, busy }`) at start + finish. A frame nav whose response lacks the frame fires a cancelable, bubbling `webjs:frame-missing` event (detail `{ frameId, url, document }`) and leaves the frame unchanged instead of full-swapping; `preventDefault()` hands the outcome to the listener. |
+| `Metadata` / `MetadataContext` / `JsonLd` (type-only) | Types the `metadata` / `generateMetadata(ctx)` return + context. `metadata.jsonLd` (a `JsonLd` object or array) emits schema.org structured data as `<script type="application/ld+json">` (escaped automatically). `metadata.preconnect` / `metadata.dnsPrefetch` (#243) emit `<link rel="preconnect">` / `<link rel="dns-prefetch">` connection-warming hints (a URL string, `{ url, crossorigin? }`, or an array); the framework also auto-emits one preconnect to the resolved cross-origin vendor CDN origin for an unpinned app. `import type { Metadata } from '@webjsdev/core'`. |
+| `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` (type-only) | Types the page / layout / route-handler args (`{ params, searchParams, url, actionData }`; layouts add `children`). `R` is an optional route literal that narrows `params` against the generated route union. `Route` / `RouteParams<R>` are the href + params helpers. Run `webjs types` to generate the union (see CLI reference). `import type { PageProps } from '@webjsdev/core'`. |
+| `WebjsConfig` (type-only) | Types the `webjs` package.json config block (`elide`, `headers`, `redirects`, `trailingSlash`, `basePath`, `csp`, the ingress body-size + timeout caps), with `WebjsHeaderRule` / `WebjsRedirectRule` / `WebjsCspConfig` / `WebjsTrailingSlash` for the nested shapes. A companion JSON Schema (`@webjsdev/server/webjs-config.schema.json`, associated in the scaffold's `.vscode/settings.json`) flags an unknown key in the editor. `import type { WebjsConfig } from '@webjsdev/core'`. |
 
 ### Directives, from `import { … } from '@webjsdev/core/directives'`
 
@@ -485,6 +489,8 @@ Framework wraps the sibling page in `Suspense({ fallback: <loading>, children: <
 
 `sitemap.{js,ts}`, `robots.{js,ts}`, `manifest.{js,ts}`, `icon.{js,ts}`, `apple-icon.{js,ts}`, `opengraph-image.{js,ts}`, `twitter-image.{js,ts}` live at app root or static segments only (not inside `[dynamic]`). Each default-exports a possibly-async function.
 
+For `sitemap.{js,ts}`, the optional `sitemap(entries)` helper from `@webjsdev/server` serializes an array of `{ url, lastModified?, changeFrequency?, priority? }` into spec-valid `<urlset>` XML (XML-escaping each url so a `&`/`<` cannot break the document, formatting `lastModified` as a W3C datetime, validating `priority` 0..1 and the `changeFrequency` enum, skipping a urlless entry). For a site past the 50,000-URL per-file limit, `sitemapIndex(sitemaps)` builds a `<sitemapindex>`: serve each shard from a `route.{js,ts}` handler returning `sitemap(shardEntries)` and return `sitemapIndex([...])` from the root `app/sitemap.{js,ts}`. Both helpers are optional; the function can still return a raw string or `Response`.
+
 ### Route handlers (`app/**/route.{js,ts}`)
 
 - Export named async functions per method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. Each receives `(Request, { params })` and returns a `Response` or any value (auto-JSON).
@@ -529,7 +535,16 @@ Two markers describe server-side files. The combination determines behaviour:
 
 - Server actions export named async functions. Args + return values must round-trip through webjs's serializer.
 - **Importing from a client component IS the API.** The dev server rewrites the import to an RPC stub.
-- **Expose as REST:** `expose('METHOD /path', fn, { validate?: parse })`. Same function powers both callers. `validate` runs only on the HTTP path (direct RPC bypasses it).
+- **Expose as REST:** `expose('METHOD /path', fn, { validate?: parse })`. Same function powers both callers.
+- **Input validation runs on BOTH call paths (#245).** A `validate` declared once runs SERVER-SIDE before the action body whether the action is invoked via the RPC path (a client component import) OR via its `expose()` REST route. Attach it two ways:
+  - `validateInput(fn, validate)` from `@webjsdev/core` (a pure-RPC action, no REST route), or
+  - `expose('METHOD /path', fn, { validate })` (also a REST route).
+  Both write the same metadata, so both call paths see the validator. The framework only CALLS the validator (it ships no validation library) and interprets the return:
+  - `{ success: true, data? }` -> valid; the action runs with `data` if present, else the original input;
+  - `{ success: false, fieldErrors, message? }` (an object with a boolean `success` of `false`, OR a `fieldErrors`) -> FAILED; the framework returns a structured `ActionResult` `{ success: false, fieldErrors, error: message?, status: 422 }` WITHOUT calling the action body. Over RPC this is a normal 200 result the client reads as `result.fieldErrors`; over REST it is a 422 JSON response. This is the new structured field-error path that matches the `ActionResult` envelope (so the no-JS page-action re-render and the client both understand it);
+  - a THROW -> a sanitized error (a 400 on REST keeping a schema lib's `issues`; on RPC the same sanitized error result as a thrown action body, prod-safe);
+  - any OTHER returned plain value -> treated as the transformed/coerced input (back-compat with `validate: Schema.parse`).
+  Disambiguation: a return is an envelope ONLY when it is an object with a boolean `success` OR a `fieldErrors`; otherwise it is a transformed input. The validator lives in the `.server` file and never ships to the client. Stay zod-free with a three-line adapter: `validate: (i) => { const r = Schema.safeParse(i); return r.success ? { success: true, data: r.data } : { success: false, fieldErrors: r.error.flatten().fieldErrors }; }`. The validator receives the action's FIRST argument (the conventional single input object).
 
 ### RPC security model
 
@@ -634,9 +649,11 @@ export async function POST(req: Request) {
 
 ---
 
-## Styling: Tailwind + `lib/utils/ui.ts` helpers (default)
+## Styling: Tailwind-first, `lib/utils/ui.ts` helpers (strong default)
 
-Tailwind CSS browser runtime + `@theme` tokens declared in the root layout. Repeated class bundles → JS helpers in `lib/utils/ui.ts` returning `` html`...` `` fragments (SSR-time, no client runtime).
+**Tailwind is the strong default for pages AND light-DOM components (the default DOM mode).** Use Tailwind utilities for layout, spacing, color (via the `@theme` tokens), typography, borders, radius, shadows, and interaction states (hover/focus/active/disabled, dark mode). Light DOM does not scope styles, so utilities apply directly and are the right tool.
+
+**The lit muscle-memory trap.** The lit reflex is to scope CSS in a shadow root with `static styles = css\`\``. In webjs the default is light DOM, which does NOT scope, so reaching for a scoped `css` block or an inline `<style>` with semantic class names (`.hero`, `.feature`, `.card`) in a light-DOM component is the habit to resist. Prefer Tailwind utilities. When a class bundle repeats, extract it into a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment (SSR-time, no client runtime), NOT a CSS class.
 
 ```ts
 // lib/utils/ui.ts
@@ -648,7 +665,9 @@ export function rubric(label: string) {
 
 Extraction rule: 1× inline. 2-3× identical → helper. 1-2 prop variation → parameterised helper. Radically different → keep inline. (No `@apply`: hides utilities from the reader.)
 
-Custom CSS is fully supported. Light-DOM components MUST follow the class-prefix rule. See `agent-docs/styling.md` for vanilla-CSS-only opt-out.
+**The custom-CSS allowlist (the only things raw CSS is for).** Reserve raw CSS for what utilities genuinely cannot express: design-token `:root` + `@theme` definitions, `@property` animated custom properties with `@keyframes`, `::-webkit-scrollbar` and `scrollbar-color`, `prefers-reduced-motion` blocks, and complex `color-mix()` or gradient effects. When custom CSS IS unavoidable in a light-DOM component, the tag-prefix invariant (#7) still holds: prefix every class selector with the component tag. **Shadow-DOM components (`static shadow = true`) legitimately use `static styles = css\`\``, which is the right home for scoped CSS, unchanged.**
+
+See `agent-docs/styling.md` for the full Tailwind-first treatment and the vanilla-CSS-only opt-out.
 
 ---
 
@@ -662,15 +681,19 @@ A non-GET `<form>` whose target page exports an `action` (see Pages above) is th
 
 Wire-byte optimization is automatic: the router sends `X-Webjs-Have` listing marker paths it has; the server short-circuits at the deepest match and returns only the divergent fragment. Rapid clicks are safe (prior fetches abort, nav-tokens prevent stale reverts). Scroll position is captured + restored on back/forward.
 
+**A failed navigation recovers in place, never a destructive full reload.** A successful swap and an HTML error body of any status (e.g. a `422` re-rendered form) both apply in place. For the remaining failure cases (a non-HTML error response like a `500` with a JSON body, or a transport/parse failure where `fetch` rejected or the body did not parse) the router dispatches a cancelable, bubbling `webjs:navigation-error` CustomEvent on `document` (detail `{ url, status, error }`, where `status` is the HTTP status or `null` and `error` is the `Error` or `null`). `preventDefault()` hands recovery to the app and leaves the page exactly as it is (shell, scroll, focus, client state preserved); otherwise the router renders a minimal in-place `<div role="alert">` into the deepest layout children slot (outer chrome preserved), falling back to a hard load only when there is no shared layout marker to render into. An AbortError (a superseding nav) is a normal supersede and never fires the event. See `agent-docs/advanced.md`.
+
 **Link prefetch is on by default (intent strategy).** Hovering, focusing, or touch-starting a same-origin in-app link speculatively fetches that page (with the same `X-Webjs-Have` header a real nav sends) and caches the fragment, so the click resolves with no round-trip. The per-link knob is a `data-prefetch` attribute (valid-HTML `data-*`, like SvelteKit and Astro; Next / Nuxt / Remix express the same choice as a component prop, which webjs has no equivalent for since links are plain `<a href>`), with four strategies and Next-style aliases: `intent` (default, hover/focus/touch), `render` (or `true`, eager on insert), `viewport` (or `auto`, on scroll-into-view), `none` (or `false`, never). Only internal links are prefetched: cross-origin, `download`, `target` other than `_self`, non-HTML extensions, `data-no-router`, and pure hash jumps are all skipped, exactly like the click path. Speculation is bounded (concurrency cap, in-flight de-dupe, a short hover dwell, an LRU+TTL cache) and is disabled under `Save-Data` / `prefers-reduced-data`. Opt out per link with `data-prefetch="none"`, `data-no-prefetch`, or `rel="external"`. There is no logout-style heuristic: prefetch issues a real GET, so a non-idempotent action must be a POST or a `<form>` (the same contract Next / Nuxt / Remix rely on). A native `<link rel="prefetch">` in the head is the browser's own mechanism and is never touched. When a fragment lands in the cache the router dispatches a `webjs:prefetch` event on `document` (detail `{ url, key, from: 'prefetch' }`), so app code can instrument hit rate and gate work on a warm cache. See `agent-docs/advanced.md`.
 
 **Production benefits from HTTP/2 at the edge.** Per-file ESM rides HTTP/2 multiplex to be competitive with bundling. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare, Heroku) serve HTTP/2 automatically. Bare-VM self-hosters put nginx / Caddy / Traefik in front. The production server (`npm run start`) speaks plain HTTP/1.1.
 
-For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. See `agent-docs/advanced.md` for the full mechanism.
+For partial-swap NOT tied to a folder layout, wrap in `<webjs-frame id="...">`. A nested trigger drives it; an EXTERNAL `<a>` / `<form>` carrying `data-webjs-frame="<id>"` drives it by id from anywhere (Turbo-style), and `data-webjs-frame="_top"` breaks OUT to a full nav. The router sets `aria-busy="true"` on the frame during its fetch (cleared on any exit) and fires a bubbling `webjs:frame-busy` event at start + finish. A frame nav whose response lacks the frame fires a cancelable `webjs:frame-missing` event and leaves the frame unchanged (no silent full-page swap). See `agent-docs/advanced.md` for the full mechanism.
 
 ---
 
 ## Invariants (for both humans and agents)
+
+> Hit one of these as a runtime error? The [Troubleshooting page](https://docs.webjs.com/docs/troubleshooting) is keyed by symptom (the throw-at-load server import, the backtick-in-template 500, the TypeScript strip failure, the SSR browser-global crash, the missing-frame swap) and maps each back to the invariant and the `webjs check` rule below.
 
 1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** The `.server.{js,ts}` extension is the path-level boundary: the file router refuses to serve the source to the browser. A separate `'use server'` directive at the top of a `.server.ts` file makes its exports RPC-callable from client code; without the directive the file is a server-only utility (browser imports get a throw-at-load stub). Direct imports of `@prisma/client`, `node:*`, or any server-only dep from a file under `components/`, `app/**/page.{js,ts}`, `app/**/layout.{js,ts}`, `app/**/loading.{js,ts}`, `app/**/error.{js,ts}`, or `app/**/not-found.{js,ts}` will crash the browser at module load.
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
@@ -723,7 +746,11 @@ webjs create <name> --template saas  # auth + login/signup + protected dashboard
 webjs dev    [--port N]                               # dev server with live reload
 webjs start  [--port N]                               # prod server. No build step, source IS the runtime. Speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]         # unit + browser tests
-webjs check  [--fix]                                  # convention validator
+webjs check  [--rules] [--json]                       # correctness validator (--rules lists the checks; report-only, no autofix). --json emits the structured violations + a summary count as JSON (non-zero exit on violations preserved), for an agent loop
+webjs mcp                                             # read-only MCP server (stdio) exposing the live route table, server actions (with RPC hashes), custom-element tags, and structured check violations, all reusing existing functions. Mutates nothing
+webjs doctor                                          # project-health checklist (Node, tsconfig, env drift, vendor pins, @webjsdev versions, git hook); non-zero exit on a hard fail so CI can gate
+webjs types                                           # generate .webjs/routes.d.ts (typed Route union + per-route params; #258). Opt-in; webjs dev emits it automatically
+webjs typecheck [tsc args...]                         # type-check the app with the project's own tsc --noEmit (non-zero on errors; needs typescript installed)
 webjs create <name> [--template api|saas]             # scaffold a new app
 webjs db <prisma-subcommand> [...]                    # passthrough to prisma
 webjs ui init                                         # @webjsdev/ui CLI
@@ -877,6 +904,37 @@ webjs's file router matches `/about` AND `/about/` against the same route (every
 
 ---
 
+## Sub-path deployment: `webjs.basePath` in package.json (#256)
+
+An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT strip the prefix needs every framework-emitted absolute URL to carry the prefix, or module resolution 404s and the page never hydrates. Declare it under `package.json` `"webjs": { "basePath": ... }`, cohesive with `webjs.redirects` / `webjs.trailingSlash` / `webjs.headers` / `webjs.csp`:
+
+```jsonc
+{ "webjs": { "basePath": "/app" } }    // example.com/app/ mount
+{ "webjs": { "basePath": "" } }        // root mount (the default, a pure no-op)
+```
+
+- **Normalization.** `'app'`, `'/app'`, and `'/app/'` all normalize to `'/app'`; a nested `'/foo/bar'` is allowed; an empty value / absence is the root-mount default. An unsafe value (`..`, a protocol, a `//host` network-path reference, whitespace, a backslash) is rejected to the empty default, so a typo fails safe instead of poisoning every emitted URL.
+- **The model is strip-at-ingress + prefix-on-emit.** At the very START of request handling the prefix is STRIPPED from the request path and the request rewritten, so all downstream logic (route matching, the `/__webjs/*` checks, the source-file gate, the redirects / trailing-slash / `webjs.headers` configs, the HTML cache key) sees a root-relative path and works UNCHANGED. A request whose path is NOT under the base path is not for this app and 404s. On emit, every framework-emitted same-origin absolute URL gets the prefix prepended: the importmap targets (`/__webjs/core/*` and same-origin `/__webjs/vendor/*`; a cross-origin `https://` CDN vendor URL is left untouched), the modulepreload hrefs, the boot script's per-route module specifiers and lazy entries, the dev reload `src`, and the 103 Early Hints preloads.
+- **Empty default is byte-identical.** With no `basePath` (or `""`) both seams are pure no-ops, so an unconfigured app serves exactly the same bytes as before this feature (guarded by a differential test).
+- **OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed (the same boundary Next draws between basePath-prefixing its `<Link>` and a raw `<a href>`; webjs links are plain `<a href>`). The #256 acceptance covers framework-emitted URLs and request matching only.
+
+Mechanism: `normalizeBasePath` / `readBasePath` / `withBasePath` / `stripBasePath` in `packages/server/src/base-path.js`; the ingress strip is in `dev.js`'s `produce()` (before `applyRedirects`), the importmap-target prefix in `importmap.js` (`setBasePath`), the boot / preload / reload prefix in `ssr.js`.
+
+---
+
+## Content-hash asset URLs: `?v=<digest>` immutable caching (prod) (#243)
+
+Every served app module (`.js` / `.ts`) and `public/` asset used to ship `Cache-Control: public, max-age=3600` because its URL was un-versioned (the dev.js comment explains why `immutable` is unsafe without a per-file fingerprint, citing a real regression after a core version bump). The importmap build id does NOT change on an app-module byte change, so it cannot be the per-asset fingerprint. In PRODUCTION the framework instead appends a PER-FILE content hash, computed at serve time (no build step).
+
+- **Emit (prod only).** `withAssetHash(url)` (in `packages/server/src/asset-hash.js`) appends `?v=<hash>` to a framework-emitted SAME-ORIGIN absolute URL: the importmap targets (`importmap.js` `buildImportMap`), the `<link rel="modulepreload">` hrefs, the boot script's module specifiers + lazy entries (`ssr.js`), AND the 103 Early Hints preloads (`dev.js` `routeFor`, so the hint warms exactly the URL the body requests). The hash is a 12-hex prefix of a sha-256 over the file BYTES, memoized in a `Map<absPath, hash>` and cleared on the fs.watch rebuild (so a changed file re-hashes). It is a NO-OP in dev (so dev output is byte-identical), a NO-OP for a CROSS-ORIGIN URL (a `https://` jspm vendor target, which jspm already versions and whose #235 SRI key is the un-hashed URL, plus already-version-named `/__webjs/vendor/*` bundles), and composes with `withBasePath` (basePath THEN `?v`, so a sub-path app emits `<basePath>/app/foo.js?v=hash`). The framework's own `/__webjs/core/*` runtime is fingerprinted too (it changes across core versions, the exact regression cited).
+- **App-module body is elision-aware, so the hash folds in the elision verdict.** An app module's SERVED body is not its raw source: the elision pass (#169) strips a side-effect import to a display-only component. That strip is a property of the IMPORTED component's verdict, so a component flipping display-only to interactive changes the importer's served body while its source stays byte-identical. Hashing the source alone would keep the same `?v` and a returning client would hold the stale immutable importer (the now-interactive component never imported, so never hydrated). So a relativized digest of the elidable + inert set is folded into every APP-module hash (`setElisionFingerprint` in `asset-hash.js`, set from `ensureReady`): a verdict flip busts every app module's `?v`. The fingerprint is empty when nothing is elidable, so a no-elision app's hash stays exactly `sha256(bytes)`; core / `public/` files are never elision-transformed, so they hash over their bytes alone.
+- **Serve.** A request carrying a `?v=` query is served `Cache-Control: public, max-age=31536000, immutable` (the pathname, query stripped, resolves the file as today; only the cache header changes). An un-fingerprinted request keeps the 1h fallback. Dev stays `no-cache`.
+- **Deploy-busts (the safety invariant).** A deploy that changes a module's bytes changes its hash, so its emitted URL changes, so a returning client fetches the new URL instead of serving the stale immutable copy. The build id stays a stable per-deploy fingerprint (the internal `importMapHash()` computation excludes the `?v`), so #241's HTML-cache keying is unaffected.
+
+See `agent-docs/advanced.md` (content-hash caching + the preconnect hints) and `docs/app/docs/no-build/page.ts`.
+
+---
+
 ## Conditional GET: ETag + If-None-Match -> 304 (on by default) (#240)
 
 Every CACHEABLE response carries a content-hash `ETag`, and a repeat request whose `If-None-Match` matches it gets a `304 Not Modified` with no body (RFC 7232). So a client holding an identical copy revalidates with a tiny 304 instead of re-transferring the whole body. Wired once at the response funnel in `dev.js`'s `handle()` (mechanism: `applyConditionalGet` in `packages/server/src/conditional-get.js`), so it covers SSR HTML pages, static assets in `public/`, app source modules, and the core / vendor runtime modules uniformly.
@@ -943,7 +1001,9 @@ Even with `revalidate` set, the framework refuses to cache a response unless eve
 
 The cached value is the stable per-page HTML body only. The per-response varying bits are RE-MINTED on every cache hit, so a brand-new visitor served from cache is still correct: the `webjs_csrf` cookie is freshly issued (it is a `Set-Cookie` header, never part of the cached body), and the published build id is re-read. CSP-enabled pages are simply never cached (see the guard table), so there is no stale-nonce risk. A cached page and its fresh render are observably identical within the window (differential correctness).
 
-**Build id is folded into the cache key, so a deploy invalidates for free.** The cached HTML bakes the deploy's `data-webjs-build` importmap into its boot script. With a Redis store that survives a deploy, a v2 process serving a v1-body would resolve modules against stale vendor URLs. To prevent that, the cache key embeds the published build id (the importmap fingerprint) alongside the path + query, so a new deploy naturally writes and reads under fresh keys and never serves a stale-importmap body. The old-deploy entries expire via their TTL.
+**Build id is folded into the cache key, so a VENDOR-changing deploy invalidates for free.** The cached HTML bakes the deploy's `data-webjs-build` importmap into its boot script. With a Redis store that survives a deploy, a v2 process serving a v1-body would resolve modules against stale vendor URLs. To prevent that, the cache key embeds the published build id (the importmap fingerprint) alongside the path + query, so a new deploy naturally writes and reads under fresh keys and never serves a stale-importmap body. The old-deploy entries expire via their TTL.
+
+> **App-module-only deploys (#243 interaction, fixed in #318).** The published build id is a fingerprint of the IMPORTMAP (core + vendor) only, so a deploy that changes ONLY an app module's bytes (not a vendor) does NOT move it. To keep a Redis-cached `revalidate` page from surviving such a deploy and serving its baked-in OLD `?v=<hash>` boot URLs, the HTML cache key ALSO folds an **app-source fingerprint** (#318): a deterministic, location-independent digest of the browser-bound file set's content hashes (the same pattern #243 uses for its elision fingerprint), computed once per analysis in PROD. An app-source-changing deploy therefore re-keys the cache (a fresh render), while a no-change redeploy reproduces the same fingerprint so a warm cache survives. The CLIENT-ROUTER build id (`data-webjs-build`) deliberately stays importmap-only and does NOT move on an app-only deploy: a partial-swap fragment already carries the new `?v` boot URLs, so app JS updates propagate on the next navigation, and a hard reload (which would wipe a half-filled form) is neither needed nor wanted for an app-only change. The mechanism is `setAppSourceFingerprint` in `html-cache.js`, fed from `dev.js`'s `ensureReady`.
 
 ### On-demand revalidation: `revalidatePath` (server-side)
 
@@ -1053,6 +1113,18 @@ Precedence is env override > package.json > default. A value of `0` disables tha
 | `keepAliveTimeout` | 5s | `webjs.keepAliveTimeoutMs` | `WEBJS_KEEP_ALIVE_TIMEOUT_MS` | Idle window before a kept-alive socket is closed |
 
 node semantics: `headersTimeout` MUST be strictly less than `requestTimeout` to ever fire (node measures both deadlines from the same request start), so a config that sets them inconsistently has `headersTimeout` clamped to just under `requestTimeout`. A value of `0` disables that timeout (node's own no-limit sentinel). Mechanism: `computeServerTimeouts` / `readBodyLimits` in `packages/server/src/body-limit.js`, read once at boot in `dev.js` (`readServerTimeoutsFromApp` / `readBodyLimitsFromApp`) and, for the body limits, stamped on every request scope so `readBody` enforces them too.
+
+---
+
+## File storage: `FileStore` + `diskStore` (streaming, traversal-safe) (#247)
+
+webjs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. It mirrors the cache / session adapter shape: a documented `FileStore` interface, a default local-disk adapter, and a module singleton so an app swaps the backend in one call without touching any call site. `import { getFileStore, setFileStore, diskStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server'`.
+
+- **The `FileStore` interface** operates on web-standard objects only: `put(key, file)` (a `File` / `Blob` / `ReadableStream` / `Uint8Array`) returns `{ key, size, contentType }`; `get(key)` returns `{ body, size, contentType }` (a STREAMING handle, `body` is a stream so a serving route does `new Response(handle.body, { headers })` without reading the file into memory) or `null`; `delete(key)` is idempotent; `url(key)` is the served URL.
+- **`diskStore({ dir?, baseUrl? })`** is the default adapter, rooted at `<cwd>/.webjs/uploads` (gitignore the directory). The write is STREAMING (`file.stream()` -> `Readable.fromWeb` -> `createWriteStream` via `pipeline`), so a large upload uses constant memory. The upstream `maxMultipartBytes` cap (#237) bounds the size before the bytes reach the store.
+- **Traversal-safe keys (security).** Every key resolves to an absolute path under `dir` and is REJECTED if it escapes, using the same `resolve` + `startsWith(dir + sep)` containment guard as the `/public/*` serve path. A key with `..`, an absolute path, a leading slash, a NUL byte, or a backslash throws (`assertSafeKey`) BEFORE any fs op. `generateKey(filename?)` mints an opaque `<uuid>.<ext>` key (whitelisted extension only), the recommended path; never trust a user-supplied filename as a key.
+- **Signed URLs.** `signedUrl(key, { secret, expiresIn })` / `verifySignedUrl(input, secret)` mint + verify an expiring HMAC-SHA256 (base64url) over the exact key plus its expiry, so a serving route gates access without a session lookup. Both the key and the expiry are signed (neither can be tampered with) and the compare is constant-time.
+- **S3-pluggability.** Because the interface is web-standard objects only, an S3 / R2 / GCS adapter is a drop-in (`setFileStore(s3Store(...))`) with no call-site change. webjs ships no S3 SDK. Mechanism: `packages/server/src/file-storage.js`. See `agent-docs/built-ins.md` (the interface) and the "Receive and persist an uploaded file" recipe in `agent-docs/recipes.md`.
 
 ---
 

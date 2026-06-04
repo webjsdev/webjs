@@ -13,7 +13,7 @@
  *     --moduleResolution bundler test/types/metadata-types.test-d.ts
  */
 
-import type { Metadata, MetadataContext } from '@webjsdev/core';
+import type { Metadata, MetadataContext, JsonLd } from '@webjsdev/core';
 
 /* ------------- A fully-populated, valid metadata object ------------- */
 
@@ -67,8 +67,28 @@ const full: Metadata = {
   cacheControl: 'public, max-age=60',
   preload: [{ href: '/fonts/Inter.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' }],
   other: { 'msvalidate.01': 'bing-token' },
+  jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: 'Hi' },
 };
 void full;
+
+/* ------------- jsonLd: single object AND array of objects (#260) ------------- */
+
+const ldSingle: Metadata = {
+  jsonLd: { '@context': 'https://schema.org', '@type': 'Product', name: 'Widget' },
+};
+void ldSingle;
+
+const ldArray: Metadata = {
+  jsonLd: [
+    { '@type': 'Article', headline: 'Post' },
+    { '@type': 'BreadcrumbList', itemListElement: [] },
+  ],
+};
+void ldArray;
+
+// JsonLd is a re-exported, permissive structured type.
+const ldTyped: JsonLd = { '@type': 'Organization', name: 'Acme', nested: { a: 1 } };
+void ldTyped;
 
 /* ------------- Accepted union variants ------------- */
 
@@ -113,6 +133,10 @@ void wrong4;
 // @ts-expect-error robots.index must be a boolean, not a string.
 const wrong5: Metadata = { robots: { index: 'yes' } };
 void wrong5;
+
+// @ts-expect-error jsonLd is an object or array of objects, never a string (#260).
+const wrong6: Metadata = { jsonLd: 'not-json-ld' };
+void wrong6;
 
 /* ------------- generateMetadata return + context typing ------------- */
 

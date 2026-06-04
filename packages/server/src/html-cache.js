@@ -26,6 +26,7 @@
 
 import { getStore } from './cache.js';
 import { STREAM_MARKER } from './conditional-get.js';
+import { createHash } from 'node:crypto';
 import { publishedBuildId } from './importmap.js';
 import { dynamicAccessed } from './context.js';
 
@@ -52,6 +53,39 @@ export const HTML_CACHE_MARKER = 'x-webjs-html-cache';
  * leans on the TTL for the rest (a best-effort global flush).
  */
 let _generation = 0;
+
+/**
+ * A fingerprint of the served app source, folded into every cache key (#318).
+ * The published build id keys on the IMPORTMAP (core + vendor) only, so a deploy
+ * that changes ONLY an app module's bytes does not move it, and a Redis-cached
+ * `revalidate` page survives that deploy still serving its baked-in OLD `?v`
+ * boot URLs (under #243 immutable caching those then content-address to stale
+ * bytes). dev.js sets this to a deterministic, location-independent digest of
+ * the browser-bound file set's content hashes (PROD only; '' in dev, where
+ * fs.watch handles staleness), so an app-source-changing deploy re-keys (a fresh
+ * render) while a no-change redeploy keeps the key (a warm cache survives). The
+ * client-router build id deliberately stays importmap-only: a partial-swap
+ * fragment already carries the new `?v` boot URLs, so app updates propagate on
+ * the next navigation without a destructive hard reload.
+ *
+ * @type {string}
+ */
+let _appSourceFp = '';
+
+/**
+ * Set the app-source fingerprint folded into the HTML cache key (see
+ * `_appSourceFp`). Called by dev.js from `ensureReady` after the browser-bound
+ * file set + asset hashes are known, and again on each rebuild. The input is a
+ * deterministic, location-independent STRING (sorted `relpath:contentHash`
+ * lines); it is digested to a short hex so the key stays compact. An empty
+ * input clears the fingerprint (the key collapses to its prior shape).
+ *
+ * @param {string} raw
+ * @returns {void}
+ */
+export function setAppSourceFingerprint(raw) {
+  _appSourceFp = raw ? createHash('sha256').update(raw).digest('hex').slice(0, 16) : '';
+}
 
 /**
  * Read the revalidation window (seconds) a page module opted into via
@@ -86,8 +120,13 @@ export function readRevalidate(pageModule) {
  *    naturally writes and reads under fresh keys. The cached HTML bakes the
  *    deploy's `data-webjs-build` importmap into its boot script, so a Redis
  *    store that survives a deploy must NOT let a v2 process serve a v1-body
- *    (resolving modules against stale vendor URLs). Folding the build id in
- *    means a deploy effectively invalidates all cached HTML for free.
+ *    (resolving modules against stale vendor URLs);
+ *  - the app-source fingerprint (#318), so a deploy that changes ONLY an app
+ *    module's bytes (which does not move the importmap build id) also re-keys,
+ *    instead of serving a cached body with stale `?v` boot URLs. Together the
+ *    build id (vendor) and the app-source fingerprint (app modules) mean ANY
+ *    deploy that changes the served output re-keys, while a no-change redeploy
+ *    keeps every key so a warm cache survives.
  *
  * @param {URL} url
  * @returns {string}
@@ -100,7 +139,11 @@ export function htmlCacheKey(url) {
     ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&')
     : '';
   const build = publishedBuildId() || 'nobuild';
-  return `${KEY_PREFIX}${build}:${_generation}:${url.pathname}${search}`;
+  // The app-source fingerprint (#318) re-keys on an app-module-only deploy that
+  // the importmap-only build id misses. Empty (dev / no fingerprint) collapses
+  // to the prior key shape, so an unconfigured app is byte-identical.
+  const appfp = _appSourceFp ? `${_appSourceFp}:` : '';
+  return `${KEY_PREFIX}${build}:${appfp}${_generation}:${url.pathname}${search}`;
 }
 
 /**

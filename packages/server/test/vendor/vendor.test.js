@@ -404,11 +404,38 @@ test('jspmGenerate: second call with same installs hits in-process cache', { ski
   assert.deepEqual(first, second, 'cached call returns the same URLs');
 });
 
-test('jspmGenerate: install order does not affect output', { skip: !NETWORK_OK }, async () => {
-  clearVendorCache();
-  const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
-  const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
-  assert.deepEqual(a, b, 'output should be order-independent');
+test('jspmGenerate: install order does not affect OUR merged output (deterministic mock, no live CDN)', async () => {
+  // The property under test is OUR per-package resolve + merge being
+  // order-independent, NOT the live CDN's transitive-resolution stability. The
+  // old test hit ga.jspm.io twice and `deepEqual`d the results, which flaked
+  // (#312): the live CDN occasionally resolved a transitive in one ordering but
+  // not the other. Mock the generate endpoint so each install resolves to a
+  // FIXED fragment, isolating our code from the live CDN.
+  const fragment = (pkg) => {
+    const name = pkg.replace(/@[^@]*$/, ''); // strip the trailing @version
+    return { [name]: `https://ga.jspm.io/npm:${pkg}/mock.js` };
+  };
+  const mock = async (_url, opts) => {
+    const { install } = JSON.parse(opts.body); // jspmResolveOne sends one install per call
+    const imports = {};
+    for (const i of install) Object.assign(imports, fragment(i));
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  await withMockedFetch(mock, async () => {
+    clearVendorCache();
+    const a = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
+    clearVendorCache(); // force b to re-resolve through the mock, not the in-process cache
+    const b = await jspmGenerate(['clsx@2.1.1', 'picocolors@1.1.1']);
+    assert.deepEqual(a, b, 'merged output must be order-independent');
+    assert.deepEqual(
+      a,
+      {
+        picocolors: 'https://ga.jspm.io/npm:picocolors@1.1.1/mock.js',
+        clsx: 'https://ga.jspm.io/npm:clsx@2.1.1/mock.js',
+      },
+      'each requested package resolved to its fixed fragment',
+    );
+  });
 });
 
 /* ---------- jspmGenerate failure modes (mocked fetch, no network) ---------- */
@@ -1679,6 +1706,232 @@ test('resolveVendorImports: ok=true for a pin file (deterministic disk read)', a
     const r = await resolveVendorImports(dir, async () => new Set(['ignored']));
     assert.equal(r.ok, true, 'a pin-file read never partially fails');
   } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+/* ---------- live-resolve SRI integrity (#235), mocked fetch ---------- */
+
+// Build an app dir with one resolvable bare-import package so the live path
+// runs (getPackageVersion needs a real node_modules entry).
+async function makeLiveApp(slug, pkg = 'dayjs', version = '1.11.20') {
+  const dir = join(tmpdir(), `webjs-${slug}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, 'node_modules', pkg), { recursive: true });
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'host' }));
+  await writeFile(join(dir, 'node_modules', pkg, 'package.json'),
+    JSON.stringify({ name: pkg, version, main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', pkg, 'index.js'), 'export default 1;\n');
+  return dir;
+}
+
+// A jspm-generate mock response carrying a `map.imports` fragment.
+function jspmResponse(imports) {
+  return /** @type any */ ({ ok: true, status: 200, json: async () => ({ map: { imports } }) });
+}
+
+// A bundle-fetch mock response carrying raw bytes.
+function bundleResponse(bytes) {
+  return /** @type any */ ({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  });
+}
+
+test('resolveVendorImports live: emits sha384 integrity keyed by the FINAL cross-origin URL', async () => {
+  const { sha384Integrity } = await import('../../src/vendor.js');
+  const dir = await makeLiveApp('sri-live');
+  const finalUrl = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const bundleBytes = new TextEncoder().encode('export default function dayjs(){};');
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (url) => {
+      const u = String(url);
+      if (u.includes('api.jspm.io')) return jspmResponse({ dayjs: finalUrl });
+      if (u === finalUrl) return bundleResponse(bundleBytes);
+      throw new Error(`unexpected fetch: ${u}`);
+    }, async () => {
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs']));
+      assert.equal(r.imports.dayjs, finalUrl, 'import map carries the cross-origin URL');
+      const expected = await sha384Integrity(bundleBytes);
+      assert.equal(r.integrity[finalUrl], expected,
+        'integrity keyed by the FINAL URL, value matches sha384 of the bundle bytes');
+      assert.match(r.integrity[finalUrl], /^sha384-[A-Za-z0-9+/=]+$/);
+      assert.equal(r.ok, true);
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports live: same-origin targets are not fetched or hashed', async () => {
+  // A jspm fragment could theoretically include a same-origin entry; SRI is a
+  // cross-origin defense, so a `/`-rooted target must be skipped (never fetched,
+  // absent from the integrity map).
+  const dir = await makeLiveApp('sri-sameorigin');
+  const crossUrl = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const localUrl = '/__webjs/core/index-browser.js';
+  const bundleBytes = new TextEncoder().encode('// cross-origin bundle');
+  /** @type {string[]} */
+  const fetched = [];
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (url) => {
+      const u = String(url);
+      fetched.push(u);
+      if (u.includes('api.jspm.io')) return jspmResponse({ dayjs: crossUrl, '@webjsdev/core': localUrl });
+      if (u === crossUrl) return bundleResponse(bundleBytes);
+      throw new Error(`unexpected fetch: ${u}`);
+    }, async () => {
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs']));
+      assert.ok(r.integrity[crossUrl], 'cross-origin URL is hashed');
+      assert.equal(r.integrity[localUrl], undefined, 'same-origin URL absent from integrity map');
+      assert.ok(!fetched.includes(localUrl), 'same-origin URL is never fetched');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports live: graceful degradation on a bundle fetch failure (counterfactual)', async () => {
+  // The key safety test. One cross-origin bundle fetch fails; the resolve must
+  // NOT throw, the imports must stay intact, the failing URL gets NO integrity,
+  // a warning is emitted, and OTHER URLs still get their hash.
+  const dir = await makeLiveApp('sri-degrade');
+  const okUrl = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const badUrl = 'https://ga.jspm.io/npm:clsx@2.1.1/index.js';
+  const okBytes = new TextEncoder().encode('export default function dayjs(){};');
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (url) => {
+      const u = String(url);
+      if (u.includes('api.jspm.io')) return jspmResponse({ dayjs: okUrl, clsx: badUrl });
+      if (u === okUrl) return bundleResponse(okBytes);
+      if (u === badUrl) return /** @type any */ ({ ok: false, status: 502 });
+      throw new Error(`unexpected fetch: ${u}`);
+    }, async () => {
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs', 'clsx']));
+      // imports intact for BOTH
+      assert.equal(r.imports.dayjs, okUrl);
+      assert.equal(r.imports.clsx, badUrl, 'failing-integrity import is still present');
+      // integrity present for the good URL, absent for the failed one
+      assert.ok(r.integrity[okUrl], 'good URL keeps its integrity');
+      assert.equal(r.integrity[badUrl], undefined, 'failed URL has no integrity');
+      assert.ok(warnings.some(w => w.includes('could not compute SRI')),
+        'a warning is emitted for the failed integrity fetch');
+    });
+  } finally {
+    console.warn = origWarn;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports live: a fetch rejection (not just non-ok) also degrades, no throw', async () => {
+  const dir = await makeLiveApp('sri-reject');
+  const url = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (u) => {
+      const s = String(u);
+      if (s.includes('api.jspm.io')) return jspmResponse({ dayjs: url });
+      throw new Error('socket hang up'); // the bundle fetch rejects
+    }, async () => {
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs']));
+      assert.equal(r.imports.dayjs, url, 'import survives a bundle fetch rejection');
+      assert.equal(r.integrity[url], undefined, 'no integrity on a rejected fetch');
+      assert.ok(warnings.some(w => w.includes('could not compute SRI')));
+    });
+  } finally {
+    console.warn = origWarn;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports live: in-process cache avoids re-fetching an already-hashed URL', async () => {
+  const dir = await makeLiveApp('sri-cache');
+  const url = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const bundleBytes = new TextEncoder().encode('export default 1;');
+  let bundleFetches = 0;
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (u) => {
+      const s = String(u);
+      if (s.includes('api.jspm.io')) return jspmResponse({ dayjs: url });
+      if (s === url) { bundleFetches++; return bundleResponse(bundleBytes); }
+      throw new Error(`unexpected fetch: ${s}`);
+    }, async () => {
+      const thunk = async () => new Set(['dayjs']);
+      await resolveVendorImports(dir, thunk);
+      await resolveVendorImports(dir, thunk); // second resolve, same URL
+      assert.equal(bundleFetches, 1, 'the immutable bundle URL is hashed once, then cached');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveVendorImports: PINNED path is unchanged (live-hash path not taken)', async () => {
+  // Counterfactual that the pin path did not regress: a pin file with its own
+  // integrity returns verbatim, and NO bundle fetch fires for it.
+  const dir = join(tmpdir(), `webjs-sri-pin-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
+  let fetched = false;
+  try {
+    await writeFile(join(dir, '.webjs', 'vendor', 'importmap.json'), JSON.stringify({
+      imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js' },
+      integrity: { 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js': 'sha384-pinned' },
+    }));
+    clearVendorCache();
+    await withMockedFetch(async () => { fetched = true; throw new Error('should not fetch'); }, async () => {
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs']));
+      assert.equal(r.integrity['https://ga.jspm.io/npm:dayjs@1.11.20/index.js'], 'sha384-pinned',
+        'pin integrity returned verbatim');
+      assert.equal(fetched, false, 'no live bundle fetch on the pinned path');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('live-resolve integrity reaches the importmap + modulepreload emission (end to end)', async () => {
+  // Prove the ALREADY-WIRED emission now fires on the live path: feed the live
+  // resolveVendorImports output into setVendorEntries (as ensureReady does in
+  // dev.js), then assert the served importmap JSON carries the integrity
+  // sibling AND ssr.js's integrityAttr(url) emits `integrity="sha384-..."` for
+  // the cross-origin target.
+  const { setVendorEntries, importMapTag } = await import('../../src/importmap.js');
+  const { integrityAttr, preloadCrossOriginAttr } = await import('../../src/ssr.js');
+  const dir = await makeLiveApp('sri-e2e');
+  const finalUrl = 'https://ga.jspm.io/npm:dayjs@1.11.20/index.js';
+  const bundleBytes = new TextEncoder().encode('export default function dayjs(){};');
+  try {
+    clearVendorCache();
+    await withMockedFetch(async (url) => {
+      const u = String(url);
+      if (u.includes('api.jspm.io')) return jspmResponse({ dayjs: finalUrl });
+      if (u === finalUrl) return bundleResponse(bundleBytes);
+      throw new Error(`unexpected fetch: ${u}`);
+    }, async () => {
+      const v = await resolveVendorImports(dir, async () => new Set(['dayjs']));
+      await setVendorEntries(v.imports, v.integrity);
+      // The importmap script tag carries the integrity sibling for the URL.
+      const tag = importMapTag();
+      assert.ok(tag.includes('"integrity"'), 'importmap tag carries an integrity block');
+      assert.ok(tag.includes(v.integrity[finalUrl]), 'importmap integrity value present');
+      // The modulepreload tag for this cross-origin URL gets integrity + crossorigin.
+      assert.match(integrityAttr(finalUrl), /^ integrity="sha384-[A-Za-z0-9+/=]+"$/,
+        'modulepreload integrity attribute emitted for the live-resolved URL');
+      assert.ok(preloadCrossOriginAttr(finalUrl).includes('crossorigin'),
+        'cross-origin URL also gets crossorigin');
+    });
+  } finally {
+    await setVendorEntries({}, {});
     await rm(dir, { recursive: true, force: true });
   }
 });

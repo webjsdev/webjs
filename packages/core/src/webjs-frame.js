@@ -35,15 +35,41 @@
  * frame appears in the response, the router falls through to the
  * normal layout-marker mechanism (and then to full body swap).
  *
+ * External targeting (Turbo's `data-turbo-frame`): a trigger (an `<a>`
+ * or a `<form>`) that is NOT nested inside the frame can still drive it
+ * by carrying `data-webjs-frame="<id>"`. The router resolves the id via
+ * `getElementById` in the current document, so an external nav/sidebar
+ * link or a filter form drives a content frame it does not enclose. An
+ * id that does not resolve to a live `<webjs-frame>` warns once and falls
+ * back to a normal navigation (fail-safe, never a wrong-region swap). The
+ * reserved token `data-webjs-frame="_top"` on a trigger INSIDE a frame
+ * breaks OUT to a full-page navigation instead of swapping the frame.
+ *
+ * Busy state: while a frame's navigation is in flight the router sets the
+ * native `aria-busy="true"` on the frame element and clears it (to
+ * `"false"`) on completion, success, failure, or abort, so assistive tech
+ * announces the loading state and CSS can style `webjs-frame[aria-busy="true"]`.
+ * It also dispatches a bubbling `webjs:frame-busy` event on the frame at
+ * both edges (detail `{ frameId, busy: true }` then `{ frameId, busy: false }`),
+ * so app code can hook the start and finish.
+ *
  * The element is **light DOM**: no shadow root, no slot mechanics.
  * Children are normal light-DOM children that the router replaces
  * via the same keyed reconciler used for layout marker swaps. This
  * means scroll position, input values, and `<details>` open state
  * are preserved for any matched elements inside the frame.
  *
+ * With JS disabled a `data-webjs-frame` link is an inert attribute on a
+ * plain `<a href>`, so the click is a normal full-page navigation, the
+ * correct progressive-enhancement fallback.
+ *
  * @element webjs-frame
  * @attr {string} id: Required. The frame's identifier, used by
- *   `closest()` on the client and `querySelector` on the response.
+ *   `closest()` on the client, `getElementById` for external
+ *   `data-webjs-frame` targeting, and `querySelector` on the response.
+ * @fires webjs:frame-busy: Bubbling. Dispatched on the frame when its
+ *   navigation starts (`detail.busy === true`) and finishes
+ *   (`detail.busy === false`); `detail.frameId` names the frame.
  */
 // Defined lazily inside an IIFE so that importing this module on the
 // server (Node) doesn't trip a `HTMLElement is not defined` reference

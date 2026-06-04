@@ -116,6 +116,150 @@ package, it goes in that package's `test/`.
 
 ---
 
+## Component test helpers (`@webjsdev/core/testing`)
+
+`import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations, click, shadowQuery, shadowQueryAll } from '@webjsdev/core/testing'`. The mount + hydrate + a11y helpers run in the WTR Chromium session (real DOM), thin wrappers over the browser already running.
+
+### `fixture()` vs `ssrFixture()`
+
+Both server-render an `html\`…\`` template (via `renderToString`, with DSD) and set the markup into a container so the browser upgrades the custom element. The difference is how they wait:
+
+- **`fixture(template)`** waits two macrotasks. Use it for a quick mount where the SSR-then-hydrate distinction does not matter.
+- **`ssrFixture(template)`** awaits the element's NATIVE `updateComplete` promise (the real render-cycle resolution), not a timer, so the post-hydration DOM is observable deterministically. It is the documented SSR + hydrate entry. Its contract: the SSR'd markup and the post-hydration DOM agree, so a hydration mismatch (server renders one thing, client another) is observable by comparing the SSR'd inner HTML against `el.innerHTML` / `el.shadowRoot.innerHTML` after it resolves. The component class must already be registered (the test imports its module, same as `fixture()`).
+
+`waitForUpdate(el)` now also awaits the native `updateComplete` when present (falling back to a macrotask flush for a plain element), so a re-render after a property assignment or signal `set()` settles deterministically.
+
+```js
+import { html } from '@webjsdev/core';
+import { ssrFixture, waitForUpdate } from '@webjsdev/core/testing';
+
+const el = await ssrFixture(html`<my-counter count="5"></my-counter>`);
+assert.ok(el.innerHTML.includes('5'));          // post-hydration DOM
+
+el.count = 10;
+await waitForUpdate(el);                          // awaits the real cycle
+assert.ok(el.innerHTML.includes('10'));
+```
+
+**Hydration-mismatch pattern.** To assert SSR and the hydrated DOM agree, normalise the SSR string (strip the `<!--webjs-hydrate-->` marker, `data-webjs-prop-*` attributes, part comments) and compare against the live `el.innerHTML`. The counterfactual is a component whose `render()` is non-deterministic across the SSR call and the hydration render; `ssrFixture` returns the live hydrated element, so the divergence is detectable. The worked tests live in `packages/core/test/testing/browser/ssr-fixture.test.js`, alongside the broader SSR-vs-client parity corpus in `packages/core/test/rendering/browser/ssr-client-parity.test.js`.
+
+### `assertNoA11yViolations(el, opts?)` (opt-in)
+
+An OPT-IN accessibility assertion that runs the standard axe-core engine against an element's subtree in the WTR Chromium session. Nothing calls it for you, it is never a forced gate.
+
+axe-core is a TEST-ONLY peer, imported dynamically by the helper, so it is NOT a hard dependency of `@webjsdev/core`. Install it where you run the test (`npm install -D axe-core`; the scaffold and this repo already ship it). If it is missing, the helper throws a clear message: `assertNoA11yViolations needs axe-core. Install it: npm install -D axe-core`.
+
+On zero violations it resolves; on a violation it throws an Error whose message lists each violation's id, impact, a short help string, and the failing nodes' selectors, so the failure is actionable. `opts` passes through to `axe.run` (e.g. `{ rules: { 'color-contrast': { enabled: false } } }`).
+
+```js
+import { ssrFixture, assertNoA11yViolations } from '@webjsdev/core/testing';
+
+const el = await ssrFixture(html`<my-form></my-form>`);
+await assertNoA11yViolations(el);                // passes a clean subtree
+
+// a <button> with no accessible name, an <input> with no label, an <img>
+// with no alt: each throws a named violation. Worked both-direction tests
+// live in packages/core/test/testing/browser/a11y.test.js.
+```
+
+---
+
+## The handle() test harness (`@webjsdev/server/testing`)
+
+`createRequestHandler({ appDir }).handle(request)` drives the FULL request
+pipeline (middleware, routing, SSR, page actions, server-action RPC, auth +
+CSRF) and returns a native `Response`. It is the same entry the framework's own
+suite uses, so the most realistic way to test an app is to fire a `Request`
+through it and assert on the `Response`, no spawned process and no network.
+
+`@webjsdev/server/testing` ships THIN builders over that `handle()`. They are
+not a test framework: each is a few lines over native `Request` / `Response`,
+and they reuse the REAL cookie / header names and the REAL wire serializer (so a
+test exercises the production contract, never a parallel fake).
+
+```js
+import { createRequestHandler } from '@webjsdev/server';
+import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+  from '@webjsdev/server/testing';
+
+const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
+```
+
+### testRequest: fire a request, get the Response
+
+```js
+const res = await testRequest(app.handle, '/about');
+assert.equal(res.status, 200);
+assert.match(await res.text(), /About/);
+```
+
+A bare path (`/about`) is prefixed with a dummy origin (the pipeline only reads
+`pathname` + `search`); a full URL string or a pre-built `Request` works too.
+The optional third arg is a standard `RequestInit` (method, headers, body).
+
+### getCsrf + the auth/session helpers
+
+The action RPC endpoint requires a `x-webjs-csrf` header matching the
+`webjs_csrf` cookie issued on the first SSR response. `getCsrf(handle)` does the
+initial GET and returns `{ token, cookie, header }` so a test can send a
+CSRF-valid request. `loginAndGetCookies(handle, { email, password })` drives the
+REAL credentials login through `handle()` (the `createAuth` route handler) and
+captures the genuine signed session `Set-Cookie`, so a follow-up request can hit
+a protected route as the logged-in user:
+
+```js
+// unauthenticated protected route is gated
+const gated = await testRequest(app.handle, '/dashboard');
+assert.equal(gated.status, 302);                     // -> /login
+
+// real login, then reuse the captured cookie
+const { cookies } = await loginAndGetCookies(app.handle, { email, password });
+const dash = await testRequest(app.handle, '/dashboard', withSessionCookie({}, cookies));
+assert.equal(dash.status, 200);
+```
+
+The session cookie is the production cookie, captured from a real login, never a
+hand-built shape. (The default login path is `/api/auth/signin/credentials`, the
+route `createAuth`'s handler routes a credentials login through; override
+`opts.loginPath` / `opts.body` for a different wiring.)
+
+### invokeActionForTest: round-trip an action through the REAL endpoint
+
+```js
+// modules/posts/actions/create.server.ts exports createPost
+const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);
+```
+
+`invokeActionForTest` serializes `args` with the webjs serializer (exactly as
+the generated client stub does), POSTs them to the REAL
+`/__webjs/action/<hash>/<fn>` endpoint with a valid CSRF cookie + header, and
+parses the response with the serializer. The action is addressed by the SHA-256
+hash of its `.server.{js,ts}` file path (absolute or appDir-relative) plus the
+function name, the same scheme the stub uses (`actionEndpoint(appDir, file, fn)`
+returns that path if you need it directly).
+
+**Prefer this over a direct import of the action.** A direct import calls the
+function in-process and bypasses three production concerns the endpoint
+enforces:
+
+- **the wire serializer** (a `Date` / `Map` / `BigInt` arg or return is
+  genuinely encoded + decoded, not passed by reference),
+- **CSRF** (a missing token is a 403),
+- **prod error sanitization** (a thrown error surfaces as a sanitized
+  message-only payload, never the stack or extra error fields).
+
+So `invokeActionForTest` catches a serializer / CSRF / error-sanitization
+regression a direct import cannot see. For the negative cases (assert a 403 on
+missing CSRF, or inspect a sanitized 500 body), `rawActionRequest(...)` returns
+the raw `Response` and never throws on a non-2xx; pass `{ omitCsrf: true }` to
+deliberately drop the CSRF pair.
+
+The saas scaffold's `test/auth/auth.test.ts` is a worked example: it drives the
+unauthenticated-redirect gate, then a real signup -> login -> dashboard flow
+through `handle()` using these helpers.
+
+---
+
 ## App layout (what users get)
 
 A scaffolded webjs app has one `test/` directory at its root,

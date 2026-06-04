@@ -186,6 +186,124 @@ runtime with zero build cost. `MetadataContext` types the
 `generateMetadata` argument (`{ params, searchParams, url, actionData }`,
 where `actionData` is set only on a failed-page-action re-render).
 
+### Typed page / layout / route-handler props (`PageProps`, `LayoutProps`, `RouteHandlerContext`)
+
+A page default-export receives `{ params, searchParams, url, actionData }`; a
+layout receives the same plus `children`; a `route.{js,ts}` handler receives
+`(request, { params })`. Type each with the exported helpers so a typo in a
+param name or a wrong-typed field is a compile-time error.
+
+```ts
+import type { PageProps, LayoutProps, RouteHandlerContext } from '@webjsdev/core';
+
+// A static route: `params` is `Record<string, string>`.
+export default function About({ searchParams }: PageProps) { /* ... */ }
+
+// A dynamic route: pass the route literal to narrow `params`.
+export default function Post({ params }: PageProps<'/blog/[slug]'>) {
+  const slug = params.slug; // typed `string`
+  /* ... */
+}
+
+// A layout adds `children: TemplateResult`.
+export default function RootLayout({ children }: LayoutProps) { /* ... */ }
+
+// A route handler's 2nd arg.
+export async function GET(req: Request, ctx: RouteHandlerContext) {
+  return Response.json({ id: ctx.params.id });
+}
+```
+
+`PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` take an optional
+route literal `R`. With no `R` (or in an app that has not generated route
+types), `params` is `Record<string, string>`, the runtime default. With `R`
+set to a generated dynamic route, `params` narrows to its exact shape
+(`{ slug: string }`, `{ rest: string[] }`, `{ slug?: string[] }`). The shapes
+mirror what `packages/server/src/ssr.js` and `packages/server/src/api.js`
+actually pass, NOT Next.js's superset. Pure types in
+`packages/core/src/routes.d.ts`, erased at runtime with zero build cost.
+
+### The generated route union (`webjs types`) types `navigate()` and catches bad hrefs
+
+Run `webjs types` to generate `.webjs/routes.d.ts`, an opt-in overlay that
+augments `@webjsdev/core` with one key per route in `app/`. It narrows two
+things at tsserver time:
+
+- The `Route` href type: `navigate('/blog/anything')` is accepted,
+  `navigate('/nonexistent')` is a type error. (Until you generate the types,
+  `Route` is `string`, so `navigate()` is unconstrained, non-breaking for
+  JSDoc apps and un-generated apps alike.)
+- Per-route `params`: `PageProps<'/blog/[slug]'>['params']` becomes
+  `{ slug: string }`, derived from the generated `RouteParamMap`.
+
+```sh
+webjs types     # writes .webjs/routes.d.ts (count of routes printed)
+```
+
+`webjs dev` also emits it automatically at startup and re-emits after each
+route rebuild, so an editor always has fresh route types. The file is
+gitignored (regenerated per machine, like Next's `.next/types`); the scaffold
+`tsconfig.json` lists `.webjs/routes.d.ts` in `include` so tsserver picks it
+up. To opt in for an existing app, run `webjs types` once and ensure your
+`tsconfig.json` `include` lists `.webjs/routes.d.ts`.
+
+This is webjs's no-build equivalent of Next 15's `typedRoutes`, achieved via
+interface declaration-merging (`declare module '@webjsdev/core'`) rather than a
+bundler. The mechanism is `generateRouteTypes(appDir)` in
+`packages/server/src/route-types.js`, which reuses the one route enumerator
+(`buildRouteTable`). Output is deterministic (sorted keys), so re-running
+yields a byte-identical file.
+
+### The `webjs` package.json config block: `WebjsConfig` + JSON Schema
+
+The `webjs` object in `package.json` (the `elide` / `headers` / `redirects` /
+`trailingSlash` / `csp` knobs plus the ingress body-size and timeout caps) has
+two typed references, so a typo'd key is diagnosed instead of silently dropped:
+
+- **A JSON Schema**, `packages/server/webjs-config.schema.json` (shipped in the
+  `@webjsdev/server` package). The scaffold's `.vscode/settings.json` associates
+  it with the `webjs` property of `package.json`, so VS Code flags an unknown
+  key natively while you edit the JSON. `additionalProperties: false` on the
+  block is what turns a typo into an editor warning.
+- **The `WebjsConfig` type**, exported from `@webjsdev/core`, a typed reference
+  for an agent or human authoring the block (with `WebjsHeaderRule`,
+  `WebjsRedirectRule`, `WebjsCspConfig`, `WebjsTrailingSlash` for the nested
+  shapes).
+
+```ts
+import type { WebjsConfig } from '@webjsdev/core';
+
+const config: WebjsConfig = {
+  trailingSlash: 'never',
+  csp: true,
+  redirects: [{ source: '/old', destination: '/new' }],
+};
+```
+
+The schema and the type mirror what the server readers actually consume
+(`readElideEnabled`, `compileHeaderRules`, `compileRedirectRules` /
+`readTrailingSlashPolicy`, `readCspConfig`, `readBodyLimits` /
+`computeServerTimeouts`). Adding a `webjs.*` key means updating the schema, the
+type, AND the reader in lockstep, the one procedure documented in
+`packages/server/AGENTS.md`. A drift test
+(`packages/server/test/config/webjs-config-schema.test.js`) fails if the schema
+and the reader key set diverge.
+
+### Both runtime packages ship a type overlay
+
+Both `@webjsdev/core` AND `@webjsdev/server` ship a hand-authored `.d.ts`
+overlay plus a `types` export condition, so a `strict` + `nodenext` app
+resolves real types for either import with no TS7016 ("could not find a
+declaration file") error. The server overlay (`packages/server/index.d.ts`,
+with `src/check.d.ts` and `src/testing.d.ts` for the `./check` / `./testing`
+subpaths) types the full public surface (`createRequestHandler`, `startServer`,
+`cors`, `cache`, `createAuth`, `rateLimit`, `sitemap`, `Session`, `json`,
+`readBody`, the `revalidate*` family, the context helpers, the cache stores, the
+auth providers, the test harness, and the convention validator), reusing the
+core prop / metadata types rather than redefining them. The runtime stays plain
+`.js` + JSDoc; the overlay is types-only with zero runtime cost. A drift test
+keeps `index.d.ts` in lockstep with `index.js`'s runtime exports.
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language

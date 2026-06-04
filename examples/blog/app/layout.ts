@@ -1,4 +1,4 @@
-import { html, cspNonce, type Metadata } from '@webjsdev/core';
+import { html, cspNonce, type Metadata, type LayoutProps } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
 import '../components/theme-toggle.ts';
 
@@ -58,7 +58,7 @@ export function generateMetadata(ctx: { url: string }): Metadata {
  * that can't live on a classable element, and selection/scrollbar
  * pseudo-elements.
  */
-export default function RootLayout({ children }: { children: unknown }) {
+export default function RootLayout({ children }: LayoutProps) {
   // CSP nonce for inline scripts. Empty when no nonce in CSP.
   const nonce = cspNonce();
   return html`

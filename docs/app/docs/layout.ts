@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
       { href: '/docs/architecture', label: 'Architecture' },
       { href: '/docs/no-build', label: 'No-Build Model' },
       { href: '/docs/configuration', label: 'Configuration' },
+      { href: '/docs/migrating-from-nextjs', label: 'Migrating from Next.js' },
     ],
   },
   {
@@ -55,6 +56,7 @@ const NAV_SECTIONS = [
       { href: '/docs/sessions', label: 'Sessions' },
       { href: '/docs/auth', label: 'Auth (Providers)' },
       { href: '/docs/rate-limiting', label: 'Rate Limiting' },
+      { href: '/docs/security', label: 'Security' },
       { href: '/docs/metadata-routes', label: 'Metadata Routes' },
     ],
   },
@@ -77,6 +79,7 @@ const NAV_SECTIONS = [
       { href: '/docs/deployment', label: 'Deployment' },
       { href: '/docs/testing', label: 'Testing' },
       { href: '/docs/conventions', label: 'Conventions & AI Workflow' },
+      { href: '/docs/troubleshooting', label: 'Troubleshooting' },
     ],
   },
 ];

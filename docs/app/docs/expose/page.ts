@@ -36,7 +36,7 @@ export const createPost = expose('POST /api/posts', async ({ title, body }) => {
     </ul>
 
     <h2>Input validation</h2>
-    <p>Pass a <code>validate</code> function as the third argument. It runs only on the HTTP path (RPC calls are same-origin and CSRF-protected, so they bypass validation):</p>
+    <p>Pass a <code>validate</code> function as the third argument. It runs server-side before the action body on BOTH call paths: the internal RPC path (a client component import) AND this HTTP path. So a validator declared once guards both (issue #245):</p>
 
     <pre>import { expose } from '@webjsdev/core';
 import { z } from 'zod';
@@ -54,7 +54,14 @@ export const createPost = expose(
   { validate: (input) => PostSchema.parse(input) }
 );</pre>
 
-    <p>If validation throws, the HTTP response is <code>400</code> with the error message and any <code>issues</code> array (compatible with Zod/Valibot).</p>
+    <p>The framework calls <code>validate(input)</code> and interprets the return three ways:</p>
+    <ul>
+      <li><strong>Returns a structured envelope</strong> <code>{ success: false, fieldErrors }</code> (or <code>{ success: true, data }</code> on pass): a failure becomes a <code>422</code> JSON response carrying <code>fieldErrors</code> here, and a normal result the client reads as <code>result.fieldErrors</code> over RPC. This is the recommended field-error path, matching the <code>ActionResult</code> envelope.</li>
+      <li><strong>Throws</strong> (the <code>Schema.parse</code> style above): the HTTP response is <code>400</code> with the error message and any <code>issues</code> array (compatible with Zod/Valibot); over RPC it becomes the same sanitized error a thrown action body produces.</li>
+      <li><strong>Returns any other value</strong>: that value replaces the input (a transform/coercion). The <code>Schema.parse</code> form above uses this.</li>
+    </ul>
+
+    <p>To attach a validator WITHOUT an HTTP route (a pure-RPC action), use <code>validateInput(fn, validate)</code> from <code>@webjsdev/core</code> instead of <code>expose()</code>. The zod adapter for the structured form is three lines: <code>{ const r = Schema.safeParse(i); return r.success ? { success: true, data: r.data } : { success: false, fieldErrors: r.error.flatten().fieldErrors }; }</code></p>
 
     <h2>URL parameters</h2>
     <p><code>expose()</code> supports URL parameters. On the HTTP path, the adapter merges <code>{ ...queryParams, ...urlParams, ...jsonBody }</code> into a single object argument:</p>

@@ -286,6 +286,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
       check: 'webjs check',
+      typecheck: 'webjs typecheck',
+      // Onboarding/setup-verify: a contributor runs `npm run doctor` after
+      // cloning to assert the toolchain (Node floor, tsconfig flag, env drift,
+      // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
+      // (its env-drift + network pin-freshness checks would make CI flaky).
+      doctor: 'webjs doctor',
       'db:migrate': 'prisma migrate dev',
       'db:generate': 'prisma generate',
       'db:studio': 'prisma studio',
@@ -298,9 +304,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     devDependencies: {
       prisma: '^6.0.0',
+      // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
+      // tsc --noEmit). Not needed at runtime (Node strips types in place), only
+      // to type-check the app.
+      typescript: '^5.6.0',
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
+      // The standard accessibility engine, used opt-in by the
+      // assertNoA11yViolations() test helper from @webjsdev/core/testing.
+      // Test-only: dynamically imported, never shipped to the app runtime.
+      'axe-core': '^4.10.0',
       // tsserver plugin for editor intelligence inside html`` templates.
       // @webjsdev/ts-plugin bundles ts-lit-plugin internally, so just one
       // plugin entry is needed in tsconfig (see below).
@@ -346,6 +360,22 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         { name: '@webjsdev/ts-plugin' },
       ],
     },
+    // `.webjs/routes.d.ts` is the OPT-IN generated route-types overlay (#258):
+    // run `webjs types` (or `webjs dev`, which emits it) to narrow the
+    // @webjsdev/core `Route` href union + per-route `params`. Listed in
+    // `include` so tsserver picks it up; it is gitignored (regenerated per
+    // machine), so a fresh clone runs `webjs dev` / `webjs types` to recreate
+    // it, and the static @webjsdev/core types work even when it is absent.
+    include: [
+      'app/**/*',
+      'components/**/*',
+      'modules/**/*',
+      'lib/**/*',
+      'middleware.js',
+      'middleware.ts',
+      '.webjs/routes.d.ts',
+    ],
+    exclude: ['node_modules', '.webjs/vendor', 'prisma/migrations'],
   }, null, 2) + '\n');
 
   // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---
@@ -397,6 +427,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // to main, mirroring the webjs framework's own CI.
     '.github/workflows/ci.yml',
     '.editorconfig',
+    // VS Code: associate the published webjs-config JSON Schema with the
+    // package.json `webjs` block, so an unknown / typo'd key (#259) is
+    // flagged natively in the editor instead of silently dropped.
+    '.vscode/settings.json',
     // Production / deploy scaffolding. `docker compose up --build` runs
     // the app locally with the same Dockerfile production builds from.
     'Dockerfile',

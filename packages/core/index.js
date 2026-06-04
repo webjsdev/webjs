@@ -15,7 +15,7 @@ export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
 export { notFound, redirect, isNotFound, isRedirect } from './src/nav.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
-export { expose, getExposed } from './src/expose.js';
+export { expose, getExposed, validateInput } from './src/expose.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
@@ -29,6 +29,9 @@ export { WebjsFrame } from './src/webjs-frame.js';
 
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
 export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+
+// Optimistic-mutation helper (thin signal wrapper, rolls back on failure)
+export { optimistic } from './src/optimistic.js';
 
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported so the bare specifier exposes the same

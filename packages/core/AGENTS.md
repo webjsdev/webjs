@@ -41,13 +41,14 @@ the same output in all three.
 | `registry.js` | Custom-element bookkeeping (`register`, `lookup`, `allTags`, `tagOf`, `isLazy`, `primeModuleUrl`) |
 | `lazy-loader.js` | IntersectionObserver-based lazy module loading for `static lazy = true` |
 | `nav.js` | `notFound()`, `redirect()` sentinels for page/action handlers |
-| `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging |
+| `optimistic.js` | `optimistic(signal, value, action)` (#246): optimistic-UI helper. Sets the signal to `value`, awaits `action()`, rolls back on a throw or an `ActionResult` `{ success: false }`. A thin wrapper over the signal primitive; re-exported from `index.js` + `index-browser.js`, and classified in `component-elision.js` as a reactive (client-work) import |
+| `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging, plus `validateInput(fn, validate)` (#245): attaches an input validator through the SAME `__webjsHttp` metadata `expose` writes (so `getExposed(fn)` surfaces it) WITHOUT creating a REST route, so the validator runs on the RPC path too. Both are server-only (stripped from `index-browser.js`). `getExposed` reads the metadata back |
 | `escape.js` | HTML attribute / text escaping (the only sanitiser) |
 | `csp-nonce.js` | Isomorphic CSP nonce reader: `cspNonce()` (returns the request nonce, `''` in the browser) + `setCspNonceProvider` (server-only wiring). The provider is installed by `@webjsdev/server`'s `context.js`; as of #233 it returns a freshly-MINTED per-request nonce (not just an inbound-header parse). `setCspNonceProvider` is stripped from the browser surface |
 | `rich-fetch.js` | Content-negotiated fetch helper |
 | `websocket-client.js` | `connectWS()` with auto-reconnect |
 | `serialize.js` | Wire-format primitives (Date/Map/Set/BigInt/cycles…) used by RPC |
-| `testing.js` | `fixture`, `waitForUpdate`, `click`, `shadowQuery`, `shadowQueryAll` |
+| `testing.js` | `fixture`, `ssrFixture` (SSR + hydrate, awaits the native `updateComplete`), `waitForUpdate` (awaits `updateComplete` when present), `assertNoA11yViolations` (opt-in axe-core a11y assertion, dynamically imports the test-only `axe-core` peer), `click`, `shadowQuery`, `shadowQueryAll` |
 
 ## Public exports (re-exported from `index.js`)
 
@@ -60,11 +61,26 @@ export.
 **Type-only exports.** `index.d.ts` (the overlay) re-exports the
 type-only public surface alongside the runtime exports. The component
 typing lives in `src/component.d.ts`; the page-metadata typing
-(`Metadata`, `MetadataContext`, and the nested shapes) lives in
-`src/metadata.d.ts`. Both are pure declaration files (erased at runtime,
-zero build cost). A page imports them with `import type { Metadata } from
-'@webjsdev/core'`. The `Metadata` shape MUST stay in lockstep with what
-`packages/server/src/ssr.js` actually reads, never Next.js's superset.
+(`Metadata`, `MetadataContext`, and the nested shapes, including
+`PreconnectHint` for the `metadata.preconnect` / `metadata.dnsPrefetch`
+connection-warming hints, #243) lives in
+`src/metadata.d.ts`; the typed page / layout / route-handler props plus the
+opt-in route union (`PageProps`, `LayoutProps`, `RouteHandlerContext`, `Route`,
+`RouteParams`, and the `WebjsRoutes` / `RouteParamMap` augmentation targets,
+#258) live in `src/routes.d.ts`. The `webjs` package.json config-block typing
+(`WebjsConfig` plus the nested `WebjsHeaderRule` / `WebjsRedirectRule` /
+`WebjsCspConfig` / `WebjsTrailingSlash`, #259) lives in
+`src/webjs-config.d.ts`; it mirrors the `@webjsdev/server` config readers and
+the companion JSON Schema (`packages/server/webjs-config.schema.json`), and
+those three MUST stay in lockstep (the procedure is documented in
+`packages/server/AGENTS.md`). All are pure declaration files (erased at
+runtime, zero build cost). A page imports them with `import type { Metadata,
+PageProps } from '@webjsdev/core'`. The `Metadata` and `PageProps` /
+`LayoutProps` shapes MUST stay in lockstep with what
+`packages/server/src/ssr.js` actually reads / constructs, never Next.js's
+superset. `routes.d.ts`'s `WebjsRoutes` / `RouteParamMap` are EMPTY by default
+(so `Route = string`); `webjs types` generates `.webjs/routes.d.ts` to augment
+them per app.
 
 ## Package-specific invariants
 

@@ -41,7 +41,11 @@ const USAGE = `webjs commands:
   webjs dev   [--port 8080]                       Start dev server with live reload
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check                                     Run correctness checks on the app
+  webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
+  webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
+  webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, @webjsdev versions, git hook)
+  webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
+  webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack with Prisma+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir
@@ -263,6 +267,18 @@ async function main() {
 
       const violations = await checkConventions(process.cwd());
 
+      // --json emits the raw structured violations + a summary count as JSON,
+      // so an agent running `webjs check` in a loop consumes structured data
+      // instead of regex-scraping stdout. The shared projector keeps this byte-
+      // identical to the MCP `check` tool. The non-zero exit on violations is
+      // preserved (an agent gates on the exit code AND parses the report).
+      if (rest.includes('--json')) {
+        const { projectCheck } = await import('../lib/check-json.js');
+        console.log(JSON.stringify(projectCheck(violations)));
+        if (violations.length > 0) process.exit(1);
+        break;
+      }
+
       if (violations.length === 0) {
         console.log('webjs check: all checks pass ✓');
       } else {
@@ -275,6 +291,85 @@ async function main() {
         }
         process.exit(1);
       }
+      break;
+    }
+    case 'doctor': {
+      // Project-health checklist (#266). The checks are PURE (in lib/doctor.js);
+      // this branch only renders them and owns the exit code: non-zero iff any
+      // HARD check FAILS, so CI can gate on it. Warns are informational and do
+      // NOT fail the exit (env drift / pin staleness / version drift are the
+      // app's concern, not a broken toolchain).
+      const { runDoctorChecks } = await import('../lib/doctor.js');
+      const results = await runDoctorChecks(process.cwd());
+      const marker = { pass: '[pass]', warn: '[warn]', fail: '[fail]' };
+      console.log('webjs doctor: project-health checklist\n');
+      for (const r of results) {
+        console.log(`  ${marker[r.status]} ${r.name}`);
+        console.log(`    ${r.message}`);
+        if (r.fix && r.status !== 'pass') console.log(`    Fix: ${r.fix}`);
+        console.log();
+      }
+      const counts = results.reduce((acc, r) => {
+        acc[r.status] = (acc[r.status] || 0) + 1;
+        return acc;
+      }, /** @type {Record<string, number>} */ ({}));
+      const pass = counts.pass || 0;
+      const warn = counts.warn || 0;
+      const fail = counts.fail || 0;
+      console.log(`  ${pass} passed, ${warn} warning(s), ${fail} failed.`);
+      if (fail > 0) {
+        console.error(
+          `\nwebjs doctor: ${fail} hard check(s) failed. Fix the toolchain issue(s) above.`,
+        );
+        process.exit(1);
+      }
+      break;
+    }
+    case 'types': {
+      // Generate `.webjs/routes.d.ts` from the app's `app/` routes (#258),
+      // narrowing the @webjsdev/core `Route` href union + per-route `params`.
+      // Opt-in codegen: the static types in @webjsdev/core work without it
+      // (un-generated apps see `Route = string`).
+      const { generateRouteTypes } = await import('@webjsdev/server');
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      const appDir = process.cwd();
+      const text = await generateRouteTypes(appDir);
+      const outDir = join(appDir, '.webjs');
+      await mkdir(outDir, { recursive: true });
+      const outFile = join(outDir, 'routes.d.ts');
+      await writeFile(outFile, text);
+      // Count the typed routes (each `WebjsRoutes` key is one route literal).
+      const count = (text.match(/^\s+".*": true;$/gm) || []).length;
+      console.log(
+        `webjs types: wrote .webjs/routes.d.ts (${count} route${count === 1 ? '' : 's'} typed). ` +
+        `Ensure tsconfig "include" lists ".webjs/routes.d.ts" so tsserver picks it up.`,
+      );
+      break;
+    }
+    case 'typecheck': {
+      // Type-check the app with the project's OWN tsc (it reads the app's
+      // tsconfig: strict + noEmit + erasableSyntaxOnly). The framework runs the
+      // standard compiler, it does not embed one. Extra args after `typecheck`
+      // pass through (e.g. `webjs typecheck --watch`). Exits non-zero on a type
+      // error, so it works as a CI gate and the scaffolded `typecheck` script.
+      const cwd = process.cwd();
+      const { createRequire } = await import('node:module');
+      let tscPath;
+      try {
+        const req = createRequire(join(cwd, 'package.json'));
+        tscPath = req.resolve('typescript/bin/tsc');
+      } catch {
+        console.error(
+          'webjs typecheck: TypeScript is not installed in this project.\n' +
+          'Install it with `npm install -D typescript`, then re-run `webjs typecheck`.',
+        );
+        process.exit(1);
+      }
+      const child = spawn(process.execPath, [tscPath, '--noEmit', ...rest], {
+        stdio: 'inherit',
+        cwd,
+      });
+      child.on('exit', (code) => process.exit(code ?? 1));
       break;
     }
     case 'create': {
@@ -548,6 +643,29 @@ Full docs: https://docs.webjs.com`);
         `\n` +
         `  --from PROVIDER     CDN to resolve through. One of: ${[...SUPPORTED_PROVIDERS].join(', ')}. Default: jspm.`);
       process.exit(1);
+    }
+    case 'mcp': {
+      // Read-only MCP server (#262) over stdio. STDOUT is the JSON-RPC channel,
+      // so nothing here may write to stdout: the data functions are read-only
+      // and `runMcpServer` routes all diagnostics to stderr. The CLI version is
+      // advertised in the initialize handshake's serverInfo.
+      const { readFileSync } = await import('node:fs');
+      let version = '0.0.0';
+      try {
+        const pkg = JSON.parse(
+          readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+        );
+        version = pkg.version || version;
+      } catch {}
+      const { runMcpServer } = await import('../lib/mcp.js');
+      await runMcpServer({
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        cwd: process.cwd(),
+        version,
+      });
+      break;
     }
     case 'help':
     case undefined:

@@ -58,6 +58,19 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
 
+    // #259: the VS Code settings that associate the webjs-config JSON Schema
+    // with package.json's `webjs` block must reach the scaffolded app. This
+    // file is under a `.vscode/` dir that .gitignore would normally exclude, so
+    // it is a regression guard against the template silently not shipping.
+    const vscodePath = join(appDir, '.vscode', 'settings.json');
+    assert.ok(existsSync(vscodePath), '.vscode/settings.json should exist');
+    const vscode = JSON.parse(readFileSync(vscodePath, 'utf8'));
+    const webjsSchema = vscode['json.schemas']?.[0]?.schema?.properties?.webjs;
+    assert.ok(
+      webjsSchema && String(webjsSchema.$ref || '').includes('webjs-config.schema.json'),
+      '.vscode/settings.json should $ref the webjs-config schema for the webjs block'
+    );
+
     // Full-stack template-specific
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
@@ -248,6 +261,16 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     assert.match(signup, /fieldErrors/, 'signup action returns field errors');
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
     assert.doesNotMatch(signup, /id="signup-form"/, 'old inert JS-only form id is gone');
+
+    // The auth test is a REAL handle()-driven flow at the convention-correct
+    // path test/auth/auth.test.ts (#267), not the old type-shape stub at
+    // test/unit/auth.test.ts.
+    assert.ok(existsSync(join(appDir, 'test', 'auth', 'auth.test.ts')), 'test/auth/auth.test.ts present');
+    assert.ok(!existsSync(join(appDir, 'test', 'unit', 'auth.test.ts')), 'old test/unit/auth.test.ts stub is gone');
+    const authTest = readFileSync(join(appDir, 'test', 'auth', 'auth.test.ts'), 'utf8');
+    assert.match(authTest, /@webjsdev\/server\/testing/, 'auth test uses the handle() test harness');
+    assert.match(authTest, /redirects to \/login when unauthenticated/, 'auth test asserts the protected-route gate');
+    assert.match(authTest, /loginAndGetCookies/, 'auth test drives the real login flow');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

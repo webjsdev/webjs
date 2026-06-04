@@ -112,6 +112,15 @@ layered on top:
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
 
+**Config validation in `package.json`.** The scaffold ships
+`.vscode/settings.json`, which associates the published webjs-config JSON
+Schema (`@webjsdev/server/webjs-config.schema.json`) with the `webjs` block
+of `package.json`. In VS Code an unknown / typo'd `webjs.*` key (`redirect`
+for `redirects`, say) is then flagged inline instead of silently dropped to
+the default. The same shape is typed by the `WebjsConfig` type from
+`@webjsdev/core` (`import type { WebjsConfig } from '@webjsdev/core'`) for a
+typed reference.
+
 ## UI components: Webjs UI (preinstalled)
 
 This scaffold ships with the standard Webjs UI component kit
@@ -266,6 +275,28 @@ test/<feature>/                feature-scoped tests, one folder per concern
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
 ```
+
+### Typed page / layout / route-handler props
+
+Type page / layout / route-handler arguments with the exported helpers so a
+param typo is a compile-time error:
+
+```ts
+import type { PageProps, LayoutProps, RouteHandlerContext } from '@webjsdev/core';
+
+export default function Post({ params }: PageProps<'/blog/[slug]'>) {
+  return html`<h1>${params.slug}</h1>`;   // params typed { slug: string }
+}
+export default function RootLayout({ children }: LayoutProps) { /* ... */ }
+export async function GET(req: Request, ctx: RouteHandlerContext) { /* ctx.params */ }
+```
+
+Run `webjs types` once (and ensure `tsconfig.json` `include` lists
+`.webjs/routes.d.ts`, the scaffold already does) to generate the route union:
+`PageProps<'/blog/[slug]'>['params']` then narrows to `{ slug: string }` and
+`navigate()` only accepts real app routes. `webjs dev` regenerates the file on
+startup, so it stays current. Without it, `params` is `Record<string, string>`
+and `navigate()` accepts any string (non-breaking).
 
 ## Database (Prisma + SQLite by default)
 
@@ -438,7 +469,7 @@ import '@webjsdev/core/client-router';              // enable SPA nav
 import { unsafeHTML, live } from '@webjsdev/core/directives';
 import { createContext } from '@webjsdev/core/context';
 import { Task } from '@webjsdev/core/task';
-import { fixture, waitForUpdate } from '@webjsdev/core/testing';
+import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations } from '@webjsdev/core/testing';
 
 import { rateLimit, cors, cache, createAuth, Credentials, Session } from '@webjsdev/server';
 ```
@@ -587,7 +618,7 @@ Practical consequences for agents writing webjs code.
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
 | Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
 | `@property()` decorator | Banned by invariant 10 (erasable TS) | `static properties = { ... }` plus `declare` |
-| `static styles = css` block without `static shadow = true` | Styles leak globally; the framework warns at runtime | Add `static shadow = true`, or use Tailwind utilities |
+| Scoped `static styles = css` or an inline `<style>` with semantic class names (`.hero`, `.card`) in a light-DOM component | Scoped block does nothing without `static shadow = true`; inline `<style>` class names leak globally | Tailwind utilities (the light-DOM default); or `static shadow = true` for genuinely scoped CSS |
 | `willUpdate` computing SSR-visible derived state | Works (runs at SSR), but overriding it opts the component out of elision | Fine for interactive components; for display-only, derive inline in `render()` |
 | `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via a `static properties` + `declare` reactive prop |
 | `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
@@ -595,6 +626,30 @@ Practical consequences for agents writing webjs code.
 The full annotated catalog with code examples lives in the framework
 repo at
 [`agent-docs/lit-muscle-memory-gotchas.md`](https://github.com/webjsdev/webjs/blob/main/agent-docs/lit-muscle-memory-gotchas.md).
+
+### Styling: Tailwind-first (the most common lit reflex to unlearn)
+
+**Tailwind utilities are the strong default for pages AND light-DOM
+components (the default DOM mode).** Use them for layout, spacing, color
+(via the `@theme` tokens), typography, borders, radius, shadows, and
+interaction states (hover/focus/active/disabled, dark mode). Light DOM
+does not scope styles, so utilities apply directly.
+
+The lit habit is to scope CSS in a shadow root (`static styles =
+css\`\``) or write an inline `<style>` with semantic class names
+(`.hero`, `.card`). In a light-DOM webjs component the scoped block does
+nothing without `static shadow = true`, and the inline class names leak
+globally. Prefer Tailwind. When a utility bundle repeats, extract it into
+a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment, not a
+CSS class.
+
+Reserve raw CSS for what utilities cannot express: design-token `:root` /
+`@theme` definitions, `@property` + `@keyframes` animations,
+`::-webkit-scrollbar`, `prefers-reduced-motion` blocks, and complex
+`color-mix()` / gradient effects. When custom CSS is unavoidable in a
+light-DOM component, prefix every class selector with the component tag
+(invariant below). Shadow-DOM components (`static shadow = true`)
+legitimately use `static styles = css\`\`` for scoped CSS.
 
 ## Server action pattern
 
@@ -709,8 +764,45 @@ return html`
 ```
 
 The router's `closest('webjs-frame')` detection takes precedence over
-layout markers. Only the frame's content swaps. Use this sparingly -
+layout markers. Only the frame's content swaps. Use this sparingly,
 folder-based layouts handle 99% of cases.
+
+**External targeting + `_top` (Turbo-style).** A trigger does not have to be
+nested in the frame it drives. An `<a>` or `<form>` (or any ancestor)
+carrying `data-webjs-frame="<id>"` drives the frame with that id from
+anywhere (an external sidebar/nav link, a filter form), resolved via
+`getElementById`. The reserved token `data-webjs-frame="_top"` on a trigger
+INSIDE a frame breaks OUT to a full-page navigation. An id that does not
+resolve to a live `<webjs-frame>` warns once and falls back to a normal nav
+(never throws). With JS disabled a `data-webjs-frame` link is an inert
+attribute on a plain `<a href>`, so the click is a normal full navigation.
+
+**Busy state.** While a frame nav is in flight the router sets the native
+`aria-busy="true"` on the frame (cleared to `"false"` on any exit: success,
+error, abort, or a missing frame), so AT announces it and CSS can style
+`webjs-frame[aria-busy="true"]`. It also dispatches a bubbling
+`webjs:frame-busy` event on the frame at start and finish (detail
+`{ frameId, busy }`).
+
+When a frame nav's response lacks the matching `<webjs-frame id>` (e.g. an
+auth redirect), the router fires a cancelable, bubbling `webjs:frame-missing`
+event (detail `{ frameId, url, document }`) and leaves the frame unchanged
+rather than silently swapping the whole page; call `preventDefault()` to take
+over the outcome (e.g. `location.assign(e.detail.url)`).
+
+**Failed navigations recover in place, never a destructive full reload.** A
+successful swap and an HTML error body of any status (e.g. a `422` re-rendered
+form) both apply in place. For the remaining failure cases (a non-HTML error
+response like a `500` with a JSON body, or a transport/parse failure) the
+router fires a cancelable, bubbling `webjs:navigation-error` event on
+`document` (detail `{ url, status, error }`, where `status` is the HTTP status
+or `null`, and `error` is the `Error` or `null`). `preventDefault()` hands
+recovery to you and leaves the page exactly as it is (shell, scroll, focus,
+client state preserved); otherwise the router renders a minimal in-place
+`<div role="alert">` into the deepest layout children slot (outer chrome
+preserved), only hard-loading as a last resort when there is no shared layout
+marker. An AbortError (a superseding nav) is a normal supersede and never fires
+the event.
 
 ### 5. `loading.ts` for per-segment skeletons
 
@@ -903,13 +995,16 @@ composition, so a nested shell ends up dropped by the HTML parser.
    feature surface changed, `webjs check` passing. A unit test is not
    always enough: a component, hydration, the client router, or a server
    action called from the client needs a browser test
-   (`webjs test --browser`) asserting the behaviour in a real browser. A
-   commit that stages app code (`app/`, `modules/`, `components/`, `lib/`)
-   with no test is blocked for Claude Code by
-   `.claude/hooks/require-tests-with-src.sh`. The test suite itself runs in
-   CI (`.github/workflows/ci.yml`), not in the pre-commit hook, so `git
-   commit` stays fast and the gate cannot be skipped with a local
-   `--no-verify`.
+   (`webjs test --browser`) asserting the behaviour in a real browser. For
+   Claude Code, a commit that stages app code (`app/`, `modules/`,
+   `components/`, `lib/`) with no test WARNS via
+   `.claude/hooks/require-tests-with-src.sh` (every change should still ship
+   with a test, but that is a convention, not a hard gate). A project that
+   wants the strict floor opts into a hard block by setting
+   `WEBJS_TEST_GATE=block` (in `.claude/settings.json` env, your shell, or
+   CI). The real enforcement is CI: the test suite runs in
+   `.github/workflows/ci.yml`, not in the pre-commit hook, so `git commit`
+   stays fast and the gate cannot be skipped with a local `--no-verify`.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.

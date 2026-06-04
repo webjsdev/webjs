@@ -114,6 +114,20 @@ self-review loop.
   `static styles = css\`...\``) or third-party-embed isolation. `<slot>`
   projection works identically in both modes (named slots, fallback content,
   `assignedNodes` / `slotchange`, first-wins resolution).
+- **Tailwind-first styling.** Tailwind utilities are the strong default for
+  pages AND light-DOM components: layout, spacing, color (via `@theme`
+  tokens), typography, borders, radius, shadows, interaction states. Light
+  DOM does not scope, so utilities apply directly. The lit reflex to scope
+  CSS (`static styles = css\`...\``) or write an inline `<style>` with
+  semantic class names (`.hero`, `.card`) in a light-DOM component is wrong:
+  the scoped block needs `static shadow = true`, and inline class names leak
+  globally. When a utility bundle repeats, extract a `lib/utils/ui.ts` helper
+  returning an `` html`...` `` fragment, not a CSS class. Reserve raw CSS for
+  the allowlist (design tokens / `@theme`, `@property` + `@keyframes`,
+  `::-webkit-scrollbar`, `prefers-reduced-motion`, complex `color-mix()` /
+  gradients); when unavoidable in a light-DOM component, prefix every class
+  selector with the component tag. Shadow-DOM components legitimately use
+  `static styles = css\`...\`` for scoped CSS.
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
 - One function per server action file (`*.server.ts`).

@@ -180,7 +180,21 @@ export const metadata = {
       <li><code>&lt;meta name="theme-color"&gt;</code>: from <code>metadata.themeColor</code></li>
       <li><code>&lt;meta property="og:*"&gt;</code>: one tag per key in <code>metadata.openGraph</code></li>
       <li><code>&lt;link rel="preload"&gt;</code>: from <code>metadata.preload</code> array (fonts, images, etc.)</li>
+      <li><code>&lt;script type="application/ld+json"&gt;</code>: from <code>metadata.jsonLd</code> (schema.org structured data)</li>
     </ul>
+
+    <h3>JSON-LD structured data</h3>
+    <p>Set <code>metadata.jsonLd</code> to a schema.org object (or an array of objects, one script per element) to emit <code>&lt;script type="application/ld+json"&gt;</code> for Google rich results (Article, Product, BreadcrumbList, FAQ, etc.). webjs serializes and HTML-safe-escapes it for you, so a value containing <code>&lt;/script&gt;</code> can never break out of the tag. You own the schema; the framework adds no schema library. It works in <code>generateMetadata</code> too, for per-request data.</p>
+
+    <pre>export const metadata = {
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'Blog Post Title',
+    author: { '@type': 'Person', name: 'Ada' },
+    datePublished: '2026-06-01',
+  },
+};</pre>
 
     <h2>Module Preload Hints</h2>
     <p>The SSR pipeline automatically emits <code>&lt;link rel="modulepreload"&gt;</code> tags for:</p>

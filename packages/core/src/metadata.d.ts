@@ -143,6 +143,23 @@ export type AppleWebAppMetadata =
       startupImage?: AppleStartupImage | AppleStartupImage[];
     };
 
+/**
+ * A single JSON-LD structured-data object (schema.org). The author owns the
+ * shape (Article, Product, BreadcrumbList, Organization, FAQPage, etc.), so
+ * this is intentionally permissive. The framework serializes it with
+ * `JSON.stringify` and HTML-safe-escapes the output into a
+ * `<script type="application/ld+json">` block.
+ */
+export type JsonLd = Record<string, unknown>;
+
+/**
+ * A `metadata.preconnect` / `metadata.dnsPrefetch` hint. A bare URL string,
+ * or an object form. `crossorigin` (preconnect only) emits the `crossorigin`
+ * attribute; `true` / `''` -> a bare `crossorigin`, a string -> its value
+ * (e.g. `'anonymous'`, `'use-credentials'`).
+ */
+export type PreconnectHint = string | { url: string; crossorigin?: string | boolean };
+
 /** A `metadata.preload` link descriptor (emitted as `<link rel="preload">`). */
 export interface PreloadDescriptor {
   href: MetadataUrl;
@@ -237,6 +254,34 @@ export interface Metadata {
   cacheControl?: string;
   /** `<link rel="preload">` hints (fonts, images, etc.). */
   preload?: PreloadDescriptor[];
+
+  /**
+   * `<link rel="preconnect">` hints: warm DNS + TLS + TCP to a cross-origin
+   * the page is about to talk to (an API host, a font / image CDN). Each
+   * entry is a URL string or `{ url, crossorigin? }` (a font CDN needs
+   * `crossorigin`). A single value or an array. webjs ALSO auto-emits one
+   * preconnect to the resolved vendor CDN origin for an unpinned app (deduped
+   * against an author-declared one).
+   */
+  preconnect?: PreconnectHint | PreconnectHint[];
+
+  /**
+   * `<link rel="dns-prefetch">` hints: resolve a cross-origin's DNS ahead of
+   * use (a lighter-weight precursor to `preconnect`). A URL string,
+   * `{ url }`, or an array.
+   */
+  dnsPrefetch?: PreconnectHint | PreconnectHint[];
+
+  /**
+   * JSON-LD structured data (schema.org), emitted as one or more
+   * `<script type="application/ld+json">` blocks in `<head>`. A single
+   * object emits ONE script; an array emits one script PER element. The
+   * author owns the schema.org shape; the framework serializes with
+   * `JSON.stringify` and HTML-safe-escapes the output automatically (a
+   * value containing `</script>` can never break out of the tag). Works in
+   * `generateMetadata(ctx)` for per-request data (a per-post Article, etc.).
+   */
+  jsonLd?: JsonLd | JsonLd[];
 
   /** Catch-all `<meta name="…">` entries. Value may be a list. */
   other?: Record<string, string | number | Array<string | number>>;

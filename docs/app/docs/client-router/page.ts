@@ -41,9 +41,24 @@ export default function ClientRouter() {
       <li><strong>4xx (e.g. 422)</strong>: server re-renders the form with <code>value</code> attributes preserving what the user typed, inline error messages visible, no full-page reload. The Rails / Django / Laravel / Phoenix server-side validation flow.</li>
       <li><strong>5xx with HTML</strong>: error page rendered in place (not a flash of blank then reload).</li>
     </ul>
-    <p>Non-HTML responses (JSON error envelopes, downloads, opaque types) fall back to <code>location.href = url</code> and let the browser handle them.</p>
+    <p>Non-HTML <em>error</em> responses (a JSON error envelope from a 500), and transport/parse failures, recover in place via the <code>webjs:navigation-error</code> event below rather than a destructive full reload.</p>
     <p><strong>204 No Content</strong>: DOM untouched. History records the requested URL ("stay on current page" pattern for autosave-style submissions).</p>
     <p><strong>3xx redirects</strong>: <code>fetch()</code> follows them automatically. The <em>final</em> URL after redirects is recorded in history (Post-Redirect-Get pattern works correctly).</p>
+
+    <h2>Failed navigations recover in place (<code>webjs:navigation-error</code>)</h2>
+    <p>A successful swap and an HTML error body of any status both apply in place (above). The remaining failure cases are a <strong>non-HTML error response</strong> (a 500 carrying a JSON body) and a <strong>transport/parse failure</strong> (the <code>fetch</code> rejected, or the body claimed HTML but did not parse). For those the router no longer abandons the SPA with a destructive full <code>location.href</code> reload (which would discard the partial-swap shell, scroll, focus, and in-flight client state, and eat a second round-trip that may itself fail to the browser's default error page).</p>
+    <p>Instead the router dispatches a cancelable, bubbling <code>webjs:navigation-error</code> event on <code>document</code>, with detail <code>{ url, status, error }</code>: <code>status</code> is the HTTP status when a response arrived (else <code>null</code>), and <code>error</code> is the <code>Error</code> for a transport/parse failure (else <code>null</code>).</p>
+    <ul>
+      <li><strong><code>preventDefault()</code></strong> hands recovery to your app. The router does nothing further, so the current page is left exactly as it is (shell, scroll, focus, and client state preserved). Show a toast, retry, or navigate elsewhere.</li>
+      <li><strong>Not cancelled (the default)</strong> renders a minimal in-place error surface, a <code>&lt;div role="alert"&gt;</code> carrying a generic message plus the status, into the deepest layout children slot (the same target a normal partial swap writes to, so outer chrome and nav are preserved).</li>
+      <li><strong>Last-resort hard load</strong> happens only when there is no shared layout marker to render into (a genuine cross-document nav), and only after the event was not cancelled.</li>
+    </ul>
+    <p>An <strong>AbortError</strong> (a newer navigation superseding this one) is a normal supersede, not an error, and never fires <code>webjs:navigation-error</code>.</p>
+    <pre>document.addEventListener('webjs:navigation-error', (e) =&gt; {
+  // e.detail = { url, status, error }
+  e.preventDefault();                 // app handles recovery; page left intact
+  showToast(\`Could not load \${e.detail.url} (status \${e.detail.status})\`);
+});</pre>
 
     <h2><code>&lt;webjs-frame&gt;</code>: escape hatch for non-layout regions</h2>
     <p>The marker mechanism scopes swaps to the deepest shared <strong>layout</strong>. When you need a swap region <em>smaller</em> than the deepest layout (typically a widget inside a page that should swap independently of the rest of the page) wrap it in <code>&lt;webjs-frame id="..."&gt;</code>.</p>
@@ -61,6 +76,20 @@ export default async function PostPage({ params }) {
 }</pre>
     <p>When the user clicks "Load more", the router's <code>closest('webjs-frame')</code> from the click target finds <code>#comments</code>. The fetched response is expected to contain a <code>&lt;webjs-frame id="comments"&gt;</code> too. Only its children swap into the live frame, leaving the article body (and any reading scroll position, video playback, etc.) fully intact.</p>
     <p>This takes precedence over the layout-marker mechanism. Most apps never need it. Only reach for it when you've identified that the auto-marker swap is wider than the actual change.</p>
+
+    <h3>External targeting (<code>data-webjs-frame</code>) and <code>_top</code></h3>
+    <p>A trigger does not have to be nested inside the frame it drives. Mirroring Turbo's <code>data-turbo-frame</code>, an <code>&lt;a&gt;</code> or <code>&lt;form&gt;</code> (or any ancestor of it) carrying <code>data-webjs-frame="&lt;id&gt;"</code> drives the frame with that id from anywhere in the document, resolved via <code>getElementById</code>. So an external nav/sidebar link or a filter form can drive a content frame it does not enclose.</p>
+    <pre>&lt;nav data-webjs-frame="results"&gt;
+  &lt;a href="/products?sort=new"&gt;Newest&lt;/a&gt;
+  &lt;a href="/products?sort=top"&gt;Top rated&lt;/a&gt;
+&lt;/nav&gt;
+&lt;form action="/products" data-webjs-frame="results"&gt;…filters…&lt;/form&gt;
+
+&lt;webjs-frame id="results"&gt;…current results…&lt;/webjs-frame&gt;</pre>
+    <p>An explicit <code>data-webjs-frame</code> WINS over the closest-enclosing-frame default. The reserved token <code>data-webjs-frame="_top"</code> on a trigger INSIDE a frame breaks OUT to a full-page navigation. An id that does not resolve to a live <code>&lt;webjs-frame&gt;</code> warns once and falls back to a normal navigation (it never throws). With JS disabled the attribute is inert on a plain <code>&lt;a href&gt;</code>, so the click is a normal full navigation, the correct progressive-enhancement fallback.</p>
+
+    <h3>Busy state (<code>aria-busy</code> + <code>webjs:frame-busy</code>)</h3>
+    <p>While a frame's navigation is in flight the router sets the native <code>aria-busy="true"</code> on the frame element and clears it (to <code>"false"</code>) on every exit, a successful swap, a frame-missing response, an HTTP/transport error, or an abort by a newer navigation. So assistive tech announces the loading state, and CSS can style the busy region with <code>webjs-frame[aria-busy="true"]</code>. The router also dispatches a bubbling <code>webjs:frame-busy</code> event on the frame at both edges (detail <code>{ frameId, busy }</code>, <code>true</code> at start then <code>false</code> at finish) for app-level hooks.</p>
 
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>

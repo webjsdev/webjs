@@ -47,6 +47,7 @@ process.emitWarning = function (warning, type, code, ctor) {
 };
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
+import { generateRouteTypes } from './route-types.js';
 import { ssrPage, ssrNotFound } from './ssr.js';
 import { loadPageAction, runPageAction } from './page-action.js';
 import { handleApi } from './api.js';
@@ -112,7 +113,9 @@ function resolveRequestId(req) {
 function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
-import { setVendorEntries, setCoreInstall, publishBuildId } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
+import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -123,7 +126,7 @@ import {
 } from './redirects.js';
 import { readBodyLimits, computeServerTimeouts } from './body-limit.js';
 import { applyConditionalGet, BUFFERED_MARKER } from './conditional-get.js';
-import { commitHtmlCache } from './html-cache.js';
+import { commitHtmlCache, setAppSourceFingerprint } from './html-cache.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -304,6 +307,25 @@ export async function readTrailingSlashFromApp(appDir) {
 }
 
 /**
+ * Read the sub-path base path (`webjs.basePath`) from the app's
+ * package.json (issue #256). A missing, malformed, or unreadable config
+ * yields `''` (root mount), never a throw, so an unconfigured app is
+ * byte-identical to before this feature. Normalized to `''` or
+ * `/segment[/segment...]` by `readBasePath`.
+ *
+ * @param {string} appDir
+ * @returns {Promise<string>}
+ */
+export async function readBasePathFromApp(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return readBasePath(pkg);
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Read the CSP config (`webjs.csp`) from the app's package.json and
  * normalize it (issue #233). A missing, malformed, or unreadable config
  * yields a disabled config (no nonce minted, no CSP header), never a
@@ -422,6 +444,15 @@ export async function createRequestHandler(opts) {
       logger.error?.('[webjs] onError hook threw (ignored)', { err: String(e) });
     }
   }
+  // Sub-path deployment base path (issue #256), read once from the app's
+  // package.json `webjs.basePath` and bound into the importmap builder BEFORE
+  // setCoreInstall / setVendorEntries so every importmap target (and the
+  // recomputed hash) reflects the prefix. Empty (the default) makes both the
+  // ingress strip and the emit-side prefix pure no-ops, so an unconfigured app
+  // is byte-identical to before this feature.
+  const basePathValue = await readBasePathFromApp(appDir);
+  await setBasePath(basePathValue);
+
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
   // URLs depending on whether the resolved @webjsdev/core install
@@ -441,6 +472,15 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core.js')) &&
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
+
+  // Content-hash asset URLs for immutable caching (issue #243). Bind the
+  // asset-hash module to the app + core roots and enable fingerprinting in
+  // PROD only. In dev `withAssetHash` stays a pure no-op (never enabled), so
+  // the dev importmap / boot / preload output is byte-identical to before.
+  // This runs AFTER setBasePath / setCoreInstall, but those recompute the
+  // importmap hash with `{ fingerprint: false }`, so the boot-published build
+  // id is a stable deploy fingerprint independent of per-file content hashes.
+  setAssetRoots({ appDir, coreDir, enabled: !dev });
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no
@@ -487,6 +527,32 @@ export async function createRequestHandler(opts) {
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+
+  // Emit `.webjs/routes.d.ts` (typed Route union + per-route params, #258) in
+  // dev so an editor's tsserver always has up-to-date route types without the
+  // developer remembering to run `webjs types`. Best-effort and fire-and-
+  // forget: a failure logs and never blocks boot. Re-emitted after each route
+  // rebuild (see doRebuild) so adding/removing a route refreshes the types.
+  /** @returns {Promise<void>} */
+  async function emitRouteTypes() {
+    try {
+      const { mkdir, writeFile, rename } = await import('node:fs/promises');
+      const text = await generateRouteTypes(appDir);
+      const outDir = join(appDir, '.webjs');
+      await mkdir(outDir, { recursive: true });
+      // Write to a temp sibling then rename, so tsserver (which reads this
+      // file) never observes a half-written body if two rebuilds race. rename
+      // is atomic within the same dir. Both paths sit under the watcher-ignored
+      // .webjs/, so neither the temp write nor the rename re-triggers a rebuild.
+      const dest = join(outDir, 'routes.d.ts');
+      const tmp = join(outDir, `routes.d.ts.${process.pid}.tmp`);
+      await writeFile(tmp, text);
+      await rename(tmp, dest);
+    } catch (e) {
+      logger.warn?.(`[webjs] could not write .webjs/routes.d.ts (route types): ${e?.message || e}`);
+    }
+  }
+  if (dev) void emitRouteTypes();
 
   // Per-path response-header rules (issue #232), read once from the
   // app's package.json `webjs.headers`. Static config, so no rebuild
@@ -622,6 +688,47 @@ export async function createRequestHandler(opts) {
               : { elidableComponents: new Set(), inertRouteModules: new Set() };
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
+            // Fold the elision verdict into app-module content hashes (#243): an
+            // app module's served body is elision-transformed, so a verdict flip
+            // must bust its `?v` even when its source is byte-identical. A stable
+            // string of the sorted elidable + inert paths, RELATIVIZED to appDir
+            // so the fingerprint is a property of the app's STRUCTURE, not its
+            // filesystem location (two deploys at different absolute paths, or
+            // two identical apps, produce the same fingerprint). asset-hash
+            // digests it into each app-module hash; '' when nothing is elidable,
+            // so a no-elision app's hash stays exactly `sha256(bytes)`.
+            {
+              // `appDir + sep` boundary (matches asset-hash's containment guard)
+              // so a sibling-prefix dir cannot be mis-relativized.
+              const rel = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
+              const elidedPaths = [
+                ...state.elidableComponents,
+                ...state.inertRouteModules,
+              ].map(rel).sort();
+              setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
+            }
+            // App-source fingerprint for the HTML cache key (#318): a
+            // deterministic, location-independent digest of the browser-bound
+            // file set's content hashes, so a deploy that changes ONLY an app
+            // module's bytes (which the importmap-only build id misses) re-keys
+            // the cache instead of serving a body with stale `?v` boot URLs.
+            // PROD only (asset-hash is enabled there); '' in dev, where fs.watch
+            // handles staleness. Computed AFTER the elision fingerprint, so each
+            // per-file hash already reflects the elision verdict (an elision
+            // flip changes the served output, so it moves this fingerprint too).
+            // This eagerly hashes the WHOLE browser-bound set once (not just the
+            // first route's files), but `assetHashFor` is memoized and already
+            // runs for `?v` emission in prod, so it stays a one-time bounded cost
+            // inside the lazy analysis (never at boot).
+            if (!dev && state.browserBoundFiles) {
+              const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
+              const lines = [...state.browserBoundFiles]
+                .map((abs) => `${relApp(abs)}:${assetHashFor(abs)}`)
+                .sort();
+              setAppSourceFingerprint(lines.join('\n'));
+            } else {
+              setAppSourceFingerprint('');
+            }
             t.elision = now() - m;
             if (dev) {
               for (const { className, file } of await findOrphanComponents(appDir)) {
@@ -773,7 +880,16 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    // Refresh the generated route types (#258) so adding/removing a route file
+    // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
+    // best-effort (see emitRouteTypes).
+    if (dev) void emitRouteTypes();
     clearVendorCache();
+    // Content-hash asset cache (#243): clear so a changed file re-hashes and
+    // its emitted `?v` busts the stale immutable copy. A no-op in dev (the
+    // module is never enabled there), kept for correctness + the deploy-busts
+    // regression test, which clears + re-hashes to observe a changed `?v`.
+    clearAssetHashCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.
@@ -820,6 +936,19 @@ export async function createRequestHandler(opts) {
 
       let pathname = '/';
       try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
+      // Sub-path deployment (issue #256): the per-path response-header rules
+      // (`webjs.headers`) author their `source` patterns app-root-relative,
+      // exactly like `webjs.redirects` / `webjs.trailingSlash` (which the
+      // ingress strip in produce() already sees root-relative). So match the
+      // header rules against the STRIPPED path too, keeping the whole config
+      // surface consistent under a base path. `pathname` itself (used for the
+      // access log) stays the RAW path the client hit. No-op when basePath is
+      // empty or the request is not under it.
+      let headerPathname = pathname;
+      if (basePathValue) {
+        const s = stripBasePath(pathname, basePathValue);
+        if (s !== null) headerPathname = s;
+      }
       const startedAt = performance.now();
 
       let res;
@@ -846,7 +975,7 @@ export async function createRequestHandler(opts) {
       // Applied to every served response (documents, assets, the core
       // runtime, probes), since the defaults are universally safe.
       let merged = applySecurityHeaders(res, {
-        pathname,
+        pathname: headerPathname,
         https: webRequestIsHttps(req),
         prod: !dev,
         rules: headerRules,
@@ -884,6 +1013,14 @@ export async function createRequestHandler(opts) {
       // stripped here regardless. Best-effort: a store failure is swallowed.
       try {
         const reqUrl = new URL(req.url);
+        // Sub-path deployment (issue #256): the HTML cache READ (in ssrPage)
+        // and `revalidatePath` both key on the app-root-relative path, so key
+        // the WRITE on the stripped path too, or a cached page would never
+        // hit. No-op when basePath is empty / the path is not under it.
+        if (basePathValue) {
+          const s = stripBasePath(reqUrl.pathname, basePathValue);
+          if (s !== null) reqUrl.pathname = s;
+        }
         merged = await commitHtmlCache(req, merged, reqUrl);
       } catch { /* never let the cache write crash the response */ }
 
@@ -905,7 +1042,10 @@ export async function createRequestHandler(opts) {
       // duration / requestId (no bodies, no secrets). Suppressed for the
       // framework's own /__webjs/* probe + static traffic so it does not spam.
       // Best-effort: a logger that throws must not take the response down.
-      if (shouldAccessLog(pathname)) {
+      // Use the STRIPPED path for the suppression check (issue #256) so a
+      // framework probe at `<basePath>/__webjs/*` is suppressed just like the
+      // root-mounted `/__webjs/*`. The logged `path` stays the RAW client URL.
+      if (shouldAccessLog(headerPathname)) {
         try {
           logger.info?.('request', {
             requestId: reqId,
@@ -924,6 +1064,48 @@ export async function createRequestHandler(opts) {
   /** @param {Request} req */
   function produce(req) {
     return (async () => {
+      // Sub-path deployment ingress strip (issue #256). When `webjs.basePath`
+      // is set and the request path is under it, STRIP the prefix and rewrite
+      // the Request so EVERYTHING downstream (redirects, trailing-slash, the
+      // probes, the `/__webjs/*` checks, the source-file gate, route matching,
+      // SSR) sees a ROOT-relative path and works UNCHANGED. This single strip
+      // is why the rest of the framework needs no per-site changes. A request
+      // whose path is NOT under the base path is not for this mounted app, so
+      // return a 404 (the safe default for a mounted app). Empty basePath (the
+      // default) is a pure pass-through, so an unconfigured app is unchanged.
+      if (basePathValue) {
+        let reqUrl;
+        try { reqUrl = new URL(req.url); } catch { reqUrl = null; }
+        if (reqUrl) {
+          const stripped = stripBasePath(reqUrl.pathname, basePathValue);
+          if (stripped === null) {
+            // Not under the base path: this request is not for this app.
+            return new Response('Not found', {
+              status: 404,
+              headers: { 'content-type': 'text/plain; charset=utf-8' },
+            });
+          }
+          if (stripped !== reqUrl.pathname) {
+            reqUrl.pathname = stripped;
+            // Rewrite the Request with the stripped URL, preserving method,
+            // headers, and body. `duplex: 'half'` is required by the spec when
+            // a body stream is present on a non-GET/HEAD request.
+            const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+            req = new Request(
+              reqUrl.toString(),
+              /** @type {any} */ ({
+                method: req.method,
+                headers: req.headers,
+                body: hasBody ? req.body : undefined,
+                duplex: hasBody ? 'half' : undefined,
+                redirect: req.redirect,
+                signal: req.signal,
+              }),
+            );
+          }
+        }
+      }
+
       // Declarative redirects (issue #254): apply the configured old-path ->
       // new-path rules at the VERY START of request handling, before the
       // probes, routing, SSR, or asset serving. A matched source returns a
@@ -1005,7 +1187,12 @@ export async function createRequestHandler(opts) {
       // interactivity site-wide. Matched on the decoded path, like handleCore.
       let assetPath = probePath;
       try { assetPath = decodeURIComponent(probePath); } catch { /* keep raw on malformed escape */ }
-      const staticResp = await tryServeFrameworkStatic(assetPath, req.method.toUpperCase(), { coreDir, appDir, dev });
+      // Content-hash fingerprint (#243): a `?v=` query means an immutable,
+      // content-addressed asset url. Detected off the raw request url here
+      // (probePath was parsed from it above).
+      let assetVersioned = false;
+      try { assetVersioned = new URL(req.url).searchParams.has('v'); } catch { /* none */ }
+      const staticResp = await tryServeFrameworkStatic(assetPath, req.method.toUpperCase(), { coreDir, appDir, dev, versioned: assetVersioned });
       if (staticResp) return staticResp;
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
@@ -1029,14 +1216,32 @@ export async function createRequestHandler(opts) {
    * BEFORE running SSR: resolves a pathname to its page-route module URLs
    * without loading them. Returns null for non-page paths.
    *
+   * Sub-path deployment (issue #256): the HTTP layer passes the RAW request
+   * pathname (still carrying the base path, since the ingress strip happens
+   * inside `produce`, not here), so strip it for route matching and prefix
+   * the emitted module URLs so the early-hint preloads resolve under the
+   * prefix. A path not under the base path yields null (no hints).
+   *
    * @param {string} pathname
    */
   function routeFor(pathname) {
-    const page = matchPage(state.routeTable, pathname);
+    const matchPathname = basePathValue
+      ? stripBasePath(pathname, basePathValue)
+      : pathname;
+    if (matchPathname === null) return null;
+    const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
     const moduleUrls = [page.route.file, ...page.route.layouts].map((f) => {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
-      return rel.split('\\').join('/').replace(/^\/?/, '/');
+      const url = rel.split('\\').join('/').replace(/^\/?/, '/');
+      // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
+      // the SAME url the body's modulepreload + boot specifiers request (#243).
+      // A bare url would warm a different url and waste the hint. No-op in dev.
+      // Best-effort: a request landing in the narrow pre-warm window (before the
+      // elision verdict is set) hashes against an empty fingerprint, so the hint
+      // can mismatch the post-warm body for that one request, only a wasted
+      // speculative preload, never a stale body (the body url is authoritative).
+      return withAssetHash(withBasePath(url, basePathValue), basePathValue);
     });
     return { moduleUrls };
   }
@@ -1076,6 +1281,25 @@ export async function createRequestHandler(opts) {
  * etc.) sitting in front of this process. See the deployment docs for
  * the recommended topology.
  *
+/**
+ * Paths under the app root whose changes must NOT trigger a dev rebuild.
+ * `node_modules` / `.git` are noise. `.webjs/` is the framework's generated
+ * artefact dir (the #258 routes.d.ts and the vendor pin) that the dev server
+ * itself writes on startup and on every rebuild, so without this skip the
+ * write fires a watch event, triggers a rebuild, re-writes the file, and loops
+ * forever. `prisma/dev*` / `prisma/migrations` churn during db:migrate. The
+ * prisma branch is prefix-only (no trailing separator) so the SQLite sidecars
+ * `prisma/dev.db` / `prisma/dev.db-journal` match too; the others stay
+ * separator-anchored so an unrelated name like `node_modules.bak/foo` does not.
+ *
+ * @param {string} filename relative path from an fs.watch `event.filename`
+ * @returns {boolean} true when the change should be ignored
+ */
+export function shouldIgnoreWatchPath(filename) {
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/.test(filename || '');
+}
+
+/**
  * @param {{
  *   appDir: string,
  *   port?: number,
@@ -1111,18 +1335,9 @@ export async function startServer(opts) {
     // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
     // Node 24. No external dep needed.
     //
-    // fs.watch returns relative paths in event.filename. We apply
-    // the same ignore filter chokidar used before: skip
-    // node_modules, .git, and prisma's dev artefacts (dev.db,
-    // dev.db-journal, migrations/) which the dev server writes
-    // during db:migrate and would otherwise loop.
-    //
-    // The prisma branch uses prefix-only matching (no required
-    // trailing separator) so the SQLite sidecar files like
-    // `prisma/dev.db` and `prisma/dev.db-journal` are ignored too.
-    // node_modules / .git stay separator-anchored so unrelated
-    // names like `node_modules.bak/foo` don't get caught.
-    const IGNORE = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/;
+    // fs.watch returns relative paths in event.filename. `shouldIgnoreWatchPath`
+    // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
+    // prisma's dev artefacts so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
     (async () => {
@@ -1130,7 +1345,7 @@ export async function startServer(opts) {
         const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
-          if (IGNORE.test(filename)) continue;
+          if (shouldIgnoreWatchPath(filename)) continue;
           rebuild();
         }
       } catch (err) {
@@ -1154,8 +1369,11 @@ export async function startServer(opts) {
     try {
       const url = urlFromRequest(req);
 
-      // SSE: handled specially; doesn't fit the req→Response model.
-      if (url.pathname === '/__webjs/events') {
+      // SSE: handled specially; doesn't fit the req→Response model. Match the
+      // base-path-stripped pathname so the reload stream answers at
+      // `<basePath>/__webjs/events` under a sub-path deploy (#256). With no
+      // basePath this is a pure pass-through (the bare path still matches).
+      if (stripBasePath(url.pathname, basePath()) === '/__webjs/events') {
         if (!dev) { res.writeHead(404); res.end(); return; }
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -1265,16 +1483,20 @@ export async function startServer(opts) {
  *
  * @param {string} path decoded pathname
  * @param {string} method upper-cased HTTP method
- * @param {{ coreDir: string, appDir: string, dev: boolean }} ctx
+ * @param {{ coreDir: string, appDir: string, dev: boolean, versioned?: boolean }} ctx
+ *   `versioned` is true when the request carried a `?v=` query (a
+ *   content-hash-fingerprinted url, issue #243); the core module is then served
+ *   `immutable` (1 year) instead of the 1h fallback, since the hash in the url
+ *   busts the cache on the next deploy.
  * @returns {Promise<Response|null>} a Response, or null when path is not one of these assets
  */
 async function tryServeFrameworkStatic(path, method, ctx) {
-  const { coreDir, appDir, dev } = ctx;
+  const { coreDir, appDir, dev, versioned } = ctx;
 
   // Dev live-reload client.
   if (path === '/__webjs/reload.js') {
     if (!dev) return new Response('Not found', { status: 404 });
-    return new Response(RELOAD_CLIENT_JS, {
+    return new Response(reloadClientJs(basePath()), {
       headers: { 'content-type': 'application/javascript; charset=utf-8' },
     });
   }
@@ -1301,7 +1523,11 @@ async function tryServeFrameworkStatic(path, method, ctx) {
     if (abs !== coreDir && !abs.startsWith(coreDir + sep)) {
       return new Response('forbidden', { status: 403 });
     }
-    return fileResponse(abs, { dev, immutable: false });
+    // A `?v=<hash>` request is content-addressed, so serve it `immutable` (#243):
+    // the hash busts the cache on the next core bump, so the regression the
+    // un-versioned 1h cap guards against (a stale immutable core after a bump)
+    // cannot recur. An un-fingerprinted request keeps the 1h fallback.
+    return fileResponse(abs, { dev, immutable: !!versioned });
   }
 
   // Vendor URL handler for `webjs vendor pin --download` mode only. In default
@@ -1344,6 +1570,11 @@ async function handleCore(req, ctx) {
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { path = url.pathname; }
   const method = req.method.toUpperCase();
+  // Content-hash fingerprint (#243): a `?v=` query marks a content-addressed
+  // asset url that may be served `immutable` (the hash busts the cache on a
+  // byte change). The pathname (query stripped by `url.pathname`) resolves the
+  // file as today; only the cache header changes when `?v` is present.
+  const versioned = url.searchParams.has('v');
 
   // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) and the
   // framework-internal static assets (`/__webjs/core/*`, `/__webjs/reload.js`,
@@ -1351,7 +1582,7 @@ async function handleCore(req, ctx) {
   // so they are not repeated here. This fallback covers the (currently
   // unreachable) case of handleCore being entered for one of those assets, so
   // the routing stays correct if a future caller bypasses the early path.
-  const frameworkStatic = await tryServeFrameworkStatic(path, method, { coreDir, appDir, dev });
+  const frameworkStatic = await tryServeFrameworkStatic(path, method, { coreDir, appDir, dev, versioned });
   if (frameworkStatic) return frameworkStatic;
 
   // Internal server-action RPC endpoint
@@ -1409,7 +1640,8 @@ async function handleCore(req, ctx) {
     if (!abs.startsWith(publicRoot)) {
       return new Response(null, { status: 404 });
     }
-    if (await exists(abs)) return fileResponse(abs, { dev, immutable: false });
+    // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
+    if (await exists(abs)) return fileResponse(abs, { dev, immutable: versioned });
   }
 
   // User source modules (served as ES modules, with action-file rewriting).
@@ -1481,13 +1713,15 @@ async function handleCore(req, ctx) {
         elidableComponents: state.elidableComponents,
         appDir,
       };
+      // A `?v=<hash>` app-module request is content-addressed -> immutable
+      // (#243); an un-fingerprinted request keeps the 1h fallback.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts, state.tsCache);
+        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned);
       }
       if (/\.m?js$/.test(abs)) {
-        return jsModuleResponse(abs, dev, elideOpts);
+        return jsModuleResponse(abs, dev, elideOpts, versioned);
       }
-      return fileResponse(abs, { dev, immutable: false });
+      return fileResponse(abs, { dev, immutable: versioned });
     }
   }
 
@@ -1841,8 +2075,10 @@ async function fileResponse(abs, opts) {
  * @param {string} abs
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} elideOpts
+ * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
+ *   serve `immutable` (1 year) instead of the 1h fallback. Dev stays `no-cache`.
  */
-async function jsModuleResponse(abs, dev, elideOpts) {
+async function jsModuleResponse(abs, dev, elideOpts, immutable) {
   let source;
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
@@ -1853,7 +2089,7 @@ async function jsModuleResponse(abs, dev, elideOpts) {
   // weak ETag + 304 (see fileResponse).
   const headers = {
     'content-type': 'application/javascript; charset=utf-8',
-    'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+    'cache-control': dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
     [BUFFERED_MARKER]: '1',
   };
   return new Response(code, { status: 200, headers });
@@ -1899,15 +2135,21 @@ async function stripTs(source, _abs) {
  * @param {boolean} dev
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
  * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
+ * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
+ *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
+ *   the same bytes regardless; only the cache header varies. Dev stays `no-cache`.
  */
-async function tsResponse(abs, dev, elideOpts, cache) {
+async function tsResponse(abs, dev, elideOpts, cache, immutable) {
+  // The body bytes are identical with or without `?v`; only the cache header
+  // changes, so the per-mtime cache stays a single entry.
+  const cacheControl = dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
   const st = await stat(abs);
   const cached = cache.get(abs);
   if (cached && cached.mtimeMs === st.mtimeMs) {
     return new Response(cached.code, {
       headers: {
         'content-type': 'application/javascript; charset=utf-8',
-        'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+        'cache-control': cacheControl,
         [BUFFERED_MARKER]: '1',
       },
     });
@@ -1938,7 +2180,8 @@ async function tsResponse(abs, dev, elideOpts, cache) {
           `webjs is buildless: only erasable TS syntax is supported. ` +
           `Replace enum / namespace / parameter-property / legacy-decorator / ` +
           `import = require constructs with their erasable equivalents. ` +
-          `Run \`webjs check\` for guidance (no-non-erasable-typescript rule).`
+          `Run \`webjs check\` for guidance (no-non-erasable-typescript rule). ` +
+          `Docs: https://docs.webjs.com/docs/typescript`
         // Prod: terse, no path leak, no Node-message leak (Node's
         // message can include source snippets). Operators get the
         // detail in server logs above.
@@ -1964,7 +2207,7 @@ async function tsResponse(abs, dev, elideOpts, cache) {
   return new Response(code, {
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
-      'cache-control': dev ? 'no-cache' : 'public, max-age=3600',
+      'cache-control': cacheControl,
       [BUFFERED_MARKER]: '1',
     },
   });
@@ -2091,7 +2334,17 @@ function locatePackageDir(appDir, pkgName) {
   return null;
 }
 
-const RELOAD_CLIENT_JS = `// webjs dev reload client
-const es = new EventSource('/__webjs/events');
+/**
+ * The dev live-reload client. The `EventSource` URL is a framework-emitted
+ * same-origin path, so it must carry the base path under a sub-path deploy
+ * (#256), like the importmap targets and the RPC stub. No-op when basePath
+ * is empty.
+ * @param {string} bp the normalized base path (`''` = no-op)
+ * @returns {string}
+ */
+function reloadClientJs(bp) {
+  return `// webjs dev reload client
+const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
 es.addEventListener('reload', () => location.reload());
 `;
+}

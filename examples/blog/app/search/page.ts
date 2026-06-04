@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, type PageProps } from '@webjsdev/core';
 import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
 
 export const metadata = { title: 'Search posts' };
@@ -13,10 +13,11 @@ export const metadata = { title: 'Search posts' };
  * exercises this form as the canonical "a form submits and the server
  * renders the response with JS off" case.
  */
-export default async function Search(
-  { searchParams }: { searchParams?: { q?: string } },
-) {
-  const q = String(searchParams?.q || '').trim();
+// A static route (no dynamic segment), typed with `PageProps<'/search'>`.
+// `searchParams` is `Record<string, string | string[]>`, the established
+// page-context shape (#258).
+export default async function Search({ searchParams }: PageProps<'/search'>) {
+  const q = String(searchParams.q || '').trim();
   const all = await listPosts();
   const results = q
     ? all.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()))

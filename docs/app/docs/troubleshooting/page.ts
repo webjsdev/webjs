@@ -1,0 +1,72 @@
+import { html } from '@webjsdev/core';
+
+export const metadata = {
+  title: 'Troubleshooting | webjs',
+  description:
+    'Symptom-keyed fixes for the distinctive webjs error signatures: throw-at-load server imports, backtick-in-template 500s, TypeScript strip failures, SSR browser-global crashes, the missing-frame swap, and more, each linked to the webjs check rule and the invariant behind it.',
+};
+
+export default function Troubleshooting() {
+  return html`
+    <h1>Troubleshooting</h1>
+    <p>webjs's no-build, isomorphic-module model produces a few error signatures you have not seen in a bundled framework: a module that throws at LOAD rather than at call, a 500 from a stray backtick, a strip-time failure that points at a lint rule. This page is keyed by SYMPTOM. Find the error text or the behavior you are seeing, then read the cause and the fix. Most of these are also caught ahead of time by <code>webjs check</code>, so run it first.</p>
+
+    <h2>"Cannot import X from browser code. This file is server-only"</h2>
+    <p><strong>Symptom:</strong> the page goes blank and the browser console shows an error thrown at module load, naming a <code>.server</code> file, before any of your code runs.</p>
+    <p><strong>Cause:</strong> you imported a server-only utility (a <code>.server.{js,ts}</code> file with NO <code>'use server'</code> directive) directly into a page, layout, or component. The dev server resolves that browser import to a stub whose body throws at the top level, so it fails the instant the module loads, not when you call the function. This is deliberate: it keeps the server source (your Prisma client, secrets, <code>node:*</code> usage) off the client.</p>
+    <p><strong>Fix:</strong> never import a no-<code>'use server'</code> util straight into client-bound code. Use it INSIDE a <code>'use server'</code> action, a <code>route.{js,ts}</code> handler, or <code>middleware.{js,ts}</code> (all server-only), and have the page call that action. A page reaches server logic through an action whose RPC stub loads safely on the client. See <a href="/docs/server-actions">Server Actions</a>. This is framework invariant 1 (the <code>.server</code> boundary).</p>
+
+    <h2>A 500 in production from an <code>html</code> template that worked in dev</h2>
+    <p><strong>Symptom:</strong> a page renders in dev but 500s in production, or throws a cryptic JavaScript parse error near a template.</p>
+    <p><strong>Cause:</strong> a backtick character appears inside an <code>html\`...\`</code> (or <code>css\`...\`</code>) template body, even inside a CSS or HTML comment. A nested backtick closes the tagged-template literal at JavaScript parse time, so the rest of the file is misparsed.</p>
+    <p><strong>Fix:</strong> remove the backtick from the template body. If you need a literal backtick in rendered output, build it from a string expression (<code>\${'\`'}</code>) rather than typing it inline. This is framework invariant 9.</p>
+
+    <h2>A 500 at strip time pointing at <code>no-non-erasable-typescript</code></h2>
+    <p><strong>Symptom:</strong> a <code>.ts</code> file 500s with a message about TypeScript stripping and the <code>no-non-erasable-typescript</code> rule, or the server refuses to start naming a required Node version.</p>
+    <p><strong>Cause:</strong> webjs strips types with Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, which only erases TYPES. Non-erasable syntax (an <code>enum</code>, a <code>namespace</code> with values, a constructor parameter property, a legacy decorator with <code>emitDecoratorMetadata</code>, or <code>import = require</code>) has no type-only form to strip, so it fails. The Node-version variant means you are on Node below 24, where the built-in strip and recursive <code>fs.watch</code> are unavailable.</p>
+    <p><strong>Fix:</strong> set <code>compilerOptions.erasableSyntaxOnly: true</code> in <code>tsconfig.json</code> so the compiler rejects these at edit time, and use the erasable equivalents (a <code>const</code> object plus a union type instead of an <code>enum</code>, an explicit field plus assignment instead of a parameter property). Upgrade to Node 24+ for the version error. See <a href="/docs/typescript">TypeScript</a>. This is framework invariant 10, enforced by the <code>erasable-typescript-only</code> and <code>no-non-erasable-typescript</code> check rules.</p>
+
+    <h2>An SSR crash naming <code>document</code>, <code>window</code>, or a DOM method</h2>
+    <p><strong>Symptom:</strong> the server render throws naming a browser global or an <code>HTMLElement</code> method (<code>document</code>, <code>window</code>, <code>localStorage</code>, <code>this.querySelector</code>, <code>this.classList</code>, <code>this.attachShadow</code>), and the page never reaches the browser.</p>
+    <p><strong>Cause:</strong> a component touched a genuinely browser-only global in its <code>constructor</code> or <code>render()</code>, both of which run during SSR. The SSR pipeline constructs the component and calls <code>render()</code> on the server, where the live DOM does not exist. (The attribute methods, <code>closest()</code>, and the host IDL reflections ARE backed by a server shim and do not crash; only the live-DOM surface does.)</p>
+    <p><strong>Fix:</strong> move browser-only reads (<code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code>) into <code>connectedCallback</code>, which runs only in the browser, then write the value to a signal to refine the first paint. Defaults for the first paint go in the constructor; server-known data comes through the page function as a prop. See <a href="/docs/components">Components</a> and <a href="/docs/progressive-enhancement">Progressive Enhancement</a>. The <code>no-browser-globals-in-render</code> check rule catches this ahead of time.</p>
+
+    <h2>A custom element renders but never reacts to a property change</h2>
+    <p><strong>Symptom:</strong> the component paints correctly on first load, but assigning a reactive property later does not re-render it.</p>
+    <p><strong>Cause:</strong> you wrote a class-field initializer for a reactive property (<code>count: number = 0</code> or <code>count = 0</code>). Under modern class-field semantics that compiles to a define on <code>this</code> AFTER <code>super()</code>, which overwrites the framework's reactive accessor, so subsequent assignments bypass the update.</p>
+    <p><strong>Fix:</strong> declare the property with <code>declare count: number</code> (no initializer) and set its default in the <code>constructor</code> after <code>super()</code>. The <code>static properties</code> block is the runtime declaration; <code>declare</code> only types it. See <a href="/docs/components">Components</a>. The <code>reactive-props-use-declare</code> check rule flags this.</p>
+
+    <h2>A component's first paint is empty until JavaScript runs</h2>
+    <p><strong>Symptom:</strong> a component shows a blank or skeleton state on first load and fills in only after hydration, and with JavaScript disabled it stays empty.</p>
+    <p><strong>Cause:</strong> initial data is fetched in <code>connectedCallback</code> or <code>firstUpdated</code>, neither of which runs during SSR, so the server-rendered HTML is empty by design. This breaks progressive enhancement.</p>
+    <p><strong>Fix:</strong> fetch the data on the server in the page function and pass it down as a prop (<code>.prop=\${richObject}</code> for a custom element, which round-trips through SSR, or an attribute for a native element). Reserve <code>connectedCallback</code> for genuinely browser-only refinement. See <a href="/docs/progressive-enhancement">Progressive Enhancement</a>.</p>
+
+    <h2>A whole page gets replaced on a frame navigation</h2>
+    <p><strong>Symptom:</strong> clicking a link inside a <code>&lt;webjs-frame&gt;</code> replaces the entire document instead of just the frame (for example an auth redirect returning a login page).</p>
+    <p><strong>Cause:</strong> the navigation response did not contain a <code>&lt;webjs-frame&gt;</code> with the requested id. Rather than silently swapping the whole document, webjs now fires a cancelable <code>webjs:frame-missing</code> event and leaves the frame unchanged (with a console warning).</p>
+    <p><strong>Fix:</strong> make sure the response for a frame-scoped navigation includes the matching frame, or listen for <code>webjs:frame-missing</code> on <code>document</code> and decide the outcome yourself (the event detail carries <code>{ frameId, url, document }</code>; call <code>preventDefault()</code> to take over, for example a full navigation with <code>navigate(detail.url)</code>). See the <code>&lt;webjs-frame&gt;</code> section in <a href="/docs/client-router">Client Router</a>.</p>
+
+    <h2>A vendor module 404s after deploying under a sub-path</h2>
+    <p><strong>Symptom:</strong> the app works at the origin root but, when mounted under a sub-path (example.com/app/) behind a proxy that does not strip the prefix, the importmap and module URLs 404 and the page never hydrates.</p>
+    <p><strong>Cause:</strong> the framework-emitted URLs (importmap targets, the boot module specifiers, the RPC endpoint) default to origin-root paths.</p>
+    <p><strong>Fix:</strong> set <code>"webjs": { "basePath": "/app" }</code> in <code>package.json</code>. webjs strips the prefix at ingress and prefixes every framework-emitted URL, so module resolution works under the mount. See <a href="/docs/configuration">Configuration</a>.</p>
+
+    <h2>A browser <code>import</code> of an app file returns 404</h2>
+    <p><strong>Symptom:</strong> a module the browser tries to fetch returns 404 even though the file exists.</p>
+    <p><strong>Cause:</strong> only files reachable from a browser-bound entry (a page, layout, error, loading, not-found, or component) through the static import graph are servable. A file nothing client-side imports, a hand-rolled <code>scripts/</code> helper, or a <code>.server</code> file's source returns 404 by construction, the same posture as a bundler manifest.</p>
+    <p><strong>Fix:</strong> import the module from a browser-bound entry so it enters the graph, or, if it is server-only, keep it behind the <code>.server</code> boundary and reach it through an action. See <a href="/docs/no-build">No-Build Model</a>.</p>
+
+    <h2><code>expose</code> reads as <code>undefined</code></h2>
+    <p><strong>Symptom:</strong> <code>import { expose } from '@webjsdev/core'</code> is <code>undefined</code> at runtime.</p>
+    <p><strong>Cause:</strong> the bare <code>@webjsdev/core</code> specifier resolves to the BROWSER entry, which excludes server-only exports like <code>expose</code>. Importing it from a client-bound file silently reads <code>undefined</code>.</p>
+    <p><strong>Fix:</strong> only use <code>expose</code> inside a <code>.server.{js,ts}</code> file, where the import resolves to the full server surface. See <a href="/docs/expose">expose()</a>.</p>
+
+    <h2>A component's <code>static styles</code> have no effect (and a console warning)</h2>
+    <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block does not style the component at all, and the framework warns at runtime.</p>
+    <p><strong>Cause:</strong> <code>static styles</code> is adopted through a shadow root, but the component is in light DOM (the default), which has no shadow root, so the stylesheet is never adopted and the framework warns.</p>
+    <p><strong>Fix:</strong> add <code>static shadow = true</code> to scope the styles, or use Tailwind utilities (unique by construction), or, if you keep custom CSS in light DOM, prefix every class selector with the component tag name (framework invariant 7 for light-DOM CSS). See <a href="/docs/styling">Styling</a>.</p>
+
+    <h2>Still stuck</h2>
+    <p>The framework source is in <code>node_modules/@webjsdev/</code> with no build step, so what you read is what runs. Grep the relevant file (the SSR pipeline in <code>@webjsdev/server/src/ssr.js</code>, client hydration in <code>@webjsdev/core/src/render-client.js</code>, the convention rules in <code>@webjsdev/server/src/check.js</code>). Run <code>webjs check</code> to surface most of the issues above before they reach the browser, and run <code>webjs check --rules</code> to read what each rule enforces.</p>
+  `;
+}

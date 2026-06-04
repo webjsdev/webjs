@@ -278,9 +278,46 @@ SESSION_SECRET="change-me"
 API_KEY="sk-..."</pre>
     <p>webjs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> on boot via Node 24+'s built-in <code>process.loadEnvFile</code>. No <code>dotenv</code> dependency. Shell-exported values take precedence over the file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration">Configuration</a> for the full precedence rules.</p>
 
+    <h2>Secrets: platform injection, not a committed file</h2>
+    <p>webjs deliberately stays out of secret management. There is no encrypted credentials file and no bespoke crypto subsystem. Secrets are plain environment variables, the 12-factor way, and the safe production posture is the standard one your platform already supports.</p>
+    <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
+      <p style="margin:0 0 .5rem;font-weight:600">Never commit <code>.env</code></p>
+      <p style="margin:0">The scaffold gitignores <code>.env</code> for you. Keep it that way. A committed <code>.env</code> leaks every secret to anyone with repo access and into your git history forever. Commit <code>.env.example</code> (keys with placeholder values) instead, so a new contributor knows what to set without seeing real values.</p>
+    </div>
+    <p><strong><code>.env</code> is for local development only.</strong> It is the convenient way to set <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, and the rest on your own machine. It is NOT how production secrets should reach a deployed app.</p>
+    <p><strong>Inject production secrets through the host platform's secret store.</strong> Because a shell-exported or platform-injected value takes precedence over the <code>.env</code> file (and you do not ship <code>.env</code> to production at all), every platform's native mechanism works with no webjs-specific step:</p>
+    <ul>
+      <li><strong>Railway / Fly / Render / Vercel / Heroku:</strong> set variables in the project's environment settings (or their CLI / dashboard secret store). They arrive as <code>process.env</code> at runtime.</li>
+      <li><strong>Docker / Compose:</strong> pass <code>--env-file</code> at run time (a file that lives on the host, never in the image), or use Docker / Compose <code>secrets</code> for files mounted at <code>/run/secrets</code>. Do not <code>COPY</code> a <code>.env</code> into the image, and keep <code>.env</code> in <code>.dockerignore</code> (the scaffold does).</li>
+      <li><strong>Kubernetes:</strong> a <code>Secret</code> surfaced as env vars (or a mounted file) via the pod spec.</li>
+      <li><strong>systemd / bare VM:</strong> an <code>EnvironmentFile=</code> directive pointing at a root-owned, <code>0600</code> file outside the repo.</li>
+    </ul>
+    <p>Server-side code reads these with <code>process.env.X</code>. They never reach the browser: only names prefixed <code>WEBJS_PUBLIC_</code> are exposed client-side, and the boundary is fail-closed, so a secret cannot leak by a typo. See <a href="/docs/security">Security</a> for the full env boundary.</p>
+    <h3>Rotate <code>AUTH_SECRET</code></h3>
+    <p><code>AUTH_SECRET</code> signs session cookies and auth tokens, so treat it like any signing key: use 32 or more random characters, keep it only in the platform secret store, and rotate it periodically and immediately on any suspected exposure. Rotating it invalidates existing sessions and tokens (everyone is signed out), which is the point. For a zero-downtime rotation, deploy the new value during a low-traffic window and accept that active sessions end. The same applies to any <code>SESSION_SECRET</code> and to OAuth provider secrets.</p>
+    <p>See the <a href="/docs/configuration">Configuration</a> page for the precedence rules and the optional <code>env.{js,ts}</code> boot-time validation that fails fast on a missing or malformed secret.</p>
+
+    <h2>Database connections (Prisma + Postgres)</h2>
+    <p>SQLite needs no pool tuning. When you move to Postgres in production, size the connection pool, because connection exhaustion is the most common scaling surprise and webjs gives no prior signal in dev (SQLite has no pool).</p>
+    <p>A webjs server is ONE Node process per instance, and Prisma opens its own connection pool inside that process. The default pool size is <code>num_cpus * 2 + 1</code>, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
+    <p><strong>Bound the per-instance pool with <code>connection_limit</code> in the <code>DATABASE_URL</code></strong>, sized so <code>instances * connection_limit</code> stays comfortably under the database's <code>max_connections</code> (leave headroom for migrations and admin tools):</p>
+    <pre># One pool of at most 10 connections per instance.
+DATABASE_URL="postgresql://user:pass@db.example.com:5432/app?connection_limit=10"</pre>
+    <p><strong>Front Postgres with a pooler when instance count is high or variable</strong> (autoscaling, many small instances, or a low <code>max_connections</code> plan). Point <code>DATABASE_URL</code> at a transaction-mode pooler (PgBouncer, or a managed pooler like Supabase, Neon, or PlanetScale) so many app connections share a small set of real database connections. With PgBouncer in transaction mode, tell Prisma so it disables prepared statements, and give migrations a DIRECT connection (the pooler does not support the session features migrations need):</p>
+    <pre># App traffic goes through the pooler (port 6543), migrations go direct (5432).
+DATABASE_URL="postgresql://user:pass@pooler.example.com:6543/app?pgbouncer=true&amp;connection_limit=1"
+DIRECT_URL="postgresql://user:pass@db.example.com:5432/app"</pre>
+    <pre>// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}</pre>
+    <p>Behind a transaction pooler, set <code>connection_limit=1</code> per instance (the pooler does the multiplexing). Without a pooler, set <code>connection_limit</code> to a per-instance budget and keep the instance count bounded. Either way, always import the Prisma client from the scaffolded <code>lib/prisma.server.ts</code> singleton, never <code>new PrismaClient()</code> per request, so a process opens one pool, not one per call.</p>
+
     <h2>Docker / Containerisation</h2>
     <p>A minimal Dockerfile for a webjs app:</p>
-    <pre>FROM node:23-slim
+    <pre>FROM node:24-slim
 
 WORKDIR /app
 

@@ -61,6 +61,17 @@ even if the user doesn't explicitly ask.**
 4. Sync with parent: `git fetch origin && git rebase origin/main` if behind
 5. Don't mix unrelated work on the wrong branch
 
+### After cloning: verify the toolchain
+
+Run `npm run doctor` (which runs `webjs doctor`) once after cloning to assert
+the project is set up correctly: the Node major (the strip-types floor), the
+tsconfig `erasableSyntaxOnly` flag, `.env` drift vs `.env.example`, vendor-pin
+freshness, `@webjsdev/*` version coherence, and the git pre-commit hook. It
+prints `[pass]` / `[warn]` / `[fail]` per check with an actionable fix line and
+exits non-zero only on a hard fail (a broken toolchain), so a green run means
+`npm run dev` will boot. It is a local onboarding/setup-verify tool, not a CI
+gate (its env-drift + network pin-freshness checks would make CI flaky).
+
 ### Every code change must include:
 
 1. **Commit and push per logical unit, not at the end.** A logical unit is
@@ -85,6 +96,12 @@ even if the user doesn't explicitly ask.**
 
 4. **Convention check.** Run `webjs check` after changes and fix
    any violations before reporting the task as done.
+
+5. **Type check.** Run `npm run typecheck` (which runs `webjs typecheck`,
+   a `tsc --noEmit` over the app) and fix any type errors. `webjs check` is
+   correctness-only and does NOT type-check, so this is the separate
+   is-my-TypeScript-valid gate. It exits non-zero on a type error, so add it
+   to CI once the app type-checks cleanly.
 
 ### Definition of done (MUST be addressed BEFORE opening the PR)
 
@@ -425,6 +442,16 @@ test/
 | node (unit + integration) | `test/<feature>/*.test.ts` | Fast, no spawned process. Import server actions/queries/utilities and call them directly. Use `renderToString` for SSR HTML assertions. |
 | browser | `test/<feature>/browser/*.test.js` | Real Chromium via web-test-runner + Playwright. Shadow DOM, events, `adoptedStyleSheets`, `IntersectionObserver`. |
 | e2e | `test/<feature>/e2e/*.test.ts` | Boots the app and drives it through HTTP / a real browser. Gated behind `WEBJS_E2E=1` so it doesn't run on every `webjs test`. |
+
+For a browser component test, `ssrFixture(html\`<my-el></my-el>\`)` from
+`@webjsdev/core/testing` server-renders THEN hydrates the component, awaiting
+its native `updateComplete`, so the post-hydration DOM is observable and an
+SSR-vs-hydrate mismatch shows up (contrast `fixture()`, which only waits two
+macrotasks). `assertNoA11yViolations(el)` is the OPT-IN axe-core accessibility
+assertion: axe-core is a test-only devDependency, dynamically imported, never
+shipped to the app runtime, and the assertion is never an automatic gate.
+Install it once with `npm install -D axe-core` (the scaffold already lists it).
+The scaffold's `test/hello/browser/hello.test.js` demonstrates both.
 | smoke | `test/<feature>/smoke/*.test.ts` | Fast deploy-time sanity check (single critical path; "does this surface still return 200"). |
 
 ### Running
@@ -433,14 +460,53 @@ test/
 - `webjs test --browser` (or `npx wtr`) runs the browser tests.
 - `WEBJS_E2E=1 webjs test` adds the e2e tests.
 
-**Every change ships with a test.** For Claude Code, a commit that
-stages app code (`app/`, `modules/`, `components/`, `lib/`) without
-staging a test is blocked by `.claude/hooks/require-tests-with-src.sh`.
-A unit test alone is not enough for interactive or component code: add
-the browser test that asserts the rendered/hydrated behaviour. The test
-suite itself runs in CI (`.github/workflows/ci.yml`) on every PR and
-push to main, not in the local pre-commit hook, so `git commit` stays
-fast and the gate cannot be skipped with a local `--no-verify`.
+### The handle() test harness (full-pipeline node tests)
+
+For a node test that needs the REAL request pipeline (middleware, routing,
+SSR, page actions, server-action RPC, auth + CSRF), drive
+`createRequestHandler({ appDir }).handle(request)` and assert on the
+`Response`. `@webjsdev/server/testing` ships thin builders over it:
+
+```ts
+import { createRequestHandler } from '@webjsdev/server';
+import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+  from '@webjsdev/server/testing';
+
+const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
+
+// fire a request, assert the response
+const res = await testRequest(app.handle, '/about');
+
+// real login, reuse the captured session cookie on a protected route
+const { cookies } = await loginAndGetCookies(app.handle, { email, password });
+const dash = await testRequest(app.handle, '/dashboard', withSessionCookie({}, cookies));
+
+// round-trip a server action through the REAL /__webjs/action/<hash>/<fn> path
+const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);
+```
+
+Prefer `invokeActionForTest` over a direct import of the action when you want
+to verify the production contract: it exercises the wire serializer (a `Date` /
+`Map` arg survives), CSRF, and prod error sanitization, which a direct call
+bypasses. The saas template's `test/auth/auth.test.ts` is a worked example.
+
+This is also why the auth test lives at `test/auth/auth.test.ts` (the
+feature-folder convention), NOT `test/unit/auth.test.ts`. Test KIND is a
+subfolder inside a feature, never the top level.
+
+**Every change ships with a test.** This is a convention, not a hard
+gate, consistent with the convention-vs-check principle this file
+states (a sensible app can legitimately want a test-less commit for a
+spike, a vendored file, or a pure refactor). For Claude Code, a commit
+that stages app code (`app/`, `modules/`, `components/`, `lib/`) without
+staging a test WARNS via `.claude/hooks/require-tests-with-src.sh`, then
+lets the commit through. A project that wants the strict floor opts into
+a hard block by setting `WEBJS_TEST_GATE=block` (in
+`.claude/settings.json` env, your shell, or CI). A unit test alone is
+not enough for interactive or component code: add the browser test that
+asserts the rendered/hydrated behaviour. The real enforcement is CI: the
+test suite runs in `.github/workflows/ci.yml` on every PR and push to
+main, so the gate cannot be skipped with a local `--no-verify`.
 
 ### Choosing a feature folder
 
@@ -626,7 +692,7 @@ Both hydrate without flash on the client.
 
 ---
 
-## Styling: Tailwind + JS helpers
+## Styling: Tailwind-first + JS helpers
 
 <!-- OVERRIDE -->
 
@@ -635,6 +701,31 @@ design tokens defined in the root layout. Every colour, font family,
 fluid type scale value, and motion duration is declared once in `@theme`
 and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
 `font-serif`, `duration-fast`, `text-display`).
+
+**Tailwind-first is the strong default for pages AND light-DOM
+components (the default DOM mode).** Use utilities for layout, spacing,
+color (via the `@theme` tokens), typography, borders, radius, shadows,
+and interaction states (hover/focus/active/disabled, dark mode). Light
+DOM does not scope styles, so utilities apply directly.
+
+**The lit muscle-memory trap.** If you have written lit, the habit is to
+scope CSS in a shadow root (`static styles = css\`\``) or write an inline
+`<style>` with semantic class names (`.hero`, `.feature`, `.card`) for
+every component. In a webjs light-DOM component the scoped block does
+nothing without `static shadow = true`, and the inline class names leak
+into the global namespace. Prefer Tailwind utilities. When the same
+bundle repeats, extract a `lib/utils/ui.ts` helper (below), not a CSS
+class.
+
+**Custom-CSS allowlist (the only things raw CSS is for).** Reserve raw
+CSS for what utilities cannot express: design-token `:root` / `@theme`
+definitions, `@property` animated custom properties with `@keyframes`,
+`::-webkit-scrollbar` / `scrollbar-color`, `prefers-reduced-motion`
+blocks, and complex `color-mix()` or gradient effects. When custom CSS is
+unavoidable in a light-DOM component, the class-prefix rule (see the
+Components section above) still applies. Shadow-DOM components
+(`static shadow = true`) legitimately author `static styles = css\`\``;
+that is the right home for scoped CSS.
 
 **Dedup repeated Tailwind class bundles with JS helpers, not `@apply`.**
 When the same string of classes appears in 2+ places, extract it into a

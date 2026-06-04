@@ -45,11 +45,22 @@ Five stacked zero-build optimizations:
    specifiers. Each `pkg@version` is resolved through `api.jspm.io/generate`
    to a CDN URL (`https://ga.jspm.io/npm:<pkg>@<version>/...`) and added
    to the import map; the browser fetches each package directly from
-   the CDN. `webjs vendor pin` commits the resolved URLs + SHA-384
-   integrity hashes to `.webjs/vendor/importmap.json` for reproducible
-   deploys; `webjs vendor pin --download` also caches the bundle bytes
-   locally under `.webjs/vendor/<pkg>@<version>.js` for air-gapped /
-   strict-CSP deployments. No bundler runs at any point.
+   the CDN. **SRI integrity (SHA-384) is computed on BOTH paths.** A
+   live-resolved (unpinned) app hashes each cross-origin bundle at warmup
+   and emits `integrity` + `crossorigin` on the importmap and modulepreload
+   tags, so a swapped or compromised CDN response is rejected by the browser
+   even with no pin file (#235). The hashing is bounded (parallel fetches
+   with a small concurrency cap and a per-fetch timeout) and FAIL-OPEN: a
+   bundle fetch failure skips that one URL's integrity (it loads without SRI,
+   the same as before) and emits a one-time warning, so a CDN hiccup never
+   takes the app down. Added warmup cost is one HEAD-like GET per distinct
+   cross-origin bundle, cached per process by URL so a re-resolve does not
+   re-fetch. `webjs vendor pin` still commits the resolved URLs + integrity
+   hashes to `.webjs/vendor/importmap.json` for reproducible deploys (and a
+   stable boot-time build id with no warmup fetch); `webjs vendor pin
+   --download` also caches the bundle bytes locally under
+   `.webjs/vendor/<pkg>@<version>.js` for air-gapped / strict-CSP
+   deployments. No bundler runs at any point.
 
 ## No-build production model
 
@@ -61,7 +72,9 @@ production. The Rails 7+ / Hotwire pattern:
   resolved via `<script type="importmap">` emitted into the document
   head. By default each package resolves through `api.jspm.io/generate`
   to a `https://ga.jspm.io/npm:<pkg>@<version>/...` URL and the browser
-  fetches it from the CDN directly. `webjs vendor pin` commits the
+  fetches it from the CDN directly, with an `integrity` SRI hash on every
+  cross-origin entry (computed live at warmup for an unpinned app, or read
+  from the pin file for a pinned one). `webjs vendor pin` commits the
   resolved URLs + SHA-384 integrity hashes to `.webjs/vendor/importmap.json`
   for reproducible deploys; `webjs vendor pin --download` additionally
   caches each bundle to `.webjs/vendor/<pkg>@<version>.js` and rewrites
@@ -85,6 +98,71 @@ production. The Rails 7+ / Hotwire pattern:
 Content-hashed cache-busting and granular cache invalidation come from
 the same per-file model: edit one file, only that file's URL hash
 changes, only that one re-downloads.
+
+## Content-hash asset caching: `?v=<digest>` immutable URLs (prod) (#243)
+
+In PRODUCTION the framework appends a per-file content hash to every
+SAME-ORIGIN asset URL it emits (the importmap targets, the
+`<link rel="modulepreload">` hrefs, the boot script's module specifiers).
+The hash is a short prefix of a sha-256 over the file's BYTES, computed at
+serve time (no build step) and memoized. A request whose URL carries that
+`?v=<digest>` query is served `Cache-Control: public, max-age=31536000,
+immutable` instead of the 1-hour fallback, so a browser / CDN holds it for
+a year without revalidating.
+
+This is safe precisely because the hash IS the version: a deploy that
+changes a module's bytes changes its hash, so its emitted URL changes, so a
+returning client fetches the NEW URL rather than serving a stale immutable
+copy. The framework's own `@webjsdev/core` runtime (`/__webjs/core/*`) is
+fingerprinted too, which fixes the exact regression an un-versioned
+`immutable` would otherwise cause (a year-pinned old core renderer running
+against a server emitting the new SSR shape after a version bump).
+
+- **Per-file digest, not the build id.** The importmap build id
+  (`data-webjs-build`) does not change on an app-module byte change, so it
+  cannot be the per-asset fingerprint; each file carries its own hash.
+- **Cross-origin URLs are NEVER fingerprinted.** A `https://ga.jspm.io/...`
+  vendor target keeps its exact URL: jspm already versions it, and #235's
+  SRI integrity is keyed by the un-hashed cross-origin URL. A downloaded
+  `/__webjs/vendor/<pkg>@<ver>.js` bundle is already version-named, so it is
+  left unchanged too.
+- **Composes with `webjs.basePath` (#256).** A sub-path deploy emits
+  `<basePath>/app/foo.js?v=<digest>`: the base path is prefixed first, the
+  `?v` query appended after, and the ingress base-path strip never touches a
+  query.
+- **DEV is byte-identical to before.** Fingerprinting is enabled only in
+  `webjs start` (prod). `webjs dev` emits no `?v` and serves every module
+  `no-cache`, so the dev wire is unchanged.
+- **Un-fingerprinted requests keep the 1-hour fallback.** Only the presence
+  of a `?v` query flips the cache header; a hand-typed bare URL still
+  resolves and serves `public, max-age=3600`.
+
+## Connection-warming hints: `preconnect` / `dnsPrefetch` + auto vendor preconnect (#243)
+
+A page can warm a cross-origin connection it is about to use (an API host,
+a font / image CDN) by declaring it in `metadata`:
+
+```ts
+export const metadata = {
+  preconnect: ['https://api.example.com', { url: 'https://fonts.gstatic.com', crossorigin: true }],
+  dnsPrefetch: 'https://analytics.example.com',
+};
+```
+
+Each emits a head hint: `<link rel="preconnect" href="..." [crossorigin]>`
+(warms DNS + TLS + TCP) and `<link rel="dns-prefetch" href="...">` (DNS
+only). Each field takes a URL string, `{ url, crossorigin? }`, or an array;
+hrefs are HTML-escaped. See `agent-docs/metadata.md`.
+
+**Auto vendor preconnect.** For an UNPINNED app resolving vendors live from
+a cross-origin CDN, the framework auto-emits ONE
+`<link rel="preconnect" href="<cdn-origin>" crossorigin>` (the resolved
+vendor CDN origin, e.g. `https://ga.jspm.io`, derived from the importmap, so
+a `--from jsdelivr` app preconnects to jsdelivr) so the browser warms that
+connection before the importmap resolves. It is DEDUPED against an
+author-declared preconnect to the same origin, and emits NOTHING for a
+same-origin pinned app (vendors served from the app's own origin) or an app
+with no cross-origin vendors.
 
 
 ## Rate limiting via `rateLimit()`
@@ -178,6 +256,22 @@ the host actually provides. The default rate-limit collapsing to
 
 **Scaling:** in-memory by default. `setStore(redisStore({ url: process.env.REDIS_URL }))` shares limits across instances.
 
+## Sub-path deployment: `webjs.basePath` (#256)
+
+An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT strip the prefix needs every framework-emitted absolute URL to carry that prefix, or module resolution 404s and the page never hydrates. Set the prefix in `package.json`:
+
+```jsonc
+{ "webjs": { "basePath": "/app" } }
+```
+
+`'app'`, `'/app'`, and `'/app/'` all normalize to `'/app'`; a nested `'/foo/bar'` is allowed; the empty default (or absence) is a root mount and a pure no-op (an unconfigured app is byte-identical to before this feature). An unsafe value (a `..`, a protocol, a `//host` network-path reference, whitespace, a backslash) is rejected to the empty default so a typo fails safe.
+
+**The model is strip-at-ingress + prefix-on-emit, two seams only.** At the very start of request handling, when the request path is under the base path, the framework STRIPS the prefix and rewrites the request, so all downstream logic (route matching, the `/__webjs/*` checks, the source-file gate, redirects, trailing-slash, the `webjs.headers` path config, the HTML cache key) sees a root-relative path and works unchanged. A request whose path is NOT under the base path is not for this mounted app, so it 404s. On the way out, every framework-emitted same-origin absolute URL gets the prefix prepended: the importmap targets (the `/__webjs/core/*` runtime entries and any same-origin `/__webjs/vendor/*` local target; a cross-origin `https://` CDN vendor URL is left untouched), the `<link rel="modulepreload">` hrefs, the boot script's per-route module specifiers and lazy-loader entries, the dev reload `src`, and the 103 Early Hints preloads. So a sub-path deploy serves `<basePath>/__webjs/core/*` and resolves every module under the prefix.
+
+The whole config surface (`webjs.redirects` / `webjs.trailingSlash` / `webjs.headers` `source` patterns) is authored app-root-relative, exactly as without a base path, because the ingress strip runs first.
+
+**OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed under a base path. This is the same boundary Next draws between basePath auto-prefixing its `<Link>` component and a raw `<a href>`: webjs links are plain `<a href>`, so an author targeting a sub-path deploy writes the prefix into their own hrefs (or a future helper does) until client-side prefixing lands. The acceptance for #256 covers the server-emitted-URL + matching surface only.
+
 ## CORS via `cors()`
 
 `cors()` is a middleware factory (same `(req, next) => Response` contract as `rateLimit()`), usable in `middleware.js` (root or per-segment) or wrapped around a `route.js` handler. It handles origin reflection, the `OPTIONS` preflight, `Vary: Origin`, and the credentials rule, so route handlers do not hand-roll any of it. The `--template api` scaffold ships a root `middleware.ts` demonstrating it.
@@ -268,6 +362,105 @@ navigation automatically.
    `customElements.upgrade()`s the swapped subtree, `pushState`s the
    URL, scrolls.
 6. Dispatches `webjs:navigate` event on `document`.
+
+### In-place navigation-error recovery (`webjs:navigation-error`)
+
+A successful swap (2xx/3xx) applies in place, and an HTML error body of any
+status (a 4xx/5xx page, e.g. a `422` re-rendered form) is ALSO applied in
+place. The remaining failure cases are a **non-HTML error response** (a
+`500` carrying a JSON body) and a **transport/parse failure** (the `fetch`
+rejected, or the body claimed HTML but did not parse). For those the router
+no longer abandons the SPA with a destructive full `location.href` reload
+(which would discard the partial-swap shell, scroll, focus, and in-flight
+client state, and eat a second round-trip that may itself fail to the
+browser's default error page).
+
+Instead the router dispatches a cancelable, bubbling
+`webjs:navigation-error` CustomEvent on `document`, with detail
+`{ url, status, error }`: `status` is the HTTP status when a response
+arrived (else `null`), and `error` is the `Error` for a transport/parse
+failure (else `null`).
+
+- **`preventDefault()` hands recovery to the app.** The router does NOTHING
+  further: the current page is left exactly as it is (shell, scroll, focus,
+  and client state all preserved), so the app can show its own toast, retry,
+  or navigate elsewhere.
+- **Not cancelled (the default)** renders a MINIMAL in-place error surface,
+  a `<div role="alert" data-webjs-nav-error>` carrying a generic message
+  plus the status, into the deepest layout children slot (the same target a
+  normal partial swap writes to, so outer chrome and nav are preserved). No
+  full reload, the shell survives, and the user sees the failure.
+- **Last-resort hard load** happens only when there is NO shared layout
+  marker to render into (a genuine cross-document nav), and only after the
+  event was not cancelled, so a truly unrecoverable case is not a silent
+  dead-end. This is the exception, not the default.
+
+An **AbortError** (a newer navigation superseding this one) is a normal
+supersede, NOT an error, and never dispatches `webjs:navigation-error`.
+
+```ts
+document.addEventListener('webjs:navigation-error', (e) => {
+  // e.detail = { url, status, error }
+  e.preventDefault();                 // app handles recovery; page left intact
+  showToast(`Could not load ${e.detail.url} (status ${e.detail.status})`);
+});
+```
+
+### Form submission state (`webjs:submit-start` / `webjs:submit-end` + `aria-busy`)
+
+When a `<form>` submits through the JS-enhanced router, the form gets a
+submission lifecycle a component can read to disable the submit button, show a
+spinner, or set a pending style:
+
+- The router sets the native `aria-busy="true"` on the form for the in-flight
+  duration (cleared on settle). This IS the readable "is this form submitting"
+  primitive: any component can poll `form.getAttribute('aria-busy')` or style
+  `form[aria-busy="true"]` in CSS.
+- It dispatches a bubbling `webjs:submit-start` (detail `{ form, url }`) when the
+  submission fetch starts, and `webjs:submit-end` (detail `{ form, url, ok }`,
+  `ok` is whether the submission settled as a success) on EVERY settle (success,
+  a 4xx/5xx validation re-render, a navigation error, or an abort by a
+  superseding submit). The pair is balanced even under a rapid re-submit (a
+  nav-token guard keeps a superseded submit's teardown from clearing the busy
+  state a newer submit set, the same guard `<webjs-frame>` uses).
+
+```ts
+// A submit button that disables itself while its form is submitting.
+form.addEventListener('webjs:submit-start', () => { button.disabled = true; });
+form.addEventListener('webjs:submit-end', (e) => {
+  button.disabled = false;            // e.detail = { form, url, ok }
+});
+/* or purely in CSS, no JS: */
+/* form[aria-busy="true"] button[type="submit"] { opacity: .5; pointer-events: none; } */
+```
+
+Progressive enhancement is unaffected: with JS off the form is a normal POST;
+the events + `aria-busy` are a client-only enhancement.
+
+### Optimistic mutations (`optimistic()`)
+
+`optimistic(signal, value, action)` from `@webjsdev/core` shows a mutation's
+expected result IMMEDIATELY (the UI feels instant), runs the real server action,
+and ROLLS BACK on failure. It is a thin wrapper over the signal primitive, no
+state machine.
+
+```ts
+import { signal, optimistic } from '@webjsdev/core';
+import { likePost } from '../actions/like-post.server.js';
+
+const liked = signal(false);
+// in an @click handler:
+const result = await optimistic(liked, true, () => likePost(postId));
+// `liked` flips to true instantly. If likePost THROWS or returns
+// { success: false }, `liked` rolls back to its prior value; the throw
+// re-throws and the { success: false } result is returned (read its
+// error / fieldErrors). On success the optimistic value stays; reconcile
+// to the authoritative value from `result` if you need it.
+```
+
+It rolls back on a thrown error OR an `ActionResult` `{ success: false }`
+envelope, and never on success. Client-only (it mutates a signal), so a
+component importing it is never elided as display-only.
 
 ### Wire-byte optimization
 
@@ -550,8 +743,92 @@ html`<webjs-frame id="activity">…contents…</webjs-frame>`
 On click, the router walks `closest('webjs-frame')` from the click
 target. If a frame is found AND the response contains a matching
 `<webjs-frame id="...">`, the swap is scoped to that frame's children,
-which takes precedence over the layout-marker mechanism. Otherwise the
-router falls through to the layout-marker path.
+which takes precedence over the layout-marker mechanism.
+
+#### External targeting (`data-webjs-frame`) and `_top` breakout
+
+A trigger does NOT have to be nested inside the frame it drives. Mirroring
+Turbo's `data-turbo-frame`, an `<a>` or `<form>` (or any ancestor of it)
+carrying `data-webjs-frame="<id>"` drives the frame with that id, resolved
+via `getElementById` in the current document. So an external nav/sidebar
+link or a filter form can drive a content frame it does not enclose:
+
+```ts
+html`
+  <nav data-webjs-frame="results">
+    <a href="/products?sort=new">Newest</a>
+    <a href="/products?sort=top">Top rated</a>
+  </nav>
+  <form action="/products" data-webjs-frame="results">…filters…</form>
+
+  <webjs-frame id="results">…current results…</webjs-frame>
+`
+```
+
+Resolution precedence: an explicit `data-webjs-frame` WINS over the
+closest-enclosing-frame default. So a link physically inside frame A that
+carries `data-webjs-frame="b"` drives frame B.
+
+- **`data-webjs-frame="_top"`** is a reserved token: it forces a full-page
+  navigation (the normal layout/marker swap or a full nav), breaking OUT of
+  the enclosing frame. Put it on a link inside a frame that should escape it.
+- **An id that does not resolve** to a live `<webjs-frame>` emits a one-time
+  `console.warn` and falls back to a normal navigation (fail-safe; the
+  router never throws and never swaps the wrong region).
+- **With JS disabled** a `data-webjs-frame` link is an inert attribute on a
+  plain `<a href>`, so the click is a normal full-page navigation, the
+  correct progressive-enhancement fallback.
+
+#### Busy state (`aria-busy` + `webjs:frame-busy`)
+
+While a frame's navigation is in flight the router sets the native
+`aria-busy="true"` on the frame element and clears it (to `"false"`) on
+completion, on EVERY exit (a successful swap, a frame-missing response, an
+HTTP/transport error, or an abort by a newer nav). So assistive tech
+announces the loading state for free, and CSS can style the busy region:
+
+```css
+webjs-frame[aria-busy="true"] { opacity: 0.6; }
+```
+
+The router also dispatches a bubbling `webjs:frame-busy` event on the frame
+at both edges, so app code can hook the start and finish:
+
+```ts
+document.addEventListener('webjs:frame-busy', (e) => {
+  const { frameId, busy } = e.detail; // busy: true at start, false at finish
+  spinner.toggle(frameId, busy);
+});
+```
+
+#### `webjs:frame-missing` (response lacks the requested frame)
+
+When a frame-scoped navigation's response does NOT carry a matching
+`<webjs-frame id="...">` (e.g. an auth gate returns a login page without
+the frame), the router does NOT fall through to a full-page swap, because
+that would silently destroy the page. Instead it dispatches a cancelable,
+bubbling `webjs:frame-missing` CustomEvent on the frame element (so a
+document-level listener catches it) and returns.
+
+- **Default (not prevented):** the router emits a one-line `console.warn`
+  and leaves the frame UNCHANGED (its current content stays, now stale).
+  No full-page swap ever happens.
+- **Calling `preventDefault()`** keeps the framework silent and doing nothing
+  further. The listener owns the outcome, e.g. it may call `navigate(url)`
+  for a deliberate full swap, or `location.assign(url)` for a hard load.
+
+`event.detail` is `{ frameId, url, document }`, where `frameId` is the
+requested frame id, `url` is the navigation target, and `document` is the
+parsed response document (so a listener can inspect what came back).
+
+```ts
+document.addEventListener('webjs:frame-missing', (e) => {
+  // The frame wasn't in the response (auth redirect, say). Take over
+  // with a deliberate full navigation to the URL the server returned.
+  e.preventDefault();
+  location.assign(e.detail.url);
+});
+```
 
 ### Opt out per link
 

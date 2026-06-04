@@ -131,10 +131,26 @@ export const metadata = {
     { href: '/public/fonts/Inter.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
   ],
 
+  // ----- Connection-warming hints (#243) -----
+  preconnect: [                                      // → <link rel="preconnect">
+    'https://api.example.com',                       //   warms DNS + TLS + TCP
+    { url: 'https://fonts.gstatic.com', crossorigin: true },
+  ],
+  dnsPrefetch: 'https://analytics.example.com',      // → <link rel="dns-prefetch"> (DNS only)
+
   // ----- Catch-all -----
   other: {
     'msvalidate.01': 'bing-token',
     'mobile-web-app-capable': 'yes',
+  },
+
+  // ----- JSON-LD structured data (schema.org) -----
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How webjs ships zero dead JS',
+    author: { '@type': 'Person', name: 'Vivek' },
+    datePublished: '2026-06-01',
   },
 };
 ```
@@ -178,3 +194,141 @@ returns a `304 Not Modified` with no body. A `no-store` or `private` page
 gets NO ETag and never 304s, so private / per-user content is never
 revalidated across sessions. A streamed Suspense response is not ETagged.
 See the conditional-GET section in the framework root `AGENTS.md`.
+
+## Connection-warming: `preconnect` / `dnsPrefetch` (#243)
+
+Warm a cross-origin connection the page is about to use (an API host, a
+font / image CDN) so the browser pays the DNS + TLS + TCP cost ahead of the
+first real request:
+
+```ts
+export const metadata = {
+  preconnect: [
+    'https://api.example.com',                              // bare URL
+    { url: 'https://fonts.gstatic.com', crossorigin: true },// crossorigin set
+  ],
+  dnsPrefetch: 'https://analytics.example.com',             // a single URL
+};
+```
+
+- **`preconnect`** emits `<link rel="preconnect" href="..." [crossorigin]>`,
+  warming DNS + TLS + TCP. Each entry is a URL string or
+  `{ url, crossorigin? }` (`crossorigin: true` / `''` emits a bare
+  `crossorigin`; a string like `'anonymous'` emits its value). A font CDN
+  needs `crossorigin`.
+- **`dnsPrefetch`** emits `<link rel="dns-prefetch" href="...">`, which
+  resolves DNS only (a lighter-weight precursor; it never carries
+  `crossorigin`).
+- Each field takes a URL string, the object form, or an array of either.
+  Every href is HTML-escaped.
+
+**Auto vendor preconnect.** For an UNPINNED app resolving vendors live from
+a cross-origin CDN, the framework auto-emits ONE
+`<link rel="preconnect" href="<cdn-origin>" crossorigin>` (the resolved
+vendor CDN origin, e.g. `https://ga.jspm.io`, derived from the importmap so
+a `--from jsdelivr` app preconnects to jsdelivr), so the browser warms that
+connection before the importmap resolves. It is DEDUPED against an
+author-declared `preconnect` to the same origin, and NONE is emitted for a
+same-origin pinned app (vendors served from the app's own origin) or an app
+with no cross-origin vendors.
+
+## JSON-LD structured data (`jsonLd`)
+
+`metadata.jsonLd` emits schema.org structured data as one or more
+`<script type="application/ld+json">` blocks in `<head>`. This is the
+highest-leverage modern SEO surface (Google's Article, Product,
+BreadcrumbList, Organization, and FAQ rich results all read it). webjs
+stays true to its no-build identity here. JSON-LD is a web standard
+rendered as a plain script tag, so the framework ONLY serializes and
+escapes. There is no schema library and no validation. **You own the
+schema.org object.**
+
+**Single object** emits one script:
+
+```ts
+import type { Metadata } from '@webjsdev/core';
+
+export const metadata: Metadata = {
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How webjs ships zero dead JS',
+    author: { '@type': 'Person', name: 'Vivek' },
+    datePublished: '2026-06-01',
+    image: 'https://example.com/og.png',
+  },
+};
+```
+
+renders:
+
+```html
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article",...}</script>
+```
+
+**An array** emits one script PER element. Use it to ship several graphs
+for one page (a Product alongside its BreadcrumbList, say):
+
+```ts
+export const metadata: Metadata = {
+  jsonLd: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: 'Acme Widget',
+      offers: { '@type': 'Offer', price: '19.99', priceCurrency: 'USD' },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Shop', item: 'https://example.com/shop' },
+        { '@type': 'ListItem', position: 2, name: 'Widget', item: 'https://example.com/shop/widget' },
+      ],
+    },
+  ],
+};
+```
+
+**Per-request data** works the same way through `generateMetadata`, so a
+dynamic route can build the Article from the loaded record:
+
+```ts
+import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> {
+  const post = await getPost(ctx.params.slug);   // via a server query
+  return {
+    title: post.title,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: post.title,
+      datePublished: post.publishedAt,
+      author: { '@type': 'Person', name: post.authorName },
+    },
+  };
+}
+```
+
+### Escaping guarantee
+
+The serialized JSON is HTML-safe-escaped automatically. `<`, `>`, `&`,
+and the line separators U+2028 / U+2029 are replaced with their JSON
+Unicode escapes (`<` and friends). A JSON parser decodes those back to
+the original characters, so the embedded data still parses to your exact
+object, while the literal byte sequence `</script>` can never form in the
+served HTML. So a value containing `</script><img src=x onerror=...>`
+cannot break out of the script tag. You do not escape anything yourself.
+
+The block is a NON-EXECUTABLE data island (`type="application/ld+json"`),
+so a Content-Security-Policy `script-src` does not gate it and it carries
+NO nonce.
+
+### Robustness
+
+The framework fails SAFE per element. An entry that is not a plain object,
+or an object with a circular reference that `JSON.stringify` cannot
+serialize, is skipped (with a one-line `console.warn`) and never breaks
+the rest of the head. Absent `jsonLd` emits nothing (the field is purely
+additive).

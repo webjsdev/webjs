@@ -182,3 +182,48 @@ test('a pure-RPC server module is hashed at boot but NOT executed until first ca
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('skipExposeLoad builds the hash index WITHOUT loading an expose() module (#262)', async () => {
+  // An expose()-referencing module IS loaded by the default index (the router
+  // needs its REST route before a request). A read-only introspection caller
+  // (the MCP list_actions tool) passes skipExposeLoad so it derives the same
+  // path-only hash without running the module's top-level side effects (Prisma
+  // init, DB connect) or risking a stray stdout write into the JSON-RPC channel.
+  // Inject the absolute file:// URL to the real core `expose`, so the scaffolded
+  // module (in a tmpdir) actually resolves it and the default load populates a
+  // REST route, proving the load truly happened.
+  const exposeUrl = new URL('../../../core/src/expose.js', import.meta.url).href;
+  const files = {
+    'actions/exposed.server.js': `'use server';
+      import { expose } from ${JSON.stringify(exposeUrl)};
+      globalThis.__webjs_expose_probe = (globalThis.__webjs_expose_probe || 0) + 1;
+      async function ping() { return 'pong'; }
+      export const handler = expose('GET /ping', ping);
+    `,
+  };
+  // Default: loads the expose module (probe fires), and httpRoutes is populated.
+  const dirA = await scaffold(files);
+  try {
+    delete globalThis.__webjs_expose_probe;
+    const loaded = await buildActionIndex(dirA, true);
+    assert.equal(globalThis.__webjs_expose_probe, 1, 'default index loads the expose module');
+    assert.ok(loaded.httpRoutes.length >= 1, 'default index populates the expose REST route');
+  } finally {
+    delete globalThis.__webjs_expose_probe;
+    await rm(dirA, { recursive: true, force: true });
+  }
+  // skipExposeLoad: the module is NOT loaded (probe stays undefined), but the
+  // file IS still hashed (so list_actions can emit its RPC endpoint).
+  const dirB = await scaffold(files);
+  try {
+    delete globalThis.__webjs_expose_probe;
+    const lean = await buildActionIndex(dirB, false, { skipExposeLoad: true });
+    assert.equal(globalThis.__webjs_expose_probe, undefined, 'skipExposeLoad must NOT load the module');
+    assert.equal(lean.httpRoutes.length, 0, 'skipExposeLoad leaves httpRoutes empty');
+    const file = resolveServerModule(lean, '/actions/exposed.server.js');
+    assert.ok(lean.fileToHash.get(file), 'the file is still hashed for RPC dispatch');
+  } finally {
+    delete globalThis.__webjs_expose_probe;
+    await rm(dirB, { recursive: true, force: true });
+  }
+});
