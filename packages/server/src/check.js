@@ -754,9 +754,12 @@ export async function checkConventions(appDir) {
   // --- Rule: gitignore-vendor-not-ignored ---
   // The .gitignore pattern for .webjs/vendor/ is subtle: `.webjs/`
   // alone excludes the directory entirely and git can't re-include
-  // children of an excluded parent. The correct pattern is `.webjs/*`
-  // plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. AI agents
-  // and human reviewers frequently "simplify" this back to `.webjs/`,
+  // children of an excluded parent. The correct pattern is `**/.webjs/*`
+  // plus `!**/.webjs/vendor/` plus `!**/.webjs/vendor/**` (the `**/`
+  // prefix ignores `.webjs/` at any depth so a nested app does not leak
+  // its generated routes.d.ts; the older root-anchored `.webjs/*` also
+  // passes, since this probe runs from the app root). AI agents and
+  // human reviewers frequently "simplify" this back to `.webjs/`,
   // silently breaking `webjs vendor pin`.
   //
   // This rule verifies the actual gitignore behavior by spawning
