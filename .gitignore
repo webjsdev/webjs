@@ -12,9 +12,15 @@ out/
 # DO NOT collapse to `.webjs/`: parent exclusion blocks child
 # negations and silently breaks `webjs vendor pin`. The
 # `gitignore-vendor-not-ignored` lint rule guards this.
-.webjs/*
-!.webjs/vendor/
-!.webjs/vendor/**
+# The `**/` prefix is REQUIRED in this monorepo: a slash-bearing
+# `.webjs/*` anchors to the repo root, so the nested in-repo apps
+# (website/, docs/, packages/ui/packages/website/) leaked their
+# generated `.webjs/routes.d.ts` into `git status`. `**/.webjs/*`
+# matches the dir at every depth while the negations still re-include
+# vendor at each (a re-included parent allows child negation).
+**/.webjs/*
+!**/.webjs/vendor/
+!**/.webjs/vendor/**
 
 # generated Tailwind CSS - built from public/input.css via `npm run dev` / `npm run start`
 **/public/tailwind.css

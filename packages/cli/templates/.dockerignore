@@ -6,10 +6,12 @@ node_modules
 # `.webjs/` is ignored EXCEPT for `.webjs/vendor/`, which holds the committed
 # importmap manifest (and optionally downloaded bundle bytes) the server needs
 # at boot without reaching api.jspm.io. DO NOT collapse to `**/.webjs`: parent
-# exclusion blocks child negations and the vendor files would never ship.
-.webjs/*
-!.webjs/vendor/
-!.webjs/vendor/**
+# exclusion blocks child negations and the vendor files would never ship. The
+# `**/` prefix matches `.webjs/` at any depth so a nested build context does
+# not ship the per-machine cache, mirroring the `.gitignore` pattern.
+**/.webjs/*
+!**/.webjs/vendor/
+!**/.webjs/vendor/**
 
 dist
 build

@@ -176,8 +176,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // .dockerignore must preserve the .webjs/vendor negation (parent
     // exclusion would silently drop the committed importmap).
     const dockerignore = readFileSync(join(appDir, '.dockerignore'), 'utf8');
-    assert.match(dockerignore, /!\.webjs\/vendor\//,
-      '.dockerignore keeps .webjs/vendor/ (committed importmap ships)');
+    assert.match(dockerignore, /^!\*\*\/\.webjs\/vendor\/$/m,
+      '.dockerignore keeps **/.webjs/vendor/ (committed importmap ships)');
 
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
@@ -202,6 +202,25 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // .gitignore mentions the SQLite dev DB
     const gitignore = readFileSync(join(appDir, '.gitignore'), 'utf8');
     assert.match(gitignore, /prisma\/dev\.db/, '.gitignore covers SQLite');
+
+    // .gitignore ignores .webjs/ at ANY depth (#365): a scaffolded app
+    // nested below its repo root must not leak its generated
+    // .webjs/routes.d.ts. The depth-robust `**/.webjs/*` prefix is what
+    // distinguishes the fix from the old root-anchored `.webjs/*`.
+    // Anchor to a line start (multiline) so these match the ACTIVE rule
+    // lines, not the surrounding comment prose that also names the
+    // pattern. Without the anchor a revert of the real rule to `.webjs/*`
+    // would still pass while a stale comment kept the `**/` text.
+    assert.match(
+      gitignore,
+      /^\*\*\/\.webjs\/\*$/m,
+      '.gitignore uses **/.webjs/* so a nested app does not leak routes.d.ts',
+    );
+    assert.match(
+      gitignore,
+      /^!\*\*\/\.webjs\/vendor\/$/m,
+      '.gitignore keeps the **/ vendor negation so the committed pin ships',
+    );
 
     // .env.example mentions DATABASE_URL
     const envExample = readFileSync(join(appDir, '.env.example'), 'utf8');
