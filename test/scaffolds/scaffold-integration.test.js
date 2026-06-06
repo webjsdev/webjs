@@ -176,8 +176,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // .dockerignore must preserve the .webjs/vendor negation (parent
     // exclusion would silently drop the committed importmap).
     const dockerignore = readFileSync(join(appDir, '.dockerignore'), 'utf8');
-    assert.match(dockerignore, /!\.webjs\/vendor\//,
-      '.dockerignore keeps .webjs/vendor/ (committed importmap ships)');
+    assert.match(dockerignore, /^!\*\*\/\.webjs\/vendor\/$/m,
+      '.dockerignore keeps **/.webjs/vendor/ (committed importmap ships)');
 
     // package.json contents
     const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
