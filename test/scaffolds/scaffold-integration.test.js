@@ -203,6 +203,21 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     const gitignore = readFileSync(join(appDir, '.gitignore'), 'utf8');
     assert.match(gitignore, /prisma\/dev\.db/, '.gitignore covers SQLite');
 
+    // .gitignore ignores .webjs/ at ANY depth (#365): a scaffolded app
+    // nested below its repo root must not leak its generated
+    // .webjs/routes.d.ts. The depth-robust `**/.webjs/*` prefix is what
+    // distinguishes the fix from the old root-anchored `.webjs/*`.
+    assert.match(
+      gitignore,
+      /\*\*\/\.webjs\/\*/,
+      '.gitignore uses **/.webjs/* so a nested app does not leak routes.d.ts',
+    );
+    assert.match(
+      gitignore,
+      /!\*\*\/\.webjs\/vendor\//,
+      '.gitignore keeps the **/ vendor negation so the committed pin ships',
+    );
+
     // .env.example mentions DATABASE_URL
     const envExample = readFileSync(join(appDir, '.env.example'), 'utf8');
     assert.match(envExample, /DATABASE_URL/, '.env.example carries DATABASE_URL');
