@@ -39,7 +39,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 import { redactStringsAndTemplates } from './js-scan.js';
 import { resolveImport } from './module-graph.js';
 
@@ -286,6 +286,37 @@ const EXPORT_SPEC_RE = /\bexport\b[^'";]+?\sfrom\s+(['"])([^'"]+)\1/dg;
 /** A server-file specifier: served as a stub at a bare URL, never preloaded. @type {RegExp} */
 const SERVER_FILE_RE = /\.server\.(?:js|ts|mjs|mts)$/;
 
+/** JS-ish specifier extensions that map to a `.ts`/`.mts` sibling on disk. @type {Set<string>} */
+const JS_SPEC_EXTS = new Set(['.js', '.mjs', '.jsx', '.cjs']);
+
+/**
+ * Normalize a relative import specifier's extension to the RESOLVED file's, so
+ * the URL the browser fetches equals the modulepreload href (which `ssr.js`
+ * derives from the resolved absolute path via `toUrlPath`, after `resolveImport`
+ * rewrites a `.js` specifier to its `.ts` sibling and resolves an extensionless
+ * one). Without this, an `import './x.js'` whose file is `x.ts` would be served
+ * `./x.js?v=H` (fetched as `/x.js?v=H`) while the preload is `/x.ts?v=H`: same
+ * hash, different path, so the preload is wasted and the file double-fetched.
+ *
+ * Conservative: only swaps a known JS-ish extension or appends to a genuinely
+ * extensionless basename; a directory specifier (`.` / `..` / trailing-slash)
+ * or an unrecognized extension is left untouched.
+ *
+ * @param {string} spec  the author's relative specifier (no query)
+ * @param {string} abs   the resolved absolute file path
+ * @returns {string}
+ */
+function normalizeSpecToResolved(spec, abs) {
+  const absExt = extname(abs);
+  if (!absExt) return spec;
+  const specExt = extname(spec);
+  if (specExt === absExt) return spec;
+  const base = spec.slice(spec.lastIndexOf('/') + 1);
+  if (base === '' || base === '.' || base === '..') return spec; // directory import
+  if (specExt) return JS_SPEC_EXTS.has(specExt) ? spec.slice(0, -specExt.length) + absExt : spec;
+  return spec + absExt; // extensionless
+}
+
 /**
  * Append `?v=<content-hash>` to every SAME-ORIGIN relative / root-absolute
  * static-import specifier in a served module's source, so the URL the browser
@@ -309,21 +340,31 @@ const SERVER_FILE_RE = /\.server\.(?:js|ts|mjs|mts)$/;
  * absolute path -> same hash, elision-fingerprint fold included), so the two
  * URLs are byte-identical by construction.
  *
+ * The fetched URL is made to equal the preload href even when the specifier's
+ * extension differs from the file on disk: `normalizeSpecToResolved` rewrites a
+ * `.js`/extensionless specifier to the resolved `.ts` sibling (the form the
+ * preload, derived from the resolved path, uses), then `?v` is appended.
+ *
  * Scope, mirroring the modulepreload set so the rewrite never diverges from it:
- *   - Only `.`-relative and `/`-root-absolute specifiers. A BARE specifier
- *     (`@webjsdev/core`, an npm dep) is importmap-resolved and its importmap
- *     TARGET is already versioned by `withAssetHash`; rewriting it here would
- *     double-version and break the importmap key.
+ *   - Only `.`-relative specifiers (`./`, `../`). The browser resolves these
+ *     against the importer's own URL, which is already base-path-prefixed, so
+ *     the rewrite is base-path-correct by construction. A `/`-root-absolute
+ *     specifier is deliberately NOT versioned: it would miss the `webjs.basePath`
+ *     prefix under a sub-path deploy (a pre-existing author-import limitation),
+ *     and apps use relative imports. A BARE specifier (`@webjsdev/core`) is
+ *     importmap-resolved and versioned at its importmap TARGET; rewriting it here
+ *     would break the importmap key.
  *   - Only targets that resolve to a readable file UNDER `_appDir` (the servable
  *     same-origin root). A `.server.*` target is excluded: it serves as a stub
  *     at a bare URL and is never in the preload set, and its served bytes are
  *     generated (not the file bytes the hash covers).
  *   - A specifier already carrying a query is left as-is.
  *
- * Matching runs over a redaction mask (string / template / comment bodies
- * blanked, positions preserved), so an `import`/`export … from` printed as
- * example code inside an `html\`\`` template is never rewritten (same guard the
- * module-graph scanner uses).
+ * Matching runs over a redaction mask with `blankStrings` on (NO literal body
+ * survives), so an `import`/`export … from` printed inside an `html\`\`` template
+ * OR a plain string literal is never rewritten (a plain-string body is NOT
+ * blanked by the default mask, so the stricter mask is required here to avoid
+ * splicing `?v` into the served string's value).
  *
  * A pure pass-through when fingerprinting is disabled (dev, or roots unset), so
  * dev output stays byte-identical. Runs AFTER `elideImportsFromSource` in the
@@ -340,9 +381,9 @@ export function versionModuleImports(source, importerAbs) {
   // Cheap bail before any regex/redaction work for a module with no imports.
   if (!source.includes('import') && !source.includes('export')) return source;
 
-  const masked = redactStringsAndTemplates(source);
-  /** @type {Array<{ pos: number, text: string }>} */
-  const inserts = [];
+  const masked = redactStringsAndTemplates(source, true);
+  /** @type {Array<{ start: number, end: number, text: string }>} */
+  const edits = [];
   for (const re of [IMPORT_SPEC_RE, EXPORT_SPEC_RE]) {
     re.lastIndex = 0;
     for (const m of source.matchAll(re)) {
@@ -350,28 +391,30 @@ export function versionModuleImports(source, importerAbs) {
       // inside a string / template / comment and is not a real import edge.
       if (masked[/** @type {number} */ (m.index)] === ' ') continue;
       const spec = m[2];
-      // Bare specifier -> importmap-resolved, already versioned at its target.
-      if (spec[0] !== '.' && spec[0] !== '/') continue;
+      // Only `./` `../` relative specifiers (base-path-correct, the app pattern).
+      // Bare -> importmap target; `/`-absolute -> pre-existing basePath gap.
+      if (spec[0] !== '.') continue;
       if (spec.includes('?')) continue;
       const abs = resolveImport(spec, importerAbs, _appDir);
       if (!abs || SERVER_FILE_RE.test(abs)) continue;
       if (!abs.startsWith(_appDir + sep)) continue;
       const hash = assetHashFor(abs);
       if (!hash) continue;
-      // `/d` flag: indices[2] is [start, end] of the specifier content, so
-      // `end` is the offset of the closing quote, where the query is spliced.
-      const specEnd = /** @type {[number, number]} */ (m.indices[2])[1];
-      inserts.push({ pos: specEnd, text: `?v=${hash}` });
+      // `/d` flag: indices[2] is [start, end] of the specifier CONTENT (no
+      // quotes). Replace it with the resolved-extension form + `?v` so the
+      // fetched URL is byte-identical to the preload href.
+      const [start, end] = /** @type {[number, number]} */ (m.indices[2]);
+      edits.push({ start, end, text: `${normalizeSpecToResolved(spec, abs)}?v=${hash}` });
     }
   }
-  if (inserts.length === 0) return source;
+  if (edits.length === 0) return source;
 
-  inserts.sort((a, b) => a.pos - b.pos);
+  edits.sort((a, b) => a.start - b.start);
   let out = '';
   let last = 0;
-  for (const ins of inserts) {
-    out += source.slice(last, ins.pos) + ins.text;
-    last = ins.pos;
+  for (const e of edits) {
+    out += source.slice(last, e.start) + e.text;
+    last = e.end;
   }
   return out + source.slice(last);
 }

@@ -110,6 +110,46 @@ test('does not rewrite an import shown as example code inside a template literal
   );
 });
 
+test('normalizes a .js specifier to the .ts file on disk, so it matches the preload (#369 review)', () => {
+  // The author writes `import './widget.js'` but the file is widget.ts. The
+  // modulepreload href is derived from the resolved path (`/...widget.ts?v=H`),
+  // so the served import must point at `.ts`, not `.js`, or the preload is
+  // wasted and the module double-fetched.
+  const bytes = 'export class W {}\n';
+  writeFileSync(join(appDir, 'components', 'widget.ts'), bytes);
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const h = shortHash(bytes);
+  const out = versionModuleImports("import '../components/widget.js';\n", join(appDir, 'app', 'page.ts'));
+  assert.equal(out, `import '../components/widget.ts?v=${h}';\n`);
+  assert.equal(withAssetHash('/components/widget.ts'), `/components/widget.ts?v=${h}`, 'matches the preload href');
+});
+
+test('appends the resolved extension to an extensionless specifier', () => {
+  const bytes = 'export class W {}\n';
+  writeFileSync(join(appDir, 'components', 'widget.ts'), bytes);
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const h = shortHash(bytes);
+  const out = versionModuleImports("import '../components/widget';\n", join(appDir, 'app', 'page.ts'));
+  assert.equal(out, `import '../components/widget.ts?v=${h}';\n`);
+});
+
+test('does NOT rewrite an import written inside a PLAIN string literal (#369 review, byte-corruption guard)', () => {
+  // The default redaction mask keeps plain-string bodies verbatim (so
+  // register('tag') stays readable), so this would slip through a keyword-only
+  // guard and corrupt the served string. The blankStrings mask prevents it.
+  writeFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'export class T {}\n');
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const src = "export const SNIPPET = \"import '../components/theme-toggle.ts'\";\n";
+  assert.equal(versionModuleImports(src, join(appDir, 'app', 'page.ts')), src, 'the string value is untouched');
+});
+
+test('does NOT version a root-absolute specifier (basePath-unsafe; pre-existing author limitation)', () => {
+  writeFileSync(join(appDir, 'components', 'x.ts'), 'export class X {}\n');
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const src = "import '/components/x.ts';\n";
+  assert.equal(versionModuleImports(src, join(appDir, 'app', 'page.ts')), src);
+});
+
 test('leaves a specifier that already carries a query as-is', () => {
   writeFileSync(join(appDir, 'components', 'x.ts'), 'export class X {}\n');
   setAssetRoots({ appDir, coreDir, enabled: true });

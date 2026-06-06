@@ -67,10 +67,20 @@ const REGEX_PRECEDING_KEYWORDS = new Set([
  * nesting, so a nested `` html`...${html`...`}...` `` is delimited correctly
  * (the inner backtick is not mistaken for the outer close).
  *
+ * `blankStrings` (default false, so existing callers are byte-identical)
+ * additionally blanks PLAIN string bodies and disables the verbatim-template
+ * fast path, yielding a mask in which NO literal body survives. Callers that
+ * only check whether a keyword sits in code position (not inside any literal),
+ * e.g. the import-versioning pass, pass true so an `import '…'` written inside
+ * a plain string is correctly masked out (the default mask keeps plain-string
+ * bodies verbatim so `register('tag')` stays readable, which would otherwise
+ * leave such a string looking like a real import).
+ *
  * @param {string} src
+ * @param {boolean} [blankStrings=false]  also blank plain-string + verbatim-template bodies
  * @returns {string}
  */
-export function redactStringsAndTemplates(src) {
+export function redactStringsAndTemplates(src, blankStrings = false) {
   const n = src.length;
   let out = '';
   let i = 0;
@@ -157,7 +167,7 @@ export function redactStringsAndTemplates(src) {
       if (ch === '\n') hasNewline = true;
       k++;
     }
-    const verbatim = !forceBlank && !tagged && closed && !hasNewline && !hasInterp;
+    const verbatim = !forceBlank && !blankStrings && !tagged && closed && !hasNewline && !hasInterp;
     out += '`'; i++;
     if (verbatim) {
       while (i < n) {
@@ -197,7 +207,7 @@ export function redactStringsAndTemplates(src) {
       if (c === '/' && next === '/') { scanLineComment(); continue; }
       if (c === '/' && next === '*') { scanBlockComment(); continue; }
       if (c === '/' && isRegex()) { scanRegex(); continue; }
-      if (c === "'" || c === '"') { scanString(c, blank); continue; }
+      if (c === "'" || c === '"') { scanString(c, blank || blankStrings); continue; }
       if (c === '`') { scanTemplate(blank); continue; }
       if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; out += blank ? ' ' : c; i++; continue; }
       if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; out += blank ? ' ' : c; i++; continue; }
