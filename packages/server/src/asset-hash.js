@@ -39,7 +39,9 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
+import { redactStringsAndTemplates } from './js-scan.js';
+import { resolveImport } from './module-graph.js';
 
 /**
  * Length of the emitted hex hash. 12 hex chars (48 bits) is plenty to
@@ -263,4 +265,156 @@ export function withAssetHash(url, basePath = '') {
   // merge with `&` if one is somehow present.
   const sepChar = url.includes('?') ? '&' : '?';
   return `${url}${sepChar}v=${hash}`;
+}
+
+/**
+ * Static `import` specifier with positional indices. Mirrors module-graph.js's
+ * `IMPORT_RE` (side-effect / default / namespace / named imports), but captures
+ * the quote (group 1) and specifier (group 2) so the `/d` flag yields the
+ * specifier's start/end for an in-place splice. Excludes dynamic `import(...)`
+ * (no whitespace after `import`) and `import.meta` (no quote), exactly like the
+ * graph scanner, so the rewrite set is the static-import set the modulepreload
+ * hints cover.
+ *
+ * @type {RegExp}
+ */
+const IMPORT_SPEC_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?(['"])([^'"]+)\1/dg;
+
+/** Match `export … from '…'` re-exports (mirrors module-graph's EXPORT_FROM_RE). @type {RegExp} */
+const EXPORT_SPEC_RE = /\bexport\b[^'";]+?\sfrom\s+(['"])([^'"]+)\1/dg;
+
+/** A server-file specifier: served as a stub at a bare URL, never preloaded. @type {RegExp} */
+const SERVER_FILE_RE = /\.server\.(?:js|ts|mjs|mts)$/;
+
+/** JS-ish specifier extensions that map to a `.ts`/`.mts` sibling on disk. @type {Set<string>} */
+const JS_SPEC_EXTS = new Set(['.js', '.mjs', '.jsx', '.cjs']);
+
+/**
+ * Normalize a relative import specifier's extension to the RESOLVED file's, so
+ * the URL the browser fetches equals the modulepreload href (which `ssr.js`
+ * derives from the resolved absolute path via `toUrlPath`, after `resolveImport`
+ * rewrites a `.js` specifier to its `.ts` sibling and resolves an extensionless
+ * one). Without this, an `import './x.js'` whose file is `x.ts` would be served
+ * `./x.js?v=H` (fetched as `/x.js?v=H`) while the preload is `/x.ts?v=H`: same
+ * hash, different path, so the preload is wasted and the file double-fetched.
+ *
+ * Conservative: only swaps a known JS-ish extension or appends to a genuinely
+ * extensionless basename; a directory specifier (`.` / `..` / trailing-slash)
+ * or an unrecognized extension is left untouched.
+ *
+ * @param {string} spec  the author's relative specifier (no query)
+ * @param {string} abs   the resolved absolute file path
+ * @returns {string}
+ */
+function normalizeSpecToResolved(spec, abs) {
+  const absExt = extname(abs);
+  if (!absExt) return spec;
+  const specExt = extname(spec);
+  if (specExt === absExt) return spec;
+  const base = spec.slice(spec.lastIndexOf('/') + 1);
+  if (base === '' || base === '.' || base === '..') return spec; // directory import
+  if (specExt) return JS_SPEC_EXTS.has(specExt) ? spec.slice(0, -specExt.length) + absExt : spec;
+  return spec + absExt; // extensionless
+}
+
+/**
+ * Append `?v=<content-hash>` to every SAME-ORIGIN relative / root-absolute
+ * static-import specifier in a served module's source, so the URL the browser
+ * actually fetches matches the `?v=`-versioned `modulepreload` hint and boot
+ * specifier the framework emits for that file.
+ *
+ * The bug this fixes (#369): the boot script imports the entry modules with
+ * `?v=<hash>` and the head emits `<link rel=modulepreload href=".../x.ts?v=hash">`
+ * for every transitive module, but a layout/page imports its components with a
+ * BARE relative specifier (`import '../components/x.ts'`). The browser resolves
+ * a relative specifier against the importer's URL and a `?v` query is NOT
+ * inherited across that resolution, so it fetches the UN-versioned URL: a
+ * different cache key from the preload. Result: the preload is wasted, the
+ * module is downloaded a second time, and the served copy gets the 1h fallback
+ * cache header instead of `immutable`. Rewriting the specifier in the served
+ * source to carry the same `?v=<hash>` collapses both to one cache key (one
+ * fetch, preload used, immutable cached).
+ *
+ * The appended hash is `assetHashFor(resolvedTarget)`, the exact value
+ * `withAssetHash` computes for the modulepreload href of the same file (same
+ * absolute path -> same hash, elision-fingerprint fold included), so the two
+ * URLs are byte-identical by construction.
+ *
+ * The fetched URL is made to equal the preload href even when the specifier's
+ * extension differs from the file on disk: `normalizeSpecToResolved` rewrites a
+ * `.js`/extensionless specifier to the resolved `.ts` sibling (the form the
+ * preload, derived from the resolved path, uses), then `?v` is appended.
+ *
+ * Scope, mirroring the modulepreload set so the rewrite never diverges from it:
+ *   - Only `.`-relative specifiers (`./`, `../`). The browser resolves these
+ *     against the importer's own URL, which is already base-path-prefixed, so
+ *     the rewrite is base-path-correct by construction. A `/`-root-absolute
+ *     specifier is deliberately NOT versioned: it would miss the `webjs.basePath`
+ *     prefix under a sub-path deploy (a pre-existing author-import limitation),
+ *     and apps use relative imports. A BARE specifier (`@webjsdev/core`) is
+ *     importmap-resolved and versioned at its importmap TARGET; rewriting it here
+ *     would break the importmap key.
+ *   - Only targets that resolve to a readable file UNDER `_appDir` (the servable
+ *     same-origin root). A `.server.*` target is excluded: it serves as a stub
+ *     at a bare URL and is never in the preload set, and its served bytes are
+ *     generated (not the file bytes the hash covers).
+ *   - A specifier already carrying a query is left as-is.
+ *
+ * Matching runs over a redaction mask with `blankStrings` on (NO literal body
+ * survives), so an `import`/`export … from` printed inside an `html\`\`` template
+ * OR a plain string literal is never rewritten (a plain-string body is NOT
+ * blanked by the default mask, so the stricter mask is required here to avoid
+ * splicing `?v` into the served string's value).
+ *
+ * A pure pass-through when fingerprinting is disabled (dev, or roots unset), so
+ * dev output stays byte-identical. Runs AFTER `elideImportsFromSource` in the
+ * serve path, so an elided side-effect import (already replaced by a comment)
+ * is not matched.
+ *
+ * @param {string} source       the served module source (post-elision, type-stripped if TS)
+ * @param {string} importerAbs  absolute path of the module being served
+ * @returns {string}
+ */
+export function versionModuleImports(source, importerAbs) {
+  if (!_enabled || !_appDir) return source;
+  if (typeof source !== 'string') return source;
+  // Cheap bail before any regex/redaction work for a module with no imports.
+  if (!source.includes('import') && !source.includes('export')) return source;
+
+  const masked = redactStringsAndTemplates(source, true);
+  /** @type {Array<{ start: number, end: number, text: string }>} */
+  const edits = [];
+  for (const re of [IMPORT_SPEC_RE, EXPORT_SPEC_RE]) {
+    re.lastIndex = 0;
+    for (const m of source.matchAll(re)) {
+      // The keyword must sit in code position; if blanked in the mask it lives
+      // inside a string / template / comment and is not a real import edge.
+      if (masked[/** @type {number} */ (m.index)] === ' ') continue;
+      const spec = m[2];
+      // Only `./` `../` relative specifiers (base-path-correct, the app pattern).
+      // Bare -> importmap target; `/`-absolute -> pre-existing basePath gap.
+      if (spec[0] !== '.') continue;
+      if (spec.includes('?')) continue;
+      const abs = resolveImport(spec, importerAbs, _appDir);
+      if (!abs || SERVER_FILE_RE.test(abs)) continue;
+      if (!abs.startsWith(_appDir + sep)) continue;
+      const hash = assetHashFor(abs);
+      if (!hash) continue;
+      // `/d` flag: indices[2] is [start, end] of the specifier CONTENT (no
+      // quotes). Replace it with the resolved-extension form + `?v` so the
+      // fetched URL is byte-identical to the preload href.
+      const [start, end] = /** @type {[number, number]} */ (m.indices[2]);
+      edits.push({ start, end, text: `${normalizeSpecToResolved(spec, abs)}?v=${hash}` });
+    }
+  }
+  if (edits.length === 0) return source;
+
+  edits.sort((a, b) => a.start - b.start);
+  let out = '';
+  let last = 0;
+  for (const e of edits) {
+    out += source.slice(last, e.start) + e.text;
+    last = e.end;
+  }
+  return out + source.slice(last);
 }

@@ -191,6 +191,54 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       `no modulepreload may point at a non-servable URL; broken:\n${broken.join('\n')}`);
   });
 
+  test('nested component modules are fetched once: import URL matches the preload (#369)', async () => {
+    // Regression for #369: layout.ts / page.ts import their components with a
+    // bare relative specifier (`import '../components/x.ts'`). The browser
+    // resolves that against the importer's `?v=`-versioned URL, and a `?v` is
+    // NOT inherited across relative resolution, so before the fix it fetched the
+    // UN-versioned URL: a different cache key from the `?v=`-versioned
+    // modulepreload hint. Result: the preload was wasted AND the module was
+    // downloaded a second time. Capture every same-origin module request on a
+    // cold load and assert (a) no module path is fetched both bare and
+    // versioned, and (b) every modulepreload href is actually one of the
+    // fetched URLs (the preload is used, not warming a dead cache key).
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => { if (req.resourceType() === 'script' || /\.(ts|js|mts|mjs)(\?|$)/.test(req.url())) requested.push(req.url()); };
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(3000);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+
+    const origin = new URL(baseUrl).origin;
+    const sameOriginModules = requested.filter((u) => u.startsWith(origin) && /\.(ts|js|mts|mjs)(\?|$)/.test(u));
+
+    // (a) No module path requested both with and without ?v (the bug's signature).
+    /** @type {Map<string, Set<string>>} */
+    const byPath = new Map();
+    for (const u of sameOriginModules) {
+      const url = new URL(u);
+      if (!byPath.has(url.pathname)) byPath.set(url.pathname, new Set());
+      byPath.get(url.pathname).add(url.search.includes('v=') ? 'versioned' : 'bare');
+    }
+    const split = [...byPath.entries()].filter(([, variants]) => variants.size > 1).map(([p]) => p);
+    assert.equal(split.length, 0, `no module may be fetched both bare and versioned (double-fetch):\n${split.join('\n')}`);
+
+    // (b) Every modulepreload href was actually requested (preload used, not wasted).
+    const preloads = await page.evaluate(() =>
+      [...document.querySelectorAll('link[rel="modulepreload"]')].map((l) => l.href).filter((h) => h.startsWith(location.origin)),
+    );
+    assert.ok(preloads.length > 0, 'expected same-origin modulepreloads on the home route');
+    const requestedSet = new Set(sameOriginModules);
+    const unused = preloads.filter((href) => !requestedSet.has(href));
+    assert.equal(unused.length, 0, `every modulepreload must be requested by the module graph (else it warms a dead cache key):\n${unused.join('\n')}`);
+  });
+
   test('theme-toggle custom element is upgraded (light DOM)', async () => {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(2000);
