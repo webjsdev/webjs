@@ -60,16 +60,21 @@ export default function RootLayout({ children }: { children: unknown }) {
     <link rel="icon" href="/public/favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="/public/favicon.png">
 
-    <!-- Self-hosted fonts (declared via @font-face in input.css). Preload the
-         two above-the-fold families so they fetch in parallel with the
-         stylesheet: the display face (Inter Tight, hero headline) and the body
-         face (Inter). Each is one variable file covering all weights. The hero
-         install command is the one above-the-fold monospace text, but JetBrains
-         Mono is deliberately not preloaded. The preload budget stays on the two
-         LCP text faces, and the ui-monospace fallback is close enough that the
-         late swap on a single command line is negligible. -->
+    <!-- Self-hosted fonts (declared via @font-face in input.css), preloaded so
+         they fetch in parallel with the stylesheet instead of being discovered
+         only after the CSS parses. The display face (Inter Tight, hero
+         headline) and the body face (Inter) are the LCP text faces. JetBrains
+         Mono is preloaded too: the hero install command is above-the-fold
+         monospace text and the primary CTA, and a trace of the live site showed
+         the un-preloaded mono file as the tail of the critical request chain
+         (document, then tailwind.css, then the font, discovered late via its
+         @font-face). Preloading it drops that hop so the command paints its
+         final face without the late swap. Each family is one variable file
+         covering every weight, so three small woff2 files over h2 is a cheap
+         preload budget. -->
     <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Warm the analytics connection so the async gtag handshake (and the
          beacon to google-analytics.com it then opens) overlaps head parse
