@@ -7,9 +7,12 @@ node_modules/
 # DO NOT collapse to `.webjs/`: parent exclusion blocks child
 # negations and silently breaks `webjs vendor pin`. The
 # `gitignore-vendor-not-ignored` lint rule guards this.
-.webjs/*
-!.webjs/vendor/
-!.webjs/vendor/**
+# `**/.webjs/*` (not `.webjs/*`) so the dir is ignored at any depth: a
+# slash-bearing `.webjs/*` anchors to this file's dir and would miss a
+# nested app. The negations still re-include vendor at each depth.
+**/.webjs/*
+!**/.webjs/vendor/
+!**/.webjs/vendor/**
 
 # generated Tailwind CSS, built from public/input.css via npm run dev / start
 public/tailwind.css

@@ -3,7 +3,7 @@ node_modules/
 
 # webjs / framework caches.
 # `.webjs/routes.d.ts` (the generated route-types overlay, regenerated per
-# machine by `webjs types` / `webjs dev`) is correctly ignored by `.webjs/*`.
+# machine by `webjs types` / `webjs dev`) is correctly ignored by `**/.webjs/*`.
 # `.webjs/vendor/` is the EXCEPTION: it holds the committed importmap
 # manifest (.webjs/vendor/importmap.json) and optionally the vendored
 # bundle files (after `webjs vendor pin --download`). Both ship to
@@ -19,9 +19,16 @@ node_modules/
 # git ignores them with no warning). The `gitignore-vendor-not-ignored`
 # lint rule (run via `webjs check`) verifies this with
 # `git check-ignore` and will fail CI if the pattern regresses.
-.webjs/*
-!.webjs/vendor/
-!.webjs/vendor/**
+#
+# The `**/` prefix matches `.webjs/` at ANY depth, not just this app's
+# root. A slash-bearing `.webjs/*` anchors to this file's directory, so
+# an app nested below its repo root (a monorepo package) would leak its
+# generated `.webjs/routes.d.ts` into `git status`. `**/.webjs/*` covers
+# the nested case while the negations still re-include vendor at each
+# depth (a re-included parent dir permits a child negation).
+**/.webjs/*
+!**/.webjs/vendor/
+!**/.webjs/vendor/**
 
 # generated Tailwind CSS, built from public/input.css via npm run dev / start
 public/tailwind.css
