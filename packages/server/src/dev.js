@@ -115,7 +115,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor } from './asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, versionModuleImports } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
 import {
@@ -2142,9 +2142,13 @@ async function jsModuleResponse(abs, dev, elideOpts, immutable) {
   let source;
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
-  const code = elideImportsFromSource(
+  let code = elideImportsFromSource(
     source, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
   );
+  // Version same-origin relative import specifiers so the URL the browser
+  // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
+  // A no-op in dev (fingerprinting disabled).
+  code = versionModuleImports(code, abs);
   // Buffered (string) body, so opt into the conditional-GET funnel for the
   // weak ETag + 304 (see fileResponse).
   const headers = {
@@ -2267,6 +2271,11 @@ async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDevError)
       code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
     );
   }
+  // Version same-origin relative import specifiers so the URL the browser
+  // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
+  // A no-op in dev (fingerprinting disabled). Cached with the elision result:
+  // PROD files are static within a deploy, so the baked `?v` stays correct.
+  code = versionModuleImports(code, abs);
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).
   if (cache.size >= TS_CACHE_MAX) {
     const oldest = cache.keys().next().value;

@@ -157,7 +157,9 @@ test('served module source reflects each handler\'s own elision verdict (no cros
   // per-handler (state.tsCache). ON is warmed FIRST here so a shared cache
   // would be poisoned by the time OFF reads it.
   const ORIG = process.env.WEBJS_ELIDE;
-  const IMPORT = /import\s+['"][^'"]*build-stamp\.ts['"]/;
+  // The OFF handler keeps the import; in PROD its relative specifier is also
+  // versioned with `?v=<hash>` (#369), so allow that optional query suffix.
+  const IMPORT = /import\s+['"][^'"]*build-stamp\.ts(?:\?v=[0-9a-f]+)?['"]/;
   try {
     delete process.env.WEBJS_ELIDE;
     const hOn = await createRequestHandler({ appDir: BLOG, dev: false });

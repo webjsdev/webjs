@@ -40,6 +40,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
+import { redactStringsAndTemplates } from './js-scan.js';
+import { resolveImport } from './module-graph.js';
 
 /**
  * Length of the emitted hex hash. 12 hex chars (48 bits) is plenty to
@@ -263,4 +265,113 @@ export function withAssetHash(url, basePath = '') {
   // merge with `&` if one is somehow present.
   const sepChar = url.includes('?') ? '&' : '?';
   return `${url}${sepChar}v=${hash}`;
+}
+
+/**
+ * Static `import` specifier with positional indices. Mirrors module-graph.js's
+ * `IMPORT_RE` (side-effect / default / namespace / named imports), but captures
+ * the quote (group 1) and specifier (group 2) so the `/d` flag yields the
+ * specifier's start/end for an in-place splice. Excludes dynamic `import(...)`
+ * (no whitespace after `import`) and `import.meta` (no quote), exactly like the
+ * graph scanner, so the rewrite set is the static-import set the modulepreload
+ * hints cover.
+ *
+ * @type {RegExp}
+ */
+const IMPORT_SPEC_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?(['"])([^'"]+)\1/dg;
+
+/** Match `export … from '…'` re-exports (mirrors module-graph's EXPORT_FROM_RE). @type {RegExp} */
+const EXPORT_SPEC_RE = /\bexport\b[^'";]+?\sfrom\s+(['"])([^'"]+)\1/dg;
+
+/** A server-file specifier: served as a stub at a bare URL, never preloaded. @type {RegExp} */
+const SERVER_FILE_RE = /\.server\.(?:js|ts|mjs|mts)$/;
+
+/**
+ * Append `?v=<content-hash>` to every SAME-ORIGIN relative / root-absolute
+ * static-import specifier in a served module's source, so the URL the browser
+ * actually fetches matches the `?v=`-versioned `modulepreload` hint and boot
+ * specifier the framework emits for that file.
+ *
+ * The bug this fixes (#369): the boot script imports the entry modules with
+ * `?v=<hash>` and the head emits `<link rel=modulepreload href=".../x.ts?v=hash">`
+ * for every transitive module, but a layout/page imports its components with a
+ * BARE relative specifier (`import '../components/x.ts'`). The browser resolves
+ * a relative specifier against the importer's URL and a `?v` query is NOT
+ * inherited across that resolution, so it fetches the UN-versioned URL: a
+ * different cache key from the preload. Result: the preload is wasted, the
+ * module is downloaded a second time, and the served copy gets the 1h fallback
+ * cache header instead of `immutable`. Rewriting the specifier in the served
+ * source to carry the same `?v=<hash>` collapses both to one cache key (one
+ * fetch, preload used, immutable cached).
+ *
+ * The appended hash is `assetHashFor(resolvedTarget)`, the exact value
+ * `withAssetHash` computes for the modulepreload href of the same file (same
+ * absolute path -> same hash, elision-fingerprint fold included), so the two
+ * URLs are byte-identical by construction.
+ *
+ * Scope, mirroring the modulepreload set so the rewrite never diverges from it:
+ *   - Only `.`-relative and `/`-root-absolute specifiers. A BARE specifier
+ *     (`@webjsdev/core`, an npm dep) is importmap-resolved and its importmap
+ *     TARGET is already versioned by `withAssetHash`; rewriting it here would
+ *     double-version and break the importmap key.
+ *   - Only targets that resolve to a readable file UNDER `_appDir` (the servable
+ *     same-origin root). A `.server.*` target is excluded: it serves as a stub
+ *     at a bare URL and is never in the preload set, and its served bytes are
+ *     generated (not the file bytes the hash covers).
+ *   - A specifier already carrying a query is left as-is.
+ *
+ * Matching runs over a redaction mask (string / template / comment bodies
+ * blanked, positions preserved), so an `import`/`export … from` printed as
+ * example code inside an `html\`\`` template is never rewritten (same guard the
+ * module-graph scanner uses).
+ *
+ * A pure pass-through when fingerprinting is disabled (dev, or roots unset), so
+ * dev output stays byte-identical. Runs AFTER `elideImportsFromSource` in the
+ * serve path, so an elided side-effect import (already replaced by a comment)
+ * is not matched.
+ *
+ * @param {string} source       the served module source (post-elision, type-stripped if TS)
+ * @param {string} importerAbs  absolute path of the module being served
+ * @returns {string}
+ */
+export function versionModuleImports(source, importerAbs) {
+  if (!_enabled || !_appDir) return source;
+  if (typeof source !== 'string') return source;
+  // Cheap bail before any regex/redaction work for a module with no imports.
+  if (!source.includes('import') && !source.includes('export')) return source;
+
+  const masked = redactStringsAndTemplates(source);
+  /** @type {Array<{ pos: number, text: string }>} */
+  const inserts = [];
+  for (const re of [IMPORT_SPEC_RE, EXPORT_SPEC_RE]) {
+    re.lastIndex = 0;
+    for (const m of source.matchAll(re)) {
+      // The keyword must sit in code position; if blanked in the mask it lives
+      // inside a string / template / comment and is not a real import edge.
+      if (masked[/** @type {number} */ (m.index)] === ' ') continue;
+      const spec = m[2];
+      // Bare specifier -> importmap-resolved, already versioned at its target.
+      if (spec[0] !== '.' && spec[0] !== '/') continue;
+      if (spec.includes('?')) continue;
+      const abs = resolveImport(spec, importerAbs, _appDir);
+      if (!abs || SERVER_FILE_RE.test(abs)) continue;
+      if (!abs.startsWith(_appDir + sep)) continue;
+      const hash = assetHashFor(abs);
+      if (!hash) continue;
+      // `/d` flag: indices[2] is [start, end] of the specifier content, so
+      // `end` is the offset of the closing quote, where the query is spliced.
+      const specEnd = /** @type {[number, number]} */ (m.indices[2])[1];
+      inserts.push({ pos: specEnd, text: `?v=${hash}` });
+    }
+  }
+  if (inserts.length === 0) return source;
+
+  inserts.sort((a, b) => a.pos - b.pos);
+  let out = '';
+  let last = 0;
+  for (const ins of inserts) {
+    out += source.slice(last, ins.pos) + ins.text;
+    last = ins.pos;
+  }
+  return out + source.slice(last);
 }
