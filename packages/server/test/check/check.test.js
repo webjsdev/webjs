@@ -728,6 +728,75 @@ test('gitignore-vendor-not-ignored: passes for the correct pattern', async () =>
   }
 });
 
+test('gitignore-vendor-not-ignored: passes for the depth-robust `**/.webjs/*` pattern', async () => {
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '**/.webjs/*\n!**/.webjs/vendor/\n!**/.webjs/vendor/**\n',
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
+    assert.equal(v, undefined, '`**/.webjs/*` keeps the vendor pin un-ignored');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('`**/.webjs/*` ignores nested routes.d.ts while the anchored `.webjs/*` does not', async () => {
+  // The actual #365 bug: a slash-bearing `.webjs/*` anchors to the
+  // .gitignore's dir, so a nested app (a monorepo package) leaks its
+  // generated `.webjs/routes.d.ts`. `**/.webjs/*` ignores it at any
+  // depth while still re-including the committed vendor pin. Probed
+  // directly with `git check-ignore` since the rule only checks the
+  // root-level vendor path.
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
+    const ignored = (rel) =>
+      spawnSync('git', ['check-ignore', '-q', rel], { cwd: appDir, stdio: 'pipe', env })
+        .status === 0;
+
+    // Counterfactual: the old anchored pattern misses the nested file.
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n',
+    );
+    assert.equal(
+      ignored('website/.webjs/routes.d.ts'),
+      false,
+      'anchored `.webjs/*` leaks a nested routes.d.ts (the bug)',
+    );
+
+    // The fix: `**/.webjs/*` ignores routes.d.ts at every depth and
+    // still tracks the vendor pin at root and nested depths.
+    await writeFile(
+      join(appDir, '.gitignore'),
+      '**/.webjs/*\n!**/.webjs/vendor/\n!**/.webjs/vendor/**\n',
+    );
+    assert.equal(ignored('.webjs/routes.d.ts'), true, 'root routes.d.ts ignored');
+    assert.equal(
+      ignored('website/.webjs/routes.d.ts'),
+      true,
+      'nested routes.d.ts ignored',
+    );
+    assert.equal(
+      ignored('.webjs/vendor/importmap.json'),
+      false,
+      'root vendor pin stays tracked',
+    );
+    assert.equal(
+      ignored('website/.webjs/vendor/importmap.json'),
+      false,
+      'nested vendor pin stays tracked',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('gitignore-vendor-not-ignored: flags broader `*.js` rule that hides bundle files', async () => {
   // The pin manifest gets through because it ends in .json, but
   // `webjs vendor pin --download` writes <pkg>@<version>.js files

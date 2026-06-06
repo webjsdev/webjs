@@ -91,7 +91,7 @@ export const RULES = [
   {
     name: 'gitignore-vendor-not-ignored',
     description:
-      'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `.webjs/*` (NOT `.webjs/`) plus `!.webjs/vendor/` plus `!.webjs/vendor/**`. The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
+      'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `**/.webjs/*` (NOT `.webjs/`) plus `!**/.webjs/vendor/` plus `!**/.webjs/vendor/**`. The `**/` prefix matches `.webjs/` at any depth so a nested / monorepo app does not leak its generated `.webjs/routes.d.ts`; the older root-anchored `.webjs/*` also passes this rule (the probe is run from the app root). The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
   },
   {
     name: 'no-browser-globals-in-render',
@@ -804,9 +804,10 @@ export async function checkConventions(appDir) {
               `${probe} is gitignored, but \`webjs vendor pin\` writes files under .webjs/vendor/ and they MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a \`.webjs/\` line in .gitignore that excludes the parent directory before the \`!.webjs/vendor/\` exception can take effect (git semantics: a parent exclusion blocks child negations). A second possible cause is a broader rule (e.g. \`*.js\` at root) that hides bundle files added by \`webjs vendor pin --download\`.`,
           fix:
             'Replace `.webjs/` in your .gitignore with this three-line pattern:\n' +
-            '  .webjs/*\n' +
-            '  !.webjs/vendor/\n' +
-            '  !.webjs/vendor/**\n' +
+            '  **/.webjs/*\n' +
+            '  !**/.webjs/vendor/\n' +
+            '  !**/.webjs/vendor/**\n' +
+            'The `**/` prefix ignores `.webjs/` at any depth (so a nested / monorepo app does not leak its generated `.webjs/routes.d.ts`) while still re-including the committed vendor pin. ' +
             'Verify with `git check-ignore -q .webjs/vendor/importmap.json` (exit 1 means correctly un-ignored).',
         });
       }
