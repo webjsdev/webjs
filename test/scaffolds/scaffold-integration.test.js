@@ -207,14 +207,18 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // nested below its repo root must not leak its generated
     // .webjs/routes.d.ts. The depth-robust `**/.webjs/*` prefix is what
     // distinguishes the fix from the old root-anchored `.webjs/*`.
+    // Anchor to a line start (multiline) so these match the ACTIVE rule
+    // lines, not the surrounding comment prose that also names the
+    // pattern. Without the anchor a revert of the real rule to `.webjs/*`
+    // would still pass while a stale comment kept the `**/` text.
     assert.match(
       gitignore,
-      /\*\*\/\.webjs\/\*/,
+      /^\*\*\/\.webjs\/\*$/m,
       '.gitignore uses **/.webjs/* so a nested app does not leak routes.d.ts',
     );
     assert.match(
       gitignore,
-      /!\*\*\/\.webjs\/vendor\//,
+      /^!\*\*\/\.webjs\/vendor\/$/m,
       '.gitignore keeps the **/ vendor negation so the committed pin ships',
     );
 
