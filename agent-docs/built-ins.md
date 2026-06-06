@@ -184,6 +184,42 @@ time-based floor that always holds cross-instance), use `revalidatePath`
 per mutation as the reliable cross-instance primitive, and treat
 `revalidateAll()` as a single-instance / dev convenience.
 
+## Content-hash asset URLs (`?v=<digest>`, immutable caching, prod) (#243)
+
+Every served app module (`.js` / `.ts`) and `public/` asset used to ship `Cache-Control: public, max-age=3600` because its URL was un-versioned (the dev.js comment explains why `immutable` is unsafe without a per-file fingerprint, citing a real regression after a core version bump). The importmap build id does NOT change on an app-module byte change, so it cannot be the per-asset fingerprint. In PRODUCTION the framework instead appends a PER-FILE content hash, computed at serve time (no build step).
+
+- **Emit (prod only).** `withAssetHash(url)` (in `packages/server/src/asset-hash.js`) appends `?v=<hash>` to a framework-emitted SAME-ORIGIN absolute URL: the importmap targets (`importmap.js` `buildImportMap`), the `<link rel="modulepreload">` hrefs, the boot script's module specifiers + lazy entries (`ssr.js`), AND the 103 Early Hints preloads (`dev.js` `routeFor`, so the hint warms exactly the URL the body requests). The hash is a 12-hex prefix of a sha-256 over the file BYTES, memoized in a `Map<absPath, hash>` and cleared on the fs.watch rebuild (so a changed file re-hashes). It is a NO-OP in dev (so dev output is byte-identical), a NO-OP for a CROSS-ORIGIN URL (a `https://` jspm vendor target, which jspm already versions and whose #235 SRI key is the un-hashed URL, plus already-version-named `/__webjs/vendor/*` bundles), and composes with `withBasePath` (basePath THEN `?v`, so a sub-path app emits `<basePath>/app/foo.js?v=hash`). The framework's own `/__webjs/core/*` runtime is fingerprinted too (it changes across core versions, the exact regression cited).
+- **App-module body is elision-aware, so the hash folds in the elision verdict.** An app module's SERVED body is not its raw source: the elision pass (#169) strips a side-effect import to a display-only component. That strip is a property of the IMPORTED component's verdict, so a component flipping display-only to interactive changes the importer's served body while its source stays byte-identical. Hashing the source alone would keep the same `?v` and a returning client would hold the stale immutable importer (the now-interactive component never imported, so never hydrated). So a relativized digest of the elidable + inert set is folded into every APP-module hash (`setElisionFingerprint` in `asset-hash.js`, set from `ensureReady`): a verdict flip busts every app module's `?v`. The fingerprint is empty when nothing is elidable, so a no-elision app's hash stays exactly `sha256(bytes)`; core / `public/` files are never elision-transformed, so they hash over their bytes alone.
+- **Serve.** A request carrying a `?v=` query is served `Cache-Control: public, max-age=31536000, immutable` (the pathname, query stripped, resolves the file as today; only the cache header changes). An un-fingerprinted request keeps the 1h fallback. Dev stays `no-cache`.
+- **Deploy-busts (the safety invariant).** A deploy that changes a module's bytes changes its hash, so its emitted URL changes, so a returning client fetches the new URL instead of serving the stale immutable copy. The build id stays a stable per-deploy fingerprint (the internal `importMapHash()` computation excludes the `?v`), so #241's HTML-cache keying is unaffected.
+
+See `agent-docs/advanced.md` (content-hash caching + the preconnect hints) and `docs/app/docs/no-build/page.ts`.
+
+## Conditional GET (ETag + If-None-Match -> 304, on by default) (#240)
+
+Every CACHEABLE response carries a content-hash `ETag`, and a repeat request whose `If-None-Match` matches it gets a `304 Not Modified` with no body (RFC 7232). So a client holding an identical copy revalidates with a tiny 304 instead of re-transferring the whole body. Wired once at the response funnel in `dev.js`'s `handle()` (mechanism: `applyConditionalGet` in `packages/server/src/conditional-get.js`), so it covers SSR HTML pages, static assets in `public/`, app source modules, and the core / vendor runtime modules uniformly.
+
+The ETag is WEAK (`W/"..."`). It hashes the UNCOMPRESSED body and the prod compression step reuses it across the identity / gzip / br codings, which a STRONG validator may not do (RFC 7232 2.3.3); `If-None-Match` already weak-compares, so a `304` still fires. The funnel only hashes a body the framework positively marked as buffered. A user `route.{js,ts}` handler returning a `ReadableStream` (and especially an SSE `text/event-stream`, whose stream never ends) carries no such marker, so the funnel never buffers it (no memory blow-up, no hang) and never ETags it.
+
+**What gets an ETag + honors 304:**
+
+| Response | ETag? | Why |
+|---|---|---|
+| A page with a PUBLIC `metadata.cacheControl` (e.g. `public, max-age=60`) | yes | Explicitly opted into caching; a repeat read 304s |
+| Static assets (`public/*`), app `.js` / `.ts` modules, core / vendor modules | yes | Content-addressable; the ETag is the body hash |
+
+**What is EXCLUDED (no ETag, never 304):**
+
+| Response | Why excluded |
+|---|---|
+| A `no-store` page (the DEFAULT for dynamic / per-user pages) | Private content must never get a cross-session 304: a shared cache keyed on the URL could replay one user's validator to another |
+| A `private` `Cache-Control` response | Same private-content reasoning |
+| A streamed Suspense response (pending boundaries) | An unflushed stream cannot be hashed cheaply; the SSR pipeline flags it internally and the funnel skips it. Streaming responses are not conditional-GET cached |
+| A `route.{js,ts}` handler returning a `ReadableStream` (incl. an SSE `text/event-stream`) | The body is not marked buffered, so the funnel never reads it. Buffering a stream would blow up memory, and an SSE stream never ends so the read would hang forever |
+| Non-GET / non-HEAD, and any status other than 200 | A validator is only meaningful for a successful, replayable read |
+
+**Stable-body handling.** The ETag is computed over the response's OWN body bytes, so an identical body yields an identical ETag across requests. Per-response varying bits that ride RESPONSE HEADERS (the `x-webjs-build` id, the `set-cookie` CSRF token, the CSP nonce on the header) are NOT part of the body hash, so they do not destabilise the ETag. The one body-level varying input is the CSP nonce stamped INTO the inline boot script: with CSP enabled the HTML body changes every request, so its ETag changes every request and a 304 is simply never produced for that page (correct, not a bug). CSP is off by default, so the common cacheable-page case has a stable body and a stable ETag. The 304 preserves the validators and caching headers (`ETag`, `Cache-Control`, `Vary`, plus the framework's `X-Webjs-Build` / `X-Request-Id` and any `Set-Cookie`) and drops only the body-describing headers (`Content-Length`, `Content-Type`, `Content-Encoding`), so a shared cache and the client router behave identically to a 200.
+
 ## Sessions
 
 ```js
