@@ -1,4 +1,4 @@
-# docker compose - runs website + docs + blog + ui-website as four services
+# docker compose runs website + docs + blog + ui-website as four services
 # from a single image. Local parity with Railway deployment (same Dockerfile).
 #
 #   docker compose up --build
@@ -6,25 +6,23 @@
 #     docs       → http://localhost:15002
 #     blog       → http://localhost:15004
 #     ui-website → http://localhost:15003  (registry host + @webjsdev/ui docs)
+#
+# Readiness gate: the image carries a single PORT-driven HEALTHCHECK (it probes
+# /__webjs/ready, see Dockerfile), so each service only sets PORT and compose
+# inherits the gate. No per-service healthcheck block is duplicated here.
 services:
   website:
     image: webjs
     build: .
     working_dir: /app/website
     # @webjsdev/cli installed in the root node_modules/.bin by npm workspaces;
-    # invoke its binary directly rather than via `webjs`.
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5001"]
+    # invoke its binary directly rather than via `webjs`. The server reads PORT
+    # (set below) with no --port flag, so the image HEALTHCHECK probes the same port.
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15001:5001"
-    # Readiness gate: unhealthy (503) until the first-request analysis is warm,
-    # then 200. Mirrors the railway.json healthcheckPath.
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5001/__webjs/ready"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 20s
     environment:
+      PORT: "5001"
       DOCS_URL: ${DOCS_URL:-http://localhost:15002}
       EXAMPLE_BLOG_URL: ${EXAMPLE_BLOG_URL:-http://localhost:15004}
       UI_URL:   ${UI_URL:-http://localhost:15003}
@@ -33,15 +31,11 @@ services:
     image: webjs
     build: .
     working_dir: /app/docs
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5002"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15002:5002"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5002/__webjs/ready"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 20s
+    environment:
+      PORT: "5002"
 
   blog:
     image: webjs
@@ -54,16 +48,11 @@ services:
       - -c
       - |
         node /app/node_modules/prisma/build/index.js migrate deploy && \
-        node /app/node_modules/@webjsdev/cli/bin/webjs.js start --port 5004
+        node /app/node_modules/@webjsdev/cli/bin/webjs.js start
     ports:
       - "15004:5004"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5004/__webjs/ready"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 30s
     environment:
+      PORT: "5004"
       DATABASE_URL: file:/data/dev.db
       AUTH_SECRET:    ${AUTH_SECRET:-change-me-at-least-32-characters-long!}
       SESSION_SECRET: ${SESSION_SECRET:-change-me-at-least-32-characters-long!}
@@ -75,19 +64,15 @@ services:
     build: .
     working_dir: /app/packages/ui/packages/website
     # Registry host for @webjsdev/ui:
-    #   GET /r/<name>.json   - single registry item (CLI fetches from here)
-    #   GET /r/index.json    - flat list of all items
-    #   GET /docs/components/<name> - per-component docs page
+    #   GET /r/<name>.json          single registry item (CLI fetches from here)
+    #   GET /r/index.json           flat list of all items
+    #   GET /docs/components/<name> per-component docs page
     # The registry JSON is built at image time (see Dockerfile RUN step).
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start", "--port", "5003"]
+    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15003:5003"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5003/__webjs/ready"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 20s
+    environment:
+      PORT: "5003"
 
 volumes:
   blog-data:
