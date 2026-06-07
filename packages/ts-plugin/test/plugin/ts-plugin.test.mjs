@@ -740,8 +740,8 @@ test('skips check when component is reachable but the prop has no `declare` anno
 test('does not check tags that are not reachable through imports', () => {
   // The component class exists in the program but page.ts forgets to
   // import it. Reachability gating means we don't synthesise a value
-  // diagnostic: the missing import is already surfaced via the kept
-  // "unknown tag" warning from ts-lit-plugin.
+  // diagnostic for an unreachable tag (the missing side-effect import is
+  // the real problem to surface).
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
