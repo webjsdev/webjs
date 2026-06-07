@@ -8,7 +8,9 @@ export default function EditorSetup() {
     <p>webjs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
 
     <div class="callout">
-      <p><strong>VS Code, Cursor, Windsurf, VSCodium:</strong> install the <strong><code>webjs</code></strong> extension from the <a href="https://marketplace.visualstudio.com/items?itemName=webjsdev.webjs" target="_blank">VS Marketplace</a> or <a href="https://open-vsx.org/extension/webjsdev/webjs" target="_blank">Open VSX</a> (search "webjs"). It bundles the language-service plugin and registers it automatically (no <code>tsconfig.json</code> edit), and adds <code>html</code> / <code>css</code> template highlighting. The rest of this page is for wiring the plugin by hand (Neovim / JetBrains) and for understanding what it does.</p>
+      <p><strong>VS Code, Cursor, Windsurf, VSCodium:</strong> install the <strong><code>webjs</code></strong> extension from the <a href="https://marketplace.visualstudio.com/items?itemName=webjsdev.webjs" target="_blank">VS Marketplace</a> or <a href="https://open-vsx.org/extension/webjsdev/webjs" target="_blank">Open VSX</a> (search "webjs"). It bundles the language-service plugin and registers it automatically (no <code>tsconfig.json</code> edit), and adds <code>html</code> / <code>css</code> template highlighting.</p>
+      <p><strong>Neovim:</strong> install <a href="https://github.com/webjsdev/webjs.nvim" target="_blank"><code>webjsdev/webjs.nvim</code></a> via lazy.nvim (<code>{ 'webjsdev/webjs.nvim', opts = {} }</code>) for treesitter <code>html</code> / <code>css</code> / <code>svg</code> template highlighting, the <code>:WebjsCheck</code> diagnostics source, and an <code>init_options</code> helper for wiring the tsserver plugin into <code>ts_ls</code> (see the Neovim section below).</p>
+      <p>The rest of this page is for wiring the plugin by hand and for understanding what it does.</p>
     </div>
 
     <p><strong><code>@webjsdev/ts-plugin</code> is editor-only, not required for the framework to run.</strong> It is <strong>standalone</strong> as of <code>@webjsdev/ts-plugin@0.5.0</code>: its own <code>html</code>-template parser drives all the in-template intelligence, with no Lit dependency. The scaffold wires it up automatically.</p>
@@ -109,7 +111,11 @@ StudentCard.register('student-card');</pre>
     <p>Reload the window. The plugin is now active.</p>
 
     <h3>Neovim</h3>
-    <p>Any LSP client that speaks tsserver loads the plugin automatically. The key is pointing the LSP at your <strong>workspace's</strong> <code>node_modules/typescript</code> so the plugin in <code>tsconfig.json</code> resolves.</p>
+    <p>Install <a href="https://github.com/webjsdev/webjs.nvim" target="_blank"><code>webjsdev/webjs.nvim</code></a> for treesitter template highlighting, <code>:WebjsCheck</code>, and <code>:checkhealth webjs</code>. It also gives you a helper to load the tsserver plugin without editing <code>tsconfig.json</code>:</p>
+    <pre>require('lspconfig').ts_ls.setup({
+  init_options = require('webjs').with_tsserver_plugin(),
+})</pre>
+    <p>Otherwise, any LSP client that speaks tsserver loads the plugin automatically from <code>tsconfig.json</code>. The key is pointing the LSP at your <strong>workspace's</strong> <code>node_modules/typescript</code> so the plugin resolves.</p>
 
     <h4><code>nvim-lspconfig</code></h4>
     <pre>-- lua/plugins/tsserver.lua
