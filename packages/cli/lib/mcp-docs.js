@@ -193,6 +193,11 @@ export async function initText(deps) {
     'state primitive. Server-only code lives behind the `.server.{js,ts}` boundary.',
     'When writing a component, read `webjs-docs://lit-muscle-memory-gotchas` first:',
     'the Lit habits that break webjs SSR/reactivity each have a webjs-shaped fix there.',
+    '',
+    'webjs is NO-BUILD: the full framework source ships as readable JSDoc `.js` in',
+    '`node_modules/@webjsdev/*/src` (what you read is what runs, no compiled dist to',
+    'see through). When the docs do not answer something, read the real source with',
+    'the `source` tool (grep it, read a file, or list the packages and entry points).',
   ].join('\n');
 
   const parts = [
