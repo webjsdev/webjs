@@ -1,12 +1,9 @@
 {
   "name": "@webjsdev/ts-plugin",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "commonjs",
-  "description": "TypeScript language-service plugin for webjs - bundles ts-lit-plugin internally so users install one plugin instead of two. Adds webjs-aware go-to-definition, ts-lit-plugin diagnostic suppression for Class.register('tag') elements, attribute auto-complete from `static properties`, and attribute-value type-check against `declare` annotations.",
+  "description": "Standalone TypeScript language-service plugin for webjs (no Lit dependency). Adds in-template intelligence inside html`` templates: go-to-definition on tags / attributes / CSS classes, binding-aware completions, value/binding diagnostics, and hover, all driven by its own template parser and gated on import-graph reachability.",
   "main": "src/index.js",
-  "dependencies": {
-    "ts-lit-plugin": "^2.0.2"
-  },
   "peerDependencies": {
     "typescript": ">=5.0.0"
   },

@@ -1,15 +1,18 @@
 /**
- * @webjsdev/ts-plugin: a TypeScript language-service plugin that resolves
+ * @webjsdev/ts-plugin: a standalone TypeScript language-service plugin that
+ * gives editors webjs-aware intelligence inside `html\`\`` templates, with NO
+ * Lit dependency (the bundled `vscode-lit` / `ts-lit-plugin` reliance was
+ * removed in Phase 3, #386). It provides, all driven by its own template
+ * parser (`./template/parse.js`) and gated on import-graph reachability:
  *
- *   1. Custom-element tag names inside `html\`\`` tagged templates → the
- *      corresponding WebComponent class declaration.
- *   2. CSS class names inside `class="…"` attributes of `html\`\`` templates
- *      → the rule that defines them in a `css\`\`` tagged template.
+ *   - go-to-definition on custom-element tags, attribute / property / event
+ *     names, and CSS class names in `class="…"`;
+ *   - binding-aware completions (tag names, `.prop` / `?bool` / plain attrs);
+ *   - in-template diagnostics (incompatible bindings, unquoted bindings,
+ *     expressionless `.prop`);
+ *   - hover.
  *
- * Runs alongside ts-lit-plugin. Whenever upstream returns no definition,
- * this plugin tries both resolvers in turn.
- *
- * Registration scan is keyed by each SourceFile's version so subsequent
+ * The registration scan is keyed by each SourceFile's version so subsequent
  * lookups are cheap and invalidate incrementally on edits.
  */
 
@@ -33,59 +36,26 @@ function init(modules) {
   return { create };
 
   /**
-   * Load `ts-lit-plugin` programmatically and let it enhance the
-   * language service first, so our wrapping sits on top of its
-   * template-literal intelligence. This is what lets users install
-   * `@webjsdev/ts-plugin` as a single plugin (instead of needing to
-   * list `ts-lit-plugin` separately in tsconfig).
-   *
-   * Failure modes:
-   *  - ts-lit-plugin missing from node_modules (very unlikely: we
-   *    declare it as a runtime dep)
-   *  - factory shape changed in an incompatible way upstream
-   *  - factory throws
-   *
-   * In every failure path we log + fall back to the bare language
-   * service so the editor degrades to "no template intelligence" but
-   * never crashes.
+   * Decorate the host language service with webjs's in-template intelligence.
+   * The plugin is fully self-contained: it provides its own parser-driven
+   * completions, diagnostics, definitions, and hover, with NO dependency on
+   * `ts-lit-plugin` (removed in Phase 3, #386). `inner` is the stock tsserver
+   * language service; we override only the methods we extend and fall back to
+   * it on any error.
    *
    * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
-   * @returns {import('typescript/lib/tsserverlibrary').LanguageService}
    */
-  function loadLitEnhanced(info) {
-    try {
-      // eslint-disable-next-line global-require
-      const litFactory = require('ts-lit-plugin');
-      const litMod = typeof litFactory === 'function' ? litFactory({ typescript: ts }) : null;
-      const litCreate = litMod && typeof litMod.create === 'function' ? litMod.create : null;
-      if (!litCreate) {
-        info.project.projectService.logger?.info?.(
-          '@webjsdev/ts-plugin: ts-lit-plugin has unexpected factory shape: falling back to bare LS',
-        );
-        return info.languageService;
-      }
-      const enhanced = litCreate(info);
-      return enhanced || info.languageService;
-    } catch (e) {
-      info.project.projectService.logger?.info?.(
-        `@webjsdev/ts-plugin: ts-lit-plugin failed to load: falling back to bare LS: ${String(e)}`,
-      );
-      return info.languageService;
-    }
-  }
-
-  /** @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info */
   function create(info) {
     const proxy = Object.create(null);
-    const inner = loadLitEnhanced(info);
+    const inner = info.languageService;
     for (const k of Object.keys(inner)) {
       proxy[k] = /** @type any */ (inner[/** @type any */ (k)]).bind(inner);
     }
 
     proxy.getDefinitionAndBoundSpan = (fileName, position) => {
-      // Always try upstream first: ts-lit-plugin / stock tsserver may
-      // already have an answer for Lit-style components, JSDoc-tagged
-      // elements, or HTMLElementTagNameMap-augmented tags.
+      // Try the stock tsserver answer first (it resolves JSDoc-tagged
+      // elements, HTMLElementTagNameMap-augmented tags, and expressions in
+      // `${}` holes); only fall through to our resolvers when it has none.
       const upstream = inner.getDefinitionAndBoundSpan(fileName, position);
       if (upstream && upstream.definitions && upstream.definitions.length > 0) {
         return upstream;
@@ -120,19 +90,13 @@ function init(modules) {
       }
     };
 
-    // ts-lit-plugin doesn't know about webjs components (no `@customElement`
-    // decorator, no HTMLElementTagNameMap augmentation), so it flags every
-    // `<my-component>` inside an html`` template as "Unknown tag". Filter
-    // those out: but ONLY for tags that this file can actually reach
-    // through its import graph. A tag registered somewhere in the program
-    // but not imported here is still genuinely unknown at runtime, so the
-    // diagnostic must stay.
+    // Append webjs's in-template diagnostics (incompatible bindings, unquoted
+    // bindings, expressionless `.prop`) to the stock semantic diagnostics.
     proxy.getSemanticDiagnostics = (fileName) => {
       const diags = inner.getSemanticDiagnostics(fileName);
       try {
-        const filtered = filterLitTagDiagnostics(info, fileName, diags);
         const attrDiags = webjsAttrValueDiagnostics(info, fileName);
-        return attrDiags.length ? [...filtered, ...attrDiags] : filtered;
+        return attrDiags.length ? [...diags, ...attrDiags] : diags;
       } catch (e) {
         info.project.projectService.logger?.info?.(
           `@webjsdev/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
@@ -140,16 +104,9 @@ function init(modules) {
         return diags;
       }
     };
-    proxy.getSuggestionDiagnostics = (fileName) => {
-      const diags = inner.getSuggestionDiagnostics(fileName);
-      try { return filterLitTagDiagnostics(info, fileName, diags); }
-      catch (e) { return diags; }
-    };
 
-    // Attribute-name auto-complete inside `<webjs-tag |…>` openers. The
-    // `static properties = { … }` map on the component class drives the
-    // completion list. ts-lit-plugin's own completions kick in only when
-    // it recognises the tag, which it doesn't for webjs.
+    // Attribute-name auto-complete inside `<webjs-tag |…>` openers, driven by
+    // the component class's `static properties` map (see webjsAttrCompletions).
     proxy.getCompletionsAtPosition = (fileName, position, options) => {
       const upstream = inner.getCompletionsAtPosition(fileName, position, options);
       try {
@@ -179,84 +136,6 @@ function init(modules) {
     };
 
     return proxy;
-  }
-
-  /* ================================================================
-   * Diagnostic filter: drop ts-lit-plugin "unknown tag/attr" reports
-   * for webjs components that are reachable from `fileName`.
-   * ================================================================ */
-
-  /**
-   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
-   * @param {string} fileName
-   * @param {readonly import('typescript').Diagnostic[] | undefined} diags
-   */
-  function filterLitTagDiagnostics(info, fileName, diags) {
-    if (!diags || diags.length === 0) return diags;
-    const program = info.languageService.getProgram();
-    if (!program) return diags;
-    const sf = program.getSourceFile(fileName);
-    if (!sf) return diags;
-
-    const registry = buildRegistry(program);
-    if (registry.components.size === 0) return diags;
-    const reachable = collectReachableTags(program, sf, registry);
-    if (reachable.size === 0) return diags;
-
-    return diags.filter((d) => !shouldSuppressDiagnostic(d, sf, reachable));
-  }
-
-  /**
-   * A diagnostic is suppressible only if:
-   *   1. It originates from ts-lit-plugin (source contains "lit"); and
-   *   2. Its span sits on, or inside an opening tag whose name is, a
-   *      reachable webjs tag.
-   *
-   * @param {import('typescript').Diagnostic} d
-   * @param {import('typescript').SourceFile} sf
-   * @param {Set<string>} reachable
-   */
-  function shouldSuppressDiagnostic(d, sf, reachable) {
-    const source = /** @type any */ (d).source;
-    if (typeof source !== 'string' || !/lit/i.test(source)) return false;
-    if (typeof d.start !== 'number' || typeof d.length !== 'number') return false;
-    const text = sf.text;
-    // Case A: the span itself is the tag name.
-    const spanText = text.slice(d.start, d.start + d.length).toLowerCase();
-    if (reachable.has(spanText)) return true;
-    // Case B: the span sits inside an opening tag whose name is reachable
-    // (ts-lit-plugin "unknown attribute" diagnostics target the attribute
-    // identifier, not the tag).
-    const tag = enclosingOpenTag(text, d.start);
-    return !!tag && reachable.has(tag);
-  }
-
-  /**
-   * Walk backwards from `pos` to find the nearest `<tag-name` opener that
-   * has not yet been closed by `>`. Returns the lowercased tag name, or
-   * undefined if the position is not inside an opening tag.
-   *
-   * @param {string} text
-   * @param {number} pos
-   */
-  function enclosingOpenTag(text, pos) {
-    for (let i = pos - 1; i >= 0; i--) {
-      const c = text[i];
-      if (c === '>') return undefined;
-      if (c !== '<') continue;
-      // Found a `<`; read the tag name that follows.
-      let j = i + 1;
-      if (text[j] === '/') return undefined;
-      let name = '';
-      while (j < text.length) {
-        const ch = text[j];
-        if (/[A-Za-z0-9_-]/.test(ch)) { name += ch; j++; }
-        else break;
-      }
-      if (!name || !name.includes('-')) return undefined;
-      return name.toLowerCase();
-    }
-    return undefined;
   }
 
   /**

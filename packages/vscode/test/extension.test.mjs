@@ -56,8 +56,8 @@ test('the bundled tsserver plugin is auto-registered (no Lit plugin)', () => {
 test('build.mjs produces a self-contained, Lit-free vendored plugin', () => {
   // The vsix must resolve `@webjsdev/ts-plugin` from its own node_modules, so
   // the build vendors a single CJS bundle there. Prove it is self-contained
-  // (no further deps to drag in) and that ts-lit-plugin is left EXTERNAL, so
-  // the plugin runs as the bare, Lit-free webjs language service at runtime.
+  // (no further deps to drag in) and truly Lit-free: the plugin is standalone
+  // (#386), so it neither requires nor references ts-lit-plugin.
   execFileSync('node', [join(ROOT, 'scripts/build.mjs')], { stdio: 'pipe' });
   const dir = join(ROOT, 'node_modules/@webjsdev/ts-plugin');
   assert.ok(existsSync(join(dir, 'index.cjs')), 'vendored bundle exists');
@@ -66,8 +66,8 @@ test('build.mjs produces a self-contained, Lit-free vendored plugin', () => {
   assert.equal(pkg.main, 'index.cjs');
   assert.ok(!pkg.dependencies, 'vendored plugin declares no dependencies');
   const bundle = readFileSync(join(dir, 'index.cjs'), 'utf8');
-  // External, not inlined: a require call survives for graceful runtime fallback.
-  assert.match(bundle, /require\(["']ts-lit-plugin["']\)/, 'ts-lit-plugin stays external');
+  // No ts-lit-plugin require survives: the plugin is fully standalone.
+  assert.ok(!/require\(["'`]ts-lit-plugin["'`]\)/.test(bundle), 'bundle does not require ts-lit-plugin');
   // webjs's own resolver logic IS bundled in.
   assert.match(bundle, /register/, 'webjs registration scan is present');
 });

@@ -4,11 +4,9 @@ A **tsserver plugin** that gives editors (VS Code, Neovim, JetBrains)
 webjs-aware intelligence inside `` html`` `` tagged templates:
 go-to-definition on custom-element tag names / attributes / CSS classes,
 binding-aware completions, in-template diagnostics, and hover, all driven
-by webjs's OWN HTML-in-template parser. As of Phase 2 (#385) the plugin
-provides this intelligence itself and no longer depends on `ts-lit-plugin`
-(it still wraps it when present, but degrades to the full webjs language
-service when it is absent, which is how the `webjs` VSCode extension bundles
-it). Phase 3 (#386) removes the `ts-lit-plugin` dependency entirely.
+by webjs's OWN HTML-in-template parser. It is **standalone** as of Phase 3
+(#386): no `ts-lit-plugin` dependency, no Lit code. The `webjs` VS Code
+extension bundles it; Neovim / JetBrains wire it via `tsconfig.json`.
 
 Framework-wide rules (workflow, JSDoc-in-`packages/`, no-build,
 commit conventions, autonomous-mode behaviour, scaffold rules) live
@@ -19,11 +17,9 @@ This file only covers what's specific to `@webjsdev/ts-plugin`.
 
 ## Role
 
-The plugin owns webjs's in-template intelligence. When `ts-lit-plugin` is
-also installed it **wraps** it (list `ts-lit-plugin` first in
-`tsconfig.json`, `@webjsdev/ts-plugin` second), layering on top; when it is
-absent (the VSCode-extension bundle, and after Phase 3) the same features
-run standalone. The plugin:
+The plugin owns webjs's in-template intelligence. It is **standalone** as of
+Phase 3 (#386): it decorates the stock tsserver language service directly and
+has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
 
 1. Scans the program at boot for `Class.register('tag', …)` /
    `customElements.define('tag', Class)` registrations into a registry of
@@ -48,8 +44,6 @@ run standalone. The plugin:
    would false-positive on third-party customs).
 7. **Hover**: a tag shows its class; an attribute / property / event shows
    its declared type.
-8. When `ts-lit-plugin` IS present, also filters its "Unknown tag /
-   attribute" diagnostics for reachable webjs tags (retired in Phase 3).
 
 ## Module map
 
@@ -81,13 +75,10 @@ README.md                  User-facing setup instructions.
    missing source file, type-checker quirk), fall back to passthrough.
    The user's editor must never break because of this plugin. Wrap risky
    logic in try/catch with a silent return.
-4. **Every feature works with `ts-lit-plugin` ABSENT.** The plugin's own
-   parser, completions, diagnostics, and hover never require it; the only
-   `ts-lit-plugin` coupling is the optional diagnostic-suppression in
-   `filterLitTagDiagnostics` when it happens to be installed. The `webjs`
-   VSCode extension bundles this plugin with `ts-lit-plugin` left external,
-   so anything you add MUST function standalone. When it IS used via
-   `tsconfig.json`, list `ts-lit-plugin` first, this one second.
+4. **No `ts-lit-plugin` dependency.** The plugin is self-contained: its own
+   parser, completions, diagnostics, and hover never require it, and the
+   source must never `require('ts-lit-plugin')` (a test asserts this). A
+   single `tsconfig.json` plugin entry, `{ "name": "@webjsdev/ts-plugin" }`.
 5. **No blanket unknown-tag / unknown-attribute diagnostics.** webjs has no
    `HTMLElementTagNameMap`, so flagging an unrecognised tag/attribute would
    false-positive on legitimate third-party custom elements. Only

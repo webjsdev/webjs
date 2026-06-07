@@ -170,8 +170,9 @@ Naming convention: derive the scope class from the file path. Slashes
 - `app/admin/layout.ts`               → `.layout-admin`
 
 Styles colocate with the markup as `const STYLES = css\`…\`` and
-interpolate via `<style>${STYLES.text}</style>`. `ts-lit-plugin` /
-`@webjsdev/ts-plugin` highlights the CSS and resolves class go-to-definition.
+interpolate via `<style>${STYLES.text}</style>`. The standalone
+`@webjsdev/ts-plugin` (and the `webjs` editor extension) resolves class
+go-to-definition inside those blocks.
 
 ### Example: a page
 

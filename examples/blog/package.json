@@ -27,7 +27,7 @@
     "dayjs": "^1.11.21"
   },
   "devDependencies": {
-    "@webjsdev/ts-plugin": "^0.4.0",
+    "@webjsdev/ts-plugin": "^0.5.0",
     "@webjsdev/ui": "^0.3.0",
     "prisma": "^5.22.0",
     "typescript": "^6.0.3"
