@@ -22,7 +22,17 @@ specific to the Neovim plugin.
    to `vim.diagnostic` + quickfix), `health.lua` (`:checkhealth webjs`).
    `plugin/webjs.lua` registers `:WebjsCheck` so it works without an explicit
    `setup()`.
-3. **Docs**: `doc/webjs.txt` (`:help webjs`), `README.md`.
+3. **Bundled language service** (`vendor/node_modules/@webjsdev/ts-plugin/`):
+   a committed verbatim copy of the standalone `@webjsdev/ts-plugin` (#386).
+   `with_tsserver_plugin()` points `tsserver` at it via `plugins[].location`
+   (-> `pluginProbeLocations`), so intelligence works with NO
+   `@webjsdev/ts-plugin` in the app (before `npm install`, pruned trees,
+   non-scaffolded apps). When the app ALSO wires it via `tsconfig`, `tsserver`
+   dedupes by name (verified), so no double-load. Regenerate with
+   `scripts/vendor-ts-plugin.mjs` then `git add -f packages/nvim/vendor`
+   (the output is under a gitignored `node_modules/`); `test/vendor-sync.test.mjs`
+   is the drift guard.
+4. **Docs**: `doc/webjs.txt` (`:help webjs`), `README.md`.
 
 ## Invariants
 
