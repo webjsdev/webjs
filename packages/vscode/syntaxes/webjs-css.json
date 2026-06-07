@@ -1,0 +1,39 @@
+{
+  "$comment": "webjs css`...` template injection. Highlights CSS inside the css tagged template (used in `static styles`) as source.css, with ${...} substitutions tokenized as TypeScript.",
+  "injectionSelector": "L:source.js -comment -(string -meta.embedded), L:source.jsx -comment -(string -meta.embedded), L:source.js.jsx -comment -(string -meta.embedded), L:source.ts -comment -(string -meta.embedded), L:source.tsx -comment -(string -meta.embedded)",
+  "scopeName": "inline.webjs.css",
+  "patterns": [
+    {
+      "begin": "(?x)(\\b(?:\\w+\\.)*css\\s*)(`)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.tagged-template.webjs" },
+        "2": { "name": "punctuation.definition.string.template.begin.js" }
+      },
+      "end": "(`)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.template.end.js" }
+      },
+      "contentName": "meta.embedded.block.css",
+      "patterns": [
+        { "include": "#webjs-substitution" },
+        { "include": "source.css" }
+      ]
+    }
+  ],
+  "repository": {
+    "webjs-substitution": {
+      "name": "meta.template.expression.js",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.js" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.js" }
+      },
+      "patterns": [
+        { "include": "source.ts" }
+      ]
+    }
+  }
+}

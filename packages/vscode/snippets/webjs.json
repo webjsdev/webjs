@@ -1,0 +1,76 @@
+{
+  "webjs page": {
+    "prefix": "wjpage",
+    "description": "A webjs page (app/<segment>/page.ts). Default export is a server-only function returning a TemplateResult.",
+    "body": [
+      "import { html } from '@webjsdev/core';",
+      "",
+      "export default function ${1:Page}() {",
+      "  return html`<h1>${2:Hello}</h1>`;",
+      "}"
+    ]
+  },
+  "webjs dynamic page": {
+    "prefix": "wjdynamic",
+    "description": "A dynamic page reading params (app/<segment>/[id]/page.ts). Fetch via a server action/query, never the DB directly.",
+    "body": [
+      "import { html } from '@webjsdev/core';",
+      "",
+      "export default async function ${1:Detail}({ params }: { params: { ${2:id}: string } }) {",
+      "  const ${3:item} = await ${4:getItem}(params.${2:id});",
+      "  return html`<h1>\\${${3:item}.${5:name}}</h1>`;",
+      "}"
+    ]
+  },
+  "webjs server action": {
+    "prefix": "wjaction",
+    "description": "A server action (*.server.ts + 'use server'). Returns the ActionResult envelope; the client import becomes a typed RPC stub.",
+    "body": [
+      "'use server';",
+      "",
+      "export async function ${1:doThing}(input: { ${2:name}: string }) {",
+      "  const ${2:name} = String(input?.${2:name} || '').trim();",
+      "  if (!${2:name}) return { success: false, error: '${2:name} required', status: 400 };",
+      "  return { success: true, data: ${3:null} };",
+      "}"
+    ]
+  },
+  "webjs component": {
+    "prefix": "wjcomponent",
+    "description": "An interactive WebComponent. Signals are the default state; the tag must contain a hyphen.",
+    "body": [
+      "import { WebComponent, html, signal } from '@webjsdev/core';",
+      "",
+      "export class ${1:MyThing} extends WebComponent {",
+      "  ${2:count} = signal(${3:0});",
+      "",
+      "  render() {",
+      "    return html`<button @click=\\${() => this.${2:count}.set(this.${2:count}.get() + 1)}>",
+      "      \\${this.${2:count}.get()}</button>`;",
+      "  }",
+      "}",
+      "",
+      "${1:MyThing}.register('${4:my-thing}');"
+    ]
+  },
+  "webjs route handler": {
+    "prefix": "wjroute",
+    "description": "An HTTP route handler (app/<path>/route.ts). Named exports per method.",
+    "body": [
+      "export async function GET(request: Request, { params }: { params: Record<string, string> }) {",
+      "  return Response.json({ ${1:ok}: true });",
+      "}"
+    ]
+  },
+  "webjs layout": {
+    "prefix": "wjlayout",
+    "description": "A layout (app/<segment>/layout.ts). Must embed children; only the root layout writes the html shell.",
+    "body": [
+      "import { html } from '@webjsdev/core';",
+      "",
+      "export default function ${1:Layout}({ children }: { children: unknown }) {",
+      "  return html`<main>\\${children}</main>`;",
+      "}"
+    ]
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "name": "webjs",
+  "displayName": "webjs",
+  "version": "0.1.0",
+  "description": "All-in-one webjs support: html/css template highlighting, language-service intelligence, snippets, and commands. No Lit extension required.",
+  "publisher": "webjsdev",
+  "private": true,
+  "type": "commonjs",
+  "main": "./src/extension.js",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "webjs",
+    "web components",
+    "html",
+    "css",
+    "ssr",
+    "lit",
+    "no-build"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webjsdev/webjs.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/webjsdev/webjs/tree/main/packages/vscode#readme",
+  "bugs": "https://github.com/webjsdev/webjs/issues",
+  "galleryBanner": {
+    "color": "#0b0b0c",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
+  "contributes": {
+    "typescriptServerPlugins": [
+      {
+        "name": "@webjsdev/ts-plugin",
+        "enableForWorkspaceTypeScriptVersions": true
+      }
+    ],
+    "grammars": [
+      {
+        "injectTo": [
+          "source.js",
+          "source.jsx",
+          "source.js.jsx",
+          "source.ts",
+          "source.tsx"
+        ],
+        "scopeName": "inline.webjs.html",
+        "path": "./syntaxes/webjs-html.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.html": "html",
+          "meta.embedded.block.css": "css",
+          "source.css": "css"
+        }
+      },
+      {
+        "injectTo": [
+          "source.js",
+          "source.jsx",
+          "source.js.jsx",
+          "source.ts",
+          "source.tsx"
+        ],
+        "scopeName": "inline.webjs.css",
+        "path": "./syntaxes/webjs-css.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.css": "css"
+        }
+      },
+      {
+        "injectTo": [
+          "source.js",
+          "source.jsx",
+          "source.js.jsx",
+          "source.ts",
+          "source.tsx"
+        ],
+        "scopeName": "inline.webjs.svg",
+        "path": "./syntaxes/webjs-svg.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.svg": "xml"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "typescript",
+        "path": "./snippets/webjs.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/webjs.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "webjs.check",
+        "title": "webjs: Run check"
+      },
+      {
+        "command": "webjs.create",
+        "title": "webjs: Create a new app"
+      },
+      {
+        "command": "webjs.docs",
+        "title": "webjs: Open documentation"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "node scripts/package.mjs package",
+    "publish:vsce": "node scripts/package.mjs publish:vsce",
+    "publish:ovsx": "npm run package && npx --yes ovsx publish webjs.vsix"
+  },
+  "dependencies": {
+    "@webjsdev/ts-plugin": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
+  }
+}
