@@ -10,7 +10,7 @@ Installing this package gives you the `webjs` command.
 Install once, globally:
 
 ```sh
-npm i -g @webjsdev/cli
+npm i -g webjsdev
 ```
 
 Then scaffold a new app anywhere:

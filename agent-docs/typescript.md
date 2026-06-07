@@ -333,10 +333,10 @@ Every feature is gated on import-graph reachability: a tag is recognized only if
 
 ### The `webjs` VSCode extension (recommended over a manual tsconfig plugin)
 
-The `webjs` extension (`packages/vscode`, on the VS Marketplace and Open VSX) is the all-in-one editor setup. It bundles the tsserver plugin and auto-registers it via `contributes.typescriptServerPlugins`, so you get the intelligence above **without editing `tsconfig.json`**, plus:
+The `webjs` extension (`packages/editors/vscode`, on the VS Marketplace and Open VSX) is the all-in-one editor setup. It bundles the tsserver plugin and auto-registers it via `contributes.typescriptServerPlugins`, so you get the intelligence above **without editing `tsconfig.json`**, plus:
 
 - `` html` `` / `` css` `` / `` svg` `` template highlighting via original TextMate injection grammars (no separate Lit / lit-html extension needed).
 - Snippets for the common recipes (`wjpage`, `wjcomponent`, `wjaction`, and more).
 - Commands (`webjs: Run check`, `webjs: Create a new app`, `webjs: Open documentation`).
 
-It works in VSCode and its forks (Cursor, Antigravity, Windsurf, VSCodium), which pull from Open VSX. The bundled plugin is standalone (no Lit dependency), so it is the whole webjs language service. Install via the Extensions view (search "webjs"), or for editors without a UI, `code --install-extension webjs.vsix`. **Neovim** has its own plugin, `webjs.nvim` (`packages/nvim`, install `webjsdev/webjs.nvim` via lazy.nvim / packer): treesitter `html` / `css` / `svg` template highlighting plus the same tsserver plugin wired through `ts_ls`. JetBrains uses the manual `tsconfig.json` `plugins` entry above.
+It works in VSCode and its forks (Cursor, Antigravity, Windsurf, VSCodium), which pull from Open VSX. The bundled plugin is standalone (no Lit dependency), so it is the whole webjs language service. Install via the Extensions view (search "webjs"), or for editors without a UI, `code --install-extension webjs.vsix`. **Neovim** has its own plugin, `webjs.nvim` (`packages/editors/nvim`, install `webjsdev/webjs.nvim` via lazy.nvim / packer): treesitter `html` / `css` / `svg` template highlighting plus the same tsserver plugin wired through `ts_ls`. JetBrains uses the manual `tsconfig.json` `plugins` entry above.

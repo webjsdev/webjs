@@ -6,7 +6,7 @@
  *
  * @webjsdev/ts-plugin is standalone, dependency-free plain CJS (#386), so we
  * copy its `package.json` + `src/` verbatim into
- *   packages/nvim/vendor/node_modules/@webjsdev/ts-plugin/
+ *   packages/editors/nvim/vendor/node_modules/@webjsdev/ts-plugin/
  * tsserver resolves a plugin as `<probeLocation>/node_modules/<name>`, so the
  * probe location handed to ts_ls is `<plugin-root>/vendor` (see
  * lua/webjs/init.lua `bundled_location`).
@@ -15,8 +15,8 @@
  * repo's root .gitignore excludes. The files are committed anyway via
  * `git add -f` (once tracked, git keeps staging their changes regardless of
  * .gitignore). The standalone webjs.nvim repo (a subtree split of
- * packages/nvim) ships them as ordinary files. Re-run this whenever
- * `packages/ts-plugin/src` changes, then `git add -f packages/nvim/vendor`.
+ * packages/editors/nvim) ships them as ordinary files. Re-run this whenever
+ * `packages/editors/ts-plugin/src` changes, then `git add -f packages/editors/nvim/vendor`.
  * `test/vendor-sync.test.mjs` fails if the committed copy drifts from source.
  */
 import { cpSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
@@ -34,4 +34,4 @@ cpSync(resolve(SRC, 'src'), resolve(DEST, 'src'), { recursive: true });
 copyFileSync(resolve(SRC, 'package.json'), resolve(DEST, 'package.json'));
 
 console.log(`[vendor] copied @webjsdev/ts-plugin src + package.json -> ${DEST}`);
-console.log('[vendor] remember: git add -f packages/nvim/vendor  (node_modules is gitignored)');
+console.log('[vendor] remember: git add -f packages/editors/nvim/vendor  (node_modules is gitignored)');

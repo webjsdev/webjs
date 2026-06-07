@@ -92,7 +92,7 @@ file exists and is consistent, converts each grammar `begin` pattern to
 a JS RegExp and asserts it matches the real `` tag` `` forms while
 rejecting look-alikes (`` nothtml` ``), and runs `build.mjs` to prove
 the vendored plugin is self-contained and Lit-free. Run from the repo
-root via `npm test` (picked up under `packages/vscode/test`).
+root via `npm test` (picked up under `packages/editors/vscode/test`).
 
 Full per-feature behaviour of the tsserver plugin itself lives in
 [`../ts-plugin/AGENTS.md`](../ts-plugin/AGENTS.md).

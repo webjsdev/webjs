@@ -1,5 +1,5 @@
 -- Headless self-test for webjs.nvim (Phase 4 of #381). Run via
---   nvim --headless -l packages/nvim/test/selftest.lua
+--   nvim --headless -l packages/editors/nvim/test/selftest.lua
 -- Exits non-zero (`:cq`) on any failure so a CI wrapper can detect it.
 
 local fail = 0

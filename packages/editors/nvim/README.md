@@ -90,10 +90,10 @@ require('webjs').setup({
 
 ## Development
 
-This plugin is developed in the webjs monorepo at `packages/nvim/` and
+This plugin is developed in the webjs monorepo at `packages/editors/nvim/` and
 published to the standalone `webjsdev/webjs.nvim` repo for lazy.nvim / packer
 discovery (see `PUBLISHING.md`). The headless test suite is
-`test/selftest.lua` (run `nvim --headless -l packages/nvim/test/selftest.lua`),
+`test/selftest.lua` (run `nvim --headless -l packages/editors/nvim/test/selftest.lua`),
 wrapped by `test/nvim.test.mjs` for the repo's `npm test`.
 
 License: MIT.

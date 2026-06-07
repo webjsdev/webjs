@@ -23,17 +23,29 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 function declaredBinFiles() {
   const out = [];
   const pkgsDir = join(ROOT, 'packages');
-  for (const name of readdirSync(pkgsDir)) {
+  // Each `packages/<x>` and each grouped `packages/<group>/<x>` (e.g.
+  // packages/wrappers/create-webjs after #402) is a candidate package dir.
+  const candidates = [];
+  for (const name of readdirSync(pkgsDir, { withFileTypes: true })) {
+    if (!name.isDirectory()) continue;
+    candidates.push(posix.join('packages', name.name));
+    for (const sub of readdirSync(join(pkgsDir, name.name), { withFileTypes: true })) {
+      if (sub.isDirectory() && sub.name !== 'node_modules') {
+        candidates.push(posix.join('packages', name.name, sub.name));
+      }
+    }
+  }
+  for (const dir of candidates) {
     let pkg;
     try {
-      pkg = JSON.parse(readFileSync(join(pkgsDir, name, 'package.json'), 'utf8'));
+      pkg = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8'));
     } catch {
       continue; // not a package dir
     }
     if (!pkg.bin) continue;
     const targets = typeof pkg.bin === 'string' ? [pkg.bin] : Object.values(pkg.bin);
     for (const rel of targets) {
-      out.push(posix.join('packages', name, rel));
+      out.push(posix.join(dir, rel));
     }
   }
   return out;

@@ -43,11 +43,11 @@ dependencies.
 
 ## Releasing a version
 
-1. Bump `version` in `packages/vscode/package.json` (the pre-commit hook
+1. Bump `version` in `packages/editors/vscode/package.json` (the pre-commit hook
    skips this package's changelog, so no changelog file is generated).
 2. Build + package + publish to both registries:
    ```sh
-   cd packages/vscode
+   cd packages/editors/vscode
 
    # VS Marketplace (builds the vendored plugin + packages from a clean
    # staging dir, then uploads):

@@ -29,9 +29,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/vscode"
+    "directory": "packages/editors/vscode"
   },
-  "homepage": "https://github.com/webjsdev/webjs/tree/main/packages/vscode#readme",
+  "homepage": "https://github.com/webjsdev/webjs/tree/main/packages/editors/vscode#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",
   "galleryBanner": {
     "color": "#0b0b0c",
