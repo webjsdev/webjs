@@ -1,0 +1,79 @@
+*webjs.txt*  Neovim support for webjs apps
+
+==============================================================================
+CONTENTS                                                          *webjs-contents*
+
+  1. Introduction ......................... |webjs-introduction|
+  2. Requirements ......................... |webjs-requirements|
+  3. Setup ................................ |webjs-setup|
+  4. Commands ............................. |webjs-commands|
+  5. LSP intelligence ..................... |webjs-lsp|
+  6. Health ............................... |webjs-health|
+
+==============================================================================
+1. INTRODUCTION                                               *webjs-introduction*
+
+webjs.nvim is the Neovim counterpart to the webjs VS Code extension. It adds
+in-template highlighting for the `html` / `css` / `svg` tagged templates webjs
+uses, and surfaces the standalone @webjsdev/ts-plugin language service plus a
+`webjs check` diagnostics source.
+
+Highlighting works as soon as the plugin is on the runtimepath; the treesitter
+injection queries under queries/ are auto-loaded. No Lit plugin is required.
+
+==============================================================================
+2. REQUIREMENTS                                               *webjs-requirements*
+
+- Neovim 0.10+
+- Treesitter parsers: typescript, javascript, html, css (svg optional).
+  Install with nvim-treesitter: `:TSInstall typescript javascript html css`
+- For intelligence: Node 24+, typescript and @webjsdev/ts-plugin in the app,
+  and a tsserver LSP client (ts_ls or typescript-tools.nvim).
+
+Run `:checkhealth webjs` to verify.
+
+==============================================================================
+3. SETUP                                                             *webjs-setup*
+
+>lua
+  require('webjs').setup({
+    cmd = 'webjs',   -- the webjs CLI used by :WebjsCheck
+  })
+<
+setup() is optional: it only registers the user commands. Highlighting needs
+no setup() call.
+
+==============================================================================
+4. COMMANDS                                                       *webjs-commands*
+
+                                                                    *:WebjsCheck*
+:WebjsCheck             Run `webjs check --json` in the current directory and
+                        load the violations into |vim.diagnostic| and the
+                        |quickfix| list. Open it with |:copen|.
+
+==============================================================================
+5. LSP INTELLIGENCE                                                    *webjs-lsp*
+
+@webjsdev/ts-plugin is standalone (no Lit dependency). ts_ls loads it from the
+app's tsconfig.json `plugins`. To load it without editing tsconfig, merge it
+into your ts_ls init_options:
+
+>lua
+  require('lspconfig').ts_ls.setup({
+    init_options = require('webjs').with_tsserver_plugin(),
+  })
+<
+                                                  *webjs.with_tsserver_plugin()*
+require('webjs').with_tsserver_plugin({init_options}, {root})
+                        Return {init_options} with the @webjsdev/ts-plugin
+                        entry merged into `plugins` (idempotent). {root}
+                        defaults to the cwd.
+
+==============================================================================
+6. HEALTH                                                           *webjs-health*
+
+                                                              *:checkhealth-webjs*
+`:checkhealth webjs` verifies Node 24+, the webjs CLI, and the treesitter
+parsers the injection queries depend on.
+
+vim:tw=78:ts=8:ft=help:norl:
