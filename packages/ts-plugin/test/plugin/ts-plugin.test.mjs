@@ -71,6 +71,16 @@ function offsetOf(file, needle) {
   return i;
 }
 
+test('the plugin is standalone: no ts-lit-plugin dependency', () => {
+  // Phase 3 (#386) removed the ts-lit-plugin runtime dependency. The plugin
+  // must declare no dependencies and its source must never require it (a
+  // historical mention in a comment is fine; an actual require is not).
+  const pkg = require('../../package.json');
+  assert.ok(!pkg.dependencies, 'no runtime dependencies');
+  const src = require('node:fs').readFileSync(require.resolve('../../src/index.js'), 'utf8');
+  assert.ok(!/require\(\s*['"`]ts-lit-plugin['"`]\s*\)/.test(src), 'source does not require ts-lit-plugin');
+});
+
 test('decorates the host service without crashing on a minimal info object', () => {
   // The suite passes a deliberately partial `info` (minimal logger, no
   // serverHost data). The decorator must never throw; LS methods stay

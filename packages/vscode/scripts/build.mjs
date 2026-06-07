@@ -10,12 +10,11 @@
  * written to `node_modules/@webjsdev/ts-plugin/` as REAL files, then package
  * with `--no-dependencies` so vsce ships exactly that and nothing else.
  *
- * `ts-lit-plugin` and `typescript` are left external on purpose. The plugin's
- * `require('ts-lit-plugin')` is wrapped in a graceful fallback (see
- * packages/ts-plugin/src/index.js), so with neither present it degrades to the
- * bare webjs language service: webjs-aware go-to-definition, attribute
- * completion from `static properties`, and tag diagnostics, with NO Lit
- * dependency. `typescript` is provided by the user's tsserver at runtime.
+ * The plugin is standalone (no Lit dependency; the ts-lit-plugin reliance was
+ * removed in Phase 3, #386), so the bundle is just the webjs language service:
+ * go-to-definition, binding-aware completions, in-template diagnostics, and
+ * hover. `typescript` is left external because it is provided by the user's
+ * tsserver at runtime.
  */
 import { build } from 'esbuild';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -40,9 +39,8 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: 'node18',
-  // typescript: provided by the host tsserver. ts-lit-plugin: intentionally
-  // absent so the plugin runs as the bare, Lit-free webjs language service.
-  external: ['typescript', 'typescript/lib/tsserverlibrary', 'ts-lit-plugin'],
+  // typescript is provided by the host tsserver, never bundled.
+  external: ['typescript', 'typescript/lib/tsserverlibrary'],
   logLevel: 'info',
 });
 
