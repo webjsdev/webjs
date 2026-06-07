@@ -586,16 +586,9 @@ async function collectMetadata(route, ctx, dev) {
  * @returns {{ head: string, body: string }}
  */
 function hoistHeadTags(headHtml, bodyHtml) {
-  const hoisted = [];
-  // <script>…</script> and <style>…</style> are paired; <link …> is void.
-  const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
-
-  let remaining = bodyHtml;
-  let m;
-  while ((m = re.exec(remaining)) !== null) {
-    hoisted.push(m[1]);
-    remaining = remaining.slice(m[0].length);
-  }
+  // Shares the leading-run scanner (comment-skipping included) with the
+  // streaming path so both hoist identically. See collectHoistedHeadTags.
+  const { tags: hoisted, body: remaining } = collectHoistedHeadTags(bodyHtml);
   if (!hoisted.length) return { head: headHtml, body: bodyHtml };
   const newHead = headHtml.replace('</head>', hoisted.join('\n') + '\n</head>');
   return { head: newHead, body: remaining };
@@ -744,14 +737,33 @@ function wrapInDocument(body, opts) {
  */
 function collectHoistedHeadTags(bodyHtml) {
   const tags = [];
-  const re = /^\s*(<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
+  // <script>…</script> and <style>…</style> are paired; <link …> is void.
+  // A plain HTML comment (<!-- … -->) is consumed but NOT hoisted, so a
+  // comment interleaved with head-bound tags (e.g. "<!-- Self-hosted fonts -->"
+  // between a favicon <link> and the stylesheet <link>) does not terminate
+  // the leading run and strand the stylesheet in <body>, which caused FOUC
+  // because a <link rel="stylesheet"> in <body> is not reliably
+  // render-blocking (#406). The `(?!/?wj:)` guard exempts client-router
+  // markers (<!--wj:children:…-->, <!--/wj:children-->) so a layout that
+  // renders children directly after its head tags still terminates the run
+  // there rather than swallowing the nesting marker.
+  const re =
+    /^\s*(<!--(?!\/?wj:)[\s\S]*?-->|<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
   let remaining = bodyHtml;
+  // `body` only advances to just-past the LAST hoisted head tag. Comments
+  // are scanned through (so they don't terminate the run) but a comment that
+  // trails the final head tag stays in the body rather than being dropped.
+  let body = bodyHtml;
   let m;
   while ((m = re.exec(remaining)) !== null) {
-    tags.push(m[1]);
+    const token = m[1];
     remaining = remaining.slice(m[0].length);
+    if (!token.startsWith('<!--')) {
+      tags.push(token);
+      body = remaining;
+    }
   }
-  return { tags, body: remaining };
+  return { tags, body };
 }
 
 /**
