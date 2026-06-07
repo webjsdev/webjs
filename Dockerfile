@@ -31,7 +31,7 @@ COPY package.json package-lock.json ./
 COPY packages/cli/package.json                       ./packages/cli/
 COPY packages/core/package.json                      ./packages/core/
 COPY packages/server/package.json                    ./packages/server/
-COPY packages/ts-plugin/package.json                 ./packages/ts-plugin/
+COPY packages/editors/ts-plugin/package.json         ./packages/editors/ts-plugin/
 COPY packages/ui/package.json                        ./packages/ui/
 COPY packages/ui/packages/registry/package.json      ./packages/ui/packages/registry/
 COPY packages/ui/packages/website/package.json       ./packages/ui/packages/website/
