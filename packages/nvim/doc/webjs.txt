@@ -27,8 +27,9 @@ injection queries under queries/ are auto-loaded. No Lit plugin is required.
 - Neovim 0.10+
 - Treesitter parsers: typescript, javascript, html, css (svg optional).
   Install with nvim-treesitter: `:TSInstall typescript javascript html css`
-- For intelligence: Node 24+, typescript and @webjsdev/ts-plugin in the app,
-  and a tsserver LSP client (ts_ls or typescript-tools.nvim).
+- For intelligence: Node 24+, typescript in the app, and a tsserver LSP
+  client (ts_ls or typescript-tools.nvim). @webjsdev/ts-plugin is bundled
+  inside this plugin (works with no app dependency).
 
 Run `:checkhealth webjs` to verify.
 
@@ -54,20 +55,24 @@ no setup() call.
 ==============================================================================
 5. LSP INTELLIGENCE                                                    *webjs-lsp*
 
-@webjsdev/ts-plugin is standalone (no Lit dependency). ts_ls loads it from the
-app's tsconfig.json `plugins`. To load it without editing tsconfig, merge it
-into your ts_ls init_options:
+webjs.nvim BUNDLES @webjsdev/ts-plugin (standalone, no Lit dependency). Wire it
+into ts_ls with the helper, which points tsserver at the bundled copy via its
+plugin probe location:
 
 >lua
   require('lspconfig').ts_ls.setup({
     init_options = require('webjs').with_tsserver_plugin(),
   })
 <
+That works with no @webjsdev/ts-plugin in the app. If the app also wires it via
+tsconfig.json `plugins`, tsserver dedupes by name, so there is no double-load.
+
                                                   *webjs.with_tsserver_plugin()*
-require('webjs').with_tsserver_plugin({init_options}, {root})
-                        Return {init_options} with the @webjsdev/ts-plugin
-                        entry merged into `plugins` (idempotent). {root}
-                        defaults to the cwd.
+require('webjs').with_tsserver_plugin({init_options})
+                        Return {init_options} with the bundled
+                        @webjsdev/ts-plugin merged into `plugins` (idempotent),
+                        its `location` set to the copy vendored inside
+                        webjs.nvim. No app dependency required.
 
 ==============================================================================
 6. HEALTH                                                           *webjs-health*

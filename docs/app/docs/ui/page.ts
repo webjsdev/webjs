@@ -19,8 +19,9 @@ export default function UiDocs() {
     <h2>For webjs users</h2>
     <p>
       Nothing to install. <code>@webjsdev/ui</code> is a hard dependency of <code>@webjsdev/cli</code>, so a global
-      webjs install already includes it. Apps scaffolded with <code>webjs create</code> list it in
-      <code>devDependencies</code> too.
+      webjs install already includes it, and <code>webjs ui add</code> resolves the kit from there. A
+      scaffolded app does NOT pin <code>@webjsdev/ui</code>: <code>webjs ui add</code> copies the component
+      source into <code>components/ui/</code> (those files import <code>@webjsdev/core</code>, not the kit).
     </p>
     <pre>webjs ui init
 webjs ui add button card dialog input label</pre>

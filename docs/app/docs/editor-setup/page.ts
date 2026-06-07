@@ -13,7 +13,15 @@ export default function EditorSetup() {
       <p>The rest of this page is for wiring the plugin by hand and for understanding what it does.</p>
     </div>
 
-    <p><strong><code>@webjsdev/ts-plugin</code> is editor-only, not required for the framework to run.</strong> It is <strong>standalone</strong> as of <code>@webjsdev/ts-plugin@0.5.0</code>: its own <code>html</code>-template parser drives all the in-template intelligence, with no Lit dependency. The scaffold wires it up automatically.</p>
+    <p><strong><code>@webjsdev/ts-plugin</code> is editor-only, not required for the framework to run.</strong> It is <strong>standalone</strong> as of <code>@webjsdev/ts-plugin@0.5.0</code>: its own <code>html</code>-template parser drives all the in-template intelligence, with no Lit dependency.</p>
+
+    <div class="callout">
+      <p><strong>Two ways the intelligence reaches your editor</strong> (you can have both; <code>tsserver</code> dedupes, so there's no conflict):</p>
+      <ul>
+        <li><strong>From the app's <code>node_modules</code></strong>: the scaffold lists <code>{ "name": "@webjsdev/ts-plugin" }</code> in <code>tsconfig.json</code>, and tsserver editors load it from <code>node_modules</code> after <code>npm install</code>. This gives the intelligence with <em>no editor plugin installed</em> (VS Code with "Use Workspace Version", Neovim <code>ts_ls</code>, JetBrains). It does NOT provide template <strong>highlighting</strong> (a tsserver plugin can't).</li>
+        <li><strong>From the editor plugin</strong>: the <code>webjs</code> VS Code extension and <code>webjs.nvim</code> <em>bundle</em> the plugin, so the intelligence works even <em>before <code>npm install</code></em>, and they add the template <strong>highlighting</strong> that <code>node_modules</code> can't.</li>
+      </ul>
+    </div>
 
     <p>This page covers two layers of intelligence:</p>
     <ol>

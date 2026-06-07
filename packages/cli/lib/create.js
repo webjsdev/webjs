@@ -315,14 +315,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // assertNoA11yViolations() test helper from @webjsdev/core/testing.
       // Test-only: dynamically imported, never shipped to the app runtime.
       'axe-core': '^4.10.0',
-      // tsserver plugin for editor intelligence inside html`` templates.
-      // @webjsdev/ts-plugin is standalone (no Lit dependency): one plugin
-      // entry in tsconfig (see below).
+      // tsserver plugin, wired into tsconfig below. Gives the language
+      // INTELLIGENCE (go-to-def, completions, diagnostics, hover inside html``
+      // templates) in any tsserver editor with NO editor plugin installed,
+      // because editors load tsconfig plugins from node_modules. The `webjs`
+      // VS Code extension and webjs.nvim ALSO bundle this plugin (so it works
+      // before `npm install` too, and adds template HIGHLIGHTING, which a
+      // tsserver plugin can't provide); tsserver dedupes by name, so loading
+      // it both ways is a no-op. Standalone, no Lit dependency. Editor-only.
       '@webjsdev/ts-plugin': 'latest',
-      // AI-first component library CLI, preinstalled so `webjs ui add button`
-      // works immediately after scaffold. Users can remove if they prefer
-      // to add it later.
-      '@webjsdev/ui': 'latest',
+      // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit is
+      // shadcn-style copy-in: `webjs ui add <name>` copies component source
+      // into components/ui/ (they import @webjsdev/core, not the kit), and the
+      // CLI resolves @webjsdev/ui from its own install.
     },
   }, null, 2) + '\n');
 

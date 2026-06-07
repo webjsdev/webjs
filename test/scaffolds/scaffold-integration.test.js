@@ -188,7 +188,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);
     assert.ok(pkg.dependencies['@prisma/client']);
+    // ts-plugin stays: it gives editor INTELLIGENCE from node_modules via the
+    // tsconfig plugin (any tsserver editor, no editor plugin needed).
     assert.ok(pkg.devDependencies['@webjsdev/ts-plugin']);
+    // @webjsdev/ui is NOT pinned (#399): shadcn-style copy-in; `webjs ui add`
+    // resolves the kit from the CLI, so the app needs no pin.
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    assert.ok(!allDeps['@webjsdev/ui'], 'no @webjsdev/ui in a scaffolded app');
 
     // tsconfig.json has the editor plugin, standalone (no ts-lit-plugin entry).
     const tsconfig = JSON.parse(readFileSync(join(appDir, 'tsconfig.json'), 'utf8'));
