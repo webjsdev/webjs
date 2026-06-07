@@ -2,10 +2,13 @@
 
 A **tsserver plugin** that gives editors (VS Code, Neovim, JetBrains)
 webjs-aware intelligence inside `` html`` `` tagged templates:
-go-to-definition on custom-element tag names, CSS class resolution,
-attribute auto-complete sourced from `static properties`, and
-suppression of `ts-lit-plugin`'s "Unknown tag / attribute" diagnostics
-for tags any reachable file registers via `Class.register('tag')`.
+go-to-definition on custom-element tag names / attributes / CSS classes,
+binding-aware completions, in-template diagnostics, and hover, all driven
+by webjs's OWN HTML-in-template parser. As of Phase 2 (#385) the plugin
+provides this intelligence itself and no longer depends on `ts-lit-plugin`
+(it still wraps it when present, but degrades to the full webjs language
+service when it is absent, which is how the `webjs` VSCode extension bundles
+it). Phase 3 (#386) removes the `ts-lit-plugin` dependency entirely.
 
 Framework-wide rules (workflow, JSDoc-in-`packages/`, no-build,
 commit conventions, autonomous-mode behaviour, scaffold rules) live
@@ -16,32 +19,51 @@ This file only covers what's specific to `@webjsdev/ts-plugin`.
 
 ## Role
 
-The plugin **wraps** `ts-lit-plugin`. Order in `tsconfig.json` matters:
-list `ts-lit-plugin` first, `@webjsdev/ts-plugin` second. The webjs
-plugin sits on top and:
+The plugin owns webjs's in-template intelligence. When `ts-lit-plugin` is
+also installed it **wraps** it (list `ts-lit-plugin` first in
+`tsconfig.json`, `@webjsdev/ts-plugin` second), layering on top; when it is
+absent (the VSCode-extension bundle, and after Phase 3) the same features
+run standalone. The plugin:
 
 1. Scans the program at boot for `Class.register('tag', …)` /
-   `customElements.define('tag', Class)` registrations.
+   `customElements.define('tag', Class)` registrations into a registry of
+   per-member records (`{ propName, attrName, state }`, where `attrName` is
+   the hyphenated form of `propName`).
 2. For every `.ts` / `.js` file being edited, computes its **import
    graph** transitively. Only tags whose registering file is reachable
-   from the current file count as "available".
-3. Re-routes go-to-definition on custom-element tag names inside
-   `html\`\`` templates to the registered class.
-4. Filters `ts-lit-plugin`'s "Unknown tag" / "Unknown attribute"
-   diagnostics so registered webjs elements aren't red-squiggled.
-5. Adds attribute completions from the registered class's
-   `static properties = { … }` map.
-6. Type-checks interpolated attribute values
-   (`<my-counter count=\${expr}>`) against the declared property type
-   from `declare propName: T`.
+   from the current file count as "available". This gates every feature.
+3. Parses the markup inside each `` html`` `` template into an AST
+   (`src/template/parse.js`) with absolute source spans and binding-modifier
+   classification (`@event` / `.property` / `?boolean` / plain).
+4. **Go-to-definition** on a custom-element tag (→ class), an attribute /
+   property / event name (→ the `declare` member or `static properties`
+   key), and a CSS class inside `class="…"` (→ the `css\`\`` rule).
+5. **Completions**: reachable custom tag names after `<` / `</`, and
+   binding-aware attribute completions keyed by prefix (`.` → property
+   names, plain / `?` → hyphenated attribute names; `@event` is permissive).
+6. **Diagnostics**: incompatible-type bindings (plain / `.prop` / `@event`
+   callable), unquoted `@`/`.`/`?` bindings (invariant 4, code 9002), and
+   expressionless `.prop` bindings (code 9003). Deliberately NO blanket
+   unknown-tag / unknown-attribute (webjs has no element type map, so it
+   would false-positive on third-party customs).
+7. **Hover**: a tag shows its class; an attribute / property / event shows
+   its declared type.
+8. When `ts-lit-plugin` IS present, also filters its "Unknown tag /
+   attribute" diagnostics for reachable webjs tags (retired in Phase 3).
 
 ## Module map
 
 ```
 src/
-  index.js         The whole plugin. Single-file by design, since tsserver
-                   plugins are tiny by convention.
-README.md          User-facing setup instructions.
+  index.js            The language-service decorator: registry, reachability,
+                      completions, diagnostics, definitions, hover.
+  template/parse.js   The html`` HTML-in-template parser (length-preserving
+                      ${} masking → node/attr AST with absolute spans).
+test/plugin/
+  ts-plugin.test.mjs       Language-service behaviour (definitions, completions,
+                           diagnostics, hover) via a real in-memory tsserver.
+  template-parse.test.mjs  The parser in isolation.
+README.md                  User-facing setup instructions.
 ```
 
 ## Package-specific invariants
@@ -59,18 +81,27 @@ README.md          User-facing setup instructions.
    missing source file, type-checker quirk), fall back to passthrough.
    The user's editor must never break because of this plugin. Wrap risky
    logic in try/catch with a silent return.
-4. **Plugin order matters.** `ts-lit-plugin` first, then this one. Both
-   are installed by the scaffold's `tsconfig.json`. Documented in the
-   scaffold's `tsconfig.json` comment and in the framework AGENTS.md
-   "Editor setup" section.
+4. **Every feature works with `ts-lit-plugin` ABSENT.** The plugin's own
+   parser, completions, diagnostics, and hover never require it; the only
+   `ts-lit-plugin` coupling is the optional diagnostic-suppression in
+   `filterLitTagDiagnostics` when it happens to be installed. The `webjs`
+   VSCode extension bundles this plugin with `ts-lit-plugin` left external,
+   so anything you add MUST function standalone. When it IS used via
+   `tsconfig.json`, list `ts-lit-plugin` first, this one second.
+5. **No blanket unknown-tag / unknown-attribute diagnostics.** webjs has no
+   `HTMLElementTagNameMap`, so flagging an unrecognised tag/attribute would
+   false-positive on legitimate third-party custom elements. Only
+   zero-false-positive rules ship.
 
 ## Tests
 
 `packages/ts-plugin/test/plugin/ts-plugin.test.mjs` boots a real
-tsserver instance against fixture sources and asserts diagnostic
-and completion behaviour. Covers tag resolution, attribute
-completion, attribute-value type-check, import-graph gating, and
+tsserver instance against fixture sources and asserts definition,
+completion, diagnostic, and hover behaviour. Covers tag / attribute /
+CSS-class resolution, binding-aware completions (incl. hyphenation and
+`.prop` vs plain), the diagnostic rules, hover, import-graph gating, and
 the "lit-plugin diagnostic suppression only when imported" path.
+`template-parse.test.mjs` covers the parser in isolation.
 
 The file is `.mjs` because `@webjsdev/ts-plugin` itself is a
 CommonJS package (`"type": "commonjs"`); the test uses ESM

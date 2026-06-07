@@ -523,6 +523,159 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
   assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
 });
 
+test('a camelCase prop completes as a hyphenated attribute; state props are excluded', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box ></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
+  const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
+  assert.ok(names.includes('max-length'), `plain attr is hyphenated: ${JSON.stringify(names)}`);
+  assert.ok(!names.includes('maxLength'), 'camelCase prop is not offered as a plain attribute');
+  assert.ok(!names.includes('internal'), 'state prop has no attribute');
+});
+
+test('`.` triggers property-name completions (camelCase, includes state props)', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box .') + '<my-box .'.length;
+  const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
+  assert.ok(names.includes('maxLength'), `property binding uses prop name: ${JSON.stringify(names)}`);
+  assert.ok(names.includes('internal'), 'state props are valid .prop targets');
+});
+
+test('completes reachable custom-element tag names after `<`', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = {};\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my></my>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my') + '<my'.length;
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  const names = completions.entries.map((e) => e.name);
+  assert.ok(names.includes('my-box'), `expected tag completion: ${JSON.stringify(names)}`);
+});
+
+test('does not complete attributes for an UNREACHABLE (not imported) tag', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` + // NOT importing ./box.ts
+      `export default function P() {\n` +
+      `  return html\`<my-box ></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  const names = (completions?.entries || []).map((e) => e.name);
+  assert.ok(!names.includes('mode'), 'unreachable tag offers no webjs attributes');
+});
+
+/* ================================================================
+ * Hover + attribute go-to-definition inside html`` templates
+ * ================================================================ */
+
+test('go-to-definition on an attribute name resolves to the declared member', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number } };\n` +
+      `  declare maxLength: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box max-length=\${5}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', 'max-length') + 1;
+  const def = svc.getDefinitionAndBoundSpan('/page.ts', pos);
+  assert.ok(def && def.definitions.length === 1, 'resolves the attribute');
+  assert.equal(def.definitions[0].fileName, '/box.ts');
+  assert.equal(def.definitions[0].name, 'maxLength');
+  assert.equal(def.textSpan.length, 'max-length'.length);
+});
+
+test('hover on a custom-element tag shows its component class', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = {};\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box') + 2;
+  const qi = svc.getQuickInfoAtPosition('/page.ts', pos);
+  assert.ok(qi, 'returns quick info');
+  const text = qi.displayParts.map((p) => p.text).join('');
+  assert.ok(/my-box/.test(text) && /Box/.test(text), `unexpected hover: ${text}`);
+});
+
+test('hover on a property binding shows its declared type', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .count=\${1}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '.count') + 2;
+  const qi = svc.getQuickInfoAtPosition('/page.ts', pos);
+  assert.ok(qi, 'returns quick info');
+  const text = qi.displayParts.map((p) => p.text).join('');
+  assert.ok(/property/.test(text) && /count/.test(text) && /number/.test(text), `unexpected hover: ${text}`);
+});
+
 /* ================================================================
  * Attribute-value type-check on `<webjs-tag attr=${expr}>` interpolations
  * ================================================================ */
@@ -572,6 +725,107 @@ test('passes when interpolated value is assignable to declared string type', () 
   const diags = svc.getSemanticDiagnostics('/page.ts');
   const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
   assert.equal(ours.length, 0, `unexpected diagnostics: ${ours.map((d) => d.messageText).join('; ')}`);
+});
+
+test('flags an incompatible `.prop` binding against the declared property type', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const s: string = 'x';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .count=\${s}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1, `expected one .prop type diagnostic, got ${ours.length}`);
+  assert.ok(/property 'count'/.test(ours[0].messageText), `unexpected message: ${ours[0].messageText}`);
+});
+
+test('flags a quoted binding (invariant 4) as code 9002', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const fn = () => {};\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click="\${fn}"></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1);
+  assert.equal(ours[0].code, 9002);
+  assert.ok(/must be unquoted/.test(ours[0].messageText));
+});
+
+test('flags an expressionless `.prop` binding as code 9003', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { value: { type: String } };\n` +
+      `  declare value: string;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .value="hi"></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1);
+  assert.equal(ours[0].code, 9003);
+});
+
+test('flags a non-callable `@event` handler; accepts a function', () => {
+  const base =
+    `import { WebComponent } from '@webjsdev/core';\n` +
+    `export class Box extends WebComponent {\n` +
+    `  static properties = {};\n` +
+    `}\n` +
+    `Box.register('my-box');\n`;
+  const bad = makeService({
+    '/box.ts': base,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const notFn: number = 1;\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click=\${notFn}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const badOurs = bad.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(badOurs.length, 1, 'non-callable handler flagged');
+  assert.ok(/not callable/.test(badOurs[0].messageText));
+
+  const good = makeService({
+    '/box.ts': base,
+    '/ok.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const fn = (e: Event) => {};\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click=\${fn}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const goodOurs = good.getSemanticDiagnostics('/ok.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(goodOurs.length, 0, 'a function handler is accepted');
 });
 
 test('flags string-or-number against a string-literal-union type', () => {

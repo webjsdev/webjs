@@ -17,6 +17,8 @@
 
 /* eslint-disable no-restricted-syntax */
 
+const tpl = require('./template/parse.js');
+
 /**
  * TypeScript Language Service plugin factory.
  *
@@ -91,12 +93,28 @@ function init(modules) {
       try {
         return (
           webjsTagDefinition(info, fileName, position) ||
+          webjsAttrDefinition(info, fileName, position) ||
           webjsCssClassDefinition(info, fileName, position) ||
           upstream
         );
       } catch (e) {
         info.project.projectService.logger?.info?.(
           `@webjsdev/ts-plugin: getDefinitionAndBoundSpan threw: ${String(e)}`,
+        );
+        return upstream;
+      }
+    };
+
+    // Hover inside an html`` template: a custom-element tag shows its class,
+    // an attribute/property/event shows its declared type. Outside template
+    // markup (e.g. inside a `${}` hole) we defer to upstream/tsserver.
+    proxy.getQuickInfoAtPosition = (fileName, position) => {
+      const upstream = inner.getQuickInfoAtPosition(fileName, position);
+      try {
+        return webjsTemplateQuickInfo(info, fileName, position) || upstream;
+      } catch (e) {
+        info.project.projectService.logger?.info?.(
+          `@webjsdev/ts-plugin: getQuickInfoAtPosition threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -308,34 +326,276 @@ function init(modules) {
     const source = program.getSourceFile(fileName);
     if (!source) return undefined;
 
-    // Must be inside an html`` template, in an opening-tag attribute slot.
+    // Must be inside an html`` template.
     const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
     if (!templateExpr) return undefined;
-    const { rawText, startPos } = getTemplateText(templateExpr);
-    const offset = position - startPos;
-    if (offset < 0 || offset > rawText.length) return undefined;
-
-    const sanitised = stripHoles(rawText);
-    const tag = enclosingOpenTag(sanitised, offset);
-    if (!tag) return undefined;
+    const doc = tpl.parseTemplate(ts, templateExpr);
+    if (!doc) return undefined;
 
     const registry = buildRegistry(program);
-    const ref = registry.components.get(tag);
-    if (!ref || !ref.attributes || ref.attributes.length === 0) return undefined;
-
-    // Restrict to tags reachable from this file. Without the import,
-    // suggesting attributes would imply the element is usable here when
-    // it isn't.
+    if (registry.components.size === 0) return undefined;
     const reachable = collectReachableTags(program, source, registry);
+
+    const ctx = completionContext(doc, position);
+    if (!ctx) return undefined;
+
+    // Element-name completions after `<` / `</`: offer reachable custom tags.
+    if (ctx.kind === 'tag') {
+      const entries = [];
+      for (const tag of reachable) {
+        const ref = registry.components.get(tag);
+        if (!ref) continue;
+        entries.push({
+          name: tag,
+          kind: /** @type any */ (ts.ScriptElementKind).classElement,
+          kindModifiers: '',
+          sortText: '0',
+          labelDetails: { description: ref.className },
+        });
+      }
+      return entries.length ? entries : undefined;
+    }
+
+    // Attribute / binding completions inside an open custom-element tag.
+    const tag = ctx.node.tag;
+    if (!tag.includes('-')) return undefined;
+    const ref = registry.components.get(tag);
+    if (!ref) return undefined;
     if (!reachable.has(tag)) return undefined;
 
-    return ref.attributes.map((name) => ({
+    const desc = `<${tag}>`;
+    const mk = (name, kindKey) => ({
       name,
-      kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+      kind: /** @type any */ (ts.ScriptElementKind)[kindKey],
       kindModifiers: '',
       sortText: '0',
-      labelDetails: { description: `<${tag}>` },
-    }));
+      labelDetails: { description: desc },
+    });
+
+    // `.prop` -> property names; `?bool`/plain -> attribute names; `@event`
+    // is permissive (webjs has no declared event source) so we offer nothing
+    // rather than guess.
+    if (ctx.prefix === 'property') {
+      return ref.properties.map((p) => mk(p, 'memberVariableElement'));
+    }
+    if (ctx.prefix === 'event') return undefined;
+    // plain or `?bool`: attribute names (non-state props).
+    return ref.attributes.map((a) => mk(a, 'memberVariableElement'));
+  }
+
+  /**
+   * Classify the completion context at `position` inside a parsed template.
+   *
+   * @param {import('./template/parse.js').TemplateDocument} doc
+   * @param {number} position   Absolute source offset.
+   * @returns {{ kind: 'tag' } | { kind: 'attr', node: any, prefix: 'none'|'event'|'property'|'boolean' } | undefined}
+   */
+  function completionContext(doc, position) {
+    const rel = position - doc.startPos;
+    if (rel < 0 || rel > doc.masked.length) return undefined;
+    const m = doc.masked;
+
+    // Walk back over the partial word currently being typed.
+    let w = rel;
+    while (w > 0 && /[A-Za-z0-9_\-:.@?]/.test(m[w - 1])) w--;
+    const before = m[w - 1];
+    // Tag-name context: the partial is preceded by `<` or `</`.
+    if (before === '<' || (m[w - 1] === '/' && m[w - 2] === '<')) {
+      return { kind: 'tag' };
+    }
+
+    // Attribute context: cursor sits in an open tag's attribute area, not in
+    // a value. Find the node whose open-tag region contains `position`.
+    for (let idx = 0; idx < doc.nodes.length; idx++) {
+      const node = doc.nodes[idx];
+      const openEnd = node.openEnd ?? (doc.nodes[idx + 1]?.openStart ?? doc.startPos + doc.masked.length);
+      const tagNameEnd = node.tagSpan.start + node.tagSpan.length;
+      if (position <= tagNameEnd) continue; // in/Before the tag name itself.
+      if (position < node.openStart || position > openEnd) continue;
+      // Inside a quoted attribute value? Then it's not name-completion.
+      const inValue = node.attrs.some(
+        (a) => a.valueSpan && position >= a.valueSpan.start && position <= a.valueSpan.start + a.valueSpan.length,
+      );
+      if (inValue) return undefined;
+      // Determine the binding prefix of the partial word.
+      const first = m[w];
+      const prefix = first === '@' ? 'event' : first === '.' ? 'property' : first === '?' ? 'boolean' : 'none';
+      return { kind: 'attr', node, prefix };
+    }
+    return undefined;
+  }
+
+  /* ================================================================
+   * Resolver: attribute / property / event name → class member
+   * ================================================================ */
+
+  /**
+   * The `{ tag, attr, ref, member }` for an attribute name under the cursor
+   * inside a reachable webjs tag, or undefined.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   */
+  function attrUnderCursor(info, fileName, position) {
+    const program = info.languageService.getProgram();
+    if (!program) return undefined;
+    const source = program.getSourceFile(fileName);
+    if (!source) return undefined;
+    const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
+    if (!templateExpr) return undefined;
+    const doc = tpl.parseTemplate(ts, templateExpr);
+    if (!doc) return undefined;
+    const hit = tpl.attrNameAtOffset(doc, position);
+    if (!hit || !hit.node.isCustom) return undefined;
+
+    const registry = buildRegistry(program);
+    const ref = registry.components.get(hit.node.tag);
+    if (!ref) return undefined;
+    const reachable = collectReachableTags(program, source, registry);
+    if (!reachable.has(hit.node.tag)) return undefined;
+
+    const member =
+      hit.attr.modifier === 'property'
+        ? ref.members.find((mm) => mm.propName === hit.attr.name)
+        : ref.members.find((mm) => mm.attrName === hit.attr.name);
+    return { tag: hit.node.tag, attr: hit.attr, ref, member, program };
+  }
+
+  /**
+   * Go-to-definition on an attribute / property / event name: resolve to the
+   * class member (the `declare` field or the `static properties` key).
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   * @returns {import('typescript').DefinitionInfoAndBoundSpan | undefined}
+   */
+  function webjsAttrDefinition(info, fileName, position) {
+    const hit = attrUnderCursor(info, fileName, position);
+    if (!hit || !hit.member) return undefined;
+    const target = findMemberNameSpan(hit.program, hit.ref, hit.member.propName);
+    if (!target) return undefined;
+    return {
+      textSpan: hit.attr.nameSpan,
+      definitions: [
+        {
+          fileName: target.fileName,
+          textSpan: target.span,
+          kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+          name: hit.member.propName,
+          containerKind: /** @type any */ (ts.ScriptElementKind).classElement,
+          containerName: hit.ref.className,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Hover for a custom-element tag (its class) or an attribute / property /
+   * event (its declared type), inside an html`` template.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   * @returns {import('typescript').QuickInfo | undefined}
+   */
+  function webjsTemplateQuickInfo(info, fileName, position) {
+    const program = info.languageService.getProgram();
+    if (!program) return undefined;
+    const source = program.getSourceFile(fileName);
+    if (!source) return undefined;
+    const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
+    if (!templateExpr) return undefined;
+    const doc = tpl.parseTemplate(ts, templateExpr);
+    if (!doc) return undefined;
+
+    const registry = buildRegistry(program);
+    const reachable = collectReachableTags(program, source, registry);
+    const parts = (text) => [{ text, kind: 'text' }];
+
+    // Tag hover.
+    const tagHit = tpl.tagNameAtOffset(doc, position);
+    if (tagHit && tagHit.isCustom && reachable.has(tagHit.tag)) {
+      const ref = registry.components.get(tagHit.tag);
+      if (ref) {
+        return {
+          kind: /** @type any */ (ts.ScriptElementKind).classElement,
+          kindModifiers: '',
+          textSpan: tagHit.tagSpan,
+          displayParts: parts(`(webjs component) <${tagHit.tag}> → ${ref.className}`),
+          documentation: [],
+        };
+      }
+    }
+
+    // Attribute / property / event hover.
+    const hit = attrUnderCursor(info, fileName, position);
+    if (hit && hit.member) {
+      const kindWord =
+        hit.attr.modifier === 'event' ? 'event' : hit.attr.modifier === 'property' ? 'property' : 'attribute';
+      const checker = program.getTypeChecker();
+      const t = resolvePropType(hit.program, hit.ref, hit.member.propName, checker);
+      const typeStr = t ? `: ${checker.typeToString(t)}` : '';
+      const shown = hit.attr.modifier === 'property' ? hit.member.propName : hit.member.attrName;
+      return {
+        kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+        kindModifiers: '',
+        textSpan: hit.attr.nameSpan,
+        displayParts: parts(`(${kindWord}) ${shown}${typeStr} on <${hit.tag}>`),
+        documentation: [],
+      };
+    }
+    return undefined;
+  }
+
+  /**
+   * The source location of a class member's name (the `declare propName`
+   * field if present, else the `static properties` key), for go-to-definition.
+   *
+   * @param {import('typescript').Program} program
+   * @param {ComponentRef} ref
+   * @param {string} propName
+   * @returns {{ fileName: string, span: import('typescript').TextSpan } | undefined}
+   */
+  function findMemberNameSpan(program, ref, propName) {
+    const compSf = program.getSourceFile(ref.fileName);
+    if (!compSf) return undefined;
+    const cls = findClassDeclaration(compSf, ref.className);
+    if (!cls) return undefined;
+    // Prefer the typed `declare propName: T` field.
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name) continue;
+      const isStatic = (member.modifiers || []).some((mod) => mod.kind === ts.SyntaxKind.StaticKeyword);
+      if (isStatic) continue;
+      const nm =
+        ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name) ? member.name.text : undefined;
+      if (nm === propName) {
+        return {
+          fileName: ref.fileName,
+          span: { start: member.name.getStart(compSf), length: member.name.getWidth(compSf) },
+        };
+      }
+    }
+    // Fall back to the `static properties` key.
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name) continue;
+      if (!ts.isIdentifier(member.name) || member.name.text !== 'properties') continue;
+      const init = member.initializer;
+      if (!init || !ts.isObjectLiteralExpression(init)) continue;
+      for (const prop of init.properties) {
+        if (!prop.name) continue;
+        const nm =
+          ts.isIdentifier(prop.name) || ts.isStringLiteralLike(prop.name) ? prop.name.text : undefined;
+        if (nm === propName) {
+          return {
+            fileName: ref.fileName,
+            span: { start: prop.name.getStart(compSf), length: prop.name.getWidth(compSf) },
+          };
+        }
+      }
+    }
+    return undefined;
   }
 
   /* ================================================================
@@ -628,17 +888,37 @@ function init(modules) {
 
   /**
    * @typedef {{
+   *   propName: string,
+   *   attrName: string,
+   *   state: boolean,
+   * }} PropMember
+   *   One reactive property. `propName` is the `static properties` key (the
+   *   `.prop` binding name, camelCase); `attrName` is its hyphenated HTML
+   *   attribute name (the plain / `?bool` binding name); `state: true` means
+   *   it has NO attribute (excluded from `observedAttributes`).
+   *
+   * @typedef {{
    *   fileName: string,
    *   className: string,
    *   classNameSpan: import('typescript').TextSpan,
    *   attributes: string[],
+   *   properties: string[],
+   *   members: PropMember[],
    * }} ComponentRef
+   *   `attributes` = hyphenated attribute names of non-state props (plain /
+   *   `?bool` binding targets). `properties` = property names of ALL props
+   *   (`.prop` binding targets). `members` = the full records.
    *
    * @typedef {{
    *   fileName: string,
    *   span: import('typescript').TextSpan,
    * }} CssClassRef
    */
+
+  /** Mirror of `@webjsdev/core`'s property -> attribute naming. */
+  function hyphenate(s) {
+    return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+  }
 
   /**
    * Build or return cached tag → ComponentRef and class-name → CssClassRef
@@ -698,7 +978,7 @@ function init(modules) {
     /** @type {Map<string, ComponentRef>} */
     const out = new Map();
 
-    /** @type {Map<string, { span: import('typescript').TextSpan, attrs: string[] }>} */
+    /** @type {Map<string, { span: import('typescript').TextSpan, members: PropMember[] }>} */
     const localClasses = new Map();
     function indexClasses(node) {
       if (ts.isClassDeclaration(node) && node.name) {
@@ -707,7 +987,7 @@ function init(modules) {
             start: node.name.getStart(sf),
             length: node.name.getWidth(sf),
           },
-          attrs: extractStaticProperties(node),
+          members: extractStaticProperties(node),
         });
       }
       ts.forEachChild(node, indexClasses);
@@ -724,7 +1004,9 @@ function init(modules) {
               fileName: sf.fileName,
               className: match.className,
               classNameSpan: local.span,
-              attributes: local.attrs,
+              attributes: local.members.filter((m) => !m.state).map((m) => m.attrName),
+              properties: local.members.map((m) => m.propName),
+              members: local.members,
             });
           }
         }
@@ -736,15 +1018,16 @@ function init(modules) {
   }
 
   /**
-   * Read the keys of a class's `static properties = { … }` initializer.
-   * webjs maps each key to a reactive property + matching attribute, so
-   * the keys are exactly the attribute set we want to suggest.
+   * Read a class's `static properties = { … }` initializer into per-member
+   * records. webjs maps each key to a reactive property (the `.prop` binding
+   * name) plus, unless `state: true`, a hyphenated HTML attribute (the plain
+   * and `?bool` binding name).
    *
    * @param {import('typescript').ClassDeclaration} cls
-   * @returns {string[]}
+   * @returns {PropMember[]}
    */
   function extractStaticProperties(cls) {
-    /** @type {string[]} */
+    /** @type {PropMember[]} */
     const out = [];
     for (const member of cls.members) {
       if (!ts.isPropertyDeclaration(member)) continue;
@@ -760,10 +1043,30 @@ function init(modules) {
         let key;
         if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
         else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
-        if (key) out.push(key);
+        if (!key) continue;
+        out.push({ propName: key, attrName: hyphenate(key), state: propIsState(prop) });
       }
     }
     return out;
+  }
+
+  /**
+   * Does a `static properties` entry opt into internal-state mode
+   * (`{ state: true }`)? Such props have no HTML attribute.
+   *
+   * @param {import('typescript').ObjectLiteralElementLike} prop
+   * @returns {boolean}
+   */
+  function propIsState(prop) {
+    if (!ts.isPropertyAssignment(prop)) return false;
+    const v = prop.initializer;
+    if (!v || !ts.isObjectLiteralExpression(v)) return false;
+    for (const o of v.properties) {
+      if (!ts.isPropertyAssignment(o) || !o.name) continue;
+      const n = ts.isIdentifier(o.name) || ts.isStringLiteralLike(o.name) ? o.name.text : '';
+      if (n === 'state' && o.initializer.kind === ts.SyntaxKind.TrueKeyword) return true;
+    }
+    return false;
   }
 
   /**
@@ -869,16 +1172,23 @@ function init(modules) {
    * ================================================================ */
 
   /**
-   * Walk every html`` template in the file. For each `${expr}` that
-   * sits in attribute-value position of a reachable webjs tag, look up
-   * the matching `declare attr: T` field on the component class and
-   * assignability-check `typeof expr` against `T`. Emit a diagnostic
-   * for any mismatch.
+   * Walk every html`` template in the file and run the webjs in-template
+   * diagnostic rules over the parsed AST of each reachable webjs tag. Rules
+   * (all zero-false-positive by design, since webjs has no element type map
+   * to safely flag unknown tags/attributes against):
    *
-   * Static (non-interpolated) attribute values like `mode="login"` are
-   * not checked: they're plain template text and at runtime always
-   * coerce to strings. Only interpolations carry a real value type
-   * worth checking.
+   *  - **incompatible-type-binding** (code 9001): an interpolated value whose
+   *    type is not assignable to the member's `declare`d type. Covers plain
+   *    attributes, `.prop` bindings, and `?bool` (must be boolean-ish);
+   *    `@event` must be callable.
+   *  - **unquoted-binding** (code 9002, invariant 4): an `@event` / `.prop` /
+   *    `?bool` binding whose value is quoted (`@click="${fn}"`). The hole is
+   *    dropped at SSR; it must be unquoted.
+   *  - **expressionless-property-binding** (code 9003): a `.prop` binding with
+   *    no `${}` expression (`.value="x"` sets the property to a literal string,
+   *    almost always a mistake).
+   *
+   * Static (non-interpolated) plain attribute values are never checked.
    *
    * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
    * @param {string} fileName
@@ -899,65 +1209,105 @@ function init(modules) {
 
     const checker = program.getTypeChecker();
 
+    const push = (start, length, messageText, code) =>
+      out.push({
+        file: sf,
+        start,
+        length,
+        messageText,
+        category: ts.DiagnosticCategory.Error,
+        code,
+        source: 'webjsdev-ts-plugin',
+      });
+
     /** @param {import('typescript').Node} node */
     function visit(node) {
       if (ts.isTaggedTemplateExpression(node) && tagMatches(node.tag, 'html')) {
-        collectFromTemplate(node);
+        const doc = tpl.parseTemplate(ts, node);
+        if (doc) for (const el of doc.nodes) checkNode(doc, el);
       }
       ts.forEachChild(node, visit);
     }
 
-    /** @param {import('typescript').TaggedTemplateExpression} expr */
-    function collectFromTemplate(expr) {
-      const tpl = expr.template;
-      if (ts.isNoSubstitutionTemplateLiteral(tpl)) return;
-      // tpl is a TemplateExpression: head + spans[].
-      const segments = [tpl.head, ...tpl.templateSpans.map((s) => s.literal)];
-      // segments[i].text is the cooked text *between* the (i-1)th hole and
-      // the ith hole (segments[0] is the head, before the first hole).
-      // Walk text segment-by-segment, tracking which interpolation each
-      // hole belongs to.
-      // Stitch the cooked text together with placeholders to track tags.
-      // Simpler: just inspect the trailing text of each segment that
-      // precedes a span: does it look like `<webjs-tag … attr=`?
-      for (let i = 0; i < tpl.templateSpans.length; i++) {
-        // Text immediately preceding the i-th interpolation.
-        const preceding = i === 0 ? tpl.head.text : tpl.templateSpans[i - 1].literal.text;
-        // Build the *full* preceding text for this interpolation (head +
-        // all earlier segments). We need this so an opening `<` from a
-        // previous segment is still visible. Use the cumulative slice
-        // ending at segment `i`.
-        const cumulative = i === 0
-          ? preceding
-          : segments.slice(0, i + 1).map((s) => s.text).join('•'); // any non-tag char as placeholder
-        const ctx = findAttrContext(cumulative);
-        if (!ctx) continue;
-        if (!reachable.has(ctx.tag)) continue;
-        const ref = registry.components.get(ctx.tag);
-        if (!ref) continue;
-        // Skip if the attr name doesn't match a known prop.
-        if (!ref.attributes.includes(ctx.attr)) continue;
+    /**
+     * @param {import('./template/parse.js').TemplateDocument} doc
+     * @param {any} el
+     */
+    function checkNode(doc, el) {
+      if (!el.isCustom) return;
+      if (!reachable.has(el.tag)) return;
+      const ref = registry.components.get(el.tag);
+      if (!ref) return;
 
-        const propType = resolvePropType(program, ref, ctx.attr, checker);
+      for (const attr of el.attrs) {
+        const bound = attr.modifier !== 'none';
+        const hasHole = attr.holeIndex != null;
+
+        // Rule: unquoted-binding (invariant 4).
+        if (bound && attr.quoted && (attr.valueKind === 'expression' || attr.valueKind === 'mixed')) {
+          const prefix = attr.modifier === 'event' ? '@' : attr.modifier === 'property' ? '.' : '?';
+          push(
+            attr.nameSpan.start,
+            attr.nameSpan.length,
+            `The ${prefix}${attr.name} binding on <${el.tag}> must be unquoted ` +
+              `(write ${prefix}${attr.name}=\${…}, not quoted). The expression is dropped at SSR otherwise.`,
+            9002,
+          );
+          continue;
+        }
+
+        // Rule: expressionless-property-binding.
+        if (attr.modifier === 'property' && !hasHole) {
+          push(
+            attr.nameSpan.start,
+            attr.nameSpan.length,
+            `The .${attr.name} property binding on <${el.tag}> expects an expression ` +
+              `(.${attr.name}=\${value}).`,
+            9003,
+          );
+          continue;
+        }
+
+        // Rule: incompatible-type-binding (needs a sole-hole value).
+        if (!hasHole) continue;
+        const hole = doc.holes[attr.holeIndex];
+        if (!hole || !hole.expression) continue;
+        const exprType = checker.getTypeAtLocation(hole.expression);
+        const exprStart = hole.expression.getStart(sf);
+        const exprLen = hole.expression.getEnd() - exprStart;
+
+        if (attr.modifier === 'event') {
+          // Event handlers must be callable.
+          if (exprType.getCallSignatures().length === 0 && !isAnyOrUnknown(exprType)) {
+            push(
+              exprStart,
+              exprLen,
+              `The @${attr.name} handler on <${el.tag}> is '${checker.typeToString(exprType)}', ` +
+                `which is not callable.`,
+              9001,
+            );
+          }
+          continue;
+        }
+
+        // Plain / `.prop` / `?bool`: assignability against the declared type.
+        const member =
+          attr.modifier === 'property'
+            ? ref.members.find((m) => m.propName === attr.name)
+            : ref.members.find((m) => m.attrName === attr.name);
+        if (!member) continue;
+        const propType = resolvePropType(program, ref, member.propName, checker);
         if (!propType) continue; // no `declare` annotation → can't check
-
-        const span = tpl.templateSpans[i];
-        const exprNode = span.expression;
-        const exprType = checker.getTypeAtLocation(exprNode);
-
         if (checker.isTypeAssignableTo(exprType, propType)) continue;
 
-        out.push({
-          file: sf,
-          start: exprNode.getStart(sf),
-          length: exprNode.getEnd() - exprNode.getStart(sf),
-          messageText:
-            `Type '${checker.typeToString(exprType)}' is not assignable to ` +
-            `attribute '${ctx.attr}' of type '${checker.typeToString(propType)}' on <${ctx.tag}>.`,
-          category: ts.DiagnosticCategory.Error,
-          code: 9001,
-          source: 'webjsdev-ts-plugin',
-        });
+        const label = attr.modifier === 'property' ? `property '${member.propName}'` : `attribute '${member.attrName}'`;
+        push(
+          exprStart,
+          exprLen,
+          `Type '${checker.typeToString(exprType)}' is not assignable to ` +
+            `${label} of type '${checker.typeToString(propType)}' on <${el.tag}>.`,
+          9001,
+        );
       }
     }
 
@@ -965,34 +1315,9 @@ function init(modules) {
     return out;
   }
 
-  /**
-   * Inspect the tail of `text` (cumulative html`` segments preceding an
-   * interpolation) and return the enclosing tag + attribute name if the
-   * interpolation sits in attribute-value position of an open tag.
-   *
-   * @param {string} text
-   * @returns {{ tag: string, attr: string } | undefined}
-   */
-  function findAttrContext(text) {
-    // Find the last unclosed `<`. We want the opener whose `>` hasn't
-    // appeared yet.
-    let depth = 0;
-    let openIdx = -1;
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '<') { openIdx = i; depth = 1; }
-      else if (text[i] === '>' && depth === 1) { depth = 0; openIdx = -1; }
-    }
-    if (openIdx === -1) return undefined;
-    const tagPart = text.slice(openIdx + 1);
-    // First token after `<` is the tag name.
-    const tm = /^([a-zA-Z][\w-]*)/.exec(tagPart);
-    if (!tm) return undefined;
-    const tag = tm[1].toLowerCase();
-    if (!tag.includes('-')) return undefined;
-    // Trailing pattern: ` attrName=` optionally followed by an open quote.
-    const am = /\s+([A-Za-z_][\w-]*)\s*=\s*['"`]?$/.exec(tagPart);
-    if (!am) return undefined;
-    return { tag, attr: am[1] };
+  /** Is `t` the `any` or `unknown` type (so assignability checks are moot)? */
+  function isAnyOrUnknown(t) {
+    return (t.flags & ts.TypeFlags.Any) !== 0 || (t.flags & ts.TypeFlags.Unknown) !== 0;
   }
 
   /**

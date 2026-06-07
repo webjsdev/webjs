@@ -7,7 +7,7 @@ Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodiu
 ## Features
 
 - **Template highlighting.** Markup inside `` html`...` `` and `` css`...` `` (and `` svg`...` ``) tagged templates is highlighted as HTML / CSS / SVG, with `${...}` expressions tokenized as TypeScript. No separate Lit / lit-html extension needed.
-- **Language-service intelligence.** Bundles the webjs TypeScript-server plugin and registers it automatically (no `tsconfig.json` edit): webjs-aware go-to-definition, custom-element attribute autocomplete from `static properties`, and diagnostic suppression for elements registered with `Class.register('tag')`.
+- **Language-service intelligence.** Bundles the webjs TypeScript-server plugin and registers it automatically (no `tsconfig.json` edit), with its own in-template engine (no Lit plugin): go-to-definition on tags / attributes / CSS classes, binding-aware completions (tag names, and `.prop` / `?bool` / plain attributes keyed by prefix), in-template diagnostics (value type-checks, unquoted-binding and expressionless-property errors), and hover, all gated on import-graph reachability.
 - **Snippets** for the common recipes: `wjpage`, `wjdynamic`, `wjaction`, `wjcomponent`, `wjroute`, `wjlayout`.
 - **Commands:** `webjs: Run check`, `webjs: Create a new app`, `webjs: Open documentation`.
 
