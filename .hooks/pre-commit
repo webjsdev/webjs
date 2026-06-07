@@ -51,9 +51,12 @@ fi
 # the version-bump commit ships with its release notes in one shot.
 # Bumps are detected by scanning the staged diff for a `+ "version":`
 # line in any packages/*/package.json.
-STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- 'packages/*/package.json' 2>/dev/null \
+STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- \
+    'packages/*/package.json' 'packages/editors/*/package.json' 'packages/wrappers/*/package.json' 2>/dev/null \
   | awk '
-      /^diff --git/ { match($0, /packages\/[^\/]+\/package.json/); pkg = substr($0, RSTART+9, RLENGTH-22); next }
+      # pkg = the directory immediately containing package.json, at any depth
+      # (so a grouped package like packages/editors/ts-plugin maps to "ts-plugin").
+      /^diff --git/ { match($0, /[A-Za-z0-9_-]+\/package\.json/); pkg = substr($0, RSTART, RLENGTH-13); next }
       pkg && /^\+\s*"version":\s*"[^"]+"/ {
         match($0, /"[0-9]+\.[0-9]+\.[0-9]+[^"]*"/); v = substr($0, RSTART+1, RLENGTH-2);
         print pkg "@" v

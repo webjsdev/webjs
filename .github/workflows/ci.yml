@@ -41,10 +41,10 @@ jobs:
           done
       - name: Framework runtime packages are buildless (no .ts source)
         run: |
-          # Invariant: packages/{core,server,cli,ts-plugin} are plain .js +
-          # JSDoc. .ts is allowed in examples/docs/website and in scaffold
-          # templates / the ui registry (those ship to user apps).
-          hits=$(git ls-files 'packages/core/**/*.ts' 'packages/server/**/*.ts' 'packages/cli/**/*.ts' 'packages/ts-plugin/**/*.ts' \
+          # Invariant: packages/{core,server,cli} and packages/editors/* are
+          # plain .js + JSDoc. .ts is allowed in examples/docs/website and in
+          # scaffold templates / the ui registry (those ship to user apps).
+          hits=$(git ls-files 'packages/core/**/*.ts' 'packages/server/**/*.ts' 'packages/cli/**/*.ts' 'packages/editors/**/*.ts' \
             | grep -vE '\.d\.ts$|/templates/' || true)
           if [ -n "$hits" ]; then
             echo "::error::TypeScript source in a buildless framework package (invariant violated):"; echo "$hits"; exit 1

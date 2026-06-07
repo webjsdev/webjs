@@ -1,7 +1,7 @@
 # AGENTS.md for webjs.nvim
 
 The Neovim editor plugin for webjs, the counterpart to the `webjs` VS Code
-extension (`packages/vscode`). Phase 4 of the editor-plugin epic (#381).
+extension (`packages/editors/vscode`). Phase 4 of the editor-plugin epic (#381).
 
 Framework-wide rules (workflow, no-build, commit conventions) live in the
 framework root [`../../AGENTS.md`](../../AGENTS.md). This file covers what is
@@ -29,7 +29,7 @@ specific to the Neovim plugin.
    `@webjsdev/ts-plugin` in the app (before `npm install`, pruned trees,
    non-scaffolded apps). When the app ALSO wires it via `tsconfig`, `tsserver`
    dedupes by name (verified), so no double-load. Regenerate with
-   `scripts/vendor-ts-plugin.mjs` then `git add -f packages/nvim/vendor`
+   `scripts/vendor-ts-plugin.mjs` then `git add -f packages/editors/nvim/vendor`
    (the output is under a gitignored `node_modules/`); `test/vendor-sync.test.mjs`
    is the drift guard.
 4. **Docs**: `doc/webjs.txt` (`:help webjs`), `README.md`.
@@ -57,7 +57,7 @@ load, `:WebjsCheck` registers, `with_tsserver_plugin` is idempotent,
 `check.project` builds quickfix entries, and each tagged template injects the
 right parser. `test/nvim.test.mjs` wraps it for the repo's `npm test` and
 SKIPS when `nvim` is not installed (so CI without Neovim stays green). Run
-directly with `nvim --headless -l packages/nvim/test/selftest.lua`.
+directly with `nvim --headless -l packages/editors/nvim/test/selftest.lua`.
 
 ## Publishing
 

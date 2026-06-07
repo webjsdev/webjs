@@ -38,7 +38,15 @@ walk(join(ROOT, 'test'), all);
 const packagesDir = join(ROOT, 'packages');
 for (const pkg of readdirSync(packagesDir, { withFileTypes: true })) {
   if (!pkg.isDirectory()) continue;
-  walk(join(packagesDir, pkg.name, 'test'), all);
+  const pkgPath = join(packagesDir, pkg.name);
+  walk(join(pkgPath, 'test'), all);
+  // Grouped packages live one level deeper (packages/editors/<x>,
+  // packages/wrappers/<x> after #402), so walk each sub-package's test/ too.
+  for (const sub of readdirSync(pkgPath, { withFileTypes: true })) {
+    if (sub.isDirectory() && sub.name !== 'node_modules' && sub.name !== 'test') {
+      walk(join(pkgPath, sub.name, 'test'), all);
+    }
+  }
 }
 
 // Run the @webjsdev/ui workspace's own tests separately via its

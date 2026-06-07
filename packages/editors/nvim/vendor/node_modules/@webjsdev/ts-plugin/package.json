@@ -17,7 +17,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/ts-plugin"
+    "directory": "packages/editors/ts-plugin"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",

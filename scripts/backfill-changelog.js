@@ -47,6 +47,15 @@ function npmName(pkg) {
   return UNSCOPED.has(pkg) ? pkg : `@webjsdev/${pkg}`;
 }
 
+// Some packages live in a grouped subfolder (#402). The PACKAGES keys stay
+// the bare names (used for the npm name + the changelog/<pkg>/ dir); map a
+// key to its on-disk directory here when it is not packages/<pkg>.
+const PACKAGE_DIRS = { 'ts-plugin': 'packages/editors/ts-plugin' };
+/** @param {string} pkg short dir name -> its repo-relative package dir */
+function pkgDir(pkg) {
+  return PACKAGE_DIRS[pkg] || `packages/${pkg}`;
+}
+
 function git(args, opts = {}) {
   const r = spawnSync('git', args, {
     cwd: ROOT,
@@ -71,7 +80,7 @@ function versionTimeline(pkg) {
   // Then filter to commits where a `+  "version":` line shows up.
   const raw = git([
     'log', '--reverse', '--diff-filter=M', '--pretty=format:===%h\t%aI',
-    '-p', '--', `packages/${pkg}/package.json`,
+    '-p', '--', `${pkgDir(pkg)}/package.json`,
   ]);
 
   const out = [];
@@ -101,7 +110,7 @@ function versionTimeline(pkg) {
   // `+  "version":` line in this package's package.json.
   const staged = spawnSync(
     'git',
-    ['diff', '--cached', '--unified=0', '--', `packages/${pkg}/package.json`],
+    ['diff', '--cached', '--unified=0', '--', `${pkgDir(pkg)}/package.json`],
     { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 },
   ).stdout || '';
   const stagedMatch = staged.match(/^\+\s*"version":\s*"([^"]+)"/m);
@@ -153,7 +162,7 @@ function commitsInRange(pkg, fromSha, toSha) {
   const RECORD = '';
   const fmt = `%h${FIELD}%aI${FIELD}%s${FIELD}%b${RECORD}`;
   const raw = git([
-    'log', '--reverse', `--pretty=format:${fmt}`, range, '--', `packages/${pkg}/`,
+    'log', '--reverse', `--pretty=format:${fmt}`, range, '--', `${pkgDir(pkg)}/`,
   ]);
   const out = [];
   for (const rec of raw.split(RECORD)) {

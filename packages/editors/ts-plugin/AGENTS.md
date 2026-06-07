@@ -86,7 +86,7 @@ README.md                  User-facing setup instructions.
 
 ## Tests
 
-`packages/ts-plugin/test/plugin/ts-plugin.test.mjs` boots a real
+`packages/editors/ts-plugin/test/plugin/ts-plugin.test.mjs` boots a real
 tsserver instance against fixture sources and asserts definition,
 completion, diagnostic, and hover behaviour. Covers tag / attribute /
 CSS-class resolution, binding-aware completions (incl. hyphenation and

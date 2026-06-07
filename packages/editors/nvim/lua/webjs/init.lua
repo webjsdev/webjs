@@ -17,7 +17,7 @@ M.config = {
   cmd = 'webjs',
 }
 
---- The plugin's own root dir (…/packages/nvim, or the cloned webjs.nvim repo).
+--- The plugin's own root dir (…/packages/editors/nvim, or the cloned webjs.nvim repo).
 local function plugin_root()
   local src = debug.getinfo(1, 'S').source:sub(2) -- this file: <root>/lua/webjs/init.lua
   return vim.fn.fnamemodify(src, ':h:h:h')

@@ -3,9 +3,9 @@
  *
  * webjs.nvim bundles a verbatim copy of the standalone ts-plugin (it has no
  * install-time build step) and points tsserver at it. That copy MUST stay in
- * sync with `packages/ts-plugin/src`; this test fails if it drifts, telling you
- * to re-run `node packages/nvim/scripts/vendor-ts-plugin.mjs` then
- * `git add -f packages/nvim/vendor`.
+ * sync with `packages/editors/ts-plugin/src`; this test fails if it drifts, telling you
+ * to re-run `node packages/editors/nvim/scripts/vendor-ts-plugin.mjs` then
+ * `git add -f packages/editors/nvim/vendor`.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ function walk(root, base = root, out = []) {
   return out;
 }
 
-test('vendored ts-plugin src is byte-identical to packages/ts-plugin/src', () => {
+test('vendored ts-plugin src is byte-identical to packages/editors/ts-plugin/src', () => {
   assert.ok(existsSync(VENDORED), 'vendored src dir exists (run scripts/vendor-ts-plugin.mjs)');
   const srcFiles = walk(SRC).sort();
   const vendoredFiles = walk(VENDORED).sort();
@@ -35,7 +35,7 @@ test('vendored ts-plugin src is byte-identical to packages/ts-plugin/src', () =>
     assert.equal(
       readFileSync(join(VENDORED, f), 'utf8'),
       readFileSync(join(SRC, f), 'utf8'),
-      `vendored ${f} drifted; re-run node packages/nvim/scripts/vendor-ts-plugin.mjs`,
+      `vendored ${f} drifted; re-run node packages/editors/nvim/scripts/vendor-ts-plugin.mjs`,
     );
   }
 });

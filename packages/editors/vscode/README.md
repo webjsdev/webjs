@@ -18,6 +18,6 @@ Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodiu
 
 ## About
 
-This extension lives in the [webjs monorepo](https://github.com/webjsdev/webjs/tree/main/packages/vscode) and is versioned with the framework. webjs is buildless: the framework source you read in `node_modules/@webjsdev/*/src` is what runs.
+This extension lives in the [webjs monorepo](https://github.com/webjsdev/webjs/tree/main/packages/editors/vscode) and is versioned with the framework. webjs is buildless: the framework source you read in `node_modules/@webjsdev/*/src` is what runs.
 
 License: MIT.

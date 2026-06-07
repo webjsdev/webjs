@@ -53,9 +53,10 @@ staged=$(git diff --cached --name-only 2>/dev/null || true)
 if [ -z "$staged" ]; then exit 0; fi
 
 # Framework source lives under each package's src/, EXCEPT the CLI, which
-# keeps its logic in packages/cli/lib/. Gate both so a CLI change (the
-# framework's own installer) is not a blind spot.
-src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/([^/]+/src|cli/lib)/' || true)
+# keeps its logic in packages/cli/lib/. Grouped packages live one level
+# deeper (packages/editors/<pkg>/src, e.g. ts-plugin, vscode after #402).
+# Gate all so a change is not a blind spot.
+src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/([^/]+/src|editors/[^/]+/src|cli/lib)/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi
 
 test_staged=$(printf '%s\n' "$staged" | grep -E '(^|/)test/|\.test\.[mc]?[jt]sx?$|\.spec\.[mc]?[jt]sx?$' || true)
