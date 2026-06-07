@@ -332,3 +332,13 @@ Gives you:
 - Attribute-value type-check: `<my-counter count=${expr}>` assignability-checks `typeof expr` against `declare count: T`.
 
 Both behaviours are gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing.
+
+### The `webjs` VSCode extension (recommended over a manual tsconfig plugin)
+
+The `webjs` extension (`packages/vscode`, on the VS Marketplace and Open VSX) is the all-in-one editor setup. It bundles the tsserver plugin and auto-registers it via `contributes.typescriptServerPlugins`, so you get the intelligence above **without editing `tsconfig.json`**, plus:
+
+- `` html` `` / `` css` `` / `` svg` `` template highlighting via original TextMate injection grammars (no separate Lit / lit-html extension needed).
+- Snippets for the common recipes (`wjpage`, `wjcomponent`, `wjaction`, and more).
+- Commands (`webjs: Run check`, `webjs: Create a new app`, `webjs: Open documentation`).
+
+It works in VSCode and its forks (Cursor, Antigravity, Windsurf, VSCodium), which pull from Open VSX. The extension's bundled plugin is built with `ts-lit-plugin` left external, so it runs as the bare, Lit-free webjs language service. Install via the Extensions view (search "webjs"), or for editors without a UI, `code --install-extension webjs.vsix`. The manual `tsconfig.json` `plugins` entry above is still the path for Neovim and JetBrains until their plugins land (epic #381).

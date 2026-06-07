@@ -1,0 +1,39 @@
+{
+  "$comment": "webjs svg`...` template injection. Highlights SVG markup inside the svg tagged template as XML, with ${...} substitutions tokenized as TypeScript.",
+  "injectionSelector": "L:source.js -comment -(string -meta.embedded), L:source.jsx -comment -(string -meta.embedded), L:source.js.jsx -comment -(string -meta.embedded), L:source.ts -comment -(string -meta.embedded), L:source.tsx -comment -(string -meta.embedded)",
+  "scopeName": "inline.webjs.svg",
+  "patterns": [
+    {
+      "begin": "(?x)(\\b(?:\\w+\\.)*svg\\s*)(`)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.tagged-template.webjs" },
+        "2": { "name": "punctuation.definition.string.template.begin.js" }
+      },
+      "end": "(`)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.template.end.js" }
+      },
+      "contentName": "meta.embedded.block.svg",
+      "patterns": [
+        { "include": "#webjs-substitution" },
+        { "include": "text.xml" }
+      ]
+    }
+  ],
+  "repository": {
+    "webjs-substitution": {
+      "name": "meta.template.expression.js",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.js" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.js" }
+      },
+      "patterns": [
+        { "include": "source.ts" }
+      ]
+    }
+  }
+}

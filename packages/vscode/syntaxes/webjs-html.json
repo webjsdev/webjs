@@ -1,0 +1,39 @@
+{
+  "$comment": "webjs html`...` template injection. Highlights HTML inside the html tagged template (and member forms like x.html`...`) as text.html.basic, with ${...} substitutions tokenized as TypeScript. Original grammar; webjs uses the same html tag name as Lit, so a standard injection applies, and shipping our own means no Lit extension is needed.",
+  "injectionSelector": "L:source.js -comment -(string -meta.embedded), L:source.jsx -comment -(string -meta.embedded), L:source.js.jsx -comment -(string -meta.embedded), L:source.ts -comment -(string -meta.embedded), L:source.tsx -comment -(string -meta.embedded)",
+  "scopeName": "inline.webjs.html",
+  "patterns": [
+    {
+      "begin": "(?x)(\\b(?:\\w+\\.)*html\\s*)(`)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.tagged-template.webjs" },
+        "2": { "name": "punctuation.definition.string.template.begin.js" }
+      },
+      "end": "(`)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.template.end.js" }
+      },
+      "contentName": "meta.embedded.block.html",
+      "patterns": [
+        { "include": "#webjs-substitution" },
+        { "include": "text.html.basic" }
+      ]
+    }
+  ],
+  "repository": {
+    "webjs-substitution": {
+      "name": "meta.template.expression.js",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.js" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.js" }
+      },
+      "patterns": [
+        { "include": "source.ts" }
+      ]
+    }
+  }
+}

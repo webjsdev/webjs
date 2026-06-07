@@ -1,0 +1,18 @@
+# Source + tooling that doesn't belong in the published vsix.
+.vscodeignore
+.gitignore
+.vscode/**
+scripts/**
+test/**
+**/*.test.*
+**/*.map
+
+# We package with `--no-dependencies`, so node_modules is excluded wholesale.
+# Re-include ONLY the vendored, self-contained tsserver plugin that the build
+# step writes (a single CJS bundle + its package.json). This is what makes the
+# contributed `@webjsdev/ts-plugin` resolvable inside the vsix.
+node_modules/**
+!node_modules/@webjsdev/ts-plugin/**
+
+# Build artifacts.
+webjs.vsix

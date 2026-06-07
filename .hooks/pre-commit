@@ -66,13 +66,15 @@ if [ -n "$STAGED_PKG_BUMPS" ]; then
   #
   # The wrapper packages (create-webjs, webjsdev) are version-lockstep
   # mirrors of @webjsdev/cli and are explicitly NOT tracked in the
-  # changelog system. Skip them: their bumps don't require a
+  # changelog system. The vscode editor extension ships to the VS
+  # Marketplace + Open VSX (not npm), so it is likewise outside the
+  # npm changelog system. Skip them all: their bumps don't require a
   # changelog file, and scripts/backfill-changelog.js wouldn't
   # produce one for them anyway (they're not in its PACKAGES list).
   TO_GENERATE=""
   for bump in $STAGED_PKG_BUMPS; do
     pkg="${bump%@*}"; ver="${bump#*@}"
-    if [ "$pkg" = "create-webjs" ] || [ "$pkg" = "webjsdev" ]; then
+    if [ "$pkg" = "create-webjs" ] || [ "$pkg" = "webjsdev" ] || [ "$pkg" = "vscode" ]; then
       continue
     fi
     if [ ! -f "changelog/$pkg/$ver.md" ]; then
