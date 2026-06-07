@@ -983,16 +983,23 @@ function init(modules) {
    * ================================================================ */
 
   /**
-   * Walk every html`` template in the file. For each `${expr}` that
-   * sits in attribute-value position of a reachable webjs tag, look up
-   * the matching `declare attr: T` field on the component class and
-   * assignability-check `typeof expr` against `T`. Emit a diagnostic
-   * for any mismatch.
+   * Walk every html`` template in the file and run the webjs in-template
+   * diagnostic rules over the parsed AST of each reachable webjs tag. Rules
+   * (all zero-false-positive by design, since webjs has no element type map
+   * to safely flag unknown tags/attributes against):
    *
-   * Static (non-interpolated) attribute values like `mode="login"` are
-   * not checked: they're plain template text and at runtime always
-   * coerce to strings. Only interpolations carry a real value type
-   * worth checking.
+   *  - **incompatible-type-binding** (code 9001): an interpolated value whose
+   *    type is not assignable to the member's `declare`d type. Covers plain
+   *    attributes, `.prop` bindings, and `?bool` (must be boolean-ish);
+   *    `@event` must be callable.
+   *  - **unquoted-binding** (code 9002, invariant 4): an `@event` / `.prop` /
+   *    `?bool` binding whose value is quoted (`@click="${fn}"`). The hole is
+   *    dropped at SSR; it must be unquoted.
+   *  - **expressionless-property-binding** (code 9003): a `.prop` binding with
+   *    no `${}` expression (`.value="x"` sets the property to a literal string,
+   *    almost always a mistake).
+   *
+   * Static (non-interpolated) plain attribute values are never checked.
    *
    * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
    * @param {string} fileName
@@ -1013,65 +1020,105 @@ function init(modules) {
 
     const checker = program.getTypeChecker();
 
+    const push = (start, length, messageText, code) =>
+      out.push({
+        file: sf,
+        start,
+        length,
+        messageText,
+        category: ts.DiagnosticCategory.Error,
+        code,
+        source: 'webjsdev-ts-plugin',
+      });
+
     /** @param {import('typescript').Node} node */
     function visit(node) {
       if (ts.isTaggedTemplateExpression(node) && tagMatches(node.tag, 'html')) {
-        collectFromTemplate(node);
+        const doc = tpl.parseTemplate(ts, node);
+        if (doc) for (const el of doc.nodes) checkNode(doc, el);
       }
       ts.forEachChild(node, visit);
     }
 
-    /** @param {import('typescript').TaggedTemplateExpression} expr */
-    function collectFromTemplate(expr) {
-      const tpl = expr.template;
-      if (ts.isNoSubstitutionTemplateLiteral(tpl)) return;
-      // tpl is a TemplateExpression: head + spans[].
-      const segments = [tpl.head, ...tpl.templateSpans.map((s) => s.literal)];
-      // segments[i].text is the cooked text *between* the (i-1)th hole and
-      // the ith hole (segments[0] is the head, before the first hole).
-      // Walk text segment-by-segment, tracking which interpolation each
-      // hole belongs to.
-      // Stitch the cooked text together with placeholders to track tags.
-      // Simpler: just inspect the trailing text of each segment that
-      // precedes a span: does it look like `<webjs-tag … attr=`?
-      for (let i = 0; i < tpl.templateSpans.length; i++) {
-        // Text immediately preceding the i-th interpolation.
-        const preceding = i === 0 ? tpl.head.text : tpl.templateSpans[i - 1].literal.text;
-        // Build the *full* preceding text for this interpolation (head +
-        // all earlier segments). We need this so an opening `<` from a
-        // previous segment is still visible. Use the cumulative slice
-        // ending at segment `i`.
-        const cumulative = i === 0
-          ? preceding
-          : segments.slice(0, i + 1).map((s) => s.text).join('•'); // any non-tag char as placeholder
-        const ctx = findAttrContext(cumulative);
-        if (!ctx) continue;
-        if (!reachable.has(ctx.tag)) continue;
-        const ref = registry.components.get(ctx.tag);
-        if (!ref) continue;
-        // Skip if the attr name doesn't match a known prop.
-        if (!ref.attributes.includes(ctx.attr)) continue;
+    /**
+     * @param {import('./template/parse.js').TemplateDocument} doc
+     * @param {any} el
+     */
+    function checkNode(doc, el) {
+      if (!el.isCustom) return;
+      if (!reachable.has(el.tag)) return;
+      const ref = registry.components.get(el.tag);
+      if (!ref) return;
 
-        const propType = resolvePropType(program, ref, ctx.attr, checker);
+      for (const attr of el.attrs) {
+        const bound = attr.modifier !== 'none';
+        const hasHole = attr.holeIndex != null;
+
+        // Rule: unquoted-binding (invariant 4).
+        if (bound && attr.quoted && (attr.valueKind === 'expression' || attr.valueKind === 'mixed')) {
+          const prefix = attr.modifier === 'event' ? '@' : attr.modifier === 'property' ? '.' : '?';
+          push(
+            attr.nameSpan.start,
+            attr.nameSpan.length,
+            `The ${prefix}${attr.name} binding on <${el.tag}> must be unquoted ` +
+              `(write ${prefix}${attr.name}=\${…}, not quoted). The expression is dropped at SSR otherwise.`,
+            9002,
+          );
+          continue;
+        }
+
+        // Rule: expressionless-property-binding.
+        if (attr.modifier === 'property' && !hasHole) {
+          push(
+            attr.nameSpan.start,
+            attr.nameSpan.length,
+            `The .${attr.name} property binding on <${el.tag}> expects an expression ` +
+              `(.${attr.name}=\${value}).`,
+            9003,
+          );
+          continue;
+        }
+
+        // Rule: incompatible-type-binding (needs a sole-hole value).
+        if (!hasHole) continue;
+        const hole = doc.holes[attr.holeIndex];
+        if (!hole || !hole.expression) continue;
+        const exprType = checker.getTypeAtLocation(hole.expression);
+        const exprStart = hole.expression.getStart(sf);
+        const exprLen = hole.expression.getEnd() - exprStart;
+
+        if (attr.modifier === 'event') {
+          // Event handlers must be callable.
+          if (exprType.getCallSignatures().length === 0 && !isAnyOrUnknown(exprType)) {
+            push(
+              exprStart,
+              exprLen,
+              `The @${attr.name} handler on <${el.tag}> is '${checker.typeToString(exprType)}', ` +
+                `which is not callable.`,
+              9001,
+            );
+          }
+          continue;
+        }
+
+        // Plain / `.prop` / `?bool`: assignability against the declared type.
+        const member =
+          attr.modifier === 'property'
+            ? ref.members.find((m) => m.propName === attr.name)
+            : ref.members.find((m) => m.attrName === attr.name);
+        if (!member) continue;
+        const propType = resolvePropType(program, ref, member.propName, checker);
         if (!propType) continue; // no `declare` annotation → can't check
-
-        const span = tpl.templateSpans[i];
-        const exprNode = span.expression;
-        const exprType = checker.getTypeAtLocation(exprNode);
-
         if (checker.isTypeAssignableTo(exprType, propType)) continue;
 
-        out.push({
-          file: sf,
-          start: exprNode.getStart(sf),
-          length: exprNode.getEnd() - exprNode.getStart(sf),
-          messageText:
-            `Type '${checker.typeToString(exprType)}' is not assignable to ` +
-            `attribute '${ctx.attr}' of type '${checker.typeToString(propType)}' on <${ctx.tag}>.`,
-          category: ts.DiagnosticCategory.Error,
-          code: 9001,
-          source: 'webjsdev-ts-plugin',
-        });
+        const label = attr.modifier === 'property' ? `property '${member.propName}'` : `attribute '${member.attrName}'`;
+        push(
+          exprStart,
+          exprLen,
+          `Type '${checker.typeToString(exprType)}' is not assignable to ` +
+            `${label} of type '${checker.typeToString(propType)}' on <${el.tag}>.`,
+          9001,
+        );
       }
     }
 
@@ -1079,34 +1126,9 @@ function init(modules) {
     return out;
   }
 
-  /**
-   * Inspect the tail of `text` (cumulative html`` segments preceding an
-   * interpolation) and return the enclosing tag + attribute name if the
-   * interpolation sits in attribute-value position of an open tag.
-   *
-   * @param {string} text
-   * @returns {{ tag: string, attr: string } | undefined}
-   */
-  function findAttrContext(text) {
-    // Find the last unclosed `<`. We want the opener whose `>` hasn't
-    // appeared yet.
-    let depth = 0;
-    let openIdx = -1;
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '<') { openIdx = i; depth = 1; }
-      else if (text[i] === '>' && depth === 1) { depth = 0; openIdx = -1; }
-    }
-    if (openIdx === -1) return undefined;
-    const tagPart = text.slice(openIdx + 1);
-    // First token after `<` is the tag name.
-    const tm = /^([a-zA-Z][\w-]*)/.exec(tagPart);
-    if (!tm) return undefined;
-    const tag = tm[1].toLowerCase();
-    if (!tag.includes('-')) return undefined;
-    // Trailing pattern: ` attrName=` optionally followed by an open quote.
-    const am = /\s+([A-Za-z_][\w-]*)\s*=\s*['"`]?$/.exec(tagPart);
-    if (!am) return undefined;
-    return { tag, attr: am[1] };
+  /** Is `t` the `any` or `unknown` type (so assignability checks are moot)? */
+  function isAnyOrUnknown(t) {
+    return (t.flags & ts.TypeFlags.Any) !== 0 || (t.flags & ts.TypeFlags.Unknown) !== 0;
   }
 
   /**

@@ -654,6 +654,107 @@ test('passes when interpolated value is assignable to declared string type', () 
   assert.equal(ours.length, 0, `unexpected diagnostics: ${ours.map((d) => d.messageText).join('; ')}`);
 });
 
+test('flags an incompatible `.prop` binding against the declared property type', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const s: string = 'x';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .count=\${s}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1, `expected one .prop type diagnostic, got ${ours.length}`);
+  assert.ok(/property 'count'/.test(ours[0].messageText), `unexpected message: ${ours[0].messageText}`);
+});
+
+test('flags a quoted binding (invariant 4) as code 9002', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const fn = () => {};\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click="\${fn}"></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1);
+  assert.equal(ours[0].code, 9002);
+  assert.ok(/must be unquoted/.test(ours[0].messageText));
+});
+
+test('flags an expressionless `.prop` binding as code 9003', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { value: { type: String } };\n` +
+      `  declare value: string;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .value="hi"></my-box>\`;\n` +
+      `}\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(ours.length, 1);
+  assert.equal(ours[0].code, 9003);
+});
+
+test('flags a non-callable `@event` handler; accepts a function', () => {
+  const base =
+    `import { WebComponent } from '@webjsdev/core';\n` +
+    `export class Box extends WebComponent {\n` +
+    `  static properties = {};\n` +
+    `}\n` +
+    `Box.register('my-box');\n`;
+  const bad = makeService({
+    '/box.ts': base,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const notFn: number = 1;\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click=\${notFn}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const badOurs = bad.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(badOurs.length, 1, 'non-callable handler flagged');
+  assert.ok(/not callable/.test(badOurs[0].messageText));
+
+  const good = makeService({
+    '/box.ts': base,
+    '/ok.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `const fn = (e: Event) => {};\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box @click=\${fn}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const goodOurs = good.getSemanticDiagnostics('/ok.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  assert.equal(goodOurs.length, 0, 'a function handler is accepted');
+});
+
 test('flags string-or-number against a string-literal-union type', () => {
   const svc = makeService({
     '/auth.ts':
