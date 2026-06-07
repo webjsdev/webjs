@@ -10,7 +10,9 @@
     "bin",
     "lib",
     "templates",
-    "README.md"
+    "README.md",
+    "resources",
+    "scripts"
   ],
   "dependencies": {
     "@webjsdev/server": "^0.8.0",
@@ -35,5 +37,8 @@
   ],
   "engines": {
     "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "node scripts/copy-mcp-resources.js"
   }
 }
