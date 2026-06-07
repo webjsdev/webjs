@@ -316,8 +316,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Test-only: dynamically imported, never shipped to the app runtime.
       'axe-core': '^4.10.0',
       // tsserver plugin for editor intelligence inside html`` templates.
-      // @webjsdev/ts-plugin bundles ts-lit-plugin internally, so just one
-      // plugin entry is needed in tsconfig (see below).
+      // @webjsdev/ts-plugin is standalone (no Lit dependency): one plugin
+      // entry in tsconfig (see below).
       '@webjsdev/ts-plugin': 'latest',
       // AI-first component library CLI, preinstalled so `webjs ui add button`
       // works immediately after scaffold. Users can remove if they prefer
@@ -347,15 +347,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // SYNTAX errors. Use a `const` object + union for enum-shaped
       // values; write fields + constructor assignments explicitly.
       erasableSyntaxOnly: true,
-      // @webjsdev/ts-plugin gives the editor:
-      //   • type-check + diagnostics inside html`` templates (via the
-      //     ts-lit-plugin it bundles internally)
-      //   • webjs-aware go-to-definition on custom-element tags
-      //   • "Unknown tag/attribute" suppression for elements registered
-      //     via Class.register('tag-name')
-      //   • attribute auto-complete sourced from `static properties`
-      //   • attribute-value type-check against `declare` annotations
-      // Editor-only. The framework runs without it.
+      // @webjsdev/ts-plugin (standalone, no Lit dependency) gives the editor,
+      // inside html`` templates:
+      //   • go-to-definition on custom-element tags, attributes, and CSS classes
+      //   • binding-aware completions (tag names, .prop / ?bool / plain attrs)
+      //   • diagnostics (value type-checks, unquoted-binding, expressionless .prop)
+      //   • hover showing the component class / declared member type
+      // Editor-only. The framework runs without it. For VS Code / Cursor /
+      // Windsurf, the `webjs` extension bundles this automatically.
       plugins: [
         { name: '@webjsdev/ts-plugin' },
       ],

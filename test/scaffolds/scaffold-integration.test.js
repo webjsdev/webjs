@@ -190,10 +190,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(pkg.dependencies['@prisma/client']);
     assert.ok(pkg.devDependencies['@webjsdev/ts-plugin']);
 
-    // tsconfig.json has the editor plugin
+    // tsconfig.json has the editor plugin, standalone (no ts-lit-plugin entry).
     const tsconfig = JSON.parse(readFileSync(join(appDir, 'tsconfig.json'), 'utf8'));
     const pluginNames = (tsconfig.compilerOptions.plugins || []).map((p) => p.name);
     assert.ok(pluginNames.includes('@webjsdev/ts-plugin'), 'editor plugin listed');
+    assert.ok(!pluginNames.includes('ts-lit-plugin'), 'no separate ts-lit-plugin entry (standalone, #386)');
+    assert.ok(!pkg.devDependencies['ts-lit-plugin'] && !pkg.dependencies['ts-lit-plugin'], 'scaffold pulls no ts-lit-plugin');
 
     // {{APP_NAME}} placeholder substituted in template files
     const agents = readFileSync(join(appDir, 'AGENTS.md'), 'utf8');
