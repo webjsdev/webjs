@@ -141,7 +141,7 @@ async function main() {
     }
     case 'ui': {
       // Delegate to @webjsdev/ui. Bundled as a hard dependency of
-      // @webjsdev/cli, so `npm install -g @webjsdev/cli` pulls it in
+      // @webjsdev/cli, so `npm install -g webjsdev` pulls it in
       // automatically, and `webjs ui add button` works out of the box
       // without an extra install in user projects.
       const { createRequire } = await import('node:module');
@@ -157,7 +157,7 @@ async function main() {
           entry = userReq.resolve('@webjsdev/ui/bin/webjsui.js');
         } catch {
           console.error('@webjsdev/ui could not be resolved.');
-          console.error('Reinstall the CLI:  npm install -g @webjsdev/cli');
+          console.error('Reinstall the CLI:  npm install -g webjsdev');
           process.exit(1);
         }
       }

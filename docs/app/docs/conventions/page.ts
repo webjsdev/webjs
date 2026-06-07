@@ -165,7 +165,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
     <h2>webjs create</h2>
     <p>The scaffolding command generates a complete project with all conventions, config files, and example tests pre-configured:</p>
 
-    <pre>npm i -g @webjsdev/cli
+    <pre>npm i -g webjsdev
 webjs create my-app
 cd my-app && npm run dev</pre>
 

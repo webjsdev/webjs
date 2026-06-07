@@ -15,7 +15,7 @@ export default function GettingStarted() {
 
     <h2>Quick Start</h2>
     <pre># install once
-npm i -g @webjsdev/cli
+npm i -g webjsdev
 
 # scaffold a new app
 webjs create my-app
