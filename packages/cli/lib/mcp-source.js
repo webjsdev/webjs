@@ -2,10 +2,12 @@
  * The `source` tool for `webjs mcp` (#378): read-only access to the FRAMEWORK
  * source itself.
  *
- * webjs is no-build, so every app's `node_modules/@webjsdev/<pkg>/src` holds the
- * authored JSDoc `.js` that actually runs (no compiled/minified dist to see
- * through). That is a real advantage: when the docs do not answer a question,
- * an agent can read the real source. This tool makes that first-class and
+ * webjs is buildless, so every app's `node_modules/@webjsdev/<pkg>/src` holds the
+ * authored JSDoc `.js`, and server-side that source runs directly. (The one built
+ * artifact is the `@webjsdev/core` browser bundle in `dist/`, which this tool
+ * deliberately skips: it surfaces only the authored `src/`.) That is a real
+ * advantage: when the docs do not answer a question, an agent can read the real
+ * authored source. This tool makes that first-class and
  * discoverable (and reachable for an MCP-only client with no filesystem tools):
  *   - no args (or `package`): list the resolved `@webjsdev/*` packages + their
  *     `src/` entry-point files.
@@ -36,11 +38,15 @@ const MAX_HITS = 60;
 const MAX_FILES = 4000;
 
 /**
- * Resolve each `@webjsdev/*` package's root + `src/` dir from `cwd`. Uses
- * `createRequire(cwd).resolve('<pkg>/package.json')`, so it works for a real
- * `node_modules` install AND the monorepo workspace (where the specifier
- * resolves through the symlink to `packages/<pkg>`). A package that is not
- * installed is skipped (not every app depends on every `@webjsdev/*`).
+ * Resolve each `@webjsdev/*` package's root + source dir from `cwd`. Locates the
+ * root by checking each `require.resolve.paths` node_modules dir on disk for
+ * `@webjsdev/<pkg>/package.json`, so it works for a real `node_modules` install
+ * AND the monorepo workspace (where the dir is a symlink to `packages/<pkg>`),
+ * and honours hoisting. This fs check is deliberate: `<pkg>/package.json` is
+ * blocked by `exports` for server/cli/ui, and the bin-only cli has no main
+ * entry, so neither `resolve('<pkg>/package.json')` nor `resolve('<pkg>')` is
+ * reliable. The source dir is `src/`, or `lib/` for the cli. A package that is
+ * not installed is skipped (not every app depends on every `@webjsdev/*`).
  *
  * @param {string} cwd
  * @param {{ exists: (p: string) => boolean }} fsDeps
@@ -121,7 +127,7 @@ export function listSources(deps, pkgFilter) {
       ? `@webjsdev/${pkgFilter} is not installed/resolvable here. Resolvable: ${deps.roots.map((r) => r.pkg).join(', ') || '(none)'}`
       : 'No @webjsdev/* packages resolvable from here (run inside a webjs app or the monorepo).';
   }
-  const lines = ['webjs framework source (no-build: this is what runs). Read with `source({ path })` or search with `source({ query })`.', ''];
+  const lines = ['webjs framework authored source (buildless; server-side this runs directly, and core ships a built browser dist/ that is excluded here). Read with `source({ path })` or search with `source({ query })`.', ''];
   for (const r of roots) {
     const dirName = r.src.split(sep).pop(); // 'src' for most, 'lib' for cli
     let entries = [];
@@ -169,12 +175,21 @@ export async function grepSources(deps, query) {
   return hits.join('\n');
 }
 
+/** True when `p` is `base` itself or a descendant of it. */
+function within(base, p) {
+  return p === base || p.startsWith(base + sep);
+}
+
 /**
- * `path` mode: read one source file. Accepts `<pkg>/...` or
- * `@webjsdev/<pkg>/...`; resolves under that package's ROOT and refuses to
- * escape it (traversal guard). Read-only.
+ * `path` mode: read one AUTHORED-source file. Accepts `<pkg>/...` or
+ * `@webjsdev/<pkg>/...`. Scoped to the package's SOURCE dir (`src/`, or `lib/`
+ * for cli), so it serves only the authored source and NOT the built `dist/`
+ * browser bundle, `node_modules`, etc. Refuses any path that escapes the source
+ * dir lexically (`..`/absolute), and (when `deps.realpath` is provided)
+ * re-checks the symlink-resolved path so a symlink inside `src/` cannot reach
+ * outside. Read-only.
  *
- * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readFile: Function }} deps
+ * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readFile: Function, realpath?: Function }} deps
  * @param {string} path
  * @returns {Promise<string>}
  */
@@ -187,7 +202,21 @@ export async function readSource(deps, path) {
     return `Unknown or unresolvable package "${pkg || path}". Resolvable: ${deps.roots.map((r) => r.pkg).join(', ') || '(none)'}. Pass a path like server/src/ssr.js.`;
   }
   const abs = resolve(entry.root, segs.slice(1).join('/'));
-  // Traversal guard: must stay inside the resolved package root.
+  const srcLabel = entry.src.split(sep).pop();
+  // Scope to the authored source dir, so dist/ (the built core browser bundle),
+  // package.json, node_modules, etc. are not readable; only `src/` (or cli `lib/`).
+  if (!within(entry.src, abs)) {
+    return `Refusing to read outside the @webjsdev/${pkg} authored source (only ${srcLabel}/ is exposed; the built dist/ is not).`;
+  }
+  // Defense in depth: a symlink inside the source dir must not resolve outside it.
+  if (deps.realpath) {
+    try {
+      if (!within(deps.realpath(entry.src), deps.realpath(abs))) {
+        return `Refusing to read outside the @webjsdev/${pkg} authored source (a symlink escapes ${srcLabel}/).`;
+      }
+    } catch { /* abs does not exist; the readFile below returns the not-a-file message */ }
+  }
+  // Legacy guard kept as a belt-and-suspenders against a root escape too.
   if (abs !== entry.root && !abs.startsWith(entry.root + sep)) {
     return `Refusing to read outside @webjsdev/${pkg} (path escapes the package root).`;
   }

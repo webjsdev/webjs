@@ -75,9 +75,11 @@ lib/
                          checking the `require.resolve.paths` node_modules dirs on
                          disk (NOT `<pkg>/package.json`, which `exports` blocks for
                          server/cli/ui, NOR the main entry, which cli lacks), and
-                         uses `src/` or (for cli) `lib/`. READ-ONLY +
-                         traversal-guarded (cannot escape a package root), loads no
-                         module.
+                         uses `src/` or (for cli) `lib/`. READ-ONLY and scoped to
+                         the AUTHORED source dir: the built `@webjsdev/core` browser
+                         `dist/` bundle, `package.json`, etc. are NOT readable, only
+                         `src/`. Traversal-guarded lexically AND via `realpath` (a
+                         symlink inside `src/` cannot escape), loads no module.
                          The docs are bundled into the package at `prepack`
                          (`scripts/copy-mcp-resources.js` -> `resources/`, which is
                          in `files`, gitignored) so `npx @webjsdev/cli mcp` is

@@ -298,7 +298,7 @@ test('mcp: tools/call source reads/greps/lists the framework source (driven agai
   ]);
   let text = frames[0].result.content[0].text;
   assert.match(text, /@webjsdev\/server\/src:/, 'lists the server source dir');
-  assert.match(text, /no-build/i, 'frames it as the real running source');
+  assert.match(text, /buildless|authored source/i, 'frames it as the real authored source');
 
   // path -> read a real source file
   ({ frames } = await driveMcp(REPO, [
@@ -318,6 +318,12 @@ test('mcp: tools/call source reads/greps/lists the framework source (driven agai
     { jsonrpc: '2.0', id: 43, method: 'tools/call', params: { name: 'source', arguments: { path: 'server/../../../etc/passwd' } } },
   ]));
   assert.match(frames[0].result.content[0].text, /Refusing to read outside/, 'traversal guard holds end to end');
+
+  // the built core browser bundle (dist/) is NOT readable; only authored src/
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 44, method: 'tools/call', params: { name: 'source', arguments: { path: 'core/dist/webjs-core-browser.js' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /Refusing to read outside/, 'dist (built bundle) not exposed, only src');
 });
 
 /* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */

@@ -116,7 +116,7 @@ const TOOL_DEFS = [
   {
     name: 'source',
     description:
-      'Read the FRAMEWORK source itself (webjs is no-build, so node_modules/@webjsdev/*/src is the real JSDoc that runs). Pass `path` to read a file (e.g. server/src/ssr.js), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
+      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `path` to read a file (e.g. server/src/ssr.js), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
     inputSchema: SOURCE_SCHEMA,
   },
   {
@@ -404,12 +404,13 @@ export async function runMcpServer(opts) {
   let sourceDeps = opts.sourceDeps;
   if (!sourceDeps) {
     const { readFile } = await import('node:fs/promises');
-    const { readdirSync, existsSync } = await import('node:fs');
+    const { readdirSync, existsSync, realpathSync } = await import('node:fs');
     const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
     sourceDeps = {
       roots: resolveFrameworkRoots(cwd, { exists: existsSync }),
       readFile,
       readdir,
+      realpath: realpathSync,
     };
   }
 

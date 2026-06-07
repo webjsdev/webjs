@@ -6,7 +6,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -96,14 +97,40 @@ test('grepSources: discloses the cap at > 60 matches (no silent truncation)', as
   assert.match(out, /truncated at 60 matches/);
 });
 
-test('readSource: reads a file; refuses traversal; rejects unknown package', async () => {
-  const t = fakeTree();
+test('readSource: reads authored src; refuses traversal, dist, and out-of-src files', async () => {
+  const t = fakeTree({ '/fw/core/dist/webjs-core-browser.js': 'built bundle\n', '/fw/core/package.json': '{}' });
   assert.match(await readSource(t, 'core/src/html.js'), /export const html/);
   assert.match(await readSource(t, '@webjsdev/server/src/ssr.js'), /renderToString/, 'accepts the @webjsdev/ prefix');
   // Counterfactual: a traversal path must be refused, not read.
   assert.match(await readSource(t, 'core/../../etc/passwd'), /Refusing to read outside/);
   assert.match(await readSource(t, 'core/../server/src/ssr.js'), /Refusing to read outside/, 'cannot hop packages via ..');
+  // Scoped to src/: the built dist bundle and package.json are NOT readable.
+  assert.match(await readSource(t, 'core/dist/webjs-core-browser.js'), /Refusing to read outside/, 'dist (the built bundle) is not exposed');
+  assert.match(await readSource(t, 'core/package.json'), /Refusing to read outside/, 'only the authored source dir is exposed');
   assert.match(await readSource(t, 'nope/src/x.js'), /Unknown or unresolvable/);
+});
+
+test('readSource: a symlink inside src that points outside is refused (realpath hardening)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mcp-src-symlink-'));
+  const src = join(root, 'pkg', 'src');
+  const secret = join(root, 'secret.txt');
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(src, 'real.js'), 'export const ok = 1;\n');
+  writeFileSync(secret, 'SECRET\n');
+  let symlinked = true;
+  try { symlinkSync(secret, join(src, 'evil.js')); } catch { symlinked = false; } // skip if symlinks unsupported
+  const deps = {
+    roots: [{ pkg: 'pkg', root: join(root, 'pkg'), src }],
+    readFile: async (p) => (await import('node:fs/promises')).readFile(p, 'utf8'),
+    realpath: realpathSync,
+  };
+  assert.match(await readSource(deps, 'pkg/src/real.js'), /export const ok/, 'a normal src file still reads');
+  if (symlinked) {
+    const out = await readSource(deps, 'pkg/src/evil.js');
+    assert.match(out, /Refusing to read outside/, 'the escaping symlink is refused');
+    assert.ok(!/SECRET/.test(out), 'the symlink target is never returned');
+  }
+  rmSync(root, { recursive: true, force: true });
 });
 
 test('runSourceTool: dispatches path -> read, query -> grep, none -> list', async () => {
