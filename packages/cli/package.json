@@ -11,8 +11,7 @@
     "lib",
     "templates",
     "README.md",
-    "resources",
-    "scripts"
+    "resources"
   ],
   "dependencies": {
     "@webjsdev/server": "^0.8.0",

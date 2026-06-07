@@ -246,13 +246,15 @@ export async function searchDocs(deps, args) {
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (!lines[i].toLowerCase().includes(q)) continue;
+        // Check the cap BEFORE pushing, so `capped` means a match BEYOND the cap
+        // exists (exactly MAX_HITS matches is NOT a truncation, nothing dropped).
+        if (hits.length >= MAX_HITS) { capped = true; break outer; }
         // Nearest preceding heading for context.
         let heading = '';
         for (let j = i; j >= 0; j--) {
           if (/^#+\s/.test(lines[j])) { heading = lines[j].replace(/^#+\s/, ''); break; }
         }
         hits.push(`[${entry.uri}] ${heading ? heading + ': ' : ''}${lines[i].trim()}`);
-        if (hits.length >= MAX_HITS) { capped = true; break outer; }
       }
     }
     if (!hits.length) return `No matches for "${query}" in the webjs docs. Topics: ${cat.map((d) => d.name).join(', ')}`;

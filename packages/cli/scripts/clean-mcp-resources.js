@@ -5,16 +5,35 @@
  * stale `resources/` would shadow the live repo-root `agent-docs/` in dev (and
  * in the in-repo apps that resolve `@webjsdev/cli` via the workspace symlink),
  * so dev would read a possibly-stale copy. Cleaning it on `postpack` keeps the
- * bundle transient: present only inside the tarball, absent in the working tree,
- * so `resolveDocsLocation` always uses the live source in dev. Dependency-free.
+ * bundle transient, so `resolveDocsLocation` always uses the live source in dev.
+ *
+ * The reusable `cleanBundle(...)` is exported + unit-tested; the script body
+ * runs it against the real package path. Dependency-free.
+ *
+ * @module clean-mcp-resources
  */
 
 import { rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const cliRoot = resolve(here, '..'); // packages/cli/scripts -> packages/cli
+/**
+ * Remove the bundle directory. PURE side effect on the given path.
+ *
+ * @param {string} destRoot  the `resources/` dir to remove
+ * @returns {void}
+ */
+export function cleanBundle(destRoot) {
+  rmSync(destRoot, { recursive: true, force: true });
+}
 
-rmSync(join(cliRoot, 'resources'), { recursive: true, force: true });
-console.error('[webjs] cleaned the transient MCP docs bundle (resources/)');
+function main() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const cliRoot = resolve(here, '..'); // packages/cli/scripts -> packages/cli
+  cleanBundle(join(cliRoot, 'resources'));
+  console.error('[webjs] cleaned the transient MCP docs bundle (resources/)');
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
