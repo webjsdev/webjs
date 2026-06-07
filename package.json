@@ -7,6 +7,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "packages/editors/*",
+    "packages/wrappers/*",
     "packages/ui/packages/*",
     "examples/*",
     "docs",
