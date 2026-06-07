@@ -604,6 +604,79 @@ test('does not complete attributes for an UNREACHABLE (not imported) tag', () =>
 });
 
 /* ================================================================
+ * Hover + attribute go-to-definition inside html`` templates
+ * ================================================================ */
+
+test('go-to-definition on an attribute name resolves to the declared member', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number } };\n` +
+      `  declare maxLength: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box max-length=\${5}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', 'max-length') + 1;
+  const def = svc.getDefinitionAndBoundSpan('/page.ts', pos);
+  assert.ok(def && def.definitions.length === 1, 'resolves the attribute');
+  assert.equal(def.definitions[0].fileName, '/box.ts');
+  assert.equal(def.definitions[0].name, 'maxLength');
+  assert.equal(def.textSpan.length, 'max-length'.length);
+});
+
+test('hover on a custom-element tag shows its component class', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = {};\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box') + 2;
+  const qi = svc.getQuickInfoAtPosition('/page.ts', pos);
+  assert.ok(qi, 'returns quick info');
+  const text = qi.displayParts.map((p) => p.text).join('');
+  assert.ok(/my-box/.test(text) && /Box/.test(text), `unexpected hover: ${text}`);
+});
+
+test('hover on a property binding shows its declared type', () => {
+  const svc = makeService({
+    '/box.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { count: { type: Number } };\n` +
+      `  declare count: number;\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .count=\${1}></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '.count') + 2;
+  const qi = svc.getQuickInfoAtPosition('/page.ts', pos);
+  assert.ok(qi, 'returns quick info');
+  const text = qi.displayParts.map((p) => p.text).join('');
+  assert.ok(/property/.test(text) && /count/.test(text) && /number/.test(text), `unexpected hover: ${text}`);
+});
+
+/* ================================================================
  * Attribute-value type-check on `<webjs-tag attr=${expr}>` interpolations
  * ================================================================ */
 

@@ -93,12 +93,28 @@ function init(modules) {
       try {
         return (
           webjsTagDefinition(info, fileName, position) ||
+          webjsAttrDefinition(info, fileName, position) ||
           webjsCssClassDefinition(info, fileName, position) ||
           upstream
         );
       } catch (e) {
         info.project.projectService.logger?.info?.(
           `@webjsdev/ts-plugin: getDefinitionAndBoundSpan threw: ${String(e)}`,
+        );
+        return upstream;
+      }
+    };
+
+    // Hover inside an html`` template: a custom-element tag shows its class,
+    // an attribute/property/event shows its declared type. Outside template
+    // markup (e.g. inside a `${}` hole) we defer to upstream/tsserver.
+    proxy.getQuickInfoAtPosition = (fileName, position) => {
+      const upstream = inner.getQuickInfoAtPosition(fileName, position);
+      try {
+        return webjsTemplateQuickInfo(info, fileName, position) || upstream;
+      } catch (e) {
+        info.project.projectService.logger?.info?.(
+          `@webjsdev/ts-plugin: getQuickInfoAtPosition threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -405,6 +421,179 @@ function init(modules) {
       const first = m[w];
       const prefix = first === '@' ? 'event' : first === '.' ? 'property' : first === '?' ? 'boolean' : 'none';
       return { kind: 'attr', node, prefix };
+    }
+    return undefined;
+  }
+
+  /* ================================================================
+   * Resolver: attribute / property / event name → class member
+   * ================================================================ */
+
+  /**
+   * The `{ tag, attr, ref, member }` for an attribute name under the cursor
+   * inside a reachable webjs tag, or undefined.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   */
+  function attrUnderCursor(info, fileName, position) {
+    const program = info.languageService.getProgram();
+    if (!program) return undefined;
+    const source = program.getSourceFile(fileName);
+    if (!source) return undefined;
+    const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
+    if (!templateExpr) return undefined;
+    const doc = tpl.parseTemplate(ts, templateExpr);
+    if (!doc) return undefined;
+    const hit = tpl.attrNameAtOffset(doc, position);
+    if (!hit || !hit.node.isCustom) return undefined;
+
+    const registry = buildRegistry(program);
+    const ref = registry.components.get(hit.node.tag);
+    if (!ref) return undefined;
+    const reachable = collectReachableTags(program, source, registry);
+    if (!reachable.has(hit.node.tag)) return undefined;
+
+    const member =
+      hit.attr.modifier === 'property'
+        ? ref.members.find((mm) => mm.propName === hit.attr.name)
+        : ref.members.find((mm) => mm.attrName === hit.attr.name);
+    return { tag: hit.node.tag, attr: hit.attr, ref, member, program };
+  }
+
+  /**
+   * Go-to-definition on an attribute / property / event name: resolve to the
+   * class member (the `declare` field or the `static properties` key).
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   * @returns {import('typescript').DefinitionInfoAndBoundSpan | undefined}
+   */
+  function webjsAttrDefinition(info, fileName, position) {
+    const hit = attrUnderCursor(info, fileName, position);
+    if (!hit || !hit.member) return undefined;
+    const target = findMemberNameSpan(hit.program, hit.ref, hit.member.propName);
+    if (!target) return undefined;
+    return {
+      textSpan: hit.attr.nameSpan,
+      definitions: [
+        {
+          fileName: target.fileName,
+          textSpan: target.span,
+          kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+          name: hit.member.propName,
+          containerKind: /** @type any */ (ts.ScriptElementKind).classElement,
+          containerName: hit.ref.className,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Hover for a custom-element tag (its class) or an attribute / property /
+   * event (its declared type), inside an html`` template.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @param {number} position
+   * @returns {import('typescript').QuickInfo | undefined}
+   */
+  function webjsTemplateQuickInfo(info, fileName, position) {
+    const program = info.languageService.getProgram();
+    if (!program) return undefined;
+    const source = program.getSourceFile(fileName);
+    if (!source) return undefined;
+    const templateExpr = findEnclosingTaggedTemplate(source, position, 'html');
+    if (!templateExpr) return undefined;
+    const doc = tpl.parseTemplate(ts, templateExpr);
+    if (!doc) return undefined;
+
+    const registry = buildRegistry(program);
+    const reachable = collectReachableTags(program, source, registry);
+    const parts = (text) => [{ text, kind: 'text' }];
+
+    // Tag hover.
+    const tagHit = tpl.tagNameAtOffset(doc, position);
+    if (tagHit && tagHit.isCustom && reachable.has(tagHit.tag)) {
+      const ref = registry.components.get(tagHit.tag);
+      if (ref) {
+        return {
+          kind: /** @type any */ (ts.ScriptElementKind).classElement,
+          kindModifiers: '',
+          textSpan: tagHit.tagSpan,
+          displayParts: parts(`(webjs component) <${tagHit.tag}> → ${ref.className}`),
+          documentation: [],
+        };
+      }
+    }
+
+    // Attribute / property / event hover.
+    const hit = attrUnderCursor(info, fileName, position);
+    if (hit && hit.member) {
+      const kindWord =
+        hit.attr.modifier === 'event' ? 'event' : hit.attr.modifier === 'property' ? 'property' : 'attribute';
+      const checker = program.getTypeChecker();
+      const t = resolvePropType(hit.program, hit.ref, hit.member.propName, checker);
+      const typeStr = t ? `: ${checker.typeToString(t)}` : '';
+      const shown = hit.attr.modifier === 'property' ? hit.member.propName : hit.member.attrName;
+      return {
+        kind: /** @type any */ (ts.ScriptElementKind).memberVariableElement,
+        kindModifiers: '',
+        textSpan: hit.attr.nameSpan,
+        displayParts: parts(`(${kindWord}) ${shown}${typeStr} on <${hit.tag}>`),
+        documentation: [],
+      };
+    }
+    return undefined;
+  }
+
+  /**
+   * The source location of a class member's name (the `declare propName`
+   * field if present, else the `static properties` key), for go-to-definition.
+   *
+   * @param {import('typescript').Program} program
+   * @param {ComponentRef} ref
+   * @param {string} propName
+   * @returns {{ fileName: string, span: import('typescript').TextSpan } | undefined}
+   */
+  function findMemberNameSpan(program, ref, propName) {
+    const compSf = program.getSourceFile(ref.fileName);
+    if (!compSf) return undefined;
+    const cls = findClassDeclaration(compSf, ref.className);
+    if (!cls) return undefined;
+    // Prefer the typed `declare propName: T` field.
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name) continue;
+      const isStatic = (member.modifiers || []).some((mod) => mod.kind === ts.SyntaxKind.StaticKeyword);
+      if (isStatic) continue;
+      const nm =
+        ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name) ? member.name.text : undefined;
+      if (nm === propName) {
+        return {
+          fileName: ref.fileName,
+          span: { start: member.name.getStart(compSf), length: member.name.getWidth(compSf) },
+        };
+      }
+    }
+    // Fall back to the `static properties` key.
+    for (const member of cls.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name) continue;
+      if (!ts.isIdentifier(member.name) || member.name.text !== 'properties') continue;
+      const init = member.initializer;
+      if (!init || !ts.isObjectLiteralExpression(init)) continue;
+      for (const prop of init.properties) {
+        if (!prop.name) continue;
+        const nm =
+          ts.isIdentifier(prop.name) || ts.isStringLiteralLike(prop.name) ? prop.name.text : undefined;
+        if (nm === propName) {
+          return {
+            fileName: ref.fileName,
+            span: { start: prop.name.getStart(compSf), length: prop.name.getWidth(compSf) },
+          };
+        }
+      }
     }
     return undefined;
   }
