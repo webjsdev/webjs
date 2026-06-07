@@ -236,9 +236,11 @@ export async function searchDocs(deps, args) {
 
   if (query) {
     const q = String(query).toLowerCase();
+    const MAX_HITS = 40;
     /** @type {string[]} */
     const hits = [];
-    for (const entry of cat) {
+    let capped = false;
+    outer: for (const entry of cat) {
       let text = '';
       try { text = await deps.readFile(entry.file, 'utf8'); } catch { continue; }
       const lines = text.split('\n');
@@ -250,11 +252,12 @@ export async function searchDocs(deps, args) {
           if (/^#+\s/.test(lines[j])) { heading = lines[j].replace(/^#+\s/, ''); break; }
         }
         hits.push(`[${entry.uri}] ${heading ? heading + ': ' : ''}${lines[i].trim()}`);
-        if (hits.length >= 40) break;
+        if (hits.length >= MAX_HITS) { capped = true; break outer; }
       }
-      if (hits.length >= 40) break;
     }
     if (!hits.length) return `No matches for "${query}" in the webjs docs. Topics: ${cat.map((d) => d.name).join(', ')}`;
+    // Disclose truncation rather than silently capping (no silent caps).
+    if (capped) hits.push(`... (truncated at ${MAX_HITS} matches; refine the query or open a doc with \`topic\`)`);
     return hits.join('\n');
   }
 

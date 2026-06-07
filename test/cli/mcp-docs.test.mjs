@@ -4,10 +4,13 @@
  * so these never touch the real filesystem and prove the logic independent of
  * the dispatch/transport tested in `mcp.test.mjs`.
  */
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '..', '..');
@@ -20,7 +23,11 @@ const {
   searchDocs,
   getPrompt,
   PROMPTS,
+  resolveDocsLocation,
 } = await import(resolve(REPO, 'packages', 'cli', 'lib', 'mcp-docs.js'));
+
+const _cleanup = [];
+after(() => { for (const d of _cleanup) rmSync(d, { recursive: true, force: true }); });
 
 /** An in-memory corpus: a fake docsDir + AGENTS.md, no real fs. */
 function fixture() {
@@ -99,6 +106,66 @@ test('searchDocs: topic returns the doc, query returns tagged hits, no-args retu
   assert.match(await searchDocs(deps, {}), /topics/i);
   assert.match(await searchDocs(deps, { topic: 'missing' }), /Unknown topic/);
   assert.match(await searchDocs(deps, { query: 'zzzznotfound' }), /No matches/);
+});
+
+test('searchDocs: a capped query result discloses the truncation (no silent cap)', async () => {
+  // A corpus with > 40 matching lines for the query, in one doc.
+  const many = Array.from({ length: 60 }, (_, i) => `signal line ${i}`).join('\n');
+  const deps = {
+    docsDir: '/docs',
+    agentsPath: '/AGENTS.md',
+    listDir: () => ['big.md'],
+    exists: () => false,
+    readFile: async () => `# Big\n\n${many}\n`,
+  };
+  const out = await searchDocs(deps, { query: 'signal line' });
+  const lines = out.split('\n');
+  assert.ok(lines.length <= 41, 'caps the hit list');
+  assert.match(out, /truncated at 40 matches/, 'discloses the cap rather than silently dropping');
+});
+
+test('resolveDocsLocation: prefers the bundled resources/, falls back to repo-root agent-docs', () => {
+  // Build a fake package layout: <root>/packages/cli/lib (the module location),
+  // <root>/agent-docs (the dev fallback), <root>/packages/cli/resources (bundled).
+  const root = mkdtempSync(join(tmpdir(), 'mcp-resolve-'));
+  _cleanup.push(root);
+  const libDir = join(root, 'packages', 'cli', 'lib');
+  const bundled = join(root, 'packages', 'cli', 'resources', 'agent-docs');
+  mkdirSync(libDir, { recursive: true });
+  mkdirSync(join(root, 'agent-docs'), { recursive: true });
+  writeFileSync(join(root, 'AGENTS.md'), '# root\n');
+  const moduleUrl = pathToFileURL(join(libDir, 'mcp-docs.js')).href;
+
+  // No bundle yet -> dev fallback to the repo-root agent-docs + AGENTS.md.
+  let loc = resolveDocsLocation(moduleUrl);
+  assert.equal(loc.docsDir, join(root, 'agent-docs'), 'falls back to repo-root agent-docs');
+  assert.equal(loc.agentsPath, join(root, 'AGENTS.md'));
+
+  // Bundle present -> the published path wins.
+  mkdirSync(bundled, { recursive: true });
+  writeFileSync(join(root, 'packages', 'cli', 'resources', 'AGENTS.md'), '# bundled\n');
+  loc = resolveDocsLocation(moduleUrl);
+  assert.equal(loc.docsDir, bundled, 'prefers the bundled resources/agent-docs');
+  assert.equal(loc.agentsPath, join(root, 'packages', 'cli', 'resources', 'AGENTS.md'));
+});
+
+test('copy + clean scripts: prepack bundles agent-docs, postpack removes the transient bundle', () => {
+  const cliDir = resolve(REPO, 'packages', 'cli');
+  const resourcesDir = join(cliDir, 'resources');
+  // Guard: only run if the working tree has no pre-existing bundle (it is gitignored).
+  const preexisting = existsSync(resourcesDir);
+  try {
+    execFileSync(process.execPath, [join(cliDir, 'scripts', 'copy-mcp-resources.js')], { stdio: 'pipe' });
+    assert.ok(existsSync(join(resourcesDir, 'agent-docs')), 'copy script created resources/agent-docs');
+    assert.ok(existsSync(join(resourcesDir, 'AGENTS.md')), 'copy script bundled AGENTS.md');
+    assert.ok(readdirSync(join(resourcesDir, 'agent-docs')).some((f) => f.endsWith('.md')), 'bundled docs are present');
+
+    execFileSync(process.execPath, [join(cliDir, 'scripts', 'clean-mcp-resources.js')], { stdio: 'pipe' });
+    assert.ok(!existsSync(resourcesDir), 'clean script removed the transient bundle');
+  } finally {
+    // Never leave a bundle behind (it would shadow the live docs in dev).
+    if (!preexisting) rmSync(resourcesDir, { recursive: true, force: true });
+  }
 });
 
 test('getPrompt: every listed prompt resolves to a user message; unknown throws', () => {
