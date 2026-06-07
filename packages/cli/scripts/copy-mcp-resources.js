@@ -34,4 +34,5 @@ mkdirSync(destDocs, { recursive: true });
 cpSync(srcDocs, destDocs, { recursive: true });
 copyFileSync(srcAgents, join(destRoot, 'AGENTS.md'));
 
-console.log(`[webjs] bundled MCP docs into ${join('resources')} (agent-docs + AGENTS.md)`);
+// Diagnostics go to stderr so they never pollute a tool parsing `npm pack --json` stdout.
+console.error(`[webjs] bundled MCP docs into ${join('resources')} (agent-docs + AGENTS.md)`);
