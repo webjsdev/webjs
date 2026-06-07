@@ -315,8 +315,7 @@ syntax. Add `"checkJs": true` to enforce types in editor + CI.
 **Editor-only. Not required for the framework to run.** The runtime
 has no dependency on it.
 
-A single plugin. As of `@webjsdev/ts-plugin@0.4.0`, `ts-lit-plugin`
-is bundled internally, so list one entry:
+A single plugin with its OWN in-template intelligence (no Lit dependency; the `webjs` VSCode extension bundles it). List one entry:
 
 ```jsonc
 "plugins": [
@@ -324,14 +323,13 @@ is bundled internally, so list one entry:
 ]
 ```
 
-Gives you:
-- Type-check + diagnostics for attribute *values* inside `` html`` `` templates.
-- Go-to-definition from `<my-counter>` to the class registered via `MyCounter.register('my-counter')`.
-- Diagnostic suppression for "Unknown tag" / "Unknown attribute" on tags any webjs class registers.
-- Attribute auto-complete from `static properties = { … }` keys.
-- Attribute-value type-check: `<my-counter count=${expr}>` assignability-checks `typeof expr` against `declare count: T`.
+Gives you, inside `` html`` `` templates:
+- **Go-to-definition** from `<my-counter>` to the class registered via `MyCounter.register('my-counter')`, from an attribute / property / event name to its class member, and from a CSS class in `class="…"` to its `` css`` `` rule.
+- **Completions**: reachable custom-element tag names after `<`, and binding-aware attribute completions: `.` offers property names, plain / `?` offer hyphenated attribute names (`maxLength` → `max-length`), `@event` is permissive.
+- **Diagnostics**: attribute / property value type-checks (`<my-counter .count=${expr}>` assignability-checks `typeof expr` against `declare count: T`; `@click=${fn}` must be callable), unquoted `@`/`.`/`?` bindings (invariant 4), and expressionless `.prop` bindings.
+- **Hover**: a tag shows its component class; an attribute / property / event shows its declared type.
 
-Both behaviours are gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing.
+Every feature is gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing. There is deliberately no blanket "unknown tag / attribute" diagnostic (webjs has no element type map, so it would false-positive on third-party custom elements).
 
 ### The `webjs` VSCode extension (recommended over a manual tsconfig plugin)
 
