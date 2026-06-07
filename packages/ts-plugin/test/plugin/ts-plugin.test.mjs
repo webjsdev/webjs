@@ -523,6 +523,86 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
   assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
 });
 
+test('a camelCase prop completes as a hyphenated attribute; state props are excluded', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box ></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
+  const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
+  assert.ok(names.includes('max-length'), `plain attr is hyphenated: ${JSON.stringify(names)}`);
+  assert.ok(!names.includes('maxLength'), 'camelCase prop is not offered as a plain attribute');
+  assert.ok(!names.includes('internal'), 'state prop has no attribute');
+});
+
+test('`.` triggers property-name completions (camelCase, includes state props)', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my-box .></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box .') + '<my-box .'.length;
+  const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
+  assert.ok(names.includes('maxLength'), `property binding uses prop name: ${JSON.stringify(names)}`);
+  assert.ok(names.includes('internal'), 'state props are valid .prop targets');
+});
+
+test('completes reachable custom-element tag names after `<`', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = {};\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './box.ts';\n` +
+      `export default function P() {\n` +
+      `  return html\`<my></my>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my') + '<my'.length;
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  const names = completions.entries.map((e) => e.name);
+  assert.ok(names.includes('my-box'), `expected tag completion: ${JSON.stringify(names)}`);
+});
+
+test('does not complete attributes for an UNREACHABLE (not imported) tag', () => {
+  const svc = makeService({
+    '/box.ts':
+      `export class Box extends WebComponent {\n` +
+      `  static properties = { mode: { type: String } };\n` +
+      `}\n` +
+      `Box.register('my-box');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` + // NOT importing ./box.ts
+      `export default function P() {\n` +
+      `  return html\`<my-box ></my-box>\`;\n` +
+      `}\n`,
+  });
+  const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
+  const completions = svc.getCompletionsAtPosition('/page.ts', pos, undefined);
+  const names = (completions?.entries || []).map((e) => e.name);
+  assert.ok(!names.includes('mode'), 'unreachable tag offers no webjs attributes');
+});
+
 /* ================================================================
  * Attribute-value type-check on `<webjs-tag attr=${expr}>` interpolations
  * ================================================================ */
