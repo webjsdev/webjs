@@ -33,16 +33,14 @@ The extension must NOT depend on any Lit extension or grammar. Two
 mechanisms keep it that way, and both are load-bearing:
 
 - **Highlighting** uses our own grammars, never `vscode-lit-html`.
-- **Intelligence** bundles `@webjsdev/ts-plugin` with `ts-lit-plugin`
-  left EXTERNAL (`scripts/build.mjs`). The plugin's
-  `require('ts-lit-plugin')` already has a graceful fallback (see
-  `../ts-plugin/src/index.js`), so absent that module it runs as the
-  bare, Lit-free webjs language service. Do NOT bundle `ts-lit-plugin`
-  in; phase 3 (#381) removes the dependency from the plugin entirely.
+- **Intelligence** bundles `@webjsdev/ts-plugin`, which is standalone as
+  of Phase 3 (#386): it has its own template parser and no `ts-lit-plugin`
+  dependency, so the esbuilt bundle (`scripts/build.mjs`) is the whole
+  webjs language service with no Lit code at all.
 
 `test/extension.test.mjs` asserts no `ts-lit-plugin` / `lit-html` string
-appears in the manifest and that the built bundle keeps the require
-external rather than inlining it.
+appears in the manifest and that the built bundle neither requires nor
+references `ts-lit-plugin`.
 
 ## Build + packaging (the monorepo gotcha)
 

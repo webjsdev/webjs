@@ -108,18 +108,20 @@ editor-only, not required for the framework to run.
 ]
 ```
 
-`@webjsdev/ts-plugin` bundles `ts-lit-plugin` internally (it's a runtime
-dependency of the plugin) and loads it programmatically, so users
-list one entry, not two. You get the full stack of template-literal
-intelligence (type-checking, diagnostics, go-to-def inside
-`` html`…` `` and `` css`…` `` templates) **plus** webjs-aware behaviour
-layered on top:
+`@webjsdev/ts-plugin` is **standalone** (no Lit dependency): one plugin
+entry, its own template parser. Inside `` html`…` `` templates you get:
 
-- "Unknown tag/attribute" diagnostics are silenced for elements
-  registered via `Class.register('tag-name')`.
-- Attribute auto-complete sourced from each component's
-  `static properties`.
-- Attribute-value type-check against `declare propName: T` annotations.
+- Go-to-definition on custom-element tags, attribute / property / event
+  names, and CSS classes in `class="…"`.
+- Binding-aware completions: reachable tag names after `<`, and
+  prefix-keyed attributes (`.prop` property names, `?bool` / plain
+  hyphenated attribute names).
+- Diagnostics: value type-checks against `declare propName: T`, unquoted
+  `@`/`.`/`?` bindings, and expressionless `.prop` bindings.
+- Hover showing the component class / declared member type.
+
+In VS Code / Cursor / Windsurf, the **`webjs` extension** bundles this
+automatically (no `tsconfig.json` edit, no separate Lit extension).
 
 See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
 for the full walkthrough.
