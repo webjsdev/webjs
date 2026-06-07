@@ -64,3 +64,6 @@ coverage/
 
 # Playwright/chrome-devtools MCP console-log output
 .playwright-mcp/
+
+# Bundled MCP docs (generated at prepack from agent-docs + AGENTS.md, #376)
+packages/cli/resources/

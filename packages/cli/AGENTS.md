@@ -40,12 +40,14 @@ lib/
                          newline-delimited JSON-RPC 2.0 (one object per line),
                          writing ONLY JSON-RPC frames to stdout and every
                          diagnostic to stderr (stdout is the protocol channel).
-                         Handshake: `initialize` -> serverInfo + capabilities;
+                         Handshake: `initialize` -> serverInfo + capabilities
+                         (`tools` + `resources` + `prompts`);
                          `notifications/initialized` -> no reply; `tools/list`
-                         -> the four tools; `tools/call` -> a content array
-                         whose text is the JSON result. Unknown method ->
-                         -32601, parse error -> -32700, a malformed line never
-                         crashes the loop. Four read-only tools, each
+                         -> the tools; `tools/call` -> a content array
+                         whose text is the JSON result (introspection) or markdown
+                         (knowledge). Unknown method -> -32601, parse error ->
+                         -32700, a malformed line never crashes the loop.
+                         INTROSPECTION tools (read-only, appDir-scoped), each
                          projecting an EXISTING @webjsdev/server function:
                          `list_routes` (buildRouteTable), `list_actions`
                          (buildActionIndex + hashFile for the
@@ -54,8 +56,23 @@ lib/
                          shared `projectCheck`). Function names are extracted
                          LEXICALLY (extractExportNames / extractRouteMethods) so
                          no app module is loaded (no DB init side effects).
-                         `deps` is injectable for in-process tests. Tests:
-                         `test/cli/mcp.test.mjs`, `test/cli/check-json.test.mjs`.
+                         KNOWLEDGE layer (#376), all in `lib/mcp-docs.js`: an
+                         `init` tool (the read-first mental-model primer, sourcing
+                         the execution-model + invariants sections from AGENTS.md
+                         so it cannot drift), a `docs` tool (retrieve a doc by
+                         topic / search by query / index), MCP `resources/list` +
+                         `resources/read` serving the `agent-docs/*.md` corpus +
+                         AGENTS.md as `webjs-docs://<name>`, and `prompts/list` +
+                         `prompts/get` exposing the recipes as guided workflows.
+                         The docs are bundled into the package at `prepack`
+                         (`scripts/copy-mcp-resources.js` -> `resources/`, which is
+                         in `files`, gitignored) so `npx @webjsdev/cli mcp` is
+                         self-contained; `resolveDocsLocation` falls back to the
+                         repo-root `agent-docs/` in dev so source stays single.
+                         `deps` (introspection) + `docsDeps` (knowledge) are
+                         injectable for in-process tests. Tests:
+                         `test/cli/mcp.test.mjs`, `test/cli/mcp-docs.test.mjs`,
+                         `test/cli/check-json.test.mjs`.
   doctor.js              `webjs doctor` project-health checks (#266).
                          `runDoctorChecks(appDir, opts?)` is PURE (reads files +
                          optionally the network, never exits / prints) so each
@@ -90,7 +107,7 @@ README.md                npm-facing package readme.
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules] [--json]` | `checkConventions()` from `@webjsdev/server/check`. `--rules` lists the checks. `--json` emits the structured violations + a summary count as JSON (via the shared `lib/check-json.js` `projectCheck`), so an agent in a loop consumes structured data instead of regex-scraping stdout; the non-zero exit on violations is preserved. Report-only: each violation carries a prose `fix` hint, but there is no `--fix` autofix flag (the rules either rewrite code or rename files, so an automatic codemod is not safe) |
-| `webjs mcp` | Read-only MCP stdio server (#262), `runMcpServer()` from `lib/mcp.js`. Exposes four tools over newline-delimited JSON-RPC 2.0: `list_routes`, `list_actions`, `list_components`, `check`, each reusing an existing `@webjsdev/server` data function and mutating nothing. Hand-rolled, ZERO new dependency. Wired into the scaffold's `.claude.json` next to the Playwright MCP entry as `{ "command": "npx", "args": ["@webjsdev/cli", "mcp"] }`. STDOUT is the JSON-RPC channel (diagnostics go to stderr) |
+| `webjs mcp` | MCP stdio server (#262, knowledge layer #376), `runMcpServer()` from `lib/mcp.js`. Hand-rolled, ZERO new dependency, newline-delimited JSON-RPC 2.0. INTROSPECTION tools (read-only): `list_routes`, `list_actions`, `list_components`, `check`. KNOWLEDGE layer: an `init` mental-model primer + a `docs` retrieval tool, MCP `resources` (the `agent-docs` corpus + AGENTS.md as `webjs-docs://*`), and `prompts` (the recipes as guided workflows). Docs bundled into the package at `prepack` (self-contained `npx`), repo-root fallback in dev. Wired into the scaffold's `.claude.json` next to the Playwright MCP entry as `{ "command": "npx", "args": ["@webjsdev/cli", "mcp"] }`; mountable in any MCP host (Cursor `.cursor/mcp.json`, etc.). STDOUT is the JSON-RPC channel (diagnostics go to stderr) |
 | `webjs doctor` | `runDoctorChecks()` from `lib/doctor.js`. A project-health checklist over existing signals (Node major, tsconfig `erasableSyntaxOnly`, `.env` drift vs `.env.example`, vendor-pin freshness, `@webjsdev/*` version coherence, git pre-commit hook). PURE checks render with a `[pass]` / `[warn]` / `[fail]` marker; non-zero exit iff a HARD check fails (Node below the floor, or `erasableSyntaxOnly` missing in an existing tsconfig), so CI can gate. Warns (drift / staleness) never fail the exit. The only network touch (pin freshness) is best-effort: a fetch failure is a warn, never a hard fail. An onboarding/setup-verify tool, NOT a scaffold-CI hard gate. Tests: `test/cli/doctor.test.mjs` |
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |

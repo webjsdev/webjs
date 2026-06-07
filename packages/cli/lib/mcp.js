@@ -23,6 +23,16 @@
 import { createInterface } from 'node:readline';
 import { relative } from 'node:path';
 
+import {
+  resolveDocsLocation,
+  listResources,
+  readResource,
+  initText,
+  searchDocs,
+  PROMPTS,
+  getPrompt,
+} from './mcp-docs.js';
+
 const PROTOCOL_VERSION = '2024-11-05';
 
 /**
@@ -31,31 +41,8 @@ const PROTOCOL_VERSION = '2024-11-05';
  * into an agent-friendly shape. Descriptions are crisp so a model picks the
  * right tool without reading source.
  */
-const TOOL_DEFS = [
-  {
-    name: 'list_routes',
-    description:
-      'List the app route table: SSR pages (path, file, dynamic flag, param names) and route.{js,ts} API handlers (path, file, HTTP methods). Read-only.',
-  },
-  {
-    name: 'list_actions',
-    description:
-      'List registered server actions (the .server.{js,ts} files with "use server"): file, exported function name, and the /__webjs/action/<hash>/<fn> RPC endpoint. Read-only.',
-  },
-  {
-    name: 'list_components',
-    description:
-      'List registered custom-element tags: tag name, defining file, and class name. Read-only.',
-  },
-  {
-    name: 'check',
-    description:
-      'Run webjs check (correctness rules) and return the structured violations { rule, file, message, fix } plus a summary count and per-rule breakdown. Read-only.',
-  },
-];
-
-/** The shared input schema: every tool takes an optional appDir override. */
-const TOOL_INPUT_SCHEMA = {
+/** The shared input schema for the introspection tools: an optional appDir override. */
+const APPDIR_SCHEMA = {
   type: 'object',
   properties: {
     appDir: {
@@ -65,6 +52,71 @@ const TOOL_INPUT_SCHEMA = {
   },
   required: [],
 };
+
+/** `init` takes no input. */
+const INIT_SCHEMA = { type: 'object', properties: {}, required: [] };
+
+/** `docs` takes an optional topic OR a free-text query. */
+const DOCS_SCHEMA = {
+  type: 'object',
+  properties: {
+    topic: {
+      type: 'string',
+      description: 'A doc name (e.g. components, recipes, lit-muscle-memory-gotchas, AGENTS). Returns the full doc.',
+    },
+    query: {
+      type: 'string',
+      description: 'Free-text search across all webjs docs. Returns matching lines with their source.',
+    },
+  },
+  required: [],
+};
+
+/**
+ * The tools. The four introspection tools project an EXISTING @webjsdev/server
+ * function (read-only, appDir-scoped). `init` + `docs` (#376) surface the
+ * framework knowledge: `init` is the "read first" mental-model primer, `docs`
+ * retrieves a doc by topic or searches the corpus. Descriptions are crisp so a
+ * model picks the right tool without reading source.
+ */
+const TOOL_DEFS = [
+  {
+    name: 'init',
+    description:
+      'READ THIS FIRST before writing or editing a webjs app. Returns the webjs mental model (NOT React/Next: no RSC, components hydrate but pages do not, signals-default state, the .server boundary) plus the invariants and the doc index. Read-only.',
+    inputSchema: INIT_SCHEMA,
+  },
+  {
+    name: 'docs',
+    description:
+      'Retrieve webjs framework docs: pass `topic` for a full doc (components, recipes, styling, built-ins, configuration, advanced, metadata, typescript, testing, lit-muscle-memory-gotchas, AGENTS, ...) or `query` to search the corpus. No args returns the topic index. Read-only.',
+    inputSchema: DOCS_SCHEMA,
+  },
+  {
+    name: 'list_routes',
+    description:
+      'List the app route table: SSR pages (path, file, dynamic flag, param names) and route.{js,ts} API handlers (path, file, HTTP methods). Read-only.',
+    inputSchema: APPDIR_SCHEMA,
+  },
+  {
+    name: 'list_actions',
+    description:
+      'List registered server actions (the .server.{js,ts} files with "use server"): file, exported function name, and the /__webjs/action/<hash>/<fn> RPC endpoint. Read-only.',
+    inputSchema: APPDIR_SCHEMA,
+  },
+  {
+    name: 'list_components',
+    description:
+      'List registered custom-element tags: tag name, defining file, and class name. Read-only.',
+    inputSchema: APPDIR_SCHEMA,
+  },
+  {
+    name: 'check',
+    description:
+      'Run webjs check (correctness rules) and return the structured violations { rule, file, message, fix } plus a summary count and per-rule breakdown. Read-only.',
+    inputSchema: APPDIR_SCHEMA,
+  },
+];
 
 /**
  * Lexically extract the names exported from a module source. Recognises the
@@ -302,6 +354,23 @@ export async function runMcpServer(opts) {
   }
   const runners = makeToolRunners(deps);
 
+  // The docs corpus deps for the knowledge layer (#376): resources / prompts /
+  // init / docs. Injectable for tests; otherwise resolved from the bundled
+  // (published) or repo-root (dev) docs and node fs.
+  let docsDeps = opts.docsDeps;
+  if (!docsDeps) {
+    const loc = resolveDocsLocation(import.meta.url);
+    const { readFile } = await import('node:fs/promises');
+    const { readdirSync, existsSync } = await import('node:fs');
+    docsDeps = {
+      docsDir: loc.docsDir,
+      agentsPath: loc.agentsPath,
+      listDir: readdirSync,
+      exists: existsSync,
+      readFile,
+    };
+  }
+
   /** Write one JSON-RPC frame as a single line to stdout. */
   const send = (frame) => {
     stdout.write(JSON.stringify(frame) + '\n');
@@ -323,7 +392,7 @@ export async function runMcpServer(opts) {
     if (method === 'initialize') {
       return rpcResult(id, {
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'webjs', version },
       });
     }
@@ -336,24 +405,59 @@ export async function runMcpServer(opts) {
         tools: TOOL_DEFS.map((t) => ({
           name: t.name,
           description: t.description,
-          inputSchema: TOOL_INPUT_SCHEMA,
+          inputSchema: t.inputSchema,
         })),
       });
+    }
+
+    // Knowledge layer (#376): the framework docs as MCP resources.
+    if (method === 'resources/list') {
+      return rpcResult(id, { resources: listResources(docsDeps) });
+    }
+    if (method === 'resources/read') {
+      const uri = ((msg && msg.params) || {}).uri;
+      try {
+        const r = await readResource(docsDeps, uri);
+        return rpcResult(id, { contents: [r] });
+      } catch (e) {
+        return rpcError(id, -32602, e && e.message ? e.message : String(e));
+      }
+    }
+
+    // Knowledge layer (#376): the recipes as guided-workflow prompts.
+    if (method === 'prompts/list') {
+      return rpcResult(id, { prompts: PROMPTS });
+    }
+    if (method === 'prompts/get') {
+      const params = (msg && msg.params) || {};
+      try {
+        return rpcResult(id, getPrompt(params.name, params.arguments));
+      } catch (e) {
+        return rpcError(id, -32602, e && e.message ? e.message : String(e));
+      }
     }
 
     if (method === 'tools/call') {
       const params = (msg && msg.params) || {};
       const name = params.name;
       const args = params.arguments || {};
-      const runner = runners[name];
-      if (!runner) {
+      // The knowledge tools route to the docs layer; they return markdown text.
+      const isKnowledgeTool = name === 'init' || name === 'docs';
+      if (!isKnowledgeTool && !runners[name]) {
         return rpcError(id, -32602, `Unknown tool: ${String(name)}`);
       }
       const appDir = typeof args.appDir === 'string' && args.appDir ? args.appDir : cwd;
       try {
-        const result = await runner(appDir);
+        const result = isKnowledgeTool
+          ? name === 'init'
+            ? await initText(docsDeps)
+            : await searchDocs(docsDeps, args)
+          : await runners[name](appDir);
+        // Knowledge tools return a markdown string; introspection tools return
+        // a JSON-serialisable object.
+        const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
         return rpcResult(id, {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text', text }],
         });
       } catch (e) {
         // A tool failure is an MCP tool-result error (isError), not a transport

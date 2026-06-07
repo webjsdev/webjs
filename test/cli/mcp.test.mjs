@@ -90,7 +90,7 @@ test('mcp: initialize handshake returns serverInfo + capabilities', async () => 
   const r = frames[0];
   assert.equal(r.id, 1);
   assert.equal(r.result.protocolVersion, '2024-11-05');
-  assert.deepEqual(r.result.capabilities, { tools: {} });
+  assert.deepEqual(r.result.capabilities, { tools: {}, resources: {}, prompts: {} });
   assert.deepEqual(r.result.serverInfo, { name: 'webjs', version: '9.9.9' });
 });
 
@@ -105,19 +105,23 @@ test('mcp: notifications/initialized gets NO response', async () => {
   assert.equal(frames[0].id, 2);
 });
 
-test('mcp: tools/list returns the four tools with inputSchemas', async () => {
+test('mcp: tools/list returns the introspection + knowledge tools with inputSchemas', async () => {
   const dir = tmpDir();
   const { frames } = await driveMcp(dir, [
     { jsonrpc: '2.0', id: 3, method: 'tools/list' },
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'list_actions', 'list_components', 'list_routes']);
+  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_routes']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
-    assert.ok(t.inputSchema.properties.appDir, 'inputSchema declares appDir');
   }
+  // The introspection tools take appDir; init takes nothing; docs takes topic/query.
+  const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+  assert.ok(byName.list_routes.inputSchema.properties.appDir, 'introspection tool declares appDir');
+  assert.deepEqual(byName.init.inputSchema.properties, {}, 'init takes no args');
+  assert.ok(byName.docs.inputSchema.properties.topic && byName.docs.inputSchema.properties.query, 'docs takes topic/query');
 });
 
 test('mcp: tools/call check returns a content array parsing to { violations, summary }', async () => {
@@ -281,6 +285,102 @@ test('mcp: a falsy id (0) and a string id are echoed, not dropped', async () => 
   assert.equal(frames.length, 2);
   assert.equal(frames[0].id, 0, 'a 0 id must be echoed (no falsy drop)');
   assert.equal(frames[1].id, 'abc', 'a string id must be echoed');
+});
+
+/* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */
+
+test('mcp: tools/call init returns the read-first primer (NOT-React mental model + invariants)', async () => {
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'init', arguments: {} } },
+  ]);
+  const text = frames[0].result.content[0].text;
+  assert.equal(typeof text, 'string');
+  assert.match(text, /read first/i);
+  assert.match(text, /NO RSC/, 'steers away from the React/RSC mental model');
+  assert.match(text, /Invariants/, 'includes the invariants section sourced from AGENTS.md');
+  assert.match(text, /webjs-docs:\/\//, 'lists the doc resources');
+});
+
+test('mcp: tools/call docs returns a topic, a query search, and the index', async () => {
+  const dir = tmpDir();
+  // topic
+  let { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'recipes' } } },
+  ]);
+  assert.match(frames[0].result.content[0].text, /recipe|page|action|component/i, 'topic returns the recipes doc');
+  // query
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 22, method: 'tools/call', params: { name: 'docs', arguments: { query: 'signal' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /webjs-docs:\/\//, 'query returns hits tagged with their source URI');
+  // no args -> index
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 23, method: 'tools/call', params: { name: 'docs', arguments: {} } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /topics/i, 'no args returns the topic index');
+  // unknown topic fails soft (no crash, a helpful message)
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 24, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'does-not-exist' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /Unknown topic/, 'unknown topic returns a message, not an error frame');
+});
+
+test('mcp: resources/list + resources/read serve the framework docs; unknown uri errors cleanly', async () => {
+  const dir = tmpDir();
+  let { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 25, method: 'resources/list' },
+  ]);
+  const resources = frames[0].result.resources;
+  assert.ok(Array.isArray(resources) && resources.length >= 5, 'a corpus of resources');
+  assert.ok(resources.some((r) => r.uri === 'webjs-docs://AGENTS'), 'the AGENTS contract is a resource');
+  assert.ok(resources.some((r) => r.uri === 'webjs-docs://components'), 'agent-docs are resources');
+  for (const r of resources) assert.equal(r.mimeType, 'text/markdown');
+
+  // read one
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 26, method: 'resources/read', params: { uri: 'webjs-docs://components' } },
+  ]));
+  const contents = frames[0].result.contents;
+  assert.equal(contents[0].uri, 'webjs-docs://components');
+  assert.equal(contents[0].mimeType, 'text/markdown');
+  assert.ok(contents[0].text.length > 100, 'returns the doc text');
+
+  // unknown uri -> JSON-RPC error, loop survives
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 27, method: 'resources/read', params: { uri: 'webjs-docs://nope' } },
+    { jsonrpc: '2.0', id: 28, method: 'resources/list' },
+  ]));
+  assert.equal(frames[0].error.code, -32602, 'unknown resource is a -32602');
+  assert.ok(frames[1].result.resources, 'the loop kept serving after the error');
+});
+
+test('mcp: prompts/list + prompts/get serve the recipe workflows; unknown prompt errors cleanly', async () => {
+  const dir = tmpDir();
+  let { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 29, method: 'prompts/list' },
+  ]);
+  const prompts = frames[0].result.prompts;
+  const names = prompts.map((p) => p.name).sort();
+  assert.deepEqual(names, ['add_component', 'add_dynamic_route', 'add_module', 'add_page', 'add_server_action']);
+
+  // get one, with an argument folded in
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 30, method: 'prompts/get', params: { name: 'add_component', arguments: { tag: 'my-thing' } } },
+  ]));
+  const got = frames[0].result;
+  assert.equal(typeof got.description, 'string');
+  assert.equal(got.messages[0].role, 'user');
+  assert.match(got.messages[0].content.text, /my-thing/, 'the provided arg is folded in');
+  assert.match(got.messages[0].content.text, /register|signal|WebComponent/, 'carries the component recipe');
+
+  // unknown prompt -> error, loop survives
+  ({ frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 31, method: 'prompts/get', params: { name: 'nope' } },
+    { jsonrpc: '2.0', id: 32, method: 'prompts/list' },
+  ]));
+  assert.equal(frames[0].error.code, -32602, 'unknown prompt is a -32602');
+  assert.ok(frames[1].result.prompts, 'the loop kept serving after the error');
 });
 
 test('mcp: a request split across stdin chunks (mid-line) still parses', async () => {
