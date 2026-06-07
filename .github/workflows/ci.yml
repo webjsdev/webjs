@@ -166,3 +166,25 @@ jobs:
         run: npm test --workspace=@webjsdev/website
       - name: blog tests (node)
         run: npm test --workspace=@webjsdev/example-blog
+
+  docker:
+    name: Docker image build (the deploy artifact)
+    runs-on: ubuntu-latest
+    # The jobs above run the apps in-process via createRequestHandler; NONE of
+    # them build the Docker image that every Railway service actually deploys.
+    # That gap let #404's package reorg ship a stale `COPY packages/ts-plugin`
+    # path that broke all four live deploys for a day (#409): a COPY of a
+    # missing source is a hard Docker error, invisible to every in-process
+    # check. Building the image here catches that class (stale COPY paths, a
+    # broken npm install / dist / tailwind / prisma step in the image) on the
+    # PR instead of at deploy time. Build only, no push.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the monorepo image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
