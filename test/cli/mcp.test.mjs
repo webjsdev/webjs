@@ -112,7 +112,7 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_routes']);
+  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_routes', 'source']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
@@ -122,6 +122,7 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   assert.ok(byName.list_routes.inputSchema.properties.appDir, 'introspection tool declares appDir');
   assert.deepEqual(byName.init.inputSchema.properties, {}, 'init takes no args');
   assert.ok(byName.docs.inputSchema.properties.topic && byName.docs.inputSchema.properties.query, 'docs takes topic/query');
+  assert.ok(byName.source.inputSchema.properties.path && byName.source.inputSchema.properties.query, 'source takes path/query/package');
 });
 
 test('mcp: tools/call check returns a content array parsing to { violations, summary }', async () => {
@@ -285,6 +286,44 @@ test('mcp: a falsy id (0) and a string id are echoed, not dropped', async () => 
   assert.equal(frames.length, 2);
   assert.equal(frames[0].id, 0, 'a 0 id must be echoed (no falsy drop)');
   assert.equal(frames[1].id, 'abc', 'a string id must be echoed');
+});
+
+/* ---------------- source tool (#378): read the framework's own source ---------------- */
+
+test('mcp: tools/call source reads/greps/lists the framework source (driven against the monorepo)', async () => {
+  // Drive with cwd = the repo so @webjsdev/* resolves to the workspace packages.
+  // no-args -> the package listing
+  let { frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: {} } },
+  ]);
+  let text = frames[0].result.content[0].text;
+  assert.match(text, /@webjsdev\/server\/src:/, 'lists the server source dir');
+  assert.match(text, /buildless|authored source/i, 'frames it as the real authored source');
+
+  // path -> read a real source file
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 41, method: 'tools/call', params: { name: 'source', arguments: { path: 'server/src/check.js' } } },
+  ]));
+  text = frames[0].result.content[0].text;
+  assert.ok(text.length > 200 && /export/.test(text), 'returns the real check.js source');
+
+  // query -> grep with pkg-qualified hits
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 42, method: 'tools/call', params: { name: 'source', arguments: { query: 'renderToString' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /\[@webjsdev\/[a-z-]+\/src\/[^\]]+:\d+\]/, 'grep hits carry pkg + file:line');
+
+  // traversal is refused, not read
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 43, method: 'tools/call', params: { name: 'source', arguments: { path: 'server/../../../etc/passwd' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /Refusing to read outside/, 'traversal guard holds end to end');
+
+  // the built core browser bundle (dist/) is NOT readable; only authored src/
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 44, method: 'tools/call', params: { name: 'source', arguments: { path: 'core/dist/webjs-core-browser.js' } } },
+  ]));
+  assert.match(frames[0].result.content[0].text, /Refusing to read outside/, 'dist (built bundle) not exposed, only src');
 });
 
 /* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */

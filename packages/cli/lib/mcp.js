@@ -32,6 +32,7 @@ import {
   PROMPTS,
   getPrompt,
 } from './mcp-docs.js';
+import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
 
@@ -72,6 +73,26 @@ const DOCS_SCHEMA = {
   required: [],
 };
 
+/** `source` reads the framework source: a `path` to read, a `query` to grep, or a `package` to list. */
+const SOURCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    path: {
+      type: 'string',
+      description: 'A framework source file to read, e.g. server/src/ssr.js or @webjsdev/core/src/render-client.js.',
+    },
+    query: {
+      type: 'string',
+      description: 'Grep the @webjsdev/* src trees for this substring. Returns file:line hits.',
+    },
+    package: {
+      type: 'string',
+      description: 'Limit a no-args listing to one package (core, server, cli, ts-plugin, ui).',
+    },
+  },
+  required: [],
+};
+
 /**
  * The tools. The four introspection tools project an EXISTING @webjsdev/server
  * function (read-only, appDir-scoped). `init` + `docs` (#376) surface the
@@ -91,6 +112,12 @@ const TOOL_DEFS = [
     description:
       'Retrieve webjs framework docs: pass `topic` for a full doc (components, recipes, styling, built-ins, configuration, advanced, metadata, typescript, testing, lit-muscle-memory-gotchas, AGENTS, ...) or `query` to search the corpus. No args returns the topic index. Read-only.',
     inputSchema: DOCS_SCHEMA,
+  },
+  {
+    name: 'source',
+    description:
+      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `path` to read a file (e.g. server/src/ssr.js), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
+    inputSchema: SOURCE_SCHEMA,
   },
   {
     name: 'list_routes',
@@ -371,6 +398,22 @@ export async function runMcpServer(opts) {
     };
   }
 
+  // The `source` tool (#378): read the framework's own source from
+  // node_modules/@webjsdev/*/src (no-build, so it is the real JSDoc). Roots are
+  // resolved once from the server cwd. Injectable for tests.
+  let sourceDeps = opts.sourceDeps;
+  if (!sourceDeps) {
+    const { readFile } = await import('node:fs/promises');
+    const { readdirSync, existsSync, realpathSync } = await import('node:fs');
+    const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+    sourceDeps = {
+      roots: resolveFrameworkRoots(cwd, { exists: existsSync }),
+      readFile,
+      readdir,
+      realpath: realpathSync,
+    };
+  }
+
   /** Write one JSON-RPC frame as a single line to stdout. */
   const send = (frame) => {
     stdout.write(JSON.stringify(frame) + '\n');
@@ -441,8 +484,8 @@ export async function runMcpServer(opts) {
       const params = (msg && msg.params) || {};
       const name = params.name;
       const args = params.arguments || {};
-      // The knowledge tools route to the docs layer; they return markdown text.
-      const isKnowledgeTool = name === 'init' || name === 'docs';
+      // The knowledge tools route to the docs / source layer; they return text.
+      const isKnowledgeTool = name === 'init' || name === 'docs' || name === 'source';
       if (!isKnowledgeTool && !runners[name]) {
         return rpcError(id, -32602, `Unknown tool: ${String(name)}`);
       }
@@ -451,7 +494,9 @@ export async function runMcpServer(opts) {
         const result = isKnowledgeTool
           ? name === 'init'
             ? await initText(docsDeps)
-            : await searchDocs(docsDeps, args)
+            : name === 'docs'
+              ? await searchDocs(docsDeps, args)
+              : await runSourceTool(sourceDeps, args)
           : await runners[name](appDir);
         // Knowledge tools return a markdown string; introspection tools return
         // a JSON-serialisable object.
