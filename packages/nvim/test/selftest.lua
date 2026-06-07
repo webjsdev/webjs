@@ -23,10 +23,15 @@ ok(pcall(require, 'webjs.health'), 'webjs.health loads')
 webjs.setup({})
 ok(vim.fn.exists(':WebjsCheck') == 2, ':WebjsCheck command registered')
 
--- 3. tsserver plugin helper is idempotent
-local io = webjs.with_tsserver_plugin({}, '/tmp/app')
+-- 3. tsserver plugin helper is idempotent and points at the BUNDLED copy
+local io = webjs.with_tsserver_plugin({})
 ok(io.plugins[1].name == '@webjsdev/ts-plugin', 'with_tsserver_plugin injects the plugin')
-ok(#webjs.with_tsserver_plugin(io, '/tmp/app').plugins == 1, 'with_tsserver_plugin is idempotent')
+ok(#webjs.with_tsserver_plugin(io).plugins == 1, 'with_tsserver_plugin is idempotent')
+local loc = io.plugins[1].location
+ok(vim.fn.isdirectory(loc .. '/node_modules/@webjsdev/ts-plugin') == 1,
+  'plugin location points at the vendored bundle (works with no app dependency)')
+ok(vim.fn.filereadable(loc .. '/node_modules/@webjsdev/ts-plugin/src/index.js') == 1,
+  'bundled ts-plugin entry is present')
 
 -- 4. check.project maps a violation to a quickfix entry
 local _, qf = check.project({
