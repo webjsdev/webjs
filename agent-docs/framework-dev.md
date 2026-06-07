@@ -4,6 +4,19 @@ Read this only when editing the webjs monorepo (this repo), not a scaffolded app
 
 ---
 
+### Deploying the in-repo apps (Docker image + readiness gate)
+
+The four in-repo apps (`website`, `docs`, `examples/blog`, `packages/ui/packages/website`) deploy from ONE image built by the root `Dockerfile`, each run as a separate service with its own `PORT` (compose sets it locally, the platform injects it in prod). `compose.yaml` is local parity for that setup; the platform never reads it.
+
+The readiness gate is the same `/__webjs/ready` endpoint the framework ships and documents (503 until fully warm, then 200, see the deployment docs page). Two seams carry it, because no single file configures every platform:
+
+- **Docker / compose / most Docker-based hosts:** the root `Dockerfile` `HEALTHCHECK` (PORT-driven, dependency-free `node -e fetch`) makes the image self-gate. This mirrors `packages/cli/templates/Dockerfile`, the pattern the scaffold ships to users.
+- **Railway:** it IGNORES the Docker `HEALTHCHECK` and only honours its own `healthcheckPath`. `railway.json` declares `healthcheckPath: /__webjs/ready`, but a service only applies it if it is wired to read `railway.json` (config-as-code) AND built via the Dockerfile builder. A service left on the RAILPACK builder with no config-file path ignores `railway.json` entirely, so its `healthcheckPath` is null and deploys serve a cold-start window. Wire each service to `railway.json` rather than setting `healthcheckPath` by hand in the dashboard (dashboard values drift from the repo).
+
+Net: edit the `HEALTHCHECK` for the Docker contract, keep `railway.json` for the Railway contract, and never hand-set deploy config in a platform dashboard.
+
+---
+
 ### Repo health: worktree-safe git config (core.bare / hooksPath)
 
 This repo uses git worktrees (the review subagents spawn throwaway ones under `.claude/worktrees/`). Git's worktree machinery can leave `core.bare=true` in the shared `.git/config`, which is lethal to the main checkout: every git operation that needs a work tree then fails with `fatal: this operation must be run in a work tree`. The shared value is harmless only while the main worktree carries a per-worktree override (`extensions.worktreeConfig=true` plus a `.git/config.worktree` pinning `core.bare=false`).

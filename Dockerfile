@@ -93,6 +93,20 @@ RUN npx tailwindcss -i website/public/input.css                       -o website
  && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
  && npx tailwindcss -i packages/ui/packages/website/public/input.css  -o packages/ui/packages/website/public/tailwind.css  --minify
 
-# Defaults - Railway / compose override per service.
+# Default env vars. Railway / compose set their own per service.
 ENV NODE_ENV=production
+
+# Platform-neutral readiness gate (mirrors packages/cli/templates/Dockerfile,
+# the pattern the scaffold ships to users). webjs answers /__webjs/ready with
+# 503 until the instance is fully warm (analysis + first vendor attempt), then
+# 200. This image-level HEALTHCHECK is honoured by Docker, compose, and most
+# Docker-based platforms, so the readiness gate works the same everywhere
+# without a per-platform file. Each service sets its own PORT (compose env, or
+# Railway injects it); the probe reads it, defaulting to 8080. Dependency-free
+# (Node's built-in fetch, no curl/wget). Platforms that read their own config
+# point the equivalent knob at the same path (Railway healthcheckPath in
+# railway.json, Fly [checks], k8s readinessProbe).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/__webjs/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+
 CMD ["node", "--help"]
