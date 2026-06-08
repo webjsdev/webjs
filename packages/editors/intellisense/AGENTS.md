@@ -40,9 +40,9 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
 6. **Diagnostics**: incompatible-type bindings (plain / `.prop` / `@event`
    callable, code 9001), unquoted `@`/`.`/`?` bindings (invariant 4, code
    9002), expressionless `.prop` bindings (code 9003), and duplicate
-   custom-element tag registrations (code 9004, the live underline on a tag
-   registered more than once across the program; the `no-duplicate-tag`
-   `webjs check` rule is the matching CI gate). The 9004 check is program-wide
+   custom-element tag registrations (code 9004), the live underline on a tag
+   registered more than once across the program, matching the
+   `no-duplicate-tag` `webjs check` rule that is the CI gate. The 9004 check is program-wide
    and NOT import-graph gated (a collision is a runtime hazard regardless of
    imports) and runs under its own try/catch in the `getSemanticDiagnostics`
    decorator, independent of the in-template rules. Deliberately NO blanket
