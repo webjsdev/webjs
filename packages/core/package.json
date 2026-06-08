@@ -75,7 +75,7 @@
     "prepare": "node -e \"require('fs').existsSync('../../scripts/build-framework-dist.js') && require('fs').existsSync('./src/html.js') && require('child_process').execSync('npm run build:dist', {stdio:'inherit'})\""
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.25.0"
   },
   "publishConfig": {
     "access": "public"

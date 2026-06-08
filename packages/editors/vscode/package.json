@@ -129,6 +129,6 @@
     "@webjsdev/intellisense": "^0.5.0"
   },
   "devDependencies": {
-    "esbuild": "^0.24.2"
+    "esbuild": "^0.25.0"
   }
 }
