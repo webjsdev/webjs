@@ -45,7 +45,12 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
    `no-duplicate-tag` `webjs check` rule that is the CI gate. The 9004 check is program-wide
    and NOT import-graph gated (a collision is a runtime hazard regardless of
    imports) and runs under its own try/catch in the `getSemanticDiagnostics`
-   decorator, independent of the in-template rules. Deliberately NO blanket
+   decorator, independent of the in-template rules. It sees every file in the
+   tsserver program, so it can underline an on-disk duplicate that the
+   `no-duplicate-tag` `webjs check` rule deliberately skips (the CI rule
+   excludes gitignored / generated copies; the editor surfaces them as live
+   authoring feedback). That divergence is intentional: CI polices committed
+   source, the editor warns on whatever is open in the project. Deliberately NO blanket
    unknown-tag / unknown-attribute (webjs has no element type map, so it
    would false-positive on third-party customs).
 7. **Hover**: a tag shows its class; an attribute / property / event shows
