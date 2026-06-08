@@ -60,6 +60,14 @@ See the [package.json `exports` field](./package.json) for subpaths:
 re-exports. Keep this list in sync if you add or remove a barrel
 export.
 
+**The `index.d.ts` overlay must declare every runtime named export** (it
+drifted badly once, #388: 35 missing). This is now enforced:
+`test/types/dts-export-coverage.test.mjs` reads each package's runtime
+exports dynamically and tsc-checks that the `.d.ts` declares them all, so a
+new `export` in `index.js` without a matching declaration fails CI. When you
+add a runtime export, add its declaration (re-export from the source module's
+`.d.ts`, creating that `.d.ts` if absent).
+
 **Type-only exports.** `index.d.ts` (the overlay) re-exports the
 type-only public surface alongside the runtime exports. The component
 typing lives in `src/component.d.ts`; the page-metadata typing
