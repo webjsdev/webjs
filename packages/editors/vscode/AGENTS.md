@@ -66,9 +66,15 @@ regenerates the vendored plugin (what the tests exercise).
 ## Not on npm
 
 The extension ships to the VS Marketplace + Open VSX, NOT npm. It is
-`private: true`, it is NOT in `scripts/backfill-changelog.js`'s
-`PACKAGES` list, and the pre-commit hook skips `vscode` in its
-changelog-generation gate. Do not add it to any npm publish flow.
+`private: true`. Do not add it to any npm publish flow.
+
+It IS tracked in the unified changelog (#413): it is in
+`scripts/backfill-changelog.js`'s `PACKAGES` list and a version bump
+requires a `changelog/vscode/<version>.md` (the pre-commit gate enforces
+it, exactly like an npm package). The entry carries `npm: false` in its
+frontmatter, which is how the `publish-npm` / `publish-github-packages` /
+`publish-release` scripts know to skip the registry while still rendering
+it on the website `/changelog` feed.
 
 ## Module map
 
