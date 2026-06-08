@@ -64,6 +64,11 @@ export const RULES = [
       'Static tag = \'...\' in component files must contain a hyphen (HTML custom element spec).',
   },
   {
+    name: 'no-duplicate-tag',
+    description:
+      'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
+  },
+  {
     name: 'reactive-props-use-declare',
     description:
       'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
@@ -747,6 +752,49 @@ export async function checkConventions(appDir) {
             });
           }
         }
+      }
+    }
+  }
+
+  // --- Rule: no-duplicate-tag ---
+  // Two registrations of the SAME tag string anywhere in the app resolve
+  // inconsistently at runtime (SSR last-wins, browser first-wins), so flag
+  // every colliding site naming the others. Reuses the same register/define
+  // extraction as tag-name-has-hyphen, over the redacted source so a tag in a
+  // docs-page tagged-template example does not count.
+  {
+    /** @type {Map<string, string[]>} tag -> rel files that register it (with repeats) */
+    const tagSites = new Map();
+    const patterns = [
+      /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"`])([^'"`]+)\1/g,
+      /\bcustomElements\.define\s*\(\s*(['"`])([^'"`]+)\1/g,
+    ];
+    for (const { rel, scan } of files) {
+      if (!isComponentFile(rel)) continue;
+      for (const re of patterns) {
+        let match;
+        while ((match = re.exec(scan)) !== null) {
+          const tagName = match[2];
+          const arr = tagSites.get(tagName) || [];
+          arr.push(rel);
+          tagSites.set(tagName, arr);
+        }
+      }
+    }
+    for (const [tagName, sites] of tagSites) {
+      if (sites.length < 2) continue;
+      // Report once per DISTINCT file, naming the others.
+      for (const file of new Set(sites)) {
+        const others = [...new Set(sites)].filter((f) => f !== file);
+        const where = others.length
+          ? `also registered in ${others.join(', ')}`
+          : 'registered more than once in this file';
+        violations.push({
+          rule: 'no-duplicate-tag',
+          file,
+          message: `Custom element tag "${tagName}" is registered more than once (${where}). A tag must be registered exactly once; the runtime resolves a duplicate inconsistently (SSR keeps the last registration, the browser keeps the first).`,
+          fix: `Rename one registration so each "${tagName}" is unique, e.g. "${tagName}-2".`,
+        });
       }
     }
   }

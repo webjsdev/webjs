@@ -183,6 +183,71 @@ GoodComp.register('good-comp');
   }
 });
 
+test('no-duplicate-tag: flags the same tag registered in two files, naming both', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'a.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class A extends WebComponent {}
+A.register('like-button');
+`,
+    );
+    await writeFile(
+      join(appDir, 'components', 'b.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class B extends WebComponent {}
+customElements.define('like-button', B);
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const dups = violations.filter((v) => v.rule === 'no-duplicate-tag');
+    // One violation per colliding file (both a.js and b.js).
+    assert.equal(dups.length, 2, 'expected a violation on each colliding file');
+    const filesFlagged = dups.map((v) => v.file).sort();
+    assert.ok(filesFlagged.some((f) => f.endsWith('a.js')) && filesFlagged.some((f) => f.endsWith('b.js')),
+      'both files flagged');
+    assert.ok(dups.every((v) => v.message.includes('like-button')), 'message names the tag');
+    // Each violation names the OTHER file.
+    const aViol = dups.find((v) => v.file.endsWith('a.js'));
+    assert.ok(aViol.message.includes('b.js'), 'a.js violation names b.js');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-duplicate-tag: passes when each tag is registered once (counterfactual)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'a.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class A extends WebComponent {}
+A.register('like-button');
+`,
+    );
+    await writeFile(
+      join(appDir, 'components', 'b.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class B extends WebComponent {}
+B.register('share-button');
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.filter((v) => v.rule === 'no-duplicate-tag').length,
+      0,
+      'distinct tags must not be flagged',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('components-have-register: flags component with no register() call', async () => {
   const appDir = await makeTempApp();
   try {
