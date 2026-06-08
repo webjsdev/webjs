@@ -11,37 +11,55 @@
       "default": "./dist/webjs-core.js"
     },
     "./directives": {
+      "types": "./src/directives.d.ts",
       "source": "./src/directives.js",
       "default": "./dist/webjs-core-browser.js"
     },
     "./context": {
+      "types": "./src/context.d.ts",
       "source": "./src/context.js",
       "default": "./dist/webjs-core-browser.js"
     },
     "./task": {
+      "types": "./src/task.d.ts",
       "source": "./src/task.js",
       "default": "./dist/webjs-core-browser.js"
     },
     "./client-router": {
+      "types": "./src/router-client.d.ts",
       "source": "./src/router-client.js",
       "default": "./dist/webjs-core-browser.js"
     },
     "./lazy-loader": {
+      "types": "./src/lazy-loader.d.ts",
       "source": "./src/lazy-loader.js",
       "default": "./dist/webjs-core-lazy-loader.js"
     },
     "./testing": {
+      "types": "./src/testing.d.ts",
       "source": "./src/testing.js",
       "default": "./dist/webjs-core-testing.js"
     },
-    "./client": "./src/render-client.js",
-    "./server": "./src/render-server.js",
+    "./client": {
+      "types": "./src/render-client.d.ts",
+      "default": "./src/render-client.js"
+    },
+    "./server": {
+      "types": "./src/render-server.d.ts",
+      "default": "./src/render-server.js"
+    },
     "./component": {
       "types": "./src/component.d.ts",
       "default": "./src/component.js"
     },
-    "./registry": "./src/registry.js",
-    "./signals": "./src/signal.js",
+    "./registry": {
+      "types": "./src/registry.d.ts",
+      "default": "./src/registry.js"
+    },
+    "./signals": {
+      "types": "./src/signal.d.ts",
+      "default": "./src/signal.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
