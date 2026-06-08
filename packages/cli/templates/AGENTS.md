@@ -96,6 +96,52 @@ node_modules/@webjsdev/
 Reaching straight for the source is the fastest way to resolve "why
 doesn't X work?" with no documentation guesswork and no stale blog posts.
 
+## Use the webjs MCP server (introspection + framework knowledge)
+
+This project ships a **read-only Model Context Protocol server** that gives
+you (the AI agent) live, version-accurate facts about THIS app and the
+framework. Prefer it over guessing or recalling webjs from training data,
+which drifts. It mutates nothing.
+
+**It is already available, no install needed:** the webjs CLI (a project
+dependency) has it built in as `webjs mcp`. It is an MCP STDIO server (JSON-RPC
+over stdout), so you do not run it in a terminal and read its output. Your MCP
+host (Claude Code, Cursor, etc.) launches it and surfaces its tools, then you
+invoke those tools through the MCP protocol.
+
+Claude Code is pre-wired (see `.claude.json`). For another host, register the
+server by pointing it at the CLI (or the equivalent standalone package):
+
+```jsonc
+// Cursor: .cursor/mcp.json   (or your host's MCP config)
+{ "mcpServers": { "webjs": {
+  "command": "npx", "args": ["@webjsdev/cli", "mcp"]   // the built-in CLI route
+  // equivalent: "command": "npx", "args": ["@webjsdev/mcp"]
+} } }
+```
+
+What it serves:
+
+- **Introspection of this app** (read-only, no module load, no DB side
+  effects): `list_routes` (the route table), `list_actions` (server actions
+  with their `/__webjs/action/<hash>/<fn>` RPC endpoints), `list_components`
+  (registered custom-element tags), `check` (the structured `webjs check`
+  violations). Use these to learn the real route/action/component surface
+  before editing, instead of grepping or assuming.
+- **Framework knowledge**: an `init` primer (the read-first mental model +
+  invariants), a `docs` tool (retrieve a topic or search the `agent-docs`
+  corpus), MCP `resources` (the docs corpus + this AGENTS.md), recipe
+  `prompts` (guided page/route/action/component workflows), and a `source`
+  tool that reads the framework's OWN no-build source from
+  `node_modules/@webjsdev/*/src` (what actually runs).
+
+You have TWO complementary ways to understand the framework, use whichever
+helps (or both): (1) **grep the full framework source** under
+`node_modules/@webjsdev/*/src`, which is the real no-build code that runs (no
+sourcemaps, no guessing), and (2) **the MCP** for live app introspection plus
+the curated `init` / `docs` / `source` knowledge tools. Reach for either before
+guessing from training data or asking the user.
+
 ## Editor TS plugin: `@webjsdev/intellisense`
 
 This scaffold's `tsconfig.json` lists a single tsserver plugin. It is
