@@ -5,7 +5,11 @@
  *
  *   changelog/<pkg>/<version>.md
  *
- * where <pkg> is one of `core`, `server`, `cli`, `ts-plugin`, `ui`.
+ * where <pkg> is one of `core`, `server`, `cli`, `ts-plugin`, `ui`,
+ * `vscode`, or `nvim`. The last two are the editor packages: tracked
+ * for the /changelog feed but flagged `npm: false` in their frontmatter
+ * so the publish-* scripts skip the registry (they ship via vsce/ovsx
+ * and the webjs.nvim git subtree).
  *
  * For each version of each package, the file lists every
  * conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that
