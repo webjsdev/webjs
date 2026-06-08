@@ -49,6 +49,16 @@ for (const line of m[1].split('\n')) {
   fm[k] = v;
 }
 
+// Non-npm packages (the editor extensions: the VS Code extension ships via
+// vsce/ovsx, webjs.nvim via the git subtree) are tracked in the changelog
+// for the /changelog feed but carry `npm: false`, so there is nothing to
+// publish to the registry. Skip cleanly so a vscode/nvim release does not
+// fail the workflow.
+if (fm.npm === 'false') {
+  console.log(`[publish-npm] skip ${fm.package || file}: npm:false (non-npm package)`);
+  process.exit(0);
+}
+
 const pkgName = fm.package; // "@webjsdev/core"
 const version = fm.version;
 if (!pkgName || !version) {

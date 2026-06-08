@@ -58,6 +58,14 @@ for (const line of m[1].split('\n')) {
   fm[k] = v;
 }
 
+// Non-npm packages (the editor extensions) are tracked in the changelog
+// but ship via vsce/ovsx and the nvim git subtree, not a registry. Their
+// entries carry `npm: false`; skip cleanly so a release does not fail.
+if (fm.npm === 'false') {
+  console.log(`[publish-github-packages] skip ${fm.package || file}: npm:false (non-npm package)`);
+  process.exit(0);
+}
+
 // Historical changelog files (the @webjskit era) record `package:
 // "@webjskit/<short>"` in their frontmatter; we cannot publish those
 // names to GitHub Packages because the @webjskit scope does not

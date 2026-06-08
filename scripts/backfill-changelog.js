@@ -33,27 +33,67 @@ const OUT = resolve(ROOT, 'changelog');
 // "bump to match cli@X.Y.Z" every single time, which is noise on
 // the rendered /changelog page. The release workflow auto-bumps and
 // auto-publishes them without writing changelog files.
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui'];
+// The npm-published framework packages PLUS the two editor packages that
+// ship through other channels (the VS Code extension via vsce/ovsx, the
+// Neovim plugin via the webjsdev/webjs.nvim git subtree). The editor
+// packages are tracked here for the unified /changelog feed but are NOT
+// npm-published: they carry `npm: false` in their frontmatter so the
+// release workflow's publish-* scripts skip them (see DISPLAY_NAME /
+// NON_NPM below and scripts/publish-npm.js).
+const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'vscode', 'nvim'];
 
 // Some packages publish under an unscoped npm name; for those the
 // frontmatter's `package` field is the bare name. (None of the
-// PACKAGES above are unscoped today; this set is reserved for any
-// future framework-side unscoped package the changelog would
-// render.)
+// `@webjsdev/<pkg>` framework packages are unscoped; this set is
+// reserved for any future framework-side unscoped npm package.)
 const UNSCOPED = new Set();
+
+// Packages that are NOT on npm. Their changelog entries carry `npm: false`
+// so the release workflow's publish scripts skip the registry publish
+// (they ship via vsce/ovsx and the nvim git subtree instead). The display
+// name is what renders in the changelog frontmatter `package:` field, since
+// the `@webjsdev/<dir>` convention does not match their real identity (the
+// extension id is `webjsdev.webjs`; the plugin is `webjs.nvim`).
+const NON_NPM = new Set(['vscode', 'nvim']);
+const DISPLAY_NAME = {
+  vscode: 'webjs (VS Code extension)',
+  nvim: 'webjs.nvim',
+};
 
 /** @param {string} pkg short dir name */
 function npmName(pkg) {
+  if (DISPLAY_NAME[pkg]) return DISPLAY_NAME[pkg];
   return UNSCOPED.has(pkg) ? pkg : `@webjsdev/${pkg}`;
 }
 
 // Some packages live in a grouped subfolder (#402). The PACKAGES keys stay
 // the bare names (used for the npm name + the changelog/<pkg>/ dir); map a
 // key to its on-disk directory here when it is not packages/<pkg>.
-const PACKAGE_DIRS = { 'ts-plugin': 'packages/editors/ts-plugin' };
+const PACKAGE_DIRS = {
+  'ts-plugin': 'packages/editors/ts-plugin',
+  vscode: 'packages/editors/vscode',
+  nvim: 'packages/editors/nvim',
+};
 /** @param {string} pkg short dir name -> its repo-relative package dir */
 function pkgDir(pkg) {
   return PACKAGE_DIRS[pkg] || `packages/${pkg}`;
+}
+
+// Prior on-disk locations of a package, before a move. `git log` does not
+// follow a directory across a rename, so to attribute a commit that landed
+// while the package lived at its old path (the #402/#404 reorg moved the
+// editor packages from packages/<x> into packages/editors/<x>), we pass
+// BOTH the current and the historical dir as pathspecs. Without this, a
+// package's pre-move version bumps and feature commits are invisible to the
+// changelog (vscode's 0.1.0/0.2.0 and the nvim epic work all predate #404).
+const PACKAGE_OLD_DIRS = {
+  'ts-plugin': ['packages/ts-plugin'],
+  vscode: ['packages/vscode'],
+  nvim: ['packages/nvim'],
+};
+/** All historical repo-relative dirs for a package (current first). */
+function pkgDirs(pkg) {
+  return [pkgDir(pkg), ...(PACKAGE_OLD_DIRS[pkg] || [])];
 }
 
 function git(args, opts = {}) {
@@ -80,7 +120,7 @@ function versionTimeline(pkg) {
   // Then filter to commits where a `+  "version":` line shows up.
   const raw = git([
     'log', '--reverse', '--diff-filter=M', '--pretty=format:===%h\t%aI',
-    '-p', '--', `${pkgDir(pkg)}/package.json`,
+    '-p', '--', ...pkgDirs(pkg).map((d) => `${d}/package.json`),
   ]);
 
   const out = [];
@@ -162,7 +202,8 @@ function commitsInRange(pkg, fromSha, toSha) {
   const RECORD = '';
   const fmt = `%h${FIELD}%aI${FIELD}%s${FIELD}%b${RECORD}`;
   const raw = git([
-    'log', '--reverse', `--pretty=format:${fmt}`, range, '--', `${pkgDir(pkg)}/`,
+    'log', '--reverse', `--pretty=format:${fmt}`, range, '--',
+    ...pkgDirs(pkg).map((d) => `${d}/`),
   ]);
   const out = [];
   for (const rec of raw.split(RECORD)) {
@@ -205,6 +246,9 @@ function renderEntry(pkg, version, date, commits) {
     `version: ${version}`,
     `date: ${date}`,
     `commit_count: ${commits.length}`,
+    // Non-npm packages (the editor extensions) carry this flag so the
+    // release workflow's publish-* scripts skip the registry publish.
+    ...(NON_NPM.has(pkg) ? ['npm: false'] : []),
     '---',
     '',
   ].join('\n');
