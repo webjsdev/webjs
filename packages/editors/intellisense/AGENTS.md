@@ -15,6 +15,33 @@ apply here. Read that first.
 
 This file only covers what's specific to `@webjsdev/intellisense`.
 
+## Editing `src/`: re-vendor before you commit (REQUIRED)
+
+This package is the SOURCE OF TRUTH for two downstream consumers, and one of
+them keeps a COMMITTED copy that a CI drift test enforces. After ANY change
+under `src/` (even a one-line edit), run, in this order, BEFORE committing:
+
+```sh
+node packages/editors/nvim/scripts/vendor-intellisense.mjs
+git add -f packages/editors/nvim/vendor   # the copy lives under a gitignored node_modules/
+```
+
+- **webjs.nvim** ships a verbatim copy at
+  `packages/editors/nvim/vendor/node_modules/@webjsdev/intellisense/src` (it has
+  no install-time build step). The drift guard
+  `packages/editors/nvim/test/vendor-sync.test.mjs` FAILS CI ("vendored
+  intellisense src is byte-identical ...") whenever `src/` and the vendored copy
+  diverge. Forgetting the re-vendor is the single most common way an
+  intellisense edit reds CI.
+- **The `webjs` VS Code extension** bundles this package via esbuild at vsix
+  package time, so it picks up `src/` changes automatically (no committed copy,
+  nothing to re-vendor there).
+
+So the rule of thumb: an intellisense `src/` edit is not done until the nvim
+vendor copy is re-synced and force-added on the same commit (or a follow-up
+commit on the same PR). Run `node --test packages/editors/nvim/test/vendor-sync.test.mjs`
+to confirm green before pushing.
+
 ## Role
 
 The plugin owns webjs's in-template intelligence. It is **standalone** as of
