@@ -29,10 +29,16 @@ specific to the Neovim plugin.
    (-> `pluginProbeLocations`), so intelligence works with NO
    `@webjsdev/intellisense` in the app (before `npm install`, pruned trees,
    non-scaffolded apps). When the app ALSO wires it via `tsconfig`, `tsserver`
-   dedupes by name (verified), so no double-load. Regenerate with
-   `scripts/vendor-intellisense.mjs` then `git add -f packages/editors/nvim/vendor`
-   (the output is under a gitignored `node_modules/`); `test/vendor-sync.test.mjs`
-   is the drift guard.
+   dedupes by name (verified), so no double-load. **This copy is GENERATED,
+   never hand-edit a file under `vendor/node_modules/@webjsdev/intellisense/`.**
+   To change its behaviour, edit `packages/editors/intellisense/src/` (the source
+   of truth) and regenerate: `node packages/editors/nvim/scripts/vendor-intellisense.mjs`
+   then `git add -f packages/editors/nvim/vendor` (the output is under a gitignored
+   `node_modules/`). The `test/vendor-sync.test.mjs` drift guard FAILS the
+   "Unit + integration" CI job ("vendored intellisense src is byte-identical ...")
+   whenever the copy and `src/` diverge, whether you forgot to re-vendor after an
+   intellisense edit OR hand-edited the copy. Confirm green with
+   `node --test packages/editors/nvim/test/vendor-sync.test.mjs`.
 4. **Docs**: `doc/webjs.txt` (`:help webjs`), `README.md`.
 
 ## Invariants

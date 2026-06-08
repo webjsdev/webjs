@@ -64,6 +64,11 @@ export const RULES = [
       'Static tag = \'...\' in component files must contain a hyphen (HTML custom element spec).',
   },
   {
+    name: 'no-duplicate-tag',
+    description:
+      'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
+  },
+  {
     name: 'reactive-props-use-declare',
     description:
       'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
@@ -751,6 +756,62 @@ export async function checkConventions(appDir) {
     }
   }
 
+  // --- Rule: no-duplicate-tag ---
+  // Two registrations of the SAME tag string anywhere in the app resolve
+  // inconsistently at runtime (SSR last-wins, browser first-wins), so flag
+  // every colliding site naming the others. Scans EVERY source file, not just
+  // components/, because a duplicate is a runtime hazard regardless of where
+  // the register/define call lives (a page, a lib, a module can register a
+  // tag too); this keeps the rule in lockstep with the editor's 9004
+  // diagnostic, which is likewise project-wide. Reuses the same
+  // register/define extraction as tag-name-has-hyphen, over the redacted
+  // source so a tag in a docs-page tagged-template example does not count.
+  // Only hyphenated tags are considered (a non-hyphenated tag is already
+  // flagged by tag-name-has-hyphen / invariant 3), matching the 9004 filter.
+  {
+    // Generated / gitignored files (e.g. a `webjs ui add`-regenerated
+    // `components/` dir) are not committed source the rule should police;
+    // counting them would flag a collision between a hand-written component
+    // and its generated copy. Skip anything git reports as ignored.
+    // Best-effort: a non-git project (or absent git) scans everything.
+    const ignored = await gitIgnoredSet(appDir, files.map((f) => f.rel));
+    /** @type {Map<string, string[]>} tag -> rel files that register it (with repeats) */
+    const tagSites = new Map();
+    const patterns = [
+      /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"`])([^'"`]+)\1/g,
+      /\bcustomElements\.define\s*\(\s*(['"`])([^'"`]+)\1/g,
+    ];
+    for (const { scan, rel } of files) {
+      if (ignored.has(rel)) continue;
+      for (const re of patterns) {
+        let match;
+        while ((match = re.exec(scan)) !== null) {
+          const tagName = match[2];
+          if (!tagName.includes('-')) continue;
+          const arr = tagSites.get(tagName) || [];
+          arr.push(rel);
+          tagSites.set(tagName, arr);
+        }
+      }
+    }
+    for (const [tagName, sites] of tagSites) {
+      if (sites.length < 2) continue;
+      // Report once per DISTINCT file, naming the others.
+      for (const file of new Set(sites)) {
+        const others = [...new Set(sites)].filter((f) => f !== file);
+        const where = others.length
+          ? `also registered in ${others.join(', ')}`
+          : 'registered more than once in this file';
+        violations.push({
+          rule: 'no-duplicate-tag',
+          file,
+          message: `Custom element tag "${tagName}" is registered more than once (${where}). A tag must be registered exactly once; the runtime resolves a duplicate inconsistently (SSR keeps the last registration, the browser keeps the first).`,
+          fix: `Rename one registration so each "${tagName}" is unique, e.g. "${tagName}-2".`,
+        });
+      }
+    }
+  }
+
   // --- Rule: gitignore-vendor-not-ignored ---
   // The .gitignore pattern for .webjs/vendor/ is subtle: `.webjs/`
   // alone excludes the directory entirely and git can't re-include
@@ -835,4 +896,50 @@ async function pathExists(p) {
   } catch {
     return false;
   }
+}
+
+/**
+ * The subset of `rels` (appDir-relative paths) that git reports as ignored,
+ * via a single batched `git check-ignore --stdin`. Best-effort: returns an
+ * empty Set when the directory is not a git repo, git is absent, or the
+ * spawn fails, so a non-git project scans every file as before. Runs with
+ * `cwd: appDir` and the inherited GIT_* env stripped so cwd is the sole
+ * authority on which repo + .gitignore stack is consulted (a pre-commit
+ * hook from a linked worktree exports GIT_WORK_TREE, which would otherwise
+ * override cwd-based discovery; same reason as gitignore-vendor-not-ignored).
+ * Works for an in-repo sub-package with no nested `.git` too: git walks up
+ * to the monorepo root and resolves the relative paths against cwd.
+ *
+ * @param {string} appDir absolute app directory
+ * @param {string[]} rels appDir-relative file paths
+ * @returns {Promise<Set<string>>}
+ */
+async function gitIgnoredSet(appDir, rels) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  if (!rels.length) return out;
+  try {
+    const { spawnSync } = await import('node:child_process');
+    const {
+      GIT_DIR: _gd, GIT_WORK_TREE: _gwt, GIT_INDEX_FILE: _gif, GIT_PREFIX: _gp,
+      ...gitEnv
+    } = process.env;
+    // `git check-ignore --stdin` exits 0 when ≥1 path is ignored (those
+    // paths are echoed on stdout), 1 when none are ignored, >1 on error.
+    const res = spawnSync('git', ['check-ignore', '--stdin'], {
+      cwd: appDir,
+      input: rels.join('\n'),
+      encoding: 'utf8',
+      env: gitEnv,
+    });
+    if (res.status === 0 && typeof res.stdout === 'string') {
+      for (const line of res.stdout.split('\n')) {
+        const p = line.trim();
+        if (p) out.add(p);
+      }
+    }
+  } catch {
+    // git missing or spawn failure: scan everything (no filter).
+  }
+  return out;
 }

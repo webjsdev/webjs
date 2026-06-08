@@ -15,6 +15,33 @@ apply here. Read that first.
 
 This file only covers what's specific to `@webjsdev/intellisense`.
 
+## Editing `src/`: re-vendor before you commit (REQUIRED)
+
+This package is the SOURCE OF TRUTH for two downstream consumers, and one of
+them keeps a COMMITTED copy that a CI drift test enforces. After ANY change
+under `src/` (even a one-line edit), run, in this order, BEFORE committing:
+
+```sh
+node packages/editors/nvim/scripts/vendor-intellisense.mjs
+git add -f packages/editors/nvim/vendor   # the copy lives under a gitignored node_modules/
+```
+
+- **webjs.nvim** ships a verbatim copy at
+  `packages/editors/nvim/vendor/node_modules/@webjsdev/intellisense/src` (it has
+  no install-time build step). The drift guard
+  `packages/editors/nvim/test/vendor-sync.test.mjs` FAILS CI ("vendored
+  intellisense src is byte-identical ...") whenever `src/` and the vendored copy
+  diverge. Forgetting the re-vendor is the single most common way an
+  intellisense edit reds CI.
+- **The `webjs` VS Code extension** bundles this package via esbuild at vsix
+  package time, so it picks up `src/` changes automatically (no committed copy,
+  nothing to re-vendor there).
+
+So the rule of thumb: an intellisense `src/` edit is not done until the nvim
+vendor copy is re-synced and force-added on the same commit (or a follow-up
+commit on the same PR). Run `node --test packages/editors/nvim/test/vendor-sync.test.mjs`
+to confirm green before pushing.
+
 ## Role
 
 The plugin owns webjs's in-template intelligence. It is **standalone** as of
@@ -38,8 +65,19 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
    binding-aware attribute completions keyed by prefix (`.` → property
    names, plain / `?` → hyphenated attribute names; `@event` is permissive).
 6. **Diagnostics**: incompatible-type bindings (plain / `.prop` / `@event`
-   callable), unquoted `@`/`.`/`?` bindings (invariant 4, code 9002), and
-   expressionless `.prop` bindings (code 9003). Deliberately NO blanket
+   callable, code 9001), unquoted `@`/`.`/`?` bindings (invariant 4, code
+   9002), expressionless `.prop` bindings (code 9003), and duplicate
+   custom-element tag registrations (code 9004), the live underline on a tag
+   registered more than once across the program, matching the
+   `no-duplicate-tag` `webjs check` rule that is the CI gate. The 9004 check is program-wide
+   and NOT import-graph gated (a collision is a runtime hazard regardless of
+   imports) and runs under its own try/catch in the `getSemanticDiagnostics`
+   decorator, independent of the in-template rules. It sees every file in the
+   tsserver program, so it can underline an on-disk duplicate that the
+   `no-duplicate-tag` `webjs check` rule deliberately skips (the CI rule
+   excludes gitignored / generated copies; the editor surfaces them as live
+   authoring feedback). That divergence is intentional: CI polices committed
+   source, the editor warns on whatever is open in the project. Deliberately NO blanket
    unknown-tag / unknown-attribute (webjs has no element type map, so it
    would false-positive on third-party customs).
 7. **Hover**: a tag shows its class; an attribute / property / event shows

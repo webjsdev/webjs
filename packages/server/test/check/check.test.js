@@ -183,6 +183,144 @@ GoodComp.register('good-comp');
   }
 });
 
+test('no-duplicate-tag: flags the same tag registered in two files, naming both', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'a.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class A extends WebComponent {}
+A.register('like-button');
+`,
+    );
+    await writeFile(
+      join(appDir, 'components', 'b.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class B extends WebComponent {}
+customElements.define('like-button', B);
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const dups = violations.filter((v) => v.rule === 'no-duplicate-tag');
+    // One violation per colliding file (both a.js and b.js).
+    assert.equal(dups.length, 2, 'expected a violation on each colliding file');
+    const filesFlagged = dups.map((v) => v.file).sort();
+    assert.ok(filesFlagged.some((f) => f.endsWith('a.js')) && filesFlagged.some((f) => f.endsWith('b.js')),
+      'both files flagged');
+    assert.ok(dups.every((v) => v.message.includes('like-button')), 'message names the tag');
+    // Each violation names the OTHER file.
+    const aViol = dups.find((v) => v.file.endsWith('a.js'));
+    assert.ok(aViol.message.includes('b.js'), 'a.js violation names b.js');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-duplicate-tag: flags a collision across non-component directories (not gated on components/)', async () => {
+  // A register/define call can live in a page, a lib, or a module, not only
+  // under components/. A duplicate is a runtime hazard regardless, so the rule
+  // scans every source file (keeping it in lockstep with the editor's
+  // project-wide 9004 diagnostic).
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class Widget extends WebComponent {}
+Widget.register('app-widget');
+export default function P() {}
+`,
+    );
+    await writeFile(
+      join(appDir, 'lib', 'extra.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class Widget2 extends WebComponent {}
+customElements.define('app-widget', Widget2);
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const dups = violations.filter((v) => v.rule === 'no-duplicate-tag');
+    assert.equal(dups.length, 2, 'both non-component files flagged');
+    const filesFlagged = dups.map((v) => v.file);
+    assert.ok(filesFlagged.some((f) => f.endsWith('page.js')), 'app/page.js flagged');
+    assert.ok(filesFlagged.some((f) => f.endsWith('extra.js')), 'lib/extra.js flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-duplicate-tag: ignores a gitignored generated copy (no false positive)', async () => {
+  // ui-website gitignores its `webjs ui add`-regenerated `components/` dir.
+  // A generated copy colliding with the committed component must NOT fail
+  // check; only committed source is policed.
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(join(appDir, '.gitignore'), '/components/\n');
+    await mkdir(join(appDir, 'app', '_components'), { recursive: true });
+    await mkdir(join(appDir, 'components', 'site'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', '_components', 'theme-toggle.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class T extends WebComponent {}
+T.register('theme-toggle');
+`,
+    );
+    // Gitignored generated copy of the same tag.
+    await writeFile(
+      join(appDir, 'components', 'site', 'theme-toggle.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class T2 extends WebComponent {}
+T2.register('theme-toggle');
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.filter((v) => v.rule === 'no-duplicate-tag').length,
+      0,
+      'a gitignored generated copy must not trigger a duplicate-tag violation',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-duplicate-tag: passes when each tag is registered once (counterfactual)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'a.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class A extends WebComponent {}
+A.register('like-button');
+`,
+    );
+    await writeFile(
+      join(appDir, 'components', 'b.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class B extends WebComponent {}
+B.register('share-button');
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.filter((v) => v.rule === 'no-duplicate-tag').length,
+      0,
+      'distinct tags must not be flagged',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('components-have-register: flags component with no register() call', async () => {
   const appDir = await makeTempApp();
   try {
