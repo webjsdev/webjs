@@ -254,6 +254,43 @@ customElements.define('app-widget', Widget2);
   }
 });
 
+test('no-duplicate-tag: ignores a gitignored generated copy (no false positive)', async () => {
+  // ui-website gitignores its `webjs ui add`-regenerated `components/` dir.
+  // A generated copy colliding with the committed component must NOT fail
+  // check; only committed source is policed.
+  const appDir = await makeTempApp();
+  try {
+    if (!initGit(appDir)) return;
+    await writeFile(join(appDir, '.gitignore'), '/components/\n');
+    await mkdir(join(appDir, 'app', '_components'), { recursive: true });
+    await mkdir(join(appDir, 'components', 'site'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', '_components', 'theme-toggle.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class T extends WebComponent {}
+T.register('theme-toggle');
+`,
+    );
+    // Gitignored generated copy of the same tag.
+    await writeFile(
+      join(appDir, 'components', 'site', 'theme-toggle.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class T2 extends WebComponent {}
+T2.register('theme-toggle');
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    assert.equal(
+      violations.filter((v) => v.rule === 'no-duplicate-tag').length,
+      0,
+      'a gitignored generated copy must not trigger a duplicate-tag violation',
+    );
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-duplicate-tag: passes when each tag is registered once (counterfactual)', async () => {
   const appDir = await makeTempApp();
   try {
