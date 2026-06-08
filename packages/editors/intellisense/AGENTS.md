@@ -38,8 +38,14 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
    binding-aware attribute completions keyed by prefix (`.` → property
    names, plain / `?` → hyphenated attribute names; `@event` is permissive).
 6. **Diagnostics**: incompatible-type bindings (plain / `.prop` / `@event`
-   callable), unquoted `@`/`.`/`?` bindings (invariant 4, code 9002), and
-   expressionless `.prop` bindings (code 9003). Deliberately NO blanket
+   callable, code 9001), unquoted `@`/`.`/`?` bindings (invariant 4, code
+   9002), expressionless `.prop` bindings (code 9003), and duplicate
+   custom-element tag registrations (code 9004, the live underline on a tag
+   registered more than once across the program; the `no-duplicate-tag`
+   `webjs check` rule is the matching CI gate). The 9004 check is program-wide
+   and NOT import-graph gated (a collision is a runtime hazard regardless of
+   imports) and runs under its own try/catch in the `getSemanticDiagnostics`
+   decorator, independent of the in-template rules. Deliberately NO blanket
    unknown-tag / unknown-attribute (webjs has no element type map, so it
    would false-positive on third-party customs).
 7. **Hover**: a tag shows its class; an attribute / property / event shows
