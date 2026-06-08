@@ -99,11 +99,17 @@ const workspacePkgJson = ['packages', 'packages/editors', 'packages/wrappers']
   .map((base) => resolve(REPO_ROOT, base, shortPkg, 'package.json'))
   .find((p) => existsSync(p));
 if (!workspacePkgJson) {
-  console.error(
-    `[publish-github-packages] cannot find a workspace package.json for ${pkgName} ` +
-      `(tried packages/${shortPkg}, packages/editors/${shortPkg}, packages/wrappers/${shortPkg})`,
+  // No workspace dir for this name. `npm publish` (the prior release step)
+  // resolves a workspace BY NAME, so a current package provably exists by the
+  // time we get here; a not-found means the package was renamed or removed
+  // (e.g. @webjsdev/ts-plugin -> @webjsdev/intellisense, #416, whose frozen
+  // changelog/ts-plugin/ entries a bootstrap re-processes). There is nothing
+  // to mirror, so SKIP rather than fail the whole run (#423).
+  console.log(
+    `[publish-github-packages] skip ${pkgName}@${version}: no workspace dir ` +
+      `(renamed/removed package; tried packages/${shortPkg}, packages/editors/${shortPkg}, packages/wrappers/${shortPkg})`,
   );
-  process.exit(2);
+  process.exit(0);
 }
 const workspaceVersion = JSON.parse(readFileSync(workspacePkgJson, 'utf8')).version;
 if (workspaceVersion !== version) {
