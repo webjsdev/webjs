@@ -4,7 +4,7 @@
 --   1. Highlighting: treesitter injection queries (shipped under queries/,
 --      auto-loaded from the runtimepath) inject html / css / svg into the
 --      `html` / `css` / `svg` tagged templates. No setup() call needed.
---   2. Intelligence: the standalone `@webjsdev/ts-plugin` tsserver plugin
+--   2. Intelligence: the standalone `@webjsdev/intellisense` tsserver plugin
 --      surfaced through your LSP, plus a `:WebjsCheck` diagnostics source.
 --
 -- `setup()` is OPTIONAL: it only registers the user commands and applies
@@ -23,24 +23,24 @@ local function plugin_root()
   return vim.fn.fnamemodify(src, ':h:h:h')
 end
 
---- The directory webjs.nvim VENDORS @webjsdev/ts-plugin into. tsserver
+--- The directory webjs.nvim VENDORS @webjsdev/intellisense into. tsserver
 --- resolves a plugin as `<location>/node_modules/<name>`, so this is the dir
---- whose `node_modules/@webjsdev/ts-plugin` holds the bundled copy.
+--- whose `node_modules/@webjsdev/intellisense` holds the bundled copy.
 --- @return string
 function M.bundled_location()
   return plugin_root() .. '/vendor'
 end
 
 --- The tsserver plugin spec to add to your LSP's `init_options.plugins`. It
---- points at the copy of @webjsdev/ts-plugin BUNDLED inside webjs.nvim, so the
---- webjs language service works even when the app has no @webjsdev/ts-plugin
+--- points at the copy of @webjsdev/intellisense BUNDLED inside webjs.nvim, so the
+--- webjs language service works even when the app has no @webjsdev/intellisense
 --- in node_modules (e.g. before `npm install`) and with no `tsconfig.json`
 --- edit. When the app DOES wire the plugin via tsconfig, tsserver dedupes by
 --- name, so there is no double-load.
---- @return table { name = '@webjsdev/ts-plugin', location = string }
+--- @return table { name = '@webjsdev/intellisense', location = string }
 function M.tsserver_plugin()
   return {
-    name = '@webjsdev/ts-plugin',
+    name = '@webjsdev/intellisense',
     location = M.bundled_location(),
   }
 end
@@ -53,7 +53,7 @@ function M.with_tsserver_plugin(init_options)
   init_options = init_options or {}
   init_options.plugins = init_options.plugins or {}
   for _, p in ipairs(init_options.plugins) do
-    if p.name == '@webjsdev/ts-plugin' then return init_options end
+    if p.name == '@webjsdev/intellisense' then return init_options end
   end
   table.insert(init_options.plugins, M.tsserver_plugin())
   return init_options

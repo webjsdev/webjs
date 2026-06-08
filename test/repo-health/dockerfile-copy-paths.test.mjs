@@ -7,7 +7,7 @@
 // app on every platform.
 //
 // This bit us in #404: the editor/wrapper package reorg moved
-// packages/ts-plugin to packages/editors/ts-plugin and updated all the JS
+// packages/ts-plugin to packages/editors/intellisense and updated all the JS
 // path tooling, but the Dockerfile's hard-coded `COPY packages/ts-plugin/
 // package.json` line was missed. Every Railway deploy failed from #404
 // until #409, and nothing local caught it: the four-app boot check runs

@@ -13,12 +13,12 @@ export default function EditorSetup() {
       <p>The rest of this page is for wiring the plugin by hand and for understanding what it does.</p>
     </div>
 
-    <p><strong><code>@webjsdev/ts-plugin</code> is editor-only, not required for the framework to run.</strong> It is <strong>standalone</strong> as of <code>@webjsdev/ts-plugin@0.5.0</code>: its own <code>html</code>-template parser drives all the in-template intelligence, with no Lit dependency.</p>
+    <p><strong><code>@webjsdev/intellisense</code> is editor-only, not required for the framework to run.</strong> It is <strong>standalone</strong> as of <code>@webjsdev/intellisense@0.5.0</code>: its own <code>html</code>-template parser drives all the in-template intelligence, with no Lit dependency.</p>
 
     <div class="callout">
       <p><strong>Two ways the intelligence reaches your editor</strong> (you can have both; <code>tsserver</code> dedupes, so there's no conflict):</p>
       <ul>
-        <li><strong>From the app's <code>node_modules</code></strong>: the scaffold lists <code>{ "name": "@webjsdev/ts-plugin" }</code> in <code>tsconfig.json</code>, and tsserver editors load it from <code>node_modules</code> after <code>npm install</code>. This gives the intelligence with <em>no editor plugin installed</em> (VS Code with "Use Workspace Version", Neovim <code>ts_ls</code>, JetBrains). It does NOT provide template <strong>highlighting</strong> (a tsserver plugin can't).</li>
+        <li><strong>From the app's <code>node_modules</code></strong>: the scaffold lists <code>{ "name": "@webjsdev/intellisense" }</code> in <code>tsconfig.json</code>, and tsserver editors load it from <code>node_modules</code> after <code>npm install</code>. This gives the intelligence with <em>no editor plugin installed</em> (VS Code with "Use Workspace Version", Neovim <code>ts_ls</code>, JetBrains). It does NOT provide template <strong>highlighting</strong> (a tsserver plugin can't).</li>
         <li><strong>From the editor plugin</strong>: the <code>webjs</code> VS Code extension and <code>webjs.nvim</code> <em>bundle</em> the plugin, so the intelligence works even <em>before <code>npm install</code></em>, and they add the template <strong>highlighting</strong> that <code>node_modules</code> can't.</li>
       </ul>
     </div>
@@ -26,7 +26,7 @@ export default function EditorSetup() {
     <p>This page covers two layers of intelligence:</p>
     <ol>
       <li><strong>Type-safe component internals</strong>: <code>this.student: Student</code> inside the class. Works out of the box once <code>tsconfig.json</code> is set up.</li>
-      <li><strong>In-template intelligence</strong>: completions, diagnostics, go-to-definition, and hover for custom-element tags and bindings inside <code>html\`…\`</code> templates. Provided by <code>@webjsdev/ts-plugin</code>.</li>
+      <li><strong>In-template intelligence</strong>: completions, diagnostics, go-to-definition, and hover for custom-element tags and bindings inside <code>html\`…\`</code> templates. Provided by <code>@webjsdev/intellisense</code>.</li>
     </ol>
     <p>There's also an optional standard-TypeScript convention for typing <code>document.querySelector('student-card')</code>, briefly covered at the end.</p>
 
@@ -51,7 +51,7 @@ export default function EditorSetup() {
     "skipLibCheck": true,
     "erasableSyntaxOnly": true,
     "plugins": [
-      { "name": "@webjsdev/ts-plugin" }
+      { "name": "@webjsdev/intellisense" }
     ]
   }
 }</pre>
@@ -61,7 +61,7 @@ export default function EditorSetup() {
       <li><code>allowImportingTsExtensions: true</code>: lets you write <code>import { x } from './foo.ts'</code>, matching how webjs serves them.</li>
       <li><code>noEmit: true</code>: TypeScript type-checks only. webjs strips types via Node's built-in stripper at import / request time.</li>
       <li><code>erasableSyntaxOnly: true</code>: rejects non-erasable TypeScript (<code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators). Required because Node's stripper only supports erasable TS. See the <a href="/docs/typescript">TypeScript</a> page for the erasable equivalents.</li>
-      <li><code>plugins</code>: one entry. <code>@webjsdev/ts-plugin</code> is standalone (no separate <code>ts-lit-plugin</code> entry).</li>
+      <li><code>plugins</code>: one entry. <code>@webjsdev/intellisense</code> is standalone (no separate <code>ts-lit-plugin</code> entry).</li>
     </ul>
 
     <h2>Layer 1: component internals (works everywhere)</h2>
@@ -84,7 +84,7 @@ StudentCard.register('student-card');</pre>
     <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code> inside the constructor. Without <code>declare</code>, TypeScript emits a <code>student = undefined</code> class-field initializer that runs <em>after</em> <code>super()</code> and overwrites that accessor. <code>declare</code> tells TS "type this field for me, but don't emit any runtime assignment."</p>
 
     <h2>Layer 2: in-template intelligence</h2>
-    <p><code>@webjsdev/ts-plugin</code> parses the markup inside each <code>html\`…\`</code> template and contributes webjs-specific knowledge, all driven by the component's <code>static properties</code> and <code>declare</code> types:</p>
+    <p><code>@webjsdev/intellisense</code> parses the markup inside each <code>html\`…\`</code> template and contributes webjs-specific knowledge, all driven by the component's <code>static properties</code> and <code>declare</code> types:</p>
     <ul>
       <li><strong>Go-to-definition</strong>: F12 / Ctrl+Click on a webjs tag jumps to its class; on an attribute / property / event name jumps to the class member; on a class name inside <code>html\`class="…"\`</code> jumps to the matching <code>css\`…\`</code> rule.</li>
       <li><strong>Completions</strong>: reachable custom-element tag names after <code>&lt;</code>, and binding-aware attributes: <code>.</code> offers property names, plain / <code>?</code> offer the hyphenated attribute names (<code>maxLength</code> becomes <code>max-length</code>), <code>@event</code> is permissive.</li>
@@ -105,11 +105,11 @@ StudentCard.register('student-card');</pre>
     </table>
 
     <h3>Install (manual)</h3>
-    <pre>npm i -D typescript @webjsdev/ts-plugin</pre>
+    <pre>npm i -D typescript @webjsdev/intellisense</pre>
     <p>Then make sure the single plugin entry is in <code>tsconfig.json</code> (already in the baseline above):</p>
     <pre>{
   "compilerOptions": {
-    "plugins": [{ "name": "@webjsdev/ts-plugin" }]
+    "plugins": [{ "name": "@webjsdev/intellisense" }]
   }
 }</pre>
 
@@ -157,7 +157,7 @@ return {
     <p>tsserver loads plugins on startup, so an editor restart is required to pick up new plugin code. In Neovim: <code>:LspRestart</code>. In VS Code: <code>Cmd/Ctrl+Shift+P</code> then "TypeScript: Restart TS Server".</p>
 
     <h2>Optional: typed DOM queries</h2>
-    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a>. With <code>@webjsdev/ts-plugin</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates. The augmentation is purely about typing DOM-query call sites.</p>
+    <p>If you want <code>document.querySelector('student-card')</code> to return <code>StudentCard | null</code> instead of <code>Element | null</code>, augment TypeScript's built-in <code>HTMLElementTagNameMap</code> inside your component file. This is a <a href="https://developer.mozilla.org/docs/Web/API/Document/querySelector" target="_blank">standard TypeScript pattern</a>. With <code>@webjsdev/intellisense</code> active you no longer need this for tag/attribute intelligence inside <code>html\`…\`</code> templates. The augmentation is purely about typing DOM-query call sites.</p>
 
     <h2>Editor actions: quick reference</h2>
     <table>

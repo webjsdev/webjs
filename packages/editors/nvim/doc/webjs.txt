@@ -15,7 +15,7 @@ CONTENTS                                                          *webjs-content
 
 webjs.nvim is the Neovim counterpart to the webjs VS Code extension. It adds
 in-template highlighting for the `html` / `css` / `svg` tagged templates webjs
-uses, and surfaces the standalone @webjsdev/ts-plugin language service plus a
+uses, and surfaces the standalone @webjsdev/intellisense language service plus a
 `webjs check` diagnostics source.
 
 Highlighting works as soon as the plugin is on the runtimepath; the treesitter
@@ -28,7 +28,7 @@ injection queries under queries/ are auto-loaded. No Lit plugin is required.
 - Treesitter parsers: typescript, javascript, html, css (svg optional).
   Install with nvim-treesitter: `:TSInstall typescript javascript html css`
 - For intelligence: Node 24+, typescript in the app, and a tsserver LSP
-  client (ts_ls or typescript-tools.nvim). @webjsdev/ts-plugin is bundled
+  client (ts_ls or typescript-tools.nvim). @webjsdev/intellisense is bundled
   inside this plugin (works with no app dependency).
 
 Run `:checkhealth webjs` to verify.
@@ -55,7 +55,7 @@ no setup() call.
 ==============================================================================
 5. LSP INTELLIGENCE                                                    *webjs-lsp*
 
-webjs.nvim BUNDLES @webjsdev/ts-plugin (standalone, no Lit dependency). Wire it
+webjs.nvim BUNDLES @webjsdev/intellisense (standalone, no Lit dependency). Wire it
 into ts_ls with the helper, which points tsserver at the bundled copy via its
 plugin probe location:
 
@@ -64,13 +64,13 @@ plugin probe location:
     init_options = require('webjs').with_tsserver_plugin(),
   })
 <
-That works with no @webjsdev/ts-plugin in the app. If the app also wires it via
+That works with no @webjsdev/intellisense in the app. If the app also wires it via
 tsconfig.json `plugins`, tsserver dedupes by name, so there is no double-load.
 
                                                   *webjs.with_tsserver_plugin()*
 require('webjs').with_tsserver_plugin({init_options})
                         Return {init_options} with the bundled
-                        @webjsdev/ts-plugin merged into `plugins` (idempotent),
+                        @webjsdev/intellisense merged into `plugins` (idempotent),
                         its `location` set to the copy vendored inside
                         webjs.nvim. No app dependency required.
 

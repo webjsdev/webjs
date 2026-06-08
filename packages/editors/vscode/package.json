@@ -44,7 +44,7 @@
   "contributes": {
     "typescriptServerPlugins": [
       {
-        "name": "@webjsdev/ts-plugin",
+        "name": "@webjsdev/intellisense",
         "enableForWorkspaceTypeScriptVersions": true
       }
     ],
@@ -126,7 +126,7 @@
     "publish:ovsx": "npm run package && npx --yes ovsx publish webjs.vsix"
   },
   "dependencies": {
-    "@webjsdev/ts-plugin": "*"
+    "@webjsdev/intellisense": "*"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"

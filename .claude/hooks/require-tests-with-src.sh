@@ -54,7 +54,7 @@ if [ -z "$staged" ]; then exit 0; fi
 
 # Framework source lives under each package's src/, EXCEPT the CLI, which
 # keeps its logic in packages/cli/lib/. Grouped packages live one level
-# deeper (packages/editors/<pkg>/src, e.g. ts-plugin, vscode after #402).
+# deeper (packages/editors/<pkg>/src, e.g. intellisense, vscode after #402).
 # Gate all so a change is not a blind spot.
 src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/([^/]+/src|editors/[^/]+/src|cli/lib)/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi

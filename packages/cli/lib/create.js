@@ -323,7 +323,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // before `npm install` too, and adds template HIGHLIGHTING, which a
       // tsserver plugin can't provide); tsserver dedupes by name, so loading
       // it both ways is a no-op. Standalone, no Lit dependency. Editor-only.
-      '@webjsdev/ts-plugin': 'latest',
+      '@webjsdev/intellisense': 'latest',
       // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit is
       // shadcn-style copy-in: `webjs ui add <name>` copies component source
       // into components/ui/ (they import @webjsdev/core, not the kit), and the
@@ -352,7 +352,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // SYNTAX errors. Use a `const` object + union for enum-shaped
       // values; write fields + constructor assignments explicitly.
       erasableSyntaxOnly: true,
-      // @webjsdev/ts-plugin (standalone, no Lit dependency) gives the editor,
+      // @webjsdev/intellisense (standalone, no Lit dependency) gives the editor,
       // inside html`` templates:
       //   • go-to-definition on custom-element tags, attributes, and CSS classes
       //   • binding-aware completions (tag names, .prop / ?bool / plain attrs)
@@ -361,7 +361,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Editor-only. The framework runs without it. For VS Code / Cursor /
       // Windsurf, the `webjs` extension bundles this automatically.
       plugins: [
-        { name: '@webjsdev/ts-plugin' },
+        { name: '@webjsdev/intellisense' },
       ],
     },
     // `.webjs/routes.d.ts` is the OPT-IN generated route-types overlay (#258):

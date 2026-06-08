@@ -19,7 +19,7 @@ is what runs. Quick map:
   `cache.js`, `rate-limit.js`, `csrf.js`. `ssr.js` shows exactly how
   the metadata object becomes `<head>` tags.
 - `node_modules/@webjsdev/cli/`: CLI commands + scaffold templates.
-- `node_modules/@webjsdev/ts-plugin/`: tsserver plugin (go-to-definition
+- `node_modules/@webjsdev/intellisense/`: tsserver plugin (go-to-definition
   on tag names, `<webjs-tag>` "Unknown tag/attribute" diagnostic
   suppression, attribute auto-complete sourced from `static properties`,
   gated on the current file's import graph). Inside `` html`` `` templates.

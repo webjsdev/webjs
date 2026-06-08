@@ -171,7 +171,7 @@ Naming convention: derive the scope class from the file path. Slashes
 
 Styles colocate with the markup as `const STYLES = css\`…\`` and
 interpolate via `<style>${STYLES.text}</style>`. The standalone
-`@webjsdev/ts-plugin` (and the `webjs` editor extension) resolves class
+`@webjsdev/intellisense` (and the `webjs` editor extension) resolves class
 go-to-definition inside those blocks.
 
 ### Example: a page

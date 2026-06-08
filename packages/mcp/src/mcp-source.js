@@ -28,7 +28,7 @@ import { createRequire } from 'node:module';
 import { join, resolve, sep, relative } from 'node:path';
 
 /** The published framework packages whose source an agent may want to read. */
-export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui'];
+export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui'];
 
 /** Source file extensions worth grepping / reading (text, not assets). */
 const TEXT_EXT = /\.(?:js|ts|mjs|mts|cjs|cts|json|md)$/i;

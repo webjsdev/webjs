@@ -4,7 +4,8 @@ const PKG_COLOR: Record<string, string> = {
   core:        'bg-accent/15 text-accent',
   server:      'bg-blue-500/15 text-blue-500',
   cli:         'bg-emerald-500/15 text-emerald-500',
-  'ts-plugin': 'bg-purple-500/15 text-purple-500',
+  'ts-plugin':   'bg-purple-500/15 text-purple-500', // legacy entries (renamed to intellisense, #416)
+  intellisense:  'bg-purple-500/15 text-purple-500',
   ui:          'bg-orange-500/15 text-orange-500',
   vscode:      'bg-sky-500/15 text-sky-500',
   nvim:        'bg-green-600/15 text-green-600',

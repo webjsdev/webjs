@@ -144,7 +144,7 @@ test('runSourceTool: dispatches path -> read, query -> grep, none -> list', asyn
 test('resolveFrameworkRoots: finds every @webjsdev/* package in the monorepo', () => {
   const roots = resolveFrameworkRoots(REPO, { exists: existsSync });
   const names = roots.map((r) => r.pkg).sort();
-  assert.deepEqual(names, ['cli', 'core', 'server', 'ts-plugin', 'ui'], 'all five resolve (cli is bin-only, ui/server hide package.json from exports)');
+  assert.deepEqual(names, ['cli', 'core', 'intellisense', 'server', 'ui'], 'all five resolve (cli is bin-only, ui/server hide package.json from exports)');
   // cli source dir is lib/, the rest src/.
   assert.match(roots.find((r) => r.pkg === 'cli').src, /\/lib$/);
   assert.match(roots.find((r) => r.pkg === 'server').src, /\/src$/);

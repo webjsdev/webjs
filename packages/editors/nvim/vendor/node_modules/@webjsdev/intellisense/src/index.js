@@ -1,5 +1,5 @@
 /**
- * @webjsdev/ts-plugin: a standalone TypeScript language-service plugin that
+ * @webjsdev/intellisense: a standalone TypeScript language-service plugin that
  * gives editors webjs-aware intelligence inside `html\`\`` templates, with NO
  * Lit dependency (the bundled `vscode-lit` / `ts-lit-plugin` reliance was
  * removed in Phase 3, #386). It provides, all driven by its own template
@@ -69,7 +69,7 @@ function init(modules) {
         );
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjsdev/ts-plugin: getDefinitionAndBoundSpan threw: ${String(e)}`,
+          `@webjsdev/intellisense: getDefinitionAndBoundSpan threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -84,7 +84,7 @@ function init(modules) {
         return webjsTemplateQuickInfo(info, fileName, position) || upstream;
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjsdev/ts-plugin: getQuickInfoAtPosition threw: ${String(e)}`,
+          `@webjsdev/intellisense: getQuickInfoAtPosition threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -99,7 +99,7 @@ function init(modules) {
         return attrDiags.length ? [...diags, ...attrDiags] : diags;
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjsdev/ts-plugin: getSemanticDiagnostics threw: ${String(e)}`,
+          `@webjsdev/intellisense: getSemanticDiagnostics threw: ${String(e)}`,
         );
         return diags;
       }
@@ -129,7 +129,7 @@ function init(modules) {
         };
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjsdev/ts-plugin: getCompletionsAtPosition threw: ${String(e)}`,
+          `@webjsdev/intellisense: getCompletionsAtPosition threw: ${String(e)}`,
         );
         return upstream;
       }
@@ -1096,7 +1096,7 @@ function init(modules) {
         messageText,
         category: ts.DiagnosticCategory.Error,
         code,
-        source: 'webjsdev-ts-plugin',
+        source: 'webjsdev-intellisense',
       });
 
     /** @param {import('typescript').Node} node */
