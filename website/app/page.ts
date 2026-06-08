@@ -48,7 +48,7 @@ const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,va
 // alone is ~44 KB. The ~99 KB is the full Next baseline, react + react-dom
 // plus the Next runtime plus the app-router client).
 const STATS = [
-  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. webjs core is about 4.5x lighter on the wire.' },
+  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. WebJs core is about 4.5x lighter on the wire.' },
   { big: '0', label: 'Runtime dependencies', sub: '@webjsdev/core has none. The whole stack adds only ws, for WebSockets.' },
   { big: '~15k', label: 'Lines of framework code', sub: 'Small enough that an AI agent can read and grep the whole framework, not guess.' },
   { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
@@ -172,7 +172,7 @@ export default function LandingPage() {
         The framework your <span class=${GRADTEXT}>AI agent</span> already knows how to use
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[58ch] mx-auto mb-8 text-pretty">
-        webjs is built for AI agents from the ground up. Native web components,
+        WebJs is built for AI agents from the ground up. Native web components,
         server actions, and streaming SSR, all on web standards. No bundler,
         no config, no guesswork.
       </p>
@@ -195,7 +195,7 @@ export default function LandingPage() {
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Built for agents</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Your AI writes the code. webjs writes the rules.</h2>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Your AI writes the code. WebJs writes the rules.</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">
             Every app ships a machine-readable contract and cross-agent guardrails,
             so the model produces production-quality code without guessing. Tests and
@@ -279,7 +279,7 @@ export default function LandingPage() {
             </div>
           `)}
         </div>
-        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. webjs uses Next.js-style file routing and lit-style web components, the proven DX AI agents already have the muscle memory for.</p>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. WebJs uses Next.js-style file routing and lit-style web components, the proven DX AI agents already have the muscle memory for.</p>
         <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js. JSDoc-typed JavaScript, no build step.</p>
       </div>
     </section>
