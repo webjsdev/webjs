@@ -191,6 +191,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // intellisense (@webjsdev/intellisense) stays: it gives editor INTELLIGENCE from node_modules via the
     // tsconfig plugin (any tsserver editor, no editor plugin needed).
     assert.ok(pkg.devDependencies['@webjsdev/intellisense']);
+    assert.ok(pkg.devDependencies['@types/node'], 'scaffold installs Node builtin type declarations');
     // @webjsdev/ui is NOT pinned (#399): shadcn-style copy-in; `webjs ui add`
     // resolves the kit from the CLI, so the app needs no pin.
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -200,6 +201,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     const tsconfig = JSON.parse(readFileSync(join(appDir, 'tsconfig.json'), 'utf8'));
     const pluginNames = (tsconfig.compilerOptions.plugins || []).map((p) => p.name);
     assert.ok(pluginNames.includes('@webjsdev/intellisense'), 'editor plugin listed');
+    assert.deepEqual(tsconfig.compilerOptions.types, ['node'], 'tsconfig enables node: builtin types for .server.ts files');
     assert.ok(!pluginNames.includes('ts-lit-plugin'), 'no separate ts-lit-plugin entry (standalone, #386)');
     assert.ok(!pkg.devDependencies['ts-lit-plugin'] && !pkg.dependencies['ts-lit-plugin'], 'scaffold pulls no ts-lit-plugin');
 

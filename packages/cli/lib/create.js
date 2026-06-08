@@ -308,6 +308,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
       // to type-check the app.
       typescript: '^5.6.0',
+      '@types/node': '^24.0.0',
       '@web/test-runner': '^0.20.0',
       '@web/test-runner-playwright': '^0.11.0',
       'playwright': '^1.59.0',
@@ -337,6 +338,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       module: 'NodeNext',
       moduleResolution: 'NodeNext',
       lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      types: ['node'],
       strict: true,
       noEmit: true,
       allowImportingTsExtensions: true,
