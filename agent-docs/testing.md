@@ -71,7 +71,7 @@ packages/
   cli/test/                        scaffold validation only
   ui/test/                         schema, resolver, project-detect, components
     components/browser/            real-browser tests for the kit
-  ts-plugin/test/plugin/           tsserver plugin tests (.test.mjs)
+  intellisense/test/plugin/        tsserver plugin tests (.test.mjs)
 test/                              cross-package only
   ssr/                             SSR pipeline (core + server)
   actions/                         expose() (core + server)
