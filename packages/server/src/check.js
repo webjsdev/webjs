@@ -759,9 +759,15 @@ export async function checkConventions(appDir) {
   // --- Rule: no-duplicate-tag ---
   // Two registrations of the SAME tag string anywhere in the app resolve
   // inconsistently at runtime (SSR last-wins, browser first-wins), so flag
-  // every colliding site naming the others. Reuses the same register/define
-  // extraction as tag-name-has-hyphen, over the redacted source so a tag in a
-  // docs-page tagged-template example does not count.
+  // every colliding site naming the others. Scans EVERY source file, not just
+  // components/, because a duplicate is a runtime hazard regardless of where
+  // the register/define call lives (a page, a lib, a module can register a
+  // tag too); this keeps the rule in lockstep with the editor's 9004
+  // diagnostic, which is likewise project-wide. Reuses the same
+  // register/define extraction as tag-name-has-hyphen, over the redacted
+  // source so a tag in a docs-page tagged-template example does not count.
+  // Only hyphenated tags are considered (a non-hyphenated tag is already
+  // flagged by tag-name-has-hyphen / invariant 3), matching the 9004 filter.
   {
     /** @type {Map<string, string[]>} tag -> rel files that register it (with repeats) */
     const tagSites = new Map();
@@ -769,12 +775,12 @@ export async function checkConventions(appDir) {
       /\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*(['"`])([^'"`]+)\1/g,
       /\bcustomElements\.define\s*\(\s*(['"`])([^'"`]+)\1/g,
     ];
-    for (const { rel, scan } of files) {
-      if (!isComponentFile(rel)) continue;
+    for (const { scan, rel } of files) {
       for (const re of patterns) {
         let match;
         while ((match = re.exec(scan)) !== null) {
           const tagName = match[2];
+          if (!tagName.includes('-')) continue;
           const arr = tagSites.get(tagName) || [];
           arr.push(rel);
           tagSites.set(tagName, arr);

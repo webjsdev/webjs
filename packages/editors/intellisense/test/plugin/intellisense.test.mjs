@@ -672,6 +672,43 @@ test('does not flag a tag registered exactly once (code 9004 counterfactual)', (
   assert.equal(ours.length, 0, `unexpected 9004: ${ours.map((d) => d.messageText).join('; ')}`);
 });
 
+test('9004: flags a tag registered twice in the SAME file (one underline per literal)', () => {
+  const svc = makeService({
+    '/twice.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class TwiceA extends WebComponent {}\n` +
+      `export class TwiceB extends WebComponent {}\n` +
+      `TwiceA.register('twice-widget');\n` +
+      `window.customElements.define('twice-widget', TwiceB);\n`,
+  });
+  const ours = svc.getSemanticDiagnostics('/twice.ts').filter((d) => d.code === 9004);
+  // Two registrations in one file → one underline per registration literal.
+  assert.equal(ours.length, 2, `expected two 9004 on /twice.ts, got ${ours.length}`);
+  // window.customElements.define is recognised (not just the bare form).
+  assert.ok(ours.every((d) => /twice-widget/.test(d.messageText)));
+});
+
+test('9004: a register() call written as html`` template TEXT is not a registration', () => {
+  // A docs/example page printing `register('demo-tag')` inside a template is
+  // template-literal text, never a real CallExpression, so it must not count
+  // as a registration and must not collide with a real one elsewhere.
+  const svc = makeService({
+    '/real.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Demo extends WebComponent {}\n` +
+      `Demo.register('demo-tag');\n`,
+    '/doc.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `export default function D() {\n` +
+      `  return html\`<pre>Other.register('demo-tag')</pre>\`;\n` +
+      `}\n`,
+  });
+  const real = svc.getSemanticDiagnostics('/real.ts').filter((d) => d.code === 9004);
+  const doc = svc.getSemanticDiagnostics('/doc.ts').filter((d) => d.code === 9004);
+  assert.equal(real.length, 0, 'the single real registration is not a duplicate');
+  assert.equal(doc.length, 0, 'an example inside a template is never a registration');
+});
+
 test('flags a non-callable `@event` handler; accepts a function', () => {
   const base =
     `import { WebComponent } from '@webjsdev/core';\n` +

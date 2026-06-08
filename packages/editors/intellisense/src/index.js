@@ -33,6 +33,9 @@ function init(modules) {
   /** @type {Map<string, { version: string, components: Map<string, ComponentRef>, classes: Map<string, CssClassRef[]> }>} */
   const perFileCache = new Map();
 
+  /** @type {Map<string, { version: string, sites: Array<{ tag: string, start: number, length: number }> }>} */
+  const regSitesCache = new Map();
+
   return { create };
 
   /**
@@ -1113,24 +1116,45 @@ function init(modules) {
     const sites = new Map();
     for (const sf of program.getSourceFiles()) {
       if (sf.fileName.includes('/node_modules/')) continue;
-      /** @param {import('typescript').Node} node */
-      const visit = (node) => {
-        if (ts.isCallExpression(node)) {
-          const arg = registrationTagArg(node);
-          if (arg && arg.text.includes('-')) {
-            const arr = sites.get(arg.text) || [];
-            arr.push({
-              fileName: sf.fileName,
-              start: arg.getStart(sf),
-              length: arg.getWidth(sf),
-            });
-            sites.set(arg.text, arr);
-          }
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(sf);
+      for (const s of registrationSitesFor(sf)) {
+        const arr = sites.get(s.tag) || [];
+        arr.push({ fileName: sf.fileName, start: s.start, length: s.length });
+        sites.set(s.tag, arr);
+      }
     }
+    return sites;
+  }
+
+  /**
+   * The hyphenated-tag registration sites in ONE source file, memoized by the
+   * file's tsserver version so the whole-program scan on each keystroke is not
+   * a fresh AST walk of every unchanged file.
+   *
+   * @param {import('typescript').SourceFile} sf
+   * @returns {Array<{ tag: string, start: number, length: number }>}
+   */
+  function registrationSitesFor(sf) {
+    const version =
+      /** @type any */ (sf).version !== undefined
+        ? String(/** @type any */ (sf).version)
+        : `${sf.getFullStart()}:${sf.getEnd()}`;
+    const cached = regSitesCache.get(sf.fileName);
+    if (cached && cached.version === version) return cached.sites;
+
+    /** @type {Array<{ tag: string, start: number, length: number }>} */
+    const sites = [];
+    /** @param {import('typescript').Node} node */
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) {
+        const arg = registrationTagArg(node);
+        if (arg && arg.text.includes('-')) {
+          sites.push({ tag: arg.text, start: arg.getStart(sf), length: arg.getWidth(sf) });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    regSitesCache.set(sf.fileName, { version, sites });
     return sites;
   }
 

@@ -218,6 +218,42 @@ customElements.define('like-button', B);
   }
 });
 
+test('no-duplicate-tag: flags a collision across non-component directories (not gated on components/)', async () => {
+  // A register/define call can live in a page, a lib, or a module, not only
+  // under components/. A duplicate is a runtime hazard regardless, so the rule
+  // scans every source file (keeping it in lockstep with the editor's
+  // project-wide 9004 diagnostic).
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await mkdir(join(appDir, 'lib'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'page.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class Widget extends WebComponent {}
+Widget.register('app-widget');
+export default function P() {}
+`,
+    );
+    await writeFile(
+      join(appDir, 'lib', 'extra.js'),
+      `import { WebComponent } from '@webjsdev/core';
+class Widget2 extends WebComponent {}
+customElements.define('app-widget', Widget2);
+`,
+    );
+
+    const violations = await checkConventions(appDir);
+    const dups = violations.filter((v) => v.rule === 'no-duplicate-tag');
+    assert.equal(dups.length, 2, 'both non-component files flagged');
+    const filesFlagged = dups.map((v) => v.file);
+    assert.ok(filesFlagged.some((f) => f.endsWith('page.js')), 'app/page.js flagged');
+    assert.ok(filesFlagged.some((f) => f.endsWith('extra.js')), 'lib/extra.js flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-duplicate-tag: passes when each tag is registered once (counterfactual)', async () => {
   const appDir = await makeTempApp();
   try {
