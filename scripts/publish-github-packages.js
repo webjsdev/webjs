@@ -91,9 +91,18 @@ if (!pkgName.startsWith('@webjsdev/')) {
 // changelog tree relies on this skip to publish only the 5 current
 // versions (one per package).
 const shortPkg = pkgName.replace(/^@webjsdev\//, '');
-const workspacePkgJson = resolve(REPO_ROOT, 'packages', shortPkg, 'package.json');
-if (!existsSync(workspacePkgJson)) {
-  console.error(`[publish-github-packages] cannot find ${workspacePkgJson} for ${pkgName}`);
+// First-class libs live at `packages/<short>`, but the #402/#404 reorg moved
+// peripheral packages into `packages/editors/<short>` (intellisense, vscode)
+// and `packages/wrappers/<short>` (create-webjs, webjsdev). Probe each so a
+// grouped package resolves without a hard-coded name->dir map.
+const workspacePkgJson = ['packages', 'packages/editors', 'packages/wrappers']
+  .map((base) => resolve(REPO_ROOT, base, shortPkg, 'package.json'))
+  .find((p) => existsSync(p));
+if (!workspacePkgJson) {
+  console.error(
+    `[publish-github-packages] cannot find a workspace package.json for ${pkgName} ` +
+      `(tried packages/${shortPkg}, packages/editors/${shortPkg}, packages/wrappers/${shortPkg})`,
+  );
   process.exit(2);
 }
 const workspaceVersion = JSON.parse(readFileSync(workspacePkgJson, 'utf8')).version;
