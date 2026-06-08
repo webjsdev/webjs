@@ -48,9 +48,44 @@ queries auto-load). `setup()` is only needed to register `:WebjsCheck`.
 
 ## Language-service intelligence
 
-webjs.nvim **bundles** `@webjsdev/intellisense` (standalone, no Lit dependency).
-Wire it into your `ts_ls` setup with the helper, which points `tsserver` at the
-bundled copy via its plugin probe location:
+webjs.nvim **bundles** `@webjsdev/intellisense` (standalone, no Lit dependency)
+and exposes it to your TypeScript LSP, pointing the plugin probe location at the
+bundled copy. That works with **nothing in the app** (no `@webjsdev/intellisense`
+dependency, no `tsconfig.json` edit). If the app DOES wire the plugin via
+`tsconfig.json` `plugins` (the `webjs create` scaffold does), that is fine too:
+`tsserver` dedupes by name, so there is no double-load.
+
+**Two LSPs load tsserver plugins differently, so pick the helper for yours.**
+
+### vtsls (LazyVim's default TypeScript LSP)
+
+vtsls loads plugins via `settings.vtsls.tsserver.globalPlugins`. With LazyVim,
+configure the `vtsls` server through `nvim-lspconfig` `opts.servers`:
+
+```lua
+-- ~/.config/nvim/lua/plugins/webjs.lua
+return {
+  { 'webjsdev/webjs.nvim', ft = { 'typescript', 'javascript' }, opts = {} },
+
+  -- treesitter parsers the html/css template injections need
+  { 'nvim-treesitter/nvim-treesitter', opts = function(_, o)
+      o.ensure_installed = o.ensure_installed or {}
+      vim.list_extend(o.ensure_installed, { 'html', 'css' })
+    end },
+
+  -- the webjs intelligence plugin, into vtsls
+  { 'neovim/nvim-lspconfig', opts = { servers = { vtsls = {
+      settings = require('webjs').with_vtsls_plugin(),
+  } } } },
+}
+```
+
+`with_vtsls_plugin(settings?)` merges `{ name, location, enableForWorkspaceTypeScriptVersions = true }`
+into an existing (or new) `settings` table, idempotently.
+
+### ts_ls (a.k.a. `tsserver`) / typescript-tools.nvim
+
+ts_ls loads plugins via `init_options.plugins`:
 
 ```lua
 require('lspconfig').ts_ls.setup({
@@ -58,11 +93,10 @@ require('lspconfig').ts_ls.setup({
 })
 ```
 
-That works with **nothing in the app** (no `@webjsdev/intellisense` dependency, no
-`tsconfig.json` edit). If the app DOES wire the plugin via `tsconfig.json`
-`plugins` (the `webjs create` scaffold does), that's fine too: `tsserver`
-dedupes by name, so there is no double-load. Point your LSP at the
-**workspace's** `node_modules/typescript`, and `:LspRestart` after install.
+After either, point your LSP at the **workspace's** `node_modules/typescript`
+and `:LspRestart` once. Highlighting (the treesitter injection) is **independent**
+of this LSP wiring and works as soon as the plugin loads, given the `html` / `css`
+parsers above.
 
 ## Commands
 

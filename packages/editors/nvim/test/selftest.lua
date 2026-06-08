@@ -33,6 +33,20 @@ ok(vim.fn.isdirectory(loc .. '/node_modules/@webjsdev/intellisense') == 1,
 ok(vim.fn.filereadable(loc .. '/node_modules/@webjsdev/intellisense/src/index.js') == 1,
   'bundled intellisense entry is present')
 
+-- 3b. vtsls helper (#405): the globalPlugins shape LazyVim/vtsls uses, also
+-- pointing at the BUNDLED copy.
+local gp = webjs.vtsls_global_plugin()
+ok(gp.name == '@webjsdev/intellisense', 'vtsls_global_plugin names the plugin')
+ok(gp.location == webjs.bundled_location(), 'vtsls_global_plugin points at the bundled location')
+ok(gp.enableForWorkspaceTypeScriptVersions == true,
+  'vtsls_global_plugin enables for workspace TypeScript versions')
+local st = webjs.with_vtsls_plugin({})
+local injected = st.vtsls.tsserver.globalPlugins
+ok(injected[1].name == '@webjsdev/intellisense', 'with_vtsls_plugin injects into settings.vtsls.tsserver.globalPlugins')
+ok(vim.fn.isdirectory(injected[1].location .. '/node_modules/@webjsdev/intellisense') == 1,
+  'vtsls globalPlugin location points at the vendored bundle')
+ok(#webjs.with_vtsls_plugin(st).vtsls.tsserver.globalPlugins == 1, 'with_vtsls_plugin is idempotent')
+
 -- 4. check.project maps a violation to a quickfix entry
 local _, qf = check.project({
   violations = { { rule = 'no-foo', message = 'bad', file = '/tmp/x.ts', line = 3, column = 5 } },

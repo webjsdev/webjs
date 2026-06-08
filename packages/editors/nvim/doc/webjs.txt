@@ -55,24 +55,41 @@ no setup() call.
 ==============================================================================
 5. LSP INTELLIGENCE                                                    *webjs-lsp*
 
-webjs.nvim BUNDLES @webjsdev/intellisense (standalone, no Lit dependency). Wire it
-into ts_ls with the helper, which points tsserver at the bundled copy via its
-plugin probe location:
+webjs.nvim BUNDLES @webjsdev/intellisense (standalone, no Lit dependency) and
+points the tsserver plugin probe location at the bundled copy, so it works with
+no @webjsdev/intellisense in the app. If the app also wires it via tsconfig.json
+`plugins`, tsserver dedupes by name, so there is no double-load.
 
+Two LSPs load tsserver plugins via DIFFERENT keys; pick the helper for yours.
+
+vtsls (LazyVim's default) uses `settings.vtsls.tsserver.globalPlugins`:
+>lua
+  -- in nvim-lspconfig opts.servers
+  vtsls = { settings = require('webjs').with_vtsls_plugin() }
+<
+ts_ls / typescript-tools.nvim use `init_options.plugins`:
 >lua
   require('lspconfig').ts_ls.setup({
     init_options = require('webjs').with_tsserver_plugin(),
   })
 <
-That works with no @webjsdev/intellisense in the app. If the app also wires it via
-tsconfig.json `plugins`, tsserver dedupes by name, so there is no double-load.
+Add the `html` and `css` treesitter parsers (`ensure_installed`) for the
+template injection highlighting, which is independent of the LSP wiring.
 
                                                   *webjs.with_tsserver_plugin()*
 require('webjs').with_tsserver_plugin({init_options})
                         Return {init_options} with the bundled
                         @webjsdev/intellisense merged into `plugins` (idempotent),
                         its `location` set to the copy vendored inside
-                        webjs.nvim. No app dependency required.
+                        webjs.nvim. For ts_ls / typescript-tools.nvim.
+
+                                                     *webjs.with_vtsls_plugin()*
+require('webjs').with_vtsls_plugin({settings})
+                        Return {settings} with the bundled
+                        @webjsdev/intellisense merged into
+                        `vtsls.tsserver.globalPlugins` (idempotent), with
+                        `enableForWorkspaceTypeScriptVersions = true`. For vtsls
+                        (LazyVim). No app dependency required.
 
 ==============================================================================
 6. HEALTH                                                           *webjs-health*

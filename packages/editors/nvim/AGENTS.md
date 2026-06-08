@@ -18,7 +18,8 @@ specific to the Neovim plugin.
    auto-loads any `queries/<lang>/<kind>.scm` on the runtimepath, so no Lua
    wires this up.
 2. **Lua** (`lua/webjs/`): `init.lua` (`setup()`, the `:WebjsCheck` command,
-   the `with_tsserver_plugin()` LSP helper), `check.lua` (`webjs check --json`
+   the `with_tsserver_plugin()` LSP helper for ts_ls AND `with_vtsls_plugin()`
+   for vtsls/LazyVim, #405), `check.lua` (`webjs check --json`
    to `vim.diagnostic` + quickfix), `health.lua` (`:checkhealth webjs`).
    `plugin/webjs.lua` registers `:WebjsCheck` so it works without an explicit
    `setup()`.

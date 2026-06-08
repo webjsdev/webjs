@@ -59,6 +59,41 @@ function M.with_tsserver_plugin(init_options)
   return init_options
 end
 
+--- The vtsls-shaped globalPlugin spec. vtsls (the LSP LazyVim's TypeScript
+--- extra and many modern setups use) loads tsserver plugins via
+--- `settings.vtsls.tsserver.globalPlugins`, a DIFFERENT key from ts_ls's
+--- `init_options.plugins`, and needs `enableForWorkspaceTypeScriptVersions` so
+--- the plugin loads against the workspace's own TypeScript too. Points at the
+--- BUNDLED copy, so it works with no @webjsdev/intellisense in the app and no
+--- tsconfig edit (#405).
+--- @return table { name, location, enableForWorkspaceTypeScriptVersions, languages }
+function M.vtsls_global_plugin()
+  return {
+    name = '@webjsdev/intellisense',
+    location = M.bundled_location(),
+    enableForWorkspaceTypeScriptVersions = true,
+    languages = { 'javascript', 'typescript' },
+  }
+end
+
+--- Convenience: merge the webjs tsserver plugin into a vtsls `settings` table
+--- (creating `vtsls.tsserver.globalPlugins` if absent), idempotently. Use this
+--- with the `vtsls` language server (LazyVim's default TypeScript LSP), where
+--- `with_tsserver_plugin`'s `init_options.plugins` shape does nothing.
+--- @param settings table|nil
+--- @return table the same (or a new) settings with the globalPlugin present
+function M.with_vtsls_plugin(settings)
+  settings = settings or {}
+  settings.vtsls = settings.vtsls or {}
+  settings.vtsls.tsserver = settings.vtsls.tsserver or {}
+  settings.vtsls.tsserver.globalPlugins = settings.vtsls.tsserver.globalPlugins or {}
+  for _, p in ipairs(settings.vtsls.tsserver.globalPlugins) do
+    if p.name == '@webjsdev/intellisense' then return settings end
+  end
+  table.insert(settings.vtsls.tsserver.globalPlugins, M.vtsls_global_plugin())
+  return settings
+end
+
 --- Register user commands. Safe to call multiple times.
 function M.setup(opts)
   M.config = vim.tbl_deep_extend('force', M.config, opts or {})
