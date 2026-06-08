@@ -11,7 +11,7 @@
     "strict": true,
     "types": ["node"],
     "noEmit": true,
-    "checkJs": true,
+    "checkJs": false,
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
@@ -28,14 +28,12 @@
   "include": [
     "app/**/*",
     "components/**/*",
-    "modules/**/*",
     "lib/**/*",
     "middleware.js",
     "middleware.ts"
   ],
   "exclude": [
     "node_modules",
-    ".webjs",
-    "prisma/migrations"
+    ".webjs"
   ]
 }

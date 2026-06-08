@@ -19,6 +19,7 @@
     "@webjsdev/server": "^0.8.0"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "@web/test-runner": "^0.20.0",
     "@web/test-runner-playwright": "^0.11.0",
     "playwright": "^1.59.0"
