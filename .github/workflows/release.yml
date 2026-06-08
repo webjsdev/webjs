@@ -207,7 +207,7 @@ jobs:
             # tree only (never committed). npm publish reads from here.
             node -e "
               const fs = require('node:fs');
-              const path = './packages/${pkg}/package.json';
+              const path = './packages/wrappers/${pkg}/package.json';
               const j = JSON.parse(fs.readFileSync(path, 'utf8'));
               j.version = '${CLI_VERSION}';
               if (j.dependencies && j.dependencies['@webjsdev/cli']) {
