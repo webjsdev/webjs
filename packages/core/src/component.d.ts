@@ -114,7 +114,11 @@ export abstract class WebComponent extends HTMLElement {
   /** Optional render-error boundary inside the component. */
   renderError?(error: Error): TemplateResult | void;
 
-  connectedCallback?(): void;
-  disconnectedCallback?(): void;
-  attributeChangedCallback?(name: string, oldValue: string | null, newValue: string | null): void;
+  // Concrete on the base (component.js implements all three), so a subclass
+  // override can call `super.connectedCallback()` etc. without a
+  // possibly-undefined error (#433). NOT optional, unlike the subclass-only
+  // hooks above (firstUpdated / renderError).
+  connectedCallback(): void;
+  disconnectedCallback(): void;
+  attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void;
 }
