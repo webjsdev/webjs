@@ -29,8 +29,8 @@ export function cleanBundle(destRoot) {
 
 function main() {
   const here = dirname(fileURLToPath(import.meta.url));
-  const cliRoot = resolve(here, '..'); // packages/cli/scripts -> packages/cli
-  cleanBundle(join(cliRoot, 'resources'));
+  const pkgRoot = resolve(here, '..'); // packages/mcp/scripts -> packages/mcp
+  cleanBundle(join(pkgRoot, 'resources'));
   console.error('[webjs] cleaned the transient MCP docs bundle (resources/)');
 }
 

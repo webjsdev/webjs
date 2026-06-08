@@ -160,7 +160,7 @@ test('resolveDocsLocation: prefers the bundled resources/, falls back to repo-ro
 });
 
 test('bundleDocs + cleanBundle: copy bundles agent-docs + AGENTS, clean removes it (temp dirs only)', () => {
-  // Operate entirely in a throwaway layout, NEVER the real packages/cli/resources
+  // Operate entirely in a throwaway layout, NEVER the real packages/mcp/resources
   // (which would race the integration tests reading the live corpus).
   const root = mkdtempSync(join(tmpdir(), 'mcp-bundle-'));
   _cleanup.push(root);

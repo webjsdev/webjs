@@ -1,9 +1,9 @@
 /**
- * Bundle the framework docs into `@webjsdev/cli` so `npx @webjsdev/cli mcp` is
- * self-contained (#376). The MCP knowledge layer serves the `agent-docs/*.md`
+ * Bundle the framework docs into `@webjsdev/mcp` so `npx @webjsdev/mcp` is
+ * self-contained (#376, #415). The MCP knowledge layer serves the `agent-docs/*.md`
  * corpus + the root `AGENTS.md` as resources, but those live at the MONOREPO
  * ROOT, outside this package, so npm's `files` cannot reach them. This script
- * copies them into `packages/cli/resources/` (which IS in `files`) at `prepack`,
+ * copies them into `packages/mcp/resources/` (which IS in `files`) at `prepack`,
  * just before the tarball is built. `postpack` (clean-mcp-resources.js) removes
  * the working-tree copy right after, so the bundle is transient: present in the
  * tarball, absent in dev (where `resolveDocsLocation` falls back to the live
@@ -40,12 +40,12 @@ export function bundleDocs({ srcDocs, srcAgents, destRoot }) {
 /** Run against the real repo paths when invoked as the prepack script. */
 function main() {
   const here = dirname(fileURLToPath(import.meta.url));
-  const cliRoot = resolve(here, '..'); // packages/cli/scripts -> packages/cli
+  const pkgRoot = resolve(here, '..'); // packages/mcp/scripts -> packages/mcp
   const repoRoot = resolve(here, '..', '..', '..'); // -> monorepo root
   bundleDocs({
     srcDocs: join(repoRoot, 'agent-docs'),
     srcAgents: join(repoRoot, 'AGENTS.md'),
-    destRoot: join(cliRoot, 'resources'),
+    destRoot: join(pkgRoot, 'resources'),
   });
   // Diagnostics to stderr so they never pollute a tool parsing `npm pack --json` stdout.
   console.error('[webjs] bundled MCP docs into resources/ (agent-docs + AGENTS.md)');
