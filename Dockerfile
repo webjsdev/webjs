@@ -32,7 +32,7 @@ COPY packages/cli/package.json                       ./packages/cli/
 COPY packages/core/package.json                      ./packages/core/
 COPY packages/mcp/package.json                       ./packages/mcp/
 COPY packages/server/package.json                    ./packages/server/
-COPY packages/editors/ts-plugin/package.json         ./packages/editors/ts-plugin/
+COPY packages/editors/intellisense/package.json         ./packages/editors/intellisense/
 COPY packages/ui/package.json                        ./packages/ui/
 COPY packages/ui/packages/registry/package.json      ./packages/ui/packages/registry/
 COPY packages/ui/packages/website/package.json       ./packages/ui/packages/website/

@@ -87,7 +87,7 @@ const SOURCE_SCHEMA = {
     },
     package: {
       type: 'string',
-      description: 'Limit a no-args listing to one package (core, server, cli, ts-plugin, ui).',
+      description: 'Limit a no-args listing to one package (core, server, cli, intellisense, ui).',
     },
   },
   required: [],

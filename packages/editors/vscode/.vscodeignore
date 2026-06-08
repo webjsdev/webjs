@@ -10,9 +10,9 @@ test/**
 # We package with `--no-dependencies`, so node_modules is excluded wholesale.
 # Re-include ONLY the vendored, self-contained tsserver plugin that the build
 # step writes (a single CJS bundle + its package.json). This is what makes the
-# contributed `@webjsdev/ts-plugin` resolvable inside the vsix.
+# contributed `@webjsdev/intellisense` resolvable inside the vsix.
 node_modules/**
-!node_modules/@webjsdev/ts-plugin/**
+!node_modules/@webjsdev/intellisense/**
 
 # Build artifacts.
 webjs.vsix

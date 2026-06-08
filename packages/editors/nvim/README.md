@@ -6,7 +6,7 @@ counterpart to the `webjs` VS Code extension. Two pieces:
 - **In-template highlighting.** Treesitter injection queries highlight the
   markup inside `` html`…` ``, `` css`…` ``, and `` svg`…` `` tagged templates
   as HTML / CSS / SVG. No Lit plugin, no config.
-- **Language intelligence.** Surfaces the standalone `@webjsdev/ts-plugin`
+- **Language intelligence.** Surfaces the standalone `@webjsdev/intellisense`
   tsserver plugin through your LSP (go-to-definition on tags / attributes /
   CSS classes, binding-aware completions, in-template diagnostics, hover),
   plus a `:WebjsCheck` command that loads `webjs check` violations into
@@ -20,8 +20,8 @@ counterpart to the `webjs` VS Code extension. Two pieces:
   `:TSInstall typescript javascript html css`). `svg` is optional.
 - For intelligence: Node 24+, `typescript` in your app, and an LSP client for
   `tsserver` (`ts_ls` via `nvim-lspconfig`, or `typescript-tools.nvim`).
-  `@webjsdev/ts-plugin` is **bundled inside this plugin**, so it works even
-  with no `@webjsdev/ts-plugin` in the app (e.g. before `npm install`).
+  `@webjsdev/intellisense` is **bundled inside this plugin**, so it works even
+  with no `@webjsdev/intellisense` in the app (e.g. before `npm install`).
 
 Run `:checkhealth webjs` to verify all of the above.
 
@@ -48,7 +48,7 @@ queries auto-load). `setup()` is only needed to register `:WebjsCheck`.
 
 ## Language-service intelligence
 
-webjs.nvim **bundles** `@webjsdev/ts-plugin` (standalone, no Lit dependency).
+webjs.nvim **bundles** `@webjsdev/intellisense` (standalone, no Lit dependency).
 Wire it into your `ts_ls` setup with the helper, which points `tsserver` at the
 bundled copy via its plugin probe location:
 
@@ -58,7 +58,7 @@ require('lspconfig').ts_ls.setup({
 })
 ```
 
-That works with **nothing in the app** (no `@webjsdev/ts-plugin` dependency, no
+That works with **nothing in the app** (no `@webjsdev/intellisense` dependency, no
 `tsconfig.json` edit). If the app DOES wire the plugin via `tsconfig.json`
 `plugins` (the `webjs create` scaffold does), that's fine too: `tsserver`
 dedupes by name, so there is no double-load. Point your LSP at the

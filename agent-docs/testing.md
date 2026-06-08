@@ -131,7 +131,7 @@ ui-website ship no test suite yet, so they are not in the job.
 3. Drop the test in directly when it's a node test; nest it
    inside `browser/` / `e2e/` / `smoke/` when it's that kind.
 4. Use `.test.js` for ESM packages, `.test.mjs` when the
-   surrounding package is CJS (e.g. `@webjsdev/ts-plugin`).
+   surrounding package is CJS (e.g. `@webjsdev/intellisense`).
 
 ---
 

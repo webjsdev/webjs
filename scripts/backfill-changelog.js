@@ -5,7 +5,7 @@
  *
  *   changelog/<pkg>/<version>.md
  *
- * where <pkg> is one of `core`, `server`, `cli`, `ts-plugin`, `ui`,
+ * where <pkg> is one of `core`, `server`, `cli`, `intellisense`, `ui`,
  * `vscode`, or `nvim`. The last two are the editor packages: tracked
  * for the /changelog feed but flagged `npm: false` in their frontmatter
  * so the publish-* scripts skip the registry (they ship via vsce/ovsx
@@ -44,7 +44,7 @@ const OUT = resolve(ROOT, 'changelog');
 // npm-published: they carry `npm: false` in their frontmatter so the
 // release workflow's publish-* scripts skip them (see DISPLAY_NAME /
 // NON_NPM below and scripts/publish-npm.js).
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'mcp', 'vscode', 'nvim'];
+const PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui', 'mcp', 'vscode', 'nvim'];
 
 // Some packages publish under an unscoped npm name; for those the
 // frontmatter's `package` field is the bare name. (None of the
@@ -74,7 +74,7 @@ function npmName(pkg) {
 // the bare names (used for the npm name + the changelog/<pkg>/ dir); map a
 // key to its on-disk directory here when it is not packages/<pkg>.
 const PACKAGE_DIRS = {
-  'ts-plugin': 'packages/editors/ts-plugin',
+  'intellisense': 'packages/editors/intellisense',
   vscode: 'packages/editors/vscode',
   nvim: 'packages/editors/nvim',
 };
@@ -90,8 +90,13 @@ function pkgDir(pkg) {
 // BOTH the current and the historical dir as pathspecs. Without this, a
 // package's pre-move version bumps and feature commits are invisible to the
 // changelog (vscode's 0.1.0/0.2.0 and the nvim epic work all predate #404).
+// NOTE: `intellisense` deliberately has NO old-dirs entry. It was renamed
+// from `@webjsdev/ts-plugin` (#416), whose full version history stays frozen
+// under `changelog/ts-plugin/`. Pointing intellisense at the old ts-plugin
+// dirs would regenerate that entire history a SECOND time under
+// `changelog/intellisense/`. intellisense starts fresh at the rename (0.5.0),
+// hand-authored; future bumps are tracked from `packages/editors/intellisense`.
 const PACKAGE_OLD_DIRS = {
-  'ts-plugin': ['packages/ts-plugin'],
   vscode: ['packages/vscode'],
   nvim: ['packages/nvim'],
 };

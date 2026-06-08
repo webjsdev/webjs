@@ -310,7 +310,7 @@ JS + JSDoc gets the same call-site type safety. The TypeScript language
 server reads `@typedef` / `@param` / `@returns` identically to `.ts`
 syntax. Add `"checkJs": true` to enforce types in editor + CI.
 
-## Editor plugin: `@webjsdev/ts-plugin`
+## Editor plugin: `@webjsdev/intellisense`
 
 **Editor-only. Not required for the framework to run.** The runtime
 has no dependency on it.
@@ -319,7 +319,7 @@ A single plugin with its OWN in-template intelligence (no Lit dependency; the `w
 
 ```jsonc
 "plugins": [
-  { "name": "@webjsdev/ts-plugin" }
+  { "name": "@webjsdev/intellisense" }
 ]
 ```
 

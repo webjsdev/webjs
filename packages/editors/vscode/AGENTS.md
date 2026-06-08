@@ -18,7 +18,7 @@ This file only covers what is specific to the extension.
    templates and scope `${...}` holes as TypeScript. Authored from
    scratch (NOT copied from lit-html), so there is no Lit dependency and
    no attribution burden.
-2. **Language-service intelligence.** The bundled `@webjsdev/ts-plugin`
+2. **Language-service intelligence.** The bundled `@webjsdev/intellisense`
    tsserver plugin, auto-registered via
    `contributes.typescriptServerPlugins` (no `tsconfig.json` edit). Gives
    webjs-aware go-to-definition, attribute completion from
@@ -33,7 +33,7 @@ The extension must NOT depend on any Lit extension or grammar. Two
 mechanisms keep it that way, and both are load-bearing:
 
 - **Highlighting** uses our own grammars, never `vscode-lit-html`.
-- **Intelligence** bundles `@webjsdev/ts-plugin`, which is standalone as
+- **Intelligence** bundles `@webjsdev/intellisense`, which is standalone as
   of Phase 3 (#386): it has its own template parser and no `ts-lit-plugin`
   dependency, so the esbuilt bundle (`scripts/build.mjs`) is the whole
   webjs language service with no Lit code at all.
@@ -52,7 +52,7 @@ WHOLE monorepo (repo root + every sibling), ballooning the vsix to
 ~86 MB. So:
 
 - `scripts/build.mjs` esbuilds the plugin into a single self-contained
-  CJS bundle at `node_modules/@webjsdev/ts-plugin/` (real files, no
+  CJS bundle at `node_modules/@webjsdev/intellisense/` (real files, no
   further deps).
 - `scripts/package.mjs` copies the publishable tree into a standalone
   staging dir OUTSIDE the workspace, with a manifest whose only
@@ -101,7 +101,7 @@ the vendored plugin is self-contained and Lit-free. Run from the repo
 root via `npm test` (picked up under `packages/editors/vscode/test`).
 
 Full per-feature behaviour of the tsserver plugin itself lives in
-[`../ts-plugin/AGENTS.md`](../ts-plugin/AGENTS.md).
+[`../intellisense/AGENTS.md`](../intellisense/AGENTS.md).
 
 ---
 

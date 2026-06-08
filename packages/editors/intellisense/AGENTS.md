@@ -1,4 +1,4 @@
-# AGENTS.md for @webjsdev/ts-plugin
+# AGENTS.md for @webjsdev/intellisense
 
 A **tsserver plugin** that gives editors (VS Code, Neovim, JetBrains)
 webjs-aware intelligence inside `` html`` `` tagged templates:
@@ -13,7 +13,7 @@ commit conventions, autonomous-mode behaviour, scaffold rules) live
 in the **framework root [`../../AGENTS.md`](../../AGENTS.md)** and
 apply here. Read that first.
 
-This file only covers what's specific to `@webjsdev/ts-plugin`.
+This file only covers what's specific to `@webjsdev/intellisense`.
 
 ## Role
 
@@ -54,7 +54,7 @@ src/
   template/parse.js   The html`` HTML-in-template parser (length-preserving
                       ${} masking → node/attr AST with absolute spans).
 test/plugin/
-  ts-plugin.test.mjs       Language-service behaviour (definitions, completions,
+  intellisense.test.mjs       Language-service behaviour (definitions, completions,
                            diagnostics, hover) via a real in-memory tsserver.
   template-parse.test.mjs  The parser in isolation.
 README.md                  User-facing setup instructions.
@@ -78,7 +78,7 @@ README.md                  User-facing setup instructions.
 4. **No `ts-lit-plugin` dependency.** The plugin is self-contained: its own
    parser, completions, diagnostics, and hover never require it, and the
    source must never `require('ts-lit-plugin')` (a test asserts this). A
-   single `tsconfig.json` plugin entry, `{ "name": "@webjsdev/ts-plugin" }`.
+   single `tsconfig.json` plugin entry, `{ "name": "@webjsdev/intellisense" }`.
 5. **No blanket unknown-tag / unknown-attribute diagnostics.** webjs has no
    `HTMLElementTagNameMap`, so flagging an unrecognised tag/attribute would
    false-positive on legitimate third-party custom elements. Only
@@ -86,7 +86,7 @@ README.md                  User-facing setup instructions.
 
 ## Tests
 
-`packages/editors/ts-plugin/test/plugin/ts-plugin.test.mjs` boots a real
+`packages/editors/intellisense/test/plugin/intellisense.test.mjs` boots a real
 tsserver instance against fixture sources and asserts definition,
 completion, diagnostic, and hover behaviour. Covers tag / attribute /
 CSS-class resolution, binding-aware completions (incl. hyphenation and
@@ -94,7 +94,7 @@ CSS-class resolution, binding-aware completions (incl. hyphenation and
 the "lit-plugin diagnostic suppression only when imported" path.
 `template-parse.test.mjs` covers the parser in isolation.
 
-The file is `.mjs` because `@webjsdev/ts-plugin` itself is a
+The file is `.mjs` because `@webjsdev/intellisense` itself is a
 CommonJS package (`"type": "commonjs"`); the test uses ESM
 imports so the extension forces the right module type.
 

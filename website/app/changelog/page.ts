@@ -13,7 +13,7 @@ import { pkgBadge } from '../../modules/changelog/utils/pkg-badge.ts';
 
 export const metadata = {
   title: 'Changelog · webjs',
-  description: 'Per-package, per-version release notes for the webjs framework (@webjsdev/core, server, cli, ts-plugin, ui, mcp) plus the webjs editor extensions for VS Code and Neovim.',
+  description: 'Per-package, per-version release notes for the webjs framework (@webjsdev/core, server, cli, intellisense, ui, mcp) plus the webjs editor extensions for VS Code and Neovim.',
 };
 
 export default async function Changelog() {
@@ -27,7 +27,7 @@ export default async function Changelog() {
           Per-package, per-version release notes for <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">@webjsdev/core</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/server</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/cli</code>,
-          <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ts-plugin</code>,
+          <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/intellisense</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ui</code>, and
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/mcp</code>,
           plus the webjs editor extensions for VS Code

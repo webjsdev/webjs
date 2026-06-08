@@ -3,7 +3,7 @@
  *
  * Most of the value is DECLARATIVE (the manifest's `contributes`): the
  * `html`/`css`/`svg` template grammars highlight embedded markup with no Lit
- * extension, the bundled `@webjsdev/ts-plugin` is auto-registered as a tsserver
+ * extension, the bundled `@webjsdev/intellisense` is auto-registered as a tsserver
  * plugin (no tsconfig edit), and the snippets ship the common recipes. This
  * file only wires the three commands. It is CommonJS because VSCode loads the
  * extension host in CommonJS; `vscode` is provided by the host (never bundled).

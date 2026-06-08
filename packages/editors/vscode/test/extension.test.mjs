@@ -46,7 +46,7 @@ test('manifest identity is the published webjs extension', () => {
 test('the bundled tsserver plugin is auto-registered (no Lit plugin)', () => {
   const plugins = manifest.contributes.typescriptServerPlugins;
   assert.equal(plugins.length, 1);
-  assert.equal(plugins[0].name, '@webjsdev/ts-plugin');
+  assert.equal(plugins[0].name, '@webjsdev/intellisense');
   assert.equal(plugins[0].enableForWorkspaceTypeScriptVersions, true);
   // The whole point of phase 1: no dependency on any Lit extension/grammar.
   const raw = readFileSync(join(ROOT, 'package.json'), 'utf8');
@@ -54,15 +54,15 @@ test('the bundled tsserver plugin is auto-registered (no Lit plugin)', () => {
 });
 
 test('build.mjs produces a self-contained, Lit-free vendored plugin', () => {
-  // The vsix must resolve `@webjsdev/ts-plugin` from its own node_modules, so
+  // The vsix must resolve `@webjsdev/intellisense` from its own node_modules, so
   // the build vendors a single CJS bundle there. Prove it is self-contained
   // (no further deps to drag in) and truly Lit-free: the plugin is standalone
   // (#386), so it neither requires nor references ts-lit-plugin.
   execFileSync('node', [join(ROOT, 'scripts/build.mjs')], { stdio: 'pipe' });
-  const dir = join(ROOT, 'node_modules/@webjsdev/ts-plugin');
+  const dir = join(ROOT, 'node_modules/@webjsdev/intellisense');
   assert.ok(existsSync(join(dir, 'index.cjs')), 'vendored bundle exists');
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  assert.equal(pkg.name, '@webjsdev/ts-plugin');
+  assert.equal(pkg.name, '@webjsdev/intellisense');
   assert.equal(pkg.main, 'index.cjs');
   assert.ok(!pkg.dependencies, 'vendored plugin declares no dependencies');
   const bundle = readFileSync(join(dir, 'index.cjs'), 'utf8');

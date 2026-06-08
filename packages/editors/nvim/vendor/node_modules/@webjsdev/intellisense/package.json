@@ -1,5 +1,5 @@
 {
-  "name": "@webjsdev/ts-plugin",
+  "name": "@webjsdev/intellisense",
   "version": "0.5.0",
   "type": "commonjs",
   "description": "Standalone TypeScript language-service plugin for webjs (no Lit dependency). Adds in-template intelligence inside html`` templates: go-to-definition on tags / attributes / CSS classes, binding-aware completions, value/binding diagnostics, and hover, all driven by its own template parser and gated on import-graph reachability.",
@@ -17,7 +17,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/webjsdev/webjs.git",
-    "directory": "packages/editors/ts-plugin"
+    "directory": "packages/editors/intellisense"
   },
   "homepage": "https://github.com/webjsdev/webjs#readme",
   "bugs": "https://github.com/webjsdev/webjs/issues",

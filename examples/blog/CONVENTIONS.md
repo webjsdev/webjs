@@ -429,7 +429,7 @@ attribute coercion, reflection). `declare` types the field for
 TypeScript without emitting a class-field initializer that would
 clobber the reactive accessor at construction time. The two
 declarations together give you full intelligence in any tsserver-backed
-editor. See the Editor Setup docs for the standalone `@webjsdev/ts-plugin`
+editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense`
 (no Lit dependency) that extends this to tag / attribute
 intelligence inside `html\`…\`` templates (go-to-definition, binding-aware
 completions, value/binding diagnostics, and hover on registered webjs

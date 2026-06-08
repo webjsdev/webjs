@@ -4,10 +4,10 @@
  * VSCode resolves a contributed `typescriptServerPlugins` entry by NAME from
  * `<extension>/node_modules/<name>`, so the plugin has to ship inside the vsix
  * under that exact path. We can't just let vsce walk the workspace dependency
- * though: `@webjsdev/ts-plugin` is a symlink into the monorepo, and following
+ * though: `@webjsdev/intellisense` is a symlink into the monorepo, and following
  * it drags the entire repo `node_modules` (~86 MB of dev deps) into the
  * package. Instead we esbuild the plugin into a single self-contained CJS file
- * written to `node_modules/@webjsdev/ts-plugin/` as REAL files, then package
+ * written to `node_modules/@webjsdev/intellisense/` as REAL files, then package
  * with `--no-dependencies` so vsce ships exactly that and nothing else.
  *
  * The plugin is standalone (no Lit dependency; the ts-lit-plugin reliance was
@@ -23,8 +23,8 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXT = resolve(HERE, '..');
-const PLUGIN_SRC = resolve(EXT, '../ts-plugin');
-const OUT_DIR = resolve(EXT, 'node_modules/@webjsdev/ts-plugin');
+const PLUGIN_SRC = resolve(EXT, '../intellisense');
+const OUT_DIR = resolve(EXT, 'node_modules/@webjsdev/intellisense');
 
 const pluginPkg = JSON.parse(readFileSync(resolve(PLUGIN_SRC, 'package.json'), 'utf8'));
 
@@ -48,7 +48,7 @@ writeFileSync(
   resolve(OUT_DIR, 'package.json'),
   JSON.stringify(
     {
-      name: '@webjsdev/ts-plugin',
+      name: '@webjsdev/intellisense',
       version: pluginPkg.version,
       main: 'index.cjs',
       // Bundled + vendored into the webjs VSCode extension; not the npm package.
@@ -59,4 +59,4 @@ writeFileSync(
   ) + '\n',
 );
 
-console.log(`[build] vendored @webjsdev/ts-plugin@${pluginPkg.version} -> ${OUT_DIR}`);
+console.log(`[build] vendored @webjsdev/intellisense@${pluginPkg.version} -> ${OUT_DIR}`);

@@ -1,5 +1,5 @@
 /**
- * Unit tests for @webjsdev/ts-plugin: verifies the language-service decorator
+ * Unit tests for @webjsdev/intellisense: verifies the language-service decorator
  * returns a correct `getDefinitionAndBoundSpan` result for a cursor
  * positioned on a custom-element tag inside an html`` template.
  *
@@ -538,7 +538,7 @@ test('flags number passed where string is declared', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1, `expected one webjs diagnostic, got ${ours.length}`);
   const m = ours[0].messageText;
   assert.ok(/'number'/.test(m) && /'mode'/.test(m) && /'string'/.test(m),
@@ -563,7 +563,7 @@ test('passes when interpolated value is assignable to declared string type', () 
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 0, `unexpected diagnostics: ${ours.map((d) => d.messageText).join('; ')}`);
 });
 
@@ -584,7 +584,7 @@ test('flags an incompatible `.prop` binding against the declared property type',
       `  return html\`<my-box .count=\${s}></my-box>\`;\n` +
       `}\n`,
   });
-  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1, `expected one .prop type diagnostic, got ${ours.length}`);
   assert.ok(/property 'count'/.test(ours[0].messageText), `unexpected message: ${ours[0].messageText}`);
 });
@@ -606,7 +606,7 @@ test('flags a quoted binding (invariant 4) as code 9002', () => {
       `  return html\`<my-box @click="\${fn}"></my-box>\`;\n` +
       `}\n`,
   });
-  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1);
   assert.equal(ours[0].code, 9002);
   assert.ok(/must be unquoted/.test(ours[0].messageText));
@@ -628,7 +628,7 @@ test('flags an expressionless `.prop` binding as code 9003', () => {
       `  return html\`<my-box .value="hi"></my-box>\`;\n` +
       `}\n`,
   });
-  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1);
   assert.equal(ours[0].code, 9003);
 });
@@ -650,7 +650,7 @@ test('flags a non-callable `@event` handler; accepts a function', () => {
       `  return html\`<my-box @click=\${notFn}></my-box>\`;\n` +
       `}\n`,
   });
-  const badOurs = bad.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  const badOurs = bad.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(badOurs.length, 1, 'non-callable handler flagged');
   assert.ok(/not callable/.test(badOurs[0].messageText));
 
@@ -664,7 +664,7 @@ test('flags a non-callable `@event` handler; accepts a function', () => {
       `  return html\`<my-box @click=\${fn}></my-box>\`;\n` +
       `}\n`,
   });
-  const goodOurs = good.getSemanticDiagnostics('/ok.ts').filter((d) => d.source === 'webjsdev-ts-plugin');
+  const goodOurs = good.getSemanticDiagnostics('/ok.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(goodOurs.length, 0, 'a function handler is accepted');
 });
 
@@ -687,7 +687,7 @@ test('flags string-or-number against a string-literal-union type', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1, `expected one diagnostic for string|number against Mode`);
 });
 
@@ -710,7 +710,7 @@ test('does not type-check static (non-interpolated) attribute values', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 0, 'static attribute value should not produce a webjs diagnostic');
 });
 
@@ -733,7 +733,7 @@ test('skips check when component is reachable but the prop has no `declare` anno
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 0, 'no declare → no check, no diagnostic');
 });
 
@@ -759,7 +759,7 @@ test('does not check tags that are not reachable through imports', () => {
       `}\n`,
   });
   const diags = svc.getSemanticDiagnostics('/page.ts');
-  const ours = diags.filter((d) => d.source === 'webjsdev-ts-plugin');
+  const ours = diags.filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 0, 'unreachable tag → no value-check (lit-plugin keeps its own "unknown tag" warning)');
 });
 

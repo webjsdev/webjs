@@ -11,7 +11,7 @@
  *
  * Flow:
  *   1. `scripts/build.mjs` esbuilds the plugin into
- *      `node_modules/@webjsdev/ts-plugin/` (a real, dependency-free dir).
+ *      `node_modules/@webjsdev/intellisense/` (a real, dependency-free dir).
  *   2. Copy the extension's publishable tree into a temp dir, including that
  *      vendored plugin, with a package.json whose only dependency is the
  *      plugin and with NO `workspaces` field.
@@ -33,7 +33,7 @@ const extraArgs = process.argv.slice(3);
 // 1. Build the vendored, self-contained tsserver plugin.
 execFileSync('node', [resolve(HERE, 'build.mjs')], { stdio: 'inherit' });
 
-const VENDORED = resolve(EXT, 'node_modules/@webjsdev/ts-plugin');
+const VENDORED = resolve(EXT, 'node_modules/@webjsdev/intellisense');
 if (!existsSync(join(VENDORED, 'index.cjs'))) {
   console.error('[package] build did not produce the vendored plugin; aborting.');
   process.exit(1);
@@ -46,7 +46,7 @@ for (const item of COPY) {
   const from = resolve(EXT, item);
   if (existsSync(from)) cpSync(from, join(stage, item), { recursive: true });
 }
-cpSync(VENDORED, join(stage, 'node_modules/@webjsdev/ts-plugin'), { recursive: true });
+cpSync(VENDORED, join(stage, 'node_modules/@webjsdev/intellisense'), { recursive: true });
 
 // A standalone manifest: same contributes, but no `workspaces`, no
 // devDependencies, and the plugin as the sole production dependency so
@@ -54,7 +54,7 @@ cpSync(VENDORED, join(stage, 'node_modules/@webjsdev/ts-plugin'), { recursive: t
 const manifest = JSON.parse(readFileSync(resolve(EXT, 'package.json'), 'utf8'));
 delete manifest.devDependencies;
 delete manifest.scripts;
-manifest.dependencies = { '@webjsdev/ts-plugin': '*' };
+manifest.dependencies = { '@webjsdev/intellisense': '*' };
 writeFileSync(join(stage, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 // 3. Run vsce in the staging dir.

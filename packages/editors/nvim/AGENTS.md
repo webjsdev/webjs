@@ -22,14 +22,14 @@ specific to the Neovim plugin.
    to `vim.diagnostic` + quickfix), `health.lua` (`:checkhealth webjs`).
    `plugin/webjs.lua` registers `:WebjsCheck` so it works without an explicit
    `setup()`.
-3. **Bundled language service** (`vendor/node_modules/@webjsdev/ts-plugin/`):
-   a committed verbatim copy of the standalone `@webjsdev/ts-plugin` (#386).
+3. **Bundled language service** (`vendor/node_modules/@webjsdev/intellisense/`):
+   a committed verbatim copy of the standalone `@webjsdev/intellisense` (#386).
    `with_tsserver_plugin()` points `tsserver` at it via `plugins[].location`
    (-> `pluginProbeLocations`), so intelligence works with NO
-   `@webjsdev/ts-plugin` in the app (before `npm install`, pruned trees,
+   `@webjsdev/intellisense` in the app (before `npm install`, pruned trees,
    non-scaffolded apps). When the app ALSO wires it via `tsconfig`, `tsserver`
    dedupes by name (verified), so no double-load. Regenerate with
-   `scripts/vendor-ts-plugin.mjs` then `git add -f packages/editors/nvim/vendor`
+   `scripts/vendor-intellisense.mjs` then `git add -f packages/editors/nvim/vendor`
    (the output is under a gitignored `node_modules/`); `test/vendor-sync.test.mjs`
    is the drift guard.
 4. **Docs**: `doc/webjs.txt` (`:help webjs`), `README.md`.
@@ -37,7 +37,7 @@ specific to the Neovim plugin.
 ## Invariants
 
 1. **No Lit dependency.** Highlighting is our own treesitter queries;
-   intelligence is the standalone `@webjsdev/ts-plugin` (Phase 3, #386). Never
+   intelligence is the standalone `@webjsdev/intellisense` (Phase 3, #386). Never
    depend on a Lit treesitter/LSP plugin.
 2. **Highlighting needs no `setup()`.** The queries auto-load from the
    runtimepath. `setup()` only registers commands and applies config, so it

@@ -1,4 +1,4 @@
-# @webjsdev/ts-plugin
+# @webjsdev/intellisense
 
 A **standalone** TypeScript language-service plugin for webjs (no Lit
 dependency). Gives editors that speak `tsserver` (VS Code, Neovim via
@@ -47,7 +47,7 @@ templates itself, and serves the features above. It used to wrap
 In your webjs app:
 
 ```sh
-npm i -D @webjsdev/ts-plugin
+npm i -D @webjsdev/intellisense
 ```
 
 Add to `tsconfig.json` (a single plugin entry):
@@ -56,7 +56,7 @@ Add to `tsconfig.json` (a single plugin entry):
 {
   "compilerOptions": {
     "plugins": [
-      { "name": "@webjsdev/ts-plugin" }
+      { "name": "@webjsdev/intellisense" }
     ]
   }
 }

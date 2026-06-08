@@ -96,7 +96,7 @@ node_modules/@webjsdev/
 Reaching straight for the source is the fastest way to resolve "why
 doesn't X work?" with no documentation guesswork and no stale blog posts.
 
-## Editor TS plugin: `@webjsdev/ts-plugin`
+## Editor TS plugin: `@webjsdev/intellisense`
 
 This scaffold's `tsconfig.json` lists a single tsserver plugin. It is
 editor-only, not required for the framework to run.
@@ -104,11 +104,11 @@ editor-only, not required for the framework to run.
 ```jsonc
 // tsconfig.json (already wired by the scaffold)
 "plugins": [
-  { "name": "@webjsdev/ts-plugin" }
+  { "name": "@webjsdev/intellisense" }
 ]
 ```
 
-`@webjsdev/ts-plugin` is **standalone** (no Lit dependency): one plugin
+`@webjsdev/intellisense` is **standalone** (no Lit dependency): one plugin
 entry, its own template parser. Inside `` html`…` `` templates you get:
 
 - Go-to-definition on custom-element tags, attribute / property / event
