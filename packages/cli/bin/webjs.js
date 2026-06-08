@@ -275,7 +275,9 @@ async function main() {
       // identical to the MCP `check` tool. The non-zero exit on violations is
       // preserved (an agent gates on the exit code AND parses the report).
       if (rest.includes('--json')) {
-        const { projectCheck } = await import('../lib/check-json.js');
+        // The projector lives in @webjsdev/mcp (the MCP `check` tool's home),
+        // so `check --json` and the MCP tool stay byte-identical (#415).
+        const { projectCheck } = await import('@webjsdev/mcp/check-report');
         console.log(JSON.stringify(projectCheck(violations)));
         if (violations.length > 0) process.exit(1);
         break;
@@ -647,19 +649,23 @@ Full docs: https://docs.webjs.com`);
       process.exit(1);
     }
     case 'mcp': {
-      // Read-only MCP server (#262) over stdio. STDOUT is the JSON-RPC channel,
-      // so nothing here may write to stdout: the data functions are read-only
-      // and `runMcpServer` routes all diagnostics to stderr. The CLI version is
-      // advertised in the initialize handshake's serverInfo.
-      const { readFileSync } = await import('node:fs');
+      // Read-only MCP server (#262, #415) over stdio. STDOUT is the JSON-RPC
+      // channel, so nothing here may write to stdout: the data functions are
+      // read-only and `runMcpServer` routes all diagnostics to stderr. The
+      // implementation lives in the standalone `@webjsdev/mcp` package (also
+      // runnable directly as `npx @webjsdev/mcp`); `webjs mcp` delegates to it
+      // for back-compat. The version advertised in the initialize handshake is
+      // @webjsdev/mcp's own, resolved by its bin, so this passes none.
+      const { runMcpServer } = await import('@webjsdev/mcp');
+      const { createRequire } = await import('node:module');
+      const require = createRequire(import.meta.url);
       let version = '0.0.0';
       try {
-        const pkg = JSON.parse(
-          readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
-        );
-        version = pkg.version || version;
+        const { readFileSync } = await import('node:fs');
+        version = JSON.parse(
+          readFileSync(require.resolve('@webjsdev/mcp/package.json'), 'utf8'),
+        ).version || version;
       } catch {}
-      const { runMcpServer } = await import('../lib/mcp.js');
       await runMcpServer({
         stdin: process.stdin,
         stdout: process.stdout,

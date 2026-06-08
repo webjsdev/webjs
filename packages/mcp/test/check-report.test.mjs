@@ -24,12 +24,12 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(__dirname, '..', '..');
+const REPO = resolve(__dirname, '..', '..', '..');
 const CLI = resolve(REPO, 'packages', 'cli', 'bin', 'webjs.js');
 
 const { checkConventions } = await import('@webjsdev/server/check');
 const { projectCheck } = await import(
-  resolve(REPO, 'packages', 'cli', 'lib', 'check-json.js')
+  resolve(REPO, 'packages', 'mcp', 'src', 'check-report.js')
 );
 
 const cleanup = [];

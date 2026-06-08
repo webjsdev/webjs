@@ -107,7 +107,7 @@ A page/layout module still **loads** in the browser for its top-level side effec
 
 ## Framework source: where to find it
 
-Plain JS with JSDoc lives in `node_modules/@webjsdev/` (`core/`, `server/`, `cli/`, `ts-plugin/`, `ui/`); what you read is what runs. Starting points: SSR `@webjsdev/server/src/ssr.js`, client hydration `@webjsdev/core/src/render-client.js`, client router `@webjsdev/core/src/router-client.js`, convention rules `@webjsdev/server/src/check.js`. For UI debugging use the Playwright MCP server; for live introspection the scaffold wires a read-only `webjs mcp` server (`list_routes`, `list_actions`, `list_components`, `check`).
+Plain JS with JSDoc lives in `node_modules/@webjsdev/` (`core/`, `server/`, `cli/`, `mcp/`, `ts-plugin/`, `ui/`); what you read is what runs. Starting points: SSR `@webjsdev/server/src/ssr.js`, client hydration `@webjsdev/core/src/render-client.js`, client router `@webjsdev/core/src/router-client.js`, convention rules `@webjsdev/server/src/check.js`. For UI debugging use the Playwright MCP server; for live introspection the scaffold wires the read-only `@webjsdev/mcp` server (`npx @webjsdev/mcp`, also reachable as `webjs mcp`): `list_routes`, `list_actions`, `list_components`, `check`, plus a knowledge layer (docs / recipes / framework source).
 
 ---
 

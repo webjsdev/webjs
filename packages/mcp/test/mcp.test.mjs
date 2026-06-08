@@ -23,9 +23,9 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(__dirname, '..', '..');
+const REPO = resolve(__dirname, '..', '..', '..');
 const { runMcpServer, extractExportNames, extractRouteMethods } = await import(
-  resolve(REPO, 'packages', 'cli', 'lib', 'mcp.js')
+  resolve(REPO, 'packages', 'mcp', 'src', 'mcp.js')
 );
 
 const cleanup = [];

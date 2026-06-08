@@ -12,7 +12,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(__dirname, '..', '..');
+const REPO = resolve(__dirname, '..', '..', '..');
 const {
   catalogue,
   listResources,
@@ -23,9 +23,9 @@ const {
   getPrompt,
   PROMPTS,
   resolveDocsLocation,
-} = await import(resolve(REPO, 'packages', 'cli', 'lib', 'mcp-docs.js'));
-const { bundleDocs } = await import(resolve(REPO, 'packages', 'cli', 'scripts', 'copy-mcp-resources.js'));
-const { cleanBundle } = await import(resolve(REPO, 'packages', 'cli', 'scripts', 'clean-mcp-resources.js'));
+} = await import(resolve(REPO, 'packages', 'mcp', 'src', 'mcp-docs.js'));
+const { bundleDocs } = await import(resolve(REPO, 'packages', 'mcp', 'scripts', 'copy-mcp-resources.js'));
+const { cleanBundle } = await import(resolve(REPO, 'packages', 'mcp', 'scripts', 'clean-mcp-resources.js'));
 
 const _cleanup = [];
 after(() => { for (const d of _cleanup) rmSync(d, { recursive: true, force: true }); });
@@ -135,16 +135,16 @@ test('searchDocs: EXACTLY 40 matches does NOT claim truncation (boundary)', asyn
 });
 
 test('resolveDocsLocation: prefers the bundled resources/, falls back to repo-root agent-docs', () => {
-  // Build a fake package layout: <root>/packages/cli/lib (the module location),
-  // <root>/agent-docs (the dev fallback), <root>/packages/cli/resources (bundled).
+  // Build a fake package layout: <root>/packages/mcp/src (the module location),
+  // <root>/agent-docs (the dev fallback), <root>/packages/mcp/resources (bundled).
   const root = mkdtempSync(join(tmpdir(), 'mcp-resolve-'));
   _cleanup.push(root);
-  const libDir = join(root, 'packages', 'cli', 'lib');
-  const bundled = join(root, 'packages', 'cli', 'resources', 'agent-docs');
-  mkdirSync(libDir, { recursive: true });
+  const srcDir = join(root, 'packages', 'mcp', 'src');
+  const bundled = join(root, 'packages', 'mcp', 'resources', 'agent-docs');
+  mkdirSync(srcDir, { recursive: true });
   mkdirSync(join(root, 'agent-docs'), { recursive: true });
   writeFileSync(join(root, 'AGENTS.md'), '# root\n');
-  const moduleUrl = pathToFileURL(join(libDir, 'mcp-docs.js')).href;
+  const moduleUrl = pathToFileURL(join(srcDir, 'mcp-docs.js')).href;
 
   // No bundle yet -> dev fallback to the repo-root agent-docs + AGENTS.md.
   let loc = resolveDocsLocation(moduleUrl);
@@ -153,14 +153,14 @@ test('resolveDocsLocation: prefers the bundled resources/, falls back to repo-ro
 
   // Bundle present -> the published path wins.
   mkdirSync(bundled, { recursive: true });
-  writeFileSync(join(root, 'packages', 'cli', 'resources', 'AGENTS.md'), '# bundled\n');
+  writeFileSync(join(root, 'packages', 'mcp', 'resources', 'AGENTS.md'), '# bundled\n');
   loc = resolveDocsLocation(moduleUrl);
   assert.equal(loc.docsDir, bundled, 'prefers the bundled resources/agent-docs');
-  assert.equal(loc.agentsPath, join(root, 'packages', 'cli', 'resources', 'AGENTS.md'));
+  assert.equal(loc.agentsPath, join(root, 'packages', 'mcp', 'resources', 'AGENTS.md'));
 });
 
 test('bundleDocs + cleanBundle: copy bundles agent-docs + AGENTS, clean removes it (temp dirs only)', () => {
-  // Operate entirely in a throwaway layout, NEVER the real packages/cli/resources
+  // Operate entirely in a throwaway layout, NEVER the real packages/mcp/resources
   // (which would race the integration tests reading the live corpus).
   const root = mkdtempSync(join(tmpdir(), 'mcp-bundle-'));
   _cleanup.push(root);

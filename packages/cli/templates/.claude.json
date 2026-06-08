@@ -8,7 +8,7 @@
     "webjs": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@webjsdev/cli", "mcp"]
+      "args": ["@webjsdev/mcp"]
     }
   }
 }
