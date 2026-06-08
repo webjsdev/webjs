@@ -33,6 +33,9 @@ function init(modules) {
   /** @type {Map<string, { version: string, components: Map<string, ComponentRef>, classes: Map<string, CssClassRef[]> }>} */
   const perFileCache = new Map();
 
+  /** @type {Map<string, { version: string, sites: Array<{ tag: string, start: number, length: number }> }>} */
+  const regSitesCache = new Map();
+
   return { create };
 
   /**
@@ -91,18 +94,29 @@ function init(modules) {
     };
 
     // Append webjs's in-template diagnostics (incompatible bindings, unquoted
-    // bindings, expressionless `.prop`) to the stock semantic diagnostics.
+    // bindings, expressionless `.prop`) plus the duplicate-tag check (9004) to
+    // the stock semantic diagnostics. Each source has its own try/catch so a
+    // throw in one never suppresses the other or the upstream diagnostics
+    // (invariant 3: the plugin must never break the editor).
     proxy.getSemanticDiagnostics = (fileName) => {
       const diags = inner.getSemanticDiagnostics(fileName);
+      /** @type {import('typescript').Diagnostic[]} */
+      let extra = [];
       try {
-        const attrDiags = webjsAttrValueDiagnostics(info, fileName);
-        return attrDiags.length ? [...diags, ...attrDiags] : diags;
+        extra = extra.concat(webjsAttrValueDiagnostics(info, fileName));
       } catch (e) {
         info.project.projectService.logger?.info?.(
-          `@webjsdev/intellisense: getSemanticDiagnostics threw: ${String(e)}`,
+          `@webjsdev/intellisense: getSemanticDiagnostics (attr) threw: ${String(e)}`,
         );
-        return diags;
       }
+      try {
+        extra = extra.concat(webjsDuplicateTagDiagnostics(info, fileName));
+      } catch (e) {
+        info.project.projectService.logger?.info?.(
+          `@webjsdev/intellisense: getSemanticDiagnostics (dup-tag) threw: ${String(e)}`,
+        );
+      }
+      return extra.length ? [...diags, ...extra] : diags;
     };
 
     // Attribute-name auto-complete inside `<webjs-tag |…>` openers, driven by
@@ -1043,6 +1057,153 @@ function init(modules) {
     if (!ts.isIdentifier(classArg)) return undefined;
 
     return { tag: tagArg.text, className: classArg.text };
+  }
+
+  /* ================================================================
+   * Resolver 3b: flag a custom-element tag registered more than once
+   * across the program (code 9004). SSR overwrites the registry (the
+   * LAST `register` / `define` wins) while the browser keeps the FIRST
+   * native upgrade, so a duplicate tag resolves inconsistently at
+   * runtime. The check rule `no-duplicate-tag` is the CI gate; this is
+   * the live in-editor underline on the offending tag literal.
+   * ================================================================ */
+
+  /**
+   * Return the tag-name string-literal argument node of a
+   * `Class.register('tag')` or `customElements.define('tag', Class)` call,
+   * or undefined when the call is neither. Unlike `readRegisterCall` /
+   * `readDefineCall`, it returns the LITERAL NODE (so the caller has its
+   * source span) and does not require the class identifier to resolve
+   * locally, since a collision is real regardless of where the class lives.
+   *
+   * @param {import('typescript').CallExpression} call
+   * @returns {import('typescript').StringLiteralLike | undefined}
+   */
+  function registrationTagArg(call) {
+    const callee = call.expression;
+    if (!ts.isPropertyAccessExpression(callee)) return undefined;
+    const name = callee.name.text;
+    if (name === 'register') {
+      if (!ts.isIdentifier(callee.expression)) return undefined;
+      const [arg] = call.arguments;
+      if (arg && ts.isStringLiteralLike(arg)) return arg;
+      return undefined;
+    }
+    if (name === 'define') {
+      const obj = callee.expression;
+      const isCustomElements =
+        (ts.isIdentifier(obj) && obj.text === 'customElements') ||
+        (ts.isPropertyAccessExpression(obj) && obj.name.text === 'customElements');
+      if (!isCustomElements) return undefined;
+      const [tagArg] = call.arguments;
+      if (tagArg && ts.isStringLiteralLike(tagArg)) return tagArg;
+      return undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * Collect every custom-element tag registration across the program, keyed
+   * by tag name, each carrying the source location of its tag string literal.
+   * Program-wide and NOT import-graph gated: two registrations of the same
+   * tag are a runtime hazard whether or not the files import each other.
+   *
+   * @param {import('typescript').Program} program
+   * @returns {Map<string, Array<{ fileName: string, start: number, length: number }>>}
+   */
+  function collectAllRegistrations(program) {
+    /** @type {Map<string, Array<{ fileName: string, start: number, length: number }>>} */
+    const sites = new Map();
+    for (const sf of program.getSourceFiles()) {
+      if (sf.fileName.includes('/node_modules/')) continue;
+      for (const s of registrationSitesFor(sf)) {
+        const arr = sites.get(s.tag) || [];
+        arr.push({ fileName: sf.fileName, start: s.start, length: s.length });
+        sites.set(s.tag, arr);
+      }
+    }
+    return sites;
+  }
+
+  /**
+   * The hyphenated-tag registration sites in ONE source file, memoized by the
+   * file's tsserver version so the whole-program scan on each keystroke is not
+   * a fresh AST walk of every unchanged file.
+   *
+   * @param {import('typescript').SourceFile} sf
+   * @returns {Array<{ tag: string, start: number, length: number }>}
+   */
+  function registrationSitesFor(sf) {
+    const version =
+      /** @type any */ (sf).version !== undefined
+        ? String(/** @type any */ (sf).version)
+        : `${sf.getFullStart()}:${sf.getEnd()}`;
+    const cached = regSitesCache.get(sf.fileName);
+    if (cached && cached.version === version) return cached.sites;
+
+    /** @type {Array<{ tag: string, start: number, length: number }>} */
+    const sites = [];
+    /** @param {import('typescript').Node} node */
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) {
+        const arg = registrationTagArg(node);
+        if (arg && arg.text.includes('-')) {
+          sites.push({ tag: arg.text, start: arg.getStart(sf), length: arg.getWidth(sf) });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    regSitesCache.set(sf.fileName, { version, sites });
+    return sites;
+  }
+
+  /**
+   * Flag every custom-element tag in THIS file that is also registered
+   * elsewhere in the program (code 9004). The underline lands on the tag's
+   * string literal. Independent of `webjsAttrValueDiagnostics` (its own
+   * try/catch in the decorator) and NOT gated on the import graph.
+   *
+   * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
+   * @param {string} fileName
+   * @returns {import('typescript').Diagnostic[]}
+   */
+  function webjsDuplicateTagDiagnostics(info, fileName) {
+    /** @type {import('typescript').Diagnostic[]} */
+    const out = [];
+    const program = info.languageService.getProgram();
+    if (!program) return out;
+    const sf = program.getSourceFile(fileName);
+    if (!sf) return out;
+
+    const sites = collectAllRegistrations(program);
+    const basename = (f) => f.slice(f.lastIndexOf('/') + 1);
+
+    for (const [tag, all] of sites) {
+      if (all.length < 2) continue;
+      const here = all.filter((s) => s.fileName === fileName);
+      if (here.length === 0) continue;
+      const others = [...new Set(all.map((s) => s.fileName))].filter((f) => f !== fileName);
+      const where = others.length
+        ? `also registered in ${others.map(basename).join(', ')}`
+        : 'registered more than once in this file';
+      for (const s of here) {
+        out.push({
+          file: sf,
+          start: s.start,
+          length: s.length,
+          messageText:
+            `Custom element tag "${tag}" is registered more than once (${where}). ` +
+            'A tag must be registered exactly once; the runtime resolves a duplicate ' +
+            'inconsistently (SSR keeps the last registration, the browser keeps the ' +
+            'first). Rename one registration.',
+          category: ts.DiagnosticCategory.Error,
+          code: 9004,
+          source: 'webjsdev-intellisense',
+        });
+      }
+    }
+    return out;
   }
 
   /* ================================================================
