@@ -66,7 +66,7 @@ export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
 export { richFetch } from './src/rich-fetch.js';
-export { enableClientRouter, disableClientRouter } from './src/router-client.js';
+export { enableClientRouter, disableClientRouter, revalidate } from './src/router-client.js';
 
 // `navigate` is typed against the generated `Route` union (#258) rather than
 // the JSDoc `string`. Until an app runs `webjs types`, `Route` resolves to
@@ -74,9 +74,26 @@ export { enableClientRouter, disableClientRouter } from './src/router-client.js'
 // tsserver error. The runtime is the same async function in router-client.js.
 import type { Route } from './src/routes.d.ts';
 export function navigate(url: Route, opts?: { replace?: boolean }): Promise<void>;
-export { unsafeHTML, isUnsafeHTML, live, isLive } from './src/directives.js';
+// The full lit-html-parity directive set (mirrors index.js); the per-directive
+// declarations live in src/directives.d.ts. `repeat` is re-exported above.
+export {
+  unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
+  templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
+  until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
+  watch, isWatch,
+} from './src/directives.js';
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
 export { Task, TaskStatus } from './src/task.js';
+
+// Signals (the default state primitive, invariant 5), the CSP nonce reader,
+// the wire serializer, and the streaming/frame custom elements. These mirror
+// the index.js runtime re-exports; their declarations live in the matching
+// src/*.d.ts (#388 fixed the index.d.ts drift from index.js).
+export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
+export { stringify, parse, serialize, deserialize } from './src/serialize.js';
+export { WebjsFrame } from './src/webjs-frame.js';
+export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
 // Optimistic-mutation helper: set a signal to an expected value immediately,
 // run the action, roll back on a thrown error or a `{ success: false }`
