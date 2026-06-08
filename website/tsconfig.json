@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
+    "types": ["node"],
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
