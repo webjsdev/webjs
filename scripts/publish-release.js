@@ -47,6 +47,17 @@ for (const line of m[1].split('\n')) {
   if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
   fm[k] = v;
 }
+
+// Non-npm packages (the editor extensions) are tracked in the changelog
+// for the /changelog feed but ship via vsce/ovsx and the nvim git subtree.
+// Their `package:` is a human display name, not a scoped npm name, so the
+// derived `<short>@<version>` tag would be garbage. Skip the GitHub Release
+// for them (a dedicated editor-release tag scheme can come later).
+if (fm.npm === 'false') {
+  console.log(`[publish-release] skip ${fm.package || file}: npm:false (non-npm package)`);
+  process.exit(0);
+}
+
 // Two body transforms before publishing.
 // 1. Strip a leading h1 (e.g. `# @webjsdev/core 0.6.0`) if present.
 //    The release page renders --title above the body already, so an

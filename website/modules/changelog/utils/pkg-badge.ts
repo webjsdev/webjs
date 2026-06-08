@@ -6,6 +6,8 @@ const PKG_COLOR: Record<string, string> = {
   cli:         'bg-emerald-500/15 text-emerald-500',
   'ts-plugin': 'bg-purple-500/15 text-purple-500',
   ui:          'bg-orange-500/15 text-orange-500',
+  vscode:      'bg-sky-500/15 text-sky-500',
+  nvim:        'bg-green-600/15 text-green-600',
 };
 
 /** Color-coded pill badge for the package short-name in a changelog entry. */

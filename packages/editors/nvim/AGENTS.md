@@ -65,6 +65,14 @@ Developed here; published to the standalone `webjsdev/webjs.nvim` repo (a git
 subtree split) so lazy.nvim / packer can install it by repo name. See
 `PUBLISHING.md`.
 
+It is NOT an npm package, but it IS tracked in the unified changelog (#413).
+`package.json` exists here ONLY as the version source: bump its `version`
+and the pre-commit gate requires a `changelog/nvim/<version>.md` (backfill
+generates it). The entry carries `npm: false`, so the `publish-*` scripts
+skip the registry while the version still renders on the website
+`/changelog` feed. Keep `package.json`'s `version` in step with the
+`webjsdev/webjs.nvim` git tag.
+
 ---
 
 Framework-wide rules and full API reference:
