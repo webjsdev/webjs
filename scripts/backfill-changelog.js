@@ -44,7 +44,7 @@ const OUT = resolve(ROOT, 'changelog');
 // npm-published: they carry `npm: false` in their frontmatter so the
 // release workflow's publish-* scripts skip them (see DISPLAY_NAME /
 // NON_NPM below and scripts/publish-npm.js).
-const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'vscode', 'nvim'];
+const PACKAGES = ['core', 'server', 'cli', 'ts-plugin', 'ui', 'mcp', 'vscode', 'nvim'];
 
 // Some packages publish under an unscoped npm name; for those the
 // frontmatter's `package` field is the bare name. (None of the

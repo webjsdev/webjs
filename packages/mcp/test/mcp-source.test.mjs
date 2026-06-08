@@ -12,7 +12,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(__dirname, '..', '..');
+const REPO = resolve(__dirname, '..', '..', '..');
 const {
   resolveFrameworkRoots,
   walkSource,
@@ -20,7 +20,7 @@ const {
   grepSources,
   readSource,
   runSourceTool,
-} = await import(resolve(REPO, 'packages', 'cli', 'lib', 'mcp-source.js'));
+} = await import(resolve(REPO, 'packages', 'mcp', 'src', 'mcp-source.js'));
 
 /** An in-memory framework tree: core (src/), server (src/), cli (lib/). */
 function fakeTree(extraFiles = {}) {

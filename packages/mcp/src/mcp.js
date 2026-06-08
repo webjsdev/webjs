@@ -368,7 +368,7 @@ export async function runMcpServer(opts) {
     const server = await import('@webjsdev/server');
     const check = await import('@webjsdev/server/check');
     const { readFile } = await import('node:fs/promises');
-    const { projectCheck } = await import('./check-json.js');
+    const { projectCheck } = await import('./check-report.js');
     deps = {
       buildRouteTable: server.buildRouteTable,
       buildActionIndex: server.buildActionIndex,

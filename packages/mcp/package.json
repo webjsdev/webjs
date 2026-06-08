@@ -1,0 +1,52 @@
+{
+  "name": "@webjsdev/mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The webjs Model Context Protocol server: live app introspection (routes / actions / components / check) plus the framework knowledge layer (docs, recipes, source) for AI coding agents",
+  "bin": {
+    "webjs-mcp": "bin/webjs-mcp.js"
+  },
+  "exports": {
+    ".": {
+      "default": "./src/mcp.js"
+    },
+    "./check-report": {
+      "default": "./src/check-report.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "resources"
+  ],
+  "dependencies": {
+    "@webjsdev/server": "^0.8.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webjsdev/webjs.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/webjsdev/webjs#readme",
+  "bugs": "https://github.com/webjsdev/webjs/issues",
+  "license": "MIT",
+  "keywords": [
+    "webjs",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agents"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "node scripts/copy-mcp-resources.js",
+    "postpack": "node scripts/clean-mcp-resources.js"
+  }
+}

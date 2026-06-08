@@ -32,7 +32,7 @@ const DOCS_SCHEME = 'webjs-docs://';
 
 /**
  * Resolve where the framework-docs corpus lives, plus the `AGENTS.md` contract
- * path. Tries the BUNDLED location first (a published `@webjsdev/cli` ships
+ * path. Tries the BUNDLED location first (a published `@webjsdev/mcp` ships
  * `resources/agent-docs/` + `resources/AGENTS.md` via `prepack`), then falls
  * back to the monorepo-root layout (`agent-docs/` + `AGENTS.md`) used in dev and
  * tests. Returns `{ docsDir, agentsPath }`; either path may not exist, callers
@@ -43,12 +43,12 @@ const DOCS_SCHEME = 'webjs-docs://';
  */
 export function resolveDocsLocation(moduleUrl) {
   const here = dirname(fileURLToPath(moduleUrl || import.meta.url));
-  const cliRoot = resolve(here, '..'); // packages/cli/lib -> packages/cli
+  const pkgRoot = resolve(here, '..'); // packages/mcp/src -> packages/mcp
   const repoRoot = resolve(here, '..', '..', '..'); // -> monorepo root
 
-  const bundledDocs = join(cliRoot, 'resources', 'agent-docs');
+  const bundledDocs = join(pkgRoot, 'resources', 'agent-docs');
   if (existsSync(bundledDocs)) {
-    return { docsDir: bundledDocs, agentsPath: join(cliRoot, 'resources', 'AGENTS.md') };
+    return { docsDir: bundledDocs, agentsPath: join(pkgRoot, 'resources', 'AGENTS.md') };
   }
   return { docsDir: join(repoRoot, 'agent-docs'), agentsPath: join(repoRoot, 'AGENTS.md') };
 }
