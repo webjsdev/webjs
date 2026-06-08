@@ -14,7 +14,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,4 +59,20 @@ test('every @webjsdev npm-published changelog package resolves through the probe
     if (!resolvePkgDir(key)) missing.push(key);
   }
   assert.deepEqual(missing, [], `published packages whose dir the probe cannot resolve: ${missing.join(', ')}`);
+});
+
+test('publish-github-packages SKIPS (not fails) a package whose workspace dir is absent (#423)', () => {
+  // A renamed/removed package's frozen changelog entries (e.g. ts-plugin after
+  // the intellisense rename) must not fail a bootstrap re-run. The dir check is
+  // before any registry/.npmrc side effect, so this is offline.
+  const dir = mkdtempSync(join(tmpdir(), 'wj-ghp-'));
+  try {
+    const f = join(dir, '0.9.9.md');
+    writeFileSync(f, '---\npackage: "@webjsdev/this-package-was-removed"\nversion: 0.9.9\ndate: 2026-01-01\n---\n## Fixes\n- x\n');
+    const r = spawnSync('node', [join(ROOT, 'scripts/publish-github-packages.js'), f], { cwd: ROOT, encoding: 'utf8' });
+    assert.equal(r.status, 0, `should exit 0 (skip), got ${r.status}\n${r.stderr}`);
+    assert.match(r.stdout, /skip .*no workspace dir/, 'should log the renamed/removed skip');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
