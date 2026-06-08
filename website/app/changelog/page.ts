@@ -13,7 +13,7 @@ import { pkgBadge } from '../../modules/changelog/utils/pkg-badge.ts';
 
 export const metadata = {
   title: 'Changelog · webjs',
-  description: 'Per-package, per-version release notes for the webjs framework: @webjsdev/core, server, cli, ts-plugin, ui.',
+  description: 'Per-package, per-version release notes for the webjs framework (@webjsdev/core, server, cli, ts-plugin, ui) plus the webjs editor extensions for VS Code and Neovim.',
 };
 
 export default async function Changelog() {
@@ -28,7 +28,10 @@ export default async function Changelog() {
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/server</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/cli</code>,
           <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ts-plugin</code>, and
-          <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ui</code>.
+          <code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">/ui</code>,
+          plus the webjs editor extensions for VS Code
+          (<code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">vscode</code>) and Neovim
+          (<code class="font-mono text-[13px] bg-bg-subtle px-1 py-0.5 rounded">nvim</code>).
           Each version-bump produces one entry, automatically.
         </p>
       </header>
