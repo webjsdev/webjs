@@ -126,7 +126,7 @@
     "publish:ovsx": "npm run package && npx --yes ovsx publish webjs.vsix"
   },
   "dependencies": {
-    "@webjsdev/intellisense": "*"
+    "@webjsdev/intellisense": "^0.5.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"
