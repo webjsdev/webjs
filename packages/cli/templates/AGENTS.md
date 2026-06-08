@@ -89,7 +89,7 @@ node_modules/@webjsdev/
     src/actions.js            ← .server.ts scanner, RPC, expose()
     src/auth.js, session.js, cache.js, rate-limit.js, csrf.js
   cli/             webjs CLI (dev / start / build / test / check / create / db)
-  ts-plugin/       tsserver plugin: go-to-definition + diagnostic suppression
+  intellisense/    tsserver plugin: go-to-definition + diagnostic suppression
                    + attribute auto-complete for Class.register('tag') elements
 ```
 
