@@ -3,6 +3,7 @@ import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
+import { loadAppEnv, resolvePort } from '../lib/port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -85,7 +86,11 @@ async function main() {
       // If we're already inside the --watch child, start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
         const { startServer } = await import('@webjsdev/server');
-        const port = Number(flag(rest, '--port', process.env.PORT || 8080));
+        // Load `.env` BEFORE resolving the port so a `PORT` set there is in
+        // process.env at resolution time (#447). The server loads `.env`
+        // too, but that runs too late to affect the port the CLI computes.
+        loadAppEnv(process.cwd());
+        const port = resolvePort(flag(rest, '--port'));
         await startServer({ appDir: process.cwd(), port, dev: true });
         break;
       }
@@ -125,7 +130,10 @@ async function main() {
     }
     case 'start': {
       const { startServer } = await import('@webjsdev/server');
-      const port = Number(flag(rest, '--port', process.env.PORT || 8080));
+      // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
+      // the 8080 default (#447), same as for `dev`.
+      loadAppEnv(process.cwd());
+      const port = resolvePort(flag(rest, '--port'));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;
     }
