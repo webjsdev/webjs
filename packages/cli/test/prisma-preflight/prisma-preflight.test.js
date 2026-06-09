@@ -61,7 +61,7 @@ test('prismaDevHint: fires for a Prisma app with NO generated client', () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('prismaDevHint: COUNTERFACTUAL — silent for a non-Prisma app', () => {
+test('prismaDevHint: COUNTERFACTUAL - silent for a non-Prisma app', () => {
   // No schema, no @prisma/client. The preflight must NOT warn, or it nags every
   // app. This is the negative case that proves the guard is real.
   const dir = makeApp({ 'package.json': PKG_NO_PRISMA });

@@ -39,9 +39,9 @@ export function usesPrisma(cwd) {
  * Inspect the generated Prisma client state for a Prisma app.
  *
  * Returns one of:
- *   - `{ status: 'ok' }`         — client generated and not older than the schema.
- *   - `{ status: 'missing' }`    — schema/dep present but no generated client.
- *   - `{ status: 'stale' }`      — client exists but the schema is newer than it.
+ *   - `{ status: 'ok' }`         - client generated and not older than the schema.
+ *   - `{ status: 'missing' }`    - schema/dep present but no generated client.
+ *   - `{ status: 'stale' }`      - client exists but the schema is newer than it.
  *
  * The default `prisma-client-js` generator writes to `node_modules/.prisma/client`
  * (re-exported by `@prisma/client`), which is the scaffold's setup. A custom
@@ -62,7 +62,7 @@ export function prismaClientState(cwd) {
   if (!generatedIndex) {
     // No generated client at the default location. If a custom `output` is in
     // use the artifacts live elsewhere and `@prisma/client` itself resolves, so
-    // only flag "missing" when the package entry is ALSO absent — otherwise a
+    // only flag "missing" when the package entry is ALSO absent, otherwise a
     // custom-output app would get a spurious hint.
     const pkgClient = join(cwd, 'node_modules', '@prisma', 'client', 'default.js');
     const pkgClientAlt = join(cwd, 'node_modules', '@prisma', 'client', 'index.js');
