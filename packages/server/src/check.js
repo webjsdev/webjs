@@ -6,6 +6,10 @@ import {
   extractWebComponentClassBodies,
   matchClosingBrace,
 } from './js-scan.js';
+import { buildModuleGraph, transitiveDeps } from './module-graph.js';
+import { scanComponents } from './component-scanner.js';
+import { buildRouteTable } from './router.js';
+import { analyzeElision } from './component-elision.js';
 
 /**
  * Convention validator for webjs apps.
@@ -102,6 +106,11 @@ export const RULES = [
     name: 'no-browser-globals-in-render',
     description:
       'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
+  },
+  {
+    name: 'no-server-import-in-browser-module',
+    description:
+      'A page / layout / component module that SHIPS to the browser (the build does NOT elide it) must not transitively import a server-only `.server.{ts,js}` module. The server module is replaced by a stub in the browser, so the import is fine while the page is display-only and elided (its server import is stripped), but the moment the page also does client work (it imports a component to register, enables the client router, uses a reactive primitive, …) it stops being elided and must load in the browser, dragging the server import with it. The stub then throws (or a server-only export like `auth` is missing) the instant the module loads, a runtime browser crash that `webjs typecheck` and the rest of `webjs check` miss. The rule reuses the build\'s own elision verdict, so it ONLY fires on modules that genuinely ship; a display-only page the framework elides is never flagged. The fix is to keep the server call off the browser-shipped module: gate the route in `middleware.ts`, call the server through a `\'use server\'` action, or register the component in a layout so the page elides again. Server-to-server imports (`.server.ts` importing `.server.ts`) and `middleware.ts` / `route.ts` (never shipped) are never flagged.',
   },
   {
     name: 'no-scaffold-placeholder',
@@ -879,7 +888,169 @@ export async function checkConventions(appDir) {
     }
   }
 
+  // --- Rule: no-server-import-in-browser-module ---
+  // A page / layout / component module that SHIPS to the browser must not
+  // transitively import a server-only `.server.{ts,js}` module. The browser
+  // gets a stub for the server file, so the import is harmless while the page
+  // is display-only and the framework ELIDES it (its server import is stripped
+  // from the served source). But the moment the page also does client work
+  // (imports a component to register, enables the client router, uses a
+  // reactive primitive, …) it stops being elided, must load in the browser,
+  // and drags the server import with it: the stub throws (or a server-only
+  // export like `auth` is missing) the instant the module loads. That crash
+  // only surfaces at runtime; typecheck and every other check pass.
+  //
+  // The rule reuses the BUILD'S elision verdict (analyzeElision) instead of
+  // re-deriving it, so it fires ONLY on modules that genuinely ship: a
+  // display-only page the framework elides is never flagged (that is the
+  // legitimate pattern). The motivating case (crisp dogfood): a page that does
+  // `await auth()` (import from `lib/auth.server.ts`) AND imports a component
+  // directly, so it is not elided and ships the server import.
+  await checkServerImportInBrowserModule(appDir, violations);
+
   return violations;
+}
+
+/**
+ * Implements `no-server-import-in-browser-module`. Factored into its own
+ * function (rather than an inline block) because it does the heavier
+ * whole-app analysis the other rules avoid: it builds the module graph,
+ * scans components, builds the route table, and runs the framework's own
+ * elision analysis so the rule's notion of "ships to the browser" is
+ * byte-for-byte the build's.
+ *
+ * A module is flagged when BOTH hold:
+ *   1. It SHIPS to the browser. For a component that means it is NOT in the
+ *      elidable set; for a page / layout that means it is NOT in the inert
+ *      route-module set. (Pages and layouts that do real client work are not
+ *      inert and therefore ship.)
+ *   2. Its transitive import closure reaches a `.server.{ts,js}` module.
+ *      `transitiveDeps` stops AT a server file (it is included but not walked
+ *      into), so a server file pulled in only through another server file is
+ *      not attributed to a browser module that never reaches it directly.
+ *
+ * Never flagged: a `.server.ts` importing another `.server.ts` (server-to-
+ * server, and `.server.*` modules are not components nor route modules), and
+ * `middleware.ts` / `route.ts` (server-only, never page/layout/component
+ * entries, so they are not in the candidate set to begin with).
+ *
+ * @param {string} appDir
+ * @param {Violation[]} violations  appended to in place
+ */
+async function checkServerImportInBrowserModule(appDir, violations) {
+  // No `app/` directory means this is not a routable webjs app (e.g. a bare
+  // component library, or a fixture with only `lib/`); nothing ships, so the
+  // rule has nothing to police. Skip rather than do the heavy analysis.
+  if (!(await pathExists(join(appDir, 'app')))) return;
+
+  let moduleGraph, components, routeTable;
+  try {
+    moduleGraph = await buildModuleGraph(appDir);
+    components = await scanComponents(appDir);
+    routeTable = await buildRouteTable(appDir);
+  } catch {
+    // A malformed app the analysis can't process is left to the other rules
+    // (and the dev server) to surface; this rule degrades to a no-op.
+    return;
+  }
+
+  // Page + layout modules that the router treats as route modules, exactly the
+  // set the dev server feeds to analyzeElision (so the inert verdict matches).
+  /** @type {Set<string>} */
+  const routeModuleSet = new Set();
+  for (const page of routeTable.pages || []) {
+    if (page.file) routeModuleSet.add(page.file);
+    for (const f of page.layouts || []) routeModuleSet.add(f);
+  }
+  const routeModules = [...routeModuleSet];
+
+  // The elision flag mirrors `dev.js`: respect `webjs.elide === false` and the
+  // WEBJS_ELIDE override. When elision is OFF, the build ships EVERY component
+  // and route module, so the verdict is "nothing is elidable / inert" and the
+  // rule treats every candidate as shipping (which is correct: with elision
+  // off, a display-only page really does ship its server import too).
+  const elideEnabled = await readElideEnabledForCheck(appDir);
+  const { elidableComponents, inertRouteModules } = elideEnabled
+    ? await analyzeElision(components, routeModules, moduleGraph, (f) => readFile(f, 'utf8'), appDir)
+    : { elidableComponents: new Set(), inertRouteModules: new Set() };
+
+  // Candidate browser-shipped modules: components that are NOT elided, plus
+  // route modules that are NOT inert. A `.server.*` file is never a component
+  // (the scanner skips it) nor a route module the browser loads, so it cannot
+  // enter this set; server-to-server imports are excluded by construction.
+  /** @type {Map<string, { kind: string }>} relFile is keyed by ABS path */
+  const candidates = new Map();
+  for (const c of components) {
+    if (!elidableComponents.has(c.file)) candidates.set(c.file, { kind: 'component' });
+  }
+  for (const file of routeModules) {
+    if (inertRouteModules.has(file)) continue;
+    const base = basename(file);
+    const kind = /^layout\./.test(base) ? 'layout' : 'page';
+    candidates.set(file, { kind });
+  }
+
+  // Report at most once per module (a page importing two server modules is one
+  // finding, naming the first reached). Sorted for deterministic output.
+  for (const file of [...candidates.keys()].sort()) {
+    // `transitiveDeps` skips nothing here, so it includes (but does not walk
+    // into) any `.server.*` file reachable from this module. The module itself
+    // is not in the result. A direct OR indirect server import both surface,
+    // because the closure walks every non-server edge until it hits one.
+    const closure = transitiveDeps(moduleGraph, [file], appDir);
+    const serverDep = closure.find((d) => /\.server\.m?[jt]s$/.test(d));
+    if (!serverDep) continue;
+
+    const { kind } = candidates.get(file);
+    const relFile = relative(appDir, file);
+    const relServer = relative(appDir, serverDep);
+    // Name the import chain: if the server file is a DIRECT import of this
+    // module, the chain is just the two; otherwise show one intermediate hop
+    // so the diagnostic points at where the edge enters (the full path is
+    // recoverable from the graph, but one hop is enough to locate it).
+    const directDeps = moduleGraph.get(file);
+    const directlyImported = directDeps && directDeps.has(serverDep);
+    const chain = directlyImported
+      ? `${relFile} -> ${relServer}`
+      : `${relFile} -> … -> ${relServer}`;
+
+    violations.push({
+      rule: 'no-server-import-in-browser-module',
+      file: relFile,
+      message:
+        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}). In the browser that import resolves to a stub, so the page crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running page fails.`,
+      fix:
+        `Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) if this is a ${kind} that only became browser-bound because it imports a component to register, register that component in a \`layout.{ts,js}\` instead so the ${kind} elides again and its server import is stripped.`,
+    });
+  }
+}
+
+/**
+ * Read whether component elision is enabled for `appDir`, mirroring
+ * `dev.js`'s `readElideEnabled` so the check's notion of "ships" matches the
+ * dev server's. Elision is ON unless `webjs.elide === false` in package.json or
+ * the `WEBJS_ELIDE` env var forces it off (`0` / `false` / `off` / `no`). A
+ * missing or malformed package.json keeps the default (on). Inlined rather
+ * than imported from `dev.js` so the check tool does not pull the whole dev
+ * server module just for this flag.
+ *
+ * @param {string} appDir
+ * @returns {Promise<boolean>}
+ */
+async function readElideEnabledForCheck(appDir) {
+  const raw = process.env.WEBJS_ELIDE;
+  if (raw != null) {
+    const v = raw.trim().toLowerCase();
+    if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+    if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
+  }
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
+  } catch {
+    // No package.json, malformed JSON, or unreadable: keep the default.
+  }
+  return true;
 }
 
 /**
