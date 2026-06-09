@@ -158,7 +158,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `register(tag, C)` | Tag binding. Auto-called by `Class.register('tag')`. |
 | `render(v, el)` | Client-side render into a DOM element. |
 | `renderToString` | Server-side async render to HTML with DSD (from `/server`). |
-| `notFound()` / `redirect(url)` | Throw to return 404, or 307/308 redirect. |
+| `notFound()` / `redirect(url[, status])` | Throw to return 404, or a redirect. No-status default is convention-picked at the catching site: 302 for a GET page-render gate, 307 (method-preserving) for a server-action redirect. Override with `redirect(url, 308)` or `redirect(url, { status })`. |
 | `expose(p, fn)` | Tag a server action ALSO reachable at a REST path. Server-side only. |
 | `validateInput(fn, validate)` | Attach an input validator running on BOTH the RPC and `expose()` REST paths (#245). Server-side only. See Server actions. |
 | `Suspense({fallback, children})` | Streaming boundary. `repeat` keyed-list directive is also re-exported. |

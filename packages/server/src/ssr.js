@@ -198,7 +198,12 @@ export async function ssrPage(route, params, url, opts) {
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);
-      return new Response(null, { status: e.status || 307, headers: { location: e.url } });
+      // A redirect thrown during a GET page/layout render is a GET-to-GET
+      // navigation (an auth bounce, a gate). 302 Found is the conventional
+      // code there, so it is the default when the caller did not pick one. An
+      // explicit `redirect(url, status)` overrides it. (Action redirects, a
+      // POST, default to 307 in page-action.js so the method is preserved.)
+      return new Response(null, { status: e.status || 302, headers: { location: e.url } });
     }
     if (isNotFound(err)) {
       const html = await ssrNotFoundHtml(null, opts);

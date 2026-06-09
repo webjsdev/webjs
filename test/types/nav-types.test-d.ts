@@ -32,6 +32,8 @@ function requireNumber(x: number | undefined): number {
 const _n1: never = notFound();
 const _n2: never = redirect('/x');
 const _n3: never = redirect('/x', 308);
+// The options form is accepted alongside the positional number (#452).
+const _n4: never = redirect('/x', { status: 301 });
 
 // The type guards report booleans.
 const _b1: boolean = isNotFound(new Error());
@@ -45,4 +47,4 @@ redirect();
 // @ts-expect-error status is a number, not a string
 redirect('/x', '308');
 
-export { requireValue, requireNumber, _n1, _n2, _n3, _b1, _b2 };
+export { requireValue, requireNumber, _n1, _n2, _n3, _n4, _b1, _b2 };

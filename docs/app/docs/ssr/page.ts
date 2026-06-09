@@ -227,7 +227,7 @@ export const metadata = {
     <p>Special throw helpers are also caught:</p>
     <ul>
       <li><code>throw notFound()</code>: renders the <code>not-found.ts</code> page with a 404 status.</li>
-      <li><code>throw redirect('/login')</code>: sends a 307 redirect (or the status you specify).</li>
+      <li><code>throw redirect('/login')</code>: sends a redirect. Thrown during a GET render it defaults to <code>302</code> Found; thrown from a server action (a POST) it defaults to the method-preserving <code>307</code>. Pass a status (<code>redirect(url, 308)</code> or <code>redirect(url, { status })</code>) to override.</li>
     </ul>
     <p>In development, unhandled errors show the full stack trace in the browser. In production, only a generic "Something went wrong" message is shown, with no stack traces leaked to the client.</p>
 

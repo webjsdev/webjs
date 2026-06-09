@@ -144,7 +144,10 @@ export default () => html\`<p>read-only</p>\`;
   assert.equal(post.status, 404, 'POST to an action-less page must 404');
 });
 
-test('action that throws redirect() is honored (307, not PRG 303)', async () => {
+test('action that throws redirect() defaults to 307 (method-preserving, not PRG 303)', async () => {
+  // An action is a POST, so a thrown redirect with no explicit status defaults
+  // to the method-preserving 307 here, deliberately NOT the GET gate's 302. The
+  // PRG success path (303) is separate. #452.
   const PAGE = `
 import { html, redirect } from ${CORE};
 export async function action() { redirect('/login'); }
@@ -155,8 +158,24 @@ export default () => html\`<p>x</p>\`;
   await app.warmup();
 
   const resp = await app.handle(new Request('http://x/gate', form({ x: '1' })));
-  assert.equal(resp.status, 307, 'thrown redirect keeps its own status');
+  assert.equal(resp.status, 307, 'thrown action redirect defaults to 307');
   assert.equal(resp.headers.get('location'), '/login');
+});
+
+test('action that throws redirect() with an explicit status overrides the 307 default', async () => {
+  // `redirect(url, 303)` from an action wins over the 307 action default.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { redirect('/done', 303); }
+export default () => html\`<p>x</p>\`;
+`;
+  const appDir = makeApp({ 'app/gate2/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const resp = await app.handle(new Request('http://x/gate2', form({ x: '1' })));
+  assert.equal(resp.status, 303, 'explicit status wins');
+  assert.equal(resp.headers.get('location'), '/done');
 });
 
 test('action that throws notFound() yields 404', async () => {
