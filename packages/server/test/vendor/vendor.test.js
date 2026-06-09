@@ -585,20 +585,34 @@ test('jspmGenerate #446: conflicting graph resolves to ONE consistent set (real 
   // coherent graph: a single view URL, and the transitive @codemirror/state
   // that lint needs must be present so the browser has no unresolved bare
   // specifier.
+  const installs = ['@codemirror/view@6.39.0', '@codemirror/lint@6.9.6'];
   clearVendorCache();
-  const map = await jspmGenerate(['@codemirror/view@6.39.0', '@codemirror/lint@6.9.6']);
+  const map = await jspmGenerate(installs);
   assert.ok(map['@codemirror/view'], 'view resolves');
   assert.ok(map['@codemirror/lint'], 'lint resolves');
   assert.ok(map['@codemirror/state'], 'the transitive @codemirror/state lint pulls in is present');
-  // Mutual consistency: every entry whose URL references @codemirror/view
-  // must reference the SAME version. With the old skew there were two.
-  const viewVersions = new Set();
-  for (const url of Object.values(map)) {
-    const m = /@codemirror\/view@([^/]+)/.exec(url);
-    if (m) viewVersions.add(m[1]);
-  }
-  assert.equal(viewVersions.size, 1,
-    `exactly one @codemirror/view version across the served map; got ${[...viewVersions].join(', ')}`);
+
+  // Ground truth: a single unified generate call over the same set. This is
+  // the one mutually-consistent graph jspm computes. The fix makes
+  // jspmGenerate produce EXACTLY this.
+  const gtResp = await fetch('https://api.jspm.io/generate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      install: installs, flattenScope: true,
+      env: ['browser', 'production', 'module'], provider: 'jspm.io',
+    }),
+  });
+  const groundTruth = (await gtResp.json()).map.imports;
+  assert.deepEqual(map, groundTruth,
+    'jspmGenerate must equal the single unified graph, not a per-package merge');
+
+  // The discriminating invariant: the served @codemirror/view entry is the
+  // version the WHOLE graph agreed on (6.39.0, the requested one), NOT
+  // lint\'s transitive 6.43.x that the old per-package merge let win
+  // last-write. A skew here is the missing-export crash from the issue.
+  assert.match(map['@codemirror/view'], /@codemirror\/view@6\.39\.0\//,
+    'view stays at the version the unified graph chose, no transitive skew');
 });
 
 test('jspmGenerate #446 fallback: an unresolvable install does not collapse the map', async () => {
