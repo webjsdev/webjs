@@ -262,13 +262,22 @@ async function parseFile(file, appDir, graph, seen) {
   // Mask of `src` with all string / template-literal / comment / regex
   // CONTENT blanked to spaces (positions preserved). Used to reject an
   // `import '…'` / `export … from '…'` that appears as TEXT inside a
-  // template literal (e.g. example code shown in a `<pre>` inside an
-  // `html\`\`` template, as the docs site does) rather than as a real
-  // statement. We still read the specifier from the RAW `src` (the
-  // specifier is itself a string, blanked in the mask), and only consult
-  // the mask to confirm the `import` / `export` KEYWORD survived
-  // redaction, i.e. sits in code position and not inside a literal.
-  const masked = redactStringsAndTemplates(src);
+  // literal (e.g. example code shown in a `<pre>` inside an `html\`\``
+  // template, as the docs site does, OR a code-example written as a plain
+  // quoted string) rather than as a real statement. We still read the
+  // specifier from the RAW `src` (the specifier is itself a string,
+  // blanked in the mask), and only consult the mask to confirm the
+  // `import` / `export` KEYWORD survived redaction, i.e. sits in code
+  // position and not inside a literal.
+  //
+  // `blankStrings: true` is load-bearing: the default mask keeps PLAIN
+  // string + verbatim-template bodies verbatim (so `register('tag')` stays
+  // readable for other scanners), which would leave an `import` written
+  // inside a plain string looking like a real keyword and create a phantom
+  // graph edge to whatever path that string names. Since this caller only
+  // checks keyword-in-code-position, blank every literal body so a
+  // code-example `import` string never becomes an edge.
+  const masked = redactStringsAndTemplates(src, true);
   const deps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
     for (const m of src.matchAll(re)) {

@@ -239,6 +239,8 @@ Optional app-root file default-exporting a **schema object** (env-var names to a
 | Plain `.ts` | yes | **Lint violation** (`use-server-needs-extension`). Rename to add `.server.`. |
 | Plain `.ts` | no | Browser-safe; standard. |
 
+The server-only-utility row (`.server.ts`, no `'use server'`) is a runtime trap: its browser stub throws at module load, so a page / layout / component that ends up SHIPPING to the browser and transitively imports one crashes the moment the module loads, while `webjs typecheck` and the rest of `webjs check` pass. `webjs check`'s `no-server-import-in-browser-module` rule catches this statically by reusing the build's elision verdict (it only flags modules that genuinely ship; a display-only page the framework elides is fine, because the framework strips its server import). A `'use server'` action is exempt: its browser stub is a working RPC, which is the intended way to call the server from a shipping module.
+
 Server actions export named async functions whose args + returns round-trip through the serializer. **Importing from a client component IS the API** (rewritten to an RPC stub; never hand-write `fetch()`). **Expose as REST:** `expose('METHOD /path', fn, { validate? })`. **Input validation runs on BOTH call paths (#245),** declared via `validateInput(fn, validate)` or `expose(..., { validate })`; the framework only CALLS the validator (ships no validation library) and reads its return (`{ success: true, data? }` runs the action, `{ success: false, fieldErrors }` returns a `422` without running the body, a THROW is a sanitized error, any other value is transformed input). The validator stays server-side and receives the action's first argument. Full reference in `agent-docs/recipes.md`.
 
 ### RPC + expose security
