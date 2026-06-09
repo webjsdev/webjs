@@ -70,7 +70,19 @@ Five stacked zero-build optimizations:
    stable boot-time build id with no warmup fetch); `webjs vendor pin
    --download` also caches the bundle bytes locally under
    `.webjs/vendor/<pkg>@<version>.js` for air-gapped / strict-CSP
-   deployments. No bundler runs at any point.
+   deployments. No bundler runs at any point. **`webjs doctor` validates
+   importmap coherence** (#450): for each resolved package it checks that the
+   version pinned for every OTHER resolved package it depends on satisfies the
+   declared dependency / peer range, and WARNS naming both packages, the range,
+   and the pinned version when they skew (the class of bug where a pinned
+   package needs a newer minor of another pinned package than is pinned, so a
+   symbol it expects is missing at runtime). It is a validation over the
+   produced importmap, not a re-resolution and not bundling, and it runs the
+   SAME check with the SAME verdict over the live importmap and the vendored
+   `.webjs/vendor/importmap.json` (vendoring freezes the runtime-resolved
+   graph, so a coherent live graph stays coherent vendored). It reads
+   dependency metadata from the installed `node_modules` (no network of its
+   own) and degrades to "could not verify" when a manifest is unavailable.
 
 ## No-build production model
 
