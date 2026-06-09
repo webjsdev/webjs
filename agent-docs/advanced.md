@@ -42,10 +42,20 @@ Five stacked zero-build optimizations:
    `connectedCallback` activation. Ideal for below-the-fold widgets.
 5. **Auto-vendor via jspm.io (Rails 7 + importmap-rails posture).** At
    startup the server scans client-reachable source for bare npm import
-   specifiers. Each `pkg@version` is resolved through `api.jspm.io/generate`
-   to a CDN URL (`https://ga.jspm.io/npm:<pkg>@<version>/...`) and added
-   to the import map; the browser fetches each package directly from
-   the CDN. **SRI integrity (SHA-384) is computed on BOTH paths.** A
+   specifiers. The WHOLE scanned set is resolved in ONE
+   `api.jspm.io/generate` call (a single `install[]` array) so jspm
+   computes one mutually-consistent dependency graph: a directly-imported
+   package and a transitive that needs a newer version of the same package
+   agree on one CDN URL, instead of skewing (a direct dep pinned to its
+   local version while a transitive floats to jspm-latest, which crashed
+   the browser with a missing export). Each resolved entry is a CDN URL
+   (`https://ga.jspm.io/npm:<pkg>@<version>/...`) added to the import map;
+   the browser fetches each package directly from the CDN. If the unified
+   call fails because some install is unresolvable (a 401 for a private or
+   server-only dep), the resolver falls back to per-package isolation for
+   the offending install(s) and re-resolves the resolvable survivors as one
+   graph, so one bad dep can never collapse the whole map.
+   **SRI integrity (SHA-384) is computed on BOTH paths.** A
    live-resolved (unpinned) app hashes each cross-origin bundle at warmup
    and emits `integrity` + `crossorigin` on the importmap and modulepreload
    tags, so a swapped or compromised CDN response is rejected by the browser
@@ -70,9 +80,10 @@ production. The Rails 7+ / Hotwire pattern:
 
 - **Importmap-driven**: bare-specifier imports (`from "react"`) are
   resolved via `<script type="importmap">` emitted into the document
-  head. By default each package resolves through `api.jspm.io/generate`
-  to a `https://ga.jspm.io/npm:<pkg>@<version>/...` URL and the browser
-  fetches it from the CDN directly, with an `integrity` SRI hash on every
+  head. By default the whole scanned set resolves through one
+  `api.jspm.io/generate` call (one consistent graph, see point 5 above)
+  to `https://ga.jspm.io/npm:<pkg>@<version>/...` URLs and the browser
+  fetches them from the CDN directly, with an `integrity` SRI hash on every
   cross-origin entry (computed live at warmup for an unpinned app, or read
   from the pin file for a pinned one). `webjs vendor pin` commits the
   resolved URLs + SHA-384 integrity hashes to `.webjs/vendor/importmap.json`

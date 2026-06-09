@@ -24,7 +24,7 @@ export default function NoBuild() {
       <tbody>
         <tr><td>Is there a build step I run?</td><td>No. <code>npm run dev</code> and <code>npm run start</code> serve source directly.</td></tr>
         <tr><td>Is there a build step the framework runs?</td><td>Per-file type stripping for <code>.ts</code>, on first request, cached by mtime. That is the only transform.</td></tr>
-        <tr><td>What about npm packages?</td><td>Auto-bundled per-package on first reference. See <strong>Bare specifiers</strong> below.</td></tr>
+        <tr><td>What about npm packages?</td><td>Resolved as one consistent graph via jspm.io on first reference. See <strong>Bare specifiers</strong> below.</td></tr>
         <tr><td>How does the browser resolve <code>import '@webjsdev/core'</code>?</td><td>An <code>&lt;script type="importmap"&gt;</code> emitted in <code>&lt;head&gt;</code> maps the specifier to a URL.</td></tr>
         <tr><td>Won't N small files be slow?</td><td>HTTP/2 multiplex makes per-file serving competitive with bundling. SSR-time modulepreload hints make it parallel.</td></tr>
         <tr><td>What does this gain me?</td><td>What you read is what runs. Granular cache invalidation. Zero build-config files. Edit-and-refresh dev loop.</td></tr>
@@ -95,7 +95,7 @@ Content-Type: text/html
     <ol>
       <li>Scan every <code>.js</code> / <code>.ts</code> file under the app for bare import specifiers (skipping <code>node_modules</code>, <code>.server.{js,ts}</code> files, <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code>, <code>test/</code>, <code>'use server'</code> modules, type-only imports, and imports inside comments).</li>
       <li>For each discovered package, resolve the installed version from <code>node_modules/&lt;pkg&gt;/package.json</code>.</li>
-      <li>Call <code>api.jspm.io/generate</code> once on the first request with the full install list (e.g. <code>['dayjs@1.11.13', 'zod@3.23.8']</code>). jspm.io returns a fully-resolved importmap fragment with correct entry paths.</li>
+      <li>Call <code>api.jspm.io/generate</code> once on the first request with the full install list as a single batch (e.g. <code>['dayjs@1.11.13', 'zod@3.23.8']</code>), so jspm.io resolves the whole set as one mutually-consistent graph. A directly-imported package and a transitive that needs a newer version of the same package agree on one URL, instead of skewing. jspm.io returns a fully-resolved importmap fragment with correct entry paths. If one install can't be resolved (a private or server-only dep), webjs falls back to resolving the rest so one bad package never collapses the whole map.</li>
       <li>Emit those URLs verbatim in the page's <code>&lt;script type="importmap"&gt;</code>. Browser fetches directly from <code>ga.jspm.io</code>; webjs's server is never on the vendor-bytes path.</li>
     </ol>
     <p>Native modules and server-only packages (<code>node:*</code>, <code>@prisma/client</code>) are filtered out by the scanner (they're imported only from <code>.server.{js,ts}</code> / <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code> files, which the scanner skips). Server packages never reach the browser.</p>

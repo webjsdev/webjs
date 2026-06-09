@@ -416,7 +416,7 @@ test('jspmGenerate: install order does not affect OUR merged output (determinist
     return { [name]: `https://ga.jspm.io/npm:${pkg}/mock.js` };
   };
   const mock = async (_url, opts) => {
-    const { install } = JSON.parse(opts.body); // jspmResolveOne sends one install per call
+    const { install } = JSON.parse(opts.body); // unified call sends the whole set in one install[]
     const imports = {};
     for (const i of install) Object.assign(imports, fragment(i));
     return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
@@ -542,6 +542,297 @@ test('jspmGenerate: per-package isolation - one bad install does not poison good
   ]);
   assert.ok(result['picocolors'], 'good package must resolve despite bad neighbor');
   assert.match(result['picocolors'], /^https:\/\/ga\.jspm\.io\//);
+});
+
+/* ---------- #446: unified whole-set resolution + 401 fallback + parity ---------- */
+
+test('jspmGenerate #446: multi-install set resolves in ONE generate call (unified, not per-package)', async () => {
+  // The core of the fix: a >1 install set hits api.jspm.io ONCE with the
+  // whole install[] array, so jspm computes one mutually-consistent graph,
+  // instead of one isolated call per package (which skewed direct vs
+  // transitive versions). Counterfactual: revert jspmGenerate to the old
+  // per-package loop and this drops to two calls, each with a single install.
+  /** @type {Array<string[]>} */
+  const callInstalls = [];
+  const mock = async (_url, opts) => {
+    const { install } = JSON.parse(opts.body);
+    callInstalls.push(install);
+    const imports = {};
+    for (const i of install) {
+      const name = i.replace(/@[^@]*$/, '');
+      imports[name] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    }
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  await withMockedFetch(mock, async () => {
+    clearVendorCache();
+    await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1']);
+    assert.equal(callInstalls.length, 1, 'exactly one generate call for the whole set');
+    assert.deepEqual(
+      [...callInstalls[0]].sort(),
+      ['clsx@2.1.1', 'picocolors@1.1.1'],
+      'the single call carried BOTH installs',
+    );
+  });
+});
+
+test('jspmGenerate #446: conflicting graph resolves to ONE consistent set (real CDN)', { skip: !NETWORK_OK }, async () => {
+  // The exact repro from the issue. @codemirror/view is requested pinned at
+  // 6.39.0; @codemirror/lint@6.9.6 transitively needs a newer view (^6.42).
+  // Per-package-in-isolation produced TWO different view URLs (6.39 direct,
+  // 6.43 via lint) merged last-write-wins, so a served entry imported a
+  // symbol another served entry lacked. The unified call must yield ONE
+  // coherent graph: a single view URL, and the transitive @codemirror/state
+  // that lint needs must be present so the browser has no unresolved bare
+  // specifier.
+  const installs = ['@codemirror/view@6.39.0', '@codemirror/lint@6.9.6'];
+  clearVendorCache();
+  const map = await jspmGenerate(installs);
+  assert.ok(map['@codemirror/view'], 'view resolves');
+  assert.ok(map['@codemirror/lint'], 'lint resolves');
+  assert.ok(map['@codemirror/state'], 'the transitive @codemirror/state lint pulls in is present');
+
+  // Ground truth: a single unified generate call over the same set. This is
+  // the one mutually-consistent graph jspm computes. The fix makes
+  // jspmGenerate produce EXACTLY this.
+  const gtResp = await fetch('https://api.jspm.io/generate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      install: installs, flattenScope: true,
+      env: ['browser', 'production', 'module'], provider: 'jspm.io',
+    }),
+  });
+  const groundTruth = (await gtResp.json()).map.imports;
+  assert.deepEqual(map, groundTruth,
+    'jspmGenerate must equal the single unified graph, not a per-package merge');
+
+  // The discriminating invariant: the served @codemirror/view entry is the
+  // version the WHOLE graph agreed on (6.39.0, the requested one), NOT
+  // lint\'s transitive 6.43.x that the old per-package merge let win
+  // last-write. A skew here is the missing-export crash from the issue.
+  assert.match(map['@codemirror/view'], /@codemirror\/view@6\.39\.0\//,
+    'view stays at the version the unified graph chose, no transitive skew');
+});
+
+test('jspmGenerate #446 fallback: an unresolvable install does not collapse the map', async () => {
+  // Preserve the per-package-isolation safety property. The unified call
+  // 401s because one install (a private/server-only dep) is unresolvable.
+  // The fallback must probe each install alone, drop the bad one, and
+  // re-run the unified call over the resolvable subset so the survivors
+  // are still coherent and the good packages keep their entries.
+  /** @type {Array<string[]>} */
+  const calls = [];
+  const BAD = '@webjsdev/server@0.1.0';
+  const mock = async (_url, opts) => {
+    const { install } = JSON.parse(opts.body);
+    calls.push(install);
+    // Any batch that includes the bad install fails the WHOLE batch (jspm's
+    // 401-on-any-unresolvable behaviour).
+    if (install.includes(BAD)) {
+      return { ok: false, status: 401, json: async () => ({ error: 'Error: Not Found' }) };
+    }
+    const imports = {};
+    for (const i of install) {
+      const name = i.replace(/@[^@]*$/, '');
+      imports[name] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    }
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  await withMockedFetch(mock, async () => {
+    clearVendorCache();
+    const map = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1', BAD]);
+    assert.ok(map['picocolors'], 'good package survives despite the bad neighbour');
+    assert.ok(map['clsx'], 'second good package survives too');
+    assert.equal(map['@webjsdev/server'], undefined, 'the unresolvable install dropped out');
+    // The survivors were re-resolved together (coherence restored): there is
+    // a final unified call carrying exactly the two good installs.
+    const reunified = calls.find(c => !c.includes(BAD) && c.length === 2);
+    assert.ok(reunified, 'a unified re-run over the resolvable subset fired');
+    assert.deepEqual([...reunified].sort(), ['clsx@2.1.1', 'picocolors@1.1.1']);
+  });
+});
+
+test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently is NOT dropped', async () => {
+  // The at-risk path. The unified batch 401s PERMANENTLY (a genuinely
+  // unresolvable BAD install), so the fallback probes each install alone.
+  // picocolors is GOOD but its isolated probe hits a transient 503 (a network
+  // blip mid-probe). The old code computed the resolvable set purely from a
+  // non-empty fragment, so a transient-failed good package looked identical to
+  // an unresolvable one and got DROPPED. The fix must NOT drop it: a transient
+  // probe failure flags the whole resolve for retry (ok=false) and serves the
+  // merged fragments without evicting anyone. On the RETRY (blip cleared) the
+  // good package must survive in the map. We observe ok=false through
+  // resolveVendorImports, and survival through the second resolve.
+  const dir = await makeLiveApp('446-probe-blip', 'picocolors', '1.1.1');
+  // Add the second good dep + the unresolvable one to the app's node_modules.
+  await mkdir(join(dir, 'node_modules', 'clsx'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', 'clsx', 'package.json'),
+    JSON.stringify({ name: 'clsx', version: '2.1.1', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', 'clsx', 'index.js'), 'export default 1;\n');
+  await mkdir(join(dir, 'node_modules', '@webjsdev', 'server'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'package.json'),
+    JSON.stringify({ name: '@webjsdev/server', version: '0.1.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'index.js'), 'export default 1;\n');
+
+  const BAD = '@webjsdev/server@0.1.0';
+  let blipPicocolors = true; // the first picocolors probe 503s, later ones succeed
+  const mock = async (url, opts) => {
+    const u = String(url);
+    if (!u.includes('api.jspm.io')) {
+      // computeLiveIntegrity GETs each resolved URL; answer with bytes so the
+      // resolve completes (integrity is fail-open anyway).
+      return bundleResponse(new TextEncoder().encode(`// ${u}`));
+    }
+    const { install } = JSON.parse(opts.body);
+    // A batch that includes the unresolvable install 401s (permanent).
+    if (install.includes(BAD)) {
+      return { ok: false, status: 401, json: async () => ({ error: 'Error: Not Found' }) };
+    }
+    // The isolated picocolors probe blips with a transient 503 the first time.
+    if (install.length === 1 && install[0] === 'picocolors@1.1.1' && blipPicocolors) {
+      blipPicocolors = false;
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
+    const imports = {};
+    for (const i of install) imports[i.replace(/@[^@]*$/, '')] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  try {
+    await withMockedFetch(mock, async () => {
+      const thunk = async () => new Set(['picocolors', 'clsx', '@webjsdev/server']);
+      clearVendorCache();
+      const first = await resolveVendorImports(dir, thunk);
+      // picocolors must NOT be permanently dropped: it is served from the
+      // merged fragments where it could (clsx resolved), and the transient
+      // probe flags the resolve for retry rather than evicting it.
+      assert.equal(first.ok, false,
+        'a transient probe failure flags the whole resolve for retry, not a silent drop');
+      assert.equal(first.imports['@webjsdev/server'], undefined,
+        'the genuinely unresolvable install is still absent');
+
+      // The retry (blip cleared) must surface picocolors coherently.
+      clearVendorCache();
+      const second = await resolveVendorImports(dir, thunk);
+      assert.ok(second.imports['picocolors'],
+        'on retry the good package that blipped survives in the map');
+      assert.ok(second.imports['clsx'], 'the other good package is present too');
+      assert.equal(second.ok, true, 'the retry resolves cleanly (only a permanent 401 remains, tolerated)');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('jspmGenerate #446 fallback: a transient failure still serves a partial map and flags retry', async () => {
+  // A 5xx is transient (not an unresolvable install), so the fallback must
+  // not strip anything; it serves merged per-install fragments so the app is
+  // no worse off, and the live resolve reports ok=false so ensureReady retries.
+  // We assert through resolveVendorImports so the ok flag is observable.
+  const dir = await makeLiveApp('446-transient', 'dayjs', '1.11.20');
+  let firstCall = true;
+  const mock = async (url, opts) => {
+    const u = String(url);
+    if (!u.includes('api.jspm.io')) throw new Error(`unexpected fetch ${u}`);
+    const { install } = JSON.parse(opts.body);
+    // The whole-set unified call comes first and 503s; the per-install
+    // fallback probes then resolve.
+    if (install.length > 1 && firstCall) { firstCall = false; return { ok: false, status: 503, json: async () => ({}) }; }
+    const imports = {};
+    for (const i of install) imports[i.replace(/@[^@]*$/, '')] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  try {
+    clearVendorCache();
+    await withMockedFetch(mock, async () => {
+      // Two installs so the unified path is taken. dayjs is the real installed
+      // dep; clsx is faked via a second node_modules entry.
+      await mkdir(join(dir, 'node_modules', 'clsx'), { recursive: true });
+      await writeFile(join(dir, 'node_modules', 'clsx', 'package.json'),
+        JSON.stringify({ name: 'clsx', version: '2.1.1', main: 'index.js' }));
+      await writeFile(join(dir, 'node_modules', 'clsx', 'index.js'), 'export default 1;\n');
+      const r = await resolveVendorImports(dir, async () => new Set(['dayjs', 'clsx']));
+      assert.ok(r.imports['dayjs'], 'partial map still served after the transient failure');
+      assert.ok(r.imports['clsx'], 'both deps recovered via the per-install fallback');
+      assert.equal(r.ok, false, 'transient failure flags the resolve for retry');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('vendor parity #446: runtime live importmap and `vendor pin` agree for the same dep set', async () => {
+  // The maintainer invariant: `webjs vendor pin` must snapshot EXACTLY what
+  // the unified runtime resolution produces, transitives included. Both
+  // paths build the same install[] and call jspmGenerate, so against one
+  // deterministic mock the live `vendorImportMapEntries` output and the
+  // pinAll importmap must carry the SAME specifier->URL set (including the
+  // flattened transitive `@codemirror/state` neither file imports directly).
+  //
+  // Build an ISOLATED app dir (own node_modules, NOT the symlink
+  // makeTempAppWithSource uses) so planting @codemirror packages can't write
+  // through into the repo's real node_modules.
+  const dir = join(tmpdir(), `webjs-parity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+  await writeFile(join(dir, 'app', 'page.ts'),
+    `import { EditorView } from '@codemirror/view';\nimport { lintGutter } from '@codemirror/lint';`);
+  await mkdir(join(dir, 'node_modules', '@codemirror', 'view'), { recursive: true });
+  await mkdir(join(dir, 'node_modules', '@codemirror', 'lint'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', '@codemirror', 'view', 'package.json'),
+    JSON.stringify({ name: '@codemirror/view', version: '6.39.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@codemirror', 'view', 'index.js'), 'export const EditorView = 1;\n');
+  await writeFile(join(dir, 'node_modules', '@codemirror', 'lint', 'package.json'),
+    JSON.stringify({ name: '@codemirror/lint', version: '6.9.6', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@codemirror', 'lint', 'index.js'), 'export const lintGutter = 1;\n');
+
+  // Map an install spec (`@scope/name@version`, no subpaths in this test) to
+  // its bare specifier and a stable mock URL.
+  const specToUrl = {
+    '@codemirror/view@6.39.0': ['@codemirror/view', 'https://ga.jspm.io/npm:@codemirror/view@6.39.0/mock.js'],
+    '@codemirror/lint@6.9.6': ['@codemirror/lint', 'https://ga.jspm.io/npm:@codemirror/lint@6.9.6/mock.js'],
+  };
+  const mock = async (url, opts) => {
+    // pinAll (default mode) GETs each resolved URL to hash it (fetchIntegrity).
+    // Those carry no body; answer them with stable bytes so the pin path runs.
+    if (!opts || !opts.body) {
+      return bundleResponse(new TextEncoder().encode(`// bundle ${url}`));
+    }
+    const { install } = JSON.parse(opts.body);
+    const imports = {};
+    for (const i of install) {
+      const entry = specToUrl[i];
+      if (entry) imports[entry[0]] = entry[1];
+    }
+    // The unified call also returns the flattened transitive, regardless of
+    // which direct installs were asked for.
+    imports['@codemirror/state'] = 'https://ga.jspm.io/npm:@codemirror/state@6.6.0/mock.js';
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  try {
+    await withMockedFetch(mock, async () => {
+      clearVendorCache();
+      const bare = await scanBareImports(dir);
+      const runtime = await vendorImportMapEntries(bare, dir);
+      clearVendorCache();
+      const pinResult = await pinAll(dir);
+      assert.ok(!pinResult.failed, 'pin should succeed');
+      const pinned = await readPinFile(dir);
+      // Same specifier -> URL set on both paths, transitive included.
+      assert.deepEqual(
+        Object.keys(pinned.imports).sort(),
+        Object.keys(runtime).sort(),
+        'pin and runtime resolve the SAME specifier set (transitives included)',
+      );
+      for (const [spec, url] of Object.entries(runtime)) {
+        assert.equal(pinned.imports[spec], url, `pin and runtime agree on the URL for ${spec}`);
+      }
+      assert.ok(pinned.imports['@codemirror/state'],
+        'the flattened transitive is persisted by pin, matching the runtime map');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 // --- vendorImportMapEntries (network-gated) ---
