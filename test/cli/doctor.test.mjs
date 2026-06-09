@@ -381,6 +381,88 @@ test('the coherence check runs on the real import path (no coherence stub) witho
   assert.equal(c.status, 'pass', `empty app must pass, got: ${c.status} ${c.message}`);
 });
 
+test('coherence WARNS on a REAL cross-package edge: importmap + on-disk manifest, real getManifest', async () => {
+  // End-to-end over a REAL importmap and a REAL on-disk manifest, not a
+  // synthetic getManifest. The other coherence tests inject the manifest
+  // reader; this one exercises the production path: extractPinnedVersions parses
+  // the pinned versions out of a real importmap, and the REAL getPackageManifest
+  // (@webjsdev/server) reads the declared range from node_modules on disk. The
+  // motivating #446 shape: @codemirror/lint declares view ^6.42.0 while the
+  // importmap pins @codemirror/view@6.39.16.
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  // Real on-disk manifests the hoist-aware getPackageManifest will read. An
+  // empty index.js per package gives require.resolve a real entry to resolve,
+  // the way an installed package would have.
+  write(dir, 'node_modules/@codemirror/lint/package.json', JSON.stringify({
+    name: '@codemirror/lint',
+    version: '6.9.6',
+    main: 'index.js',
+    dependencies: { '@codemirror/view': '^6.42.0' },
+  }));
+  write(dir, 'node_modules/@codemirror/lint/index.js', '');
+  write(dir, 'node_modules/@codemirror/view/package.json', JSON.stringify({
+    name: '@codemirror/view',
+    version: '6.39.16',
+    main: 'index.js',
+  }));
+  write(dir, 'node_modules/@codemirror/view/index.js', '');
+  // A real importmap pinning the skewed versions. Inject ONLY the importmap
+  // sources; getManifest stays the REAL @webjsdev/server reader against `dir`.
+  const mod = await import('@webjsdev/server');
+  const importmap = {
+    '@codemirror/view': 'https://ga.jspm.io/npm:@codemirror/view@6.39.16/dist/index.js',
+    '@codemirror/lint': 'https://ga.jspm.io/npm:@codemirror/lint@6.9.6/dist/index.js',
+  };
+  const coherence = {
+    check: mod.checkImportmapCoherence,
+    getManifest: (pkg) => mod.getPackageManifest(pkg, dir),
+    liveImports: async () => importmap,
+    vendoredImports: async () => null,
+  };
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'warn', 'a real skew over a real manifest read must warn');
+  assert.match(c.message, /@codemirror\/lint/);    // both packages named
+  assert.match(c.message, /@codemirror\/view/);
+  assert.match(c.message, /\^6\.42\.0/);            // the required range
+  assert.match(c.message, /6\.39\.16/);             // the pinned version
+});
+
+test('coherence PASSES on a REAL coherent edge: importmap + on-disk manifest, real getManifest', async () => {
+  // Counterfactual to the test above on the SAME real path: align the declared
+  // range so the pinned view satisfies it, and the real reader must report pass.
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  write(dir, 'node_modules/@codemirror/lint/package.json', JSON.stringify({
+    name: '@codemirror/lint',
+    version: '6.9.6',
+    main: 'index.js',
+    dependencies: { '@codemirror/view': '^6.0.0' },
+  }));
+  write(dir, 'node_modules/@codemirror/lint/index.js', '');
+  write(dir, 'node_modules/@codemirror/view/package.json', JSON.stringify({
+    name: '@codemirror/view',
+    version: '6.39.16',
+    main: 'index.js',
+  }));
+  write(dir, 'node_modules/@codemirror/view/index.js', '');
+  const mod = await import('@webjsdev/server');
+  const importmap = {
+    '@codemirror/view': 'https://ga.jspm.io/npm:@codemirror/view@6.39.16/dist/index.js',
+    '@codemirror/lint': 'https://ga.jspm.io/npm:@codemirror/lint@6.9.6/dist/index.js',
+  };
+  const coherence = {
+    check: mod.checkImportmapCoherence,
+    getManifest: (pkg) => mod.getPackageManifest(pkg, dir),
+    liveImports: async () => importmap,
+    vendoredImports: async () => null,
+  };
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'pass', `a coherent real edge must pass, got: ${c.status} ${c.message}`);
+});
+
 // ---------------------------------------------------------------------------
 // CLI integration: exit code behavior.
 // ---------------------------------------------------------------------------
