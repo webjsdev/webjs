@@ -277,6 +277,16 @@ if (!session) throw redirect('/login');
 
 JWT sessions by default (stateless, scales horizontally). OAuth providers handle the full redirect flow.
 
+`auth()` resolves `{ user }` where `user` is `Record<string, unknown>` by default. To read the custom fields the callbacks set (`session.user.id`, `session.user.role`) without a cast and with typo-checking, type the session. Augment `AuthUser` for global typing, or use `createAuth<AppUser>(...)` for per-instance typing:
+
+```ts
+declare module '@webjsdev/server' {
+  interface AuthUser { id: string; role: 'admin' | 'member'; }
+}
+```
+
+Both are opt-in and types-only. See `agent-docs/typescript.md` and the auth recipe.
+
 ## File storage (`FileStore` + `diskStore`)
 
 webjs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. The model mirrors the cache / session adapters: a documented `FileStore` interface, a default local-disk adapter (`diskStore`), and a module singleton (`setFileStore` / `getFileStore`) so an app swaps the backend in one call without touching any call site.
