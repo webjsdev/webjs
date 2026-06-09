@@ -340,6 +340,14 @@ export declare function updatePinned(appDir: string, opts?: { from?: string }): 
 export declare function readPinFile(
   appDir: string,
 ): Promise<{ imports: Record<string, string>; integrity?: Record<string, string>; provider?: string } | null>;
+/**
+ * Make the opt-in `webjs vendor pin` output committable. Heals an app's
+ * `.gitignore` when a `.webjs` exclusion would swallow the pins, and is a
+ * no-op when they are already committable. Called only from `vendor pin`.
+ */
+export declare function ensureVendorCommittable(
+  appDir: string,
+): Promise<{ ignored: boolean; patched: boolean; gitignorePath: string | null }>;
 /** Serve a downloaded `/__webjs/vendor/*` bundle file (`--download` mode). */
 export declare function serveDownloadedBundle(
   appDir: string,

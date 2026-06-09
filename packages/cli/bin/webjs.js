@@ -434,7 +434,7 @@ Full docs: https://docs.webjs.com`);
       const sub = rest[0];
       const args = rest.slice(1);
       const appDir = process.cwd();
-      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
+      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, ensureVendorCommittable, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
 
       // Parse `--from <provider>` once at the top so subcommands share it.
       // Mirrors importmap-rails's `bin/importmap pin foo --from jsdelivr`.
@@ -515,6 +515,30 @@ Full docs: https://docs.webjs.com`);
           (downloaded ? ` + ${downloaded} bundle${downloaded === 1 ? '' : 's'}` : '') + '.';
         const pruneMsg = pruned.length ? ` Pruned ${pruned.length} orphan${pruned.length === 1 ? '' : 's'}.` : '';
         console.log(pinMsg + pruneMsg);
+
+        // Make the pins committable. Vendoring is opt-in, so the pins the
+        // user just wrote are meant for source control; a `.gitignore`
+        // that excludes `.webjs/` would silently swallow them. Fresh
+        // scaffolds already carry the `!.webjs/vendor/` exception, so for
+        // them this is a no-op. If the output IS ignored, self-heal the
+        // app's own `.gitignore`; if there is no `.gitignore` to patch (the
+        // ignore comes from a parent repo or `.git/info/exclude`), print a
+        // notice so the pins do not vanish from `git status` unexplained.
+        const committable = await ensureVendorCommittable(appDir);
+        if (committable.patched) {
+          console.log(
+            `Added the \`.webjs/vendor/\` exception to .gitignore so these pins commit. ` +
+            `Run \`git add .gitignore .webjs/vendor\`.`,
+          );
+        } else if (committable.ignored) {
+          console.warn(
+            `[webjs] .webjs/vendor/importmap.json is gitignored, so these pins will NOT ` +
+            `commit. The ignore is not in this app's .gitignore (a parent repo's .gitignore ` +
+            `or .git/info/exclude). Un-ignore it by adding \`!**/.webjs/vendor/\` and ` +
+            `\`!**/.webjs/vendor/**\` where the \`.webjs\` exclusion lives, then ` +
+            `\`git add .webjs/vendor\`. Verify with \`git check-ignore -q .webjs/vendor/importmap.json\`.`,
+          );
+        }
         break;
       }
 

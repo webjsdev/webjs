@@ -130,3 +130,61 @@ describe('webjs vendor CLI', () => {
     assert.match(stderr, /webjs vendor pin/);
   });
 });
+
+// #448: the opt-in pins `webjs vendor pin` writes must be committable. A
+// `.gitignore` that excludes `.webjs/` silently swallows them; pinning must
+// self-heal that so a user can commit what they deliberately created.
+describe('webjs vendor pin makes pins committable (#448)', { skip: !NETWORK_OK }, () => {
+  function git(args, cwd) {
+    return new Promise((res) => {
+      const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
+      const child = spawn('git', args, { cwd, env });
+      let out = '';
+      child.stdout.on('data', (d) => { out += d.toString(); });
+      child.on('exit', (code) => res({ code, out }));
+    });
+  }
+
+  test('a blanket .webjs/ ignore is healed so the pin is committable', async () => {
+    const dir = await makeApp();
+    try {
+      await git(['init', '-q'], dir);
+      // The exact regression: an app whose .gitignore excludes the whole
+      // .webjs directory, which swallows the pin output.
+      await writeFile(join(dir, '.gitignore'), 'node_modules/\n.webjs/\n');
+      assert.equal((await git(['check-ignore', '-q', '.webjs/vendor/importmap.json'], dir)).code, 0,
+        'precondition: the pin file is ignored before pinning');
+
+      const { code, stdout } = await runCli(['vendor', 'pin'], dir);
+      assert.equal(code, 0);
+      // The pins the user just created are now committable.
+      assert.equal((await git(['check-ignore', '-q', '.webjs/vendor/importmap.json'], dir)).code, 1,
+        'pin file is NOT ignored after pinning');
+      assert.match(stdout, /Added the `\.webjs\/vendor\/` exception to \.gitignore/);
+      // The transient cache exclusion still works: routes.d.ts stays ignored.
+      await writeFile(join(dir, '.webjs', 'routes.d.ts'), 'export {}');
+      assert.equal((await git(['check-ignore', '-q', '.webjs/routes.d.ts'], dir)).code, 0,
+        'transient .webjs cache stays ignored');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a scaffold-correct .gitignore is left unchanged (no-vendor default unaffected)', async () => {
+    const dir = await makeApp();
+    try {
+      await git(['init', '-q'], dir);
+      // The current scaffold template already un-ignores vendor.
+      const scaffold = 'node_modules/\n**/.webjs/*\n!**/.webjs/vendor/\n!**/.webjs/vendor/**\n';
+      await writeFile(join(dir, '.gitignore'), scaffold);
+
+      const { code, stdout } = await runCli(['vendor', 'pin'], dir);
+      assert.equal(code, 0);
+      const after = await readFile(join(dir, '.gitignore'), 'utf8');
+      assert.equal(after, scaffold, 'an already-committable app sees no .gitignore change');
+      assert.doesNotMatch(stdout, /Added the `\.webjs\/vendor\/` exception/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

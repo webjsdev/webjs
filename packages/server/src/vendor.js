@@ -44,6 +44,7 @@ import { readFile, readdir, writeFile, mkdir, unlink, stat, rename } from 'node:
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname, basename, sep } from 'node:path';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { digestBase64 } from './crypto-utils.js';
 import { BUFFERED_MARKER } from './conditional-get.js';
 
@@ -669,6 +670,167 @@ function pinDir(appDir) {
 /** Compute the absolute path of the importmap config file for an app. */
 function pinFilePath(appDir) {
   return join(pinDir(appDir), PIN_FILE);
+}
+
+/**
+ * The three-line `.gitignore` pattern that ignores the transient
+ * `.webjs` caches at any depth while re-including the committed
+ * `.webjs/vendor/` pin output. This mirrors the scaffold template
+ * (`packages/cli/templates/.gitignore`) and the `gitignore-vendor-not-
+ * ignored` rule in `check.js` verbatim, so a self-healed `.gitignore`
+ * ends up byte-identical to a freshly scaffolded one.
+ */
+const VENDOR_GITIGNORE_LINES = [
+  '**/.webjs/*',
+  '!**/.webjs/vendor/',
+  '!**/.webjs/vendor/**',
+];
+
+/**
+ * Probe whether `appDir`'s `.gitignore` would swallow the vendor pin
+ * output, via `git check-ignore`. Best-effort: returns false when the
+ * directory is not a git repo, git is absent, or the spawn fails.
+ *
+ * The inherited GIT_* env vars are stripped so `cwd` is the sole
+ * authority on which repo + `.gitignore` stack is consulted. Git
+ * exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE / GIT_PREFIX into
+ * hook processes (a pre-commit hook from a linked worktree exports
+ * GIT_WORK_TREE), and those OVERRIDE cwd-based discovery; without the
+ * strip the probe would consult the outer repo instead of `appDir`.
+ * Same reasoning as the `gitignore-vendor-not-ignored` check rule.
+ *
+ * @param {string} appDir
+ * @returns {boolean} true when `.webjs/vendor/importmap.json` is ignored
+ */
+function vendorPinIsIgnored(appDir) {
+  try {
+    const {
+      GIT_DIR: _gd, GIT_WORK_TREE: _gwt, GIT_INDEX_FILE: _gif, GIT_PREFIX: _gp,
+      ...gitEnv
+    } = process.env;
+    const probe = `.webjs/vendor/${PIN_FILE}`;
+    // `git check-ignore -q` exits 0 when ignored, 1 when not ignored,
+    // 128 on error (not a git repo, etc.). Treat anything but 0 as
+    // "not ignored" so a non-git project never gets its .gitignore
+    // touched.
+    const result = spawnSync('git', ['check-ignore', '-q', probe], {
+      cwd: appDir,
+      stdio: 'pipe',
+      env: gitEnv,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Make the `webjs vendor pin` output committable, idempotently.
+ *
+ * Vendoring is an OPTIONAL opt-in: the no-build default resolves bare
+ * specifiers at runtime via jspm.io and needs nothing committed. But a
+ * user who runs `webjs vendor pin` deliberately creates pins they want
+ * in source control, and a `.gitignore` that excludes `.webjs/` (the
+ * older scaffold pattern, or one an editor/agent "simplified") silently
+ * swallows that output. Fresh scaffolds already carry the vendor
+ * exception (a glob exclusion plus a re-include negation), so for them
+ * this is a no-op.
+ *
+ * Behaviour (only ever called from the opt-in `vendor pin` path):
+ *   - The pin output is NOT ignored (the common, already-correct case):
+ *     return `{ ignored: false, patched: false }`. Nothing is written.
+ *   - The pin output IS ignored AND a `.gitignore` exists: heal it (see
+ *     below), then re-probe. If the pin is committable afterwards return
+ *     `{ ignored: true, patched: true, gitignorePath }`; if a broader
+ *     unrelated rule still swallows it (e.g. a root `*.json`), the heal
+ *     cannot help, so revert the edit and return `patched: false` so the
+ *     caller prints a notice rather than claiming a fix that did not take.
+ *   - The pin output IS ignored but there is NO `.gitignore` to patch
+ *     (e.g. the ignore comes from a parent repo's `.gitignore`, or from
+ *     `.git/info/exclude`): leave the tree untouched and return
+ *     `{ ignored: true, patched: false, gitignorePath: null }` so the
+ *     caller can print a notice instead of writing a file the user did
+ *     not create.
+ *
+ * Healing has two parts, because a plain append is NOT enough. A bare
+ * directory exclusion (`.webjs/`, `/.webjs/`, `.webjs`, with or without a
+ * leading glob) excludes the directory itself, and git CANNOT re-include
+ * a child of an excluded directory, so any later negation is silently
+ * dead. So: (1) rewrite each such line IN PLACE to the glob form
+ * (`**` + `/.webjs/*`), which ignores the directory's CONTENTS at any
+ * depth while leaving the directory re-includable; (2) append whichever
+ * of the three exception lines are still missing. The heal is idempotent:
+ * a re-run finds the pin already committable and short-circuits.
+ *
+ * @param {string} appDir
+ * @returns {Promise<{ ignored: boolean, patched: boolean, gitignorePath: string | null }>}
+ */
+export async function ensureVendorCommittable(appDir) {
+  if (!vendorPinIsIgnored(appDir)) {
+    return { ignored: false, patched: false, gitignorePath: null };
+  }
+  const gitignorePath = join(appDir, '.gitignore');
+  let original;
+  try {
+    original = await readFile(gitignorePath, 'utf8');
+  } catch {
+    // No app-level .gitignore to patch. The ignore is coming from a
+    // parent repo or from .git/info/exclude; do not fabricate a
+    // .gitignore the user never had. Let the caller print a notice.
+    return { ignored: true, patched: false, gitignorePath: null };
+  }
+
+  // The exclusion glob, assembled so the literal `*` + `/` sequence never
+  // appears in this file's source comments above.
+  const exclude = VENDOR_GITIGNORE_LINES[0]; // **/.webjs/*
+
+  // 1. Rewrite any bare `.webjs` DIRECTORY exclusion to the glob form. A
+  //    directory exclusion blocks all child negations, so it must become
+  //    `**/.webjs/*` (ignore contents, keep the dir re-includable).
+  const lines = original.split('\n');
+  let rewroteDir = false;
+  const rewritten = lines.map((line) => {
+    const t = line.trim();
+    // Match the bare-directory shapes only (no `/*` suffix, not already a
+    // negation): `.webjs`, `.webjs/`, `/.webjs`, `/.webjs/`, `**/.webjs`,
+    // `**/.webjs/`. These all exclude the directory itself.
+    if (/^(\*\*\/|\/)?\.webjs\/?$/.test(t)) {
+      rewroteDir = true;
+      return exclude;
+    }
+    return line;
+  });
+
+  // 2. Append whichever exception lines are still missing.
+  const present = new Set(rewritten.map((l) => l.trim()));
+  const missing = VENDOR_GITIGNORE_LINES.filter((l) => !present.has(l));
+
+  let next = rewritten.join('\n');
+  if (missing.length > 0) {
+    const block =
+      '# webjs: keep the committed vendor pin (`webjs vendor pin`) out of\n' +
+      '# the `.webjs` cache exclusion so the pinned importmap is committable.\n' +
+      missing.join('\n') + '\n';
+    const sep = next.endsWith('\n') || next === '' ? '' : '\n';
+    next = next + sep + block;
+  }
+
+  if (!rewroteDir && missing.length === 0) {
+    // Nothing to change, yet git still ignores the pin: a broader,
+    // unrelated rule is the cause and the vendor exception cannot fix it.
+    return { ignored: true, patched: false, gitignorePath };
+  }
+
+  await writeFile(gitignorePath, next);
+
+  // 3. Re-probe. If a broader unrelated rule still swallows the pin, the
+  //    edit did not achieve the goal, so revert it and report not-patched
+  //    so the caller prints a notice instead of an inaccurate success.
+  if (vendorPinIsIgnored(appDir)) {
+    await writeFile(gitignorePath, original);
+    return { ignored: true, patched: false, gitignorePath };
+  }
+  return { ignored: true, patched: true, gitignorePath };
 }
 
 /**
