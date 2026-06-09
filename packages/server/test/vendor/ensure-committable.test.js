@@ -102,6 +102,66 @@ test('a broader unrelated rule that the exception cannot fix: revert + report no
   }
 });
 
+test('a CRLF .gitignore is healed and stays consistently CRLF', async () => {
+  // A Windows-checkout .gitignore uses CRLF endings. The heal rewrites a
+  // line and appends a block; both must use CRLF so the file does not end
+  // up mixed (mixed endings churn diffs and trip some tooling).
+  const dir = await makeRepo('# deps\r\nnode_modules/\r\n.webjs/\r\n');
+  try {
+    assert.equal(isIgnored(dir, PROBE), true, 'precondition: CRLF `.webjs/` ignores the pin');
+
+    const r = await ensureVendorCommittable(dir);
+    assert.equal(r.patched, true);
+    assert.equal(isIgnored(dir, PROBE), false, 'pin is committable after the patch');
+
+    const text = await readFile(join(dir, '.gitignore'), 'utf8');
+    // Every line ending is CRLF: no bare LF that is not preceded by CR.
+    assert.doesNotMatch(text, /(^|[^\r])\n/, 'no bare-LF line ending survives');
+    assert.match(text, /\r\n/, 'still CRLF');
+    // The rewritten exclusion and the appended negations are present.
+    assert.match(text, /^\*\*\/\.webjs\/\*\r$/m, 'bare `.webjs/` rewritten with CRLF');
+    assert.match(text, /^!\*\*\/\.webjs\/vendor\/\r$/m);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a `.webjs/**` glob exclusion is made committable by appending the exception', async () => {
+  // `.webjs/**` excludes the directory's contents (not the directory
+  // itself), so unlike a bare `.webjs/` the later negation CAN re-include
+  // vendor. The rewrite does not touch it; the append + re-probe suffices.
+  const dir = await makeRepo('node_modules/\n.webjs/**\n');
+  try {
+    assert.equal(isIgnored(dir, PROBE), true, 'precondition: `.webjs/**` ignores the pin');
+    await writeFile(join(dir, '.webjs', 'routes.d.ts'), 'export {}');
+
+    const r = await ensureVendorCommittable(dir);
+    assert.equal(r.patched, true);
+    assert.equal(isIgnored(dir, PROBE), false, 'pin committable after append');
+    assert.equal(isIgnored(dir, '.webjs/routes.d.ts'), true, 'cache still ignored');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a `.webjs/*` glob exclusion is made committable by appending the exception', async () => {
+  // `.webjs/*` is a very common form (it is what the scaffold uses, minus
+  // the `**/` prefix). It excludes direct children only, so the vendor
+  // negation re-includes the pin without any rewrite.
+  const dir = await makeRepo('node_modules/\n.webjs/*\n');
+  try {
+    assert.equal(isIgnored(dir, PROBE), true, 'precondition: `.webjs/*` ignores the pin');
+    await writeFile(join(dir, '.webjs', 'routes.d.ts'), 'export {}');
+
+    const r = await ensureVendorCommittable(dir);
+    assert.equal(r.patched, true);
+    assert.equal(isIgnored(dir, PROBE), false, 'pin committable after append');
+    assert.equal(isIgnored(dir, '.webjs/routes.d.ts'), true, 'cache still ignored');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('no-vendor / already-correct app: .gitignore is left byte-for-byte unchanged', async () => {
   const dir = await makeRepo(SCAFFOLD_IGNORE);
   try {

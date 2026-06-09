@@ -784,34 +784,46 @@ export async function ensureVendorCommittable(appDir) {
   // appears in this file's source comments above.
   const exclude = VENDOR_GITIGNORE_LINES[0]; // **/.webjs/*
 
+  // Preserve the file's line ending so a CRLF .gitignore stays all-CRLF
+  // (and an LF one all-LF). Splitting on bare `\n` keeps each existing
+  // line's trailing `\r`; the lines we WRITE (the rewritten exclusion and
+  // the appended block) must use the same ending or the file goes mixed.
+  // A file with any CRLF is treated as CRLF; otherwise LF.
+  const eol = /\r\n/.test(original) ? '\r\n' : '\n';
+
   // 1. Rewrite any bare `.webjs` DIRECTORY exclusion to the glob form. A
   //    directory exclusion blocks all child negations, so it must become
   //    `**/.webjs/*` (ignore contents, keep the dir re-includable).
   const lines = original.split('\n');
   let rewroteDir = false;
   const rewritten = lines.map((line) => {
-    const t = line.trim();
+    // Trim CR too, so a CRLF file's `.webjs/\r` still matches.
+    const t = line.replace(/\r$/, '').trim();
     // Match the bare-directory shapes only (no `/*` suffix, not already a
     // negation): `.webjs`, `.webjs/`, `/.webjs`, `/.webjs/`, `**/.webjs`,
-    // `**/.webjs/`. These all exclude the directory itself.
+    // `**/.webjs/`. These all exclude the directory itself. Emit the
+    // replacement with the file's own ending if the original line carried
+    // one (every line but a no-trailing-newline last line does).
     if (/^(\*\*\/|\/)?\.webjs\/?$/.test(t)) {
       rewroteDir = true;
-      return exclude;
+      return line.endsWith('\r') ? exclude + '\r' : exclude;
     }
     return line;
   });
 
   // 2. Append whichever exception lines are still missing.
-  const present = new Set(rewritten.map((l) => l.trim()));
+  const present = new Set(rewritten.map((l) => l.replace(/\r$/, '').trim()));
   const missing = VENDOR_GITIGNORE_LINES.filter((l) => !present.has(l));
 
   let next = rewritten.join('\n');
   if (missing.length > 0) {
     const block =
-      '# webjs: keep the committed vendor pin (`webjs vendor pin`) out of\n' +
-      '# the `.webjs` cache exclusion so the pinned importmap is committable.\n' +
-      missing.join('\n') + '\n';
-    const sep = next.endsWith('\n') || next === '' ? '' : '\n';
+      [
+        '# webjs: keep the committed vendor pin (`webjs vendor pin`) out of',
+        '# the `.webjs` cache exclusion so the pinned importmap is committable.',
+        ...missing,
+      ].join(eol) + eol;
+    const sep = next.endsWith('\n') || next === '' ? '' : eol;
     next = next + sep + block;
   }
 
