@@ -178,6 +178,44 @@ export default () => html\`<p>x</p>\`;
   assert.equal(resp.headers.get('location'), '/done');
 });
 
+test('action redirect with the { status } options form overrides through the catch site', async () => {
+  // The end-to-end override path for the options form (not just the sentinel
+  // unit test): redirect('/done', { status: 303 }) thrown from an action must
+  // land as a 303 at the real page-action catch site. #452.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { redirect('/done', { status: 303 }); }
+export default () => html\`<p>x</p>\`;
+`;
+  const appDir = makeApp({ 'app/gate3/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const resp = await app.handle(new Request('http://x/gate3', form({ x: '1' })));
+  assert.equal(resp.status, 303, 'options-form status wins end-to-end');
+  assert.equal(resp.headers.get('location'), '/done');
+});
+
+test('a gate redirect thrown during the FAILED-action re-render returns 302 (GET-shaped)', async () => {
+  // A failed action re-renders the SAME page through ssrPage (a GET-shaped page
+  // render at 422). If THAT render throws a gate redirect, it resolves via the
+  // ssr.js catch site, so it gets the GET-gate 302 default, not the action 307.
+  // This pins that the re-render is treated as a page render. #452.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { return { success: false, error: 'nope' }; }
+export default () => { redirect('/login'); };
+`;
+  const appDir = makeApp({ 'app/regate/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  // POST drives the action (fails) -> re-render -> page throws redirect() -> 302.
+  const resp = await app.handle(new Request('http://x/regate', form({ x: '1' })));
+  assert.equal(resp.status, 302, 're-render gate redirect uses the GET 302 default');
+  assert.equal(resp.headers.get('location'), '/login');
+});
+
 test('action that throws notFound() yields 404', async () => {
   const PAGE = `
 import { html, notFound } from ${CORE};
