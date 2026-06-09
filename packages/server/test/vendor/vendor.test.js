@@ -653,6 +653,77 @@ test('jspmGenerate #446 fallback: an unresolvable install does not collapse the 
   });
 });
 
+test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently is NOT dropped', async () => {
+  // The at-risk path. The unified batch 401s PERMANENTLY (a genuinely
+  // unresolvable BAD install), so the fallback probes each install alone.
+  // picocolors is GOOD but its isolated probe hits a transient 503 (a network
+  // blip mid-probe). The old code computed the resolvable set purely from a
+  // non-empty fragment, so a transient-failed good package looked identical to
+  // an unresolvable one and got DROPPED. The fix must NOT drop it: a transient
+  // probe failure flags the whole resolve for retry (ok=false) and serves the
+  // merged fragments without evicting anyone. On the RETRY (blip cleared) the
+  // good package must survive in the map. We observe ok=false through
+  // resolveVendorImports, and survival through the second resolve.
+  const dir = await makeLiveApp('446-probe-blip', 'picocolors', '1.1.1');
+  // Add the second good dep + the unresolvable one to the app's node_modules.
+  await mkdir(join(dir, 'node_modules', 'clsx'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', 'clsx', 'package.json'),
+    JSON.stringify({ name: 'clsx', version: '2.1.1', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', 'clsx', 'index.js'), 'export default 1;\n');
+  await mkdir(join(dir, 'node_modules', '@webjsdev', 'server'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'package.json'),
+    JSON.stringify({ name: '@webjsdev/server', version: '0.1.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'index.js'), 'export default 1;\n');
+
+  const BAD = '@webjsdev/server@0.1.0';
+  let blipPicocolors = true; // the first picocolors probe 503s, later ones succeed
+  const mock = async (url, opts) => {
+    const u = String(url);
+    if (!u.includes('api.jspm.io')) {
+      // computeLiveIntegrity GETs each resolved URL; answer with bytes so the
+      // resolve completes (integrity is fail-open anyway).
+      return bundleResponse(new TextEncoder().encode(`// ${u}`));
+    }
+    const { install } = JSON.parse(opts.body);
+    // A batch that includes the unresolvable install 401s (permanent).
+    if (install.includes(BAD)) {
+      return { ok: false, status: 401, json: async () => ({ error: 'Error: Not Found' }) };
+    }
+    // The isolated picocolors probe blips with a transient 503 the first time.
+    if (install.length === 1 && install[0] === 'picocolors@1.1.1' && blipPicocolors) {
+      blipPicocolors = false;
+      return { ok: false, status: 503, json: async () => ({}) };
+    }
+    const imports = {};
+    for (const i of install) imports[i.replace(/@[^@]*$/, '')] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  try {
+    await withMockedFetch(mock, async () => {
+      const thunk = async () => new Set(['picocolors', 'clsx', '@webjsdev/server']);
+      clearVendorCache();
+      const first = await resolveVendorImports(dir, thunk);
+      // picocolors must NOT be permanently dropped: it is served from the
+      // merged fragments where it could (clsx resolved), and the transient
+      // probe flags the resolve for retry rather than evicting it.
+      assert.equal(first.ok, false,
+        'a transient probe failure flags the whole resolve for retry, not a silent drop');
+      assert.equal(first.imports['@webjsdev/server'], undefined,
+        'the genuinely unresolvable install is still absent');
+
+      // The retry (blip cleared) must surface picocolors coherently.
+      clearVendorCache();
+      const second = await resolveVendorImports(dir, thunk);
+      assert.ok(second.imports['picocolors'],
+        'on retry the good package that blipped survives in the map');
+      assert.ok(second.imports['clsx'], 'the other good package is present too');
+      assert.equal(second.ok, true, 'the retry resolves cleanly (only a permanent 401 remains, tolerated)');
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('jspmGenerate #446 fallback: a transient failure still serves a partial map and flags retry', async () => {
   // A 5xx is transient (not an unresolvable install), so the fallback must
   // not strip anything; it serves merged per-install fragments so the app is

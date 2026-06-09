@@ -416,18 +416,43 @@ async function jspmCall(installs, provider) {
  * @returns {Promise<Record<string, string>>}
  */
 async function jspmResolveOne(install, provider = 'jspm') {
-  const cacheKey = `${provider}::${install}`;
+  const { ok, imports, transient } = await jspmProbeOne(install, provider);
+  // Preserve the public contract: an empty map on any failure, and the
+  // module-global retry flag set ONLY on a transient one (a permanent 401
+  // for an unresolvable private/server-only dep is tolerated).
+  if (!ok && transient) lastLiveResolveFailed = true;
+  return imports;
+}
+
+/**
+ * Probe a SINGLE install and return the FULL classification, not just the
+ * imports. Unlike `jspmResolveOne` this does NOT collapse a transient
+ * failure into the same empty map a permanent one yields, and does NOT
+ * touch `lastLiveResolveFailed`: the caller (the 401 fallback in
+ * `jspmGenerate`) needs to tell "genuinely unresolvable, safe to drop"
+ * (`ok:false, transient:false`) from "a network blip mid-probe, do NOT
+ * drop" (`ok:false, transient:true`), and owns the retry flag itself.
+ *
+ * Cached per install + provider; a successful probe's `{imports}` is the
+ * same value `jspmResolveOne` returns, so the two share the cache and the
+ * later unified re-run reuses it.
+ *
+ * @param {string} install
+ * @param {string} provider
+ * @returns {Promise<JspmCallResult>}
+ */
+function jspmProbeOne(install, provider) {
+  const cacheKey = `${provider}::probe::${install}`;
   const existing = jspmCache.get(cacheKey);
   if (existing) return existing;
 
   const promise = (async () => {
-    const { ok, imports, transient } = await jspmCall([install], provider);
-    if (!ok) {
-      jspmCache.delete(cacheKey);
-      if (transient) lastLiveResolveFailed = true;
-      return {};
-    }
-    return imports;
+    const result = await jspmCall([install], provider);
+    // Do not cache a failure: a transient one must be re-attempted on the
+    // next resolve, and a permanent one is cheap to re-confirm and must not
+    // pin a stale "unresolvable" verdict across a dependency change.
+    if (!result.ok) jspmCache.delete(cacheKey);
+    return result;
   })();
 
   jspmCache.set(cacheKey, promise);
@@ -453,9 +478,12 @@ async function jspmResolveOne(install, provider = 'jspm') {
  *   2. On a PERMANENT failure (401/4xx), probe each install in isolation
  *      to learn which ones resolve, then RE-RUN the unified call over only
  *      the resolvable subset so the survivors stay mutually consistent.
- *      The unresolvable installs drop out (their browser never fetched
- *      them anyway). If the re-run itself fails, fall back to the merged
- *      per-install fragments so the app is no worse off than pre-#446.
+ *      Only installs whose probe fails PERMANENTLY drop out (genuinely
+ *      unresolvable, the browser never fetched them anyway); if any probe
+ *      fails TRANSIENTLY, no one is dropped and the resolve is flagged for
+ *      retry, so a network blip mid-probe cannot evict a good package. If
+ *      the re-run itself fails, fall back to the merged per-install
+ *      fragments so the app is no worse off than pre-#446.
  *   3. On a TRANSIENT failure (network / timeout / 5xx / 429), set the
  *      retry flag and serve whatever the per-install probe produced.
  *
@@ -494,19 +522,43 @@ export async function jspmGenerate(installs, provider = 'jspm') {
       return mergePerInstall(await Promise.all(installs.map(i => jspmResolveOne(i, provider))));
     }
 
-    // Permanent failure: some install is unresolvable. Probe each in
-    // isolation to learn which ones jspm can resolve, then re-run the
+    // Permanent failure: at least one install is unresolvable. Probe each
+    // in isolation to learn which ones jspm can resolve, then re-run the
     // unified call over only those so the survivors form one consistent
     // graph (restores #446 coherence for the resolvable subset).
-    const fragments = await Promise.all(installs.map(i => jspmResolveOne(i, provider)));
-    const resolvable = installs.filter((_, idx) => Object.keys(fragments[idx]).length > 0);
+    const probes = await Promise.all(installs.map(i => jspmProbeOne(i, provider)));
+
+    // A GOOD package whose isolated probe failed TRANSIENTLY (a network blip
+    // mid-probe) must NOT be classified as unresolvable and dropped. Only a
+    // PERMANENT probe failure (401/404) means the install is genuinely
+    // unresolvable. If any probe failed transiently, we cannot safely decide
+    // the resolvable set this pass, so flag the whole resolve transient-
+    // failed and serve the merged fragments WITHOUT dropping anyone; the next
+    // ensureReady retry re-resolves once the blip clears. Conflating the two
+    // here is exactly the bug this guard prevents.
+    const transientProbe = probes.some(p => !p.ok && p.transient);
+    if (transientProbe) {
+      lastLiveResolveFailed = true;
+      return mergePerInstall(probes.map(p => p.imports));
+    }
+
+    // From here every failed probe is PERMANENT, so dropping it is safe.
+    const resolvable = installs.filter((_, idx) => probes[idx].ok);
 
     if (resolvable.length === installs.length) {
       // Every install resolved alone but the batch 401'd: a genuine
       // cross-package CONFLICT jspm could not satisfy as one graph (rare).
       // The coherent graph is unavailable, so serve the merged fragments
-      // (pre-#446 behaviour) rather than nothing.
-      return mergePerInstall(fragments);
+      // (pre-#446 behaviour) rather than nothing. NOTE: this degraded path
+      // can REINTRODUCE the #446 skew, because last-write-wins on a shared
+      // transitive across independent fragments is exactly the merge the
+      // unified call exists to avoid. It is a deliberate degrade-not-crash
+      // fallback for an unsatisfiable graph: no coherent graph exists, so a
+      // possibly-skewed map beats no map. The common conflicting-deps case
+      // (one shared transitive needing a newer version, issue #446's repro)
+      // IS satisfiable and resolves coherently on the unified path above;
+      // only a genuinely unsatisfiable set reaches here.
+      return mergePerInstall(probes.map(p => p.imports));
     }
     if (resolvable.length === 0) return {};
     if (resolvable.length === 1) return jspmResolveOne(resolvable[0], provider);
@@ -515,7 +567,7 @@ export async function jspmGenerate(installs, provider = 'jspm') {
     // conflict among the survivors), fall back to their merged fragments.
     const retry = await jspmCall(resolvable, provider);
     if (retry.ok) return retry.imports;
-    return mergePerInstall(resolvable.map(i => fragments[installs.indexOf(i)]));
+    return mergePerInstall(resolvable.map(i => probes[installs.indexOf(i)].imports));
   })();
 
   jspmCache.set(unifiedKey, promise);
