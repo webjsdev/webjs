@@ -252,6 +252,136 @@ test('vendor-pin WARNS listing outdated packages', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// importmap coherence (#450): warn-only, runs over BOTH importmaps with verdict
+// parity, degrades gracefully on missing metadata. Driven through the
+// `opts.coherence` injection seam so every branch runs offline.
+// ---------------------------------------------------------------------------
+
+// The #446 dep set, expressed as a LIVE importmap (jspm URLs) and a VENDORED
+// importmap (local pin paths). Both pin the same versions.
+const CM_LIVE = {
+  '@codemirror/view': 'https://ga.jspm.io/npm:@codemirror/view@6.39.16/dist/index.js',
+  '@codemirror/lint': 'https://ga.jspm.io/npm:@codemirror/lint@6.9.6/dist/index.js',
+};
+const CM_VENDORED = {
+  '@codemirror/view': '/__webjs/vendor/@codemirror--view@6.39.16.js',
+  '@codemirror/lint': '/__webjs/vendor/@codemirror--lint@6.9.6.js',
+};
+// lint needs a NEWER view than is pinned -> skew; same graph with ^6.0.0 -> coherent.
+const CM_SKEW_MANIFEST = (pkg) =>
+  pkg === '@codemirror/lint' ? { dependencies: { '@codemirror/view': '^6.42.0' } } : { dependencies: {} };
+const CM_COHERENT_MANIFEST = (pkg) =>
+  pkg === '@codemirror/lint' ? { dependencies: { '@codemirror/view': '^6.0.0' } } : { dependencies: {} };
+
+// Build a coherence injection that drives the REAL check over the given
+// importmaps + manifest reader (no network, no node_modules read).
+async function coherenceInjection({ live, vendored, getManifest }) {
+  const mod = await import('@webjsdev/server');
+  return {
+    check: mod.checkImportmapCoherence,
+    getManifest,
+    liveImports: async () => live || null,
+    vendoredImports: async () => vendored || null,
+  };
+}
+
+test('coherence WARNS on a #446-style skew, naming both packages + range + pinned version', async () => {
+  const dir = tmpDir();
+  const coherence = await coherenceInjection({
+    live: CM_LIVE, vendored: CM_VENDORED, getManifest: CM_SKEW_MANIFEST,
+  });
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'warn', 'a skew is a warn, never a hard fail');
+  assert.match(c.message, /@codemirror\/lint/);
+  assert.match(c.message, /@codemirror\/view/);
+  assert.match(c.message, /\^6\.42\.0/);   // required range
+  assert.match(c.message, /6\.39\.16/);    // pinned version
+});
+
+test('coherence PASSES on a coherent graph', async () => {
+  const dir = tmpDir();
+  const coherence = await coherenceInjection({
+    live: CM_LIVE, vendored: CM_VENDORED, getManifest: CM_COHERENT_MANIFEST,
+  });
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  assert.equal(byName(results, 'importmap-coherence').status, 'pass');
+});
+
+test('coherence PARITY: live-only and vendored-only inputs reach the SAME verdict', async () => {
+  const dir = tmpDir();
+  // Skew, live importmap only.
+  const liveOnly = await runDoctorChecks(dir, baseOpts({
+    nodeVersion: '24.0.0',
+    coherence: await coherenceInjection({ live: CM_LIVE, vendored: null, getManifest: CM_SKEW_MANIFEST }),
+  }));
+  // Skew, vendored importmap only.
+  const vendoredOnly = await runDoctorChecks(dir, baseOpts({
+    nodeVersion: '24.0.0',
+    coherence: await coherenceInjection({ live: null, vendored: CM_VENDORED, getManifest: CM_SKEW_MANIFEST }),
+  }));
+  const a = byName(liveOnly, 'importmap-coherence');
+  const b = byName(vendoredOnly, 'importmap-coherence');
+  assert.equal(a.status, b.status, 'the verdict must not depend on which importmap carried the dep set');
+  assert.equal(a.status, 'warn');
+  assert.equal(a.message, b.message, 'same dep set -> identical warning text');
+});
+
+test('coherence PASSES (skips) when there is no vendor importmap at all', async () => {
+  const dir = tmpDir();
+  const coherence = await coherenceInjection({ live: {}, vendored: null, getManifest: () => null });
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'pass');
+  assert.match(c.message, /no npm packages on the client|No vendor importmap/i);
+});
+
+test('coherence degrades to could-not-verify when metadata is unavailable (no crash, no false warn)', async () => {
+  const dir = tmpDir();
+  // Importmap present, but every manifest lookup returns null (not installed).
+  const coherence = await coherenceInjection({ live: CM_LIVE, vendored: null, getManifest: () => null });
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'warn');
+  assert.match(c.message, /[Cc]ould not verify/);
+  assert.doesNotMatch(c.message, /Incoherent/, 'missing metadata must not be reported as a conflict');
+});
+
+test('coherence never throws out of runDoctorChecks even if the check itself throws', async () => {
+  const dir = tmpDir();
+  const coherence = {
+    check: async () => { throw new Error('boom'); },
+    getManifest: () => null,
+    liveImports: async () => CM_LIVE,
+    vendoredImports: async () => null,
+  };
+  // Must resolve, not reject.
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', coherence }));
+  const c = byName(results, 'importmap-coherence');
+  assert.equal(c.status, 'warn', 'a thrown check degrades to a warn');
+});
+
+test('@webjsdev/server re-exports checkImportmapCoherence for the un-stubbed doctor path', async () => {
+  const mod = await import('@webjsdev/server');
+  assert.equal(typeof mod.checkImportmapCoherence, 'function');
+  assert.equal(typeof mod.resolveVendorImports, 'function');
+  assert.equal(typeof mod.readPinFile, 'function');
+  assert.equal(typeof mod.scanBareImports, 'function');
+});
+
+test('the coherence check runs on the real import path (no coherence stub) without throwing', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  // No pin file, no client imports: the real path resolves an empty live map
+  // and a null vendored map, so the check passes (nothing to verify). Run
+  // WITHOUT opts.coherence to exercise the real @webjsdev/server wiring.
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0', vendor: undefined, coherence: undefined }));
+  const c = results.find((r) => r.name === 'importmap-coherence');
+  assert.ok(c, 'an importmap-coherence result is present');
+  assert.equal(c.status, 'pass', `empty app must pass, got: ${c.status} ${c.message}`);
+});
+
+// ---------------------------------------------------------------------------
 // CLI integration: exit code behavior.
 // ---------------------------------------------------------------------------
 function runCli(cwd) {
