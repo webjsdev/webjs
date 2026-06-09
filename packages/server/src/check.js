@@ -998,7 +998,27 @@ async function checkServerImportInBrowserModule(appDir, violations) {
     // is not in the result. A direct OR indirect server import both surface,
     // because the closure walks every non-server edge until it hits one.
     const closure = transitiveDeps(moduleGraph, [file], appDir);
-    const serverDep = closure.find((d) => /\.server\.m?[jt]s$/.test(d));
+    // Of the reachable server files, find one that is a genuine throw-at-load
+    // crash in the browser. TWO kinds of `.server.*` import are NOT crashes and
+    // must be skipped, or the rule false-positives on legitimate code:
+    //   - A `'use server'` ACTION. The browser receives a working RPC stub
+    //     whose exports POST to the server, so calling it from a shipping
+    //     module is the intended pattern (the issue even lists it as a fix).
+    //     Only a bare `.server.*` utility (no directive) gets the
+    //     throw-at-module-load stub that crashes the page.
+    //   - A PHANTOM edge to a file that does not exist on disk. The module
+    //     graph keeps quoted-string CONTENT verbatim, so an `import` written
+    //     inside a code-example string (the docs / website `<pre>` samples)
+    //     resolves to a non-existent path. That import never runs, so it is
+    //     not a crash; require the server file to actually exist.
+    let serverDep = null;
+    for (const d of closure) {
+      if (!/\.server\.m?[jt]s$/.test(d)) continue;
+      if (await isUseServerActionFile(d)) continue; // working RPC stub, not a crash
+      if (!(await pathExists(d))) continue;          // phantom edge from a string sample
+      serverDep = d;
+      break;
+    }
     if (!serverDep) continue;
 
     const { kind } = candidates.get(file);
@@ -1037,6 +1057,28 @@ async function checkServerImportInBrowserModule(appDir, violations) {
  * @param {string} appDir
  * @returns {Promise<boolean>}
  */
+/**
+ * True if `file` is a `'use server'` action: a `.server.{ts,js}` module that
+ * declares the `'use server'` directive. The dev server rewrites its browser
+ * import into a working RPC stub (exports POST to the server), so importing it
+ * from a shipping module is legitimate, NOT the throw-at-load crash the
+ * no-server-import-in-browser-module rule catches. A bare `.server.*` utility
+ * (no directive) instead gets a stub that throws when the module loads, which
+ * IS the crash. Returns false on any read failure (treat an unreadable server
+ * file as a potential crash, the conservative direction for this rule).
+ *
+ * @param {string} file absolute path to a `.server.*` file
+ * @returns {Promise<boolean>}
+ */
+async function isUseServerActionFile(file) {
+  try {
+    const content = await readFile(file, 'utf8');
+    return hasUseServerDirective(content);
+  } catch {
+    return false;
+  }
+}
+
 async function readElideEnabledForCheck(appDir) {
   const raw = process.env.WEBJS_ELIDE;
   if (raw != null) {

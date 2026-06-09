@@ -111,6 +111,66 @@ export default async function ProjectPage() {
   }
 });
 
+// A `'use server'` ACTION imported by a shipping page is NOT a crash and must
+// NOT be flagged. The browser receives a working RPC stub (exports POST to the
+// server), so calling it from a shipping module is the intended pattern. This
+// is the single biggest false-positive class the rule must avoid (it fired on
+// every dogfood app before the directive check): a `.server.ts` with
+// `'use server'` is fundamentally different from a bare server-only utility
+// whose stub throws at load.
+test('a use-server action imported by a shipping page is NOT flagged', async () => {
+  const appDir = await makeApp({
+    'modules/posts/actions/create-post.server.ts': `'use server';
+export async function createPost(input: { title: string }) {
+  return { id: '1', title: input.title };
+}
+`,
+    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
+    'app/project/page.ts': `import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+import '../../modules/workspace/components/crisp-workspace.ts';
+export default async function ProjectPage() {
+  await createPost({ title: 'hi' });
+  return \`<crisp-workspace></crisp-workspace>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0,
+      'a use-server action resolves to a working RPC stub, so it is not a crash and must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// A phantom edge from a code-example STRING (an `import` written inside a
+// quoted string the module graph keeps verbatim) resolves to a non-existent
+// file and must not be flagged: that import never runs. Mirrors the docs /
+// website `<pre>` samples that tripped the rule before the on-disk check.
+test('a server import that only appears inside a code-example string is NOT flagged', async () => {
+  const appDir = await makeApp({
+    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
+    'app/docs/page.ts': `import '../../modules/workspace/components/crisp-workspace.ts';
+// A code sample shown in the page body; the import below is a STRING, not a
+// real import, and points at a file that does not exist on disk.
+const SAMPLE = [
+  "import { prisma } from '../lib/prisma.server.ts';",
+  "export const x = 1;",
+];
+export default function DocsPage() {
+  return \`<pre>\${SAMPLE.join('\\n')}</pre><crisp-workspace></crisp-workspace>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0,
+      'a server path that only appears in a code-example string must not be flagged (phantom edge, file does not exist)');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 // (c) A `.server.ts` importing another `.server.ts` -> no violation.
 // Server-to-server is fine; neither file is a component or a route module the
 // browser loads, so neither is a candidate.
