@@ -113,6 +113,34 @@ which fails if a new `WebComponent` hook is added without teaching the
 analyser about it. If you add an interactivity feature to the framework,
 update that file.
 
+### Elision is what keeps a server import off a display-only page (and `webjs check` guards the seam)
+
+Elision is also why a page can call a server-only utility and stay
+browser-safe, and why the same code crashes once the page gains client
+work. A page that does `const s = await auth()` (where `auth` comes from
+a `lib/auth.server.ts` UTILITY, no `'use server'`) is fine while the page
+is display-only: the framework elides the page, strips the server import,
+and the browser never sees it. The moment the page also imports a
+component to register it (`import '../components/workspace.ts'`), enables
+the client router, or uses a reactive primitive, the page stops being
+display-only, must load in the browser to do that work, and drags the
+server import with it. In the browser that import is a throw-at-load
+stub, so the page crashes the instant its module loads. `webjs typecheck`
+and the rest of `webjs check` pass; only the running page fails. This was
+the single biggest source of extra AI iterations when porting a real app.
+
+`webjs check`'s `no-server-import-in-browser-module` rule catches it
+statically. It reuses the SAME elision verdict described above (over the
+module graph, scanned components, and route table), so it flags ONLY a
+module that genuinely ships: a display-only page the framework elides is
+never flagged, because its server import really is stripped. The fix it
+suggests is the three legitimate shapes: gate the route in
+`middleware.ts` (server-only, never shipped), call the server through a
+`'use server'` ACTION (its browser stub is a working RPC, so it is
+exempt), or register the component in a `layout.{ts,js}` so the page
+elides again. Server-to-server imports (`.server.ts` importing
+`.server.ts`) and `middleware.ts` / `route.ts` are never flagged.
+
 ### Turning elision off
 
 Elision is on by default. To disable it app-wide, set `elide` to `false`
