@@ -106,6 +106,11 @@ export default async function ProjectPage() {
     assert.ok(v.file.includes('project/page.ts'), 'names the offending file');
     assert.ok(v.message.includes('auth.server.ts'), 'names the offending server import');
     assert.ok(/middleware|use server|layout/i.test(v.fix), 'fix names a concrete remedy');
+    // A page that became browser-bound by importing a component CAN elide, so it
+    // additionally gets the "register the component in a layout so it elides
+    // again" option (the boundary kinds do not).
+    assert.ok(/elide/i.test(v.fix) && /layout/.test(v.fix),
+      'a component-induced page is offered the elide-via-layout remedy');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -302,6 +307,17 @@ export default async function ErrorBoundary() {
     assert.equal(hits.length, 1, 'an error boundary that ships and imports a server module must be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
     assert.ok(/error boundary/.test(hits[0].message), 'identifies it as an error boundary');
+    // An error boundary always ships and is never elided, so the fix must NOT
+    // offer the "register the component in a layout so it elides again" remedy
+    // (that path is impossible for a boundary). It may still state the fact that
+    // it is never elided; what it must not do is suggest making it elide.
+    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
+      'a never-elided boundary must not be offered the elide-via-layout remedy');
+    assert.ok(/middleware/.test(hits[0].fix) && /use server/.test(hits[0].fix),
+      'a boundary fix offers the middleware + use-server remedies');
+    // Grammar: never "a error boundary" (wrong article before a vowel sound).
+    assert.ok(!/\ba error boundary/.test(hits[0].fix) && !/\ba error boundary/.test(hits[0].message),
+      'uses the correct article for "error boundary"');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -324,6 +340,11 @@ export default async function NotFound() {
     assert.equal(hits.length, 1, 'a personalized not-found page that ships and imports a server module must be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
     assert.ok(/not-found page/.test(hits[0].message), 'identifies it as a not-found page');
+    // A not-found page always ships and is never elided, so no "elides again".
+    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
+      'a never-elided not-found page must not be offered the elide-via-layout remedy');
+    assert.ok(/middleware/.test(hits[0].fix) && /use server/.test(hits[0].fix),
+      'a not-found fix offers the middleware + use-server remedies');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -346,6 +367,8 @@ export default async function Loading() {
     assert.equal(hits.length, 1, 'a loading boundary that ships and imports a server module must be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
     assert.ok(/loading boundary/.test(hits[0].message), 'identifies it as a loading boundary');
+    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
+      'a never-elided loading boundary must not be offered the elide-via-layout remedy');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

@@ -1075,13 +1075,22 @@ async function checkServerImportInBrowserModule(appDir, violations) {
       ? `${relFile} -> ${relServer}`
       : `${relFile} -> … -> ${relServer}`;
 
+    // The "register the component in a layout so it elides again" remedy only
+    // applies to a page / layout, which CAN elide (it became browser-bound by
+    // importing a component). The error / loading / not-found boundaries always
+    // ship and are never elided, so offering them an "elides again" fix is
+    // wrong. Branch the fix text on whether the kind can elide.
+    const canElide = kind === 'page' || kind === 'layout';
+    const fixText = canElide
+      ? `Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) if this ${kind} only became browser-bound because it imports a component to register, register that component in a \`layout.{ts,js}\` instead so the ${kind} elides again and its server import is stripped.`
+      : `Keep the server call off this browser-shipped ${kind} (it always ships and is never elided). Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); or (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
+
     violations.push({
       rule: 'no-server-import-in-browser-module',
       file: relFile,
       message:
-        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}). In the browser that import resolves to a stub, so the page crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running page fails.`,
-      fix:
-        `Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) if this is a ${kind} that only became browser-bound because it imports a component to register, register that component in a \`layout.{ts,js}\` instead so the ${kind} elides again and its server import is stripped.`,
+        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}). In the browser that import resolves to a stub, so the module crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running ${kind} fails.`,
+      fix: fixText,
     });
   }
 }
