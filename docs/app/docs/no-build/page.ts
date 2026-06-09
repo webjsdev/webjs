@@ -108,6 +108,7 @@ Pinning vendor packages from /home/me/my-app...
   zod@3.23.8
 Pinned 2 packages, wrote .webjs/vendor/importmap.json.</pre>
     <p>This writes <code>.webjs/vendor/importmap.json</code> with the resolved jspm.io URLs. Commit the file to source control. The server reads it from disk on the first request (memoized for the process), never at boot; no <code>api.jspm.io</code> call needed.</p>
+    <p>The pin output is meant to be committed, so <code>webjs vendor pin</code> keeps it committable for you. The scaffold's <code>.gitignore</code> already excludes the transient <code>.webjs</code> caches (the generated <code>routes.d.ts</code>) while un-ignoring <code>.webjs/vendor/</code>, so a fresh app needs nothing. If your <code>.gitignore</code> would swallow the pins (for example an older or hand-edited one with a blanket <code>.webjs/</code> line), pinning adds the <code>!.webjs/vendor/</code> exception for you and tells you to <code>git add .gitignore .webjs/vendor</code>. When the exclusion lives somewhere it cannot patch (a parent repo's <code>.gitignore</code>, or <code>.git/info/exclude</code>), it prints a one-line notice with the exact lines to add instead. A no-vendor app, which never runs this command, is untouched.</p>
     <p>For offline-capable production (compliance, air-gapped, strict CSP), add <code>--download</code>:</p>
     <pre>$ webjs vendor pin --download
 Pinning vendor packages from /home/me/my-app (downloading bundles)...

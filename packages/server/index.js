@@ -30,6 +30,7 @@ export {
   hasVendorPin,
   updatePinned,
   readPinFile,
+  ensureVendorCommittable,
   serveDownloadedBundle,
   SUPPORTED_PROVIDERS,
   normalizeProvider,
