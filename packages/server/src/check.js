@@ -929,10 +929,24 @@ export async function checkConventions(appDir) {
  *      into), so a server file pulled in only through another server file is
  *      not attributed to a browser module that never reaches it directly.
  *
+ * Also flagged: error / loading / not-found modules. These ship to the browser
+ * too (the dev server's `computeBrowserBoundFiles` adds them unconditionally)
+ * and are never elided, so a server import reaching one of them is the same
+ * throw-at-load crash.
+ *
  * Never flagged: a `.server.ts` importing another `.server.ts` (server-to-
  * server, and `.server.*` modules are not components nor route modules), and
  * `middleware.ts` / `route.ts` (server-only, never page/layout/component
  * entries, so they are not in the candidate set to begin with).
+ *
+ * Known limitation: a DYNAMIC `import('./x.server.ts')` is invisible to this
+ * rule. The framework's import scanner (`IMPORT_RE` in module-graph.js) matches
+ * only static `import`/`export … from`, not the `import(` call form, so a
+ * dynamic server import is not a graph edge here. This is deliberate and
+ * consistent with the framework-wide graph: a dynamic import is also not elided
+ * framework-wide, and its crash is deferred to call time (when the chunk is
+ * fetched), not module load. Catching it would mean teaching the shared scanner
+ * about `import(`, which is out of scope for this rule.
  *
  * @param {string} appDir
  * @param {Violation[]} violations  appended to in place
@@ -964,6 +978,27 @@ async function checkServerImportInBrowserModule(appDir, violations) {
   }
   const routeModules = [...routeModuleSet];
 
+  // error / loading / not-found modules ALSO ship to the browser, but unlike
+  // pages + layouts they are never elided: the dev server's
+  // `computeBrowserBoundFiles` adds them to the browser-bound entry set
+  // unconditionally (only ELIDABLE-COMPONENT imports are ever stripped, and
+  // these modules have no component to strip). So a personalized 404 that does
+  // `await auth()` is a real throw-at-load crash the page+layout-only candidate
+  // set would miss. Collect them here and add them to the candidate set as
+  // always-shipping (no elision verdict to consult).
+  /** @type {Map<string, string>} abs file -> kind */
+  const alwaysShipRouteModules = new Map();
+  for (const page of routeTable.pages || []) {
+    for (const f of page.errors || []) alwaysShipRouteModules.set(f, 'error boundary');
+    for (const f of page.loadings || []) alwaysShipRouteModules.set(f, 'loading boundary');
+  }
+  if (routeTable.notFound) alwaysShipRouteModules.set(routeTable.notFound, 'not-found page');
+  if (routeTable.notFounds) {
+    for (const f of routeTable.notFounds.values()) {
+      alwaysShipRouteModules.set(f, 'not-found page');
+    }
+  }
+
   // The elision flag mirrors `dev.js`: respect `webjs.elide === false` and the
   // WEBJS_ELIDE override. When elision is OFF, the build ships EVERY component
   // and route module, so the verdict is "nothing is elidable / inert" and the
@@ -988,6 +1023,12 @@ async function checkServerImportInBrowserModule(appDir, violations) {
     const base = basename(file);
     const kind = /^layout\./.test(base) ? 'layout' : 'page';
     candidates.set(file, { kind });
+  }
+  // error / loading / not-found modules always ship (never elided), so they are
+  // candidates unconditionally. A page/layout entry already in `candidates`
+  // wins (it is the more specific kind); these only add files not already seen.
+  for (const [file, kind] of alwaysShipRouteModules) {
+    if (!candidates.has(file)) candidates.set(file, { kind });
   }
 
   // Report at most once per module (a page importing two server modules is one

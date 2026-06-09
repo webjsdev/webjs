@@ -277,6 +277,160 @@ export default function Home() { return '<user-badge></user-badge>'; }
   }
 });
 
+// error.ts / loading.ts / not-found.ts ALSO ship to the browser, and unlike
+// pages + layouts they are never elided (the dev server's
+// computeBrowserBoundFiles adds them as browser-bound entries unconditionally;
+// only elidable-component imports are ever stripped). So a server-only import
+// reaching one of them is a real throw-at-load browser crash the rule must
+// catch. A page+layout-only candidate set would miss it (it did: 0 hits before
+// this). The fixtures pair each boundary with a sibling page so the router
+// attaches it (error/loading attach to a page in the same chain).
+test('an error boundary importing a server module IS flagged', async () => {
+  const appDir = await makeApp({
+    'lib/auth.server.ts': AUTH_SERVER,
+    'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
+    'app/error.ts': `import { auth } from '../lib/auth.server.ts';
+export default async function ErrorBoundary() {
+  const session = await auth();
+  return \`<p>Sorry \${session.user ?? 'guest'}, something broke</p>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    const hits = find(violations, 'error.ts');
+    assert.equal(hits.length, 1, 'an error boundary that ships and imports a server module must be flagged');
+    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
+    assert.ok(/error boundary/.test(hits[0].message), 'identifies it as an error boundary');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('a not-found page importing a server module IS flagged', async () => {
+  const appDir = await makeApp({
+    'lib/auth.server.ts': AUTH_SERVER,
+    'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
+    'app/not-found.ts': `import { auth } from '../lib/auth.server.ts';
+export default async function NotFound() {
+  const session = await auth();
+  return \`<h1>404 for \${session.user ?? 'guest'}</h1>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    const hits = find(violations, 'not-found.ts');
+    assert.equal(hits.length, 1, 'a personalized not-found page that ships and imports a server module must be flagged');
+    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
+    assert.ok(/not-found page/.test(hits[0].message), 'identifies it as a not-found page');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('a loading boundary importing a server module IS flagged', async () => {
+  const appDir = await makeApp({
+    'lib/auth.server.ts': AUTH_SERVER,
+    'app/dashboard/page.ts': `export default function Dash() { return '<h1>dash</h1>'; }\n`,
+    'app/dashboard/loading.ts': `import { auth } from '../../lib/auth.server.ts';
+export default async function Loading() {
+  const session = await auth();
+  return \`<p>Loading for \${session.user ?? 'guest'}…</p>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    const hits = find(violations, 'loading.ts');
+    assert.equal(hits.length, 1, 'a loading boundary that ships and imports a server module must be flagged');
+    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
+    assert.ok(/loading boundary/.test(hits[0].message), 'identifies it as a loading boundary');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// An error / loading / not-found module that imports only a 'use server' action
+// is still exempt (working RPC stub, not a crash) and a phantom string edge from
+// such a module is still ignored: the new candidates honor the same guards as
+// pages and components.
+test('an error boundary importing only a use-server action is NOT flagged', async () => {
+  const appDir = await makeApp({
+    'modules/log/actions/report.server.ts': `'use server';
+export async function report(input: { msg: string }) { return { ok: true, msg: input.msg }; }
+`,
+    'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
+    'app/error.ts': `import { report } from '../modules/log/actions/report.server.ts';
+export default async function ErrorBoundary() {
+  await report({ msg: 'boom' });
+  return '<p>handled</p>';
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0,
+      'an error boundary calling a use-server action (working RPC stub) must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// A code-example `import` written as a plain quoted STRING whose path resolves
+// to a REAL in-repo `.server.ts` must NOT create a graph edge and must NOT be
+// flagged. This is the live false-positive webjs's own docs / website pages hit:
+// a shipping page that shows `import { prisma } from '…lib/prisma.server.ts'` in
+// a code sample, where that path is a real file. The module-graph scanner now
+// masks string-embedded imports (blankStrings), so the string never becomes an
+// edge; a REAL import statement to the same file still does.
+test('a real-path server import inside a code-example string is NOT flagged', async () => {
+  const appDir = await makeApp({
+    // A REAL server file the example string names.
+    'lib/prisma.server.ts': `export const prisma = { user: { findMany() { return []; } } };\n`,
+    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
+    // A shipping page (registers a component) that shows the import in a STRING.
+    'app/docs/page.ts': `import '../../modules/workspace/components/crisp-workspace.ts';
+const SAMPLE = "import { prisma } from '../../lib/prisma.server.ts';";
+export default function DocsPage() {
+  return \`<pre>\${SAMPLE}</pre><crisp-workspace></crisp-workspace>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0,
+      'a server path shown in a code-example string (even a real file) must not create an edge or be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// The counterpart to the case above: the SAME real server file, imported as a
+// genuine top-level statement (not inside a string) on a shipping page, still
+// flags. This proves the string mask did not over-blank real imports.
+test('a real server import statement on a shipping page IS still flagged', async () => {
+  const appDir = await makeApp({
+    'lib/prisma.server.ts': `export const prisma = { user: { findMany() { return []; } } };\n`,
+    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
+    'app/docs/page.ts': `import { prisma } from '../../lib/prisma.server.ts';
+import '../../modules/workspace/components/crisp-workspace.ts';
+export default async function DocsPage() {
+  const users = prisma.user.findMany();
+  return \`<crisp-workspace count="\${users.length}"></crisp-workspace>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    const hits = find(violations, 'docs/page.ts');
+    assert.equal(hits.length, 1, 'a real server import statement on a shipping page must still be flagged');
+    assert.ok(hits[0].message.includes('prisma.server.ts'), 'names the real server import');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 // With elision disabled (webjs.elide === false), EVERY module ships, so even a
 // display-only page importing a server module is flagged: with elision off the
 // page really does ship its server import. This guards the elide-flag wiring.

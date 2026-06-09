@@ -141,6 +141,18 @@ exempt), or register the component in a `layout.{ts,js}` so the page
 elides again. Server-to-server imports (`.server.ts` importing
 `.server.ts`) and `middleware.ts` / `route.ts` are never flagged.
 
+The rule covers every module the build ships, not just pages: a shipping
+component, and `error.{ts,js}` / `loading.{ts,js}` / `not-found.{ts,js}`
+modules, are checked too. Those three boundaries always ship and are
+never elided (only an elidable component import is ever stripped), so a
+personalized 404 that does `await auth()` is the same throw-at-load crash
+and is flagged. One known gap: a DYNAMIC `import('./x.server.ts')` is not
+caught, because the framework's import scanner tracks only static
+`import` / `export … from`, not the `import(` call form. That is
+consistent with the rest of the framework (a dynamic import is also not
+elided framework-wide, and its crash is deferred to call time, not module
+load), so the rule leaves it to the runtime.
+
 ### Turning elision off
 
 Elision is on by default. To disable it app-wide, set `elide` to `false`
