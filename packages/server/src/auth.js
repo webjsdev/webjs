@@ -192,6 +192,13 @@ export function GitHub(opts = {}) {
 
 /**
  * Create the auth system.
+ *
+ * The session-user shape is typed via the `@webjsdev/server` overlay: augment
+ * its `AuthUser` interface (NextAuth/Auth.js style) for global typing, or call
+ * `createAuth<MyUser>(...)` from TypeScript for per-instance typing. See #451
+ * and the auth recipe. This JSDoc keeps the loose runtime shape; the precise
+ * typing lives in `index.d.ts` (types-only, no runtime effect).
+ *
  * @param {AuthConfig} config
  * @returns {{
  *   auth: (req?: Request) => Promise<{ user: Record<string,unknown> }|null>,

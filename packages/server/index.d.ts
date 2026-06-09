@@ -701,6 +701,43 @@ export interface ProviderConfig {
   [key: string]: unknown;
 }
 
+/**
+ * The augmentable session-user interface (#451), NextAuth/Auth.js style.
+ *
+ * It is EMPTY by default. An app declares the fields its `session`/`jwt`
+ * callbacks set (e.g. crisp sets `session.user.id = token.uid`) by augmenting
+ * it, which then types every `auth()` call globally with no cast and catches
+ * typos:
+ *
+ * ```ts
+ * declare module '@webjsdev/server' {
+ *   interface AuthUser {
+ *     id: string;
+ *     username: string;
+ *   }
+ * }
+ * ```
+ *
+ * Left un-augmented, `auth().user` falls back to `Record<string, unknown>` (see
+ * {@link ResolvedAuthUser}), so every pre-#451 app that reads `user.<field>`
+ * without declaring a shape keeps compiling unchanged. For per-instance typing
+ * instead of a global augmentation, parameterise the factory:
+ * `createAuth<MyUser>(...)`, whose `auth()` returns `{ user: MyUser }`.
+ */
+export interface AuthUser {}
+
+/**
+ * The resolved session-user shape used when `createAuth` is called WITHOUT an
+ * explicit type argument: the augmented {@link AuthUser} when an app declared
+ * one, else the open `Record<string, unknown>` (the pre-#451 default). The
+ * `keyof` probe is how the un-augmented empty interface degrades to the loose
+ * record so existing untyped code is unaffected, while an augmented interface
+ * gives precise, typo-catching fields.
+ */
+export type ResolvedAuthUser = keyof AuthUser extends never
+  ? Record<string, unknown>
+  : AuthUser;
+
 /** Auth configuration for `createAuth`. */
 export interface AuthConfig {
   providers: ProviderConfig[];
@@ -711,9 +748,15 @@ export interface AuthConfig {
   pages?: { signIn?: string; signOut?: string; error?: string };
 }
 
-/** The auth system created by `createAuth`. */
-export interface AuthInstance {
-  auth: (req?: Request) => Promise<{ user: Record<string, unknown> } | null>;
+/**
+ * The auth system created by `createAuth`. `TUser` is the resolved session-user
+ * shape; it defaults to {@link ResolvedAuthUser} (the augmented {@link AuthUser}
+ * if an app declared one, else `Record<string, unknown>`) so a module
+ * augmentation flows to every `auth()` call, and can be overridden per instance
+ * via `createAuth<MyUser>(...)`.
+ */
+export interface AuthInstance<TUser = ResolvedAuthUser> {
+  auth: (req?: Request) => Promise<{ user: TUser } | null>;
   signIn: (
     provider: string,
     data?: Record<string, unknown>,
@@ -723,8 +766,14 @@ export interface AuthInstance {
   handlers: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> };
 }
 
-/** Create the auth system. */
-export declare function createAuth(config: AuthConfig): AuthInstance;
+/**
+ * Create the auth system. Parameterise with the session-user shape
+ * (`createAuth<MyUser>(...)`) for per-instance typing, or augment the
+ * {@link AuthUser} interface for global typing; both make `auth().user` typed
+ * with no cast. Defaults to the open {@link AuthUser}, so existing untyped code
+ * keeps compiling unchanged.
+ */
+export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
 /** The credentials (email/password) provider. */
 export declare function Credentials(opts: Record<string, unknown>): ProviderConfig;
 /** The Google OAuth provider. */
