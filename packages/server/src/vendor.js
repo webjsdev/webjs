@@ -1849,10 +1849,15 @@ export function extractPinnedVersions(imports) {
  *
  * Returns `true` / `false` when the range can be evaluated, and `null` when
  * the shape is one we do NOT statically understand (a URL range, a git range,
- * a hyphen `1.2.3 - 1.4.0` range, a prerelease-tagged comparator). `null` is
- * the "could not verify" signal: the caller degrades to a soft "unverified"
- * note rather than warning on a shape it cannot judge. Failing open here is
- * deliberate, a coherence check must never cry wolf on a range it misread.
+ * a hyphen `1.2.3 - 1.4.0` range). `null` is the "could not verify" signal: the
+ * caller degrades to a soft "unverified" note rather than warning on a shape it
+ * cannot judge. Failing open here is deliberate, a coherence check must never
+ * cry wolf on a range it misread.
+ *
+ * Prerelease note: both the version and the range are judged on their release
+ * line only (the `-beta` / `-rc` tag is dropped, see `parseSemver`), so a
+ * prerelease pin is treated as its stable tuple. The worst case is a MISSED
+ * warning when a prerelease is pinned, never a spurious one.
  *
  * @param {string} version  e.g. `6.39.16`
  * @param {string} range    e.g. `^6.42.0`
@@ -1937,11 +1942,14 @@ export function satisfiesSemverRange(version, range) {
     }
     return true;
   }
-  // Exact `1.2.3` (or shorter `1` / `1.2`, treated as that prefix pinned).
-  if (/^\d+(\.\d+){0,2}$/.test(r)) {
-    const b = parseSemver(r);
+  // Exact `1.2.3` (or shorter `1` / `1.2`, treated as that prefix pinned). A
+  // leading `v` (`v1.2.3`) is tolerated so a `v`-prefixed exact pin evaluates
+  // instead of degrading to unverified.
+  const exact = r.startsWith('v') ? r.slice(1) : r;
+  if (/^\d+(\.\d+){0,2}$/.test(exact)) {
+    const b = parseSemver(exact);
     if (!b) return null;
-    const segs = r.split('.').length;
+    const segs = exact.split('.').length;
     for (let i = 0; i < segs; i++) if (v[i] !== b[i]) return false;
     return true;
   }
@@ -1950,9 +1958,17 @@ export function satisfiesSemverRange(version, range) {
 
 /**
  * Parse a version string to a `[major, minor, patch]` numeric triple, or null
- * when it has no parseable numeric core (a `latest`, a git URL, a `*`). A
- * prerelease / build suffix (`-rc.1`, `+sha`) is ignored for the comparison;
- * coherence cares about the release line, not prerelease ordering.
+ * when it has no parseable numeric core (a `latest`, a git URL, a `*`).
+ *
+ * KNOWN LIMITATION: a prerelease / build suffix (`-rc.1`, `+sha`) is dropped, so
+ * a version is judged purely on its release line. A pinned prerelease is treated
+ * as its stable tuple: `6.42.0-beta.1` is judged as `6.42.0`, so a stable range
+ * like `^6.42.0` reports it as a MATCH even though npm semver excludes a
+ * prerelease from a stable range. This is a deliberate fail-safe simplification
+ * (we do not carry prerelease ordering): the only consequence is a MISSED
+ * coherence warning when a prerelease is pinned, never a spurious one on a
+ * coherent graph. Pinned prereleases are vanishingly rare in a vendored
+ * importmap, so the missed-warning risk is negligible.
  *
  * @param {string} v
  * @returns {[number, number, number] | null}

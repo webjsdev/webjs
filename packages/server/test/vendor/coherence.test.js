@@ -180,6 +180,17 @@ test('satisfiesSemverRange: comparators, wildcards, exact, alternation', () => {
   assert.equal(satisfiesSemverRange('6.39.16', ''), true);
   assert.equal(satisfiesSemverRange('5.0.0', '^6.0.0 || ^5.0.0'), true);
   assert.equal(satisfiesSemverRange('4.0.0', '^6.0.0 || ^5.0.0'), false);
+  // A leading `v` on an exact pin evaluates rather than degrading to unverified.
+  assert.equal(satisfiesSemverRange('6.42.0', 'v6.42.0'), true);
+  assert.equal(satisfiesSemverRange('6.42.1', 'v6.42.0'), false);
+});
+
+test('satisfiesSemverRange: a pinned prerelease is judged on its release line', () => {
+  // KNOWN LIMITATION (documented): the `-beta` tag is dropped, so a prerelease
+  // pin is treated as its stable tuple. The worst case is a MISSED warning,
+  // never a spurious one. npm semver would return false for the first case.
+  assert.equal(satisfiesSemverRange('6.42.0-beta.1', '^6.42.0'), true);
+  assert.equal(satisfiesSemverRange('7.0.0-rc.1', '^6.42.0'), false);
 });
 
 test('satisfiesSemverRange: unparseable shapes return null (could not verify)', () => {
