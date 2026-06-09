@@ -1222,7 +1222,10 @@ test('ssrNotFound: not-found.js that throws falls back to an inline error body',
 
 /* ------------ ssrPage: redirect / notFound / error boundaries ------------ */
 
-test('ssrPage: redirect() thrown during render → 3xx Response with location', async () => {
+test('ssrPage: redirect() thrown during a GET render → 302 Found by default', async () => {
+  // A gating redirect during a GET render (auth bounce) is GET-to-GET, so the
+  // default is 302, the conventional code there (not the method-preserving 307
+  // an action gets). #452.
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { redirect } from ${JSON.stringify(WEBJS_MODULE_URL)};\n` +
@@ -1230,8 +1233,34 @@ test('ssrPage: redirect() thrown during render → 3xx Response with location', 
   });
   const url = new URL('http://localhost/old');
   const resp = await ssrPage(route, {}, url, { dev: false, appDir });
-  assert.ok(resp.status >= 300 && resp.status < 400, `got status ${resp.status}`);
+  assert.equal(resp.status, 302, `got status ${resp.status}`);
   assert.equal(resp.headers.get('location'), '/login');
+});
+
+test('ssrPage: an explicit redirect() status overrides the 302 GET default', async () => {
+  // `redirect(url, 308)` (and the `{ status }` options form) must win over the
+  // GET-gate convention.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { redirect } from ${JSON.stringify(WEBJS_MODULE_URL)};\n` +
+      `export default function Page() { redirect('/perm', 308); }\n`,
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/old'), { dev: false, appDir });
+  assert.equal(resp.status, 308);
+  assert.equal(resp.headers.get('location'), '/perm');
+});
+
+test('ssrPage: the redirect() { status } options form overrides the 302 GET default', async () => {
+  // The end-to-end override path for the options form through the GET catch
+  // site, not just the sentinel unit test. #452.
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { redirect } from ${JSON.stringify(WEBJS_MODULE_URL)};\n` +
+      `export default function Page() { redirect('/perm', { status: 301 }); }\n`,
+  });
+  const resp = await ssrPage(route, {}, new URL('http://localhost/old'), { dev: false, appDir });
+  assert.equal(resp.status, 301);
+  assert.equal(resp.headers.get('location'), '/perm');
 });
 
 test('ssrPage: notFound() thrown during render → 404 Response', async () => {

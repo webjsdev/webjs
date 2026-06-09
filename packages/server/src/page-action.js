@@ -196,9 +196,11 @@ export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);
-      // A thrown redirect from an action is honored as the page render does.
-      // Use the action's chosen status (307/308) so an explicit redirect()
-      // keeps its semantics; PRG (303) is the SUCCESS-result path below.
+      // A thrown redirect from an action (a POST) defaults to 307 Temporary
+      // Redirect, which is method-preserving so the action's intent survives
+      // the bounce; an explicit `redirect(url, status)` overrides it. This is
+      // deliberately NOT the GET gate's 302 default (see ssr.js). PRG (303) is
+      // the SUCCESS-result path below.
       return new Response(null, { status: e.status || 307, headers: { location: e.url } });
     }
     if (isNotFound(err)) {

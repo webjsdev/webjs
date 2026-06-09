@@ -13,25 +13,50 @@ test('notFound throws an error with the sentinel', () => {
   }
 });
 
-test('redirect throws an error with URL and default status', () => {
+test('redirect throws a sentinel with URL and an UNSET status by default', () => {
+  // No status baked in: the catching site picks the convention (302 for a GET
+  // gate, 307 for an action). So the sentinel must carry `undefined`, not 307.
   try {
     redirect('/login');
     assert.fail('should have thrown');
   } catch (e) {
     assert.ok(isRedirect(e));
     assert.equal(e.url, '/login');
-    assert.equal(e.status, 307);
+    assert.equal(e.status, undefined);
     assert.equal(isNotFound(e), false);
   }
 });
 
-test('redirect accepts custom status code', () => {
+test('redirect accepts a positional custom status code', () => {
   try {
     redirect('/new-url', 308);
     assert.fail('should have thrown');
   } catch (e) {
     assert.ok(isRedirect(e));
     assert.equal(e.status, 308);
+  }
+});
+
+test('redirect accepts the { status } options form', () => {
+  try {
+    redirect('/new-url', { status: 301 });
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.ok(isRedirect(e));
+    assert.equal(e.url, '/new-url');
+    assert.equal(e.status, 301);
+  }
+});
+
+test('redirect with an empty options object leaves status unset', () => {
+  // `redirect(url, {})` is "no explicit status", same as the one-arg form, so
+  // the catching site still applies its convention.
+  try {
+    redirect('/x', {});
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.ok(isRedirect(e));
+    assert.equal(e.status, undefined);
   }
 });
 

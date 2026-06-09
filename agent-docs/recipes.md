@@ -32,6 +32,12 @@ transition agents most often get wrong, so it is the first recipe.
    }
    ```
 
+   Start the dev server with `npm run dev` (the canonical command), NOT a bare
+   `webjs dev`: `npm run dev` runs the `predev` hook (`prisma generate`) first,
+   while `webjs dev` skips it and boots against an ungenerated client. A bare
+   `webjs dev` will now warn and point you back at `npm run dev`, but use the
+   npm script from the start.
+
 2. **Migrate.** Run the npm script (not the `webjs`/`prisma` binary directly,
    so the `predev` / `db:*` hooks fire):
 
@@ -265,7 +271,7 @@ export default function Contact({ actionData }: {
 | Action outcome | HTTP response |
 |---|---|
 | success result (see the failure rule below) | `303 See Other` to a same-site `redirect` if present, else the page's own path (Post/Redirect/Get) |
-| thrown `redirect('/x')` | `307`/`308` (keeps the status `redirect()` was called with) |
+| thrown `redirect('/x')` | `307` (method-preserving, the action default since it is a POST), or the explicit status if `redirect('/x', 308)` / `redirect('/x', { status })` was used. A redirect thrown during a plain GET page render instead defaults to `302`. |
 | thrown `notFound()` | `404` rendered via `not-found.{js,ts}` |
 | failure result (`success: false`, or `fieldErrors`, or an `error`) | re-SSR the SAME page with `status` (default `422`) and the result on `ctx.actionData` |
 

@@ -521,19 +521,33 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
     <h3><code>redirect(url, status?)</code></h3>
     <p>
-      Aborts rendering and returns a redirect response. The default status is
-      <code>307</code> (temporary redirect). Pass <code>308</code> for a permanent
-      redirect.
+      Aborts rendering and returns a redirect response. When you do not pass a
+      status, the catching site picks the conventional one: a redirect thrown
+      during a <strong>GET</strong> page or layout render (a gate, an auth
+      bounce) becomes <code>302</code> Found, the usual GET-to-GET code; a
+      redirect thrown from a <strong>server action</strong> (a POST) becomes
+      <code>307</code> Temporary Redirect, which is method-preserving so the
+      action's intent survives. Pass an explicit status to override either
+      default: positionally as <code>redirect('/x', 308)</code>, or with the
+      options form <code>redirect('/x', { status: 301 })</code>.
     </p>
     <pre>import { redirect } from '@webjsdev/core';
 
 export default async function ProtectedPage() {
   const user = await getSession();
-  if (!user) redirect('/login');          // 307 temporary redirect
-  // if (!user) redirect('/login', 308);  // 308 permanent redirect
+  if (!user) redirect('/login');               // GET gate -> 302 Found
+  // if (!user) redirect('/login', 308);        // override -> 308 permanent
+  // if (!user) redirect('/login', { status: 301 }); // options form
 
   return html\`&lt;h1&gt;Welcome, \${user.name}&lt;/h1&gt;\`;
 }</pre>
+    <p>
+      Inside a server action, the same <code>redirect('/somewhere')</code>
+      defaults to <code>307</code> instead, so a POST that bounces keeps its
+      method. The Post/Redirect/Get success path (returning
+      <code>{ success: true, redirect }</code>) is separate and always uses
+      <code>303</code> See Other.
+    </p>
 
     <p>
       Both server helpers can be called from pages, layouts, and

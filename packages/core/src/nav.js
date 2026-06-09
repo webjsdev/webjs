@@ -22,15 +22,34 @@ export function notFound() {
 }
 
 /**
+ * Throw a redirect sentinel the SSR pipeline catches and turns into a 3xx.
+ *
+ * The status is OPTIONAL and, when omitted, is chosen by the catching site so
+ * each kind of redirect gets the conventional code:
+ *   - thrown during a GET page/layout render (a gating redirect like an auth
+ *     bounce to `/login`): 302 Found, the conventional GET-to-GET code.
+ *   - thrown from a server action (a POST): 307 Temporary Redirect, which is
+ *     method-preserving so the action's intent survives. (The PRG success
+ *     path uses 303 separately.)
+ * Pass an explicit status to override: `redirect('/x', 308)` (permanent) or the
+ * options form `redirect('/x', { status: 301 })`. An explicit status wins at
+ * every catching site.
+ *
  * @param {string} url
- * @param {number} [status] 307 (temp) by default; pass 308 for permanent
+ * @param {number | { status?: number }} [status] explicit status (number) or
+ *   `{ status }`; omit to let the catching site pick (302 for a GET gate, 307
+ *   for an action).
  * @returns {never}
  */
-export function redirect(url, status = 307) {
+export function redirect(url, status) {
+  const code = typeof status === 'object' && status !== null ? status.status : status;
   const err = new Error(`webjs: redirect(${url})`);
   /** @type any */ (err).__webjs = REDIRECT;
   /** @type any */ (err).url = url;
-  /** @type any */ (err).status = status;
+  // Left undefined when the caller did not specify one, so the catching site
+  // can apply its convention (302 GET gate vs 307 action). A caller-supplied
+  // code is stored verbatim and overrides that convention.
+  /** @type any */ (err).status = typeof code === 'number' ? code : undefined;
   throw err;
 }
 

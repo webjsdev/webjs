@@ -144,7 +144,10 @@ export default () => html\`<p>read-only</p>\`;
   assert.equal(post.status, 404, 'POST to an action-less page must 404');
 });
 
-test('action that throws redirect() is honored (307, not PRG 303)', async () => {
+test('action that throws redirect() defaults to 307 (method-preserving, not PRG 303)', async () => {
+  // An action is a POST, so a thrown redirect with no explicit status defaults
+  // to the method-preserving 307 here, deliberately NOT the GET gate's 302. The
+  // PRG success path (303) is separate. #452.
   const PAGE = `
 import { html, redirect } from ${CORE};
 export async function action() { redirect('/login'); }
@@ -155,7 +158,61 @@ export default () => html\`<p>x</p>\`;
   await app.warmup();
 
   const resp = await app.handle(new Request('http://x/gate', form({ x: '1' })));
-  assert.equal(resp.status, 307, 'thrown redirect keeps its own status');
+  assert.equal(resp.status, 307, 'thrown action redirect defaults to 307');
+  assert.equal(resp.headers.get('location'), '/login');
+});
+
+test('action that throws redirect() with an explicit status overrides the 307 default', async () => {
+  // `redirect(url, 303)` from an action wins over the 307 action default.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { redirect('/done', 303); }
+export default () => html\`<p>x</p>\`;
+`;
+  const appDir = makeApp({ 'app/gate2/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const resp = await app.handle(new Request('http://x/gate2', form({ x: '1' })));
+  assert.equal(resp.status, 303, 'explicit status wins');
+  assert.equal(resp.headers.get('location'), '/done');
+});
+
+test('action redirect with the { status } options form overrides through the catch site', async () => {
+  // The end-to-end override path for the options form (not just the sentinel
+  // unit test): redirect('/done', { status: 303 }) thrown from an action must
+  // land as a 303 at the real page-action catch site. #452.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { redirect('/done', { status: 303 }); }
+export default () => html\`<p>x</p>\`;
+`;
+  const appDir = makeApp({ 'app/gate3/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  const resp = await app.handle(new Request('http://x/gate3', form({ x: '1' })));
+  assert.equal(resp.status, 303, 'options-form status wins end-to-end');
+  assert.equal(resp.headers.get('location'), '/done');
+});
+
+test('a gate redirect thrown during the FAILED-action re-render returns 302 (GET-shaped)', async () => {
+  // A failed action re-renders the SAME page through ssrPage (a GET-shaped page
+  // render at 422). If THAT render throws a gate redirect, it resolves via the
+  // ssr.js catch site, so it gets the GET-gate 302 default, not the action 307.
+  // This pins that the re-render is treated as a page render. #452.
+  const PAGE = `
+import { html, redirect } from ${CORE};
+export async function action() { return { success: false, error: 'nope' }; }
+export default () => { redirect('/login'); };
+`;
+  const appDir = makeApp({ 'app/regate/page.ts': PAGE });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+
+  // POST drives the action (fails) -> re-render -> page throws redirect() -> 302.
+  const resp = await app.handle(new Request('http://x/regate', form({ x: '1' })));
+  assert.equal(resp.status, 302, 're-render gate redirect uses the GET 302 default');
   assert.equal(resp.headers.get('location'), '/login');
 });
 

@@ -77,7 +77,7 @@ README.md                npm-facing package readme.
 
 | Command | Implementation |
 |---|---|
-| `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })` |
+| `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })`. In the parent (pre-spawn) it runs the Prisma-client preflight (`lib/prisma-preflight.js`, #452): for a Prisma app (a `prisma/schema.prisma` or an `@prisma/client` dep) whose generated client is missing/stale, it prints a hint pointing at `npm run dev` (the canonical command, which runs the `predev` `prisma generate` hook) or `webjs db generate`. A bare `webjs dev` skips `predev`; the hint replaces the raw crash. Non-Prisma apps get nothing. A hint only, never an auto-run. |
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules] [--json]` | `checkConventions()` from `@webjsdev/server/check`. `--rules` lists the checks. `--json` emits the structured violations + a summary count as JSON (via `projectCheck` from `@webjsdev/mcp/check-report`, the same projector the MCP `check` tool uses, #415), so an agent in a loop consumes structured data instead of regex-scraping stdout; the non-zero exit on violations is preserved. Report-only: each violation carries a prose `fix` hint, but there is no `--fix` autofix flag (the rules either rewrite code or rename files, so an automatic codemod is not safe) |
