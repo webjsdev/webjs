@@ -304,6 +304,40 @@ core prop / metadata types rather than redefining them. The runtime stays plain
 `.js` + JSDoc; the overlay is types-only with zero runtime cost. A drift test
 keeps `index.d.ts` in lockstep with `index.js`'s runtime exports.
 
+### Typing the `auth()` session user
+
+`auth()` resolves `{ user }`, and by default `user` is `Record<string,
+unknown>`, so reading a custom field your `session`/`jwt` callbacks set
+(such as `session.user.id`) needs a cast and a typo is not caught. Two
+opt-in ways make `user` typed, both types-only.
+
+Augment the `AuthUser` interface (NextAuth/Auth.js style) to type every
+`auth()` call across the app:
+
+```ts
+declare module '@webjsdev/server' {
+  interface AuthUser {
+    id: string;
+    role: 'admin' | 'member';
+  }
+}
+```
+
+Or parameterise the factory to type one instance without a global
+augmentation. `createAuth<AppUser>(...)` returns an `auth()` whose `user`
+is `AppUser`:
+
+```ts
+const { auth } = createAuth<AppUser>({ secret, providers });
+const session = await auth();
+session?.user.role; // typed, no cast
+```
+
+Un-augmented and un-parameterised, `AuthUser` is empty and resolves back
+to `Record<string, unknown>`, so pre-existing untyped code keeps
+compiling. The declared fields should mirror what the callbacks write
+onto `session.user`.
+
 ### TypeScript is not required
 
 JS + JSDoc gets the same call-site type safety. The TypeScript language

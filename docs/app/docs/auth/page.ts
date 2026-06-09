@@ -85,6 +85,32 @@ export async function logout() {
   },
 });</pre>
 
+    <h2>Type the session</h2>
+    <p>By default <code>auth()</code> resolves <code>{ user: Record&lt;string, unknown&gt; }</code>, so reading a custom field your callbacks set (like <code>session.user.id</code>) needs a cast and a typo slips past TypeScript. Opt into a typed <code>user</code> one of two ways.</p>
+
+    <p><strong>Augment <code>AuthUser</code></strong> (NextAuth/Auth.js style) to type every <code>auth()</code> call across the app. Declare the fields your <code>session</code>/<code>jwt</code> callbacks set:</p>
+    <pre>// lib/auth.server.ts (or any .d.ts in the project)
+declare module '@webjsdev/server' {
+  interface AuthUser {
+    id: string;
+    role: 'admin' | 'member';
+  }
+}</pre>
+    <p>Now <code>session.user.id</code> is <code>string</code> everywhere, and a misspelling like <code>session.user.idd</code> is a compile error.</p>
+
+    <p><strong>Or parameterise the factory</strong> with <code>createAuth&lt;TUser&gt;()</code> to type just this instance, without a global augmentation:</p>
+    <pre>interface AppUser {
+  id: string;
+  role: 'admin' | 'member';
+}
+
+export const { auth, signIn, signOut, handlers } =
+  createAuth&lt;AppUser&gt;({ /* ...providers, secret */ });
+
+const session = await auth();
+session?.user.role; // typed as 'admin' | 'member', no cast</pre>
+    <p>Both are types-only and opt-in: leave them out and <code>auth().user</code> stays the loose <code>Record&lt;string, unknown&gt;</code>, so existing code keeps working unchanged. The fields you declare should match what your callbacks actually write onto <code>session.user</code>.</p>
+
     <h2>Providers</h2>
     <table>
       <thead><tr><th>Provider</th><th>Env vars</th><th>Flow</th></tr></thead>
