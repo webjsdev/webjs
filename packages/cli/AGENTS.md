@@ -46,6 +46,15 @@ lib/
                          `{ hasVendorPin, findOutdated }` pair (offline tests).
                          The bin renders + owns the non-zero exit on a hard fail.
                          Tests: `test/cli/doctor.test.mjs`.
+  port.js                Port resolution for `webjs dev` / `start` (#447).
+                         `loadAppEnv(appDir)` loads `<appDir>/.env` into
+                         `process.env` (same guard + shell-wins semantics as the
+                         server's own load); `resolvePort(portFlag, env?)` is the
+                         PURE resolver with precedence `--port` > `PORT` (real env
+                         or `.env`) > 8080. The bin calls `loadAppEnv` BEFORE
+                         `resolvePort` so a `.env` PORT is in `process.env` at
+                         resolution time; the server loads `.env` too but too late
+                         to affect the port the CLI computes. Tests: `test/port/`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Prisma schema,

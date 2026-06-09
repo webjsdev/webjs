@@ -11,7 +11,7 @@ export default function Configuration() {
     <h3>webjs dev</h3>
     <pre>webjs dev [--port 8080]</pre>
     <ul>
-      <li><code>--port</code>: dev server port (default: <code>8080</code>, or <code>PORT</code> env var)</li>
+      <li><code>--port</code>: dev server port. Precedence is <code>--port</code> &gt; <code>PORT</code> (a real env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> still wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
       <li>File watching via Node's built-in <code>fs.watch</code> (automatic)</li>
       <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
       <li>TypeScript files transformed on the fly</li>
@@ -21,7 +21,7 @@ export default function Configuration() {
     <h3>webjs start</h3>
     <pre>webjs start [--port 8080]</pre>
     <ul>
-      <li><code>--port</code>: production server port (also honors the <code>PORT</code> env var, default 8080)</li>
+      <li><code>--port</code>: production server port. Same precedence as <code>dev</code>: <code>--port</code> &gt; <code>PORT</code> (real env var or <code>.env</code>) &gt; <code>8080</code>.</li>
       <li>Speaks plain HTTP/1.1. TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
       <li>gzip/brotli compression enabled by default</li>
       <li>Static file ETag + Cache-Control headers</li>
