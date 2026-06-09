@@ -91,7 +91,12 @@ production. The Rails 7+ / Hotwire pattern:
   caches each bundle to `.webjs/vendor/<pkg>@<version>.js` and rewrites
   the importmap to `/__webjs/vendor/<pkg>@<version>.js` so the server
   serves the bytes from disk (air-gapped / strict-CSP path). No bundler
-  runs at any point.
+  runs at any point. Because the pins are meant to be committed,
+  `webjs vendor pin` makes its output committable: the scaffold already
+  un-ignores `.webjs/vendor/`, and if a `.gitignore` would swallow the
+  pins it heals it (or prints how to commit them when the ignore is not
+  in the app's own `.gitignore`). A no-vendor app, which never pins, is
+  unaffected.
 - **Per-file ESM serving**: every app `.js` / `.ts` becomes its own HTTP
   resource. The browser walks the import graph and fetches each module
   on demand.
