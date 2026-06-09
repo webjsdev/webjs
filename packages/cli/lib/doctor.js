@@ -463,7 +463,13 @@ async function checkImportmapCoherence(appDir, opts) {
     }
     const real = {
       check: mod.checkImportmapCoherence,
-      getManifest: makeInstalledManifestReader(appDir),
+      // Hoist-aware manifest read from the already-installed node_modules (no
+      // network of its own), so a monorepo-hoisted dep still resolves. Falls
+      // back to the local app/node_modules read if the server build predates
+      // getPackageManifest.
+      getManifest: typeof mod.getPackageManifest === 'function'
+        ? (pkg) => mod.getPackageManifest(pkg, appDir)
+        : makeInstalledManifestReader(appDir),
       // Live importmap: resolve vendor imports the way the server does on the
       // first request (prefers the pin file, else a live jspm.io resolve).
       liveImports: async () => {

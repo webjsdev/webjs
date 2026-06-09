@@ -21,6 +21,7 @@ export {
   resolveVendorImports,
   clearVendorCache,
   getPackageVersion,
+  getPackageManifest,
   jspmGenerate,
   pinAll,
   unpinPackage,

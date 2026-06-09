@@ -27,6 +27,7 @@ import {
   checkImportmapCoherence,
   extractPinnedVersions,
   satisfiesSemverRange,
+  getPackageManifest,
 } from '../../src/vendor.js';
 
 // The motivating #446 dep set, expressed two ways: as a LIVE importmap (jspm.io
@@ -209,4 +210,20 @@ test('extractPinnedVersions: a short name does not false-match inside another UR
   });
   assert.equal(map.get('terms'), '1.0.0');
   assert.equal(map.get('ms'), '2.1.3');
+});
+
+// --- getPackageManifest -----------------------------------------------------
+
+test('getPackageManifest: reads an installed package, hoist-aware', () => {
+  // picocolors is installed in this repo (hoisted to the workspace root). The
+  // coherence check reads dep ranges through this, so it must resolve a hoisted
+  // package, not only one under the appDir's own node_modules.
+  const m = getPackageManifest('picocolors', process.cwd());
+  assert.ok(m, 'expected a manifest object');
+  assert.equal(typeof m.dependencies, 'object');
+  assert.equal(typeof m.peerDependencies, 'object');
+});
+
+test('getPackageManifest: returns null for an unresolvable package (degrade signal)', () => {
+  assert.equal(getPackageManifest('this-package-truly-does-not-exist-xyz-123', process.cwd()), null);
 });

@@ -312,6 +312,11 @@ export declare function resolveVendorImports(
 export declare function clearVendorCache(): void;
 /** Read a package's installed version from `node_modules`, or null. */
 export declare function getPackageVersion(pkgName: string, appDir: string): string | null;
+/** Read a package's installed `dependencies` + `peerDependencies` (hoist-aware), or null. */
+export declare function getPackageManifest(
+  pkgName: string,
+  appDir: string,
+): { dependencies: Record<string, string>; peerDependencies: Record<string, string> } | null;
 /** Resolve a list of `pkg@version` installs to importmap entries via a provider. */
 export declare function jspmGenerate(installs: string[], provider?: string): Promise<Record<string, string>>;
 /** Pin every (or the named) bare imports to `.webjs/vendor/importmap.json`. */

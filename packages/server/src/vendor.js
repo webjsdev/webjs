@@ -258,6 +258,35 @@ export function getPackageVersion(pkgName, appDir) {
   }
 }
 
+/**
+ * Read the installed package's declared `dependencies` + `peerDependencies`
+ * from its `package.json`, hoist-aware (same resolution as `getPackageVersion`,
+ * so a monorepo-hoisted dep resolves from the workspace root). Returns null
+ * when the package is not installed / unreadable, which the importmap-coherence
+ * check (#450) treats as "could not verify" rather than a conflict.
+ *
+ * This is the "already-resolved metadata, no network" source the coherence
+ * check prefers: the package is on disk because the importmap pinned it, so its
+ * manifest is a local read.
+ *
+ * @param {string} pkgName
+ * @param {string} appDir
+ * @returns {{ dependencies: Record<string,string>, peerDependencies: Record<string,string> } | null}
+ */
+export function getPackageManifest(pkgName, appDir) {
+  const real = resolvePackageDir(pkgName, appDir);
+  if (!real) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
+    return {
+      dependencies: pkg.dependencies || {},
+      peerDependencies: pkg.peerDependencies || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // JSPM Generator API client
 // ---------------------------------------------------------------------------
