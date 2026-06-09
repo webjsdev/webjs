@@ -258,6 +258,35 @@ export function getPackageVersion(pkgName, appDir) {
   }
 }
 
+/**
+ * Read the installed package's declared `dependencies` + `peerDependencies`
+ * from its `package.json`, hoist-aware (same resolution as `getPackageVersion`,
+ * so a monorepo-hoisted dep resolves from the workspace root). Returns null
+ * when the package is not installed / unreadable, which the importmap-coherence
+ * check (#450) treats as "could not verify" rather than a conflict.
+ *
+ * This is the "already-resolved metadata, no network" source the coherence
+ * check prefers: the package is on disk because the importmap pinned it, so its
+ * manifest is a local read.
+ *
+ * @param {string} pkgName
+ * @param {string} appDir
+ * @returns {{ dependencies: Record<string,string>, peerDependencies: Record<string,string> } | null}
+ */
+export function getPackageManifest(pkgName, appDir) {
+  const real = resolvePackageDir(pkgName, appDir);
+  if (!real) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
+    return {
+      dependencies: pkg.dependencies || {},
+      peerDependencies: pkg.peerDependencies || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // JSPM Generator API client
 // ---------------------------------------------------------------------------
@@ -1738,6 +1767,341 @@ export function prunePinToReachable(imports, integrity, reachable) {
     if (keptUrls.has(url)) keptIntegrity[url] = hash;
   }
   return { imports: keptImports, integrity: keptIntegrity };
+}
+
+// ---------------------------------------------------------------------------
+// Importmap coherence check (issue #450)
+// ---------------------------------------------------------------------------
+//
+// A produced importmap pins one URL per resolved package, each URL carrying an
+// `@<version>`. That pinned graph is INCOHERENT when one resolved package
+// declares a dependency or peer range on ANOTHER resolved package and the
+// version actually pinned for that other package falls OUTSIDE the range. The
+// motivating crash (#446): `@codemirror/view@6.39.16` pinned while
+// `@codemirror/lint@6.9.6` (also pinned) needs `view@^6.42.0`, so a symbol
+// `lint` expects is missing from the older `view` bundle at runtime.
+//
+// This is a VALIDATION over a produced importmap, NOT a re-resolution (that is
+// #446's job) and NOT bundling. It emits warnings; it never mutates the map.
+//
+// PARITY: `checkImportmapCoherence` is a pure function of the EXTRACTED
+// `{ package -> pinned version }` set plus the dependency metadata. It does not
+// know or care whether the importmap came from a live jspm.io resolve or from a
+// committed `.webjs/vendor/importmap.json`. Two importmaps that pin the same
+// versions for the same packages therefore always produce the same verdict,
+// which is exactly the runtime-vs-vendored parity the maintainer requires.
+
+/**
+ * Extract `{ basePackage -> pinned version }` from an importmap's `imports`
+ * map. Each value is a CDN URL (jspm.io's `npm:dayjs@1.11.13/...`, jsdelivr's
+ * `npm/dayjs@1.11.13/...`, unpkg's bare `dayjs@1.11.13/...`, skypack's
+ * `dayjs@1.11.13`) or a local `/__webjs/vendor/<pkg>@<version>...js` path. The
+ * key is the bare package name parsed from the importmap KEY (the specifier),
+ * which is authoritative; the version is parsed from the URL.
+ *
+ * A specifier that resolves to a version we cannot parse from its URL is
+ * skipped (it contributes nothing to the dep graph rather than a wrong pin).
+ * When the same base package appears at several versions (subpath imports),
+ * the LAST parsed wins; in practice every subpath of a package resolves to the
+ * one installed version, so they agree.
+ *
+ * @param {Record<string, string>} imports  importmap `imports` map (specifier -> URL)
+ * @returns {Map<string, string>}  base package name -> pinned version
+ */
+export function extractPinnedVersions(imports) {
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  for (const [spec, url] of Object.entries(imports || {})) {
+    if (typeof url !== 'string') continue;
+    const bare = extractPackageName(spec);
+    if (!bare) continue;
+    let version = null;
+    if (url.startsWith('/__webjs/vendor/')) {
+      // Local downloaded-pin path: `<name>@<version>[__subpath].js`. The name
+      // is `--`-encoded for scoped packages; we only need the version, which
+      // sits after the LAST `@` and before any `__subpath` / `.js` suffix.
+      const filename = url.slice('/__webjs/vendor/'.length);
+      const atIdx = filename.lastIndexOf('@');
+      if (atIdx > 0) {
+        const afterAt = filename.slice(atIdx + 1, filename.endsWith('.js') ? -3 : undefined);
+        const subIdx = afterAt.indexOf('__');
+        version = subIdx < 0 ? afterAt : afterAt.slice(0, subIdx);
+      }
+    } else {
+      // CDN URL: find `<bare>@<version>` anchored on a non-name char (or the
+      // string start) so a short name like `ms` does not false-match inside
+      // another package's URL. Mirrors listPinned's parser.
+      const escapedBare = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = new RegExp(`(?:^|[^a-zA-Z0-9_.-])${escapedBare}@([^/]+)`).exec(url);
+      if (m) version = m[1];
+    }
+    if (version && /\d/.test(version)) out.set(bare, version);
+  }
+  return out;
+}
+
+/**
+ * Does `version` satisfy the npm `range`? PRAGMATIC, no semver dependency
+ * (vendor.js stays dependency-free). Supports the shapes that appear in real
+ * `dependencies` / `peerDependencies`: `*` / `latest` / `x` / `''` (any),
+ * `||` alternation, a leading `>=` / `>` / `<=` / `<` / `=`, caret `^`, tilde
+ * `~`, an `x`/`*` wildcard segment (`6.x`, `6.39.x`), and an exact `1.2.3`.
+ *
+ * Returns `true` / `false` when the range can be evaluated, and `null` when
+ * the shape is one we do NOT statically understand (a URL range, a git range,
+ * a hyphen `1.2.3 - 1.4.0` range). `null` is the "could not verify" signal: the
+ * caller degrades to a soft "unverified" note rather than warning on a shape it
+ * cannot judge. Failing open here is deliberate, a coherence check must never
+ * cry wolf on a range it misread.
+ *
+ * Prerelease note: both the version and the range are judged on their release
+ * line only (the `-beta` / `-rc` tag is dropped, see `parseSemver`), so a
+ * prerelease pin is treated as its stable tuple. The worst case is a MISSED
+ * warning when a prerelease is pinned, never a spurious one.
+ *
+ * @param {string} version  e.g. `6.39.16`
+ * @param {string} range    e.g. `^6.42.0`
+ * @returns {boolean | null}
+ */
+export function satisfiesSemverRange(version, range) {
+  const v = parseSemver(version);
+  if (!v) return null;
+  const r = String(range == null ? '' : range).trim();
+  if (r === '' || r === '*' || r === 'x' || r === 'X' || r === 'latest') return true;
+  if (r.startsWith('workspace:')) return true;
+  // Alternation: satisfied if ANY clause is satisfied. A clause we cannot
+  // evaluate (null) must not let a non-matching clause produce a false
+  // negative, so an unknown clause makes the whole result unknown unless a
+  // known clause already matched.
+  if (r.includes('||')) {
+    let sawUnknown = false;
+    for (const clause of r.split('||')) {
+      const res = satisfiesSemverRange(version, clause.trim());
+      if (res === true) return true;
+      if (res === null) sawUnknown = true;
+    }
+    return sawUnknown ? null : false;
+  }
+  // A space-joined comparator set (`>=6.0.0 <7.0.0`) must ALL be satisfied.
+  if (/\s/.test(r)) {
+    // A hyphen range (`1.2.3 - 1.4.0`) is not a comparator set; we do not
+    // parse it, so degrade to unknown rather than mis-AND its halves.
+    if (/\s-\s/.test(r)) return null;
+    let result = true;
+    for (const part of r.split(/\s+/)) {
+      if (!part) continue;
+      const res = satisfiesSemverRange(version, part);
+      if (res === null) return null;
+      if (res === false) result = false;
+    }
+    return result;
+  }
+  // Comparators: >= > <= < =.
+  const cmpMatch = /^(>=|<=|>|<|=)\s*(.+)$/.exec(r);
+  if (cmpMatch) {
+    const op = cmpMatch[1];
+    const bound = parseSemver(cmpMatch[2]);
+    if (!bound) return null;
+    const c = cmpSemver(v, bound);
+    switch (op) {
+      case '>=': return c >= 0;
+      case '>': return c > 0;
+      case '<=': return c <= 0;
+      case '<': return c < 0;
+      case '=': return c === 0;
+    }
+  }
+  // Caret: same left-most non-zero segment. ^6.42.0 -> >=6.42.0 <7.0.0;
+  // ^0.7.0 -> >=0.7.0 <0.8.0; ^0.0.3 -> >=0.0.3 <0.0.4.
+  if (r.startsWith('^')) {
+    const b = parseSemver(r.slice(1));
+    if (!b) return null;
+    if (cmpSemver(v, b) < 0) return false;
+    if (b[0] > 0) return v[0] === b[0];
+    if (b[1] > 0) return v[0] === 0 && v[1] === b[1];
+    return v[0] === 0 && v[1] === 0 && v[2] === b[2];
+  }
+  // Tilde: ~6.42.0 -> >=6.42.0 <6.43.0; ~6 -> >=6.0.0 <7.0.0.
+  if (r.startsWith('~')) {
+    const raw = r.slice(1);
+    const b = parseSemver(raw);
+    if (!b) return null;
+    if (cmpSemver(v, b) < 0) return false;
+    // If the range named a minor (`~6.42` / `~6.42.0`), pin the minor; if it
+    // named only a major (`~6`), pin the major.
+    const namedMinor = /^\d+\.\d+/.test(raw);
+    return namedMinor ? v[0] === b[0] && v[1] === b[1] : v[0] === b[0];
+  }
+  // x / * wildcard segment: 6.x, 6.39.x, 6.*.
+  if (/^\d+(\.(\d+|[xX*])){0,2}$/.test(r) && /[xX*]/.test(r)) {
+    const segs = r.split('.');
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (s === 'x' || s === 'X' || s === '*') break; // any beyond here
+      if (Number(s) !== v[i]) return false;
+    }
+    return true;
+  }
+  // Exact `1.2.3` (or shorter `1` / `1.2`, treated as that prefix pinned). A
+  // leading `v` (`v1.2.3`) is tolerated so a `v`-prefixed exact pin evaluates
+  // instead of degrading to unverified.
+  const exact = r.startsWith('v') ? r.slice(1) : r;
+  if (/^\d+(\.\d+){0,2}$/.test(exact)) {
+    const b = parseSemver(exact);
+    if (!b) return null;
+    const segs = exact.split('.').length;
+    for (let i = 0; i < segs; i++) if (v[i] !== b[i]) return false;
+    return true;
+  }
+  return null;
+}
+
+/**
+ * Parse a version string to a `[major, minor, patch]` numeric triple, or null
+ * when it has no parseable numeric core (a `latest`, a git URL, a `*`).
+ *
+ * KNOWN LIMITATION: a prerelease / build suffix (`-rc.1`, `+sha`) is dropped, so
+ * a version is judged purely on its release line. A pinned prerelease is treated
+ * as its stable tuple: `6.42.0-beta.1` is judged as `6.42.0`, so a stable range
+ * like `^6.42.0` reports it as a MATCH even though npm semver excludes a
+ * prerelease from a stable range. This is a deliberate fail-safe simplification
+ * (we do not carry prerelease ordering): the only consequence is a MISSED
+ * coherence warning when a prerelease is pinned, never a spurious one on a
+ * coherent graph. Pinned prereleases are vanishingly rare in a vendored
+ * importmap, so the missed-warning risk is negligible.
+ *
+ * @param {string} v
+ * @returns {[number, number, number] | null}
+ */
+function parseSemver(v) {
+  const m = /(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(String(v == null ? '' : v));
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+}
+
+/**
+ * Compare two `[major, minor, patch]` triples. Negative if a < b, 0 if equal,
+ * positive if a > b.
+ * @param {[number, number, number]} a
+ * @param {[number, number, number]} b
+ * @returns {number}
+ */
+function cmpSemver(a, b) {
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
+/**
+ * @typedef {{
+ *   pkg: string,
+ *   version: string,
+ *   dependsOn: string,
+ *   kind: 'dependency' | 'peerDependency',
+ *   requiredRange: string,
+ *   pinnedVersion: string,
+ * }} CoherenceConflict
+ */
+
+/**
+ * @typedef {{
+ *   conflicts: CoherenceConflict[],
+ *   unverified: Array<{ pkg: string, reason: string }>,
+ *   checked: number,
+ * }} CoherenceReport
+ * `checked` counts the pinned packages whose dependency metadata was actually
+ * read (so a clean verdict is grounded in real data); a package whose manifest
+ * was unavailable is in `unverified` and is NOT counted as checked. `checked
+ * === 0` with a non-empty `unverified` therefore means "could not verify
+ * anything", which the caller surfaces as a soft degrade rather than "coherent".
+ */
+
+/**
+ * Validate that a produced importmap's pinned dependency graph is COHERENT
+ * (issue #450). For each resolved package, read its declared `dependencies`
+ * and `peerDependencies` (via the injected `getManifest`) and, for every
+ * declared range that targets ANOTHER package ALSO pinned in this importmap,
+ * check the pinned version satisfies the range. A miss is a conflict naming
+ * both packages, the required range, and the pinned version.
+ *
+ * This is the SAME function the doctor runs over the live importmap and over
+ * `.webjs/vendor/importmap.json`. It is pure in `(imports, getManifest)`, so
+ * the same pinned dep set yields the same verdict regardless of which input it
+ * came from (the runtime-vs-vendored parity invariant).
+ *
+ * Degrades gracefully: a package whose manifest `getManifest` cannot supply
+ * (not installed, unreadable, network unavailable) is recorded under
+ * `unverified` and contributes NO conflict, so the check reports "could not
+ * verify" rather than failing closed. A declared range in a shape we cannot
+ * statically evaluate (see `satisfiesSemverRange` -> null) is likewise skipped,
+ * never warned on.
+ *
+ * @param {Record<string, string>} imports  importmap `imports` map
+ * @param {{
+ *   getManifest: (pkg: string, version: string) =>
+ *     ({ dependencies?: Record<string,string>, peerDependencies?: Record<string,string> } | null
+ *      | Promise<{ dependencies?: Record<string,string>, peerDependencies?: Record<string,string> } | null>),
+ * }} opts  `getManifest` returns the declared dep ranges for a resolved
+ *   `pkg@version`, or null when unavailable (degrade to "unverified").
+ * @returns {Promise<CoherenceReport>}
+ */
+export async function checkImportmapCoherence(imports, opts) {
+  const pinned = extractPinnedVersions(imports);
+  /** @type {CoherenceConflict[]} */
+  const conflicts = [];
+  /** @type {Array<{ pkg: string, reason: string }>} */
+  const unverified = [];
+  // Sort for deterministic output: the same dep set always yields the same
+  // ordering, which keeps the verdict (and any test asserting it) stable and
+  // strengthens the parity guarantee end to end.
+  const packages = [...pinned.keys()].sort();
+  // Count of packages whose metadata we could actually read (so a conflict
+  // verdict is grounded). A package whose manifest is unavailable lands in
+  // `unverified` instead and does NOT count as checked, which lets the caller
+  // distinguish "verified coherent" from "could not verify anything".
+  let checked = 0;
+  for (const pkg of packages) {
+    const version = pinned.get(pkg);
+    let manifest;
+    try {
+      manifest = await opts.getManifest(pkg, version);
+    } catch {
+      manifest = null;
+    }
+    if (!manifest || typeof manifest !== 'object') {
+      unverified.push({ pkg, reason: `could not read dependency metadata for ${pkg}@${version}` });
+      continue;
+    }
+    checked++;
+    const groups = /** @type {const} */ ([
+      ['dependency', manifest.dependencies],
+      ['peerDependency', manifest.peerDependencies],
+    ]);
+    for (const [kind, deps] of groups) {
+      if (!deps || typeof deps !== 'object') continue;
+      for (const [depName, range] of Object.entries(deps)) {
+        // Only edges INTO the pinned graph matter: a dep on a package that is
+        // not in this importmap is not the importmap's coherence problem (it
+        // is either bundled into a CDN megabundle or simply unused on the
+        // client). Self-edges cannot conflict.
+        if (depName === pkg) continue;
+        const depPinned = pinned.get(depName);
+        if (!depPinned) continue;
+        const ok = satisfiesSemverRange(depPinned, String(range));
+        if (ok === false) {
+          conflicts.push({
+            pkg,
+            version: String(version),
+            dependsOn: depName,
+            kind,
+            requiredRange: String(range),
+            pinnedVersion: depPinned,
+          });
+        }
+        // ok === null (range shape not understood) is silently skipped: the
+        // check never warns on a range it could not evaluate.
+      }
+    }
+  }
+  return { conflicts, unverified, checked };
 }
 
 /**

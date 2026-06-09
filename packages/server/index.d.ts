@@ -312,6 +312,11 @@ export declare function resolveVendorImports(
 export declare function clearVendorCache(): void;
 /** Read a package's installed version from `node_modules`, or null. */
 export declare function getPackageVersion(pkgName: string, appDir: string): string | null;
+/** Read a package's installed `dependencies` + `peerDependencies` (hoist-aware), or null. */
+export declare function getPackageManifest(
+  pkgName: string,
+  appDir: string,
+): { dependencies: Record<string, string>; peerDependencies: Record<string, string> } | null;
 /** Resolve a list of `pkg@version` installs to importmap entries via a provider. */
 export declare function jspmGenerate(installs: string[], provider?: string): Promise<Record<string, string>>;
 /** Pin every (or the named) bare imports to `.webjs/vendor/importmap.json`. */
@@ -357,6 +362,50 @@ export declare function serveDownloadedBundle(
 export declare const SUPPORTED_PROVIDERS: Set<string>;
 /** Normalize / validate a provider name. */
 export declare function normalizeProvider(name: string): string;
+/**
+ * Validate a produced importmap's pinned dependency graph for coherence
+ * (issue #450). For each resolved package, checks that the version pinned for
+ * every OTHER resolved package it depends on satisfies the declared range.
+ * Pure in `(imports, getManifest)`, so the same dep set yields the same verdict
+ * over a live importmap and a vendored one. Degrades to `unverified` when a
+ * manifest is unavailable.
+ */
+export declare function checkImportmapCoherence(
+  imports: Record<string, string>,
+  opts: {
+    getManifest: (
+      pkg: string,
+      version: string,
+    ) =>
+      | { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }
+      | null
+      | Promise<{ dependencies?: Record<string, string>; peerDependencies?: Record<string, string> } | null>;
+  },
+): Promise<{
+  conflicts: Array<{
+    pkg: string;
+    version: string;
+    dependsOn: string;
+    kind: 'dependency' | 'peerDependency';
+    requiredRange: string;
+    pinnedVersion: string;
+  }>;
+  unverified: Array<{ pkg: string; reason: string }>;
+  checked: number;
+}>;
+/** Extract `{ basePackage -> pinned version }` from an importmap's `imports` map. */
+export declare function extractPinnedVersions(
+  imports: Record<string, string>,
+): Map<string, string>;
+/**
+ * Does `version` satisfy the npm `range`? Pragmatic, dependency-free. Returns
+ * `null` for a range shape it cannot statically evaluate (the "could not
+ * verify" signal).
+ */
+export declare function satisfiesSemverRange(
+  version: string,
+  range: string,
+): boolean | null;
 
 // ---------------------------------------------------------------------------
 // module-graph.js
