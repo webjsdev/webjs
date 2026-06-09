@@ -34,6 +34,9 @@ export {
   serveDownloadedBundle,
   SUPPORTED_PROVIDERS,
   normalizeProvider,
+  checkImportmapCoherence,
+  extractPinnedVersions,
+  satisfiesSemverRange,
 } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
