@@ -40,6 +40,23 @@ webjs db migrate init</pre>
 webjs db generate</pre>
     <p>This writes the typed client to <code>node_modules/.prisma/client</code>. Run it once after schema changes. It's not in the request hot path.</p>
 
+    <h3>Use <code>npm run dev</code>, not a bare <code>webjs dev</code></h3>
+    <p>
+      <strong><code>npm run dev</code> is the canonical command to start the dev
+      server.</strong> The scaffold defines a <code>predev</code> npm hook that
+      runs <code>prisma generate</code> first, and npm runs <code>predev</code>
+      automatically before <code>dev</code>. Running the <code>webjs dev</code>
+      binary directly skips that hook, so the server boots against an
+      ungenerated client and crashes.
+    </p>
+    <p>
+      To make that failure obvious, <code>webjs dev</code> detects a missing or
+      stale Prisma client (only for apps that actually use Prisma) and prints an
+      actionable hint pointing you at <code>npm run dev</code> or
+      <code>webjs db generate</code> instead of letting the boot crash with a
+      raw error. A non-Prisma app sees no such hint.
+    </p>
+
     <h2>Using Prisma in Server Actions</h2>
     <pre>// lib/prisma.server.ts
 import { PrismaClient } from '@prisma/client';

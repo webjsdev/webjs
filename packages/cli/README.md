@@ -42,7 +42,7 @@ webjs create <name>            # scaffold a full-stack app (default)
 webjs create <name> --template api   # backend-only API app
 webjs create <name> --template saas  # auth + dashboard + Prisma User model
 
-webjs dev                      # dev server with live reload
+webjs dev                      # dev server with live reload (prefer `npm run dev`, which runs the predev prisma generate hook)
 webjs start                    # production server (no build step, serves source directly)
 webjs check                    # validate project conventions
 webjs test                     # run server + browser tests

@@ -120,6 +120,16 @@ Counter.register('my-counter');</pre>
 
     <p>That's it. No build step, no bundler config, no compilation. Edit any <code>.ts</code> file, refresh, and see it.</p>
 
+    <p>
+      <strong>Always start the dev server with <code>npm run dev</code>, not a
+      bare <code>webjs dev</code>.</strong> The scaffold wires a
+      <code>predev</code> npm hook (<code>prisma generate</code>) that npm runs
+      automatically before <code>dev</code>; invoking the <code>webjs dev</code>
+      binary directly skips it. For a database app that means booting against an
+      ungenerated Prisma client, so <code>webjs dev</code> will warn you and
+      point you back at <code>npm run dev</code>.
+    </p>
+
     <h2>How It Works</h2>
     <ul>
       <li><strong>TypeScript:</strong> Node 24+ strips types natively via <code>module.stripTypeScriptTypes</code> (whitespace replacement, byte-exact line + column preservation, no sourcemap shipped). Every <code>.ts</code> file, whether server-side or browser-fetched, goes through the same stripper, so SSR and hydration produce identical JS. The transform is cached by mtime. Only erasable TypeScript is supported; <code>enum</code>, <code>namespace</code> with values, parameter properties, and legacy decorators fail at strip time with a pointer at the <code>no-non-erasable-typescript</code> lint rule.</li>

@@ -90,6 +90,15 @@ async function main() {
         break;
       }
 
+      // A bare `webjs dev` (not `npm run dev`) skips the `predev` hook, so a
+      // Prisma app boots against an ungenerated client and crashes with no
+      // hint (#452). Detect that here, in the PARENT only, so the message
+      // prints once rather than on every watch restart. Scoped to Prisma apps;
+      // a non-Prisma app sees nothing. A hint, not an auto-run.
+      const { prismaDevHint } = await import('../lib/prisma-preflight.js');
+      const hint = prismaDevHint(process.cwd());
+      if (hint) console.error(hint);
+
       // Otherwise, spawn ourselves as a child with node --watch.
       // This restarts the process on file changes, guaranteeing a fresh
       // Node ESM module cache. Without this, edits to transitively-imported
