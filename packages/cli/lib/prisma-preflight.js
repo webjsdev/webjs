@@ -12,9 +12,19 @@
  * Prisma (a `prisma/schema.prisma` OR an `@prisma/client` dependency), and it
  * only HINTS. It never auto-runs an arbitrary `predev` script and never shells
  * out to `prisma generate` on its own, keeping the no-build promise intact.
+ *
+ * Detection (verified against a real Prisma 6 install): the GENERATED
+ * `.prisma/client` target is resolved through standard Node resolution from the
+ * app (so a hoisted monorepo, where the client lives at a PARENT `node_modules`,
+ * resolves correctly), then read. An ABSENT target, or a present-but-stub target
+ * (the ungenerated client whose `PrismaClient` constructor throws the init
+ * error), is "ungenerated". A real generated target older than the schema is
+ * "stale". We do NOT grep the static `@prisma/client` re-export shim: it is
+ * present in both states and never carries the init-error string itself.
  */
 import { existsSync, statSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 
 /**
  * Does this app use Prisma? True if a schema is checked in OR `@prisma/client`
@@ -35,6 +45,50 @@ export function usesPrisma(cwd) {
   }
 }
 
+// Marker the ungenerated `prisma-client-js` stub embeds in its generated target
+// (`node_modules/.prisma/client/index.js`). Verified against a real Prisma 6
+// install: after `npm i @prisma/client` but before `prisma generate`, the
+// generated `.prisma/client` entry IS present but its `PrismaClient` constructor
+// throws `@prisma/client did not initialize yet. Please run "prisma generate"`.
+// A real `prisma generate` replaces that stub with the generated client, which
+// does NOT contain this string. So the marker, read from the GENERATED target
+// (not the static `@prisma/client` shim), is the reliable ungenerated signal.
+const UNGENERATED_MARKER = 'did not initialize yet';
+
+/**
+ * Resolve the GENERATED Prisma client entry (`.prisma/client/index.js`) for an
+ * app, following standard Node resolution so a hoisted monorepo layout (the
+ * generated client at a PARENT `node_modules`, the app under `apps/<x>`) still
+ * resolves. Returns a discriminated result so the caller can tell the three
+ * cases apart:
+ *   - `{ kind: 'unresolved' }`        - `@prisma/client` itself is not resolvable.
+ *   - `{ kind: 'no-target' }`         - the package resolves but `.prisma/client`
+ *                                       does not (a custom `output`, ambiguous).
+ *   - `{ kind: 'target', path }`      - the generated target resolves.
+ *
+ * @param {string} cwd
+ * @returns {{ kind: 'unresolved' } | { kind: 'no-target' } | { kind: 'target', path: string }}
+ */
+function resolveGeneratedClient(cwd) {
+  let clientDir;
+  try {
+    // Resolve @prisma/client AS THE APP would (hoisting-aware), then locate its
+    // package dir. The shim itself loads `.prisma/client/default` relative to
+    // here, so resolving from this dir follows the same (possibly hoisted) path.
+    const appRequire = createRequire(join(cwd, 'noop.js'));
+    clientDir = dirname(appRequire.resolve('@prisma/client'));
+  } catch {
+    return { kind: 'unresolved' };
+  }
+  const shimRequire = createRequire(join(clientDir, 'noop.js'));
+  for (const entry of ['.prisma/client/index.js', '.prisma/client/default.js']) {
+    try {
+      return { kind: 'target', path: shimRequire.resolve(entry) };
+    } catch { /* try the next entry */ }
+  }
+  return { kind: 'no-target' };
+}
+
 /**
  * Inspect the generated Prisma client state for a Prisma app.
  *
@@ -43,44 +97,39 @@ export function usesPrisma(cwd) {
  *   - `{ status: 'missing' }`    - schema/dep present but no generated client.
  *   - `{ status: 'stale' }`      - client exists but the schema is newer than it.
  *
- * The default `prisma-client-js` generator writes to `node_modules/.prisma/client`
- * (re-exported by `@prisma/client`), which is the scaffold's setup. A custom
- * `output` would land elsewhere; in that case we cannot cheaply prove staleness,
- * so we fall back to "ok" rather than nag a working app (false positives are
+ * Detection resolves the GENERATED `.prisma/client` target through standard Node
+ * resolution (so hoisted monorepos are handled) and reads it: an absent target,
+ * or a present-but-stub target (the ungenerated `PrismaClient` that throws on
+ * construction), is `missing`. A real generated client that is older than the
+ * schema is `stale`. A custom-`output` generator whose target Node cannot
+ * resolve falls back to `ok` rather than nag a working app (false positives are
  * worse than a missed hint here).
  *
  * @param {string} cwd
  * @returns {{ status: 'ok' | 'missing' | 'stale' }}
  */
 export function prismaClientState(cwd) {
-  const generatedDir = join(cwd, 'node_modules', '.prisma', 'client');
-  // The generator drops an index plus a default entry; either marks "generated".
-  const generatedIndex = ['index.js', 'default.js', 'index.d.ts']
-    .map((f) => join(generatedDir, f))
-    .find((p) => existsSync(p));
+  const resolved = resolveGeneratedClient(cwd);
 
-  if (!generatedIndex) {
-    // No generated client at the default location. If a custom `output` is in
-    // use the artifacts live elsewhere and `@prisma/client` itself resolves, so
-    // only flag "missing" when the package entry is ALSO absent, otherwise a
-    // custom-output app would get a spurious hint.
-    const pkgClient = join(cwd, 'node_modules', '@prisma', 'client', 'default.js');
-    const pkgClientAlt = join(cwd, 'node_modules', '@prisma', 'client', 'index.js');
-    if (!existsSync(pkgClient) && !existsSync(pkgClientAlt)) {
-      return { status: 'missing' };
-    }
-    // @prisma/client is installed but the default .prisma/client output is not
-    // there: either a custom output (can't cheaply verify) or ungenerated.
-    // Probe the package's own generated marker before deciding.
-    try {
-      const marker = readFileSync(pkgClient, 'utf8');
-      // The placeholder shipped before `generate` references the init error.
-      if (/did not initialize yet/.test(marker)) return { status: 'missing' };
-    } catch { /* fall through to ok */ }
-    return { status: 'ok' };
-  }
+  // @prisma/client not resolvable: the app declared the dep (usesPrisma gated
+  // us here) but it is not installed/generated. That is the boot-crash case.
+  if (resolved.kind === 'unresolved') return { status: 'missing' };
 
-  // Generated. Is it older than the schema (a stale client)?
+  // The package resolves but the default `.prisma/client` target does not: a
+  // custom `output` whose location we cannot cheaply verify. Fall back to `ok`
+  // rather than nag a working app (false positives are worse than a missed hint).
+  if (resolved.kind === 'no-target') return { status: 'ok' };
+
+  const generatedIndex = resolved.path;
+
+  // The generated target exists. Is it still the ungenerated stub (its
+  // PrismaClient constructor throws the init error)?
+  try {
+    const body = readFileSync(generatedIndex, 'utf8');
+    if (body.includes(UNGENERATED_MARKER)) return { status: 'missing' };
+  } catch { /* unreadable: fall through to the stale check, then ok */ }
+
+  // Generated for real. Is it older than the schema (a stale client)?
   const schema = join(cwd, 'prisma', 'schema.prisma');
   try {
     if (existsSync(schema)) {
