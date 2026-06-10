@@ -188,7 +188,7 @@ variables control infrastructure (no config files needed):
 | `AUTH_SECRET` | Required for auth JWT signing (32+ random chars) |
 | `AUTH_GOOGLE_ID` | Google OAuth client ID (optional) |
 | `AUTH_GITHUB_ID` | GitHub OAuth client ID (optional) |
-| `PORT` | Server port (default: 8080) |
+| `PORT` | Server port. Precedence: `--port` flag > `PORT` (a real exported env var or a `PORT` in `.env`) > 8080. |
 | `WEBJS_PUBLIC_*` | Any env var starting with this prefix is exposed to the browser as `process.env.WEBJS_PUBLIC_X`. Components can read it directly. No build step, no transform. Use for API base URLs, Stripe publishable keys, analytics IDs, anything that is intended to be visible client-side. |
 
 **Server-only by default.** Any env var without the `WEBJS_PUBLIC_` prefix never reaches the browser. Reading `process.env.DATABASE_URL` from a component returns `undefined`, the same as a typo. The prefix is fail-closed: secrets cannot accidentally leak.
