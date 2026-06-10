@@ -518,3 +518,101 @@ test('the pin check detects a pin on the real import path (no vendor stub)', asy
     `the real pin check must detect the pin, got: ${pin.status} ${pin.message}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// vendor-gitignore: the `.gitignore` must keep `.webjs/vendor/` committable.
+// Moved here from `webjs check`'s `gitignore-vendor-not-ignored` rule (#461):
+// inspecting `.gitignore` is a project-config concern, and vendoring is opt-in,
+// so it is a doctor WARN, not a check error / CI hard fail. Uses a real
+// `git init` so `git check-ignore` behaves as it would in a real project.
+// ---------------------------------------------------------------------------
+
+/** `git init` in dir with inherited GIT_* stripped so it targets dir, not an
+ *  outer repo whose env leaked in via a worktree pre-commit hook. */
+function initGit(dir) {
+  const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
+  return spawnSync('git', ['init', '-q'], { cwd: dir, stdio: 'pipe', env }).status === 0;
+}
+
+test('vendor-gitignore: warns on the broken `.webjs/` pattern', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  if (!initGit(dir)) return; // git unavailable: skip
+  // Parent excluded, so the `!` child negation can never re-include anything.
+  write(dir, '.gitignore', '.webjs/\n!.webjs/vendor/\n');
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  const r = byName(results, 'vendor-gitignore');
+  assert.equal(r.status, 'warn', 'broken pattern must warn');
+  assert.match(r.fix, /\*\*\/\.webjs\/\*/, 'fix names the depth-robust pattern');
+});
+
+test('vendor-gitignore: passes for the depth-robust `**/.webjs/*` pattern', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  if (!initGit(dir)) return;
+  write(dir, '.gitignore', '**/.webjs/*\n!**/.webjs/vendor/\n!**/.webjs/vendor/**\n');
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  assert.equal(byName(results, 'vendor-gitignore').status, 'pass');
+});
+
+test('vendor-gitignore: warns on a broader `*.js` rule that hides bundle files', async () => {
+  // The .json manifest gets through, but `webjs vendor pin --download` writes
+  // <pkg>@<version>.js bundles, which `*.js` blocks. The two-probe check catches it.
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  if (!initGit(dir)) return;
+  write(dir, '.gitignore', '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n');
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  const r = byName(results, 'vendor-gitignore');
+  assert.equal(r.status, 'warn', 'broader *.js rule must warn');
+  assert.match(r.message, /sample-pkg|\.js/, 'message references the bundle-file probe');
+});
+
+test('vendor-gitignore: passes (skips) when not a git repo', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  // No `git init`. A .gitignore exists but there is no .git/, so the check
+  // must not false-positive.
+  write(dir, '.gitignore', '.webjs/\n');
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  assert.equal(byName(results, 'vendor-gitignore').status, 'pass');
+});
+
+test('vendor-gitignore: passes (skips) when no .gitignore exists', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  if (!initGit(dir)) return;
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  assert.equal(byName(results, 'vendor-gitignore').status, 'pass');
+});
+
+test('vendor-gitignore: ignores leaked GIT_WORK_TREE/GIT_DIR (worktree pre-commit)', async () => {
+  // The check strips inherited GIT_* so cwd is the sole authority on which repo
+  // is consulted. Simulate a worktree pre-commit hook leaking the outer repo's
+  // context and assert the check still reads dir's own .gitignore.
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  const saved = {
+    GIT_DIR: process.env.GIT_DIR,
+    GIT_WORK_TREE: process.env.GIT_WORK_TREE,
+    GIT_INDEX_FILE: process.env.GIT_INDEX_FILE,
+  };
+  try {
+    if (!initGit(dir)) return;
+    write(dir, '.gitignore', '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n');
+    process.env.GIT_DIR = join(REPO, '.git');
+    process.env.GIT_WORK_TREE = REPO;
+    delete process.env.GIT_INDEX_FILE;
+    const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+    assert.equal(
+      byName(results, 'vendor-gitignore').status,
+      'warn',
+      'must read dir gitignore despite leaked GIT_* env',
+    );
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+});

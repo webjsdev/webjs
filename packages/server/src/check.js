@@ -98,11 +98,6 @@ export const RULES = [
       'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
   },
   {
-    name: 'gitignore-vendor-not-ignored',
-    description:
-      'Verifies the `.gitignore` exception for `.webjs/vendor/` is structurally correct via `git check-ignore`. The intended pattern is `**/.webjs/*` (NOT `.webjs/`) plus `!**/.webjs/vendor/` plus `!**/.webjs/vendor/**`. The `**/` prefix matches `.webjs/` at any depth so a nested / monorepo app does not leak its generated `.webjs/routes.d.ts`; the older root-anchored `.webjs/*` also passes this rule (the probe is run from the app root). The common-looking pattern `.webjs/` excludes the directory itself, after which git cannot re-include children (gitignore semantics: a parent exclusion blocks child negations). Without this rule, an AI agent or human editor would silently break `webjs vendor pin` by simplifying the pattern; the failure is invisible until production. Rule fires when the working directory is a git repo and a `.gitignore` exists; skipped when neither is true.',
-  },
-  {
     name: 'no-browser-globals-in-render',
     description:
       'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
@@ -821,73 +816,6 @@ export async function checkConventions(appDir) {
     }
   }
 
-  // --- Rule: gitignore-vendor-not-ignored ---
-  // The .gitignore pattern for .webjs/vendor/ is subtle: `.webjs/`
-  // alone excludes the directory entirely and git can't re-include
-  // children of an excluded parent. The correct pattern is `**/.webjs/*`
-  // plus `!**/.webjs/vendor/` plus `!**/.webjs/vendor/**` (the `**/`
-  // prefix ignores `.webjs/` at any depth so a nested app does not leak
-  // its generated routes.d.ts; the older root-anchored `.webjs/*` also
-  // passes, since this probe runs from the app root). AI agents and
-  // human reviewers frequently "simplify" this back to `.webjs/`,
-  // silently breaking `webjs vendor pin`.
-  //
-  // This rule verifies the actual gitignore behavior by spawning
-  // `git check-ignore` against a representative pin-file path. If
-  // git reports the file as ignored, the pattern is broken.
-  //
-  // Skipped when the directory isn't a git repo or has no .gitignore
-  // (the user hasn't opted into version control yet).
-  {
-    const hasGit = await pathExists(join(appDir, '.git'));
-    const hasGitignore = await pathExists(join(appDir, '.gitignore'));
-    if (hasGit && hasGitignore) {
-      const { spawnSync } = await import('node:child_process');
-      // Strip inherited git env vars so `cwd` is the sole authority on
-      // which repo `git check-ignore` consults. Git exports GIT_DIR /
-      // GIT_WORK_TREE / GIT_INDEX_FILE / GIT_PREFIX into hook processes
-      // (notably a pre-commit hook run from a linked worktree exports
-      // GIT_WORK_TREE), and those OVERRIDE cwd-based discovery, so
-      // without this the probe would consult the outer repo instead of
-      // `appDir`. See the gitignore-vendor-not-ignored regression test.
-      const {
-        GIT_DIR: _gd, GIT_WORK_TREE: _gwt, GIT_INDEX_FILE: _gif, GIT_PREFIX: _gp,
-        ...gitEnv
-      } = process.env;
-      // Check two representative paths: the pin manifest AND a sample
-      // downloaded bundle. A `.gitignore` that allows the manifest
-      // but blocks bundles (e.g. `*.js` higher up) would still break
-      // `webjs vendor pin --download`. `git check-ignore -q` exits 0
-      // when ignored, 1 when not ignored.
-      const probes = [
-        '.webjs/vendor/importmap.json',
-        '.webjs/vendor/sample-pkg@1.0.0.js',
-      ];
-      for (const probe of probes) {
-        const result = spawnSync('git', ['check-ignore', '-q', probe], {
-          cwd: appDir,
-          stdio: 'pipe',
-          env: gitEnv,
-        });
-        if (result.status === 0) {
-          violations.push({
-            rule: 'gitignore-vendor-not-ignored',
-            file: '.gitignore',
-            message:
-              `${probe} is gitignored, but \`webjs vendor pin\` writes files under .webjs/vendor/ and they MUST be committed for production deploys to use the pin (instead of calling api.jspm.io on every cold start). The most common cause: a \`.webjs/\` line in .gitignore that excludes the parent directory before the \`!.webjs/vendor/\` exception can take effect (git semantics: a parent exclusion blocks child negations). A second possible cause is a broader rule (e.g. \`*.js\` at root) that hides bundle files added by \`webjs vendor pin --download\`.`,
-          fix:
-            'Replace `.webjs/` in your .gitignore with this three-line pattern:\n' +
-            '  **/.webjs/*\n' +
-            '  !**/.webjs/vendor/\n' +
-            '  !**/.webjs/vendor/**\n' +
-            'The `**/` prefix ignores `.webjs/` at any depth (so a nested / monorepo app does not leak its generated `.webjs/routes.d.ts`) while still re-including the committed vendor pin. ' +
-            'Verify with `git check-ignore -q .webjs/vendor/importmap.json` (exit 1 means correctly un-ignored).',
-        });
-      }
-    }
-    }
-  }
-
   // --- Rule: no-server-import-in-browser-module ---
   // A page / layout / component module that SHIPS to the browser must not
   // transitively import a server-only `.server.{ts,js}` module. The browser
@@ -1169,7 +1097,8 @@ async function pathExists(p) {
  * `cwd: appDir` and the inherited GIT_* env stripped so cwd is the sole
  * authority on which repo + .gitignore stack is consulted (a pre-commit
  * hook from a linked worktree exports GIT_WORK_TREE, which would otherwise
- * override cwd-based discovery; same reason as gitignore-vendor-not-ignored).
+ * override cwd-based discovery; same reason the doctor vendor-gitignore check
+ * strips them).
  * Works for an in-repo sub-package with no nested `.git` too: git walks up
  * to the monorepo root and resolves the relative paths against cwd.
  *
