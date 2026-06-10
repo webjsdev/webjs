@@ -34,7 +34,7 @@ The package manager is detected from `npm_config_user_agent`: pnpm / yarn / bun 
 
 ## Relationship to `@webjsdev/cli`
 
-`create-webjs` is a thin scaffolding wrapper. The full CLI lives in [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli) (and its unscoped mirror [`webjsdev`](https://www.npmjs.com/package/webjsdev)), which installs globally to give you `webjs dev`, `webjs start`, `webjs create`, `webjs test`, `webjs check`, `webjs db`, and `webjs ui`. After scaffolding, `webjs <cmd>` is available locally via the new app's `node_modules/.bin`, and globally if you've run `npm i -g @webjsdev/cli` or `npm i -g webjsdev`.
+`create-webjs` is a thin scaffolding wrapper. The full CLI lives in [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli) (and its unscoped mirror [`webjsdev`](https://www.npmjs.com/package/webjsdev)), which installs globally to give you `webjs dev`, `webjs start`, `webjs create`, `webjs test`, `webjs check`, `webjs doctor`, `webjs vendor`, `webjs db`, and `webjs ui`. After scaffolding, `webjs <cmd>` is available locally via the new app's `node_modules/.bin`, and globally if you've run `npm i -g @webjsdev/cli` or `npm i -g webjsdev`.
 
 ## License
 

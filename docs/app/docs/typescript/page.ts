@@ -114,6 +114,21 @@ events[0].createdAt instanceof Date; // true
 events[0].createdAt.toLocaleDateString(); // works</pre>
     <p>For API routes, the same content negotiation applies. Use <code>json()</code> from <code>@webjsdev/server</code> on the server side and <code>richFetch()</code> from <code>webjs</code> on the client side to get rich-type encoding. External consumers (curl, other services) get plain JSON automatically.</p>
 
+    <h2>Typing the <code>auth()</code> Session User</h2>
+    <p><code>auth()</code> resolves <code>{ user }</code>, and by default <code>user</code> is <code>Record&lt;string, unknown&gt;</code>, so reading a custom field your <code>session</code>/<code>jwt</code> callbacks set (such as <code>session.user.id</code>) needs a cast and a typo is not caught. Two opt-in, types-only ways make <code>user</code> typed.</p>
+    <p>Augment the <code>AuthUser</code> interface (NextAuth/Auth.js style) to type every <code>auth()</code> call across the app:</p>
+    <pre>declare module '@webjsdev/server' {
+  interface AuthUser {
+    id: string;
+    role: 'admin' | 'member';
+  }
+}</pre>
+    <p>Or parameterise the factory to type one instance without a global augmentation: <code>createAuth&lt;AppUser&gt;(...)</code> returns an <code>auth()</code> whose <code>user</code> is <code>AppUser</code>:</p>
+    <pre>const { auth } = createAuth&lt;AppUser&gt;({ secret, providers });
+const session = await auth();
+session?.user.role; // typed, no cast</pre>
+    <p>Un-augmented and un-parameterised, <code>AuthUser</code> is empty and resolves back to <code>Record&lt;string, unknown&gt;</code>, so pre-existing untyped code keeps compiling. The declared fields should mirror what the callbacks write onto <code>session.user</code>. See <a href="/docs/auth">Auth</a>.</p>
+
     <h2>JSDoc Alternative</h2>
     <p>If you prefer <code>.js</code> files, you can achieve the same type safety using JSDoc annotations with <code>checkJs: true</code> in your tsconfig:</p>
     <pre>// lib/prisma.js
