@@ -788,16 +788,24 @@ The action receives `{ request, params, searchParams, url, formData }`
 and returns an `ActionResult`. The server interprets the result:
 
 - **Success** (`{ success: true, redirect? }`, or any non-`false`
-  result, or a thrown `redirect()`): a `303 See Other` to
-  `result.redirect` if present, else the page's own path
-  (Post/Redirect/Get, so a reload does not resubmit).
+  result): a `303 See Other` to `result.redirect` if present, else the
+  page's own path (Post/Redirect/Get, so a reload does not resubmit).
+  This 303 is the success-result path only; a `redirect()` *thrown* from
+  the action is a separate case (see below).
 - **Failure** (`{ success: false, fieldErrors?, values?, status? }`):
   re-SSR the SAME page with `status` (default `422`) and the result on
   `ctx.actionData`. The page reads `actionData.fieldErrors.<field>` for
   messages and `actionData.values.<field>` to repopulate native
   `<input value=...>`, so the user's typed input survives.
-- A thrown `notFound()` yields a 404, a thrown `redirect()` keeps its
-  own 307/308 status (PRG uses 303 only for the success-result path).
+- A thrown `notFound()` yields a 404. A thrown `redirect()` carries no
+  baked-in status; the catching site picks the convention: thrown from an
+  action (a POST) it defaults to `307 Temporary Redirect`
+  (method-preserving, so the bounce keeps the POST's intent), thrown
+  during a GET page/layout render or gate it defaults to `302 Found` (the
+  code an auth bounce conventionally wants). An explicit status overrides
+  either default, in both the positional `redirect(url, 308)` and the
+  options `redirect(url, { status })` forms. PRG's 303 (above) is only
+  the success-result path, distinct from these thrown defaults.
 
 A page WITHOUT an `action` export keeps the old behavior, a non-GET to
 it 404s. There is no form library: native input repopulation plus the
