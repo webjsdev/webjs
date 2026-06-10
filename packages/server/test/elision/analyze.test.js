@@ -62,6 +62,42 @@ test('importing renderStream forces interactive (it does client DOM work, #248)'
   assert.match(r.reason, /renderStream/);
 });
 
+test('async render() forces interactive (it suspends on the client, #469)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getUser } from '../actions/get-user.server.ts';
+    class UserProfile extends WebComponent {
+      static properties = { id: { type: String } };
+      async render() { const u = await getUser(this.id); return html\`<h3>\${u.name}</h3>\`; }
+    }
+    UserProfile.register('user-profile');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /async render/);
+});
+
+test('render = async () arrow field forces interactive (#469)', () => {
+  const src = DISPLAY_ONLY.replace(
+    'render() { return html`<p>${this.student.name}</p>`; }',
+    'render = async () => html`<p>${this.student.name}</p>`;',
+  );
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('renderFallback() forces interactive (the async-render re-fetch UI, #469)', () => {
+  const src = DISPLAY_ONLY.replace(
+    "render() { return html`<p>${this.student.name}</p>`; }",
+    "renderFallback() { return html`<p>loading</p>`; }\n  async render() { return html`<p>${this.student.name}</p>`; }",
+  );
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a plain sync render() stays elidable (async-render guard is specific, #469)', () => {
+  // Counterfactual: the word "render" alone must not trip the async signal.
+  assert.equal(analyzeComponentSource(DISPLAY_ONLY).interactive, false);
+});
+
 test('a side-effect npm import forces interactive (runs on module load)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
