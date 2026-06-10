@@ -820,75 +820,30 @@ test('use-server-needs-extension: .server.ts WITHOUT directive does not trigger 
 });
 
 /**
- * Tests for the gitignore-vendor-not-ignored rule. Uses a real
- * `git init` in a temp directory so `git check-ignore` behaves
- * exactly as it would in a real project.
+ * Gitignore-pattern semantics regression (#365). The structural correctness of
+ * the `.webjs/vendor/` exception is now verified by `webjs doctor`'s
+ * `vendor-gitignore` check (moved out of `webjs check` in #461; see
+ * `test/cli/doctor.test.mjs`). This hermetic test stays here because it probes
+ * `git check-ignore` directly, asserting the depth-robust globstar `.webjs`
+ * pattern itself, independent of any check/doctor surface. Uses a real `git
+ * init` in a temp dir so `git check-ignore` behaves as it would in a real project.
  */
 
 function initGit(appDir) {
-  // Clear inherited git env so `git init` (and the rule's later
-  // check-ignore) target appDir, not an outer repo whose GIT_DIR /
-  // GIT_WORK_TREE leaked in via a worktree pre-commit hook.
+  // Clear inherited git env so `git init` (and any later check-ignore) target
+  // appDir, not an outer repo whose GIT_DIR / GIT_WORK_TREE leaked in via a
+  // worktree pre-commit hook.
   const { GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, ...env } = process.env;
   const result = spawnSync('git', ['init', '-q'], { cwd: appDir, stdio: 'pipe', env });
   return result.status === 0;
 }
-
-test('gitignore-vendor-not-ignored: flags the broken `.webjs/` pattern', async () => {
-  const appDir = await makeTempApp();
-  try {
-    if (!initGit(appDir)) return;
-    // The structurally-broken pattern: parent excluded, child negations
-    // can never re-include anything because git stops at the parent.
-    await writeFile(join(appDir, '.gitignore'), '.webjs/\n!.webjs/vendor/\n');
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.ok(v, 'expected gitignore-vendor-not-ignored violation');
-    assert.match(v.fix, /\.webjs\/\*/);
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: passes for the correct pattern', async () => {
-  const appDir = await makeTempApp();
-  try {
-    if (!initGit(appDir)) return;
-    await writeFile(
-      join(appDir, '.gitignore'),
-      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n',
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.equal(v, undefined, 'correct pattern should not violate');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: passes for the depth-robust `**/.webjs/*` pattern', async () => {
-  const appDir = await makeTempApp();
-  try {
-    if (!initGit(appDir)) return;
-    await writeFile(
-      join(appDir, '.gitignore'),
-      '**/.webjs/*\n!**/.webjs/vendor/\n!**/.webjs/vendor/**\n',
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.equal(v, undefined, '`**/.webjs/*` keeps the vendor pin un-ignored');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
 
 test('`**/.webjs/*` ignores nested routes.d.ts while the anchored `.webjs/*` does not', async () => {
   // The actual #365 bug: a slash-bearing `.webjs/*` anchors to the
   // .gitignore's dir, so a nested app (a monorepo package) leaks its
   // generated `.webjs/routes.d.ts`. `**/.webjs/*` ignores it at any
   // depth while still re-including the committed vendor pin. Probed
-  // directly with `git check-ignore` since the rule only checks the
-  // root-level vendor path.
+  // directly with `git check-ignore`.
   const appDir = await makeTempApp();
   try {
     if (!initGit(appDir)) return;
@@ -931,93 +886,6 @@ test('`**/.webjs/*` ignores nested routes.d.ts while the anchored `.webjs/*` doe
       'nested vendor pin stays tracked',
     );
   } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: flags broader `*.js` rule that hides bundle files', async () => {
-  // The pin manifest gets through because it ends in .json, but
-  // `webjs vendor pin --download` writes <pkg>@<version>.js files
-  // and those get blocked. Two-probe check catches this.
-  const appDir = await makeTempApp();
-  try {
-    if (!initGit(appDir)) return;
-    await writeFile(
-      join(appDir, '.gitignore'),
-      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n',
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.ok(v, 'broader *.js rule should be flagged');
-    assert.match(v.message, /sample-pkg|\.js/, 'message should reference the bundle file probe');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: skipped when not a git repo', async () => {
-  const appDir = await makeTempApp();
-  try {
-    // No `git init`. A .gitignore exists but there is no .git/ dir,
-    // so the rule must skip rather than emit a false positive.
-    await writeFile(join(appDir, '.gitignore'), '.webjs/\n');
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.equal(v, undefined, 'rule must skip when .git is absent');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: skipped when no .gitignore exists', async () => {
-  const appDir = await makeTempApp();
-  try {
-    if (!initGit(appDir)) return;
-    // git repo exists but no .gitignore at all (user has not opted
-    // into ignore rules yet). Rule must skip.
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.equal(v, undefined, 'rule must skip when .gitignore is absent');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('gitignore-vendor-not-ignored: ignores leaked GIT_WORK_TREE/GIT_DIR (worktree pre-commit)', async () => {
-  // Regression for the env-leak fix in check.js. The rule shells out to
-  // `git check-ignore` with cwd set to appDir. When `webjs check` (or
-  // `npm test`) runs inside a git hook from a linked worktree, git
-  // exports GIT_WORK_TREE / GIT_DIR / GIT_INDEX_FILE into the env, and
-  // those OVERRIDE cwd-based repo discovery, so the probe would consult
-  // the outer repo instead of appDir. We simulate that by pointing those
-  // vars at THIS monorepo (process.cwd()), then assert the rule still
-  // reads appDir's .gitignore (flags the broken `*.js` rule). Without the
-  // `env` strip in check.js this fails: the probe resolves against the
-  // outer repo where `.webjs/vendor/*.js` is not ignored.
-  const appDir = await makeTempApp();
-  const saved = {
-    GIT_DIR: process.env.GIT_DIR,
-    GIT_WORK_TREE: process.env.GIT_WORK_TREE,
-    GIT_INDEX_FILE: process.env.GIT_INDEX_FILE,
-  };
-  try {
-    if (!initGit(appDir)) return;
-    await writeFile(
-      join(appDir, '.gitignore'),
-      '.webjs/*\n!.webjs/vendor/\n!.webjs/vendor/**\n*.js\n',
-    );
-    // Leak outer-repo git context, the way a worktree pre-commit hook does.
-    process.env.GIT_DIR = join(process.cwd(), '.git');
-    process.env.GIT_WORK_TREE = process.cwd();
-    delete process.env.GIT_INDEX_FILE;
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'gitignore-vendor-not-ignored');
-    assert.ok(v, 'rule must read appDir gitignore despite leaked GIT_* env');
-  } finally {
-    for (const [k, val] of Object.entries(saved)) {
-      if (val === undefined) delete process.env[k];
-      else process.env[k] = val;
-    }
     await rm(appDir, { recursive: true, force: true });
   }
 });

@@ -705,8 +705,8 @@ function pinFilePath(appDir) {
  * The three-line `.gitignore` pattern that ignores the transient
  * `.webjs` caches at any depth while re-including the committed
  * `.webjs/vendor/` pin output. This mirrors the scaffold template
- * (`packages/cli/templates/.gitignore`) and the `gitignore-vendor-not-
- * ignored` rule in `check.js` verbatim, so a self-healed `.gitignore`
+ * (`packages/cli/templates/.gitignore`) and the `vendor-gitignore`
+ * check in `doctor.js` verbatim, so a self-healed `.gitignore`
  * ends up byte-identical to a freshly scaffolded one.
  */
 const VENDOR_GITIGNORE_LINES = [
@@ -726,7 +726,7 @@ const VENDOR_GITIGNORE_LINES = [
  * hook processes (a pre-commit hook from a linked worktree exports
  * GIT_WORK_TREE), and those OVERRIDE cwd-based discovery; without the
  * strip the probe would consult the outer repo instead of `appDir`.
- * Same reasoning as the `gitignore-vendor-not-ignored` check rule.
+ * Same reasoning as the `vendor-gitignore` doctor check.
  *
  * @param {string} appDir
  * @returns {boolean} true when `.webjs/vendor/importmap.json` is ignored

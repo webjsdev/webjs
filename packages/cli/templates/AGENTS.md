@@ -520,9 +520,10 @@ Production then has no importmap.json and the server falls back to
 calling api.jspm.io on every cold start. The `**/` prefix matters too:
 it ignores `.webjs/` at any depth, so an app nested below its repo root
 (a monorepo package) does not leak its generated `.webjs/routes.d.ts`
-into `git status`. The `gitignore-vendor-not-ignored` lint rule
-(`webjs check`) verifies the pattern with `git check-ignore` and will
-fail CI if it regresses.
+into `git status`. The `vendor-gitignore` check (`webjs doctor`)
+verifies the pattern with `git check-ignore` and warns if it regresses
+(it is a project-config / setup concern, not a source-code-correctness
+CI gate).
 
 ## Imports
 

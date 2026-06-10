@@ -66,9 +66,10 @@ even if the user doesn't explicitly ask.**
 Run `npm run doctor` (which runs `webjs doctor`) once after cloning to assert
 the project is set up correctly: the Node major (the strip-types floor), the
 tsconfig `erasableSyntaxOnly` flag, `.env` drift vs `.env.example`, vendor-pin
-freshness, importmap-coherence (the resolved client deps agree on a shared
-transitive version), `@webjsdev/*` version coherence, and the git pre-commit
-hook. It
+freshness, the `.gitignore` keeping `.webjs/vendor/` committable
+(`vendor-gitignore`), importmap-coherence (the resolved client deps agree on a
+shared transitive version), `@webjsdev/*` version coherence, and the git
+pre-commit hook. It
 prints `[pass]` / `[warn]` / `[fail]` per check with an actionable fix line and
 exits non-zero only on a hard fail (a broken toolchain), so a green run means
 `npm run dev` will boot. It is a local onboarding/setup-verify tool, not a CI
