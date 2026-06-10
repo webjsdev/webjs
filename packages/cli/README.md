@@ -44,8 +44,10 @@ webjs create <name> --template saas  # auth + dashboard + Prisma User model
 
 webjs dev                      # dev server with live reload (prefer `npm run dev`, which runs the predev prisma generate hook)
 webjs start                    # production server (no build step, serves source directly)
-webjs check                    # validate project conventions
+webjs check                    # validate source-code conventions (CI gate)
+webjs doctor                   # verify the project/toolchain setup (local onboarding, not CI)
 webjs test                     # run server + browser tests
+webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
 webjs db <prisma-subcommand>   # prisma passthrough (saas template)
 
 webjs ui init                  # initialise @webjsdev/ui in this project

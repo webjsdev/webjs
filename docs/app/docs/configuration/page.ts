@@ -108,7 +108,7 @@ webjs db studio       # prisma studio</pre>
 export default {
   DATABASE_URL: 'string',                                   // required by default
   AUTH_SECRET: { type: 'string', required: true, minLength: 16 },
-  PORT: { type: 'number', optional: true, default: 3000 },  // coerced + defaulted
+  PORT: { type: 'number', optional: true, default: 8080 },  // coerced + defaulted (webjs default port)
   NODE_ENV: { type: 'enum', values: ['development', 'production', 'test'] },
 };</pre>
     <p>Each field is a type name (<code>'string'</code>) or an options object. Supported types: <code>string</code>, <code>number</code>, <code>boolean</code>, <code>url</code>, <code>enum</code>. A field is <strong>required by default</strong>; mark it <code>optional: true</code> (or give it a <code>default</code>) to allow it to be absent. String fields support <code>minLength</code> and a <code>pattern</code> (a RegExp or string); <code>enum</code> fields take a <code>values</code> array. Coerced values (a <code>number</code>, a <code>boolean</code>) and applied defaults are written back to <code>process.env</code>, so the app reads the coerced value.</p>

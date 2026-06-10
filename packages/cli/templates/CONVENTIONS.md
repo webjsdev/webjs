@@ -66,7 +66,9 @@ even if the user doesn't explicitly ask.**
 Run `npm run doctor` (which runs `webjs doctor`) once after cloning to assert
 the project is set up correctly: the Node major (the strip-types floor), the
 tsconfig `erasableSyntaxOnly` flag, `.env` drift vs `.env.example`, vendor-pin
-freshness, `@webjsdev/*` version coherence, and the git pre-commit hook. It
+freshness, importmap-coherence (the resolved client deps agree on a shared
+transitive version), `@webjsdev/*` version coherence, and the git pre-commit
+hook. It
 prints `[pass]` / `[warn]` / `[fail]` per check with an actionable fix line and
 exits non-zero only on a hard fail (a broken toolchain), so a green run means
 `npm run dev` will boot. It is a local onboarding/setup-verify tool, not a CI
@@ -348,7 +350,7 @@ variables control infrastructure (no config files needed):
 | `AUTH_SECRET` | Required for auth JWT signing (32+ random chars) |
 | `AUTH_GOOGLE_ID` | Google OAuth client ID (optional) |
 | `AUTH_GITHUB_ID` | GitHub OAuth client ID (optional) |
-| `PORT` | Server port (default: 8080) |
+| `PORT` | Server port. Precedence: `--port` flag > `PORT` (a real exported env var or a `PORT` in `.env`) > 8080. |
 | `WEBJS_PUBLIC_*` | Any env var starting with this prefix is exposed to the browser as `process.env.WEBJS_PUBLIC_X`. Components can read it directly. No build step, no transform. Use for API base URLs, Stripe publishable keys, analytics IDs, anything that is intended to be visible client-side. |
 
 **Server-only by default.** Any env var without the `WEBJS_PUBLIC_` prefix never reaches the browser. Reading `process.env.DATABASE_URL` from a component returns `undefined`, the same as a typo. The prefix is fail-closed: secrets cannot accidentally leak.

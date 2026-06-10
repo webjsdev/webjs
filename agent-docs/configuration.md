@@ -205,3 +205,21 @@ Returns JSON describing the live build, alongside the `/__webjs/health` and `/__
 ```
 
 `version` is the `@webjsdev/server` framework version (read from its own `package.json`), `build` is the published importmap build id (the same fingerprint the client router reads from `data-webjs-build`; empty until the vendor map resolves), `node` is the running Node version, `uptime` is process uptime in seconds. Mechanism: `requestId()` / `setRequestId` in `packages/server/src/context.js`, `buildInfo` / `buildInfoResponse` in `packages/server/src/build-info.js`, all wired in `packages/server/src/dev.js`.
+
+---
+
+## Server port resolution (`--port` / `PORT` / `.env`) (#447)
+
+Both `webjs dev` and `webjs start` resolve the listen port with a single
+precedence: **`--port` flag > `PORT` (a real exported env var OR a `PORT`
+in the app's `.env`) > `8080`**. A real exported `PORT` still wins over a
+`.env` `PORT`, matching the `.env` auto-load's shell-wins-over-file rule
+(`process.loadEnvFile` does not clobber an already-set var).
+
+The CLI loads `<appDir>/.env` BEFORE resolving the port, so a `PORT` set
+only in `.env` is honored (it previously was not: the port was computed
+from `process.env.PORT || 8080` before the server's own `.env` load ran,
+so the file's `PORT` never reached the comparison and the server always
+bound 8080). Mechanism: `loadAppEnv(appDir)` + the pure
+`resolvePort(portFlag, env)` in `packages/cli/lib/port.js`, called by the
+`dev` and `start` bins before listening.

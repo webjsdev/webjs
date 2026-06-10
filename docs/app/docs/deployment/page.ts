@@ -268,7 +268,7 @@ Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</pre>
     <h2>Environment Variables</h2>
     <p>webjs reads the following environment variables:</p>
     <ul>
-      <li><strong>PORT</strong>: server port (default: 8080). Overridden by <code>--port</code> CLI flag.</li>
+      <li><strong>PORT</strong>: server port (default: 8080). Resolved with precedence <code>--port</code> &gt; <code>PORT</code> (a real exported env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
       <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
     </ul>
     <p>For app-specific environment variables, use <code>process.env</code> in server-side code (pages, server actions, middleware, API routes). These are never exposed to the client.</p>

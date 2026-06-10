@@ -361,7 +361,7 @@ See the "Receive and persist an uploaded file" recipe in `agent-docs/recipes.md`
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth (optional) |
 | `SESSION_SECRET` | Cookie session signing |
 | `REDIS_URL` | When set, sessions + rate limit + cache use Redis |
-| `PORT` | Server port (default 8080) |
+| `PORT` | Server port. Precedence `--port` > `PORT` (real env or `.env`) > 8080 (#447) |
 
 ## Scaling to multiple instances
 

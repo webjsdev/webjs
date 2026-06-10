@@ -46,6 +46,7 @@ export default async function Dashboard() {
   if (!session) throw redirect('/login');
   return html\`&lt;h1&gt;Welcome, \${session.user.name}&lt;/h1&gt;\`;
 }</pre>
+    <p>A <code>redirect()</code> thrown during a GET page render (an auth gate like this) defaults to <code>302 Found</code>, the conventional bounce code. The same <code>redirect()</code> thrown from a server action (a POST) defaults to the method-preserving <code>307</code> instead; an explicit <code>redirect(url, status)</code> overrides either. To type <code>session.user</code> so <code>session.user.name</code> needs no cast, see <a href="/docs/typescript">Typing the auth() Session User</a>.</p>
 
     <h2>Sign in and sign out</h2>
     <pre>// Server actions

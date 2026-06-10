@@ -99,6 +99,7 @@ Content-Type: text/html
       <li>Emit those URLs verbatim in the page's <code>&lt;script type="importmap"&gt;</code>. Browser fetches directly from <code>ga.jspm.io</code>; webjs's server is never on the vendor-bytes path.</li>
     </ol>
     <p>Native modules and server-only packages (<code>node:*</code>, <code>@prisma/client</code>) are filtered out by the scanner (they're imported only from <code>.server.{js,ts}</code> / <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code> files, which the scanner skips). Server packages never reach the browser.</p>
+    <p><strong>Coherence is also verified as a check, not only at resolution.</strong> Resolving the whole install set as one batch (above) produces a coherent graph, but a hand-edited importmap or a partial vendor pin can still skew a transitive version. <code>webjs doctor</code> runs an <code>importmap-coherence</code> check that validates every resolved client dep's declared dependency/peer ranges against the versions actually pinned (including the generated <code>.webjs/vendor/importmap.json</code>), and names the conflicting packages, the required range, and the pinned version when they disagree. So a broken graph is caught before the browser runs it.</p>
 
     <h2>Optional: commit resolved URLs via <code>webjs vendor pin</code></h2>
     <p>By default the <code>api.jspm.io/generate</code> call happens once on the first request (memoized for the process), never at boot. To skip it entirely (no runtime dependency on jspm.io's API), run <code>webjs vendor pin</code>:</p>
