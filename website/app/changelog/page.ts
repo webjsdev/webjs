@@ -47,7 +47,7 @@ export default async function Changelog() {
                 <time class="font-mono text-[11.5px] text-fg-subtle tracking-tight">${e.date.slice(0, 10)}</time>
                 <span class="text-[11.5px] text-fg-subtle">${e.commitCount} change${e.commitCount === 1 ? '' : 's'}</span>
               </header>
-              <div>${unsafeHTML(renderEntryBody(e.body))}</div>
+              <div class="[overflow-wrap:anywhere]">${unsafeHTML(renderEntryBody(e.body))}</div>
             </article>
           `)}
     </main>
