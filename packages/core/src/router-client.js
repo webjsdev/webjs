@@ -1631,7 +1631,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // (fire-and-forget) so the URL advance + navigate event do not wait on the
   // slow boundary; each apply is guarded by the nav token so a newer navigation
   // stops it.
-  if (streamCtx && streamCtx.reader) {
+  if (streamCtx && (streamCtx.reader || streamCtx.rest)) {
     streamBoundariesProgressively(
       streamCtx.reader,
       streamCtx.dec,
@@ -2883,16 +2883,33 @@ async function readStreamedShell(resp) {
   const dec = new TextDecoder();
   let buf = '';
   const MARK = '<template data-webjs-resolve';
+  // The SSR stream flushes the whole shell (prefix + body with fallbacks +
+  // `</body></html>`) FIRST, then appends each streamed boundary as its data
+  // resolves. So the shell ends at `</html>`; the boundary marker arrives
+  // LATER (after the slow data). Delimiting on `</html>` is what lets the
+  // shell swap in immediately instead of waiting for the slow boundary. If a
+  // boundary marker is already in the buffer (a fast boundary, or a partial
+  // response with no `</html>`), split there instead.
+  const HTML_CLOSE = /<\/html\s*>/i;
   for (;;) {
     const { value, done } = await reader.read();
     if (value) buf += dec.decode(value, { stream: true });
     if (done) {
       buf += dec.decode();
+      // Stream ended: split at a boundary marker if present, else the whole
+      // body is the shell (a non-streaming response).
+      const mi = buf.indexOf(MARK);
+      if (mi !== -1) return { shell: buf.slice(0, mi), streaming: true, reader: null, dec, rest: buf.slice(mi) };
       return { shell: buf, streaming: false };
     }
-    const idx = buf.indexOf(MARK);
-    if (idx !== -1) {
-      return { shell: buf.slice(0, idx), streaming: true, reader, dec, rest: buf.slice(idx) };
+    const mi = buf.indexOf(MARK);
+    if (mi !== -1) {
+      return { shell: buf.slice(0, mi), streaming: true, reader, dec, rest: buf.slice(mi) };
+    }
+    const hm = HTML_CLOSE.exec(buf);
+    if (hm) {
+      const end = hm.index + hm[0].length;
+      return { shell: buf.slice(0, end), streaming: true, reader, dec, rest: buf.slice(end) };
     }
   }
 }
@@ -2970,6 +2987,9 @@ async function streamBoundariesProgressively(reader, dec, initialBuf, isCurrent)
     }
     return true;
   };
+  // The whole response was already buffered (the stream ended before the shell
+  // delimiter): just apply whatever boundaries are in hand.
+  if (!reader) { flush(); return; }
   try {
     for (;;) {
       if (!flush()) { try { await reader.cancel(); } catch { /* ignore */ } return; }

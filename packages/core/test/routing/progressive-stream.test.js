@@ -23,22 +23,58 @@ function streamingResponse(chunks) {
   return new Response(body, { headers: { 'content-type': 'text/html' } });
 }
 
-test('readStreamedShell returns the whole body when there are no boundaries', async () => {
+test('readStreamedShell delimits a full page at </html> (boundaries may follow)', async () => {
   const resp = streamingResponse(['<html><body><p>hello</p>', '</body></html>']);
   const r = await _readStreamedShell(resp);
-  assert.equal(r.streaming, false);
+  // A full page is delimited at </html>; the applier then finds no boundaries.
+  assert.equal(r.streaming, true);
   assert.match(r.shell, /<p>hello<\/p>/);
-  assert.match(r.shell, /<\/body><\/html>/);
+  assert.match(r.shell, /<\/body><\/html>$/, 'shell ends exactly at </html>');
 });
 
-test('readStreamedShell splits the shell at the first streamed boundary', async () => {
+test('readStreamedShell returns the whole fragment when there is no shell close and no boundary', async () => {
+  // An X-Webjs-Have partial fragment has no </html> and no boundaries.
+  const resp = streamingResponse(['<section><p>partial</p></section>']);
+  const r = await _readStreamedShell(resp);
+  assert.equal(r.streaming, false);
+  assert.match(r.shell, /<section><p>partial<\/p><\/section>/);
+});
+
+test('readStreamedShell returns the shell at </html>, BEFORE the slow boundary streams', async () => {
+  // The real SSR stream flushes the shell + </body></html> first, then the
+  // boundary template arrives later (after the slow data). A reader that
+  // only delivers the shell chunk so far must still resolve the shell now.
+  const enc = new TextEncoder();
+  let pushBoundary;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(enc.encode('<html><body><webjs-suspense id="s1"><i>loading</i></webjs-suspense></body></html>'));
+      // The boundary is held back (simulating the slow async data).
+      pushBoundary = () => {
+        controller.enqueue(enc.encode('<template data-webjs-resolve="s1"><p>real</p></template>'));
+        controller.close();
+      };
+    },
+  });
+  const resp = new Response(body, { headers: { 'content-type': 'text/html' } });
+  const r = await _readStreamedShell(resp);   // must resolve without pushBoundary()
+  assert.equal(r.streaming, true);
+  assert.ok(r.reader, 'the reader stays open for the boundary');
+  assert.match(r.shell, /<webjs-suspense id="s1"><i>loading<\/i><\/webjs-suspense>/);
+  assert.match(r.shell, /<\/html>$/, 'shell ends at </html>');
+  assert.doesNotMatch(r.shell, /data-webjs-resolve/, 'the slow boundary is NOT in the shell');
+  pushBoundary();   // release so the stream can close
+  if (pushBoundary && r.reader) { try { await r.reader.cancel(); } catch { /* ignore */ } }
+});
+
+test('readStreamedShell splits at an already-buffered fast boundary', async () => {
+  // A fully-buffered response (stream ends with the boundary present): split
+  // at the boundary marker so the applier gets it in `rest`.
   const resp = streamingResponse([
-    '<html><body><webjs-suspense id="s1"><i>loading</i></webjs-suspense></body></html>',
-    '<template data-webjs-resolve="s1"><p>real</p></template><script>swap()</script>',
+    '<html><body><x-y id="s1"></x-y><template data-webjs-resolve="s1"><p>real</p></template></body></html>',
   ]);
   const r = await _readStreamedShell(resp);
   assert.equal(r.streaming, true);
-  assert.match(r.shell, /<webjs-suspense id="s1"><i>loading<\/i><\/webjs-suspense>/);
   assert.doesNotMatch(r.shell, /data-webjs-resolve/, 'the shell stops before the boundary template');
   assert.match(r.rest, /^<template data-webjs-resolve="s1">/, 'the leftover begins at the boundary');
 });
