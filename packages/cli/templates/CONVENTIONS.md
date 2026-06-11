@@ -387,6 +387,7 @@ modules/
 - Components must call `Class.register('tag')`
 - **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** Direct imports of `@prisma/client` or `node:*` from pages, layouts, or components crash the browser at module load. Wrap in a `.server.{js,ts}` file; the framework rewrites that import to an RPC stub on the browser side. `lib/` holds both server-only infra (`lib/prisma.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with `cn`); the convention is "if a `lib/` file needs Node APIs, only import it from server-only files."
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules
+- **Fetch server data in the component that needs it, with an `async render()`, not by prop-drilling.** A leaf component can write `const u = await getUser(this.uid)` directly in `render()`; SSR awaits it so the data is in the first paint, and the client uses stale-while-revalidate on a re-fetch. Reach for `renderFallback()` only to show a re-fetch loading state, and `Task` / signals only for genuinely client-only data (a `Task` shows its pending state at SSR, losing first-paint data). Do not put `await getData()` in a page / layout when a leaf component can own it (page fetches run sequentially, a route-level waterfall).
 
 ---
 
