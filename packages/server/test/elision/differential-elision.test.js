@@ -29,8 +29,10 @@ const BLOG = resolve(HERE, '../../../../examples/blog');
 // A corpus spanning the elision shapes: a mixed page (display-only badges +
 // interactive components), an inert fully-static route, a route whose
 // display-only component is force-shipped by cross-module observation
-// (#169), and a fully-static page that drops its own module from the boot.
-const ROUTES = ['/', '/static-info', '/observed', '/about'];
+// (#169), a fully-static page that drops its own module from the boot, and a
+// bare async-render leaf whose module is elided yet whose SSR'd data is in the
+// first paint (#474, /async-leaf renders <inline-quote>).
+const ROUTES = ['/', '/static-info', '/observed', '/about', '/async-leaf'];
 
 /**
  * Mask the JS-loaded set so the diff sees only observable output. The
@@ -144,6 +146,27 @@ test('the mixed page actually elides JS on the ON side (the diff is not vacuous)
   assert.ok(
     dropped.some((u) => /build-stamp|vendor-badge|muted-text/.test(u)),
     `a display-only badge module should be dropped on the ON side; dropped=${JSON.stringify(dropped)}`,
+  );
+});
+
+test('a bare async-render leaf is elided ON yet renders identical SSR (#474)', () => {
+  // /async-leaf renders <inline-quote>, a bare async-render display-only leaf.
+  // OFF preloads its module; ON drops it (the import is stripped, the preload
+  // hint and importmap entry go with it), yet the SSR'd quote is byte-identical
+  // on both sides (already asserted by the per-route diff above) AND present.
+  const onSet = preloadSet(on['/async-leaf'].html);
+  const offSet = preloadSet(off['/async-leaf'].html);
+  assert.ok(
+    [...offSet].some((u) => /inline-quote/.test(u)),
+    `OFF must preload the bare-async leaf module; off=${JSON.stringify([...offSet])}`,
+  );
+  assert.ok(
+    ![...onSet].some((u) => /inline-quote/.test(u)),
+    `ON must elide the bare-async leaf module; on=${JSON.stringify([...onSet])}`,
+  );
+  assert.ok(
+    /What you read is what runs\./.test(on['/async-leaf'].html),
+    'the elided leaf\'s async data is still baked into the ON first paint (PE-safe)',
   );
 });
 

@@ -675,6 +675,76 @@ test('import rule: display-only importer of a shipping component ships', async (
   assert.deepEqual([...elidable], []);
 });
 
+test('import rule: a bare async parent that imports an interactive child ships (#474)', async () => {
+  // The parent is a bare async-render leaf (elidable on its own merits), but it
+  // statically imports a shipping interactive child. The import rule forces the
+  // parent to ship too, so the elided parent can never drop the child's
+  // registration. This is the fence the refinement relies on for nested
+  // interactive children.
+  const parent = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import './child.js';
+    import { getData } from '../actions/get-data.server.ts';
+    class Parent extends WebComponent {
+      async render() { const d = await getData(); return html\`<child-el>\${d.x}</child-el>\`; }
+    }
+    Parent.register('parent-el');
+  `;
+  const child = DISPLAY_ONLY.replace(/student-card/g, 'child-el').replace(
+    'render()',
+    'connectedCallback() {} render()',
+  );
+  const files = { '/app/parent.js': parent, '/app/child.js': child };
+  const elidable = await computeElidableComponents(
+    [
+      { tag: 'parent-el', file: '/app/parent.js' },
+      { tag: 'child-el', file: '/app/child.js' },
+    ],
+    graphOf({ '/app/parent.js': ['/app/child.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  assert.deepEqual([...elidable], [], 'both the interactive child AND its bare-async importer ship');
+});
+
+test('a bare async parent whose child registers ELSEWHERE is elided; the child still ships (#474)', async () => {
+  // The parent renders <child-el> but does NOT import it (no import edge), and
+  // it carries no other signal, so it is elidable. The child is interactive and
+  // registered by a SEPARATE module, so it ships on its own merits and upgrades
+  // independently. The parent's elision never touches the child's registration.
+  const parent = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getData } from '../actions/get-data.server.ts';
+    class Parent extends WebComponent {
+      async render() { const d = await getData(); return html\`<p>\${d.x}</p><child-el></child-el>\`; }
+    }
+    Parent.register('parent-el');
+  `;
+  const child = DISPLAY_ONLY.replace(/student-card/g, 'child-el').replace(
+    'render()',
+    'connectedCallback() {} render()',
+  );
+  const other = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import './child.js';
+    class Other extends WebComponent { render() { return html\`<other-el></other-el>\`; } }
+    Other.register('other-el');
+  `;
+  const files = { '/app/parent.js': parent, '/app/child.js': child, '/app/other.js': other };
+  const elidable = await computeElidableComponents(
+    [
+      { tag: 'parent-el', file: '/app/parent.js' },
+      { tag: 'child-el', file: '/app/child.js' },
+      { tag: 'other-el', file: '/app/other.js' },
+    ],
+    graphOf({ '/app/other.js': ['/app/child.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  // Parent elided (bare async, no import of the child); child + its importer ship.
+  assert.deepEqual([...elidable], ['/app/parent.js']);
+});
+
 test('unreadable component file is conservatively kept (ships)', async () => {
   const elidable = await computeElidableComponents(
     [{ tag: 'gone-el', file: '/app/gone.js' }],
