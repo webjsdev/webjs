@@ -857,6 +857,20 @@ mounted across nav and keep their `scrollTop` natively.
 
 ### `<webjs-frame>` escape hatch
 
+`<webjs-frame>` is webjs's take on **Turbo Frames** (Hotwire Turbo), so the
+mental model and most `<turbo-frame>` muscle memory transfer directly: a lazy,
+URL-addressable region that swaps on its own, driven by a link or form
+targeting its id. It is the unit for a region that loads or refreshes
+INDEPENDENTLY of a full-page navigation (something a page/layout, which
+re-renders only at the route level, cannot express), and it ships zero
+component JS. A frame's route can itself use `<webjs-suspense>`, so a deferred
+(`loading="lazy"`) frame whose data is slow streams that data behind a fallback
+inside the frame (one caveat: a streamed framed route skips the byte-saving
+subtree extraction, so the full page renders and the client slices out the
+region). See `data-fetching.md` / the data-fetching doc page for the
+async-render vs `<webjs-suspense>` vs `<webjs-frame>` vs `<webjs-stream>`
+decision boundary.
+
 For partial-swap regions NOT tied to a folder layout (a marketing-page
 widget, tabbed UI, etc.), wrap the region in a frame:
 
@@ -1008,6 +1022,13 @@ server-side into the frame instead of using `src` (the self-load then replaces
 those fallback children).
 
 ### Stream actions: surgical element-level updates (#248)
+
+`<webjs-stream>` is webjs's take on **Turbo Streams** (Hotwire Turbo); the
+action set (`append` / `prepend` / `before` / `after` / `replace` / `update` /
+`remove`) mirrors `<turbo-stream>`, so that muscle memory transfers directly. It
+is the ONLY surgical single-element update primitive (and the live-channel
+applier); a region swap or a `<webjs-frame>` reload redraws a whole region, and
+`<webjs-suspense>` is for streaming, so none of them cover "append one row".
 
 A region swap (a layout marker or a `<webjs-frame>`) is the right tool for "this
 part of the page changed". It is too coarse for "append ONE comment", "remove

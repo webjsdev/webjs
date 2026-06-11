@@ -75,6 +75,52 @@ class Report extends WebComponent {
       <li><strong>Errors.</strong> Do nothing by default. The framework isolates a failed async component automatically. Add <code>renderError()</code> ONLY to customize the error UI.</li>
     </ol>
 
+    <h2>Deferred or self-refreshing regions: webjs-frame with webjs-suspense</h2>
+    <p>Everything above puts data in the FIRST response (blocking or streamed). Some regions instead need to load or refresh <strong>independently of a full-page navigation</strong>, which is the one thing a page or layout cannot do, because a page/layout re-renders only at the route level (the whole route, on navigation). The unit for an independent region is <code>&lt;webjs-frame&gt;</code>, a server-rendered, URL-addressable sub-region that loads and reloads on its own and ships <strong>zero component JS</strong> (its content is server HTML, swapped in by the framework). It is the webjs answer to a leaf that behaves like an RSC server component, re-rendering through a server round-trip rather than shipping a module.</p>
+    <p><strong>webjs-frame is webjs's take on Turbo Frames</strong> (from Hotwire Turbo), so the mental model and most muscle memory transfer directly. A frame is a lazy, URL-addressable region; a link or form targeting it swaps only that region; <code>loading="lazy"</code> defers it to viewport entry. If you know <code>&lt;turbo-frame&gt;</code>, you already know <code>&lt;webjs-frame&gt;</code>.</p>
+    <p>Reach for a frame, not a page/layout, when the region:</p>
+    <ol>
+      <li><strong>Refreshes on its own</strong> (a dashboard widget, a "load more", a filtered list) without reloading the page. Drive it with a <code>data-webjs-frame="&lt;id&gt;"</code> link or form, or by changing its <code>src</code>; the server re-renders just that route and the frame swaps the result in. No component module ships.</li>
+      <li><strong>Is below the fold or expensive and should NOT hold the first response open.</strong> Use <code>&lt;webjs-frame id src loading="lazy"&gt;</code>, so the first response ships fast and small and the frame self-loads its URL on viewport entry (a second request). This is the deliberately-deferred case, distinct from streaming.</li>
+      <li><strong>Is URL-addressable</strong> (a tab panel, a detail pane) that maps to a route.</li>
+    </ol>
+    <p><strong>Combining the two.</strong> A frame defers a region to a SECOND request; <code>&lt;webjs-suspense&gt;</code> streams slow data WITHIN a response. They compose: a frame whose route is itself slow can wrap that data in <code>&lt;webjs-suspense&gt;</code>, so the frame defers the load (lazy, on viewport) and the slow data then streams in behind a fallback inside the frame. A comments section that is both below the fold AND slow is the canonical case.</p>
+    <pre>// app/post/[id]/page.ts, defer the comments to a lazy frame
+html\`
+  &lt;article&gt;...the post (in the first paint)...&lt;/article&gt;
+  &lt;webjs-frame id="comments" src=${'${`/post/${id}/comments`}'} loading="lazy"&gt;&lt;/webjs-frame&gt;
+\`;
+
+// app/post/[id]/comments/page.ts, the frame's route streams its slow data
+html\`
+  &lt;webjs-frame id="comments"&gt;
+    &lt;webjs-suspense .fallback=${'${html`<p>Loading comments…</p>`}'}&gt;
+      &lt;comment-list post-id=${'${id}'}&gt;&lt;/comment-list&gt;
+    &lt;/webjs-suspense&gt;
+  &lt;/webjs-frame&gt;
+\`;</pre>
+    <p>The right way: point the frame's <code>src</code> / <code>data-webjs-frame</code> at a <code>route.ts</code> or page that renders the region server-side; wrap genuinely-slow data inside it in <code>&lt;webjs-suspense&gt;</code>; use <code>loading="lazy"</code> for below-the-fold; and keep PE-critical content in the first paint (a frame <code>src</code> is JS-dependent, so a no-JS client sees only what was rendered into the frame). One caveat: when a framed route streams, the frame's byte-saving subtree extraction is skipped (the full page renders server-side and the client slices out the region), so you trade some wire bytes for the streaming.</p>
+    <h2>Surgical single-element updates and live channels: webjs-stream</h2>
+    <p>A frame or a region swap redraws a whole region. That is too coarse for "append ONE comment", "remove ONE row", "bump a count", or "insert a toast". For those, <code>&lt;webjs-stream&gt;</code> applies a per-element update declared as plain HTML: a <code>&lt;webjs-stream action target&gt;</code> wrapping a single <code>&lt;template&gt;</code>, where <code>action</code> is one of <code>append</code> / <code>prepend</code> / <code>before</code> / <code>after</code> / <code>replace</code> / <code>update</code> / <code>remove</code> and <code>target</code> is an element id. The element self-applies on connect and removes itself, so it needs no per-app DOM code.</p>
+    <p><strong>webjs-stream is webjs's take on Turbo Streams</strong> (from Hotwire Turbo); the action set mirrors <code>&lt;turbo-stream&gt;</code>, so that muscle memory transfers directly. The same applier serves two delivery paths: a content-negotiated <code>&lt;form&gt;</code> response (the client router asks for the stream MIME only on a JS-driven submit, so a JS-off form still gets a normal render), and a <strong>live channel</strong>, where <code>renderStream(message)</code> in a <code>connectWS</code> handler applies a <code>broadcast()</code>ed payload. So chat, notifications, and presence reuse the same grammar.</p>
+    <pre>// server: append one comment, fan it out to other viewers, degrade for no-JS
+import { stream, streamResponse, acceptsStream, broadcast } from '@webjsdev/server';
+export async function POST(req, { params }) {
+  const c = await addComment(params.id, await req.formData());
+  const html = stream.append('comments', ${'${`<li>${escapeHtml(c.text)}</li>`}'});
+  broadcast(${'${`post:${params.id}`}'}, html);
+  return acceptsStream(req) ? streamResponse(html) : Response.redirect(${'${`/post/${params.id}`}'}, 303);
+}</pre>
+    <p>Reach for <code>&lt;webjs-stream&gt;</code> when the change is a single element inside an otherwise-unchanged region, or when a live channel pushes incremental updates. Use a region swap or a <code>&lt;webjs-frame&gt;</code> reload when a whole region changes; those are not the tool for one row.</p>
+
+    <h2>Which primitive when (the decision boundary)</h2>
+    <ul>
+      <li><strong>async render</strong>: co-located server data in the FIRST paint (the default).</li>
+      <li><strong>webjs-suspense</strong>: slow data that should still be in the first response, streamed behind a fallback.</li>
+      <li><strong>webjs-frame</strong>: a region that loads / refreshes INDEPENDENTLY of a full navigation (self-refresh, lazy below-the-fold, URL-addressable), server-rendered, zero component JS. Turbo Frames.</li>
+      <li><strong>webjs-stream</strong>: a SURGICAL single-element update (append / remove / replace one node) or a live-channel push. Turbo Streams.</li>
+    </ul>
+
     <h2>Anti-patterns</h2>
     <ul>
       <li>Do NOT prop-drill server data through layers when the leaf component can fetch it itself.</li>
