@@ -146,6 +146,16 @@ them per app.
    component that now does client work. The guard test
    (`packages/server/test/elision/lifecycle-coverage.test.js`) fails on
    any new prototype method until it is classified.
+   Note (#474): an `async render()` is NOT, by itself, a ship signal. A
+   bare async leaf (no other client signal, light DOM) is elided like any
+   display-only component, since SSR bakes its data into the first paint.
+   It ships only on an independent signal (the lists above, an `@event`, a
+   non-`state` prop, a `<slot>`, cross-module observation, an interactive
+   child) or one of the two static carve-outs `analyzeComponentSource`
+   checks inline: `static shadow = true` (Declarative Shadow DOM must
+   re-attach on a client-side DOM insertion) and `static refresh = true`
+   (the explicit opt-in to keep the on-load re-fetch). `renderFallback`
+   stays a ship signal via `CLIENT_LIFECYCLE_HOOKS`.
 
 7. **`<slot>` works identically in light and shadow DOM.** Light-DOM
    slots get the same `assignedNodes` / `assignedElements` /
