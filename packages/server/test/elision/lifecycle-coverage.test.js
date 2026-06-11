@@ -50,6 +50,7 @@ const CLASSIFICATION = {
   firstUpdated: 'override-hook',
   getUpdateComplete: 'override-hook',
   renderError: 'override-hook',
+  renderFallback: 'override-hook',
   requestUpdate: 'call',
   addController: 'call',
   removeController: 'call',

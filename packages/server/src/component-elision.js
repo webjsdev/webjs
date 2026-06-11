@@ -111,6 +111,9 @@ export const CLIENT_LIFECYCLE_HOOKS = [
   'firstUpdated',
   'getUpdateComplete',
   'renderError',
+  // The async-render re-fetch loading UI (#469): defining it means the
+  // component suspends and re-renders on the client, so it must ship.
+  'renderFallback',
 ];
 
 /**
@@ -133,7 +136,7 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  * module ships. `renderFallback` is the optional client re-fetch loading UI,
  * meaningless without an async render, so its presence is the same signal.
  */
-const ASYNC_RENDER_RE = /\basync\s+render\s*\(|\brender\s*=\s*async\b|\brenderFallback\s*[=(]/;
+const ASYNC_RENDER_RE = /\basync\s+render\s*\(|\brender\s*=\s*async\b/;
 
 /** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
 const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
