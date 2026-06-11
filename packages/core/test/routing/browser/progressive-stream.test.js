@@ -51,13 +51,14 @@ function fakeReader(chunks) {
 }
 
 suite('progressive streaming (DOM)', () => {
-  test('applyStreamedResolve replaces the fallback and upgrades a streamed component', async () => {
+  test('applyStreamedResolve replaces the boundary with the streamed content and upgrades it', async () => {
     container().innerHTML = `<webjs-suspense id="s1"><i class="fb">loading</i></webjs-suspense>`;
     _applyStreamedResolve('s1', '<resolved-widget label="done"><!--webjs-hydrate--></resolved-widget>');
-    const boundary = host.querySelector('#s1');
-    assert.ok(!boundary.querySelector('.fb'), 'fallback removed');
-    const widget = boundary.querySelector('resolved-widget');
-    assert.ok(widget, 'streamed component present');
+    // The transient boundary wrapper is removed (matching the initial-load path).
+    assert.ok(!host.querySelector('#s1'), 'the boundary element was replaced (no wrapper left)');
+    assert.ok(!host.querySelector('.fb'), 'fallback removed');
+    const widget = host.querySelector('resolved-widget');
+    assert.ok(widget, 'streamed component present in the host');
     if (widget.updateComplete) await widget.updateComplete;   // upgrade renders on a microtask
     await tick(0);
     assert.ok(widget.querySelector('.widget'), 'streamed component upgraded and rendered');
@@ -72,9 +73,11 @@ suite('progressive streaming (DOM)', () => {
       '<template data-webjs-resolve="b"><p class="rb">B</p></template><script>x</script>',
     ]);
     await _streamBoundariesProgressively(reader, new TextDecoder(), '', () => true);
-    assert.ok(host.querySelector('#a .ra'), 'boundary a resolved');
-    assert.ok(host.querySelector('#b .rb'), 'boundary b resolved');
-    assert.equal(host.querySelector('#a').textContent, 'A');
+    // Each boundary is replaced by its content (the wrapper is removed).
+    assert.ok(host.querySelector('.ra'), 'boundary a resolved');
+    assert.ok(host.querySelector('.rb'), 'boundary b resolved');
+    assert.ok(!host.querySelector('#a') && !host.querySelector('#b'), 'both boundary wrappers removed');
+    assert.equal(host.querySelector('.ra').textContent, 'A');
   });
 
   test('a superseded stream stops applying and cancels the reader', async () => {
@@ -89,8 +92,8 @@ suite('progressive streaming (DOM)', () => {
     await tick(8);            // let the first boundary apply
     current = false;         // supersede
     await p;
-    assert.ok(host.querySelector('#c .rc'), 'the first boundary applied before supersession');
-    assert.ok(!host.querySelector('#d .rd'), 'the second boundary did NOT apply after supersession');
+    assert.ok(host.querySelector('.rc'), 'the first boundary applied before supersession');
+    assert.ok(host.querySelector('#d') && !host.querySelector('.rd'), 'the second boundary did NOT apply after supersession (its fallback wrapper remains)');
     assert.ok(reader.cancelled(), 'the reader was cancelled');
   });
 });

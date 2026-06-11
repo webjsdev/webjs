@@ -2949,11 +2949,13 @@ function takeResolveUnit(buf) {
 }
 
 /**
- * Apply one streamed Suspense resolution to the live DOM (#473): replace the
- * boundary element's children (its fallback) with the resolved content and
- * upgrade any custom elements inside. Does in JS what the SSR stream's inline
- * swap `<script>` does on the initial-load path, so a soft-nav apply does not
- * depend on inserting and executing that script.
+ * Apply one streamed Suspense resolution to the live DOM (#473). REPLACES the
+ * boundary element (its fallback) with the resolved content and upgrades any
+ * custom elements inside. This mirrors the initial-load boot resolver
+ * (`b.replaceWith(template.content)`) and the prefetched-buffered path exactly,
+ * so a streamed boundary settles to the SAME DOM shape (the transient
+ * `<webjs-boundary>` / `<webjs-suspense>` wrapper removed) however the page was
+ * reached, in JS so a soft-nav apply does not depend on the inline swap script.
  *
  * @param {string} id
  * @param {string} content
@@ -2961,8 +2963,14 @@ function takeResolveUnit(buf) {
 function applyStreamedResolve(id, content) {
   const boundary = document.getElementById(id);
   if (!boundary) return;
-  boundary.innerHTML = content;
-  upgradeTree(boundary);
+  const tpl = document.createElement('template');
+  tpl.innerHTML = content;
+  const inserted = [...tpl.content.childNodes];
+  boundary.replaceWith(tpl.content);
+  // Upgrade any custom elements now that they are connected (belt-and-braces:
+  // a connected, defined element upgrades on insertion, but a fragment that was
+  // built before its module loaded would not).
+  for (const n of inserted) if (n.nodeType === 1) upgradeTree(/** @type {Element} */ (n));
 }
 
 /**
