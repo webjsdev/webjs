@@ -102,7 +102,7 @@ class Report extends WebComponent {
 1. Server data knowable at request time: fetch it IN the component with `async render()`. Co-located, no prop-drilling, data in the first paint. The default, simplest case.
 2. Client re-fetch where stale content would mislead: add `renderFallback()` for a loading state during the re-fetch.
 3. Genuinely CLIENT-ONLY data (depends on a click, viewport, localStorage, or live updates, and does NOT need to be in the first paint): use `Task` / signals plus an RPC action.
-4. Slow server data where blocking the first byte hurts: stream it. The explicit `<webjs-suspense>` SSR-streaming opt-in is tracked in #471.
+4. Slow server data where blocking the first byte hurts: stream it. Wrap the component in `<webjs-suspense .fallback=${html\`…\`}>` to flush the fallback on the first byte and stream the data in (the only way to show a first-paint fallback; concurrent across boundaries; progressive on soft nav). Do it deliberately for slow regions, not by default.
 
 **Anti-patterns (likely footguns):**
 
@@ -113,6 +113,28 @@ class Report extends WebComponent {
 - Do NOT add `renderError()` on every component (isolation is automatic).
 
 **How it works.** On the server the SSR walker already awaits a promise-returning `render()` and bakes the data in; a throw is caught per component and rendered as the error state. On the client, `update()` detects a thenable from `render()` and routes to a stale-while-revalidate commit: the current DOM stays until the promise resolves, a monotonic render token drops a superseded resolution (an out-of-order fetch never commits stale DOM), and a rejection routes to `renderError()`. `firstUpdated` / `updated` / `updateComplete` fire after the async commit lands. Only signal reads BEFORE the first `await` establish reactive dependencies. A component with an `async render()` is always shipped to the browser (never elided as display-only).
+
+### Streaming a slow region with `<webjs-suspense>` (#471)
+
+`async render()` BLOCKS the first byte by default (the SSR HTML waits for the data). For a SLOW region where that wait hurts time-to-first-byte, wrap it in `<webjs-suspense>` to stream it: the fallback flushes immediately, the resolved content streams in.
+
+```ts
+html`
+  <webjs-suspense .fallback=${html`<p>Loading section…</p>`}>
+    <user-profile uid="42"></user-profile>
+    <user-activity uid="42"></user-activity>
+  </webjs-suspense>
+`;
+```
+
+- **The fallback is on the first byte, the content streams in.** This is the ONLY way a fallback appears on the first paint. It is a deliberate choice for slow data (fast TTFB, accepting a fallback-then-content swap), exactly like page-level `Suspense`. PE-critical content stays unwrapped (blocking) so it is in the first paint with no JS.
+- **Grouping + override.** One boundary wraps several components under ONE fallback. The boundary `.fallback` wins over a contained component's `renderFallback()`.
+- **Concurrent.** Multiple `<webjs-suspense>` boundaries on a page fetch their data in parallel (each is a non-blocking boundary resolved together), so they stream fast-before-slow with no server waterfall.
+- **Error-isolated.** A throwing component inside a boundary renders its component-scoped error state (via `renderError()` or the default) while its siblings stream normally.
+- **Progressive on soft navigation (#473).** A client-router navigation to a streamed page applies the shell (with fallbacks) immediately, advances the URL, then streams each boundary in, matching the initial-load experience instead of buffering the whole response.
+- **`.fallback` is special-cased at SSR:** the renderer reads it inline as the placeholder, never through the `data-webjs-prop-*` path (a `TemplateResult` is not serializer-safe). It must be an UNQUOTED property hole (`.fallback=${...}`, invariant 4).
+
+Decision: a bare `async render()` for request-time data that should be in the first paint (the default); `<webjs-suspense>` ONLY when the data is slow enough that blocking the first byte is the worse tradeoff.
 
 ## Display-only components are elided from the browser
 

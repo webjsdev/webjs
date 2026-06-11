@@ -195,8 +195,10 @@ trip up Lit muscle memory:
 - **SSR blocks by default. Streaming is NOT automatic.** A bare `async
   render()` (no wrapper) renders real data in the first paint with no
   fallback. There is no skeleton flash. To STREAM slow data (fallback on
-  first byte), wrap the region in `<webjs-suspense>` (tracked in #471). Do
-  not reach for a fallback expecting it to show on first load.
+  first byte), wrap the region in `<webjs-suspense .fallback=${html`…`}>`.
+  Do not reach for a fallback expecting it to show on first load; the
+  unwrapped default is block-real-data, and streaming is the deliberate
+  opt-in for slow regions.
 - **`renderFallback()` is NOT a first-paint concern.** It is the OPTIONAL
   client re-fetch loading UI, shown only when a prop / dependency change
   re-runs `async render()`, never on the first paint. The first-paint and
