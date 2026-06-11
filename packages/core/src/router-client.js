@@ -1441,6 +1441,10 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
+  // Set when the response streams Suspense boundaries (#473): holds the open
+  // reader + leftover buffer so the boundaries apply progressively after the
+  // shell swap. Null for a buffered (non-streaming) or prefetched response.
+  let streamCtx = null;
   let incomingBuild = null;
   /** @type {number | null} */
   let respStatus = null;
@@ -1559,7 +1563,13 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // tag to compare. The applySwap importmap-mismatch guard reads
     // this to detect deploys that bumped the vendor pin.
     incomingBuild = resp.headers.get('x-webjs-build');
-    html = await resp.text();
+    // Progressive streaming (#473): read only up to the first streamed Suspense
+    // boundary so the shell (with fallbacks) swaps in immediately; the rest
+    // streams in after the swap. A body with no boundaries reads to completion,
+    // so a non-streaming nav is identical to the old `resp.text()`.
+    const shellRead = await readStreamedShell(resp);
+    html = shellRead.shell;
+    if (shellRead.streaming) streamCtx = shellRead;
     }
   } catch (err) {
     // Aborted by a newer navigation: let it run, don't fall back. An
@@ -1580,7 +1590,10 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
 
   // A newer navigation started while we awaited the response body -
   // bail before we overwrite its work.
-  if (myToken !== currentNavigationToken) return { ok: false, status: respStatus, aborted: true };
+  if (myToken !== currentNavigationToken) {
+    if (streamCtx && streamCtx.reader) { try { streamCtx.reader.cancel(); } catch { /* ignore */ } }
+    return { ok: false, status: respStatus, aborted: true };
+  }
 
   const doc = parseHTML(html);
   // The body claimed text/html but didn't parse into a document (a
@@ -1611,6 +1624,20 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     } else {
       window.scrollTo(0, 0);
     }
+  }
+
+  // Progressive streaming (#473): the shell (with its Suspense fallbacks) is
+  // now live, so stream the resolved boundaries in fast-before-slow. Detached
+  // (fire-and-forget) so the URL advance + navigate event do not wait on the
+  // slow boundary; each apply is guarded by the nav token so a newer navigation
+  // stops it.
+  if (streamCtx && streamCtx.reader) {
+    streamBoundariesProgressively(
+      streamCtx.reader,
+      streamCtx.dec,
+      streamCtx.rest,
+      () => myToken === currentNavigationToken,
+    );
   }
 
   document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
@@ -2835,6 +2862,130 @@ function forwardSuspenseResolvers(fetchedBody) {
   }
 }
 
+/**
+ * Read a navigation response body progressively (#473). Returns the SHELL
+ * (the HTML up to the first streamed Suspense boundary template) as soon as it
+ * is available, so the router can swap it in immediately and the user sees the
+ * fallbacks without waiting for the slow boundary. When the body carries
+ * streamed boundaries it also returns the still-open `reader` + leftover buffer
+ * so the caller applies each boundary progressively AFTER the shell swap. A body
+ * with no boundaries reads to completion and returns the whole thing, so a
+ * non-streaming navigation is behaviourally identical to `resp.text()`.
+ *
+ * @param {Response} resp
+ * @returns {Promise<{ shell: string, streaming: boolean, reader?: ReadableStreamDefaultReader<Uint8Array>, dec?: TextDecoder, rest?: string }>}
+ */
+async function readStreamedShell(resp) {
+  if (!resp.body || typeof resp.body.getReader !== 'function') {
+    return { shell: await resp.text(), streaming: false };
+  }
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  const MARK = '<template data-webjs-resolve';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (value) buf += dec.decode(value, { stream: true });
+    if (done) {
+      buf += dec.decode();
+      return { shell: buf, streaming: false };
+    }
+    const idx = buf.indexOf(MARK);
+    if (idx !== -1) {
+      return { shell: buf.slice(0, idx), streaming: true, reader, dec, rest: buf.slice(idx) };
+    }
+  }
+}
+
+/**
+ * Extract the next complete top-level
+ * `<template data-webjs-resolve="ID">...</template>` unit from `buf`,
+ * depth-tracking NESTED `<template>` tags (a streamed shadow component carries a
+ * `<template shadowrootmode>` inside). Returns `{ id, content, rest }` for the
+ * first complete unit, or null when the closing tag has not streamed in yet.
+ *
+ * @param {string} buf
+ * @returns {{ id: string, content: string, rest: string } | null}
+ */
+function takeResolveUnit(buf) {
+  const m = /<template\s+data-webjs-resolve="([^"]+)"\s*>/i.exec(buf);
+  if (!m) return null;
+  const id = m[1];
+  const contentStart = m.index + m[0].length;
+  const tagRe = /<(\/?)template\b[^>]*>/gi;
+  tagRe.lastIndex = contentStart;
+  let depth = 1;
+  let mm;
+  while ((mm = tagRe.exec(buf))) {
+    if (mm[1] === '/') {
+      depth--;
+      if (depth === 0) {
+        return { id, content: buf.slice(contentStart, mm.index), rest: buf.slice(mm.index + mm[0].length) };
+      }
+    } else {
+      depth++;
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply one streamed Suspense resolution to the live DOM (#473): replace the
+ * boundary element's children (its fallback) with the resolved content and
+ * upgrade any custom elements inside. Does in JS what the SSR stream's inline
+ * swap `<script>` does on the initial-load path, so a soft-nav apply does not
+ * depend on inserting and executing that script.
+ *
+ * @param {string} id
+ * @param {string} content
+ */
+function applyStreamedResolve(id, content) {
+  const boundary = document.getElementById(id);
+  if (!boundary) return;
+  boundary.innerHTML = content;
+  upgradeTree(boundary);
+}
+
+/**
+ * Progressively apply streamed Suspense boundaries from an open response reader
+ * to the live DOM AFTER the shell has been swapped in (#473). Runs detached
+ * (fire-and-forget); each apply is guarded by `isCurrent` so a newer navigation
+ * stops it (and cancels the reader). A mid-stream transport failure leaves the
+ * already-applied boundaries in place and the rest showing their fallback,
+ * which is non-destructive.
+ *
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader
+ * @param {TextDecoder} dec
+ * @param {string} initialBuf
+ * @param {() => boolean} isCurrent
+ */
+async function streamBoundariesProgressively(reader, dec, initialBuf, isCurrent) {
+  let buf = initialBuf;
+  const flush = () => {
+    let unit;
+    while ((unit = takeResolveUnit(buf))) {
+      if (!isCurrent()) return false;
+      applyStreamedResolve(unit.id, unit.content);
+      buf = unit.rest;
+    }
+    return true;
+  };
+  try {
+    for (;;) {
+      if (!flush()) { try { await reader.cancel(); } catch { /* ignore */ } return; }
+      const { value, done } = await reader.read();
+      if (value) buf += dec.decode(value, { stream: true });
+      if (done) {
+        buf += dec.decode();
+        flush();
+        return;
+      }
+    }
+  } catch {
+    /* transport drop mid-stream: leave applied boundaries + remaining fallbacks */
+  }
+}
+
 /** @param {Element} container */
 function reactivateScripts(container) {
   for (const old of container.querySelectorAll('script')) {
@@ -2882,6 +3033,10 @@ export {
   prefetch as _prefetch,
   prefetchTake as _prefetchTake,
   prefetchSaysSaveData as _prefetchSaysSaveData,
+  readStreamedShell as _readStreamedShell,
+  takeResolveUnit as _takeResolveUnit,
+  applyStreamedResolve as _applyStreamedResolve,
+  streamBoundariesProgressively as _streamBoundariesProgressively,
 };
 
 /** Test-only: peek the speculative cache for a href without consuming it. */
