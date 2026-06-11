@@ -126,17 +126,22 @@ export const CLIENT_LIFECYCLE_HOOKS = [
 export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
 
 /**
- * Match an async (promise-returning) `render()` on a WebComponent: either
- * `async render(` or the arrow-field form `render = async (`. An async render
- * suspends on the client (it awaits data, then re-renders with the resolved
- * value, and may re-fetch via RPC on a prop change), so the module does real
- * client work and must never be elided as display-only. The SSR pass bakes the
- * data into the first paint regardless, but the client half (stale-while-
- * revalidate, renderFallback, the re-fetch) only runs if the module ships.
- * `renderFallback` is the optional client re-fetch loading UI, meaningless
- * without an async render, so its presence is the same signal.
+ * A bare `async render()` is NOT a standalone ship signal (#474). Its SSR
+ * pass bakes the resolved data into the first paint, so a light-DOM async
+ * component with no OTHER client signal renders identical HTML with or
+ * without its JS and is elidable like any display-only component, saving a
+ * module download plus a redundant on-hydration re-fetch. It ships only when
+ * it ALSO carries an independent signal: an `@event`, a non-`state` reactive
+ * prop, a reactive import, a lifecycle hook (`renderFallback()` included, via
+ * CLIENT_LIFECYCLE_HOOKS), a `<slot>`, `static shadow = true`, `static refresh
+ * = true`, cross-module observation, or a transitively-reachable interactive
+ * dep / child (the fixpoint's import + render rules). The two genuinely new
+ * carve-outs, both handled per-class below, are `static shadow` (Declarative
+ * Shadow DOM only attaches during HTML parsing, so a streamed / soft-navigated
+ * shadow component needs its module to re-run `attachShadow`) and the explicit
+ * `static refresh = true` opt-in (keeps the stale-while-revalidate on-load
+ * re-fetch that eliding would drop).
  */
-const ASYNC_RENDER_RE = /\basync\s+render\s*\(|\brender\s*=\s*async\b/;
 
 /** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
 const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
@@ -412,10 +417,22 @@ export function analyzeComponentSource(src) {
   }
 
   for (const body of bodies) {
-    // An async render() (or its renderFallback companion) means the component
-    // suspends and re-renders on the client, so it is never display-only.
-    if (ASYNC_RENDER_RE.test(body)) {
-      return { interactive: true, reason: 'defines an async render() (suspends on the client)' };
+    // Shadow DOM always ships (#474). Declarative Shadow DOM attaches ONLY
+    // during HTML parsing; an elided component that arrives via a client DOM
+    // insertion (a soft-nav swap, a streamed <webjs-suspense> boundary's
+    // replaceWith) would never re-attach its shadow root, because eliding
+    // drops the module that runs `attachShadow`. The analyser is context-free
+    // (it cannot tell whether a given component will be streamed or
+    // navigated to), so any shadow component is shipped.
+    if (declaresStaticTrue(body, 'shadow')) {
+      return { interactive: true, reason: 'declares static shadow (DSD must re-attach on a client swap)' };
+    }
+    // `static refresh = true` is the explicit opt-in to ship a bare async
+    // component so its stale-while-revalidate refresh runs ~after SSR; eliding
+    // a bare async component drops that on-load re-fetch (moot for request-
+    // stable data, the default), so an author who wants fresh-on-load opts in.
+    if (declaresStaticTrue(body, 'refresh')) {
+      return { interactive: true, reason: 'declares static refresh = true (keeps the on-load re-fetch)' };
     }
     for (const hook of CLIENT_LIFECYCLE_HOOKS) {
       // A client lifecycle hook as a method (`hook(`) OR as an arrow class
@@ -439,6 +456,29 @@ export function analyzeComponentSource(src) {
   }
 
   return { interactive: false, reason: null };
+}
+
+/**
+ * True if a class body declares a `static <name>` whose value is not the
+ * literal `false`. Backs the `static shadow` (DSD-on-client-swap) and
+ * `static refresh = true` (ship-the-async-refetch opt-in) ship signals (#474).
+ *
+ * Conservative on anything it cannot evaluate: a getter form
+ * (`static get <name>()`) ships, and a non-`false` value of any shape
+ * (`true`, a variable, an expression) ships. Only an absent declaration or a
+ * literal `= false` is cleared as inert, matching the light-DOM /
+ * no-refresh defaults.
+ *
+ * @param {string} classBody  redacted class body
+ * @param {string} name       the static field name (`shadow` / `refresh`)
+ * @returns {boolean}
+ */
+function declaresStaticTrue(classBody, name) {
+  // A getter cannot be evaluated statically; ship.
+  if (new RegExp(`\\bstatic\\s+get\\s+${name}\\b`).test(classBody)) return true;
+  const m = new RegExp(`\\bstatic\\s+${name}\\b\\s*=\\s*([^;\\n]*)`).exec(classBody);
+  if (!m) return false; // not declared: the default (light DOM / no refresh)
+  return !/^false\b/.test(m[1].trim()); // `= false` is inert; anything else ships
 }
 
 /**
