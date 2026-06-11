@@ -113,6 +113,13 @@ export abstract class WebComponent extends HTMLElement {
   firstUpdated?(changedProperties: Map<string, unknown>): void;
   /** Optional render-error boundary inside the component. */
   renderError?(error: Error): TemplateResult | void;
+  /**
+   * Optional loading UI for an async `render()` (#469), shown ONLY during a
+   * client re-fetch (a prop / dependency change re-runs `async render()`),
+   * NEVER on the first paint. The default re-fetch behaviour is
+   * stale-while-revalidate; define this to override it with a loading state.
+   */
+  renderFallback?(): TemplateResult | void;
 
   // Concrete on the base (component.js implements all three), so a subclass
   // override can call `super.connectedCallback()` etc. without a
