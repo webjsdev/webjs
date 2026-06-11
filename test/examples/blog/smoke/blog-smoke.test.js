@@ -180,4 +180,34 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
     assert.match(html, /Connecting…/, 'SSR should render "Connecting…" before JS hydration');
     assert.doesNotMatch(html, /Reconnecting…/, 'SSR must NOT render "Reconnecting…" on first paint');
   });
+
+  test('/stream-demo: async render data is in the first paint, the slow boundary STREAMS (#469/#471/#473)', async () => {
+    // Server-pipeline integration for async render plus webjs-suspense. The
+    // greeting is fetched IN the component (async render) and must be in the
+    // SSR HTML with no JS, while the slow fact streams behind a fallback.
+    const r = await fetch(baseUrl + '/stream-demo');
+    assert.equal(r.status, 200);
+    const html = await r.text();
+    // async render bakes the data into the first paint (PE-safe, JS-off reads it).
+    assert.match(html, /class="async-greeting"/, 'the async component rendered');
+    assert.match(html, /Hello, world!/, 'async render data is in the first paint, no JS needed');
+    // The slow region is wrapped in a streaming boundary: the fallback is the
+    // placeholder, and the content streams in as a data-webjs-resolve template.
+    assert.match(html, /<webjs-suspense id="s\d+">/, 'the boundary placeholder carries an id');
+    assert.match(html, /loading the fact/, 'the boundary fallback flushed first');
+    assert.match(html, /<!--wj-stream-shell-->/, 'the shell-ready sentinel is emitted for progressive soft-nav');
+    assert.match(html, /<template data-webjs-resolve="s\d+">/, 'the boundary streamed a resolve template');
+    assert.match(html, /The answer is 42\./, 'the slow content streamed in');
+  });
+
+  test('/stream-demo: a JS-off client reads the async-render data but NOT the streamed content', async () => {
+    // Progressive enhancement: blocking async render is in the HTML; the
+    // streamed boundary needs JS to swap (its fallback is what no-JS sees).
+    const html = await fetch(baseUrl + '/stream-demo').then((r) => r.text());
+    // The async greeting (blocking) is readable with JS off.
+    assert.match(html, /Hello, world!/, 'blocking async render is PE-safe (in the HTML)');
+    // The streamed fact's fallback is in the boundary element; without JS the
+    // swap script never runs, so the fallback is what a no-JS client keeps.
+    assert.match(html, /<webjs-suspense id="s\d+">[\s\S]*?loading the fact/, 'the no-JS client sees the boundary fallback');
+  });
 });
