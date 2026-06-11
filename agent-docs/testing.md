@@ -162,6 +162,12 @@ assert.ok(el.innerHTML.includes('10'));
 
 **Hydration-mismatch pattern.** To assert SSR and the hydrated DOM agree, normalise the SSR string (strip the `<!--webjs-hydrate-->` marker, `data-webjs-prop-*` attributes, part comments) and compare against the live `el.innerHTML`. The counterfactual is a component whose `render()` is non-deterministic across the SSR call and the hydration render; `ssrFixture` returns the live hydrated element, so the divergence is detectable. The worked tests live in `packages/core/test/testing/browser/ssr-fixture.test.js`, alongside the broader SSR-vs-client parity corpus in `packages/core/test/rendering/browser/ssr-client-parity.test.js`.
 
+**Testing async render + streaming + error isolation (#469 / #471 / #473).** Split by layer:
+- **SSR async render + error isolation** (unit, node, `renderToString`): assert an `async render()` bakes the resolved DATA into the HTML with no fallback markup, and that a throwing component renders a component-scoped error state while siblings render (worked in `packages/core/test/suspense/async-render-ssr.test.js`).
+- **`<webjs-suspense>` streaming** (unit, node, `renderToStream` + a `suspenseCtx`): collect the stream and assert the fallback flushes first, then the `<template data-webjs-resolve>` boundaries, and that multiple boundaries fetch concurrently via a timing assertion that fails if serial (worked in `packages/core/test/suspense/webjs-suspense-ssr.test.js`).
+- **Client async render** (browser, WTR): mount a component and `await el.updateComplete`, then assert stale-while-revalidate keeps prior content during a gated re-fetch, `renderFallback()` shows only on a re-fetch (never first paint), a rejected render commits `renderError()`, and the race guard drops a superseded resolution. Use a gate promise inside `render()` to control timing (worked in `packages/core/test/suspense/browser/async-render-client.test.js`).
+- **Progressive soft-nav streaming** (e2e, `WEBJS_E2E=1`): soft-navigate to a streamed page and assert the fallback is live in the DOM at the moment the URL advances (a buffered swap would only advance the URL once the boundary already resolved), then that the boundary streams in. The DOM-free reader helpers are unit-tested in `packages/core/test/routing/progressive-stream.test.js`.
+
 ### `assertNoA11yViolations(el, opts?)` (opt-in)
 
 An OPT-IN accessibility assertion that runs the standard axe-core engine against an element's subtree in the WTR Chromium session. Nothing calls it for you, it is never a forced gate.
