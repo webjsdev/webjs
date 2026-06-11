@@ -4,7 +4,7 @@ import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
+import { unsafeHTML, isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
 import { cspNonce } from './csp-nonce.js';
 
@@ -267,6 +267,19 @@ async function renderTemplate(tr, ctx) {
           // page-level `.prop` on a native element could have set the
           // property to begin with.
           out = out.slice(0, attrStart);
+          // `<webjs-suspense .fallback=${html`...`}>` (#471). A TemplateResult
+          // is not serializer-safe (the normal data-webjs-prop-* path would
+          // drop it) and a normal custom-element prop applies only at
+          // hydration, too late for the streaming placeholder. So render the
+          // fallback to HTML now and carry it as data-webjs-fallback, which the
+          // injectDSD streaming pre-pass reads as the boundary placeholder.
+          if (currentTag === 'webjs-suspense' && name === 'fallback') {
+            const fbHtml = await render(val, ctx);
+            out += `data-webjs-fallback="${escapeAttr(fbHtml)}"`;
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
           if (!currentTag.includes('-')) {
             state = 'in-tag';
             attrName = '';
@@ -387,6 +400,12 @@ function defaultSSRErrorTemplate(tag, err) {
  * @returns {Promise<string>}
  */
 async function injectDSD(html, ctx, ancestors = []) {
+  // Resolve <webjs-suspense> boundaries first (#471): in a streaming context
+  // each becomes a fallback placeholder now, with its children pushed for
+  // out-of-order streaming; without a streaming context the children render
+  // inline (blocking). Run before the custom-element walk so a streamed
+  // boundary's children leave the main flow and are not double-processed.
+  html = await processSuspenseElements(html, ctx, ancestors);
   const tags = allTags();
   if (!tags.length) return html;
   // Sort longest tag name first so the regex alternation tries the most
@@ -657,6 +676,77 @@ function isVoidElement(tag) {
  * tracking. Returns the index of the `<` of `</tagName>`, or -1 if
  * unclosed.
  *
+/**
+ * Resolve `<webjs-suspense>` boundaries in an HTML string (#471). For each
+ * top-level boundary (nested ones are handled by the recursive injectDSD that
+ * processes a boundary's streamed children):
+ *
+ * - Streaming (a SuspenseCtx is present): emit the boundary as
+ *   `<webjs-suspense id="sN">FALLBACK</webjs-suspense>` and push the raw inner
+ *   children to `ctx.pending` (wrapped in `unsafeHTML` so the streaming pass
+ *   renders them as HTML, not escaped text, then runs injectDSD over them).
+ *   `streamSuspenseBoundaries` later streams the resolved children as a
+ *   `<template data-webjs-resolve="sN">` plus the swap script. Multiple
+ *   boundaries resolve via `Promise.all`, so their data fetches run
+ *   concurrently. The placeholder is the boundary's `.fallback`
+ *   (carried as `data-webjs-fallback`); a boundary without one shows empty.
+ * - Blocking (no ctx): render the children inline now and drop the fallback,
+ *   so a non-streaming `renderToString` returns the real content. The
+ *   `<webjs-suspense>` wrapper stays as an inert inline element.
+ *
+ * @param {string} html
+ * @param {SuspenseCtx} [ctx]
+ * @param {any[]} [ancestors]
+ * @returns {Promise<string>}
+ */
+async function processSuspenseElements(html, ctx, ancestors = []) {
+  if (html.indexOf('<webjs-suspense') === -1) return html;
+  const OPEN = /<webjs-suspense((?:"[^"]*"|'[^']*'|[^>])*?)>/i;
+  let result = '';
+  let rest = html;
+  // Bounded loop: each iteration consumes at least the opening tag.
+  for (let guard = 0; guard < 10000; guard++) {
+    const m = OPEN.exec(rest);
+    if (!m) {
+      result += rest;
+      break;
+    }
+    const openStart = m.index;
+    const openEnd = m.index + m[0].length;
+    result += rest.slice(0, openStart);
+    const attrs = m[1] || '';
+    const fbMatch = /data-webjs-fallback="([^"]*)"/i.exec(attrs);
+    const fallbackHtml = fbMatch ? unescapeAttr(fbMatch[1]) : '';
+
+    const closeIdx = findClosingTagInString(rest, openEnd, 'webjs-suspense');
+    let inner;
+    let afterClose;
+    if (closeIdx === -1) {
+      inner = rest.slice(openEnd);
+      afterClose = '';
+    } else {
+      inner = rest.slice(openEnd, closeIdx);
+      const cm = /<\/webjs-suspense\s*>/i.exec(rest.slice(closeIdx));
+      afterClose = rest.slice(closeIdx + (cm ? cm[0].length : '</webjs-suspense>'.length));
+    }
+
+    if (ctx) {
+      const id = `s${ctx.nextId++}`;
+      // Raw children stream in later. unsafeHTML so the streaming pass emits
+      // the markup verbatim (then injectDSD runs over it, resolving the async
+      // components and any nested boundaries).
+      ctx.pending.push({ id, promise: Promise.resolve(unsafeHTML(inner)) });
+      result += `<webjs-suspense id="${id}">${fallbackHtml}</webjs-suspense>`;
+    } else {
+      const innerProcessed = await injectDSD(inner, ctx, ancestors);
+      result += `<webjs-suspense>${innerProcessed}</webjs-suspense>`;
+    }
+    rest = afterClose;
+  }
+  return result;
+}
+
+/**
  * @param {string} html
  * @param {number} fromIndex
  * @param {string} tagName
@@ -1347,6 +1437,27 @@ async function streamSuspenseBoundaries(ctx, controller) {
           );
         } catch (err) {
           console.error(`[webjs] Suspense boundary "${id}" rejected:`, err);
+          // Render a boundary-scoped error state rather than leaving the
+          // fallback stuck forever (#471). Dev surfaces the message; prod
+          // renders a silent empty element (no leak). A failure HERE (the
+          // error render itself throwing) leaves the fallback in place.
+          try {
+            const e = err instanceof Error ? err : new Error(String(err));
+            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e), ctx), ctx);
+            controller.enqueue(
+              `<template data-webjs-resolve="${id}">${errHtml}</template>` +
+              `<script${nonceAttr}>` +
+              `(function(){` +
+              `var t=document.currentScript.previousElementSibling;` +
+              `var b=document.getElementById("${id}");` +
+              `if(b&&t){b.innerHTML=t.innerHTML;t.remove()}` +
+              `document.currentScript.remove()` +
+              `})()` +
+              `</script>`
+            );
+          } catch (errorRenderThrew) {
+            console.error(`[webjs] Suspense boundary "${id}" error render also threw:`, errorRenderThrew);
+          }
         }
       })
     );

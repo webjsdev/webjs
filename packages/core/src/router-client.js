@@ -8,6 +8,9 @@ import './webjs-frame.js';
 // live-channel `connectWS` handler.
 import './webjs-stream.js';
 import { renderStream } from './webjs-stream.js';
+// Register <webjs-suspense> (the element-level streaming boundary, #471) so it
+// is layout-neutral and available for the progressive soft-nav streaming apply.
+import './webjs-suspense.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
