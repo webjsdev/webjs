@@ -296,6 +296,48 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(page.url().includes('/about'), `URL should contain /about, got: ${page.url()}`);
   });
 
+  test('progressive soft-nav streaming: the Suspense fallback shows while the slow boundary streams in (#473)', async () => {
+    // The homepage renders a Suspense boundary whose data resolves after 400ms,
+    // with the fallback "computing timestamp...". On a soft navigation TO the
+    // homepage the router now applies the shell (with the fallback) immediately
+    // and streams the resolved boundary in afterward. So at the moment the URL
+    // advances to "/", the fallback is STILL showing (the boundary has not
+    // resolved yet). A buffered swap would instead wait for the whole stream
+    // (past 400ms) and advance the URL only once the content was already
+    // resolved, so the fallback would never be observed live.
+    await page.goto(baseUrl + '/about', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+
+    // Click the layout's home link (href="/") to soft-navigate to the homepage.
+    await page.evaluate(() => {
+      const home = [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/');
+      home.click();
+    });
+
+    // Wait until the URL has advanced to the homepage.
+    await page.waitForFunction(() => location.pathname === '/', { timeout: 8000 });
+
+    // At URL-advance time the slow boundary has not resolved, so its fallback
+    // is live in the DOM (progressive). Read it immediately.
+    const fallbackLiveAtAdvance = await page.evaluate(() =>
+      document.body.innerText.includes('computing timestamp'),
+    );
+    assert.ok(
+      fallbackLiveAtAdvance,
+      'the Suspense fallback was live when the URL advanced (progressive streaming); a buffered swap would already show resolved content',
+    );
+
+    // And the boundary eventually streams in, replacing the fallback.
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('computing timestamp'),
+      { timeout: 8000 },
+    );
+    const resolvedNoFallback = await page.evaluate(() =>
+      !document.body.innerText.includes('computing timestamp'),
+    );
+    assert.ok(resolvedNoFallback, 'the streamed boundary replaced the fallback');
+  });
+
   test('no JavaScript errors on homepage', async () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));

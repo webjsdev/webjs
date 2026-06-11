@@ -2883,28 +2883,30 @@ async function readStreamedShell(resp) {
   const dec = new TextDecoder();
   let buf = '';
   const MARK = '<template data-webjs-resolve';
-  // The SSR stream flushes the whole shell (prefix + body with fallbacks +
-  // `</body></html>`) FIRST, then appends each streamed boundary as its data
-  // resolves. So the shell ends at `</html>`; the boundary marker arrives
-  // LATER (after the slow data). Delimiting on `</html>` is what lets the
-  // shell swap in immediately instead of waiting for the slow boundary. If a
-  // boundary marker is already in the buffer (a fast boundary, or a partial
-  // response with no `</html>`), split there instead.
+  // The SSR stream flushes the whole shell (prefix + body with fallbacks)
+  // followed by a `<!--wj-stream-shell-->` sentinel in the SAME chunk, then
+  // PAUSES for the slow data before streaming each boundary template and the
+  // `</body></html>` closer. The sentinel is what lets the shell swap in
+  // immediately instead of blocking until the slow boundary arrives. Fallbacks
+  // for robustness: an already-buffered boundary marker (a fast boundary), or
+  // `</html>` (a fully-buffered response that happens to carry boundaries).
+  const SHELL = '<!--wj-stream-shell-->';
   const HTML_CLOSE = /<\/html\s*>/i;
   for (;;) {
     const { value, done } = await reader.read();
     if (value) buf += dec.decode(value, { stream: true });
-    if (done) {
-      buf += dec.decode();
-      // Stream ended: split at a boundary marker if present, else the whole
-      // body is the shell (a non-streaming response).
-      const mi = buf.indexOf(MARK);
-      if (mi !== -1) return { shell: buf.slice(0, mi), streaming: true, reader: null, dec, rest: buf.slice(mi) };
-      return { shell: buf, streaming: false };
+    if (done) buf += dec.decode();
+    const si = buf.indexOf(SHELL);
+    if (si !== -1) {
+      return { shell: buf.slice(0, si), streaming: true, reader: done ? null : reader, dec, rest: buf.slice(si + SHELL.length) };
     }
     const mi = buf.indexOf(MARK);
     if (mi !== -1) {
-      return { shell: buf.slice(0, mi), streaming: true, reader, dec, rest: buf.slice(mi) };
+      return { shell: buf.slice(0, mi), streaming: true, reader: done ? null : reader, dec, rest: buf.slice(mi) };
+    }
+    if (done) {
+      // Stream ended with no streaming markers: the whole body is the shell.
+      return { shell: buf, streaming: false };
     }
     const hm = HTML_CLOSE.exec(buf);
     if (hm) {

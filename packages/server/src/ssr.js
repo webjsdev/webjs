@@ -1481,7 +1481,14 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
 
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(prefix + bodyHtml));
+      // Flush the shell (prefix + body with fallbacks) immediately, followed by
+      // a shell-ready sentinel comment IN THE SAME chunk. The resolved boundary
+      // templates and the `</body></html>` closer are emitted LATER (after the
+      // slow data settles), so without this sentinel a streaming soft-nav client
+      // could not tell "shell complete, awaiting the slow boundary" from "shell
+      // still arriving" and would block its progressive swap until the slow
+      // boundary (#473). The comment is inert for the native initial-load parse.
+      controller.enqueue(encoder.encode(prefix + bodyHtml + '<!--wj-stream-shell-->'));
       try {
         // Loop: resolve all currently-pending promises in parallel; nested
         // Suspense inside resolved content adds more pending entries.

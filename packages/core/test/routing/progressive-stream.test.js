@@ -40,6 +40,31 @@ test('readStreamedShell returns the whole fragment when there is no shell close 
   assert.match(r.shell, /<section><p>partial<\/p><\/section>/);
 });
 
+test('readStreamedShell returns the shell at the sentinel, BEFORE the slow boundary', async () => {
+  // The real SSR stream flushes `prefix + body + <!--wj-stream-shell-->` in one
+  // chunk, then pauses for the slow data. The shell must resolve on the
+  // sentinel, not wait for the boundary template or the trailing </html>.
+  const enc = new TextEncoder();
+  let pushRest;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(enc.encode('<html><body><webjs-suspense id="s1"><i>loading</i></webjs-suspense><!--wj-stream-shell-->'));
+      pushRest = () => {
+        controller.enqueue(enc.encode('<template data-webjs-resolve="s1"><p>real</p></template>\n</body>\n</html>'));
+        controller.close();
+      };
+    },
+  });
+  const resp = new Response(body, { headers: { 'content-type': 'text/html' } });
+  const r = await _readStreamedShell(resp);   // resolves without pushRest()
+  assert.equal(r.streaming, true);
+  assert.ok(r.reader, 'reader stays open for the boundary');
+  assert.match(r.shell, /<webjs-suspense id="s1"><i>loading<\/i><\/webjs-suspense>$/, 'shell ends at the sentinel');
+  assert.doesNotMatch(r.shell, /wj-stream-shell|data-webjs-resolve|<\/html>/, 'shell excludes the sentinel, boundary, and closer');
+  pushRest();
+  try { await r.reader.cancel(); } catch { /* ignore */ }
+});
+
 test('readStreamedShell returns the shell at </html>, BEFORE the slow boundary streams', async () => {
   // The real SSR stream flushes the shell + </body></html> first, then the
   // boundary template arrives later (after the slow data). A reader that
