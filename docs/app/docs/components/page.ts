@@ -389,6 +389,7 @@ class Cart extends WebComponent {
       </thead>
       <tbody>
         <tr><td>Database, session, cookies, request headers</td><td>Page function (server). Pass to the component as an attribute or property.</td></tr>
+        <tr><td>Server data a leaf component needs in the first paint</td><td>An <code>async render()</code> in the component (<code>const u = await getUser(this.uid)</code>). Co-located, no prop-drilling. See below.</td></tr>
         <tr><td>Initial state / defaults known at coding time</td><td>Instance signal in a class-field initializer, or the component's <code>constructor()</code> after <code>super()</code>.</td></tr>
         <tr><td>Browser-only: <code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code></td><td>Component's <code>connectedCallback()</code>, then write the signal to refine.</td></tr>
         <tr><td>Flash-sensitive (theme, RTL direction)</td><td>Synchronous inline <code>&lt;script&gt;</code> in the root layout's <code>&lt;head&gt;</code> that writes attributes to <code>document.documentElement</code> before custom elements upgrade.</td></tr>
@@ -396,6 +397,33 @@ class Cart extends WebComponent {
     </table>
 
     <p>This is the design rule that makes <a href="/docs/progressive-enhancement">progressive enhancement</a> work in webjs: the component's HTML lands in the response, with the right content, before any script runs.</p>
+
+    <h2>Fetching data in a component (async render)</h2>
+    <p>A leaf component can fetch its own server data into the first paint, so you do not have to fetch it in the page and prop-drill it down. Make <code>render()</code> async and call a <code>'use server'</code> action directly:</p>
+    <pre>class UserProfile extends WebComponent {
+  static properties = { uid: { type: String } };
+  declare uid: string;
+  async render() {
+    const u = await getUser(this.uid);   // real fn at SSR, RPC stub on the client
+    return html\`&lt;h3&gt;\${u.name}&lt;/h3&gt;\`;
+  }
+}
+UserProfile.register('user-profile');</pre>
+    <p>SSR awaits the render, so the data is in the first paint with no fallback (JS-off reads it). On a client re-fetch (a prop change) the default is stale-while-revalidate: the prior content stays until the new render resolves. Define <code>renderFallback()</code> only to show a loading state DURING a re-fetch (never on the first paint). A thrown <code>await</code> is isolated to that component, with <code>renderError()</code> as the optional custom UI.</p>
+    <h3>Which tool to reach for</h3>
+    <ul>
+      <li><strong>Server data knowable at request time</strong>: <code>async render()</code> in the component. The default, simplest case.</li>
+      <li><strong>Re-fetch where stale content would mislead</strong>: add <code>renderFallback()</code>.</li>
+      <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> shows its pending state at SSR, so it loses first-paint data.</li>
+      <li><strong>Slow server data</strong> where blocking the first byte hurts: stream it with <code>&lt;webjs-suspense&gt;</code> (forthcoming).</li>
+    </ul>
+    <h3>Anti-patterns</h3>
+    <ul>
+      <li>Do NOT prop-drill server data through layers when the leaf component can fetch it itself.</li>
+      <li>Do NOT put <code>await getData()</code> in a page / layout function if it can live in a component (page fetches run sequentially, a route-level waterfall).</li>
+      <li>Do NOT fetch in <code>connectedCallback</code> / <code>Task</code> for data that is knowable server-side (that yields a fallback-then-RPC, not first-paint data).</li>
+      <li>Do NOT expect <code>renderFallback()</code> to affect the first paint, and do NOT add <code>renderError()</code> on every component (isolation is automatic).</li>
+    </ul>
 
     <h2>Slots: Content Projection</h2>
     <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>webjs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>

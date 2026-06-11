@@ -91,6 +91,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
     <p>If <code>renderError()</code> is not defined, the error is logged to the console and the component's shadow root shows the last successful render (or nothing on first render).</p>
 
+    <h2>Per-component error isolation is automatic (async render)</h2>
+    <p>For a component with an <code>async render()</code>, error isolation is a default that needs no user code. A thrown <code>await getData()</code> (or any render throw) is caught for THAT component: its siblings render normally and the failure never bubbles to the route <code>error.ts</code>. On the server the default renders a component-scoped error box in dev and a silent empty element in prod (no internal detail leaks); on the client the same boundary runs. Add <code>renderError()</code> only to customize the error UI. This delivers a per-route-error-boundary experience at the component level, without per-component routes.</p>
+
     <h2>Server action errors</h2>
     <p>Errors thrown from server actions are sanitized in production: only the <code>message</code> property is sent to the client, never the stack trace. Internal errors (no message) are collapsed to "Internal server error". The full error is always logged server-side.</p>
 
