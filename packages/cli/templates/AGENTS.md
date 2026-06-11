@@ -679,6 +679,7 @@ Practical consequences for agents writing webjs code.
 | Fetch in `connectedCallback` / `firstUpdated` | Empty first paint (neither hook runs in SSR) | Fetch in the page function, pass as props |
 | `Task` for initial-paint data | SSR ships the pending state, flashes to resolved on hydration | Page function fetch, pass as props, OR an `async render()` in the component (`Task` is fine for client-time async) |
 | Expecting a sync `render()` only | webjs allows `async render() { const d = await getData(); ... }`; SSR bakes the data into the first paint | Use it for request-time server data; `renderFallback()` is the re-fetch loading UI (never first paint); error isolation is automatic |
+| Assuming an `async render()` always ships its module | A bare one (no other client signal) is ELIDED, so it costs zero JS and skips the on-hydration re-fetch, first paint unchanged | Rely on it for a fetch-and-display leaf. `static refresh = true` keeps the on-load refresh, `static shadow = true` always ships |
 | `window.X` / `document.X` in constructor or `render()` | SSR crash | Move to `connectedCallback` |
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
 | Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
