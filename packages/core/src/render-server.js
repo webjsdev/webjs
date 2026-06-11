@@ -1,4 +1,4 @@
-import { isTemplate } from './html.js';
+import { html, isTemplate } from './html.js';
 import { escapeText, escapeAttr } from './escape.js';
 import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
@@ -353,6 +353,30 @@ function browserMemberHint(e) {
   return null;
 }
 
+/** True in a production build (no dev error surfacing). */
+function isProd() {
+  return typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Default component-scoped error state for an async/sync render that threw
+ * during SSR, used when the component does not define renderError() (#469).
+ * Dev surfaces the tag + message loudly so the failure is obvious; prod
+ * renders an empty (silent, isolated) element so no internal detail leaks.
+ *
+ * @param {string} tag
+ * @param {Error} err
+ * @returns {unknown} a TemplateResult (dev) or '' (prod)
+ */
+function defaultSSRErrorTemplate(tag, err) {
+  if (isProd()) return '';
+  const msg = err && err.message ? err.message : String(err);
+  return html`<div data-webjs-error="${tag}" style="border:1px solid #f5c2c7;background:#f8d7da;color:#842029;padding:8px 12px;border-radius:6px;font:13px/1.4 system-ui,sans-serif">
+    <strong>&lt;${tag}&gt; failed to render</strong>
+    <div style="margin-top:4px;white-space:pre-wrap">${msg}</div>
+  </div>`;
+}
+
 /**
  * Scan an HTML string for registered custom elements and inject
  * Declarative Shadow DOM (`<template shadowrootmode="open">`).
@@ -388,9 +412,12 @@ async function injectDSD(html, ctx, ancestors = []) {
     // `<link rel="modulepreload">` hints for their module URLs.
     if (ctx && ctx.usedComponents) ctx.usedComponents.add(tag);
     let opening = selfClose ? `<${tag}${attrs}>` : match;
+    // Hoisted so the per-component error boundary (#469) can ask the failed
+    // instance for its renderError() output.
+    let instance = null;
     try {
       const isShadow = /** @type any */ (Cls).shadow === true;
-      const instance = new /** @type any */ (Cls)();
+      instance = new /** @type any */ (Cls)();
       // Thread the ancestor chain (the enclosing custom-element instances)
       // so the server element shim's closest() can resolve a parent at SSR.
       // Set before performServerUpdate so a willUpdate() that reads a parent
@@ -521,6 +548,50 @@ async function injectDSD(html, ctx, ancestors = []) {
       } else {
         console.error(`[webjs] SSR failed for <${tag}>:`, e);
       }
+      // Per-component error isolation (#469). A render that throws (most
+      // commonly a rejected `await getData()` in an async render, but any
+      // render throw) is caught HERE, per component: the loop continues so
+      // siblings render normally, and this element renders a component-scoped
+      // error state instead of bubbling to the route error.js or leaving its
+      // raw, unprocessed children in the output. renderError() customizes the
+      // error UI; the default surfaces the message in dev and renders an empty
+      // (silent, isolated) element in prod so no internal detail leaks.
+      const err = e instanceof Error ? e : new Error(String(e));
+      let errorInner = '';
+      try {
+        let errTpl;
+        if (instance && typeof instance.renderError === 'function') {
+          errTpl = instance.renderError(err);
+        }
+        if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err);
+        errorInner = await render(errTpl, ctx);
+        if (errorInner.trim()) {
+          errorInner = await injectDSD(errorInner, ctx, instance ? [...ancestors, instance] : ancestors);
+        }
+      } catch (renderErrorThrew) {
+        console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
+        errorInner = '';
+      }
+      // Replace the element (opening tag through its matching close) with the
+      // error state plus a hydration marker, so the client error boundary
+      // (component.js renderError) can take over on hydration.
+      let closeEnd = m.index + match.length;
+      if (!selfClose) {
+        const innerStart = m.index + match.length;
+        const closeIdx = findClosingTagInString(html, innerStart, tag);
+        if (closeIdx !== -1) {
+          const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
+          const cm = closeRe.exec(html.slice(closeIdx));
+          closeEnd = closeIdx + (cm ? cm[0].length : `</${tag}>`.length);
+        } else {
+          closeEnd = html.length;
+        }
+      }
+      edits.push({
+        start: m.index,
+        end: closeEnd,
+        text: `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`,
+      });
     }
   }
   if (!edits.length) return html;
