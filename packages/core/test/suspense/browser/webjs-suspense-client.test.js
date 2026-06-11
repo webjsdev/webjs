@@ -1,10 +1,10 @@
 /**
  * Client side of <webjs-suspense> (#471), real browser via WTR.
  *
- * The SSR swap script replaces the boundary's innerHTML with the streamed
- * children; the custom elements inside then upgrade natively. This test drives
- * that post-swap shape directly (no server) and asserts the wrapper is
- * layout-neutral and the streamed child hydrates.
+ * The SSR swap script REPLACES the boundary element with the streamed children
+ * (the transient wrapper is removed); the custom elements inside then upgrade
+ * natively. This test drives that post-swap shape directly (no server) and
+ * asserts the wrapper is layout-neutral and the streamed child hydrates.
  */
 import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';

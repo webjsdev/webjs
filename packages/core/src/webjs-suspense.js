@@ -7,9 +7,10 @@
  * immediately as `<webjs-suspense id="sN">FALLBACK</webjs-suspense>` and streams
  * the resolved children later as a `<template data-webjs-resolve="sN">` plus a
  * tiny inline swap `<script>` (the same mechanism page-level `Suspense` uses).
- * On initial load that swap script replaces the boundary's `innerHTML` with the
- * resolved children, and the custom elements inside upgrade natively. So NO
- * client runtime is required for first-load streaming.
+ * On initial load that swap script REPLACES the boundary element with the
+ * resolved children (the transient `<webjs-suspense id>` wrapper is removed),
+ * and the custom elements inside upgrade natively. So NO client runtime is
+ * required for first-load streaming.
  *
  * This element exists for two reasons:
  *
