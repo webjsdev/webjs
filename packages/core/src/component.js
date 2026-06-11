@@ -1048,7 +1048,15 @@ export class WebComponent extends Base {
     // --- Async render: finish the cycle when the pending commit settles. ---
     if (pendingCommit) {
       const token = this.__renderToken;
+      // Count this in-flight async commit so a non-committing cycle
+      // (shouldUpdate=false) running during the fetch does NOT resolve
+      // updateComplete early: the pending commit owns the resolution.
+      this.__pendingAsyncCommits = (this.__pendingAsyncCommits || 0) + 1;
       pendingCommit.then(() => {
+        // Always decrement first, even when superseded, so the in-flight
+        // count never leaks (a superseded cycle returns below without
+        // committing, but it is no longer pending).
+        this.__pendingAsyncCommits--;
         // A newer render superseded this one; let the newer cycle finish.
         if (token !== this.__renderToken) return;
         // --- 6. controllers' hostUpdated (after the async commit) ---
@@ -1065,7 +1073,10 @@ export class WebComponent extends Base {
     // updateComplete promise always resolves.
     if (didCommit) {
       this._postCommit(changedProperties);
-    } else {
+    } else if (!this.__pendingAsyncCommits) {
+      // A non-committing cycle resolves updateComplete only when no async
+      // commit is in flight; otherwise the pending commit resolves it once it
+      // lands, so `await el.updateComplete` never returns before that DOM.
       this._resolveUpdate();
     }
   }

@@ -97,6 +97,19 @@ test('in prod a throwing async render with no renderError() renders an empty ele
   }
 });
 
+test('a throwing SHADOW component renders its error inside a DSD template, not light DOM', async () => {
+  class ShadowBad extends WebComponent {
+    static shadow = true;
+    async render() { throw new Error('shadow boom'); }
+    renderError(error) { return html`<p class="serr">${error.message}</p>`; }
+  }
+  ShadowBad.register('shadow-bad-ssr');
+  const out = await quiet(() => renderToString(html`<shadow-bad-ssr></shadow-bad-ssr>`));
+  assert.match(out, /<template shadowrootmode="open">/, 'the error rides a DSD template for a shadow component');
+  assert.match(out, /shadow boom/, 'the error UI is present');
+  assert.doesNotMatch(out, /<!--webjs-hydrate-->/, 'no light-DOM hydration marker for a shadow component');
+});
+
 test('a sync render() throw is isolated the same way (not just async)', async () => {
   class SyncBad extends WebComponent {
     render() { throw new Error('sync boom'); }

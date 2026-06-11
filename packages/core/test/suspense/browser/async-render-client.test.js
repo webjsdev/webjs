@@ -107,6 +107,44 @@ suite('async render() on the client', () => {
     assert.equal(el.querySelector('.val').textContent, 'v=2', 'real content replaces the fallback');
   });
 
+  test('updateComplete does not resolve before an in-flight async commit (shouldUpdate=false cycle)', async () => {
+    const tag = uniq('async-uc');
+    let resolveGate;
+    class C extends WebComponent {
+      static properties = { v: { type: Number }, noop: { type: Number } };
+      constructor() { super(); this.v = 1; this.noop = 0; }
+      // Skip ONLY a cycle whose sole change is `noop` (not the first render,
+      // whose changedProperties carries every initial property value).
+      shouldUpdate(cp) { return !(cp.size === 1 && cp.has('noop')); }
+      async render() {
+        const v = this.v;
+        if (this.gate) await this.gate;
+        return html`<p class="val">v=${v}</p>`;
+      }
+    }
+    C.register(tag);
+    const el = document.createElement(tag);
+    container().appendChild(el);
+    await el.updateComplete;
+    await tick(0);
+
+    // Start a gated re-fetch, then fire a non-committing cycle during it.
+    el.gate = new Promise((res) => { resolveGate = res; });
+    el.v = 2;
+    await tick(0);                  // cycle A (async, v=2) is in flight, gated
+    assert.equal(el.querySelector('.val').textContent, 'v=1', 'still stale before the commit');
+    el.noop = 99;                   // shouldUpdate=false cycle while the async render is in flight
+    let domAtResolve = null;
+    el.updateComplete.then(() => { domAtResolve = el.querySelector('.val').textContent; });
+    await tick(0);                  // let the non-committing cycle run
+    assert.equal(domAtResolve, null, 'updateComplete did NOT resolve while the async render is in flight');
+    resolveGate();
+    await el.updateComplete;
+    await tick(0);
+    assert.equal(el.querySelector('.val').textContent, 'v=2', 'the async commit landed');
+    assert.equal(domAtResolve, 'v=2', 'updateComplete resolved only after the async DOM commit');
+  });
+
   test('a rejected async render renders renderError(), the element survives', async () => {
     const tag = uniq('async-err');
     const origError = console.error;

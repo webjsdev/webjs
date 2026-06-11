@@ -587,11 +587,21 @@ async function injectDSD(html, ctx, ancestors = []) {
           closeEnd = html.length;
         }
       }
-      edits.push({
-        start: m.index,
-        end: closeEnd,
-        text: `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`,
-      });
+      // A shadow component renders into a shadow root on the client, so its
+      // SSR error state must ride a DSD template too (matching the success
+      // path), not land in light DOM. Otherwise the client renders the error
+      // into the shadow root while the light error box lingers underneath.
+      const isShadowErr = /** @type any */ (Cls).shadow === true;
+      let text;
+      if (isShadowErr) {
+        const rawStyles = /** @type any */ (Cls).styles;
+        const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
+        const styleStr = stylesToString(styleList);
+        text = `${opening}<template shadowrootmode="open">${styleStr}${errorInner}</template>`;
+      } else {
+        text = `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`;
+      }
+      edits.push({ start: m.index, end: closeEnd, text });
     }
   }
   if (!edits.length) return html;
