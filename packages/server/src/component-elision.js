@@ -129,12 +129,12 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  * Match an async (promise-returning) `render()` on a WebComponent: either
  * `async render(` or the arrow-field form `render = async (`. An async render
  * suspends on the client (it awaits data, then re-renders with the resolved
- * value, reads the SSR seed, and may re-fetch via RPC on a prop change), so the
- * module does real client work and must never be elided as display-only. The
- * SSR pass bakes the data into the first paint regardless, but the client half
- * (stale-while-revalidate, renderFallback, the seed read) only runs if the
- * module ships. `renderFallback` is the optional client re-fetch loading UI,
- * meaningless without an async render, so its presence is the same signal.
+ * value, and may re-fetch via RPC on a prop change), so the module does real
+ * client work and must never be elided as display-only. The SSR pass bakes the
+ * data into the first paint regardless, but the client half (stale-while-
+ * revalidate, renderFallback, the re-fetch) only runs if the module ships.
+ * `renderFallback` is the optional client re-fetch loading UI, meaningless
+ * without an async render, so its presence is the same signal.
  */
 const ASYNC_RENDER_RE = /\basync\s+render\s*\(|\brender\s*=\s*async\b/;
 

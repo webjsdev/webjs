@@ -671,12 +671,6 @@ function isVoidElement(tag) {
 }
 
 /**
- * Find the position of the matching closing tag for `tagName` starting
- * from `fromIndex` in `html`. Handles nested same-tag elements via depth
- * tracking. Returns the index of the `<` of `</tagName>`, or -1 if
- * unclosed.
- *
-/**
  * Resolve `<webjs-suspense>` boundaries in an HTML string (#471). For each
  * top-level boundary (nested ones are handled by the recursive injectDSD that
  * processes a boundary's streamed children):
@@ -747,6 +741,10 @@ async function processSuspenseElements(html, ctx, ancestors = []) {
 }
 
 /**
+ * Find the position of the matching closing tag for `tagName` starting from
+ * `fromIndex` in `html`. Handles nested same-tag elements via depth tracking.
+ * Returns the index of the `<` of `</tagName>`, or -1 if unclosed.
+ *
  * @param {string} html
  * @param {number} fromIndex
  * @param {string} tagName
@@ -1430,7 +1428,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
             `(function(){` +
             `var t=document.currentScript.previousElementSibling;` +
             `var b=document.getElementById("${id}");` +
-            `if(b&&t){b.innerHTML=t.innerHTML;t.remove()}` +
+            `if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}` +
             `document.currentScript.remove()` +
             `})()` +
             `</script>`
@@ -1450,7 +1448,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
               `(function(){` +
               `var t=document.currentScript.previousElementSibling;` +
               `var b=document.getElementById("${id}");` +
-              `if(b&&t){b.innerHTML=t.innerHTML;t.remove()}` +
+              `if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}` +
               `document.currentScript.remove()` +
               `})()` +
               `</script>`

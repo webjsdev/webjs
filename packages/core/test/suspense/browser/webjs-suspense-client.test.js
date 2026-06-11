@@ -41,20 +41,25 @@ suite('<webjs-suspense> client', () => {
     assert.equal(getComputedStyle(el).display, 'contents', 'wrapper is display:contents');
   });
 
-  test('children upgrade after the streamed innerHTML swap', async () => {
+  test('the boundary is REPLACED by the streamed children, which upgrade (matches the real swap)', async () => {
     container().innerHTML = `<webjs-suspense id="s2"><i class="fb">loading</i></webjs-suspense>`;
     await tick(0);
     const boundary = host.querySelector('#s2');
     assert.ok(boundary.querySelector('.fb'), 'fallback visible first');
-    // Simulate the SSR swap script: replace innerHTML with the streamed child.
-    boundary.innerHTML = `<streamed-card label="hello"><!--webjs-hydrate--></streamed-card>`;
+    // The real SSR swap (the inline script + __webjsResolve) and the soft-nav
+    // applyStreamedResolve both REPLACE the boundary with the streamed content
+    // (the transient wrapper is removed). Mirror that here.
+    const tpl = document.createElement('template');
+    tpl.innerHTML = `<streamed-card label="hello"><!--webjs-hydrate--></streamed-card>`;
+    boundary.replaceWith(tpl.content);
     await tick(0);
-    const card = boundary.querySelector('streamed-card');
-    assert.ok(card, 'streamed custom element present');
+    assert.ok(!host.querySelector('#s2'), 'the boundary wrapper was removed');
+    const card = host.querySelector('streamed-card');
+    assert.ok(card, 'streamed custom element present in the host');
     if (card.updateComplete) await card.updateComplete;
     await tick(0);
-    assert.ok(boundary.querySelector('.card'), 'the streamed component upgraded and rendered');
-    assert.equal(boundary.querySelector('.card').textContent, 'hello');
-    assert.ok(!boundary.querySelector('.fb'), 'the fallback was replaced');
+    assert.ok(card.querySelector('.card'), 'the streamed component upgraded and rendered');
+    assert.equal(card.querySelector('.card').textContent, 'hello');
+    assert.ok(!host.querySelector('.fb'), 'the fallback was replaced');
   });
 });
