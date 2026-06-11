@@ -338,6 +338,71 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(resolvedNoFallback, 'the streamed boundary replaced the fallback');
   });
 
+  test('async render bakes data into the SSR HTML and the component hydrates (#469)', async () => {
+    // Network-probe the raw SSR HTML (no JS) to prove async render bakes the
+    // data into the first paint, then load with JS and prove the component
+    // hydrates and stays interactive (the @click counter works).
+    const rawHtml = await fetch(baseUrl + '/stream-demo').then((r) => r.text());
+    assert.ok(/Hello, world!/.test(rawHtml), 'async render data is in the raw SSR HTML (PE-safe)');
+
+    await page.goto(baseUrl + '/stream-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await page.waitForFunction(() => {
+      const b = document.querySelector('.greeting-bump');
+      return b && b.textContent.includes('n=0');
+    }, { timeout: 8000 });
+    // Click the async component's button: it must have hydrated (the @click
+    // bound after the async commit) and re-render with the new state.
+    await page.evaluate(() => document.querySelector('.greeting-bump').click());
+    await page.waitForFunction(
+      () => document.querySelector('.greeting-bump')?.textContent.includes('n=1'),
+      { timeout: 8000 },
+    );
+    const bumped = await page.evaluate(() => document.querySelector('.greeting-bump').textContent.includes('n=1'));
+    assert.ok(bumped, 'the async-render component hydrated and stayed interactive');
+    // The greeting text is still present (stale-while-revalidate held it across the re-render).
+    const greeting = await page.evaluate(() => document.querySelector('.greeting-text')?.textContent || '');
+    assert.ok(greeting.includes('Hello, world!'), 'the greeting survived the re-render');
+  });
+
+  test('a wrapped slow component streams in behind its fallback on initial load (#471)', async () => {
+    await page.goto(baseUrl + '/stream-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    // The slow fact (400ms) streams in behind its fallback; wait for it.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('The answer is 42'),
+      { timeout: 8000 },
+    );
+    const state = await page.evaluate(() => ({
+      hasFact: document.body.innerText.includes('The answer is 42'),
+      fallbackGone: !document.body.innerText.includes('loading the fact'),
+    }));
+    assert.ok(state.hasFact, 'the wrapped slow component streamed in');
+    assert.ok(state.fallbackGone, 'the boundary fallback was replaced by the streamed content');
+  });
+
+  test('progressive soft-nav to a streamed page keeps the fallback live at URL advance (#471/#473)', async () => {
+    await page.goto(baseUrl + '/static-info', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1200);
+    // Click the "Stream" nav link (soft navigation to /stream-demo).
+    await page.evaluate(() => {
+      for (const a of document.querySelectorAll('nav a')) {
+        if (a.textContent.trim() === 'Stream') { a.click(); break; }
+      }
+    });
+    await page.waitForFunction(() => location.pathname === '/stream-demo', { timeout: 8000 });
+    // The slow boundary (400ms) has not resolved when the URL advances, so its
+    // fallback is live (progressive); a buffered swap would already show "42".
+    const fallbackLive = await page.evaluate(() => document.body.innerText.includes('loading the fact'));
+    assert.ok(fallbackLive, 'the streamed boundary fallback was live when the URL advanced (progressive)');
+    // And the async-greeting (blocking) was applied in the shell immediately.
+    const greetingNow = await page.evaluate(() => document.body.innerText.includes('Hello, world!'));
+    assert.ok(greetingNow, 'the blocking async-render content was in the shell at URL advance');
+    // The boundary then streams in.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('The answer is 42'),
+      { timeout: 8000 },
+    );
+  });
+
   test('no JavaScript errors on homepage', async () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
