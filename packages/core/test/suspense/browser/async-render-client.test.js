@@ -128,7 +128,7 @@ suite('async render() on the client', () => {
     }
   });
 
-  test('race guard: a superseding render wins, the stale resolution is dropped', async () => {
+  test('race guard: the NEW render commits, a later-resolving STALE one is dropped', async () => {
     const tag = uniq('async-race');
     const gates = [];
     class C extends WebComponent {
@@ -143,16 +143,45 @@ suite('async render() on the client', () => {
     C.register(tag);
     const el = document.createElement(tag);
     container().appendChild(el);
-    // First render (v=0) is in flight, gated.
+    await tick(0);            // first render (v=0) is in flight, gated
+    el.v = 1;                 // supersede before v=0 resolves
     await tick(0);
-    el.v = 1; // supersede before v=0 resolves
-    await tick(0);
-    // Resolve the STALE render first, then the new one.
-    gates[0] && gates[0]();
-    await tick(0);
+    // Resolve the NEW render FIRST so it commits, THEN the stale one. Without
+    // the token guard the late stale resolution would clobber back to v=0.
     gates[1] && gates[1]();
     await el.updateComplete;
     await tick(0);
-    assert.equal(el.querySelector('.val').textContent, 'v=1', 'the latest render wins regardless of resolution order');
+    assert.equal(el.querySelector('.val').textContent, 'v=1', 'the new render committed');
+    gates[0] && gates[0]();   // the stale render resolves last
+    await tick(0);
+    assert.equal(el.querySelector('.val').textContent, 'v=1', 'the stale resolution did NOT overwrite the new content');
+  });
+
+  test('race guard: an async render superseded by a SYNC render is dropped', async () => {
+    // Regression: __renderToken must be stamped for every commit (sync too),
+    // or a stale async resolution clobbers a fresh synchronous commit.
+    const tag = uniq('async-sync-race');
+    let resolveGate;
+    class C extends WebComponent {
+      static properties = { v: { type: Number } };
+      constructor() { super(); this.v = 0; this.sync = false; }
+      render() {
+        if (this.sync) return html`<p class="val">v=${this.v}</p>`;   // synchronous
+        const v = this.v;
+        return new Promise((res) => { resolveGate = () => res(html`<p class="val">v=${v}</p>`); });
+      }
+    }
+    C.register(tag);
+    const el = document.createElement(tag);
+    container().appendChild(el);
+    await tick(0);            // first render (v=0) is async, in flight, gated
+    el.sync = true;
+    el.v = 1;                 // a SYNC cycle that commits v=1 immediately
+    await el.updateComplete;
+    await tick(0);
+    assert.equal(el.querySelector('.val').textContent, 'v=1', 'the sync render committed');
+    resolveGate();            // the stale async render resolves last
+    await tick(5);
+    assert.equal(el.querySelector('.val').textContent, 'v=1', 'the stale async resolution did NOT clobber the sync commit');
   });
 });

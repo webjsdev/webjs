@@ -1008,6 +1008,13 @@ export class WebComponent extends Base {
         }
 
         // --- 5. update + DOM commit (with render-error boundary) ---
+        // Stamp a fresh render token for THIS commit, sync or async. A later
+        // cycle that reaches here bumps it, so an in-flight async render whose
+        // token no longer matches drops its now-stale resolution. Stamping
+        // here (not inside _commitAsync) is what guards the async-superseded-
+        // by-sync case (#469); a shouldUpdate=false cycle never reaches here,
+        // so it does not invalidate an in-flight async render.
+        this.__renderToken = (this.__renderToken || 0) + 1;
         try {
           const r = this.update(changedProperties);
           if (r && typeof r.then === 'function') pendingCommit = r;
@@ -1228,18 +1235,20 @@ export class WebComponent extends Base {
    * Commit a promise-returning render() with stale-while-revalidate
    * semantics (#469). The current DOM stays untouched until the template
    * resolves; on a client RE-FETCH an author-defined renderFallback()
-   * optionally swaps in a loading state first. A monotonic token drops a
-   * superseded resolution so an out-of-order fetch never commits stale DOM.
-   * A rejection routes to the renderError() boundary, isolated to this
-   * component. Returns a promise that settles once the commit (or its
-   * error / fallback) has been applied.
+   * optionally swaps in a loading state first. The cycle's render token
+   * (stamped by _performRender before update() ran) drops a superseded
+   * resolution so an out-of-order fetch never commits stale DOM, INCLUDING
+   * when the superseding render is synchronous (a later cycle re-stamps the
+   * token whether or not it is async). A rejection routes to the
+   * renderError() boundary, isolated to this component. Returns a promise
+   * that settles once the commit (or its error / fallback) has been applied.
    *
    * @param {Promise<unknown>} pending
    * @returns {Promise<void>}
    * @private
    */
   _commitAsync(pending) {
-    const token = (this.__renderToken = (this.__renderToken || 0) + 1);
+    const token = this.__renderToken;
     // First paint (hydration): keep the SSR DOM, never a fallback, so
     // first-paint data stays visible with no skeleton flash. Re-fetch: an
     // author-defined renderFallback() overrides the stale-while-revalidate
