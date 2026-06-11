@@ -64,6 +64,7 @@ export default function ClientRouter() {
 });</pre>
 
     <h2><code>&lt;webjs-frame&gt;</code>: escape hatch for non-layout regions</h2>
+    <p><code>&lt;webjs-frame&gt;</code> is webjs's take on <strong>Turbo Frames</strong> (from Hotwire Turbo), so if you know <code>&lt;turbo-frame&gt;</code> the model transfers directly: a lazy, URL-addressable region that swaps on its own, driven by a link or form that targets its id. See <a href="/docs/data-fetching">Data fetching</a> for when to reach for a frame versus async render, <code>&lt;webjs-suspense&gt;</code>, or <code>&lt;webjs-stream&gt;</code>, and for combining a lazy frame with streamed content inside it.</p>
     <p>The marker mechanism scopes swaps to the deepest shared <strong>layout</strong>. When you need a swap region <em>smaller</em> than the deepest layout (typically a widget inside a page that should swap independently of the rest of the page) wrap it in <code>&lt;webjs-frame id="..."&gt;</code>.</p>
     <pre>// app/posts/[slug]/page.ts
 export default async function PostPage({ params }) {
@@ -103,6 +104,7 @@ export default async function PostPage({ params }) {
     <p><strong>Progressive-enhancement caveat:</strong> a <code>src</code>-driven frame is JS-dependent. The browser does not natively fetch a <code>&lt;webjs-frame src&gt;</code> (unlike an <code>&lt;iframe&gt;</code>), so with JS off the frame shows only whatever children were server-rendered into it. Use <code>src</code> / <code>loading</code> for deferred content (comments, a recommendations rail, an expensive card) where a JS-off placeholder is acceptable; for content that must exist without JS, render it server-side into the frame instead.</p>
 
     <h2>Stream actions (surgical element updates)</h2>
+    <p><code>&lt;webjs-stream&gt;</code> is webjs's take on <strong>Turbo Streams</strong> (from Hotwire Turbo); the action set (<code>append</code> / <code>prepend</code> / <code>before</code> / <code>after</code> / <code>replace</code> / <code>update</code> / <code>remove</code>) mirrors <code>&lt;turbo-stream&gt;</code>, so that knowledge transfers directly.</p>
     <p>A region swap is the right tool for "this part of the page changed". It is too coarse for "append ONE comment", "remove ONE row", or "bump a count". For those, a server response declares per-element actions as plain HTML, a <code>&lt;webjs-stream action target&gt;</code> wrapping one <code>&lt;template&gt;</code>:</p>
     <pre>&lt;webjs-stream action="append" target="comments"&gt;
   &lt;template&gt;&lt;li&gt;Nice post!&lt;/li&gt;&lt;/template&gt;
