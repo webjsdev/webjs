@@ -97,7 +97,7 @@ this.name = 'updated';                       // reactive property assignment
     <pre>renderFallback() {
   return html\`&lt;div class="skeleton h-24"&gt;&lt;/div&gt;\`;   // shown only while a re-fetch is in flight
 }</pre>
-    <p>A failed <code>async render()</code> (a thrown <code>await getData()</code>) is isolated to that component automatically: siblings render, the page does not blank, and <code>renderError()</code> optionally customizes the error UI. To STREAM slow data with a first-paint fallback, wrap the region in <code>&lt;webjs-suspense&gt;</code> (forthcoming). See <a href="/docs/components">Components</a> for the full decision guide and anti-patterns.</p>
+    <p>A failed <code>async render()</code> (a thrown <code>await getData()</code>) is isolated to that component automatically: siblings render, the page does not blank, and <code>renderError()</code> optionally customizes the error UI. To STREAM slow data with a first-paint fallback, wrap the region in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (it flushes the fallback on the first byte, then streams the data in, progressively on soft navigation too). See <a href="/docs/components">Components</a> and <a href="/docs/data-fetching">Data fetching</a> for the full decision guide and anti-patterns.</p>
 
     <h2>Native Web Component Callbacks</h2>
     <p>These are provided by <code>HTMLElement</code> itself and work as normal in webjs components:</p>

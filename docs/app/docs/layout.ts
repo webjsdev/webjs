@@ -27,6 +27,7 @@ const NAV_SECTIONS = [
       { href: '/docs/routing', label: 'Routing' },
       { href: '/docs/components', label: 'Components' },
       { href: '/docs/lifecycle', label: 'Lifecycle Hooks' },
+      { href: '/docs/data-fetching', label: 'Data Fetching' },
       { href: '/docs/directives', label: 'Directives' },
       { href: '/docs/ssr', label: 'Server-Side Rendering' },
       { href: '/docs/progressive-enhancement', label: 'Progressive Enhancement' },

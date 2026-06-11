@@ -415,7 +415,7 @@ UserProfile.register('user-profile');</pre>
       <li><strong>Server data knowable at request time</strong>: <code>async render()</code> in the component. The default, simplest case.</li>
       <li><strong>Re-fetch where stale content would mislead</strong>: add <code>renderFallback()</code>.</li>
       <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> shows its pending state at SSR, so it loses first-paint data.</li>
-      <li><strong>Slow server data</strong> where blocking the first byte hurts: stream it with <code>&lt;webjs-suspense&gt;</code> (forthcoming).</li>
+      <li><strong>Slow server data</strong> where blocking the first byte hurts: stream it by wrapping the component in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (fallback on the first byte, content streams in). See <a href="/docs/data-fetching">Data fetching</a>.</li>
     </ul>
     <h3>Anti-patterns</h3>
     <ul>

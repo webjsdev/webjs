@@ -76,6 +76,23 @@ With Suspense:     TTFB = shell render = ~40ms
 };</pre>
     <p>No framework runtime. No hydration. Just a DOM swap.</p>
 
+    <h2>Component-level Suspense: &lt;webjs-suspense&gt;</h2>
+    <p>The <code>Suspense({ fallback, children })</code> primitive above is page/region-level (you pass a promise as <code>children</code>). With <a href="/docs/data-fetching">async render</a>, a COMPONENT can be the suspending unit instead. A component that does <code>async render() { const u = await getUser(this.uid); ... }</code> BLOCKS the first byte by default (the data is in the first paint). To STREAM a slow component, wrap it in the <code>&lt;webjs-suspense&gt;</code> element:</p>
+    <pre>html\`
+  &lt;webjs-suspense .fallback=${'${html`<p>Loading section…</p>`}'}&gt;
+    &lt;user-profile uid="42"&gt;&lt;/user-profile&gt;
+    &lt;user-activity uid="42"&gt;&lt;/user-activity&gt;
+  &lt;/webjs-suspense&gt;
+\`;</pre>
+    <p>The decoupled model: <strong>SSR blocks by default</strong> (real data in the first paint, no fallback), and <code>&lt;webjs-suspense&gt;</code> is the EXPLICIT opt-in that flushes the fallback on the first byte and streams the data in. It reuses the same boundary engine as page-level Suspense, so:</p>
+    <ul>
+      <li><strong>Grouping + override.</strong> One boundary wraps several components under ONE fallback; the boundary <code>.fallback</code> wins over a contained component's <code>renderFallback()</code>.</li>
+      <li><strong>Concurrent.</strong> Multiple boundaries fetch their data in parallel (no server waterfall), streaming fast-before-slow.</li>
+      <li><strong>Error-isolated.</strong> A throwing component inside a boundary renders its own error state while siblings stream.</li>
+      <li><strong>Progressive on soft navigation.</strong> A client-router navigation to a streamed page applies the shell (with fallbacks) immediately, advances the URL, then streams each boundary in, matching the initial-load experience.</li>
+    </ul>
+    <p>The <code>.fallback</code> is read at SSR as the inline placeholder (never through the <code>data-webjs-prop-*</code> path, since a <code>TemplateResult</code> is not serializer-safe) and must be an unquoted property hole. <code>renderFallback()</code> on a component is a DIFFERENT concern (the client re-fetch loading state, never the first paint); see <a href="/docs/loading-states">Loading States</a>.</p>
+
     <h2>When to Use Suspense</h2>
     <ul>
       <li><strong>Slow database queries</strong>: wrap the section that depends on slow data.</li>
