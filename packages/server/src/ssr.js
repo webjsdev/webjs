@@ -183,6 +183,7 @@ export async function ssrPage(route, params, url, opts) {
       url,
       metadata,
       nonce,
+      opts.dev,
     );
     // Server HTML cache write (#241). The page opted in via `revalidate`, so
     // FLAG this candidate for the response funnel rather than writing here: the
@@ -1444,15 +1445,18 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
  * Build a streaming Response. Degrades to a single-flush response when
  * there are no pending Suspense boundaries.
  *
- * @param {string} headHtml
+ * @param {string} prefix
  * @param {string} bodyHtml
+ * @param {string} closer
  * @param {{ pending: {id: string, promise: Promise<unknown>}[], nextId: number }} ctx
  * @param {number} status
  * @param {Request | undefined} req
  * @param {URL | undefined} url
  * @param {Record<string, any>} [metadata]
+ * @param {string} [nonce]
+ * @param {boolean} [dev]  dev surfaces a streamed-boundary error message; prod stays silent
  */
-function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce) {
+function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce, dev) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default: the developer
@@ -1505,8 +1509,13 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
                 for (const n of sub.pending) ctx.pending.push(n);
                 return { id: p.id, html };
               } catch (e) {
+                // Match the SSR error-isolation policy (render-server.js's
+                // defaultSSRErrorTemplate): dev surfaces the message so the
+                // failure is obvious, prod stays SILENT so no internal detail
+                // (a DB error, a stack-derived path) leaks to the client (#478).
                 const msg = e instanceof Error ? e.message : String(e);
-                return { id: p.id, html: `<p>error: ${escapeHtml(msg)}</p>` };
+                const html = dev ? `<p>error: ${escapeHtml(msg)}</p>` : '';
+                return { id: p.id, html };
               }
             })
           );
