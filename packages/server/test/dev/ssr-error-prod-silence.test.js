@@ -81,6 +81,26 @@ test('DEV (dev:true): a thrown component render surfaces the message', async () 
   assert.ok(body.includes(SECRET), `dev must surface the component error message; body:\n${body}`);
 });
 
+test('CORE: renderToString gates on suspenseCtx.dev, independent of NODE_ENV', async () => {
+  // This is the reliable counterfactual for the leak (#483). It drives a
+  // throwing component straight through renderToString with the suspenseCtx
+  // that ssr.js stamps, NODE_ENV deleted, so NO env signal masks the result:
+  // dev:false MUST stay silent (reverting the dev-gating to isProd() would leak
+  // here because isProd() is false with NODE_ENV unset), dev:true MUST surface.
+  class SuspenseThrow extends WebComponent {
+    render() { throw new Error('SUSPCTX-SECRET'); }
+  }
+  SuspenseThrow.register('suspctx-throw');
+  const tpl = html`<div><suspctx-throw></suspctx-throw></div>`;
+  delete process.env.NODE_ENV;
+
+  const prod = await renderToString(tpl, { ssr: true, suspenseCtx: { pending: [], nextId: 1, dev: false } });
+  assert.ok(!prod.includes('SUSPCTX-SECRET'), 'dev:false stays silent with NODE_ENV unset (the leak-prevention)');
+
+  const dev = await renderToString(tpl, { ssr: true, suspenseCtx: { pending: [], nextId: 1, dev: true } });
+  assert.ok(dev.includes('SUSPCTX-SECRET'), 'dev:true surfaces the message');
+});
+
 test('context-free renderToString falls back to NODE_ENV', async () => {
   class CtxFreeThrow extends WebComponent {
     render() { throw new Error('CTXFREE-SECRET'); }
