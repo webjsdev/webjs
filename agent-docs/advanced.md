@@ -867,8 +867,8 @@ component JS. A frame's route can itself use `<webjs-suspense>`, so a deferred
 (`loading="lazy"`) frame whose data is slow streams that data behind a fallback
 inside the frame (one caveat: a streamed framed route skips the byte-saving
 subtree extraction, so the full page renders and the client slices out the
-region). See `data-fetching.md` / the data-fetching doc page for the
-async-render vs `<webjs-suspense>` vs `<webjs-frame>` vs `<webjs-stream>`
+region). See the data-fetching doc page (`docs/app/docs/data-fetching/page.ts`)
+for the async-render vs `<webjs-suspense>` vs `<webjs-frame>` vs `<webjs-stream>`
 decision boundary.
 
 For partial-swap regions NOT tied to a folder layout (a marketing-page
