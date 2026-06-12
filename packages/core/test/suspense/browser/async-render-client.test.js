@@ -222,4 +222,43 @@ suite('async render() on the client', () => {
     await tick(5);
     assert.equal(el.querySelector('.val').textContent, 'v=1', 'the stale async resolution did NOT clobber the sync commit');
   });
+
+  test('updateComplete resolves when a superseding SYNC render THROWS during an in-flight async render (#470)', async () => {
+    // Behavior guard: an async render is in flight (it owns updateComplete via
+    // the pending-async counter). A superseding cycle bumps the token and throws
+    // synchronously. The render-error boundary catches the throw and the cycle
+    // completes as a (failed) sync commit (didCommit=true), which resolves
+    // updateComplete via _postCommit. So `await el.updateComplete` must NOT hang,
+    // and the later-settling stale async render must not clobber or deadlock it.
+    const tag = uniq('async-throw-supersede');
+    let resolveGate;
+    class C extends WebComponent {
+      static properties = { v: { type: Number } };
+      constructor() { super(); this.v = 0; this.boom = false; }
+      render() {
+        if (this.boom) throw new Error('superseding render boom');   // synchronous throw
+        const v = this.v;
+        return new Promise((res) => { resolveGate = () => res(html`<p class="val">v=${v}</p>`); });
+      }
+    }
+    C.register(tag);
+    const el = document.createElement(tag);
+    container().appendChild(el);
+    await tick(0);            // first render (v=0) async, in flight, gated
+    el.boom = true;
+    el.v = 1;                 // a SYNC cycle that bumps the token and throws
+
+    // updateComplete must resolve (not hang). Guard with a timeout so a
+    // regression fails as a timeout rather than hanging the whole suite.
+    const settled = await Promise.race([
+      el.updateComplete.then(() => 'resolved'),
+      tick(2000).then(() => 'timeout'),
+    ]);
+    assert.equal(settled, 'resolved', 'updateComplete resolved after a throwing superseding render (did not hang)');
+
+    // The stale async render resolving late must not throw or hang either.
+    resolveGate();
+    await tick(5);
+    assert.ok(el.isConnected, 'the element survived the throwing supersede');
+  });
 });
