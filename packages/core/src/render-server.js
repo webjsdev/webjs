@@ -420,7 +420,7 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
   // out-of-order streaming; without a streaming context the children render
   // inline (blocking). Run before the custom-element walk so a streamed
   // boundary's children leave the main flow and are not double-processed.
-  html = await processSuspenseElements(html, ctx, ancestors);
+  html = await processSuspenseElements(html, ctx, ancestors, dev);
   const tags = allTags();
   if (!tags.length) return html;
   // Sort longest tag name first so the regex alternation tries the most
@@ -706,9 +706,11 @@ function isVoidElement(tag) {
  * @param {string} html
  * @param {SuspenseCtx} [ctx]
  * @param {any[]} [ancestors]
+ * @param {boolean} [dev]  server dev flag for prod-silence of a throwing
+ *   component in an inline (ctx-absent) boundary (#483)
  * @returns {Promise<string>}
  */
-async function processSuspenseElements(html, ctx, ancestors = []) {
+async function processSuspenseElements(html, ctx, ancestors = [], dev) {
   if (html.indexOf('<webjs-suspense') === -1) return html;
   const OPEN = /<webjs-suspense((?:"[^"]*"|'[^']*'|[^>])*?)>/i;
   let result = '';
@@ -747,7 +749,7 @@ async function processSuspenseElements(html, ctx, ancestors = []) {
       ctx.pending.push({ id, promise: Promise.resolve(unsafeHTML(inner)) });
       result += `<webjs-suspense id="${id}">${fallbackHtml}</webjs-suspense>`;
     } else {
-      const innerProcessed = await injectDSD(inner, ctx, ancestors, ctx && ctx.dev);
+      const innerProcessed = await injectDSD(inner, ctx, ancestors, dev);
       result += `<webjs-suspense>${innerProcessed}</webjs-suspense>`;
     }
     rest = afterClose;
@@ -1167,7 +1169,7 @@ export function renderToStream(value, opts = { ssr: true }) {
 
         // Stream resolved Suspense boundaries after the main content.
         if (ctx && ctx.pending.length) {
-          await streamSuspenseBoundaries(ctx, controller);
+          await streamSuspenseBoundaries(ctx, controller, dev);
         }
         controller.close();
       } catch (err) {
@@ -1425,7 +1427,7 @@ async function streamTemplate(tr, ctx, controller) {
  * @param {SuspenseCtx} ctx
  * @param {ReadableStreamDefaultController<string>} controller
  */
-async function streamSuspenseBoundaries(ctx, controller) {
+async function streamSuspenseBoundaries(ctx, controller, dev) {
   // Resolve the per-request nonce once per call. The provider in
   // @webjsdev/server sources it from AsyncLocalStorage; outside a
   // request scope (or in the browser) the helper returns '' and we
@@ -1441,7 +1443,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
         try {
           const resolved = await promise;
           const html = await render(resolved, ctx);
-          const full = await injectDSD(html, ctx, [], ctx && ctx.dev);
+          const full = await injectDSD(html, ctx, [], dev);
           controller.enqueue(
             `<template data-webjs-resolve="${id}">${full}</template>` +
             `<script${nonceAttr}>` +
@@ -1461,7 +1463,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
           // error render itself throwing) leaves the fallback in place.
           try {
             const e = err instanceof Error ? err : new Error(String(err));
-            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e, ctx && ctx.dev), ctx), ctx, [], ctx && ctx.dev);
+            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e, dev), ctx), ctx, [], dev);
             controller.enqueue(
               `<template data-webjs-resolve="${id}">${errHtml}</template>` +
               `<script${nonceAttr}>` +
