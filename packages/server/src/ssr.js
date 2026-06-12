@@ -431,7 +431,7 @@ async function loadingTemplates(route, ctx, dev) {
       const mod = await loadModule(file, dev);
       if (!mod.default) continue;
       const tree = await mod.default(ctx);
-      const html = await renderToString(tree, { ssr: true, dev: opts.dev });
+      const html = await renderToString(tree, { ssr: true, dev });
       const segmentPath = loadingSegmentPath(file);
       parts.push(`<template id="wj-loading:${segmentPath}">${html}</template>`);
     } catch { /* skip broken loading file */ }
