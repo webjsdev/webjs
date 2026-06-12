@@ -1445,8 +1445,9 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
  * Build a streaming Response. Degrades to a single-flush response when
  * there are no pending Suspense boundaries.
  *
- * @param {string} headHtml
+ * @param {string} prefix
  * @param {string} bodyHtml
+ * @param {string} closer
  * @param {{ pending: {id: string, promise: Promise<unknown>}[], nextId: number }} ctx
  * @param {number} status
  * @param {Request | undefined} req
