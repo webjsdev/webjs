@@ -82,7 +82,7 @@ export async function ssrPage(route, params, url, opts) {
   const metadata = await collectMetadata(route, ctx, opts.dev);
 
   try {
-    const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set() };
+    const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
     // Parse the partial-nav "have" header from the client. The header
     // lists comma-separated marker paths the client already has rendered
     // in its DOM. The server walks the target route's layout chain
@@ -234,7 +234,7 @@ export async function ssrPage(route, params, url, opts) {
         const mod = await loadModule(route.errors[i], opts.dev);
         if (!mod.default) continue;
         const tree = await mod.default({ ...ctx, error: err });
-        const body = await renderToString(tree);
+        const body = await renderToString(tree, { ssr: true, dev: opts.dev });
         const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
         const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
@@ -334,7 +334,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   if (notFoundFile) {
     try {
       const mod = await loadModule(notFoundFile, opts.dev);
-      if (mod.default) body = await renderToString(await mod.default({}));
+      if (mod.default) body = await renderToString(await mod.default({}), { ssr: true, dev: opts.dev });
     } catch (e) {
       body = `<h1>404: Not found</h1><pre>${escapeHtml(String(e))}</pre>`;
     }
@@ -431,7 +431,7 @@ async function loadingTemplates(route, ctx, dev) {
       const mod = await loadModule(file, dev);
       if (!mod.default) continue;
       const tree = await mod.default(ctx);
-      const html = await renderToString(tree, { ssr: true });
+      const html = await renderToString(tree, { ssr: true, dev: opts.dev });
       const segmentPath = loadingSegmentPath(file);
       parts.push(`<template id="wj-loading:${segmentPath}">${html}</template>`);
     } catch { /* skip broken loading file */ }
@@ -1503,7 +1503,7 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
             batch.map(async (p) => {
               try {
                 const resolved = await p.promise;
-                const sub = { pending: [], nextId: ctx.nextId };
+                const sub = { pending: [], nextId: ctx.nextId, dev: ctx.dev };
                 const html = await renderToString(resolved, { ssr: true, suspenseCtx: sub });
                 ctx.nextId = sub.nextId;
                 for (const n of sub.pending) ctx.pending.push(n);

@@ -30,8 +30,14 @@ import { cspNonce } from './csp-nonce.js';
  */
 export async function renderToString(value, opts = { ssr: true }) {
   const ctx = opts && opts.suspenseCtx;
+  // The server `dev` flag drives prod-silence of SSR error states (#483).
+  // `opts.dev` wins; else inherit a `dev` already stamped on the ctx (so a
+  // streamed sub-context inherits it); back-fill the ctx so downstream renders
+  // sharing it see the same flag. Undefined stays undefined (NODE_ENV fallback).
+  const dev = opts && opts.dev !== undefined ? opts.dev : ctx && ctx.dev;
+  if (ctx && ctx.dev === undefined && dev !== undefined) ctx.dev = dev;
   const html = await render(value, ctx);
-  return opts && opts.ssr === false ? html : await injectDSD(html, ctx);
+  return opts && opts.ssr === false ? html : await injectDSD(html, ctx, [], dev);
 }
 
 /**
@@ -377,12 +383,21 @@ function isProd() {
  * Dev surfaces the tag + message loudly so the failure is obvious; prod
  * renders an empty (silent, isolated) element so no internal detail leaks.
  *
+ * The prod-silence signal is the SERVER's `dev` flag, threaded through the SSR
+ * render context (#483). webjs keys prod on the CLI `dev` flag, not `NODE_ENV`,
+ * and `webjs start` does not export `NODE_ENV=production`, so a bare prod launch
+ * would otherwise leak the message. When `dev` is undefined (a context-free
+ * `renderToString` with no server signal, e.g. a bare unit test) it falls back
+ * to `isProd()` / `NODE_ENV`, preserving the prior behaviour for that path.
+ *
  * @param {string} tag
  * @param {Error} err
+ * @param {boolean} [dev]  server dev flag; undefined falls back to NODE_ENV
  * @returns {unknown} a TemplateResult (dev) or '' (prod)
  */
-function defaultSSRErrorTemplate(tag, err) {
-  if (isProd()) return '';
+function defaultSSRErrorTemplate(tag, err, dev) {
+  const surface = dev === undefined ? !isProd() : !!dev;
+  if (!surface) return '';
   const msg = err && err.message ? err.message : String(err);
   return html`<div data-webjs-error="${tag}" style="border:1px solid #f5c2c7;background:#f8d7da;color:#842029;padding:8px 12px;border-radius:6px;font:13px/1.4 system-ui,sans-serif">
     <strong>&lt;${tag}&gt; failed to render</strong>
@@ -399,7 +414,7 @@ function defaultSSRErrorTemplate(tag, err) {
  * @param {SuspenseCtx} [ctx]
  * @returns {Promise<string>}
  */
-async function injectDSD(html, ctx, ancestors = []) {
+async function injectDSD(html, ctx, ancestors = [], dev) {
   // Resolve <webjs-suspense> boundaries first (#471): in a streaming context
   // each becomes a fallback placeholder now, with its children pushed for
   // out-of-order streaming; without a streaming context the children render
@@ -487,7 +502,7 @@ async function injectDSD(html, ctx, ancestors = []) {
         // Shadow DOM: native <slot> stays as-is in the DSD template. The
         // browser handles projection from the host's light-DOM children
         // into the shadow tree natively. No framework substitution here.
-        const innerProcessed = await injectDSD(rawInner, ctx, [...ancestors, instance]);
+        const innerProcessed = await injectDSD(rawInner, ctx, [...ancestors, instance], dev);
         const rawStyles = /** @type any */ (Cls).styles;
         const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
         const styleStr = stylesToString(styleList);
@@ -550,7 +565,7 @@ async function injectDSD(html, ctx, ancestors = []) {
         }
         const partitioned = partitionAuthoredBySlot(authoredInner);
         const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
-        const innerProcessed = await injectDSD(innerWithSlots, ctx, [...ancestors, instance]);
+        const innerProcessed = await injectDSD(innerWithSlots, ctx, [...ancestors, instance], dev);
         edits.push({
           start: m.index,
           end: closeEnd,
@@ -582,10 +597,10 @@ async function injectDSD(html, ctx, ancestors = []) {
         if (instance && typeof instance.renderError === 'function') {
           errTpl = instance.renderError(err);
         }
-        if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err);
+        if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err, dev);
         errorInner = await render(errTpl, ctx);
         if (errorInner.trim()) {
-          errorInner = await injectDSD(errorInner, ctx, instance ? [...ancestors, instance] : ancestors);
+          errorInner = await injectDSD(errorInner, ctx, instance ? [...ancestors, instance] : ancestors, dev);
         }
       } catch (renderErrorThrew) {
         console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
@@ -732,7 +747,7 @@ async function processSuspenseElements(html, ctx, ancestors = []) {
       ctx.pending.push({ id, promise: Promise.resolve(unsafeHTML(inner)) });
       result += `<webjs-suspense id="${id}">${fallbackHtml}</webjs-suspense>`;
     } else {
-      const innerProcessed = await injectDSD(inner, ctx, ancestors);
+      const innerProcessed = await injectDSD(inner, ctx, ancestors, ctx && ctx.dev);
       result += `<webjs-suspense>${innerProcessed}</webjs-suspense>`;
     }
     rest = afterClose;
@@ -1130,6 +1145,11 @@ function consumePropAttrs(attrs) {
  */
 export function renderToStream(value, opts = { ssr: true }) {
   const ctx = opts && opts.suspenseCtx;
+  // Server dev flag for prod-silence of SSR error states (#483), same sourcing
+  // as renderToString: opts.dev wins, else inherit from the ctx, else undefined
+  // (NODE_ENV fallback). Back-fill the ctx so the streamed sub-renders share it.
+  const dev = opts && opts.dev !== undefined ? opts.dev : ctx && ctx.dev;
+  if (ctx && ctx.dev === undefined && dev !== undefined) ctx.dev = dev;
   return new ReadableStream({
     async start(controller) {
       try {
@@ -1141,7 +1161,7 @@ export function renderToStream(value, opts = { ssr: true }) {
           // the full HTML), then enqueue the result. This matches the
           // semantics of renderToString but still gives us a stream.
           const html = await render(value, ctx);
-          const full = await injectDSD(html, ctx);
+          const full = await injectDSD(html, ctx, [], dev);
           controller.enqueue(full);
         }
 
@@ -1421,7 +1441,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
         try {
           const resolved = await promise;
           const html = await render(resolved, ctx);
-          const full = await injectDSD(html, ctx);
+          const full = await injectDSD(html, ctx, [], ctx && ctx.dev);
           controller.enqueue(
             `<template data-webjs-resolve="${id}">${full}</template>` +
             `<script${nonceAttr}>` +
@@ -1441,7 +1461,7 @@ async function streamSuspenseBoundaries(ctx, controller) {
           // error render itself throwing) leaves the fallback in place.
           try {
             const e = err instanceof Error ? err : new Error(String(err));
-            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e), ctx), ctx);
+            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e, ctx && ctx.dev), ctx), ctx, [], ctx && ctx.dev);
             controller.enqueue(
               `<template data-webjs-resolve="${id}">${errHtml}</template>` +
               `<script${nonceAttr}>` +
