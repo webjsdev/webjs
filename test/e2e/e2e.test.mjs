@@ -1701,6 +1701,77 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(layoutInBoot, true, 'the router-enabling layout still ships (SPA nav intact)');
   });
 
+  test('a bare async-render leaf is elided: its module is never fetched, JS-off + JS-on render it (#474)', async () => {
+    // JS-OFF: the raw SSR HTML must already contain the async-baked quote
+    // (progressive-enhancement-safe; the elided module is never needed to read).
+    const rawHtml = await fetch(baseUrl + '/async-leaf').then((r) => r.text());
+    assert.ok(
+      /What you read is what runs\./.test(rawHtml),
+      'the bare-async leaf data is in the raw SSR HTML (JS-off readable)',
+    );
+    assert.ok(
+      !/components\/inline-quote\.(ts|js)/.test(rawHtml),
+      'the elided leaf module is not even referenced (no import, no modulepreload) in the served HTML',
+    );
+
+    // JS-ON: load with a real browser, probe the network, and prove the
+    // inline-quote module is NEVER downloaded while the quote is on screen and
+    // no script errors fire.
+    /** @type {string[]} */
+    const requested = [];
+    /** @type {string[]} */
+    const errors = [];
+    const onRequest = (req) => requested.push(req.url());
+    const onError = (e) => errors.push(e.message);
+    page.on('request', onRequest);
+    page.on('pageerror', onError);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/async-leaf`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2000);
+    } finally {
+      page.off('request', onRequest);
+      page.off('pageerror', onError);
+      await page.setCacheEnabled(true);
+    }
+    const moduleFetched = requested.some((u) => /components\/inline-quote\.(ts|js)/.test(u));
+    const onScreen = await page.evaluate(() => document.body.innerText.includes('What you read is what runs.'));
+    assert.equal(moduleFetched, false, 'the elided bare-async leaf module must NOT be downloaded by the browser');
+    assert.ok(onScreen, 'the elided leaf renders its async-baked content with JS on');
+    assert.deepEqual(errors, [], `no page errors on the elided leaf route; got ${JSON.stringify(errors)}`);
+  });
+
+  test('a streamed bare-async component (slow-fact) is elided while its interactive sibling (async-greeting) ships (#474)', async () => {
+    // /stream-demo wraps <slow-fact> (bare async, light DOM) in <webjs-suspense>
+    // and renders <async-greeting> (async + @click). Under #474 the slow-fact
+    // module is elided (its streamed light-DOM content needs no JS to display),
+    // while async-greeting ships (the @click is a client signal). Probe both.
+    /** @type {string[]} */
+    const requested = [];
+    const onRequest = (req) => requested.push(req.url());
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(`${baseUrl}/stream-demo`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      // Wait for the slow boundary (400ms) to stream in.
+      await page.waitForFunction(
+        () => document.body.innerText.includes('The answer is 42'),
+        { timeout: 8000 },
+      );
+      await sleep(500);
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+    const slowFactFetched = requested.some((u) => /components\/slow-fact\.(ts|js)/.test(u));
+    const greetingFetched = requested.some((u) => /components\/async-greeting\.(ts|js)/.test(u));
+    assert.equal(slowFactFetched, false, 'the elided bare-async slow-fact module must NOT be downloaded');
+    assert.equal(greetingFetched, true, 'the interactive async-greeting module (it has @click) MUST ship');
+    // The streamed content is present despite the module being elided.
+    const factOnScreen = await page.evaluate(() => document.body.innerText.includes('The answer is 42'));
+    assert.ok(factOnScreen, 'the streamed slow-fact content displays without its module (light-DOM HTML)');
+  });
+
   // --- Differential elision: ON vs OFF must be observably identical (#181) ---
   //
   // `page` runs the default (elision ON) blog; `offPage` runs a SECOND blog

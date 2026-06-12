@@ -65,6 +65,10 @@ class Report extends WebComponent {
 }</pre>
     <p>A thrown <code>await getData()</code> (or any render throw) renders a component-scoped error state while siblings render, never bubbling to the route <code>error.ts</code>. The default surfaces the tag and message in dev and renders a silent empty element in prod (no leak). This is a per-route-error-boundary experience at the component level, with no per-component routes.</p>
 
+    <h2>A bare async leaf ships zero JS (elision)</h2>
+    <p>A <strong>bare</strong> <code>async render()</code> with no other client signal (no <code>@event</code>, no non-<code>state</code> reactive prop, no signal, no lifecycle hook, no <code>&lt;slot&gt;</code>, light DOM) produces its complete output at SSR, so the framework ELIDES its module from the browser. That drops the JS download AND the redundant on-hydration re-fetch. A content or docs leaf that fetches and displays is the common shape. The first paint is byte-identical with or without the module. Only the stale-while-revalidate refresh-on-load goes away, which is moot for request-stable data (the usual case).</p>
+    <p>Two cases always ship, even bare. <code>static shadow = true</code> ships because Declarative Shadow DOM attaches only during HTML parsing, so a streamed or soft-navigated shadow component needs its module to re-run <code>attachShadow</code>. <code>static refresh = true</code> is the explicit opt-in to KEEP the on-load re-fetch when fresh-on-load data actually matters. Any independent signal (an <code>@event</code>, a non-<code>state</code> prop, a signal, <code>renderFallback()</code>, an interactive child it imports) ships the module as usual.</p>
+
     <h2>Decision rules</h2>
     <ol>
       <li><strong>Server data knowable at request time.</strong> Fetch it IN the component with <code>async render()</code>. Co-located, no prop-drilling, data in the first paint. The default, simplest case.</li>
@@ -73,6 +77,7 @@ class Report extends WebComponent {
       <li><strong>One fallback for a whole section</strong>, or a context-specific fallback. Use <code>&lt;webjs-suspense&gt;</code> around several components (override plus grouping).</li>
       <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint). Use <code>Task</code> / signals plus an RPC action.</li>
       <li><strong>Errors.</strong> Do nothing by default. The framework isolates a failed async component automatically. Add <code>renderError()</code> ONLY to customize the error UI.</li>
+      <li><strong>A pure fetch-and-display leaf.</strong> A bare <code>async render()</code> with no other signal is ELIDED automatically (no module download, no on-hydration re-fetch), and its first paint is unchanged. Add <code>static refresh = true</code> only if you need the on-load refresh; <code>static shadow = true</code> always ships.</li>
     </ol>
 
     <h2>Deferred or self-refreshing regions: webjs-frame with webjs-suspense</h2>
@@ -130,6 +135,7 @@ export async function POST(req, { params }) {
       <li>Do NOT expect <code>renderFallback()</code> to affect the first paint or trigger SSR streaming. It is the CLIENT re-fetch loading state. To show a first-paint fallback, wrap in <code>&lt;webjs-suspense&gt;</code>.</li>
       <li>Do NOT add <code>renderError()</code> on every component. Isolation is automatic.</li>
       <li>Do NOT wrap in <code>&lt;webjs-suspense&gt;</code> when a component <code>renderFallback()</code> already suffices (one layered model).</li>
+      <li>Do NOT bolt on a needless signal (or <code>static refresh = true</code>) to "force" a bare async leaf to ship. It is correctly elided and progressive-enhancement-safe already. Opt back in only when fresh-on-load data genuinely matters.</li>
     </ul>
 
     <p>See <a href="/docs/suspense">Streaming &amp; Suspense</a>, <a href="/docs/components">Components</a>, <a href="/docs/lifecycle">Lifecycle Hooks</a>, and <a href="/docs/error-handling">Error Handling</a>.</p>

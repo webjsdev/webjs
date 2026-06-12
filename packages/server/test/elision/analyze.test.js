@@ -62,7 +62,32 @@ test('importing renderStream forces interactive (it does client DOM work, #248)'
   assert.match(r.reason, /renderStream/);
 });
 
-test('async render() forces interactive (it suspends on the client, #469)', () => {
+test('a BARE async render() is ELIDABLE (data is baked into first paint, #474)', () => {
+  // A light-DOM async-display leaf with no other client signal (no @event, no
+  // non-state prop, no reactive import, no lifecycle hook, no slot/shadow). Its
+  // SSR pass resolves the data into the HTML, so the elided HTML is identical
+  // and the on-hydration re-fetch is redundant. #470 shipped it; #474 elides it.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    class FactBox extends WebComponent {
+      async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('a bare `render = async ()` arrow field is also ELIDABLE (#474)', () => {
+  const src = DISPLAY_ONLY.replace(
+    'render() { return html`<p>${this.student.name}</p>`; }',
+    'render = async () => html`<p>${this.student.name}</p>`;',
+  );
+  // DISPLAY_ONLY's only prop is { state: true }, so nothing else ships it.
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('async render() + a non-state reactive prop ships (the prop is the signal, #474)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     import { getUser } from '../actions/get-user.server.ts';
@@ -74,28 +99,117 @@ test('async render() forces interactive (it suspends on the client, #469)', () =
   `;
   const r = analyzeComponentSource(src);
   assert.equal(r.interactive, true);
-  assert.match(r.reason, /async render/);
+  assert.match(r.reason, /reactive property/);
 });
 
-test('render = async () arrow field forces interactive (#469)', () => {
-  const src = DISPLAY_ONLY.replace(
-    'render() { return html`<p>${this.student.name}</p>`; }',
-    'render = async () => html`<p>${this.student.name}</p>`;',
-  );
-  assert.equal(analyzeComponentSource(src).interactive, true);
+test('async render() + an @event binding ships (#474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    class FactBox extends WebComponent {
+      async render() { const f = await getFact(); return html\`<button @click=\${() => {}}>\${f.text}</button>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /@event/);
 });
 
-test('renderFallback() forces interactive (the async-render re-fetch UI, #469)', () => {
+test('async render() + a reactive import ships (#474)', () => {
+  const src = `
+    import { WebComponent, html, signal } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    const open = signal(false);
+    class FactBox extends WebComponent {
+      async render() { const f = await getFact(); return html\`<p>\${f.text}\${open.get()}</p>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /reactive primitive/);
+});
+
+test('async render() + renderFallback() ships (the re-fetch loading UI, #469/#474)', () => {
   const src = DISPLAY_ONLY.replace(
     "render() { return html`<p>${this.student.name}</p>`; }",
     "renderFallback() { return html`<p>loading</p>`; }\n  async render() { return html`<p>${this.student.name}</p>`; }",
   );
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /renderFallback/);
+});
+
+test('a plain sync render() stays elidable (#474)', () => {
+  assert.equal(analyzeComponentSource(DISPLAY_ONLY).interactive, false);
+});
+
+test('static shadow = true ships, even display-only (DSD must re-attach on a client swap, #474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Badge extends WebComponent {
+      static shadow = true;
+      render() { return html\`<span>x</span>\`; }
+    }
+    Badge.register('shadow-badge');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /shadow/);
+});
+
+test('static shadow = false stays elidable (the light-DOM default, #474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Badge extends WebComponent {
+      static shadow = false;
+      render() { return html\`<span>x</span>\`; }
+    }
+    Badge.register('light-badge');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('a bare async render() + static shadow = true ships (shadow carve-out, #474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    class FactBox extends WebComponent {
+      static shadow = true;
+      async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
-test('a plain sync render() stays elidable (async-render guard is specific, #469)', () => {
-  // Counterfactual: the word "render" alone must not trip the async signal.
-  assert.equal(analyzeComponentSource(DISPLAY_ONLY).interactive, false);
+test('static refresh = true ships a bare async component (the on-load re-fetch opt-in, #474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    class FactBox extends WebComponent {
+      static refresh = true;
+      async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /refresh/);
+});
+
+test('static refresh = false does not ship (#474)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getFact } from '../actions/get-fact.server.ts';
+    class FactBox extends WebComponent {
+      static refresh = false;
+      async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
+    }
+    FactBox.register('fact-box');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
 test('a side-effect npm import forces interactive (runs on module load)', () => {
@@ -559,6 +673,76 @@ test('import rule: display-only importer of a shipping component ships', async (
     '/app',
   );
   assert.deepEqual([...elidable], []);
+});
+
+test('import rule: a bare async parent that imports an interactive child ships (#474)', async () => {
+  // The parent is a bare async-render leaf (elidable on its own merits), but it
+  // statically imports a shipping interactive child. The import rule forces the
+  // parent to ship too, so the elided parent can never drop the child's
+  // registration. This is the fence the refinement relies on for nested
+  // interactive children.
+  const parent = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import './child.js';
+    import { getData } from '../actions/get-data.server.ts';
+    class Parent extends WebComponent {
+      async render() { const d = await getData(); return html\`<child-el>\${d.x}</child-el>\`; }
+    }
+    Parent.register('parent-el');
+  `;
+  const child = DISPLAY_ONLY.replace(/student-card/g, 'child-el').replace(
+    'render()',
+    'connectedCallback() {} render()',
+  );
+  const files = { '/app/parent.js': parent, '/app/child.js': child };
+  const elidable = await computeElidableComponents(
+    [
+      { tag: 'parent-el', file: '/app/parent.js' },
+      { tag: 'child-el', file: '/app/child.js' },
+    ],
+    graphOf({ '/app/parent.js': ['/app/child.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  assert.deepEqual([...elidable], [], 'both the interactive child AND its bare-async importer ship');
+});
+
+test('a bare async parent whose child registers ELSEWHERE is elided; the child still ships (#474)', async () => {
+  // The parent renders <child-el> but does NOT import it (no import edge), and
+  // it carries no other signal, so it is elidable. The child is interactive and
+  // registered by a SEPARATE module, so it ships on its own merits and upgrades
+  // independently. The parent's elision never touches the child's registration.
+  const parent = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import { getData } from '../actions/get-data.server.ts';
+    class Parent extends WebComponent {
+      async render() { const d = await getData(); return html\`<p>\${d.x}</p><child-el></child-el>\`; }
+    }
+    Parent.register('parent-el');
+  `;
+  const child = DISPLAY_ONLY.replace(/student-card/g, 'child-el').replace(
+    'render()',
+    'connectedCallback() {} render()',
+  );
+  const other = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import './child.js';
+    class Other extends WebComponent { render() { return html\`<other-el></other-el>\`; } }
+    Other.register('other-el');
+  `;
+  const files = { '/app/parent.js': parent, '/app/child.js': child, '/app/other.js': other };
+  const elidable = await computeElidableComponents(
+    [
+      { tag: 'parent-el', file: '/app/parent.js' },
+      { tag: 'child-el', file: '/app/child.js' },
+      { tag: 'other-el', file: '/app/other.js' },
+    ],
+    graphOf({ '/app/other.js': ['/app/child.js'] }),
+    async (f) => files[f],
+    '/app',
+  );
+  // Parent elided (bare async, no import of the child); child + its importer ship.
+  assert.deepEqual([...elidable], ['/app/parent.js']);
 });
 
 test('unreadable component file is conservatively kept (ships)', async () => {
