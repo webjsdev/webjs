@@ -813,6 +813,14 @@ here is for the "submit → server processes → render new page" flow.)
 
 ### 4. `<webjs-frame id="...">` for non-layout swap regions
 
+`<webjs-frame>` is webjs's take on **Turbo Frames** (Hotwire Turbo), so
+`<turbo-frame>` muscle memory transfers directly: a lazy, URL-addressable
+region that swaps on its own, driven by a link/form targeting its id. Use it
+for a region that loads or refreshes INDEPENDENTLY of a full navigation
+(a self-refreshing widget, a `loading="lazy"` below-the-fold region, a
+URL-addressable panel); it ships zero component JS. Its route can itself use
+`<webjs-suspense>` so a lazy frame's slow data streams in behind a fallback.
+
 For a widget that should swap on click but isn't a route boundary
 (e.g. a tab strip inside a page), wrap it:
 
@@ -880,6 +888,14 @@ rather than silently swapping the whole page; call `preventDefault()` to take
 over the outcome (e.g. `location.assign(e.detail.url)`).
 
 ### 5. Stream actions for surgical element-level updates
+
+`<webjs-stream>` is webjs's take on **Turbo Streams** (Hotwire Turbo); the
+action set (`append` / `prepend` / `before` / `after` / `replace` / `update` /
+`remove`) mirrors `<turbo-stream>`, so that muscle memory transfers directly.
+It is the ONLY surgical single-element update primitive AND the live-channel
+applier (`connectWS` / `broadcast` -> `renderStream`); a region swap or a
+`<webjs-frame>` reload redraws a whole region, so reach for `<webjs-stream>`
+when only one element changes.
 
 When a region swap is too coarse (append ONE comment, remove ONE row, bump a
 count, insert a toast), a server response can declare per-element actions as
