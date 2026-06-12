@@ -1,10 +1,10 @@
-import { isTemplate } from './html.js';
+import { html, isTemplate } from './html.js';
 import { escapeText, escapeAttr } from './escape.js';
 import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
 import { isRepeat } from './repeat.js';
 import { isSuspense } from './suspense.js';
-import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
+import { unsafeHTML, isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
 import { cspNonce } from './csp-nonce.js';
 
@@ -267,6 +267,19 @@ async function renderTemplate(tr, ctx) {
           // page-level `.prop` on a native element could have set the
           // property to begin with.
           out = out.slice(0, attrStart);
+          // `<webjs-suspense .fallback=${html`...`}>` (#471). A TemplateResult
+          // is not serializer-safe (the normal data-webjs-prop-* path would
+          // drop it) and a normal custom-element prop applies only at
+          // hydration, too late for the streaming placeholder. So render the
+          // fallback to HTML now and carry it as data-webjs-fallback, which the
+          // injectDSD streaming pre-pass reads as the boundary placeholder.
+          if (currentTag === 'webjs-suspense' && name === 'fallback') {
+            const fbHtml = await render(val, ctx);
+            out += `data-webjs-fallback="${escapeAttr(fbHtml)}"`;
+            state = 'in-tag';
+            attrName = '';
+            continue;
+          }
           if (!currentTag.includes('-')) {
             state = 'in-tag';
             attrName = '';
@@ -353,6 +366,30 @@ function browserMemberHint(e) {
   return null;
 }
 
+/** True in a production build (no dev error surfacing). */
+function isProd() {
+  return typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Default component-scoped error state for an async/sync render that threw
+ * during SSR, used when the component does not define renderError() (#469).
+ * Dev surfaces the tag + message loudly so the failure is obvious; prod
+ * renders an empty (silent, isolated) element so no internal detail leaks.
+ *
+ * @param {string} tag
+ * @param {Error} err
+ * @returns {unknown} a TemplateResult (dev) or '' (prod)
+ */
+function defaultSSRErrorTemplate(tag, err) {
+  if (isProd()) return '';
+  const msg = err && err.message ? err.message : String(err);
+  return html`<div data-webjs-error="${tag}" style="border:1px solid #f5c2c7;background:#f8d7da;color:#842029;padding:8px 12px;border-radius:6px;font:13px/1.4 system-ui,sans-serif">
+    <strong>&lt;${tag}&gt; failed to render</strong>
+    <div style="margin-top:4px;white-space:pre-wrap">${msg}</div>
+  </div>`;
+}
+
 /**
  * Scan an HTML string for registered custom elements and inject
  * Declarative Shadow DOM (`<template shadowrootmode="open">`).
@@ -363,6 +400,12 @@ function browserMemberHint(e) {
  * @returns {Promise<string>}
  */
 async function injectDSD(html, ctx, ancestors = []) {
+  // Resolve <webjs-suspense> boundaries first (#471): in a streaming context
+  // each becomes a fallback placeholder now, with its children pushed for
+  // out-of-order streaming; without a streaming context the children render
+  // inline (blocking). Run before the custom-element walk so a streamed
+  // boundary's children leave the main flow and are not double-processed.
+  html = await processSuspenseElements(html, ctx, ancestors);
   const tags = allTags();
   if (!tags.length) return html;
   // Sort longest tag name first so the regex alternation tries the most
@@ -388,9 +431,12 @@ async function injectDSD(html, ctx, ancestors = []) {
     // `<link rel="modulepreload">` hints for their module URLs.
     if (ctx && ctx.usedComponents) ctx.usedComponents.add(tag);
     let opening = selfClose ? `<${tag}${attrs}>` : match;
+    // Hoisted so the per-component error boundary (#469) can ask the failed
+    // instance for its renderError() output.
+    let instance = null;
     try {
       const isShadow = /** @type any */ (Cls).shadow === true;
-      const instance = new /** @type any */ (Cls)();
+      instance = new /** @type any */ (Cls)();
       // Thread the ancestor chain (the enclosing custom-element instances)
       // so the server element shim's closest() can resolve a parent at SSR.
       // Set before performServerUpdate so a willUpdate() that reads a parent
@@ -521,6 +567,60 @@ async function injectDSD(html, ctx, ancestors = []) {
       } else {
         console.error(`[webjs] SSR failed for <${tag}>:`, e);
       }
+      // Per-component error isolation (#469). A render that throws (most
+      // commonly a rejected `await getData()` in an async render, but any
+      // render throw) is caught HERE, per component: the loop continues so
+      // siblings render normally, and this element renders a component-scoped
+      // error state instead of bubbling to the route error.js or leaving its
+      // raw, unprocessed children in the output. renderError() customizes the
+      // error UI; the default surfaces the message in dev and renders an empty
+      // (silent, isolated) element in prod so no internal detail leaks.
+      const err = e instanceof Error ? e : new Error(String(e));
+      let errorInner = '';
+      try {
+        let errTpl;
+        if (instance && typeof instance.renderError === 'function') {
+          errTpl = instance.renderError(err);
+        }
+        if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err);
+        errorInner = await render(errTpl, ctx);
+        if (errorInner.trim()) {
+          errorInner = await injectDSD(errorInner, ctx, instance ? [...ancestors, instance] : ancestors);
+        }
+      } catch (renderErrorThrew) {
+        console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
+        errorInner = '';
+      }
+      // Replace the element (opening tag through its matching close) with the
+      // error state plus a hydration marker, so the client error boundary
+      // (component.js renderError) can take over on hydration.
+      let closeEnd = m.index + match.length;
+      if (!selfClose) {
+        const innerStart = m.index + match.length;
+        const closeIdx = findClosingTagInString(html, innerStart, tag);
+        if (closeIdx !== -1) {
+          const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
+          const cm = closeRe.exec(html.slice(closeIdx));
+          closeEnd = closeIdx + (cm ? cm[0].length : `</${tag}>`.length);
+        } else {
+          closeEnd = html.length;
+        }
+      }
+      // A shadow component renders into a shadow root on the client, so its
+      // SSR error state must ride a DSD template too (matching the success
+      // path), not land in light DOM. Otherwise the client renders the error
+      // into the shadow root while the light error box lingers underneath.
+      const isShadowErr = /** @type any */ (Cls).shadow === true;
+      let text;
+      if (isShadowErr) {
+        const rawStyles = /** @type any */ (Cls).styles;
+        const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
+        const styleStr = stylesToString(styleList);
+        text = `${opening}<template shadowrootmode="open">${styleStr}${errorInner}</template>`;
+      } else {
+        text = `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`;
+      }
+      edits.push({ start: m.index, end: closeEnd, text });
     }
   }
   if (!edits.length) return html;
@@ -571,10 +671,79 @@ function isVoidElement(tag) {
 }
 
 /**
- * Find the position of the matching closing tag for `tagName` starting
- * from `fromIndex` in `html`. Handles nested same-tag elements via depth
- * tracking. Returns the index of the `<` of `</tagName>`, or -1 if
- * unclosed.
+ * Resolve `<webjs-suspense>` boundaries in an HTML string (#471). For each
+ * top-level boundary (nested ones are handled by the recursive injectDSD that
+ * processes a boundary's streamed children):
+ *
+ * - Streaming (a SuspenseCtx is present): emit the boundary as
+ *   `<webjs-suspense id="sN">FALLBACK</webjs-suspense>` and push the raw inner
+ *   children to `ctx.pending` (wrapped in `unsafeHTML` so the streaming pass
+ *   renders them as HTML, not escaped text, then runs injectDSD over them).
+ *   `streamSuspenseBoundaries` later streams the resolved children as a
+ *   `<template data-webjs-resolve="sN">` plus the swap script. Multiple
+ *   boundaries resolve via `Promise.all`, so their data fetches run
+ *   concurrently. The placeholder is the boundary's `.fallback`
+ *   (carried as `data-webjs-fallback`); a boundary without one shows empty.
+ * - Blocking (no ctx): render the children inline now and drop the fallback,
+ *   so a non-streaming `renderToString` returns the real content. The
+ *   `<webjs-suspense>` wrapper stays as an inert inline element.
+ *
+ * @param {string} html
+ * @param {SuspenseCtx} [ctx]
+ * @param {any[]} [ancestors]
+ * @returns {Promise<string>}
+ */
+async function processSuspenseElements(html, ctx, ancestors = []) {
+  if (html.indexOf('<webjs-suspense') === -1) return html;
+  const OPEN = /<webjs-suspense((?:"[^"]*"|'[^']*'|[^>])*?)>/i;
+  let result = '';
+  let rest = html;
+  // Bounded loop: each iteration consumes at least the opening tag.
+  for (let guard = 0; guard < 10000; guard++) {
+    const m = OPEN.exec(rest);
+    if (!m) {
+      result += rest;
+      break;
+    }
+    const openStart = m.index;
+    const openEnd = m.index + m[0].length;
+    result += rest.slice(0, openStart);
+    const attrs = m[1] || '';
+    const fbMatch = /data-webjs-fallback="([^"]*)"/i.exec(attrs);
+    const fallbackHtml = fbMatch ? unescapeAttr(fbMatch[1]) : '';
+
+    const closeIdx = findClosingTagInString(rest, openEnd, 'webjs-suspense');
+    let inner;
+    let afterClose;
+    if (closeIdx === -1) {
+      inner = rest.slice(openEnd);
+      afterClose = '';
+    } else {
+      inner = rest.slice(openEnd, closeIdx);
+      const cm = /<\/webjs-suspense\s*>/i.exec(rest.slice(closeIdx));
+      afterClose = rest.slice(closeIdx + (cm ? cm[0].length : '</webjs-suspense>'.length));
+    }
+
+    if (ctx) {
+      const id = `s${ctx.nextId++}`;
+      // Raw children stream in later. unsafeHTML so the streaming pass emits
+      // the markup verbatim (then injectDSD runs over it, resolving the async
+      // components and any nested boundaries).
+      ctx.pending.push({ id, promise: Promise.resolve(unsafeHTML(inner)) });
+      result += `<webjs-suspense id="${id}">${fallbackHtml}</webjs-suspense>`;
+    } else {
+      const innerProcessed = await injectDSD(inner, ctx, ancestors);
+      result += `<webjs-suspense>${innerProcessed}</webjs-suspense>`;
+    }
+    rest = afterClose;
+  }
+  return result;
+}
+
+/**
+ * Find the position of the matching closing tag for `tagName` starting from
+ * `fromIndex` in `html`. Handles nested same-tag elements via depth tracking.
+ * Returns the index of the `<` of `</tagName>`, or -1 if unclosed.
  *
  * @param {string} html
  * @param {number} fromIndex
@@ -1259,13 +1428,34 @@ async function streamSuspenseBoundaries(ctx, controller) {
             `(function(){` +
             `var t=document.currentScript.previousElementSibling;` +
             `var b=document.getElementById("${id}");` +
-            `if(b&&t){b.innerHTML=t.innerHTML;t.remove()}` +
+            `if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}` +
             `document.currentScript.remove()` +
             `})()` +
             `</script>`
           );
         } catch (err) {
           console.error(`[webjs] Suspense boundary "${id}" rejected:`, err);
+          // Render a boundary-scoped error state rather than leaving the
+          // fallback stuck forever (#471). Dev surfaces the message; prod
+          // renders a silent empty element (no leak). A failure HERE (the
+          // error render itself throwing) leaves the fallback in place.
+          try {
+            const e = err instanceof Error ? err : new Error(String(err));
+            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e), ctx), ctx);
+            controller.enqueue(
+              `<template data-webjs-resolve="${id}">${errHtml}</template>` +
+              `<script${nonceAttr}>` +
+              `(function(){` +
+              `var t=document.currentScript.previousElementSibling;` +
+              `var b=document.getElementById("${id}");` +
+              `if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}` +
+              `document.currentScript.remove()` +
+              `})()` +
+              `</script>`
+            );
+          } catch (errorRenderThrew) {
+            console.error(`[webjs] Suspense boundary "${id}" error render also threw:`, errorRenderThrew);
+          }
         }
       })
     );

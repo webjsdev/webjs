@@ -35,7 +35,7 @@ const PILLARS = [
   { icon: ICON.cube, title: 'Web components, light DOM', desc: 'A thin reactive base class with html and css tagged templates, signals, and the full lit lifecycle. Light DOM by default so Tailwind just works.' },
   { icon: ICON.layers, title: 'Progressive enhancement', desc: 'Everything renders to real HTML on the server. JavaScript is opt-in per interactive behavior. Dead JS is statically elided and never shipped.' },
   { icon: ICON.plug, title: 'Server actions, rich types', desc: 'Mark a file with use server and import it from the client. Date, Map, Set, BigInt, Blob, and cycles all round-trip through the wire.' },
-  { icon: ICON.wave, title: 'Streaming SSR + Suspense', desc: 'Fallbacks flush immediately, deferred data streams in as it resolves. Time to first byte measured in milliseconds.' },
+  { icon: ICON.wave, title: 'Async render + streaming Suspense', desc: 'A component awaits its own server data into the first paint, co-located, no prop-drilling. Wrap a slow region in webjs-suspense to stream it, fallback first, data after, progressively on navigation too.' },
   { icon: ICON.shield, title: 'Built-in essentials', desc: 'Auth, sessions, cache, rate limiting, and WebSockets, with pluggable adapters. The building blocks every app needs, no third-party glue.' },
 ];
 

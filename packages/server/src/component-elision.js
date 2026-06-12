@@ -111,6 +111,9 @@ export const CLIENT_LIFECYCLE_HOOKS = [
   'firstUpdated',
   'getUpdateComplete',
   'renderError',
+  // The async-render re-fetch loading UI (#469): defining it means the
+  // component suspends and re-renders on the client, so it must ship.
+  'renderFallback',
 ];
 
 /**
@@ -121,6 +124,19 @@ export const CLIENT_LIFECYCLE_HOOKS = [
  * @type {readonly string[]}
  */
 export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
+
+/**
+ * Match an async (promise-returning) `render()` on a WebComponent: either
+ * `async render(` or the arrow-field form `render = async (`. An async render
+ * suspends on the client (it awaits data, then re-renders with the resolved
+ * value, and may re-fetch via RPC on a prop change), so the module does real
+ * client work and must never be elided as display-only. The SSR pass bakes the
+ * data into the first paint regardless, but the client half (stale-while-
+ * revalidate, renderFallback, the re-fetch) only runs if the module ships.
+ * `renderFallback` is the optional client re-fetch loading UI, meaningless
+ * without an async render, so its presence is the same signal.
+ */
+const ASYNC_RENDER_RE = /\basync\s+render\s*\(|\brender\s*=\s*async\b/;
 
 /** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
 const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
@@ -396,6 +412,11 @@ export function analyzeComponentSource(src) {
   }
 
   for (const body of bodies) {
+    // An async render() (or its renderFallback companion) means the component
+    // suspends and re-renders on the client, so it is never display-only.
+    if (ASYNC_RENDER_RE.test(body)) {
+      return { interactive: true, reason: 'defines an async render() (suspends on the client)' };
+    }
     for (const hook of CLIENT_LIFECYCLE_HOOKS) {
       // A client lifecycle hook as a method (`hook(`) OR as an arrow class
       // field (`hook = () =>`), which shadows the prototype method and still

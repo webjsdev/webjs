@@ -401,7 +401,7 @@ test('mcp: prompts/list + prompts/get serve the recipe workflows; unknown prompt
   ]);
   const prompts = frames[0].result.prompts;
   const names = prompts.map((p) => p.name).sort();
-  assert.deepEqual(names, ['add_component', 'add_dynamic_route', 'add_module', 'add_page', 'add_server_action']);
+  assert.deepEqual(names, ['add_component', 'add_dynamic_route', 'add_module', 'add_page', 'add_server_action', 'fetch_data_in_component']);
 
   // get one, with an argument folded in
   ({ frames } = await driveMcp(dir, [

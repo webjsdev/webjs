@@ -181,7 +181,32 @@ client then renders the resolved state, causing a flash.
 
 `Task` is still useful for client-time async (interaction-triggered
 mutations, polling, websocket reactions). For initial-paint data, fetch
-in the page function instead.
+in the page function OR in the component itself with an `async render()`
+(see the next entry), which Lit does not have.
+
+### 2b. Lit has no async render; webjs does (#469)
+
+Lit keeps `render()` synchronous (its async-SSR work signals a promise the
+renderer awaits BEFORE a still-sync render). webjs lets `render()` itself be
+`async`, so you write `const u = await getUser(this.id)` directly in the
+component and SSR bakes the resolved data into the first paint. Three things
+trip up Lit muscle memory:
+
+- **SSR blocks by default. Streaming is NOT automatic.** A bare `async
+  render()` (no wrapper) renders real data in the first paint with no
+  fallback. There is no skeleton flash. To STREAM slow data (fallback on
+  first byte), wrap the region in `<webjs-suspense .fallback=${html`…`}>`.
+  Do not reach for a fallback expecting it to show on first load; the
+  unwrapped default is block-real-data, and streaming is the deliberate
+  opt-in for slow regions.
+- **`renderFallback()` is NOT a first-paint concern.** It is the OPTIONAL
+  client re-fetch loading UI, shown only when a prop / dependency change
+  re-runs `async render()`, never on the first paint. The first-paint and
+  re-fetch defaults are both no-flash: SSR has the data, and a re-fetch keeps
+  the stale content (stale-while-revalidate) until the new render resolves.
+- **You do not need an error boundary.** A thrown `await getData()` is
+  isolated to that component automatically (siblings render, the page does
+  not blank). Add `renderError()` only to customize the error UI.
 
 ### 3. Browser-only APIs in the constructor or `render()`
 

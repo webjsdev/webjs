@@ -216,6 +216,48 @@ export class HelloWorld extends WebComponent {
 HelloWorld.register('hello-world');
 ```
 
+## Fetch data in a component (async render, #469)
+
+A leaf component fetches its own server data into the first paint, co-located, with no prop-drilling. Make `render()` async and call a `'use server'` action directly (real fn at SSR, RPC stub on the client). SSR awaits it, so the data is in the first paint.
+
+```ts
+// (a) blocking async render: real data in the first paint, the common case
+class UserProfile extends WebComponent {
+  static properties = { uid: { type: String } };
+  declare uid: string;
+  async render() {
+    const u = await getUser(this.uid);
+    return html`<h3>${u.name}</h3>`;
+  }
+}
+UserProfile.register('user-profile');
+
+// (b) stream a SLOW region (fallback on the first byte, content streams in)
+html`
+  <webjs-suspense .fallback=${html`<p>Loading…</p>`}>
+    <user-profile uid="42"></user-profile>
+  </webjs-suspense>
+`;
+
+// (c) renderFallback() = the CLIENT re-fetch loading state (never the first paint)
+class UserActivity extends WebComponent {
+  static properties = { uid: { type: String } };
+  declare uid: string;
+  renderFallback() { return html`<div class="skeleton h-24"></div>`; }
+  async render() {
+    const items = await getActivity(this.uid);
+    return html`<ul>${items.map((i) => html`<li>${i.label}</li>`)}</ul>`;
+  }
+}
+
+// (d) errors are isolated by default: NO renderError() needed (add it only to customize)
+class Report extends WebComponent {
+  async render() { return html`<pre>${await getReport()}</pre>`; }
+}
+```
+
+The client re-fetch default is stale-while-revalidate (the current content stays until the new render resolves). Use `<webjs-suspense>` only for genuinely slow data; keep `Task` / signals for client-only data that should NOT be in the first paint. Full decision guide in `agent-docs/components.md` and the `data-fetching` doc page.
+
 ## Form mutation with server-side validation (no JS required)
 
 This is webjs's progressive-enhancement write-path. A `<form method="POST">`

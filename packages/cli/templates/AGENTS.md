@@ -677,7 +677,8 @@ Practical consequences for agents writing webjs code.
 | Lit pattern | What breaks in webjs | Webjs equivalent |
 |---|---|---|
 | Fetch in `connectedCallback` / `firstUpdated` | Empty first paint (neither hook runs in SSR) | Fetch in the page function, pass as props |
-| `Task` for initial-paint data | SSR ships the pending state, flashes to resolved on hydration | Page function fetch, pass as props (`Task` is fine for client-time async) |
+| `Task` for initial-paint data | SSR ships the pending state, flashes to resolved on hydration | Page function fetch, pass as props, OR an `async render()` in the component (`Task` is fine for client-time async) |
+| Expecting a sync `render()` only | webjs allows `async render() { const d = await getData(); ... }`; SSR bakes the data into the first paint | Use it for request-time server data; `renderFallback()` is the re-fetch loading UI (never first paint); error isolation is automatic |
 | `window.X` / `document.X` in constructor or `render()` | SSR crash | Move to `connectedCallback` |
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
 | Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |

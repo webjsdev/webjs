@@ -50,6 +50,92 @@ For component-local state, create an instance signal in the constructor and call
 
 See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
 
+## Async render: bare-await data fetch (#469)
+
+A component can fetch its own server data into the first paint. `render()` may be `async`, so you write the natural line directly:
+
+```ts
+class UserProfile extends WebComponent {
+  static properties = { uid: { type: String } };
+  declare uid: string;
+  async render() {
+    const u = await getUser(this.uid);   // a 'use server' action: real fn at SSR, RPC stub on the client
+    return html`<h3>${u.name}</h3>`;
+  }
+}
+UserProfile.register('user-profile');
+```
+
+Writing `await` makes the function async by the JS rule, and every render path awaits a promise-returning `render()` automatically. There is no flag. Plain sync `render()` stays the zero-cost default.
+
+**Three concerns, decoupled. Do not conflate them.**
+
+1. **SSR always blocks by default.** The server awaits `async render()`, so the resolved DATA is baked into the first paint. There is no fallback on first paint, ever. JS-off reads the data (a progressive-enhancement UPGRADE over a client-fetched `Task`, which shows nothing without JS).
+2. **The client re-fetch default is stale-while-revalidate.** When a prop / dependency change re-runs `async render()`, the previously rendered content stays until the new render resolves. No blank, no flash, no user code.
+3. **`renderFallback()` is the OPTIONAL re-fetch loading UI.** Define it to OVERRIDE the stale-while-revalidate default with a loading state (skeleton / spinner) shown DURING a client re-fetch. It is shown ONLY on a re-fetch, NEVER on the first paint, and it does NOT create a server-streaming boundary. It is a prop-aware method (not a static field), so it can branch on the component's current state.
+
+```ts
+class UserActivity extends WebComponent {
+  static properties = { uid: { type: String } };
+  declare uid: string;
+  renderFallback() { return html`<div class="skeleton h-24"></div>`; }  // shown only while a re-fetch is in flight
+  async render() {
+    const items = await getActivity(this.uid);
+    return html`<ul>${items.map((i) => html`<li>${i.label}</li>`)}</ul>`;
+  }
+}
+```
+
+**Errors are isolated per component by default, no user code.** A thrown `await getData()` (or any render throw) renders a component-scoped error state while its siblings render normally; it never bubbles to the route `error.js`. The default surfaces the tag and message in dev and renders a silent empty element in prod (no leak). Override `renderError(error)` only to customize the error UI:
+
+```ts
+class Report extends WebComponent {
+  async render() { return html`<pre>${await getReport()}</pre>`; }
+  renderError(error) { return html`<p class="error">Could not load the report.</p>`; }  // optional
+}
+```
+
+`Task` and a signal cannot replace this: a `Task` renders its pending state at SSR (it loses the first-paint data), and you cannot wrap a signal around your own `await` inside `render()`. So `async render()` plus `renderFallback()` is the only way to get SSR-first-paint data AND a custom re-fetch loading state.
+
+**Decision rules (which tool to reach for):**
+
+1. Server data knowable at request time: fetch it IN the component with `async render()`. Co-located, no prop-drilling, data in the first paint. The default, simplest case.
+2. Client re-fetch where stale content would mislead: add `renderFallback()` for a loading state during the re-fetch.
+3. Genuinely CLIENT-ONLY data (depends on a click, viewport, localStorage, or live updates, and does NOT need to be in the first paint): use `Task` / signals plus an RPC action.
+4. Slow server data where blocking the first byte hurts: stream it. Wrap the component in `<webjs-suspense .fallback=${html\`…\`}>` to flush the fallback on the first byte and stream the data in (the only way to show a first-paint fallback; concurrent across boundaries; progressive on soft nav). Do it deliberately for slow regions, not by default.
+
+**Anti-patterns (likely footguns):**
+
+- Do NOT prop-drill server data through layers when the leaf component can fetch it itself.
+- Do NOT put `await getData()` in a page / layout function if it can live in a component (page / layout fetches run sequentially, a route-level waterfall).
+- Do NOT fetch in `connectedCallback` / `Task` for data that is knowable server-side (that yields a fallback-then-RPC, not first-paint data).
+- Do NOT expect `renderFallback()` to affect the first paint (it is the CLIENT re-fetch loading state).
+- Do NOT add `renderError()` on every component (isolation is automatic).
+
+**How it works.** On the server the SSR walker already awaits a promise-returning `render()` and bakes the data in; a throw is caught per component and rendered as the error state. On the client, `update()` detects a thenable from `render()` and routes to a stale-while-revalidate commit: the current DOM stays until the promise resolves, a monotonic render token drops a superseded resolution (an out-of-order fetch never commits stale DOM), and a rejection routes to `renderError()`. `firstUpdated` / `updated` / `updateComplete` fire after the async commit lands. Only signal reads BEFORE the first `await` establish reactive dependencies. A component with an `async render()` is always shipped to the browser (never elided as display-only).
+
+### Streaming a slow region with `<webjs-suspense>` (#471)
+
+`async render()` BLOCKS the first byte by default (the SSR HTML waits for the data). For a SLOW region where that wait hurts time-to-first-byte, wrap it in `<webjs-suspense>` to stream it: the fallback flushes immediately, the resolved content streams in.
+
+```ts
+html`
+  <webjs-suspense .fallback=${html`<p>Loading section…</p>`}>
+    <user-profile uid="42"></user-profile>
+    <user-activity uid="42"></user-activity>
+  </webjs-suspense>
+`;
+```
+
+- **The fallback is on the first byte, the content streams in.** This is the ONLY way a fallback appears on the first paint. It is a deliberate choice for slow data (fast TTFB, accepting a fallback-then-content swap), exactly like page-level `Suspense`. PE-critical content stays unwrapped (blocking) so it is in the first paint with no JS.
+- **Grouping + override.** One boundary wraps several components under ONE fallback. The boundary `.fallback` wins over a contained component's `renderFallback()`.
+- **Concurrent.** Multiple `<webjs-suspense>` boundaries on a page fetch their data in parallel (each is a non-blocking boundary resolved together), so they stream fast-before-slow with no server waterfall.
+- **Error-isolated.** A throwing component inside a boundary renders its component-scoped error state (via `renderError()` or the default) while its siblings stream normally.
+- **Progressive on soft navigation (#473).** A client-router navigation to a streamed page applies the shell (with fallbacks) immediately, advances the URL, then streams each boundary in, matching the initial-load experience instead of buffering the whole response.
+- **`.fallback` is special-cased at SSR:** the renderer reads it inline as the placeholder, never through the `data-webjs-prop-*` path (a `TemplateResult` is not serializer-safe). It must be an UNQUOTED property hole (`.fallback=${...}`, invariant 4).
+
+Decision: a bare `async render()` for request-time data that should be in the first paint (the default); `<webjs-suspense>` ONLY when the data is slow enough that blocking the first byte is the worse tradeoff.
+
 ## Display-only components are elided from the browser
 
 A component that does no client-side work renders the same SSR'd HTML

@@ -82,7 +82,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
   \`;
 }</pre>
 
-    <p>The component's <code>render()</code> method can also be async. During SSR, if <code>render()</code> returns a Promise, <code>injectDSD</code> awaits it before serialising the shadow root contents.</p>
+    <p>The component's <code>render()</code> method can also be async. During SSR, if <code>render()</code> returns a Promise, <code>injectDSD</code> awaits it before serialising the contents, so a component can fetch its own server data into the first paint (<code>const u = await getUser(this.uid)</code>). SSR blocks by default, so the resolved DATA is in the first paint with no fallback (a JS-off client reads it). On the client, a re-fetch keeps the prior content (stale-while-revalidate) until the new render resolves, and a thrown <code>await</code> is isolated to that component. See <a href="/docs/components">Components</a> and <a href="/docs/lifecycle">Lifecycle</a>.</p>
 
     <h2>Streaming SSR with Suspense</h2>
     <p>Not every data fetch should block the initial HTML flush. The <code>Suspense</code> function creates a boundary that streams deferred content after the initial paint:</p>

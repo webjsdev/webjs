@@ -990,6 +990,9 @@ export class WebComponent extends Base {
     // --- 1. Mark we're inside an update cycle ---
     this._isUpdating = true;
     let didCommit = false;
+    // Set when render() was async: the DOM commit lands when this settles,
+    // so the post-commit half of the cycle defers until then (#469).
+    let pendingCommit = null;
 
     // --- 2-6. Update phase. Lifecycle-hook throws are logged and
     // swallowed so the component is not left in a deadlocked state
@@ -1005,24 +1008,27 @@ export class WebComponent extends Base {
         }
 
         // --- 5. update + DOM commit (with render-error boundary) ---
+        // Stamp a fresh render token for THIS commit, sync or async. A later
+        // cycle that reaches here bumps it, so an in-flight async render whose
+        // token no longer matches drops its now-stale resolution. Stamping
+        // here (not inside _commitAsync) is what guards the async-superseded-
+        // by-sync case (#469); a shouldUpdate=false cycle never reaches here,
+        // so it does not invalidate an in-flight async render.
+        this.__renderToken = (this.__renderToken || 0) + 1;
         try {
-          this.update(changedProperties);
+          const r = this.update(changedProperties);
+          if (r && typeof r.then === 'function') pendingCommit = r;
         } catch (error) {
-          console.error(`[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`, error);
-          try {
-            const fallback = this.renderError(/** @type {Error} */ (error));
-            if (fallback !== undefined) clientRender(fallback, this._renderRoot);
-          } catch (fallbackError) {
-            console.error(`[webjs] renderError() also threw:`, fallbackError);
+          this._handleRenderError(/** @type {Error} */ (error));
+        }
+
+        if (!pendingCommit) {
+          // --- 6. controllers' hostUpdated (sync commit) ---
+          for (const c of this.__controllers) {
+            if (c.hostUpdated) c.hostUpdated();
           }
+          didCommit = true;
         }
-
-        // --- 6. controllers' hostUpdated ---
-        for (const c of this.__controllers) {
-          if (c.hostUpdated) c.hostUpdated();
-        }
-
-        didCommit = true;
       }
       // shouldUpdate=false: preserve _changedProperties so the next
       // requestUpdate keeps accumulating on top of the entries that
@@ -1031,28 +1037,46 @@ export class WebComponent extends Base {
       console.error(`[webjs] lifecycle hook threw during update phase:`, preCommitError);
     } finally {
       this._isUpdating = false;
-      if (didCommit) {
+      // The snapshot is consumed once the commit is DISPATCHED. For an async
+      // render it resets here too, so a property change during the in-flight
+      // fetch starts a fresh cycle (whose render token supersedes this one).
+      if (didCommit || pendingCommit) {
         this._changedProperties = new Map();
       }
     }
 
-    // --- 7-8. Post-commit hooks. Errors here are also caught so the
+    // --- Async render: finish the cycle when the pending commit settles. ---
+    if (pendingCommit) {
+      const token = this.__renderToken;
+      // Count this in-flight async commit so a non-committing cycle
+      // (shouldUpdate=false) running during the fetch does NOT resolve
+      // updateComplete early: the pending commit owns the resolution.
+      this.__pendingAsyncCommits = (this.__pendingAsyncCommits || 0) + 1;
+      pendingCommit.then(() => {
+        // Always decrement first, even when superseded, so the in-flight
+        // count never leaks (a superseded cycle returns below without
+        // committing, but it is no longer pending).
+        this.__pendingAsyncCommits--;
+        // A newer render superseded this one; let the newer cycle finish.
+        if (token !== this.__renderToken) return;
+        // --- 6. controllers' hostUpdated (after the async commit) ---
+        for (const c of this.__controllers) {
+          if (c.hostUpdated) c.hostUpdated();
+        }
+        // --- 7-8 + updateComplete ---
+        this._postCommit(changedProperties);
+      });
+      return;
+    }
+
+    // --- 7-8. Post-commit hooks (sync path). Errors are caught so the
     // updateComplete promise always resolves.
     if (didCommit) {
-      try {
-        // --- 7. firstUpdated (once) ---
-        if (!this.__firstRendered) {
-          this.__firstRendered = true;
-          this.firstUpdated(changedProperties);
-        }
-        // --- 8. updated (every render) ---
-        this.updated(changedProperties);
-      } catch (postCommitError) {
-        console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
-      } finally {
-        this._resolveUpdate();
-      }
-    } else {
+      this._postCommit(changedProperties);
+    } else if (!this.__pendingAsyncCommits) {
+      // A non-committing cycle resolves updateComplete only when no async
+      // commit is in flight; otherwise the pending commit resolves it once it
+      // lands, so `await el.updateComplete` never returns before that DOM.
       this._resolveUpdate();
     }
   }
@@ -1203,7 +1227,110 @@ export class WebComponent extends Base {
     }
     let tpl;
     this.__signalWatcher.observe(() => { tpl = this.render(); });
+    // Bare-await async render (#469): render() returned a promise. Use
+    // stale-while-revalidate: keep the current DOM (the SSR first paint on
+    // hydration, or the prior content on a re-fetch) visible until the new
+    // template resolves, then commit it. Returns the pending promise so
+    // _performRender defers the post-commit half of the cycle (hostUpdated,
+    // firstUpdated/updated, updateComplete) until the real commit lands.
+    // (Note: only signal reads BEFORE the first `await` are tracked; reads
+    // after a suspension point do not establish reactive dependencies.)
+    if (tpl && typeof (/** @type any */ (tpl).then) === 'function') {
+      return this._commitAsync(/** @type {Promise<unknown>} */ (tpl));
+    }
     clientRender(tpl, this._renderRoot);
+    return undefined;
+  }
+
+  /**
+   * Commit a promise-returning render() with stale-while-revalidate
+   * semantics (#469). The current DOM stays untouched until the template
+   * resolves; on a client RE-FETCH an author-defined renderFallback()
+   * optionally swaps in a loading state first. The cycle's render token
+   * (stamped by _performRender before update() ran) drops a superseded
+   * resolution so an out-of-order fetch never commits stale DOM, INCLUDING
+   * when the superseding render is synchronous (a later cycle re-stamps the
+   * token whether or not it is async). A rejection routes to the
+   * renderError() boundary, isolated to this component. Returns a promise
+   * that settles once the commit (or its error / fallback) has been applied.
+   *
+   * @param {Promise<unknown>} pending
+   * @returns {Promise<void>}
+   * @private
+   */
+  _commitAsync(pending) {
+    const token = this.__renderToken;
+    // First paint (hydration): keep the SSR DOM, never a fallback, so
+    // first-paint data stays visible with no skeleton flash. Re-fetch: an
+    // author-defined renderFallback() overrides the stale-while-revalidate
+    // default with an explicit loading state.
+    if (this.__firstRendered && this._overridesRenderFallback()) {
+      try {
+        const fb = this.renderFallback();
+        if (fb !== undefined) clientRender(fb, this._renderRoot);
+      } catch (e) {
+        console.error(`[webjs] renderFallback() threw:`, e);
+      }
+    }
+    return Promise.resolve(pending).then(
+      (tpl) => {
+        if (token !== this.__renderToken) return; // superseded by a newer render
+        clientRender(tpl, this._renderRoot);
+      },
+      (error) => {
+        if (token !== this.__renderToken) return;
+        this._handleRenderError(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  }
+
+  /**
+   * Whether the subclass overrides renderFallback() (vs the inert default).
+   * @returns {boolean}
+   * @private
+   */
+  _overridesRenderFallback() {
+    return this.renderFallback !== WebComponent.prototype.renderFallback;
+  }
+
+  /**
+   * Client-side render-error boundary, shared by the sync and async commit
+   * paths. Logs, then commits renderError()'s output (if any) so one broken
+   * component does not crash the page.
+   * @param {Error} error
+   * @private
+   */
+  _handleRenderError(error) {
+    console.error(
+      `[webjs] render error in <${tagOf(/** @type any */ (this.constructor)) || this.tagName?.toLowerCase()}>:`,
+      error,
+    );
+    try {
+      const fallback = this.renderError(error);
+      if (fallback !== undefined) clientRender(fallback, this._renderRoot);
+    } catch (fallbackError) {
+      console.error(`[webjs] renderError() also threw:`, fallbackError);
+    }
+  }
+
+  /**
+   * Post-commit half of the update cycle (steps 7-8 + updateComplete),
+   * shared by the sync path and the async (post-resolution) path.
+   * @param {Map<string, unknown>} changedProperties
+   * @private
+   */
+  _postCommit(changedProperties) {
+    try {
+      if (!this.__firstRendered) {
+        this.__firstRendered = true;
+        this.firstUpdated(changedProperties);
+      }
+      this.updated(changedProperties);
+    } catch (postCommitError) {
+      console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
+    } finally {
+      this._resolveUpdate();
+    }
   }
 
   /**
@@ -1372,6 +1499,35 @@ export class WebComponent extends Base {
    * @returns {unknown}  A TemplateResult fallback, or undefined for empty.
    */
   renderError(error) {
+    return undefined;
+  }
+
+  /**
+   * Optional loading UI for an async render() (#469), shown ONLY during a
+   * client RE-FETCH (a prop / dependency change re-runs `async render()`),
+   * NEVER on the first paint.
+   *
+   * **When to override (AI hint):** the client re-fetch default is
+   * stale-while-revalidate (the component keeps showing its current content
+   * until the new render resolves). Override `renderFallback()` only when you
+   * want a loading state (skeleton / spinner) shown during the re-fetch
+   * instead of the stale content, e.g. when stale data would mislead.
+   *
+   * **What it does NOT do:** it does not affect the first paint (SSR always
+   * blocks and bakes real data in), and it does NOT create a server-streaming
+   * boundary. To show a first-paint fallback for slow data, wrap the component
+   * in `<webjs-suspense .fallback=${...}>` instead. It is a prop-aware method,
+   * not a static field, so it can branch on the component's current state.
+   *
+   * ```js
+   * renderFallback() { return html`<div class="skeleton h-24"></div>`; }
+   * async render() { const u = await getUser(this.id); return html`<h3>${u.name}</h3>`; }
+   * ```
+   *
+   * @returns {unknown} A TemplateResult loading state, or undefined to keep
+   *   the stale-while-revalidate default.
+   */
+  renderFallback() {
     return undefined;
   }
 }

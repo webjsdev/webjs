@@ -144,14 +144,18 @@ self-review loop.
   `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in
   `firstUpdated`) instead of Lit's `classMap` / `styleMap` / `ref` / `when` /
   `choose` / `guard`.
-- Use Context for cross-component data, Task for async data in components.
+- Use Context for cross-component data. For async data in a component, prefer
+  an `async render()` (`const u = await getUser(this.uid)`, awaited at SSR so
+  the data is in the first paint); keep `Task` for genuinely client-only data.
 - **Progressive enhancement is the default.** Pages AND every web component
   are SSR'd to real HTML. Write components so the first paint is the right
   content. Read SSR-meaningful defaults in `constructor()`. `connectedCallback`
   is never called on the server, so anything there only runs after
   hydration. Initial data for components comes from the page function
-  (server-side fetch plus pass as attribute/property), NOT from `fetch` calls
-  in `connectedCallback`. For write-paths, prefer `<form action=...>` plus
+  (server-side fetch plus pass as attribute/property) OR from an `async
+  render()` in the component itself (preferred over prop-drilling;
+  `renderFallback()` is the optional re-fetch loading state, never first
+  paint), NOT from `fetch` calls in `connectedCallback`. For write-paths, prefer `<form action=...>` plus
   server action over `fetch` plus click handler. The framework upgrades plain
   forms to partial-swap submissions automatically.
 - **Client navigation is auto-magic.** Real `<a href>` and `<form action>`

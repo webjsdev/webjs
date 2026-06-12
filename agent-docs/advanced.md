@@ -18,6 +18,25 @@ fallback flushes immediately, and the resolved content streams in as a
 `<template>` + inline `__webjsResolve('id')` script when the promise
 lands. Nested Suspense supported.
 
+### Component-level streaming: `<webjs-suspense>` (#471)
+
+`Suspense({ fallback, children })` above is the page/region-level primitive (a promise passed as `children`). With **async render** (`agent-docs/components.md`), a COMPONENT is the suspending unit: a component doing `async render() { const u = await getUser(this.uid); … }` BLOCKS the first byte by default (real data in the first paint). To STREAM a slow component, wrap it in the renderer-recognized `<webjs-suspense>` element:
+
+```js
+html`
+  <webjs-suspense .fallback=${html`<p>Loading section…</p>`}>
+    <user-profile uid="42"></user-profile>
+    <user-activity uid="42"></user-activity>
+  </webjs-suspense>
+`;
+```
+
+`.fallback` is read at SSR as the inline placeholder (`render-server.js`'s `processSuspenseElements` carries it via `data-webjs-fallback`, since a `TemplateResult` is not serializer-safe) and flushed on the first byte; the children push to `ctx.pending` and stream in via the same `<template data-webjs-resolve>` engine. Multiple boundaries resolve via `Promise.all`, so they fetch concurrently (no server waterfall). One boundary groups several components under one fallback (the boundary `.fallback` wins over a contained component's `renderFallback()`), and a throwing component inside is isolated to its own error state while siblings stream. Without a streaming context (`renderToString`) the children render inline (blocking).
+
+### Progressive soft-nav streaming (#473)
+
+On a client-router navigation to a streamed page, the router applies the response PROGRESSIVELY: the SSR stream flushes the shell (with fallbacks) plus a `<!--wj-stream-shell-->` sentinel, the router's `readStreamedShell` swaps the shell in immediately and advances the URL, then `streamBoundariesProgressively` applies each resolved boundary into the live DOM as it streams (fast-before-slow), upgrading the custom elements inside. So a soft nav matches the initial-load experience instead of buffering the whole response. A non-streaming page is read to completion and applied once; a navigation superseded mid-stream stops and cancels the reader; a mid-stream transport failure leaves the applied boundaries in place (non-destructive).
+
 ## First-paint performance without a build step
 
 Five stacked zero-build optimizations:

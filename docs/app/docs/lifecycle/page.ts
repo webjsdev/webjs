@@ -87,6 +87,18 @@ this.name = 'updated';                       // reactive property assignment
 }</pre>
     <p>Without this, one broken component would crash the entire page. The default implementation renders nothing and logs to console.</p>
 
+    <h2>async render() and renderFallback()</h2>
+    <p>A component's <code>render()</code> may be <code>async</code>, so it can fetch its own server data into the first paint. Writing <code>await</code> makes the function async; webjs awaits a promise-returning <code>render()</code> automatically on both the server and the client. There is no flag.</p>
+    <pre>async render() {
+  const user = await getUser(this.uid);   // a 'use server' action: real fn at SSR, RPC stub on the client
+  return html\`&lt;h3&gt;\${user.name}&lt;/h3&gt;\`;
+}</pre>
+    <p>Three concerns stay separate. First, <strong>SSR always blocks</strong>, so the resolved data is in the first paint with no fallback (JS-off reads it). Second, the <strong>client re-fetch default is stale-while-revalidate</strong>: a prop change re-runs <code>async render()</code> and the current content stays until the new render resolves (no blank, no flash). Third, <code>renderFallback()</code> is the optional loading UI shown ONLY during a client re-fetch, never on the first paint.</p>
+    <pre>renderFallback() {
+  return html\`&lt;div class="skeleton h-24"&gt;&lt;/div&gt;\`;   // shown only while a re-fetch is in flight
+}</pre>
+    <p>A failed <code>async render()</code> (a thrown <code>await getData()</code>) is isolated to that component automatically: siblings render, the page does not blank, and <code>renderError()</code> optionally customizes the error UI. To STREAM slow data with a first-paint fallback, wrap the region in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (it flushes the fallback on the first byte, then streams the data in, progressively on soft navigation too). See <a href="/docs/components">Components</a> and <a href="/docs/data-fetching">Data fetching</a> for the full decision guide and anti-patterns.</p>
+
     <h2>Native Web Component Callbacks</h2>
     <p>These are provided by <code>HTMLElement</code> itself and work as normal in webjs components:</p>
     <ul>
