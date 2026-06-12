@@ -412,6 +412,9 @@ function defaultSSRErrorTemplate(tag, err, dev) {
  *
  * @param {string} html
  * @param {SuspenseCtx} [ctx]
+ * @param {any[]} [ancestors]
+ * @param {boolean} [dev]  server dev flag, threaded to the per-component error
+ *   template for prod-silence (#483); undefined falls back to NODE_ENV
  * @returns {Promise<string>}
  */
 async function injectDSD(html, ctx, ancestors = [], dev) {
@@ -1426,6 +1429,8 @@ async function streamTemplate(tr, ctx, controller) {
  *
  * @param {SuspenseCtx} ctx
  * @param {ReadableStreamDefaultController<string>} controller
+ * @param {boolean} [dev]  server dev flag for prod-silence of a rejected
+ *   streamed boundary (#483); undefined falls back to NODE_ENV
  */
 async function streamSuspenseBoundaries(ctx, controller, dev) {
   // Resolve the per-request nonce once per call. The provider in
