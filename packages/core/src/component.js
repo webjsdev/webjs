@@ -1,4 +1,5 @@
 import { render as clientRender } from './render-client.js';
+import { setActiveActionSignal } from './action-abort-client.js';
 import { isCSS, adoptStyles } from './css.js';
 import { register, tagOf } from './registry.js';
 import { parse as deserializeProp } from './serialize.js';
@@ -1015,11 +1016,23 @@ export class WebComponent extends Base {
         // by-sync case (#469); a shouldUpdate=false cycle never reaches here,
         // so it does not invalidate an in-flight async render.
         this.__renderToken = (this.__renderToken || 0) + 1;
+        // Abort the superseded render's in-flight action fetches (#492), start a
+        // fresh controller for this render, and bind it as the active signal so
+        // the RPC stub ties its fetches to this render. A superseded fetch's
+        // AbortError is dropped by the render-token guard in _commitAsync.
+        if (this.__renderAbort) this.__renderAbort.abort();
+        this.__renderAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        setActiveActionSignal(this.__renderAbort ? this.__renderAbort.signal : null);
         try {
           const r = this.update(changedProperties);
           if (r && typeof r.then === 'function') pendingCommit = r;
         } catch (error) {
           this._handleRenderError(/** @type {Error} */ (error));
+        } finally {
+          // The synchronous portion of render() has run; actions invoked there
+          // already captured the signal. Clear it so a later event handler is
+          // not bound to a stale render's controller.
+          setActiveActionSignal(null);
         }
 
         if (!pendingCommit) {

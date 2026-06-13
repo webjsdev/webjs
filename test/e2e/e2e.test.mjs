@@ -466,6 +466,31 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('a superseded async render aborts its in-flight action fetch (#492)', async () => {
+    // <abort-demo> awaits a slow (800ms) GET action. Bumping n while the fetch
+    // is in flight supersedes the render, and the framework aborts the previous
+    // render's fetch (net::ERR_ABORTED on the action URL).
+    /** @type {string[]} */
+    const aborted = [];
+    const onFailed = (req) => {
+      if (req.url().includes('/__webjs/action/') && /ERR_ABORTED/.test(req.failure()?.errorText || '')) aborted.push(req.url());
+    };
+    page.on('requestfailed', onFailed);
+    try {
+      await page.goto(baseUrl + '/abort', { waitUntil: 'domcontentloaded', timeout: 12000 });
+      await page.waitForFunction(() => document.querySelector('abort-demo .ad-bump') && document.querySelector('abort-demo .ad-n')?.textContent.includes('n=0'), { timeout: 8000 });
+      // Bump (n=1): the slow getSlow(1) fetch starts and stays in flight.
+      await page.evaluate(() => document.querySelector('abort-demo .ad-bump').click());
+      await sleep(200);
+      // Bump again (n=2): supersedes the in-flight n=1 render, aborting its fetch.
+      await page.evaluate(() => document.querySelector('abort-demo .ad-bump').click());
+      await page.waitForFunction(() => document.querySelector('abort-demo .ad-n')?.textContent.includes('n=2'), { timeout: 8000 });
+      assert.ok(aborted.length >= 1, 'the superseded render\'s in-flight action fetch was aborted');
+    } finally {
+      page.off('requestfailed', onFailed);
+    }
+  });
+
   test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
     // Start on another page, then soft-navigate to /seeded through the client
     // router. The navigation response carries the seed payload, the router

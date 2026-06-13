@@ -40,6 +40,9 @@ export { takeSeed, scanSeeds, SEED_MISS } from './src/action-seed-client.js';
 // Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
 // browser-cache eviction after a mutation. Inert server-side.
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+// Client action-abort plumbing (#492): a superseded async render aborts its
+// in-flight action fetches. Inert server-side.
+export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';
 
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported so the bare specifier exposes the same
