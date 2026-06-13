@@ -619,22 +619,31 @@ test('drift guard: MCP RESERVED_CONFIG and RPC_VERBS match action-config.js expo
     assert.equal(cfg.method, verb, `RPC verb ${verb} must be recognized by extractActionConfig`);
   }
 
-  // Verify all RESERVED_CONFIG names from action-config.js are excluded from callable actions.
-  // We do this by building a file that exports one of each reserved name as a const,
-  // plus a real callable function, and checking only the function appears.
-  const reservedDecls = [...srcReserved].map((name) => {
-    if (name === 'middleware') return `export const ${name} = [];`;
-    return `export const ${name} = () => [];`;
-  }).join('\n');
-  const src = `'use server';\n${reservedDecls}\nexport async function myAction() {}\n`;
-  const names = extractExportNames(src);
+  // Verify EVERY RESERVED_CONFIG name from action-config.js is excluded from the
+  // callable-action list by the REAL list_actions runner. A reserved name added
+  // to action-config.js but missing from the MCP's local set would surface here
+  // as a wrongly-listed action (each reserved name is declared as a function-
+  // valued const, the shape that would otherwise count as a callable action).
+  const reservedDecls = [...srcReserved].map((name) =>
+    name === 'middleware' ? `export const ${name} = [];` : `export const ${name} = () => [];`,
+  ).join('\n');
+  // First confirm the lexical extractor SEES them all (so the filter is the gate,
+  // not a parse miss), then confirm the runner excludes them.
+  const probe = `'use server';\n${reservedDecls}\nexport async function myAction() {}\n`;
+  const names = extractExportNames(probe);
   for (const name of srcReserved) {
-    // extractActionConfig should exclude all of these when building the action list.
-    // We verify they ARE in extractExportNames (so the filter logic is what excludes them).
-    assert.ok(names.includes(name), `reserved name '${name}' must appear in extractExportNames so the RESERVED_CONFIG filter is the gate`);
+    assert.ok(names.includes(name), `reserved name '${name}' must be visible to extractExportNames`);
   }
-  // And that the non-reserved action function IS present.
-  assert.ok(names.includes('myAction'), 'the callable action is present in export names');
+  const dir = tmpDir();
+  write(dir, 'modules/x/cfg.server.ts', probe);
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 77, method: 'tools/call', params: { name: 'list_actions', arguments: {} } },
+  ]);
+  const listed = JSON.parse(frames[0].result.content[0].text).map((a) => a.fn);
+  assert.deepEqual(listed, ['myAction'], 'only the callable action is listed; every reserved config name is excluded');
+  for (const name of srcReserved) {
+    assert.ok(!listed.includes(name), `reserved name '${name}' must be excluded from the action list (MCP RESERVED_CONFIG drift)`);
+  }
 });
 
 test('mcp: a request split across stdin chunks (mid-line) still parses', async () => {
