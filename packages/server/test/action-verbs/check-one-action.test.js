@@ -42,3 +42,15 @@ test('counts an arrow-const action too', async () => {
   assert.ok(has(await checkConventions(dir)), 'arrow + fn => two actions');
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('counts a paren-less single-param arrow action', async () => {
+  const dir = app({ 'a.server.ts': `'use server';\nexport const method='GET';\nexport const getA = id => id;\nexport async function getB(){return 1}\n` });
+  assert.ok(has(await checkConventions(dir)), 'paren-less arrow + fn => two actions');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('a plain non-function const export is not counted as an action', async () => {
+  const dir = app({ 'a.server.ts': `'use server';\nexport const method='GET';\nexport const MAX = 5;\nexport async function getA(id){return id+MAX}\n` });
+  assert.equal(has(await checkConventions(dir)), false, 'a value const is not an action');
+  rmSync(dir, { recursive: true, force: true });
+});

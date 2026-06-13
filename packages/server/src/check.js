@@ -746,7 +746,10 @@ export async function checkConventions(appDir) {
       let m;
       const reFn = /\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g;
       while ((m = reFn.exec(scan))) names.add(m[1]);
-      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/g;
+      // An arrow-const action: `export const x = (...) => ...`, the paren-less
+      // `export const x = id => ...`, or a function expression. The `=>` /
+      // `function` anchor keeps a plain `export const N = 5` from counting.
+      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g;
       while ((m = reArrow.exec(scan))) names.add(m[1]);
       if (/\bexport\s+default\b/.test(scan)) names.add('default');
       const actions = [...names].filter((n) => !RESERVED_CONFIG.has(n));
