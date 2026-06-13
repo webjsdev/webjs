@@ -25,9 +25,11 @@ subcommand) delegates to this same server, so both routes run identical code.
 ## What it exposes
 
 - **Introspection tools** (read-only, scoped to an `appDir`): `list_routes`,
-  `list_actions` (with the `/__webjs/action/<hash>/<fn>` RPC endpoints),
-  `list_components`, `check` (the structured `webjs check` violations). Each
-  projects an existing `@webjsdev/server` data function and mutates nothing.
+  `list_actions` (RPC endpoints plus the full data contract: HTTP verb, cache
+  config, and boolean flags for tags/invalidates/validate/middleware; reserved
+  config exports are excluded from the callable-action list), `list_components`,
+  `check` (the structured `webjs check` violations). Each projects an existing
+  `@webjsdev/server` data function and mutates nothing.
 - **Knowledge layer**: an `init` mental-model primer, a `docs` retrieval tool,
   MCP `resources` (the `agent-docs/*` corpus + `AGENTS.md` as `webjs-docs://*`),
   and `prompts` (the recipes as guided workflows).

@@ -36,6 +36,13 @@ import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
 
+// Mirrors packages/server/src/action-config.js. A drift test in
+// packages/mcp/test/mcp.test.mjs asserts these stay in sync with the source.
+/** HTTP verbs an action may declare (mirrors RPC_VERBS in action-config.js). */
+const RPC_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+/** Reserved config export names in a 'use server' file (mirrors RESERVED_CONFIG in action-config.js). */
+const RESERVED_CONFIG = new Set(['method', 'cache', 'tags', 'invalidates', 'validate', 'middleware']);
+
 /**
  * The four read-only tools. Each takes an optional `{ appDir }` (default the
  * server's cwd) and projects an EXISTING `@webjsdev/server` function's output
@@ -128,7 +135,7 @@ const TOOL_DEFS = [
   {
     name: 'list_actions',
     description:
-      'List registered server actions (the .server.{js,ts} files with "use server"): file, exported function name, and the /__webjs/action/<hash>/<fn> RPC endpoint. Read-only.',
+      'List registered server actions (the .server.{js,ts} files with "use server"): file, exported function name, the /__webjs/action/<hash>/<fn> RPC endpoint, HTTP verb (method), cache config, and boolean flags for tags/invalidates/validate/middleware. Config-only exports (method, cache, tags, invalidates, validate, middleware) are NOT listed as actions. Read-only.',
     inputSchema: APPDIR_SCHEMA,
   },
   {
@@ -207,6 +214,67 @@ export function extractRouteMethods(src) {
 }
 
 /**
+ * Lexically extract the HTTP-verb action config declared as reserved sibling
+ * exports in a `'use server'` file (#488). Reads source text only (no module
+ * load) so there are no DB-init or Prisma side effects.
+ *
+ * Returned shape:
+ *   {
+ *     method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE',  // default 'POST'
+ *     cache: string | null,    // raw RHS literal when present, else null
+ *     tags: boolean,           // whether the tags export is declared
+ *     invalidates: boolean,    // whether the invalidates export is declared
+ *     validate: boolean,       // whether the validate export is declared
+ *     middleware: boolean,     // whether the middleware export is declared
+ *   }
+ *
+ * @param {string} src
+ * @returns {{ method: string, cache: string|null, tags: boolean, invalidates: boolean, validate: boolean, middleware: boolean }}
+ */
+export function extractActionConfig(src) {
+  // Extract `method` from: export const method = 'GET'  (single/double/backtick)
+  const methodMatch = /\bexport\s+const\s+method\s*=\s*(['"`])([A-Za-z]+)\1/.exec(src);
+  let method = 'POST';
+  if (methodMatch) {
+    const upper = methodMatch[2].toUpperCase();
+    if (RPC_VERBS.has(upper)) method = upper;
+  }
+
+  // Extract `cache` RHS. Single-line: `export const cache = 60` -> '60'
+  // Multi-line object: capture balanced braces across lines.
+  let cache = null;
+  const cacheMatch = /\bexport\s+const\s+cache\s*=\s*/.exec(src);
+  if (cacheMatch) {
+    const rest = src.slice(cacheMatch.index + cacheMatch[0].length);
+    if (rest.startsWith('{')) {
+      // Capture the balanced-brace object (may span lines).
+      let depth = 0;
+      let end = 0;
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === '{') depth++;
+        else if (rest[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      cache = rest.slice(0, end + 1).trim();
+    } else {
+      // Single-line: read up to the first newline or semicolon.
+      const lineMatch = /^([^\n;]+)/.exec(rest);
+      if (lineMatch) cache = lineMatch[1].trim();
+    }
+  }
+
+  // Boolean presence of the remaining config names.
+  const exported = new Set(extractExportNames(src));
+  return {
+    method,
+    cache,
+    tags: exported.has('tags'),
+    invalidates: exported.has('invalidates'),
+    validate: exported.has('validate'),
+    middleware: exported.has('middleware'),
+  };
+}
+
+/**
  * The literal URL path for a page/api directory: `blog/[slug]` -> `/blog/[slug]`,
  * the root `.` -> `/`. Route groups `(group)` and `_private` segments drop, the
  * same normalization `buildRouteTable` uses for matching.
@@ -279,18 +347,28 @@ export function makeToolRunners(deps) {
       // no stray stdout from a loaded module corrupting the JSON-RPC channel).
       // The RPC hash is over the file path only, so no module load is needed.
       const idx = await buildActionIndex(appDir, false, { skipExposeLoad: true });
-      /** @type {Array<{ file: string, fn: string, endpoint: string }>} */
+      /** @type {Array<{ file: string, fn: string, endpoint: string, method: string, cache: string|null, tags: boolean, invalidates: boolean, validate: boolean, middleware: boolean }>} */
       const actions = [];
       for (const [file, hash] of idx.fileToHash) {
-        let names = [];
+        let src = '';
         try {
-          names = extractExportNames(await readFile(file, 'utf8'));
+          src = await readFile(file, 'utf8');
         } catch {}
+        const names = extractExportNames(src);
+        const config = extractActionConfig(src);
         for (const fn of names) {
+          // Skip reserved config export names: they are config, not callable actions.
+          if (RESERVED_CONFIG.has(fn)) continue;
           actions.push({
             file: relative(appDir, file),
             fn,
             endpoint: `/__webjs/action/${hash}/${fn}`,
+            method: config.method,
+            cache: config.cache,
+            tags: config.tags,
+            invalidates: config.invalidates,
+            validate: config.validate,
+            middleware: config.middleware,
           });
         }
       }
