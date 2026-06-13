@@ -1695,7 +1695,12 @@ async function handleCore(req, ctx) {
   // Internal server-action RPC endpoint
   const actMatch = /^\/__webjs\/action\/([a-f0-9]+)\/([A-Za-z0-9_$]+)$/.exec(path);
   if (actMatch) {
-    if (method !== 'POST') return new Response('POST only', { status: 405 });
+    // HTTP-verb actions (#488): any RPC verb may hit the endpoint; invokeAction
+    // enforces the action's DECLARED method (405 + Allow on a mismatch) and
+    // reads args from the URL (GET/DELETE) or the body (POST/PUT/PATCH).
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      return new Response('method not allowed', { status: 405 });
+    }
     // Pass the onError sink (issue #239): a server action that throws
     // unexpectedly is reported to the APM hook before the sanitized 500.
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
