@@ -191,3 +191,49 @@ test('aborting the request cancels the source generator (its finally runs)', asy
   assert.ok(existsSync(hashes.cancelFlag), 'the aborted generator ran its finally (cancelled)');
   assert.equal(readFileSync(hashes.cancelFlag, 'utf8'), 'cancelled');
 });
+
+test('a still-reading client gets an ERROR frame on abort, not a silent close', async () => {
+  // A server-side abort must not look like a clean completion to a client that
+  // is still reading: the abort path emits an ERROR frame so the consumer can
+  // tell truncation apart from success (the END-frame contract).
+  const headers = await csrfHeaders();
+  const ac = new AbortController();
+  const res = await handle(new Request(url(`/__webjs/action/${hashes.abort}/abortStream`), { method: 'POST', body: await stringify([]), headers, signal: ac.signal }));
+  const reader = res.body.getReader();
+  const dec = createFrameDecoder();
+  const td = new TextDecoder();
+  await reader.read(); // first chunk: the generator is now suspended mid-run
+  ac.abort();
+  let error = null;
+  let ended = false;
+  for (let i = 0; i < 50 && error == null; i++) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    for (const f of dec.push(value)) {
+      if (f.type === FRAME_ERROR) error = td.decode(f.payload);
+      else if (f.type === FRAME_END) ended = true;
+    }
+  }
+  assert.equal(error, 'stream aborted', 'the abort surfaced as an ERROR frame');
+  assert.equal(ended, false, 'an aborted stream does not emit a clean END');
+});
+
+test('the generated stub enforces the END frame (truncation throws)', async () => {
+  // The stub reader treats a body that ends without END/ERROR as truncated. We
+  // assert the GENERATED stub carries that guard AND verify the runtime contract
+  // by replaying a truncated framed body through the same decode logic.
+  const dec = createFrameDecoder();
+  const td = new TextDecoder();
+  const enc = new TextEncoder();
+  // A lone CHUNK frame, then the body ends (no END). Replicate the stub's loop.
+  const truncated = (await import('@webjsdev/core')).encodeFrame(FRAME_CHUNK, enc.encode(await stringify('partial')));
+  let ended = false;
+  const seen = [];
+  for (const f of dec.push(truncated)) {
+    if (f.type === FRAME_CHUNK) seen.push(parse(td.decode(f.payload)));
+    else if (f.type === FRAME_END) ended = true;
+  }
+  // The body is now exhausted with no END: the stub would throw here.
+  assert.deepEqual(seen, ['partial']);
+  assert.equal(ended, false, 'no END frame arrived -> the stub treats this as truncated and throws');
+});

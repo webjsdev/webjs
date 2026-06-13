@@ -82,6 +82,8 @@ export function streamActionResponse(source, opts = {}) {
   const enc = new TextEncoder();
   const iter = toAsyncIterator(source);
   let closed = false;
+  /** @type {(() => void) | null} */
+  let onAbort = null;
 
   const releaseSource = (reason) => {
     if (typeof iter.return === 'function') {
@@ -89,6 +91,7 @@ export function streamActionResponse(source, opts = {}) {
     }
     return Promise.resolve();
   };
+  const detach = () => { if (onAbort && signal) { try { signal.removeEventListener('abort', onAbort); } catch {} onAbort = null; } };
 
   const body = new ReadableStream({
     async pull(controller) {
@@ -96,7 +99,13 @@ export function streamActionResponse(source, opts = {}) {
       try {
         if (signal && signal.aborted) {
           closed = true;
+          // Emit an ERROR frame so a still-reading client sees an explicit abort
+          // rather than a silent truncation (a clean close with no terminal
+          // frame is indistinguishable from success). Best-effort: the
+          // connection may already be gone, in which case enqueue throws.
+          try { controller.enqueue(encodeFrame(FRAME_ERROR, enc.encode('stream aborted'))); } catch {}
           await releaseSource();
+          detach();
           controller.close();
           return;
         }
@@ -104,6 +113,7 @@ export function streamActionResponse(source, opts = {}) {
         if (done) {
           closed = true;
           controller.enqueue(encodeFrame(FRAME_END));
+          detach();
           controller.close();
           return;
         }
@@ -119,19 +129,23 @@ export function streamActionResponse(source, opts = {}) {
         const msg = e instanceof Error && e.message ? e.message : 'Internal server error';
         try { controller.enqueue(encodeFrame(FRAME_ERROR, enc.encode(msg))); } catch {}
         await releaseSource(e);
+        detach();
         try { controller.close(); } catch {}
       }
     },
     async cancel(reason) {
       closed = true;
+      detach();
       await releaseSource(reason);
     },
   });
 
   // A client disconnect / superseded render aborts the request signal: cancel the
-  // source promptly even if the consumer is not actively pulling.
+  // source promptly even if the consumer is not actively pulling. The listener is
+  // detached on completion / cancel so it cannot outlive the stream.
   if (signal) {
-    signal.addEventListener('abort', () => { releaseSource(); }, { once: true });
+    onAbort = () => { releaseSource(); };
+    signal.addEventListener('abort', onAbort, { once: true });
   }
 
   // A streamed result is never cacheable; mark it streamed so the conditional-GET

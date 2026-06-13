@@ -1131,7 +1131,9 @@ superseded `async render()`. A streamed result is never cached, ETagged, or
 seeded (#472); a mutation that streams still emits its `X-Webjs-Invalidate`
 header. A mid-stream throw surfaces as an error from the iterable (the HTTP status
 is already 200, so wrap the `for await` in `try/catch`), the author message in
-prod. For a slow region you want behind a fallback on the FIRST paint, use
+prod. A truncated stream (a server crash, a dropped connection) also throws
+rather than completing silently: a healthy stream always ends in an explicit
+terminal frame, so a missing one is an error. For a slow region you want behind a fallback on the FIRST paint, use
 `<webjs-suspense>` instead; streaming RPC is for an imperative stream consumed
 after an interaction. Full reference: the [Data fetching](https://docs.webjs.com/docs/data-fetching) page.
 

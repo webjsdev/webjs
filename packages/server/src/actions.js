@@ -413,19 +413,27 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // chunks. A CHUNK frame yields a value, END returns, ERROR throws the
   // (author-controlled) message. The reader is released on completion / abort.
   lines.push(`async function* __readStream(res, fn) {`);
+  lines.push(`  if (!res.body) throw new Error('webjs stream ' + fn + ' has no body');`);
   lines.push(`  const reader = res.body.getReader();`);
   lines.push(`  const dec = __frameDec();`);
   lines.push(`  const td = new TextDecoder();`);
+  lines.push(`  let ended = false;`);
   lines.push(`  try {`);
   lines.push(`    for (;;) {`);
   lines.push(`      const { value, done } = await reader.read();`);
   lines.push(`      if (done) break;`);
   lines.push(`      for (const f of dec.push(value)) {`);
   lines.push(`        if (f.type === __F_CHUNK) yield __p(td.decode(f.payload));`);
-  lines.push(`        else if (f.type === __F_END) return;`);
+  lines.push(`        else if (f.type === __F_END) { ended = true; return; }`);
   lines.push(`        else if (f.type === __F_ERR) throw new Error(td.decode(f.payload) || ('webjs stream ' + fn));`);
   lines.push(`      }`);
   lines.push(`    }`);
+  // The body ended without a terminal END/ERROR frame: the stream was truncated
+  // (a server crash, a dropped connection, an upstream timeout). A healthy
+  // stream always ends in END or ERROR, so surface this as an error rather than
+  // a silent clean completion. (A consumer that breaks early goes through the
+  // generator's return(), which skips this and runs only the finally.)
+  lines.push(`    if (!ended) throw new Error('webjs stream ' + fn + ' truncated (no end frame)');`);
   lines.push(`  } finally { try { reader.cancel(); } catch {} try { reader.releaseLock(); } catch {} }`);
   lines.push(`}`);
   // Body sender (POST/PUT/PATCH, and the URL-arg too-large fallback). `sig` is
