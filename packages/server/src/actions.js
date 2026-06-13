@@ -730,7 +730,9 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   const fn = mod[route.fnName];
   if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
   try {
-    const result = await fn(arg, { req, params });
+    // The REST boundary wires the request signal into actionSignal() too (#492),
+    // symmetric with the RPC path and the #245 validation contract.
+    const result = await runWithActionSignal(req.signal, () => fn(arg, { req, params }));
     if (result instanceof Response) return result;
     return Response.json(result ?? null);
   } catch (e) {

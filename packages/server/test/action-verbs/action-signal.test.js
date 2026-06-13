@@ -47,6 +47,12 @@ before(async () => {
     `'use server';\n` +
     `import { actionSignal } from ${JSON.stringify(SIGNAL_URL)};\n` +
     `export async function probe() { return { aborted: actionSignal().aborted }; }\n`);
+  // An expose()d REST action also reads the signal (the REST boundary, #492).
+  w('actions/rest-probe.server.js',
+    `'use server';\n` +
+    `import { expose } from ${JSON.stringify(CORE_URL)};\n` +
+    `import { actionSignal } from ${JSON.stringify(SIGNAL_URL)};\n` +
+    `export const restProbe = expose('GET /api/rest-probe', async () => ({ aborted: actionSignal().aborted }));\n`);
   w('app/layout.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ({children})=>html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   w('app/page.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ()=>html\`<main>ok</main>\`;\n`);
   const app = await createRequestHandler({ appDir, dev: true });
@@ -70,4 +76,12 @@ test('the action sees the request AbortSignal through invokeAction', async () =>
   const c = new AbortController(); c.abort();
   const aborted = await handle(new Request(`http://localhost/__webjs/action/${hash}/probe`, { method: 'POST', body: await stringify([]), headers, signal: c.signal }));
   assert.deepEqual(parse(await aborted.text()), { aborted: true });
+});
+
+test('an expose()d REST action also sees the request AbortSignal', async () => {
+  const live = await handle(new Request('http://localhost/api/rest-probe'));
+  assert.deepEqual(await live.json(), { aborted: false });
+  const c = new AbortController(); c.abort();
+  const aborted = await handle(new Request('http://localhost/api/rest-probe', { signal: c.signal }));
+  assert.deepEqual(await aborted.json(), { aborted: true });
 });
