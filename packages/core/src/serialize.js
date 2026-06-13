@@ -295,6 +295,32 @@ function newDecodeCtx() {
   };
 }
 
+/**
+ * Keys that, assigned with bracket notation, mutate the object instead of
+ * adding an own data property: `out['__proto__'] = x` invokes the prototype
+ * setter (a prototype-pollution vector, reachable because `JSON.parse` makes a
+ * wire `"__proto__"` an OWN key), and `constructor` / `prototype` shadow in a
+ * way downstream code can be confused by.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Assign a decoded value onto a plain object from the UNTRUSTED wire. A normal
+ * key is a plain assignment (the hot path); an unsafe key is written as an
+ * ordinary own data property via `defineProperty`, so the value survives as
+ * data and the prototype chain is never touched.
+ * @param {Record<string, unknown>} out
+ * @param {string} key
+ * @param {unknown} value
+ */
+function assignDecoded(out, key, value) {
+  if (UNSAFE_KEYS.has(key)) {
+    Object.defineProperty(out, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    out[key] = value;
+  }
+}
+
 function decode(v, ctx) {
   if (v === null || typeof v !== 'object') return v;
   if (Array.isArray(v)) {
@@ -314,7 +340,7 @@ function decode(v, ctx) {
     if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
     if (k === ID_KEY) continue;
     const realKey = isEscapedReservedKey(k) ? k.slice(1) : k;
-    out[realKey] = decode(v[k], ctx);
+    assignDecoded(out, realKey, decode(v[k], ctx));
   }
   return out;
 }
