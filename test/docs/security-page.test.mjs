@@ -2,7 +2,7 @@
  * Integration test for the /docs/security page (#274): the consolidated
  * security reference. Boots the docs app via createRequestHandler (prod) and
  * asserts the page serves and covers the surfaces the issue requires (CSRF
- * model + the expose() exemption, CSP nonce, secure headers, the .server
+ * model + the REST-endpoint exemption, CSP nonce, secure headers, the .server
  * boundary, sessions/secrets, rate limiting, SRI, body limits), that it is
  * registered in the sidebar nav, and that it links the deployment checklist.
  */
@@ -31,7 +31,7 @@ test('/docs/security serves and covers the required security surfaces', async ()
   // Each acceptance-criterion surface is present.
   for (const needle of [
     'CSRF', // the CSRF model
-    'expose(', // the expose() exemption + checklist
+    'route.ts', // the REST-endpoint exemption + checklist
     'NOT CSRF-protected', // the sharp edge is called out explicitly
     'Content-Security-Policy', // CSP nonce
     'cspNonce', // how to consume the nonce

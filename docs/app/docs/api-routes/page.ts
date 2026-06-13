@@ -219,11 +219,11 @@ export default rateLimit({
     </ul>
     <p>These rate-limit headers are also added to successful responses so clients can monitor their usage. The default key function extracts the client IP from <code>X-Forwarded-For</code>, <code>CF-Connecting-IP</code>, or <code>X-Real-IP</code> headers (in that order). For multi-instance deployments, use an external rate limiter (Redis, nginx, Cloudflare).</p>
 
-    <h2>CORS on expose()d Endpoints</h2>
-    <p>There are two patterns for CORS in webjs:</p>
+    <h2>CORS on REST Endpoints</h2>
+    <p>CORS in webjs comes from the <code>cors()</code> middleware (from <code>@webjsdev/server</code>):</p>
     <ol>
-      <li><strong>expose() with cors option</strong>: per-function CORS for server actions that double as REST endpoints. Preflight <code>OPTIONS</code> handling is automatic.</li>
-      <li><strong>route.ts with middleware</strong>: manual CORS via a shared middleware that applies to all routes in a segment.</li>
+      <li><strong>Wrap a single route.ts handler</strong> in <code>cors(...)</code> for per-route CORS.</li>
+      <li><strong>Apply it in middleware.ts</strong> for blanket coverage across all routes in a segment.</li>
     </ol>
     <p>Example CORS middleware for route.ts files:</p>
     <pre>// app/api/public/middleware.ts
@@ -360,7 +360,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
       <li>Export <code>WS</code> from the same <code>route.ts</code> for WebSocket support</li>
       <li>Per-segment <code>middleware.ts</code> applies to all routes underneath</li>
       <li><code>rateLimit()</code> from <code>@webjsdev/server</code> for built-in rate limiting</li>
-      <li>CORS via <code>expose()</code> options or custom middleware on <code>route.ts</code> files</li>
+      <li>CORS via the <code>cors()</code> middleware on <code>route.ts</code> files or in <code>middleware.ts</code></li>
       <li>webjs works as a backend-only API framework when no page files are present</li>
     </ul>
   `;

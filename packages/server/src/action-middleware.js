@@ -2,7 +2,7 @@
  * Per-action middleware (#490). An action file declares `export const middleware
  * = [mw1, mw2]` (a reserved config export). Each middleware is
  * `async (ctx, next) => result`, run around the action on BOTH the RPC endpoint
- * and the `route.ts`/`expose()` boundary, like `validate`.
+ * and the `route.ts` boundary (including the `route()` adapter), like `validate`.
  *
  *   - `ctx` carries `{ request, args, signal, context }`. `context` is a shared
  *     mutable object the chain accumulates; the action reads it via

@@ -908,27 +908,37 @@ SSR content is visible immediately. Only the JS download is deferred.
 
 ---
 
-## expose(): REST endpoints from server actions
+## REST endpoints from server actions (route.ts)
 
 <!-- OVERRIDE -->
-Tag a server action to also be reachable over HTTP. The file MUST be a `.server.{js,ts}` file: `expose()` is server-only and the bare `@webjsdev/core` specifier resolves to the browser entry which excludes it, so importing from a client-bound file silently reads `undefined`.
+A server action is RPC-callable from components. To ALSO reach the same
+function over plain HTTP (mobile apps, webhooks, third parties), put it behind
+a `route.ts` handler. The action stays a normal `'use server'` function; the
+route imports and calls it.
 
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { expose } from '@webjsdev/core';
-export const createPost = expose('POST /api/posts', async ({ title, body }) => {
+export async function createPost({ title, body }) {
   return prisma.post.create({ data: { title, body } });
-});
+}
 ```
 
-The same function works via RPC (from components) and HTTP (for external
-callers). Use `expose()` when mobile apps, webhooks, or third parties need
-to call your action. For internal-only actions, plain server actions are
-simpler and CSRF-protected.
+```ts
+// app/api/posts/route.ts
+import { route } from '@webjsdev/server';
+import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+// The route() adapter merges query + route params + JSON body into one input
+// object and JSON-responds the result. Pass { validate } to guard the input.
+export const POST = route(createPost);
+```
 
-**Security:** `expose()`d endpoints are NOT CSRF-protected. Authenticate
-via bearer tokens, API keys, or auth middleware.
+A hand-written `route.ts` (a `POST(req)` that reads the body and calls the
+action) is always available for full control (custom headers, streaming).
+
+**Security:** a `route.ts` REST endpoint is NOT CSRF-protected (only the RPC
+path is). Authenticate every mutating endpoint via bearer tokens, API keys, or
+auth middleware.
 
 ---
 

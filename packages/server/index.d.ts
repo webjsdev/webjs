@@ -257,8 +257,8 @@ export declare function handleApi(
 // actions.js (server-action scanner + RPC endpoint)
 // ---------------------------------------------------------------------------
 
-/** Scan the app for `.server.{js,ts}` files and build the RPC + expose index. */
-export declare function buildActionIndex(appDir: string, dev: boolean, opts?: { skipExposeLoad?: boolean }): Promise<unknown>;
+/** Scan the app for `.server.{js,ts}` files and build the pure file -> hash RPC index. */
+export declare function buildActionIndex(appDir: string, dev: boolean): Promise<unknown>;
 /** Whether a file path is a `.server.{js,ts,mjs,mts}` server file. */
 export declare function isServerFile(file: string): boolean;
 /** SHA-256 hash of an action file's absolute path (the RPC endpoint addressing scheme). */
@@ -275,6 +275,22 @@ export declare function invokeAction(
   req: Request,
   onError?: (error: unknown) => void,
 ): Promise<Response>;
+
+// ---------------------------------------------------------------------------
+// action-route.js
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap a plain `'use server'` action as a `route.ts`-style REST handler (#488).
+ * Merges query + route params + JSON body into one input object, runs the
+ * optional boundary validator, and dispatches through the request abort signal
+ * + the optional middleware chain. The always-works baseline is a hand-written
+ * `route.ts` that imports and calls the action; this is the convenience.
+ */
+export declare function route<A, R>(
+  action: (input: A, ctx: { req: Request; params: Record<string, string> }) => R | Promise<R>,
+  opts?: { validate?: (input: any) => any; middleware?: Function[] },
+): (req: Request, ctx?: { params?: Record<string, string> }) => Promise<Response>;
 
 // ---------------------------------------------------------------------------
 // importmap.js

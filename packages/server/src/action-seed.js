@@ -121,9 +121,9 @@ async function recordSeed(collector, file, fnName, args, value) {
  * Wrap one exported action function so that, when a collector is active, its
  * resolved result is recorded. Outside a collector (the RPC endpoint path) it is
  * a transparent passthrough. Non-functions (a `const VERSION = '1.0'` export)
- * pass through untouched, and the Proxy forwards property reads, so `expose()` /
- * `validateInput()` metadata stored on the function (`__webjsHttp`) still
- * resolves through `getExposed()`.
+ * pass through untouched, and the Proxy forwards property reads, so any
+ * metadata an app or the framework attaches to the function still resolves
+ * through the wrapper.
  * @param {string} file absolute action file path
  * @param {string} fnName
  * @param {unknown} orig

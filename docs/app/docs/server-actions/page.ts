@@ -149,89 +149,86 @@ PostForm.register('post-form');</pre>
     </ol>
     <p>This works because a cross-origin attacker cannot read the victim's cookies (SameSite + same-origin policy), so they cannot set the header to the matching value. No server-side session store is needed.</p>
 
-    <h2>expose(): REST Endpoints from Server Actions</h2>
-    <p>The <code>expose()</code> function makes a server action available as a first-class REST endpoint in addition to its internal RPC URL. The same function implementation backs both call paths.</p>
+    <h2>REST Endpoints from Server Actions</h2>
+    <p>A server action is RPC-callable from client components. To ALSO reach the same function over plain HTTP (from curl, a mobile app, or another service), put it behind a <code>route.ts</code> handler, the framework's first-class HTTP route. The action stays a normal <code>'use server'</code> function; the route imports it and calls it.</p>
 
-    <pre>// actions/posts.server.ts
+    <pre>// modules/posts/actions/create-post.server.ts
 'use server';
-import { expose } from '@webjsdev/core';
-import { prisma } from '../lib/prisma.server.ts';
+import { prisma } from '../../../lib/prisma.server.ts';
 
-export const listPosts = expose('GET /api/posts', async () =&gt; {
-  return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
-});
-
-export const getPost = expose('GET /api/posts/:slug', async ({ slug }: { slug: string }) =&gt; {
-  const post = await prisma.post.findUnique({ where: { slug } });
-  if (!post) return new Response('Not found', { status: 404 });
-  return post;
-});
-
-export const createPost = expose('POST /api/posts', async ({ title, body }: { title: string; body: string }) =&gt; {
+export async function createPost({ title, body }: { title: string; body: string }) {
   return prisma.post.create({ data: { title, body } });
-});</pre>
+}</pre>
 
-    <p>Now <code>createPost</code> is reachable two ways:</p>
+    <pre>// app/api/posts/route.ts
+import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const post = await createPost(body);
+  return Response.json(post);
+}</pre>
+
+    <p>Now <code>createPost</code> is reachable two ways, both backed by the exact same function:</p>
     <ul>
-      <li><strong>From a client component:</strong> <code>import { createPost } from '../actions/posts.server.ts'</code> is auto-rewritten to an RPC stub, CSRF-protected, encoded with the webjs rich serializer.</li>
-      <li><strong>From curl or another service:</strong> <code>POST /api/posts</code> with a JSON body. The function receives a single merged object of URL params + query string + JSON body.</li>
+      <li><strong>From a client component:</strong> <code>import { createPost } from '.../create-post.server.ts'</code> is auto-rewritten to an RPC stub, CSRF-protected, encoded with the webjs rich serializer.</li>
+      <li><strong>From curl or another service:</strong> <code>POST /api/posts</code> with a JSON body, served by the <code>route.ts</code> handler.</li>
     </ul>
 
-    <p>The pattern string follows the format <code>"METHOD /path"</code>. Path params use <code>:name</code> syntax (or <code>[name]</code> bracket syntax for familiarity):</p>
-    <pre>expose('GET /api/posts/:slug', fn)       // :slug style
-expose('DELETE /api/posts/[slug]', fn)   // [slug] style: equivalent</pre>
+    <h3>The route() Adapter</h3>
+    <p>For the common case (merge query + route params + JSON body into one input object, run an optional validator, JSON-respond the result), the <code>route()</code> helper from <code>@webjsdev/server</code> writes that handler for you in one line. The hand-written <code>route.ts</code> above is always available for full control (custom headers, content negotiation, streaming).</p>
 
-    <h3>Validate Hook (both call paths)</h3>
-    <p>The optional <code>validate</code> function runs server-side before the action body on BOTH the internal RPC path (a client component import) AND the HTTP path (issue #245). It receives the action's first argument. Besides the throw-to-reject form below, it can return a structured <code>{ success: false, fieldErrors }</code> envelope (a <code>422</code> over HTTP, a <code>result.fieldErrors</code> object over RPC) or a transformed input value. To attach a validator to a pure-RPC action with no HTTP route, use <code>validateInput(fn, validate)</code> instead of <code>expose()</code>.</p>
+    <pre>// app/api/posts/route.ts
+import { route } from '@webjsdev/server';
+import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
 
-    <pre>import { z } from 'zod';
+export const POST = route(createPost);
+
+// app/api/posts/[slug]/route.ts
+import { route } from '@webjsdev/server';
+import { getPost } from '../../../../modules/posts/queries/get-post.server.ts';
+
+// ctx.params.slug merges into the action input
+export const GET = route(getPost);</pre>
+
+    <h3>Validating the Input</h3>
+    <p>A boundary validator runs server-side before the action body. On the RPC path, declare it as the <code>validate</code> config export beside the action (issue #245). For a <code>route()</code> endpoint, pass it as the <code>validate</code> option. It receives the action's first argument and may throw to reject, return a structured <code>{ success: false, fieldErrors }</code> envelope (a <code>422</code> over HTTP, a <code>result.fieldErrors</code> object over RPC), or return a transformed input value.</p>
+
+    <pre>// modules/posts/actions/create-post.server.ts
+'use server';
+import { z } from 'zod';
+import { prisma } from '../../../lib/prisma.server.ts';
 
 const CreatePostSchema = z.object({
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(20000),
 });
 
-export const createPost = expose('POST /api/posts', async (input) =&gt; {
+// the RPC boundary reads this config export
+export const validate = CreatePostSchema.parse;
+
+export async function createPost(input: { title: string; body: string }) {
   return prisma.post.create({ data: input });
-}, {
-  validate: CreatePostSchema.parse,  // zod.parse throws on invalid input
-});</pre>
+}</pre>
 
-    <p>When validation fails, the response is <code>400 { "error": "...", "issues": [...] }</code>. If the thrown error has an <code>issues</code> property (as zod and valibot errors do), it is passed through for structured client-side handling.</p>
+    <pre>// app/api/posts/route.ts: the REST boundary passes the same validator
+import { route } from '@webjsdev/server';
+import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { z } from 'zod';
 
-    <h3>expose() CORS Support</h3>
-    <p>If your exposed endpoint will be called from a different origin (e.g. a mobile app or a partner's frontend), enable CORS:</p>
-
-    <pre>// Allow any origin
-export const publicList = expose('GET /api/posts', listFn, {
-  cors: true,  // Access-Control-Allow-Origin: *
+const CreatePostSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(20000),
 });
 
-// Allow a specific origin with credentials
-export const authedAction = expose('POST /api/posts', createFn, {
-  cors: 'https://partner.example.com',
-  // Sets: Access-Control-Allow-Origin: https://partner.example.com
-  //       Access-Control-Allow-Credentials: true
-});
+export const POST = route(createPost, { validate: CreatePostSchema.parse });</pre>
 
-// Allow multiple origins
-export const multiOrigin = expose('GET /api/data', dataFn, {
-  cors: ['https://app.example.com', 'https://admin.example.com'],
-});
+    <p>When a thrown validator fails over HTTP, the response is <code>400 { "error": "...", "issues": [...] }</code>. If the thrown error has an <code>issues</code> property (as zod and valibot errors do), it is passed through for structured client-side handling. A structured envelope failure is a <code>422</code>.</p>
 
-// Full control
-export const custom = expose('POST /api/webhook', hookFn, {
-  cors: {
-    origin: 'https://partner.example.com',
-    credentials: true,
-    maxAge: 3600,
-    headers: ['Content-Type', 'Authorization', 'X-Custom-Header'],
-  },
-});</pre>
+    <h3>CORS for a REST Endpoint</h3>
+    <p>If your endpoint will be called from a different origin (e.g. a mobile app or a partner's frontend), wrap the <code>route.ts</code> handler in the <code>cors()</code> middleware from <code>@webjsdev/server</code>, or apply <code>cors()</code> in <code>middleware.ts</code> for the path. See the <a href="/docs/middleware">middleware</a> docs.</p>
 
-    <p>When CORS is enabled, webjs automatically handles <code>OPTIONS</code> preflight requests at the same path, responding with the appropriate <code>Access-Control-Allow-*</code> headers.</p>
-
-    <p><strong>Important:</strong> exposed REST endpoints are <em>not</em> CSRF-protected by default. They are designed for external consumers who authenticate via bearer tokens, API keys, or signed requests. Add your own auth in a middleware or inside the function body.</p>
+    <p><strong>Important:</strong> a <code>route.ts</code> REST endpoint is <em>not</em> CSRF-protected (only the internal RPC path is). A mutating REST endpoint is designed for external consumers who authenticate via bearer tokens, API keys, or signed requests. Add your own auth in a middleware or inside the function body.</p>
 
     <h2>ActionResult&lt;T&gt; Envelope Pattern</h2>
     <p>A recommended convention for server actions is to return a discriminated union instead of throwing errors:</p>
@@ -256,7 +253,7 @@ export async function createPost(input: unknown): Promise&lt;ActionResult&lt;Pos
   return { success: true, data: post };
 }</pre>
 
-    <p>This pattern makes error handling explicit on the client side without relying on try/catch. The caller checks <code>result.success</code> and branches accordingly. It also works naturally with the <code>expose()</code> REST path, where the caller receives the same JSON shape.</p>
+    <p>This pattern makes error handling explicit on the client side without relying on try/catch. The caller checks <code>result.success</code> and branches accordingly. It also works naturally over a <code>route.ts</code> REST endpoint, where the caller receives the same JSON shape.</p>
 
     <h2>Error Sanitisation in Production</h2>
     <p>When a server action throws (rather than returning an error envelope), webjs catches the exception and returns a JSON error response:</p>
@@ -267,26 +264,33 @@ export async function createPost(input: unknown): Promise&lt;ActionResult&lt;Pos
     <p>This prevents accidental leakage of file paths, database schemas, or other implementation details to end users.</p>
 
     <h2>Complete Example</h2>
-    <p>Here is the full flow from defining a server action to calling it from a component and exposing it as REST:</p>
+    <p>Here is the full flow from defining a server action to calling it from a component and exposing it over REST via a <code>route.ts</code>:</p>
 
     <pre>// 1. Define the server action
 // actions/todos.server.ts
 'use server';
-import { expose } from '@webjsdev/core';
 
 interface Todo { id: number; text: string; done: boolean; createdAt: Date; }
 const todos: Todo[] = [];
 let nextId = 1;
 
-export const addTodo = expose('POST /api/todos', async ({ text }: { text: string }) =&gt; {
+export async function addTodo({ text }: { text: string }) {
   const todo: Todo = { id: nextId++, text, done: false, createdAt: new Date() };
   todos.push(todo);
   return todo;
-});
+}
 
-export const listTodos = expose('GET /api/todos', async () =&gt; {
+export async function listTodos() {
   return todos;
-});
+}
+
+// 1b. Expose them over REST with the route() adapter
+// app/api/todos/route.ts
+import { route } from '@webjsdev/server';
+import { addTodo, listTodos } from '../../../actions/todos.server.ts';
+
+export const GET = route(listTodos);
+export const POST = route(addTodo);
 
 // 2. Call from a web component
 // components/todo-app.ts

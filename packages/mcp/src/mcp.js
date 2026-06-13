@@ -342,11 +342,11 @@ export function makeToolRunners(deps) {
     },
 
     async list_actions(appDir) {
-      // `skipExposeLoad` builds the file -> hash maps WITHOUT importing any
-      // `expose()` module, so this stays truly read-only (no Prisma/DB init, and
-      // no stray stdout from a loaded module corrupting the JSON-RPC channel).
-      // The RPC hash is over the file path only, so no module load is needed.
-      const idx = await buildActionIndex(appDir, false, { skipExposeLoad: true });
+      // buildActionIndex is a pure file -> hash mapping that imports no module,
+      // so this stays truly read-only (no Prisma/DB init, and no stray stdout
+      // from a loaded module corrupting the JSON-RPC channel). The RPC hash is
+      // over the file path only, so no module load is needed.
+      const idx = await buildActionIndex(appDir, false);
       /** @type {Array<{ file: string, fn: string, endpoint: string, method: string, cache: string|null, tags: boolean, invalidates: boolean, validate: boolean, middleware: boolean }>} */
       const actions = [];
       for (const [file, hash] of idx.fileToHash) {

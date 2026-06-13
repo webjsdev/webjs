@@ -156,7 +156,7 @@ export default async function cors(
   resp.headers.set('access-control-allow-origin', '*');
   return resp;
 }</pre>
-    <p>For expose()d server actions, webjs has built-in CORS support via the <code>cors</code> option on <code>expose()</code>. Use middleware CORS when you need blanket coverage across all routes in a segment.</p>
+    <p>webjs also ships a ready-made <code>cors()</code> middleware (from <code>@webjsdev/server</code>) you can wrap around a single <code>route.ts</code> handler. Use middleware CORS when you need blanket coverage across all routes in a segment.</p>
 
     <h2>Rate Limiting</h2>
     <p>webjs ships a built-in rate limiter as a middleware factory. Import <code>rateLimit</code> from <code>@webjsdev/server</code>:</p>
@@ -198,7 +198,7 @@ const userAgent = headers().get('user-agent');</pre>
     <p><strong>Note:</strong> <code>cookies()</code> is read-only. To set a cookie, include a <code>Set-Cookie</code> header on the Response you return from your middleware, API route, or server action.</p>
 
     <h2>Middleware and Server Actions</h2>
-    <p>Root middleware runs on server action RPC calls (<code>POST /__webjs/action/:hash/:fn</code>) just like any other request. Per-segment middleware does not apply to server actions (they bypass the file-based route tree). If you need action-level guards, check auth inside the action itself or use <code>expose()</code> to register actions as REST endpoints under a middleware-protected segment.</p>
+    <p>Root middleware runs on server action RPC calls (<code>POST /__webjs/action/:hash/:fn</code>) just like any other request. Per-segment middleware does not apply to server actions (they bypass the file-based route tree). For action-level guards, check auth inside the action itself, declare per-action <code>middleware</code> on the action, or call the action from a <code>route.ts</code> under a middleware-protected segment.</p>
 
     <h2>Middleware and API Routes</h2>
     <p>Per-segment middleware applies to API routes (<code>route.ts</code>) within the same subtree. If <code>app/api/middleware.ts</code> exists, it runs before <code>app/api/hello/route.ts</code>, <code>app/api/auth/login/route.ts</code>, and every other route under <code>/api/</code>.</p>

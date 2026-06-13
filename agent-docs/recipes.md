@@ -130,12 +130,12 @@ export async function updateProfile(input: { name: string }) {
 Call it from a client component via a normal import. The dev server
 rewrites the import to a typed RPC stub.
 
-## Validate a server action's input once, for both call paths (#245)
+## Validate a server action's input (#245)
 
-`validateInput(fn, validate)` attaches an input validator that runs
-SERVER-SIDE before the action body on EVERY call path (the RPC path a
-client component import takes AND the `expose()` REST route if the action
-has one). On failure it returns a structured `ActionResult`
+Declare a `validate` config export beside the action (#488). It runs
+SERVER-SIDE before the action body on the RPC boundary (the path a client
+component import takes), receiving the action's FIRST argument. On failure
+it returns a structured `ActionResult`
 (`{ success: false, fieldErrors, status: 422 }`) the client reads as
 `result.fieldErrors`. The framework ships no validation library; the
 validator is a plain function (or a three-line zod adapter).
@@ -143,25 +143,23 @@ validator is a plain function (or a three-line zod adapter).
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { validateInput } from '@webjsdev/core';
 import { prisma } from '../../../lib/prisma.server.ts';
 
-export const createPost = validateInput(
-  // the action body: runs ONLY when validation passes
-  async (input: { title: string; body: string }) => {
-    const row = await prisma.post.create({ data: input });
-    return { success: true, data: row };
-  },
-  // the validator: receives the action's FIRST argument
-  (input) => {
-    const fieldErrors: Record<string, string> = {};
-    const title = String(input?.title || '').trim();
-    if (!title) fieldErrors.title = 'Title is required';
-    if (String(input?.body || '').length < 10) fieldErrors.body = 'Too short';
-    if (Object.keys(fieldErrors).length) return { success: false, fieldErrors };
-    return { success: true, data: { title, body: String(input.body) } }; // coerced input
-  },
-);
+// the validator: receives the action's FIRST argument
+export const validate = (input: any) => {
+  const fieldErrors: Record<string, string> = {};
+  const title = String(input?.title || '').trim();
+  if (!title) fieldErrors.title = 'Title is required';
+  if (String(input?.body || '').length < 10) fieldErrors.body = 'Too short';
+  if (Object.keys(fieldErrors).length) return { success: false, fieldErrors };
+  return { success: true, data: { title, body: String(input.body) } }; // coerced input
+};
+
+// the action body: runs ONLY when validation passes
+export async function createPost(input: { title: string; body: string }) {
+  const row = await prisma.post.create({ data: input });
+  return { success: true, data: row };
+}
 ```
 
 Reading the structured failure in a client component is just a property
@@ -187,23 +185,21 @@ result becomes the contract envelope.
 import { z } from 'zod';
 const Schema = z.object({ title: z.string().min(1), body: z.string().min(10) });
 
-export const createPost = validateInput(
-  async (input) => { /* ... */ },
-  (i) => {
-    const r = Schema.safeParse(i);
-    return r.success
-      ? { success: true, data: r.data }
-      : { success: false, fieldErrors: r.error.flatten().fieldErrors };
-  },
-);
+export const validate = (i: any) => {
+  const r = Schema.safeParse(i);
+  return r.success
+    ? { success: true, data: r.data }
+    : { success: false, fieldErrors: r.error.flatten().fieldErrors };
+};
+export async function createPost(input) { /* ... */ }
 ```
 
-To ALSO expose the action as REST with the SAME validator, pass `validate`
-to `expose()` instead of using `validateInput`:
-`expose('POST /api/posts', fn, { validate })`. A `{ success: false,
-fieldErrors }` return becomes a 422 JSON response there; a validator that
-THROWS (the classic `Schema.parse` style) becomes a 400, and a non-envelope
-return transforms the input (back-compat).
+To ALSO expose the action over REST with the SAME validator, put it behind
+a `route.ts` and pass the validator as the `route()` adapter's `{ validate }`
+option: `export const POST = route(createPost, { validate })`. A
+`{ success: false, fieldErrors }` return becomes a 422 JSON response there; a
+validator that THROWS (the classic `Schema.parse` style) becomes a 400, and a
+non-envelope return transforms the input.
 
 ## Add a component
 

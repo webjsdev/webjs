@@ -265,9 +265,9 @@ export function buildCoreEntries(coreDir, distMode) {
   /** @type {Record<string, string>} */
   const out = {
     // Bare specifier: browser-only entry, slim by design (drops
-    // render-server, expose, setCspNonceProvider). Node-side
-    // consumers resolve via the package.json exports `default`
-    // condition and land on `index.js` instead.
+    // render-server, setCspNonceProvider). Node-side consumers
+    // resolve via the package.json exports `default` condition and
+    // land on `index.js` instead.
     '@webjsdev/core': distMode
       ? '/__webjs/core/dist/webjs-core-browser.js'
       : '/__webjs/core/index-browser.js',

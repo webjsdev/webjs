@@ -42,7 +42,6 @@ const NAV_SECTIONS = [
     title: 'Data & Backend',
     items: [
       { href: '/docs/server-actions', label: 'Server Actions' },
-      { href: '/docs/expose', label: 'expose(): REST Endpoints' },
       { href: '/docs/api-routes', label: 'API Routes' },
       { href: '/docs/websockets', label: 'WebSockets' },
       { href: '/docs/database', label: 'Database (Prisma)' },

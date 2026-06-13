@@ -86,7 +86,8 @@ node_modules/@webjsdev/
                     auth, sessions, cache, rate-limit, WebSocket
     src/ssr.js                ← how metadata becomes <head> tags
     src/router.js             ← file convention → route table
-    src/actions.js            ← .server.ts scanner, RPC, expose()
+    src/actions.js            ← .server.ts scanner, RPC stubs, action endpoint
+    src/action-route.js       ← route() adapter (action over REST via route.ts)
     src/auth.js, session.js, cache.js, rate-limit.js, csrf.js
   cli/             webjs CLI (dev / start / build / test / check / create / db)
   intellisense/    tsserver plugin: go-to-definition + diagnostic suppression

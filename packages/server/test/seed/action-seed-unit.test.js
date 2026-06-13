@@ -3,8 +3,8 @@
  * neither the process-global load hook nor a running app:
  *   - export-name extraction for the facade,
  *   - the `__seedWrap` Proxy: records inside a collector, passthrough outside,
- *     non-function passthrough, and `expose()`/`validateInput()` metadata
- *     survival through the Proxy,
+ *     non-function passthrough, and a function's own custom property
+ *     forwarding through the Proxy,
  *   - `collectSeeds` ambient collection across a nested async chain,
  *   - key determinism (server key === the client stub's lookup key),
  *   - `buildSeedScript` (empty -> '', HTML-escaped, round-trips through parse).
@@ -22,7 +22,7 @@ import {
   buildSeedScript,
 } from '../../src/action-seed.js';
 import { hashFile } from '../../src/actions.js';
-import { stringify, parse, expose, getExposed, validateInput } from '@webjsdev/core';
+import { stringify, parse } from '@webjsdev/core';
 
 const FILE = '/app/actions/users.server.js';
 
@@ -105,17 +105,15 @@ test('__seedWrap passes a non-function export through untouched', () => {
   assert.equal(__seedWrap(FILE, 'CONFIG', obj), obj);
 });
 
-test('__seedWrap preserves expose() / validateInput() metadata through the Proxy', () => {
-  const exposed = expose('GET /ping', async () => 'pong');
-  const wrapped = __seedWrap(FILE, 'ping', exposed);
-  const meta = getExposed(wrapped);
-  assert.ok(meta, 'getExposed reads __webjsHttp forwarded through the Proxy');
-  assert.equal(meta.method, 'GET');
-  assert.equal(meta.path, '/ping');
-
-  const validated = validateInput(async (x) => x, () => ({ success: true }));
-  const wrapped2 = __seedWrap(FILE, 'v', validated);
-  assert.ok(getExposed(wrapped2)?.validate, 'validate metadata survives the Proxy');
+test('__seedWrap forwards a function\'s own custom properties through the Proxy', () => {
+  // The facade Proxy must be transparent: any metadata a framework or app
+  // attaches to the action function (its own enumerable / non-enumerable props)
+  // is readable through the wrapper, so the wrap never hides attached config.
+  const fn = async () => 'pong';
+  /** @type any */ (fn).__custom = { method: 'GET', path: '/ping' };
+  const wrapped = __seedWrap(FILE, 'ping', fn);
+  assert.deepEqual(/** @type any */ (wrapped).__custom, { method: 'GET', path: '/ping' },
+    'a custom property is read through the Proxy');
 });
 
 test('collectSeeds collects across a nested async chain, keyed by args', async () => {

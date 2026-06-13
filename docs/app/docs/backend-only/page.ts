@@ -14,7 +14,7 @@ export default function BackendOnly() {
       <li>You want file-based routing and middleware without the weight of a UI framework.</li>
       <li>Your frontend is a separate app (React, Vue, Svelte, plain HTML) and you need a typed API backend.</li>
       <li>You are building a microservice that only serves data.</li>
-      <li>You want typed RPC endpoints (via <code>expose()</code>) callable from another webjs app or any HTTP client.</li>
+      <li>You want typed RPC endpoints (server actions, optionally exposed over REST via <code>route.ts</code>) callable from another webjs app or any HTTP client.</li>
     </ul>
     <p>Use full-stack webjs when you want server-rendered pages, web components, streaming SSR, and server actions all in one codebase.</p>
 
@@ -36,7 +36,7 @@ export default function BackendOnly() {
         middleware.ts       # rate limiting for /api/auth/*
     middleware.ts           # segment middleware for all /api/* (CORS, etc.)
   actions/
-    users.server.ts        # expose()d server actions
+    users.server.ts        # server actions (exposed over REST via route.ts)
   lib/
     prisma.ts
     session.ts
@@ -125,46 +125,50 @@ import { rateLimit } from '@webjsdev/server';
 
 export default rateLimit({ window: '10s', max: 5 });</pre>
 
-    <h2>Server Actions with expose()</h2>
-    <p><code>expose()</code> turns a server action into a typed REST endpoint. This is especially useful in backend-only mode because it lets you define your API logic as plain functions with validation, then expose them over HTTP:</p>
+    <h2>Server Actions over REST via route.ts</h2>
+    <p>Define your API logic as plain server-action functions, then expose them over HTTP through a <code>route.ts</code> handler. The <code>route()</code> adapter from <code>@webjsdev/server</code> writes the common handler (merge query + params + JSON body, run an optional validator, JSON-respond) in one line:</p>
     <pre>// actions/users.server.ts
 'use server';
-import { expose } from '@webjsdev/core';
 import { prisma } from '../lib/prisma.server.ts';
 
-export const listUsers = expose('GET /api/v2/users', async () =&gt; {
+export async function listUsers() {
   return prisma.user.findMany({
     select: { id: true, name: true, email: true },
   });
-});
+}
 
-export const getUser = expose('GET /api/v2/users/:id', async ({ id }) =&gt; {
+export async function getUser({ id }: { id: string }) {
   const user = await prisma.user.findUnique({ where: { id: Number(id) } });
   if (!user) throw new Error('User not found');
   return user;
-});
+}
 
-export const createUser = expose(
-  'POST /api/v2/users',
-  async ({ name, email }) =&gt; {
-    return prisma.user.create({ data: { name, email } });
-  },
-  {
-    validate: (input) =&gt; {
-      if (!input.name || typeof input.name !== 'string') throw new Error('name is required');
-      if (!input.email || typeof input.email !== 'string') throw new Error('email is required');
-      return input;
-    },
-    cors: true, // allow any origin
-  },
-);</pre>
-    <p>The exposed action is reachable two ways:</p>
+export async function createUser({ name, email }: { name: string; email: string }) {
+  return prisma.user.create({ data: { name, email } });
+}</pre>
+    <pre>// app/api/v2/users/route.ts
+import { route } from '@webjsdev/server';
+import { listUsers, createUser } from '../../../actions/users.server.ts';
+
+const validateUser = (input: any) =&gt; {
+  if (!input.name || typeof input.name !== 'string') throw new Error('name is required');
+  if (!input.email || typeof input.email !== 'string') throw new Error('email is required');
+  return input;
+};
+
+export const GET = route(listUsers);
+export const POST = route(createUser, { validate: validateUser });
+
+// app/api/v2/users/[id]/route.ts: ctx.params.id merges into the input
+import { route } from '@webjsdev/server';
+import { getUser } from '../../../../actions/users.server.ts';
+export const GET = route(getUser);</pre>
+    <p>The action is reachable two ways:</p>
     <ul>
-      <li><strong>As an HTTP endpoint:</strong> <code>GET /api/v2/users/:id</code> from curl, Postman, or any HTTP client.</li>
+      <li><strong>As an HTTP endpoint:</strong> <code>GET /api/v2/users/:id</code> from curl, Postman, or any HTTP client, served by the <code>route.ts</code> handler.</li>
       <li><strong>As a typed function import:</strong> another webjs app (or the same app's components) can <code>import { getUser } from '../actions/users.server.ts'</code> and call it as a function with full type safety.</li>
     </ul>
-    <p>URL params, query string, and JSON body are merged into a single object argument. The optional <code>validate</code> function runs before the handler and can transform or reject input (works with zod, valibot, or any schema library that throws on error).</p>
-    <p>CORS is opt-in per endpoint. Pass <code>cors: true</code> for any-origin access, a string for a specific origin, an array for an allow-list, or a full config object. Preflight (<code>OPTIONS</code>) is handled automatically.</p>
+    <p>The <code>route()</code> adapter merges URL params, query string, and JSON body into a single object argument. The optional <code>validate</code> function runs before the handler and can transform or reject input (works with zod, valibot, or any schema library that throws on error). For CORS, wrap the handler in the <code>cors()</code> middleware, or apply it in <code>middleware.ts</code> for the path.</p>
 
     <h2>WebSocket Support</h2>
     <p>Export a <code>WS</code> function from any <code>route.ts</code> to create a WebSocket endpoint:</p>
@@ -261,7 +265,7 @@ fastify.listen({ port: 8080 });</pre>
       <li><strong>Rich wire format</strong>: webjs's built-in serializer round-trips <code>Date</code>/<code>Map</code>/<code>Set</code>/<code>BigInt</code>/<code>TypedArray</code>/<code>Blob</code>/<code>File</code>/<code>FormData</code> and reference cycles.</li>
       <li><strong>WebSocket support</strong>: export a <code>WS</code> function from a route file, no separate setup.</li>
       <li><strong>Health probes</strong>: built-in, zero config.</li>
-      <li><strong>expose()</strong>: turn server functions into REST endpoints with validation and CORS.</li>
+      <li><strong>route.ts + route()</strong>: turn server functions into REST endpoints with validation and CORS.</li>
       <li><strong>Graceful shutdown</strong>: handles SIGINT/SIGTERM, drains connections, hard-exits on timeout.</li>
       <li><strong>Compression and ETags</strong>: built-in, negotiated automatically.</li>
     </ul>
@@ -270,7 +274,7 @@ fastify.listen({ port: 8080 });</pre>
       <li><strong>Massive middleware ecosystem</strong>: Express has thousands of middleware packages (passport, multer, helmet, etc.). webjs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
       <li><strong>Years of battle-testing</strong>: Express and Fastify have been production-proven at enormous scale. webjs is new.</li>
       <li><strong>Plugin system</strong>: Fastify's plugin architecture for encapsulated contexts does not have a webjs equivalent. The middleware chain and file conventions are the extension points.</li>
-      <li><strong>Advanced schema validation</strong>: Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> option on <code>expose()</code> with zod, valibot, or any library.</li>
+      <li><strong>Advanced schema validation</strong>: Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> config export (or the <code>route()</code> adapter's <code>validate</code> option) with zod, valibot, or any library.</li>
     </ul>
 
     <h2>Example: Complete API-Only Setup</h2>

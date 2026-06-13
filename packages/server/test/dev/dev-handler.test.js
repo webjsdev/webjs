@@ -774,7 +774,7 @@ test('handle: metadata route that throws → 500', async () => {
 
 /* ------------ percent-encoded dynamic segments ------------ */
 
-/* ------------ segment middleware + action RPC + expose CORS ------------ */
+/* ------------ segment middleware + action RPC + route() REST ------------ */
 
 test('handle: segment middleware.js wraps matching routes', async () => {
   const appDir = makeApp({
@@ -863,86 +863,32 @@ test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () 
   assert.equal(body, 42);
 });
 
-test('handle: expose()d action is reachable by method+path', async () => {
+test('handle: a server action exposed over REST via a route.ts route() adapter', async () => {
+  // REST endpoints go through route.ts (#488); the route() adapter wraps a
+  // plain 'use server' action as a route handler so curl / another service can
+  // reach the same function the RPC stub calls.
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'api.server.js':
+    'modules/api/hello.server.js':
       `'use server';\n` +
-      `import { expose } from ${JSON.stringify(pathToFileURL(
-        resolve(__dirname, '../../../core/index.js'),
-      ).toString())};\n` +
-      `export const hello = expose('GET /api/hello', async () => ({ ok: true }));\n`,
+      `export async function hello() { return { ok: true }; }\n`,
   });
+  // The route.js imports the action by its absolute path (known only after
+  // makeApp creates the temp dir) and the server's index.js for route().
+  const serverIndexUrl = pathToFileURL(resolve(__dirname, '../../index.js')).toString();
+  const actionUrl = pathToFileURL(join(appDir, 'modules/api/hello.server.js')).toString();
+  const routeAbs = join(appDir, 'app/api/hello/route.js');
+  mkdirSync(dirname(routeAbs), { recursive: true });
+  writeFileSync(routeAbs,
+    `import { route } from ${JSON.stringify(serverIndexUrl)};\n` +
+    `import { hello } from ${JSON.stringify(actionUrl)};\n` +
+    `export const GET = route(hello);\n`);
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/api/hello'));
   assert.equal(resp.status, 200);
   assert.deepEqual(await resp.json(), { ok: true });
-});
-
-test('handle: expose() via an ALIASED import still registers its REST route (lazy index)', async () => {
-  // Guards the lazy action index: a module that aliases the import
-  // (`import { expose as exp }`) must still be eagerly loaded so its route
-  // registers. Matching only `expose(` would miss `exp(` and silently 404.
-  const appDir = makeApp({
-    'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'api.server.js':
-      `'use server';\n` +
-      `import { expose as exp } from ${JSON.stringify(pathToFileURL(
-        resolve(__dirname, '../../../core/index.js'),
-      ).toString())};\n` +
-      `export const hi = exp('GET /api/aliased', async () => ({ ok: true }));\n`,
-  });
-  const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/api/aliased'));
-  assert.equal(resp.status, 200);
-  assert.deepEqual(await resp.json(), { ok: true });
-});
-
-test('handle: OPTIONS preflight on expose()d action with cors returns CORS headers', async () => {
-  const appDir = makeApp({
-    'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'api.server.js':
-      `'use server';\n` +
-      `import { expose } from ${JSON.stringify(pathToFileURL(
-        resolve(__dirname, '../../../core/index.js'),
-      ).toString())};\n` +
-      `export const hello = expose('POST /api/hello', async () => ({ ok: true }), { cors: true });\n`,
-  });
-  const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/api/hello', {
-    method: 'OPTIONS',
-    headers: { origin: 'http://other', 'access-control-request-method': 'POST' },
-  }));
-  assert.equal(resp.status, 204);
-  const allowMethods = resp.headers.get('access-control-allow-methods') || '';
-  assert.ok(/POST/.test(allowMethods));
-  assert.ok(/OPTIONS/.test(allowMethods));
-});
-
-test('handle: OPTIONS at a path with exposed actions but no CORS → plain allow', async () => {
-  const appDir = makeApp({
-    'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
-    'api.server.js':
-      `'use server';\n` +
-      `import { expose } from ${JSON.stringify(pathToFileURL(
-        resolve(__dirname, '../../../core/index.js'),
-      ).toString())};\n` +
-      `export const hello = expose('GET /api/hello', async () => ({ ok: true }));\n`,
-  });
-  const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/api/hello', { method: 'OPTIONS' }));
-  assert.equal(resp.status, 204);
-  const allow = resp.headers.get('allow') || '';
-  assert.ok(/GET/.test(allow));
-  assert.ok(/OPTIONS/.test(allow));
 });
 
 test('handle: POST /__webjs/action without CSRF → 403', async () => {

@@ -39,8 +39,8 @@ export default function Security() {
     <h2>CSRF: token plus cookie</h2>
     <p>Server-action RPC calls (the typed stubs generated from a <code>'use server'</code> import) are CSRF-protected by a double-submit token. On the first SSR response the server issues a <code>webjs_csrf</code> cookie; the generated RPC stub reads it and sends a matching <code>x-webjs-csrf</code> header on every POST to the action endpoint. A mismatch returns 403. You write nothing; importing the action and calling it is the whole API.</p>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
-      <p style="margin:0 0 .5rem;font-weight:600">Sharp edge: <code>expose()</code> endpoints are NOT CSRF-protected</p>
-      <p style="margin:0">A server action tagged with <code>expose('METHOD /path', fn)</code> is ALSO reachable as a plain REST endpoint, and that REST path is deliberately exempt from the CSRF check (a third party calling your API has no webjs cookie to present). You MUST authenticate every mutating exposed endpoint yourself: a bearer token, an API key, an explicit CSRF scheme, or an origin allow-list. Treat an exposed endpoint like any public API route, not like an internal action. See the <a href="/docs/expose">expose() page</a> for the full checklist.</p>
+      <p style="margin:0 0 .5rem;font-weight:600">Sharp edge: <code>route.ts</code> REST endpoints are NOT CSRF-protected</p>
+      <p style="margin:0">A <code>route.ts</code> handler that exposes a server action over REST (whether hand-written or via the <code>route()</code> adapter) is NOT covered by the action RPC's CSRF check (a third party calling your API has no webjs cookie to present). You MUST authenticate every mutating REST endpoint yourself: a bearer token, an API key, an explicit CSRF scheme, or an origin allow-list. Treat a REST endpoint like any public API route, not like an internal action.</p>
     </div>
 
     <h2>Content-Security-Policy (opt-in, nonce-based)</h2>
@@ -73,13 +73,13 @@ export default function Security() {
     <h2>Rate limiting</h2>
     <p>Protect auth endpoints and other abuse-prone routes with the <code>rateLimit({ window, max })</code> middleware, placed at any route level (it applies to that subtree). Behind a reverse proxy or CDN, set <code>trustProxy: true</code> so it keys on the forwarded client IP, and make sure the proxy strips an inbound <code>X-Forwarded-For</code> before adding its own. See <a href="/docs/rate-limiting">Rate Limiting</a>.</p>
 
-    <h2>The <code>expose()</code> security checklist</h2>
-    <p>Because an exposed endpoint is a public API, restate the rules every time you add one:</p>
+    <h2>The REST-endpoint security checklist</h2>
+    <p>Because a <code>route.ts</code> REST endpoint is a public API, restate the rules every time you add one:</p>
     <ol>
-      <li>Authenticate every mutating endpoint (bearer or API key, an explicit CSRF scheme, or an origin allow-list). Exposed endpoints are NOT CSRF-protected.</li>
-      <li>Validate input with the <code>validate</code> option. Never trust a merged <code>{...query, ...params, ...body}</code>.</li>
+      <li>Authenticate every mutating endpoint (bearer or API key, an explicit CSRF scheme, or an origin allow-list). A <code>route.ts</code> REST endpoint is NOT CSRF-protected.</li>
+      <li>Validate input with the <code>validate</code> config export (or the <code>route()</code> adapter's <code>validate</code> option). Never trust a merged <code>{...query, ...params, ...body}</code>.</li>
       <li>Log responsibly. No user input or secrets in error messages (production responses are already sanitized to the message only, never the stack).</li>
-      <li>Configure CORS narrowly. A credentialed endpoint requires an explicit origin list, never <code>'*'</code>.</li>
+      <li>Configure CORS narrowly with the <code>cors()</code> middleware. A credentialed endpoint requires an explicit origin list, never <code>'*'</code>.</li>
       <li>Rate-limit at the edge with <code>rateLimit()</code>.</li>
     </ol>
 

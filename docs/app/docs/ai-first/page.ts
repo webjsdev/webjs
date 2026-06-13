@@ -164,7 +164,7 @@ Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</pre>
 ## File conventions in detail (pages, layouts, routes, actions, components)
 ## Invariants (rules agents must follow)
 ## Recipes (step-by-step: add a page, add an action, add a component...)
-## Security checklist for expose()
+## Security checklist for REST endpoints
 ## Advanced features (Suspense, bundling, rate limiting, WebSockets...)
 ## Runtime targets (Node, embedded, edge)
 ## Deliberately deferred (what NOT to implement)</pre>

@@ -360,7 +360,7 @@ export async function GET(req) {
 ### Behavior
 
 - **Preflight.** An `OPTIONS` request carrying `Access-Control-Request-Method` short-circuits with a `204` carrying the Allow-Methods / Allow-Headers / Max-Age headers. `next()` is NOT called. A disallowed-origin preflight returns a bare `204` with no CORS headers, so the browser blocks the follow-up.
-- **Actual request.** `next()` runs, then `Access-Control-Allow-Origin` (plus credentials / exposed headers) is attached. A disallowed origin gets NO `Access-Control-Allow-Origin`, and the browser blocks the cross-origin read, but the server still serves the response (CORS is browser-enforced, not a server gate; this matches the `expose()` path, which never 403s a mismatched actual request).
+- **Actual request.** `next()` runs, then `Access-Control-Allow-Origin` (plus credentials / exposed headers) is attached. A disallowed origin gets NO `Access-Control-Allow-Origin`, and the browser blocks the cross-origin read, but the server still serves the response (CORS is browser-enforced, not a server gate, so a mismatched actual request is never 403'd server-side).
 - **`Vary: Origin`.** Appended (never clobbering an existing `Vary`) whenever the allowed origin is dynamic (a reflected, per-origin value), so a shared cache keys on `Origin` and cannot poison one origin's response onto another. A constant `*` (no credentials) does not vary, so no `Vary` is added.
 
 ### `credentials: true` requires an explicit origin allowlist (spec, enforced, warned)

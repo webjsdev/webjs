@@ -52,6 +52,7 @@ test('calling next() twice rejects', async () => {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MW_URL = pathToFileURL(resolve(__dirname, '../../src/action-middleware.js')).toString();
 const CORE_URL = pathToFileURL(resolve(__dirname, '../../../core/index.js')).toString();
+const SERVER_INDEX_URL = pathToFileURL(resolve(__dirname, '../../index.js')).toString();
 
 let tmpRoot, appDir, handle, hash;
 const hashes = {};
@@ -70,13 +71,17 @@ before(async () => {
     `};\n` +
     `export const middleware = [auth];\n` +
     `export async function getSecret(token) { return { user: actionContext().user, secret: 42 }; }\n`);
-  // An expose()d REST action with middleware (the REST boundary runs it too).
+  // A REST action with middleware exposed via a route.ts using the route()
+  // adapter (the REST boundary runs the per-action chain too).
   w('actions/rest-guard.server.js',
     `'use server';\n` +
-    `import { expose } from ${JSON.stringify(CORE_URL)};\n` +
     `const block = async (ctx, next) => ({ success: false, status: 403 });\n` +
     `export const middleware = [block];\n` +
-    `export const restGuard = expose('GET /api/guard', async () => ({ ok: true }));\n`);
+    `export async function restGuard() { return { ok: true }; }\n`);
+  w('app/api/guard/route.js',
+    `import { route } from ${JSON.stringify(SERVER_INDEX_URL)};\n` +
+    `import { restGuard, middleware } from ${JSON.stringify(pathToFileURL(join(appDir, 'actions/rest-guard.server.js')).toString())};\n` +
+    `export const GET = route(restGuard, { middleware });\n`);
   // A GET action whose middleware short-circuits (the denial must NOT be cached).
   const gf = w('actions/get-gated.server.js',
     `'use server';\n` +
@@ -139,7 +144,7 @@ test('middleware runs on the RPC path: short-circuit + context', async () => {
   assert.deepEqual(parse(await ok.text()), { user: { id: 1 }, secret: 42 });
 });
 
-test('middleware runs on the expose() REST path, mapping the envelope status to HTTP', async () => {
+test('middleware runs on the route() REST path, mapping the envelope status to HTTP', async () => {
   const res = await handle(new Request('http://localhost/api/guard'));
   assert.equal(res.status, 403, 'the short-circuit status maps to the HTTP status, not 200');
   assert.deepEqual(await res.json(), { success: false });

@@ -3,7 +3,7 @@
  *
  * Mirror of `./index.js` but with strictly server-only exports
  * removed so the browser bundle never drags `src/render-server.js`
- * (~1100 lines) or `src/expose.js` (~90 lines) over the wire.
+ * (~1100 lines) over the wire.
  *
  * Stripped:
  *   - `renderToString`, `renderToStream` (server SSR pipeline; reach
@@ -11,10 +11,6 @@
  *   - `setCspNonceProvider` (server-side wiring called by
  *     `@webjsdev/server`'s context module; `cspNonce()` stays
  *     because layouts can call it).
- *   - `expose`, `getExposed` (live inside `.server.{js,ts}` files;
- *     framework rewrites the import to an RPC stub on the client
- *     side, so the real module never legitimately reaches the
- *     browser).
  *
  * The framework's own SSR pipeline runs on Node and resolves the
  * package via the package.json `"default"` condition, which still

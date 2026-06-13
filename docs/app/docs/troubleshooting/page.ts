@@ -56,10 +56,10 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> only files reachable from a browser-bound entry (a page, layout, error, loading, not-found, or component) through the static import graph are servable. A file nothing client-side imports, a hand-rolled <code>scripts/</code> helper, or a <code>.server</code> file's source returns 404 by construction, the same posture as a bundler manifest.</p>
     <p><strong>Fix:</strong> import the module from a browser-bound entry so it enters the graph, or, if it is server-only, keep it behind the <code>.server</code> boundary and reach it through an action. See <a href="/docs/no-build">No-Build Model</a>.</p>
 
-    <h2><code>expose</code> reads as <code>undefined</code></h2>
-    <p><strong>Symptom:</strong> <code>import { expose } from '@webjsdev/core'</code> is <code>undefined</code> at runtime.</p>
-    <p><strong>Cause:</strong> the bare <code>@webjsdev/core</code> specifier resolves to the BROWSER entry, which excludes server-only exports like <code>expose</code>. Importing it from a client-bound file silently reads <code>undefined</code>.</p>
-    <p><strong>Fix:</strong> only use <code>expose</code> inside a <code>.server.{js,ts}</code> file, where the import resolves to the full server surface. See <a href="/docs/expose">expose()</a>.</p>
+    <h2>A REST endpoint for a server action 404s</h2>
+    <p><strong>Symptom:</strong> a <code>'use server'</code> action is RPC-callable from a component but <code>curl</code>ing a path returns 404.</p>
+    <p><strong>Cause:</strong> a server action is reachable over RPC, not over an arbitrary REST path on its own. REST endpoints go through <code>route.ts</code> (the framework's HTTP handler).</p>
+    <p><strong>Fix:</strong> add an <code>app/&lt;path&gt;/route.ts</code> that imports the action and calls it, or wrap it with the <code>route()</code> adapter from <code>@webjsdev/server</code> (<code>export const POST = route(myAction)</code>). See <a href="/docs/server-actions">Server Actions</a>.</p>
 
     <h2>A component's <code>static styles</code> have no effect (and a console warning)</h2>
     <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block does not style the component at all, and the framework warns at runtime.</p>
