@@ -32,11 +32,14 @@ test('a GET action stub rides the URL, reads the seed, no CSRF on the read', asy
   assert.match(stub, /export const getUser = /);
 });
 
-test('a PUT action stub sends a body with CSRF and no seed', async () => {
+test('a PUT action stub sends a body with CSRF (and still reads the SSR seed)', async () => {
   const stub = await stubFor('replace.server.js',
     `'use server';\nexport const method='PUT';\nexport async function replace(id,d){return {id};}\n`);
   assert.match(stub, /generated server-action stub \(PUT\)/);
-  assert.doesNotMatch(stub, /__seedTake/, 'a mutation does not read a seed');
+  // Every verb reads the seed (#472): a default-POST async-render read is seeded
+  // regardless of verb; a true mutation simply misses.
+  assert.match(stub, /__seedTake/, 'all verbs read the SSR seed');
+  assert.doesNotMatch(stub, /__stale\(key\)/, 'a mutation does not consult the browser-cache staleness');
   assert.match(stub, /export const replace = /);
 });
 

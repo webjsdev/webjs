@@ -369,11 +369,14 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   const J = JSON.stringify;
   const lines = [];
   lines.push(`// webjs: generated server-action stub (${method})`);
-  // Import only what this verb uses: a GET reads the SSR seed (#472) and the
-  // browser-cache staleness, mutations do not.
-  const imports = ['stringify as __s', 'parse as __p', 'markStale as __markStale', 'parseTagHeader as __tagHdr'];
+  // Every verb reads the SSR seed (#472) first: an async-render READ invoked
+  // during SSR is seeded regardless of its declared verb (a read with no
+  // `method` is a default POST), so the first client call resolves from the
+  // seed with no hydration round-trip. The browser-cache staleness check is
+  // GET-only (only a GET is browser-cached).
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr'];
   if (method === 'GET') {
-    imports.push('takeSeed as __seedTake', 'SEED_MISS as __MISS', 'registerKeyTags as __regTags', 'consumeStale as __stale');
+    imports.push('registerKeyTags as __regTags', 'consumeStale as __stale');
   }
   lines.push(`import { ${imports.join(', ')} } from '@webjsdev/core';`);
   lines.push(`const __URL = ${J(actionUrl)};`);
@@ -402,9 +405,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     // GET/DELETE: args in the URL, with a POST fallback when too large.
     lines.push(`async function __call(fn, args) {`);
     lines.push(`  const key = await __s(args);`);
-    if (method === 'GET') {
-      lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
-    }
+    lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
     lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'});`);
     if (method === 'GET') {
       lines.push(`  const bypass = __stale(key);`);
@@ -416,8 +417,14 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     }
     lines.push(`}`);
   } else {
-    // POST/PUT/PATCH: rich body.
-    lines.push(`async function __call(fn, args) { const body = await __s(args); return __body(fn, body, __METHOD, true); }`);
+    // POST/PUT/PATCH: rich body. The seed read makes a default-POST async-render
+    // read resolve from the SSR seed on hydration (#472); a true mutation is
+    // never SSR-invoked, so the seed simply misses.
+    lines.push(`async function __call(fn, args) {`);
+    lines.push(`  const key = await __s(args);`);
+    lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
+    lines.push(`  return __body(fn, key, __METHOD, true);`);
+    lines.push(`}`);
   }
   for (const name of fnNames) {
     lines.push(
