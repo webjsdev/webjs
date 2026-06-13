@@ -69,6 +69,26 @@ test('__seedWrap records a resolved async result inside a collector', async () =
   assert.deepEqual(collector.get(key), { id: 5, name: 'user-5' });
 });
 
+test('a streamed result (#489) is NOT seeded, and does not drop other seeds', async () => {
+  const stream = __seedWrap(FILE, 'tokens', async function* () { yield 'a'; });
+  const normal = __seedWrap(FILE, 'getUser', async (id) => ({ id }));
+  const { collector } = await collectSeeds(async () => {
+    const gen = stream(); // an async generator (streamable), must not record
+    await normal(7);       // a normal value, must still record
+    // Drain the generator so it actually runs, proving the guard is on the
+    // RESULT shape (streamable), not on whether the value was consumed.
+    for await (const _ of gen) { /* drain */ }
+    return null;
+  });
+  const streamKey = `${await hashFile(FILE)}/tokens/${await stringify([])}`;
+  const normalKey = `${await hashFile(FILE)}/getUser/${await stringify([7])}`;
+  assert.equal(collector.has(streamKey), false, 'the streamed generator is not seeded');
+  assert.ok(collector.has(normalKey), 'the normal action is still seeded alongside it');
+  // The script must serialize cleanly (a recorded stream would have thrown here).
+  const script = await buildSeedScript(collector);
+  assert.match(script, /__webjs-seeds/);
+});
+
 test('__seedWrap is a passthrough OUTSIDE a collector (the RPC endpoint path)', async () => {
   let ran = false;
   const real = async () => { ran = true; return 42; };
