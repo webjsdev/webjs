@@ -749,7 +749,13 @@ export async function checkConventions(appDir) {
       // An arrow-const action: `export const x = (...) => ...`, the paren-less
       // `export const x = id => ...`, or a function expression. The `=>` /
       // `function` anchor keeps a plain `export const N = 5` from counting.
-      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g;
+      // An OPTIONAL `: Type` annotation may sit between the name and the `=`
+      // (#495); the type itself can contain a function-type `=>`, so the
+      // annotation matcher consumes any non-`=` char OR a literal `=>`, and the
+      // assignment is the first `=` NOT followed by `>` (`=(?!>)`). The
+      // alternation is unambiguous at each position (a `=` can only start `=>`),
+      // so there is no catastrophic backtracking.
+      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*(?::(?:[^=]|=>)*?)?=(?!>)\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g;
       while ((m = reArrow.exec(scan))) names.add(m[1]);
       if (/\bexport\s+default\b/.test(scan)) names.add('default');
       const actions = [...names].filter((n) => !RESERVED_CONFIG.has(n));
