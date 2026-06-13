@@ -10,6 +10,7 @@ import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
 import { buildRouteTable } from './router.js';
 import { analyzeElision } from './component-elision.js';
+import { RESERVED_CONFIG } from './action-config.js';
 
 /**
  * Convention validator for webjs apps.
@@ -106,6 +107,11 @@ export const RULES = [
     name: 'no-server-import-in-browser-module',
     description:
       'A page / layout / component module that SHIPS to the browser (the build does NOT elide it) must not transitively import a server-only `.server.{ts,js}` module. The server module is replaced by a stub in the browser, so the import is fine while the page is display-only and elided (its server import is stripped), but the moment the page also does client work (it imports a component to register, enables the client router, uses a reactive primitive, …) it stops being elided and must load in the browser, dragging the server import with it. The stub then throws (or a server-only export like `auth` is missing) the instant the module loads, a runtime browser crash that `webjs typecheck` and the rest of `webjs check` miss. The rule reuses the build\'s own elision verdict, so it ONLY fires on modules that genuinely ship; a display-only page the framework elides is never flagged. The fix is to keep the server call off the browser-shipped module: gate the route in `middleware.ts`, call the server through a `\'use server\'` action, or register the component in a layout so the page elides again. Server-to-server imports (`.server.ts` importing `.server.ts`) and `middleware.ts` / `route.ts` (never shipped) are never flagged.',
+  },
+  {
+    name: 'one-action-per-configured-file',
+    description:
+      'A `\'use server\'` action file that declares HTTP-verb config (any of `method` / `cache` / `tags` / `invalidates` / `validate`, #488) must export exactly ONE callable action function. The config is file-level (it applies to the action in the file), so a second exported function would silently inherit the same verb / cache, which is almost never intended and makes the contract ambiguous. Move the extra function to its own `.server.ts` file (the one-function-per-file convention), or, if it is a private helper, do not export it. Files with no verb config are unaffected.',
   },
   {
     name: 'no-scaffold-placeholder',
@@ -724,6 +730,34 @@ export async function checkConventions(appDir) {
           "File declares `'use server'` but its name does not match `.server.{js,ts,mts,mjs}`. The directive is silently ignored: the file is served to the browser as plain source and its exports are not RPC-callable. Code the developer expects to run on the server actually runs in the browser.",
         fix: `Rename to ${renamedBase} (add the .server. infix before the extension)`,
       });
+    }
+  }
+
+  // --- Rule: one-action-per-configured-file (#488) ---
+  // A `'use server'` file that declares HTTP-verb config (method/cache/tags/
+  // invalidates/validate) must export exactly one callable action; the config
+  // is file-level, so a second exported function would silently inherit it.
+  {
+    for (const { rel, content, scan } of files) {
+      if (!/\.server\.m?[jt]s$/.test(rel)) continue;
+      if (!hasUseServerDirective(content)) continue;
+      if (!/\bexport\s+const\s+(?:method|cache|tags|invalidates|validate)\b/.test(scan)) continue;
+      const names = new Set();
+      let m;
+      const reFn = /\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g;
+      while ((m = reFn.exec(scan))) names.add(m[1]);
+      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/g;
+      while ((m = reArrow.exec(scan))) names.add(m[1]);
+      if (/\bexport\s+default\b/.test(scan)) names.add('default');
+      const actions = [...names].filter((n) => !RESERVED_CONFIG.has(n));
+      if (actions.length > 1) {
+        violations.push({
+          rule: 'one-action-per-configured-file',
+          file: rel,
+          message: `Configured action file exports ${actions.length} callable functions (${actions.join(', ')}); the verb/cache config is file-level, so only one action per file is allowed.`,
+          fix: 'Move the extra function to its own .server.{js,ts} file, or keep it private (do not export it).',
+        });
+      }
     }
   }
 
