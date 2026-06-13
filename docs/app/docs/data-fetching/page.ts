@@ -87,6 +87,7 @@ export const invalidates = (id) =&gt; ['user:' + id];
 export async function updateUser(id, data) { /* ... */ }</pre>
     <p>The call site never changes (<code>await getUser(7)</code>). A <strong>GET</strong> rides its args in the URL, is CSRF-exempt, and is served with <code>Cache-Control</code> + an ETag, so a repeat read within the window comes from the browser cache and a stale one revalidates with a 304. A <strong>mutation</strong> sends a body, is CSRF-protected, and on completion its <code>invalidates</code> tags evict the matching server cache and tell the client to refetch the affected reads. A wrong request method is a <code>405</code>. It is additive: an action with no <code>method</code> stays a POST, exactly as before. The cache defaults to <code>private</code>; <code>{ public: true }</code> shares the response across users keyed only by URL, so use it only for data identical for every visitor, never a per-user read.</p>
     <p>A public REST endpoint is a <code>route.ts</code> that imports and calls the action; <code>validate</code> is a boundary concern (the RPC endpoint and the route handler), not a direct server-to-server call.</p>
+    <p>Cancellation is automatic: a superseded <code>async render()</code> (a newer prop or signal change while a fetch is in flight) aborts the previous render's in-flight action fetch, and on the server an action can read the request's <code>AbortSignal</code> via <code>actionSignal()</code> to stop expensive work when the client disconnects.</p>
 
     <h2>Decision rules</h2>
     <ol>
