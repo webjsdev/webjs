@@ -3,7 +3,7 @@
   "$id": "https://webjs.dev/schemas/webjs-config.schema.json",
   "title": "webjs config block",
   "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented server reader. An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
-  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
+  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, readSeedEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
