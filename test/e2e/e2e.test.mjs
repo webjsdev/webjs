@@ -364,6 +364,57 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(greeting.includes('Hello, world!'), 'the greeting survived the re-render');
   });
 
+  test('SSR action seeding: no action RPC on hydration, RPC on a prop bump (#472)', async () => {
+    // The /seeded page renders a shipping <seeded-user> whose async render()
+    // awaits the getSeedUser 'use server' action. SSR bakes the result into the
+    // first paint AND seeds it into the page, so the client's first render must
+    // resolve from the seed (NO /__webjs/action/ RPC). A prop bump asks for an
+    // unseeded id, which DOES go to the network.
+
+    // (1) Raw SSR HTML (no JS): the data is in the first paint and the seed
+    // payload is present.
+    const rawHtml = await fetch(baseUrl + '/seeded').then((r) => r.text());
+    assert.match(rawHtml, /User 1/, 'async render data is in the raw SSR HTML (PE-safe)');
+    assert.match(rawHtml, /__webjs-seeds/, 'the SSR seed payload is emitted');
+
+    // (2) Load with JS, probing every action RPC.
+    /** @type {string[]} */
+    const actionRpcs = [];
+    const onRequest = (req) => { if (req.url().includes('/__webjs/action/')) actionRpcs.push(req.url()); };
+    page.on('request', onRequest);
+    try {
+      await page.setCacheEnabled(false);
+      await page.goto(baseUrl + '/seeded', { waitUntil: 'domcontentloaded', timeout: 12000 });
+      // Wait for the component to hydrate (the @click button is bound).
+      await page.waitForFunction(
+        () => document.querySelector('seeded-user .seeded-bump') && document.querySelector('seeded-user .seeded-name')?.textContent.includes('User 1'),
+        { timeout: 8000 },
+      );
+      // Give any stray hydration re-fetch a moment to fire (it must not).
+      await sleep(800);
+      assert.equal(
+        actionRpcs.length,
+        0,
+        `no action RPC may fire on hydration (the SSR result was seeded); saw:\n${actionRpcs.join('\n')}`,
+      );
+
+      // (3) Bump uid -> the new id is unseeded, so the action DOES fetch.
+      await page.evaluate(() => document.querySelector('seeded-user .seeded-bump').click());
+      await page.waitForFunction(
+        () => document.querySelector('seeded-user .seeded-name')?.textContent.includes('User 2'),
+        { timeout: 8000 },
+      );
+      assert.ok(actionRpcs.length >= 1, 'a prop bump to an unseeded id fetches over RPC');
+      assert.ok(
+        actionRpcs.some((u) => /\/__webjs\/action\//.test(u)),
+        'the refetch went through the action RPC endpoint',
+      );
+    } finally {
+      page.off('request', onRequest);
+      await page.setCacheEnabled(true);
+    }
+  });
+
   test('a wrapped slow component streams in behind its fallback on initial load (#471)', async () => {
     await page.goto(baseUrl + '/stream-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
     // The slow fact (400ms) streams in behind its fallback; wait for it.
