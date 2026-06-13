@@ -11,7 +11,13 @@
  *   - `next()` runs the next middleware, ending at the action; its return value
  *     flows back up. A middleware SHORT-CIRCUITS by returning a value (an
  *     `ActionResult` envelope, e.g. `{ success: false, status: 401 }`) WITHOUT
- *     calling `next()`, so the action never runs.
+ *     calling `next()`, so the action never runs. A short-circuit is NOT a
+ *     completion: a GET short-circuit is served `no-store` (never cached) and a
+ *     mutation short-circuit does not run `invalidates`. On the RPC boundary the
+ *     short-circuit must be an `ActionResult` (serialized as the result, the
+ *     `status` riding inside per the #245 contract); on the `route.ts` / REST
+ *     boundary it may also be a `Response`, and an `ActionResult`'s `status`
+ *     maps to the HTTP status.
  *
  * The framework ships no middleware; it only runs the chain. Server-only.
  */

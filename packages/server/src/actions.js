@@ -534,19 +534,27 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
     // Run inside the request's AbortSignal scope (#492) and the per-action
     // middleware chain (#490): the chain wraps the action, can short-circuit
     // (an auth middleware returning an ActionResult), and accumulates context
-    // the action reads via actionContext().
+    // the action reads via actionContext(). `ranAction` distinguishes a real
+    // action completion from a middleware short-circuit (the action never ran).
     const middleware = actionMiddleware(mod);
+    let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
-      runActionChain(middleware, { request: req, args, signal: req.signal }, () => fn(...args)));
-    if (method === 'GET') return await getActionResponse(result, mod, args, req);
-    // A mutation (POST/PUT/PATCH/DELETE): resolve `invalidates`, evict those
-    // server `cache()` tags, and report them to the client via
-    // `X-Webjs-Invalidate` so the browser-cache coordinator marks them stale.
+      runActionChain(middleware, { request: req, args, signal: req.signal }, () => { ranAction = true; return fn(...args); }));
+    if (method === 'GET') {
+      // A short-circuit (the action did not run, e.g. an auth denial) is NEVER
+      // cached: serve the envelope no-store so a denial is not stored or shared.
+      if (!ranAction) return rpcResponse(result ?? null, { headers: { 'cache-control': 'no-store' } });
+      return await getActionResponse(result, mod, args, req);
+    }
+    // A mutation (POST/PUT/PATCH/DELETE): only a COMPLETED action evicts its
+    // `invalidates` tags; a short-circuit (the action never ran) does not.
     const headers = {};
-    const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
-    if (inv.length) {
-      await revalidateTags(inv);
-      headers['x-webjs-invalidate'] = inv.join(',');
+    if (ranAction) {
+      const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+      if (inv.length) {
+        await revalidateTags(inv);
+        headers['x-webjs-invalidate'] = inv.join(',');
+      }
     }
     return rpcResponse(result ?? null, { headers });
   } catch (e) {
@@ -736,11 +744,20 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
   try {
     // The REST boundary wires the request signal (#492) and the per-action
-    // middleware chain (#490) too, symmetric with the RPC path.
+    // middleware chain (#490) too, symmetric with the RPC path. `ranAction`
+    // marks whether the action ran (vs a middleware short-circuit).
     const middleware = actionMiddleware(mod);
+    let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
-      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => fn(arg, { req, params })));
+      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => { ranAction = true; return fn(arg, { req, params }); }));
     if (result instanceof Response) return result;
+    // A middleware short-circuit on the REST boundary maps the envelope's
+    // `status` to the HTTP status (like the validate failure above), so a
+    // non-webjs REST client sees the real status, not a 200 with it in the body.
+    if (!ranAction && result && typeof result === 'object' && typeof result.status === 'number') {
+      const { status, ...payload } = result;
+      return Response.json(payload, { status });
+    }
     return Response.json(result ?? null);
   } catch (e) {
     if (typeof onError === 'function') onError(e);

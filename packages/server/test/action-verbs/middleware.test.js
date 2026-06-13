@@ -54,6 +54,7 @@ const MW_URL = pathToFileURL(resolve(__dirname, '../../src/action-middleware.js'
 const CORE_URL = pathToFileURL(resolve(__dirname, '../../../core/index.js')).toString();
 
 let tmpRoot, appDir, handle, hash;
+const hashes = {};
 before(async () => {
   tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-mw-'));
   appDir = mkdtempSync(join(tmpRoot, 'app-'));
@@ -76,12 +77,29 @@ before(async () => {
     `const block = async (ctx, next) => ({ success: false, status: 403 });\n` +
     `export const middleware = [block];\n` +
     `export const restGuard = expose('GET /api/guard', async () => ({ ok: true }));\n`);
+  // A GET action whose middleware short-circuits (the denial must NOT be cached).
+  const gf = w('actions/get-gated.server.js',
+    `'use server';\n` +
+    `export const method = 'GET';\n` +
+    `export const cache = 60;\n` +
+    `const deny = async () => ({ success: false, status: 401 });\n` +
+    `export const middleware = [deny];\n` +
+    `export async function getGated() { return { ok: true }; }\n`);
+  // A mutation whose middleware short-circuits (must NOT invalidate).
+  const mf = w('actions/mut-gated.server.js',
+    `'use server';\n` +
+    `export const invalidates = () => ['gated'];\n` +
+    `const deny = async () => ({ success: false, status: 403 });\n` +
+    `export const middleware = [deny];\n` +
+    `export async function mutGated() { return { ok: true }; }\n`);
   w('app/layout.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ({children})=>html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   w('app/page.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ()=>html\`<main>ok</main>\`;\n`);
   const app = await createRequestHandler({ appDir, dev: true });
   if (app.warmup) await app.warmup();
   handle = app.handle;
   hash = await hashFile(f);
+  hashes.getGated = await hashFile(gf);
+  hashes.mutGated = await hashFile(mf);
 });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
@@ -102,7 +120,23 @@ test('middleware runs on the RPC path: short-circuit + context', async () => {
   assert.deepEqual(parse(await ok.text()), { user: { id: 1 }, secret: 42 });
 });
 
-test('middleware runs on the expose() REST path too', async () => {
+test('middleware runs on the expose() REST path, mapping the envelope status to HTTP', async () => {
   const res = await handle(new Request('http://localhost/api/guard'));
-  assert.deepEqual(await res.json(), { success: false, status: 403 });
+  assert.equal(res.status, 403, 'the short-circuit status maps to the HTTP status, not 200');
+  assert.deepEqual(await res.json(), { success: false });
+});
+
+test('a GET action short-circuit is NOT cached (no-store, not max-age)', async () => {
+  const res = await handle(new Request(`http://localhost/__webjs/action/${hashes.getGated}/getGated?a=${encodeURIComponent(await stringify([]))}`));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'no-store', 'a denial must not be cached');
+  assert.equal(res.headers.get('etag'), null, 'no ETag on a short-circuit');
+  assert.deepEqual(parse(await res.text()), { success: false, status: 401 });
+});
+
+test('a mutation short-circuit does NOT invalidate (the action never ran)', async () => {
+  const headers = await csrfHeaders();
+  const res = await handle(new Request(`http://localhost/__webjs/action/${hashes.mutGated}/mutGated`, { method: 'POST', body: await stringify([]), headers }));
+  assert.equal(res.headers.get('x-webjs-invalidate'), null, 'a denied mutation does not evict tags');
+  assert.deepEqual(parse(await res.text()), { success: false, status: 403 });
 });
