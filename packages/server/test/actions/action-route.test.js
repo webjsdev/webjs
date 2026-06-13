@@ -125,3 +125,13 @@ test('the action receives the request + params as its second arg', async () => {
   await handler(new Request('http://x/api/x?a=1', { method: 'GET' }), { params: { id: '9' } });
   assert.deepEqual(seen, { method: 'GET', params: { id: '9' } });
 });
+
+test('a validator transform-return reaches the action body (REST boundary, #245)', async () => {
+  // The REST boundary runs the validator like the RPC boundary does, so a
+  // transformed/coerced value (not the raw merged input) is what the action sees.
+  let received;
+  const action = async (input) => { received = input; return { ok: true }; };
+  const handler = route(action, { validate: (i) => ({ ...i, coerced: true }) });
+  await handler(new Request('http://x/api/x?a=1', { method: 'GET' }));
+  assert.deepEqual(received, { a: '1', coerced: true });
+});

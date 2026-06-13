@@ -20,10 +20,11 @@ const webCrypto = /** @type {Crypto} */ (globalThis.crypto);
  * they cannot set the header to the matching value.
  *
  * Notes on scope:
- *   - Applies to internal RPC only. `expose()`d REST endpoints are *not*
- *     CSRF-protected by default because they're intended for external
- *     consumers; those endpoints should carry their own auth (bearer token,
- *     signed request, API key) which the app provides via middleware.
+ *   - Applies to internal RPC only. A `route.ts` REST endpoint (hand-written
+ *     or via the `route()` adapter) is *not* CSRF-protected because it is
+ *     intended for external consumers; such an endpoint should carry its own
+ *     auth (bearer token, signed request, API key) the app provides via
+ *     middleware.
  */
 
 export const CSRF_COOKIE = 'webjs_csrf';
