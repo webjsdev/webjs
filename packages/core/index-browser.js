@@ -61,6 +61,10 @@ export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } f
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';
+// Streaming RPC wire protocol (#489): the byte framing the client stub decodes.
+export {
+  STREAM_CONTENT_TYPE, FRAME_CHUNK, FRAME_END, FRAME_ERROR, encodeFrame, createFrameDecoder,
+} from './src/action-stream.js';
 
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported here so the dist browser bundle (which

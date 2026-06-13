@@ -491,6 +491,42 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('a streaming-RPC action renders tokens incrementally (#489)', async () => {
+    // <token-stream> calls an async-generator action; each yielded token streams
+    // over the single RPC response and is appended as it arrives. We assert (1)
+    // the action response is the framed stream content type, and (2) the rendered
+    // count climbs over time (a snapshot mid-stream is below the final count),
+    // proving incremental arrival rather than one buffered result.
+    /** @type {string|null} */
+    let streamCt = null;
+    const onResponse = (res) => {
+      if (res.url().includes('/__webjs/action/') && res.url().includes('/streamTokens')) {
+        streamCt = res.headers()['content-type'] || null;
+      }
+    };
+    page.on('response', onResponse);
+    try {
+      await page.goto(baseUrl + '/rpc-stream', { waitUntil: 'domcontentloaded', timeout: 12000 });
+      await page.waitForFunction(() => document.querySelector('token-stream .ts-start'), { timeout: 8000 });
+      await page.evaluate(() => document.querySelector('token-stream .ts-start').click());
+      // Catch the list partway: wait until at least 2 tokens have rendered, then
+      // snapshot the count while more are still streaming in.
+      await page.waitForFunction(() => document.querySelectorAll('token-stream .ts-item').length >= 2, { timeout: 8000 });
+      const mid = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
+      // Then wait for the stream to finish (the button re-enables) and read final.
+      await page.waitForFunction(() => {
+        const b = document.querySelector('token-stream .ts-start');
+        return b && !b.disabled && document.querySelectorAll('token-stream .ts-item').length === 8;
+      }, { timeout: 8000 });
+      const final = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
+      assert.equal(final, 8, 'all 8 streamed tokens rendered');
+      assert.ok(mid < final, `the count climbed incrementally (mid=${mid} < final=${final})`);
+      assert.ok(streamCt && streamCt.includes('application/vnd.webjs+stream'), `the action streamed a framed body; got content-type ${streamCt}`);
+    } finally {
+      page.off('response', onResponse);
+    }
+  });
+
   test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
     // Start on another page, then soft-navigate to /seeded through the client
     // router. The navigation response carries the seed payload, the router

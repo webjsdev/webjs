@@ -16,6 +16,7 @@ import {
 import { revalidateTags } from './cache-tags.js';
 import { runWithActionSignal } from './action-signal.js';
 import { runActionChain } from './action-middleware.js';
+import { isStreamable, streamActionResponse } from './action-stream.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
@@ -376,7 +377,11 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig'];
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig',
+    // Streaming RPC (#489): an action returning a stream / async iterable sends
+    // back a framed body; the stub decodes it into an async iterable the caller
+    // `for await`s. The imports are small constants + one decoder factory.
+    'STREAM_CONTENT_TYPE as __STREAM_CT', 'createFrameDecoder as __frameDec', 'FRAME_CHUNK as __F_CHUNK', 'FRAME_END as __F_END', 'FRAME_ERROR as __F_ERR'];
   if (method === 'GET') {
     imports.push('registerKeyTags as __regTags', 'consumeStale as __stale', 'fetchMark as __mark');
   }
@@ -394,10 +399,42 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
   lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
+  // A streamed result (#489): the action returned a stream / async iterable.
+  // Return an async iterable that decodes the framed body and yields each
+  // deserialized chunk. The response is 200 (the stream started), so errors
+  // arrive as ERROR frames, not an HTTP status.
+  lines.push(`  if (ct.includes(__STREAM_CT)) return __readStream(res, fn);`);
   lines.push(`  const text = await res.text();`);
   lines.push(`  const parsed = ct.includes(__CT) ? __p(text) : (ct.includes('application/json') ? JSON.parse(text) : text);`);
   lines.push(`  if (!res.ok) throw new Error((parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status));`);
   lines.push(`  return parsed;`);
+  lines.push(`}`);
+  // Decode a framed streamed body into an async generator of rich-deserialized
+  // chunks. A CHUNK frame yields a value, END returns, ERROR throws the
+  // (author-controlled) message. The reader is released on completion / abort.
+  lines.push(`async function* __readStream(res, fn) {`);
+  lines.push(`  if (!res.body) throw new Error('webjs stream ' + fn + ' has no body');`);
+  lines.push(`  const reader = res.body.getReader();`);
+  lines.push(`  const dec = __frameDec();`);
+  lines.push(`  const td = new TextDecoder();`);
+  lines.push(`  let ended = false;`);
+  lines.push(`  try {`);
+  lines.push(`    for (;;) {`);
+  lines.push(`      const { value, done } = await reader.read();`);
+  lines.push(`      if (done) break;`);
+  lines.push(`      for (const f of dec.push(value)) {`);
+  lines.push(`        if (f.type === __F_CHUNK) yield __p(td.decode(f.payload));`);
+  lines.push(`        else if (f.type === __F_END) { ended = true; return; }`);
+  lines.push(`        else if (f.type === __F_ERR) throw new Error(td.decode(f.payload) || ('webjs stream ' + fn));`);
+  lines.push(`      }`);
+  lines.push(`    }`);
+  // The body ended without a terminal END/ERROR frame: the stream was truncated
+  // (a server crash, a dropped connection, an upstream timeout). A healthy
+  // stream always ends in END or ERROR, so surface this as an error rather than
+  // a silent clean completion. (A consumer that breaks early goes through the
+  // generator's return(), which skips this and runs only the finally.)
+  lines.push(`    if (!ended) throw new Error('webjs stream ' + fn + ' truncated (no end frame)');`);
+  lines.push(`  } finally { try { reader.cancel(); } catch {} try { reader.releaseLock(); } catch {} }`);
   lines.push(`}`);
   // Body sender (POST/PUT/PATCH, and the URL-arg too-large fallback). `sig` is
   // captured SYNCHRONOUSLY at __call entry (#492): the active render signal must
@@ -540,6 +577,19 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
     let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
       runActionChain(middleware, { request: req, args, signal: req.signal }, () => { ranAction = true; return fn(...args); }));
+    // Streaming result (#489): a COMPLETED action returning a ReadableStream /
+    // async iterable streams its chunks over the RPC wire instead of buffering.
+    // A streamed result is never cached, ETagged, or seeded (it is not a
+    // serializer-safe value). A middleware short-circuit (the action never ran)
+    // is a plain envelope and falls through to the normal verb handling below.
+    if (ranAction && isStreamable(result)) {
+      const headers = {};
+      if (method !== 'GET') {
+        const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+        if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
+      }
+      return streamActionResponse(result, { signal: req.signal, onError, headers });
+    }
     if (method === 'GET') {
       // A short-circuit (the action did not run, e.g. an auth denial) is NEVER
       // cached: serve the envelope no-store so a denial is not stored or shared.

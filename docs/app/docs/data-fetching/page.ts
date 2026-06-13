@@ -90,6 +90,19 @@ export async function updateUser(id, data) { /* ... */ }</pre>
     <p>Cancellation is automatic: a superseded <code>async render()</code> (a newer prop or signal change while a fetch is in flight) aborts the previous render's in-flight action fetch, and on the server an action can read the request's <code>AbortSignal</code> via <code>actionSignal()</code> to stop expensive work when the client disconnects.</p>
     <p>An action can declare <code>export const middleware = [mw1, mw2]</code> (each <code>async (ctx, next) =&gt; result</code>): the chain runs around the action on the RPC and REST boundaries, short-circuits (an auth middleware returning an <code>ActionResult</code> instead of calling <code>next()</code>), and accumulates context the action reads via <code>actionContext()</code>.</p>
 
+    <h2>Streaming results: return a stream or async generator</h2>
+    <p>When an action <em>returns</em> a <code>ReadableStream</code>, an async iterable, or an async generator, the framework streams each chunk over the single RPC response instead of buffering the whole thing. The call site gets back an async iterable to <code>for await</code>, and each chunk arrives as it is produced. This is for token streams (an LLM response), progress events, or a large result set you want to render incrementally.</p>
+    <pre>// modules/ai/actions/stream-answer.server.ts
+'use server';
+export async function* streamAnswer(prompt) {
+  for await (const token of llm.complete(prompt)) yield token;
+}</pre>
+    <pre>// in a component
+for await (const token of await streamAnswer(q)) {
+  this.text.set(this.text.get() + token);   // renders incrementally
+}</pre>
+    <p>Detection is purely on the return value, so any verb can stream and there is no config export to set. Each chunk round-trips through the serializer (a <code>Date</code> / <code>Map</code> / <code>BigInt</code> inside a chunk survives). Back-pressure is respected, and the stream cancels when the client disconnects or the render is superseded (the same <code>AbortSignal</code> wiring as above), so a server generator stops producing. A streamed result is never cached or seeded; a mid-stream error surfaces as a throw from the iterable (wrap the <code>for await</code> in <code>try/catch</code>). For a slow region you want behind a fallback on the FIRST paint, reach for <code>&lt;webjs-suspense&gt;</code> instead; streaming RPC is for an imperative stream a component consumes after an interaction.</p>
+
     <h2>Decision rules</h2>
     <ol>
       <li><strong>Server data knowable at request time.</strong> Fetch it IN the component with <code>async render()</code>. Co-located, no prop-drilling, data in the first paint. The default, simplest case.</li>

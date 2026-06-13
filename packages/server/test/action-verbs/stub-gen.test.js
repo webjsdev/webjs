@@ -67,3 +67,16 @@ test('a default-POST action (no method) sends a body', async () => {
   assert.match(stub, /generated server-action stub \(POST\)/);
   assert.match(stub, /export const logEvent = /);
 });
+
+test('every stub can decode a streamed result (#489): imports + __readStream', async () => {
+  // Streaming is detected on the RESPONSE content type at runtime, so EVERY
+  // stub (regardless of verb) carries the decode path.
+  const stub = await stubFor('s.server.js',
+    `'use server';\nexport async function* s(){ yield 1; }\n`);
+  assert.match(stub, /createFrameDecoder as __frameDec/, 'the frame decoder is imported');
+  assert.match(stub, /STREAM_CONTENT_TYPE as __STREAM_CT/, 'the stream MIME constant is imported');
+  assert.match(stub, /ct\.includes\(__STREAM_CT\)/, '__handle branches on the stream content type');
+  assert.match(stub, /async function\* __readStream/, 'the stub defines the stream reader');
+  assert.match(stub, /f\.type === __F_CHUNK\) yield __p/, 'a CHUNK frame yields a deserialized value');
+  assert.match(stub, /f\.type === __F_ERR\) throw/, 'an ERROR frame throws');
+});
