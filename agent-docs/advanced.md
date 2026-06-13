@@ -1096,6 +1096,45 @@ branch return a normal `ActionResult` instead. `renderStream` is auto-registered
 by the client router, so it (and the `<webjs-stream>` element) is available
 wherever a layout imports `@webjsdev/core/client-router`.
 
+### Streaming RPC results: an action returns a stream (#489)
+
+`<webjs-stream>` above is the SERVER-PUSHED render-side primitive (the server
+decides what changes and ships HTML actions). Streaming RPC is the complementary
+PULL-side primitive: a `'use server'` action that RETURNS a `ReadableStream`, an
+async iterable, or an async generator streams its chunks over the single RPC
+response, and the client gets back an async iterable to `for await`. This is the
+token-stream / progress / incremental-result case a component consumes
+imperatively after an interaction.
+
+```ts
+// modules/ai/actions/stream-answer.server.ts
+'use server';
+export async function* streamAnswer(prompt: string) {
+  for await (const token of llm.complete(prompt)) yield token;
+}
+```
+
+```ts
+// inside a component
+for await (const token of await streamAnswer(q)) {
+  this.text.set(this.text.get() + token);   // renders incrementally
+}
+```
+
+The wire is a sequence of length-prefixed frames (`application/vnd.webjs+stream`):
+each chunk is rich-serialized (a `Date` / `Map` / `BigInt` round-trips), then a
+terminal frame closes the stream. Detection is purely on the RETURN value, so any
+verb (#488) can stream and there is no config export to declare. Back-pressure is
+respected (a slow consumer throttles a fast producer), and the request
+`AbortSignal` (#492) cancels the source generator on a client disconnect or a
+superseded `async render()`. A streamed result is never cached, ETagged, or
+seeded (#472); a mutation that streams still emits its `X-Webjs-Invalidate`
+header. A mid-stream throw surfaces as an error from the iterable (the HTTP status
+is already 200, so wrap the `for await` in `try/catch`), the author message in
+prod. For a slow region you want behind a fallback on the FIRST paint, use
+`<webjs-suspense>` instead; streaming RPC is for an imperative stream consumed
+after an interaction. Full reference: the [Data fetching](https://docs.webjs.com/docs/data-fetching) page.
+
 ### Opt out per link
 
 ```html
