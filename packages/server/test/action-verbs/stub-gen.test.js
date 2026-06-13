@@ -29,6 +29,8 @@ test('a GET action stub rides the URL, reads the seed, no CSRF on the read', asy
   assert.match(stub, /'\?a=' \+ encodeURIComponent/, 'GET args ride the URL');
   assert.match(stub, /__seedTake/, 'GET reads the SSR seed (#472)');
   assert.match(stub, /__stale\(key\)/, 'GET consults the tag-stale cache');
+  assert.match(stub, /const sig = __sig\(\)/, 'the active abort signal is captured synchronously (#492)');
+  assert.match(stub, /signal: sig/, 'the fetch binds the captured abort signal');
   assert.match(stub, /export const getUser = /);
 });
 

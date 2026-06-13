@@ -844,3 +844,8 @@ export declare function GitHub(opts?: Record<string, unknown>): ProviderConfig;
 // ---------------------------------------------------------------------------
 
 export type { LayoutProps, PageProps, RouteHandlerContext };
+
+/** The current action request AbortSignal (#492), or a never-aborting signal outside an action. */
+export declare function actionSignal(): AbortSignal;
+/** Run a function with a request AbortSignal available to actionSignal() (#492). */
+export declare function runWithActionSignal<T>(signal: AbortSignal | undefined, fn: () => T): T;

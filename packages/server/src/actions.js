@@ -14,6 +14,7 @@ import {
   RESERVED_CONFIG,
 } from './action-config.js';
 import { revalidateTags } from './cache-tags.js';
+import { runWithActionSignal } from './action-signal.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
@@ -374,7 +375,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr'];
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig'];
   if (method === 'GET') {
     imports.push('registerKeyTags as __regTags', 'consumeStale as __stale', 'fetchMark as __mark');
   }
@@ -397,25 +398,29 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   lines.push(`  if (!res.ok) throw new Error((parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status));`);
   lines.push(`  return parsed;`);
   lines.push(`}`);
-  // Body sender (POST/PUT/PATCH, and the URL-arg too-large fallback).
-  lines.push(`async function __body(fn, body, m, csrf) {`);
+  // Body sender (POST/PUT/PATCH, and the URL-arg too-large fallback). `sig` is
+  // captured SYNCHRONOUSLY at __call entry (#492): the active render signal must
+  // be read before the stub's first await (stringify), or the render's
+  // synchronous window has already closed and cleared it.
+  lines.push(`async function __body(fn, body, m, csrf, sig) {`);
   lines.push(`  const headers = { 'content-type': __CT }; if (csrf) headers[${J(CSRF_HEADER)}] = __csrf();`);
-  lines.push(`  const res = await fetch(__URL + fn, { method: m, headers, credentials: 'same-origin', body });`);
+  lines.push(`  const res = await fetch(__URL + fn, { method: m, headers, credentials: 'same-origin', body, signal: sig });`);
   lines.push(`  return __handle(res, fn, null);`);
   lines.push(`}`);
   if (URL_ARG) {
     // GET/DELETE: args in the URL, with a POST fallback when too large.
     lines.push(`async function __call(fn, args) {`);
+    lines.push(`  const sig = __sig();`); // sync capture before any await
     lines.push(`  const key = await __s(args);`);
     lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
-    lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'});`);
+    lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'}, sig);`);
     if (method === 'GET') {
       lines.push(`  const bypass = __stale(key);`);
       lines.push(`  const since = __mark();`);
-      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', cache: bypass ? 'no-cache' : 'default' });`);
+      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', cache: bypass ? 'no-cache' : 'default', signal: sig });`);
       lines.push(`  return __handle(res, fn, key, since);`);
     } else {
-      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, headers: { ${J(CSRF_HEADER)}: __csrf() }, credentials: 'same-origin' });`);
+      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, headers: { ${J(CSRF_HEADER)}: __csrf() }, credentials: 'same-origin', signal: sig });`);
       lines.push(`  return __handle(res, fn, null);`);
     }
     lines.push(`}`);
@@ -424,9 +429,10 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     // read resolve from the SSR seed on hydration (#472); a true mutation is
     // never SSR-invoked, so the seed simply misses.
     lines.push(`async function __call(fn, args) {`);
+    lines.push(`  const sig = __sig();`); // sync capture before any await
     lines.push(`  const key = await __s(args);`);
     lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
-    lines.push(`  return __body(fn, key, __METHOD, true);`);
+    lines.push(`  return __body(fn, key, __METHOD, true, sig);`);
     lines.push(`}`);
   }
   for (const name of fnNames) {
@@ -524,7 +530,9 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
     args = [v.value, ...args.slice(1)];
   }
   try {
-    const result = await fn(...args);
+    // Run inside the request's AbortSignal scope (#492) so the action can read
+    // it via actionSignal() and stop work when the client disconnects / aborts.
+    const result = await runWithActionSignal(req.signal, () => fn(...args));
     if (method === 'GET') return await getActionResponse(result, mod, args, req);
     // A mutation (POST/PUT/PATCH/DELETE): resolve `invalidates`, evict those
     // server `cache()` tags, and report them to the client via
@@ -722,7 +730,9 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   const fn = mod[route.fnName];
   if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
   try {
-    const result = await fn(arg, { req, params });
+    // The REST boundary wires the request signal into actionSignal() too (#492),
+    // symmetric with the RPC path and the #245 validation contract.
+    const result = await runWithActionSignal(req.signal, () => fn(arg, { req, params }));
     if (result instanceof Response) return result;
     return Response.json(result ?? null);
   } catch (e) {

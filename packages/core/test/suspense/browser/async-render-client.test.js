@@ -7,6 +7,7 @@
  */
 import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
+import { activeActionSignal } from '../../../src/action-abort-client.js';
 
 const { suite, test } = window.Mocha ? Mocha : { suite, test };
 const assert = {
@@ -260,5 +261,39 @@ suite('async render() on the client', () => {
     resolveGate();
     await tick(5);
     assert.ok(el.isConnected, 'the element survived the throwing supersede');
+  });
+
+  // #492: a superseded async render aborts the previous render's active action
+  // signal. The action reads activeActionSignal() (as the generated stub does);
+  // a prop change supersedes the in-flight render and must abort that signal.
+  test('a superseded async render aborts the previous render\'s active action signal (#492)', async () => {
+    const tag = uniq('abort-signal');
+    /** @type {(AbortSignal|undefined)[]} */
+    const captured = [];
+    let release;
+    class C extends WebComponent {
+      static properties = { v: { type: Number } };
+      async render() {
+        captured.push(activeActionSignal());        // the stub captures this synchronously
+        await new Promise((r) => { release = r; }); // hold the render in flight
+        return html`<p class="v">${this.v}</p>`;
+      }
+    }
+    C.register(tag);
+    const el = document.createElement(tag);
+    el.v = 0;
+    container().appendChild(el);
+    await tick(10); // the first render is in flight (captured[0] bound)
+    assert.ok(captured[0], 'the first render bound an active signal');
+    assert.equal(captured[0].aborted, false, 'not aborted while it is the current render');
+
+    // Supersede with a prop change: the previous render's signal must abort.
+    el.v = 1;
+    await tick(10);
+    assert.equal(captured[0].aborted, true, 'the superseded render\'s action signal was aborted');
+    assert.ok(captured[1], 'the new render bound a fresh signal');
+    assert.equal(captured[1].aborted, false, 'the current render\'s signal is live');
+    if (release) release(); // let the stale render resolve (dropped by the token guard)
+    await tick(5);
   });
 });
