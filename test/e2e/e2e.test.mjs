@@ -428,17 +428,20 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const onRequest = (req) => { if (req.url().includes('/__webjs/action/')) actionReqs.push({ method: req.method(), url: req.url() }); };
     page.on('request', onRequest);
     try {
-      await page.setCacheEnabled(false);
+      // The browser cache is ENABLED (default) so the second bump genuinely
+      // tests the tag-bypass: a broken coordinator would serve the cached value.
       await page.goto(baseUrl + '/verbs', { waitUntil: 'domcontentloaded', timeout: 12000 });
       await page.waitForFunction(
         () => document.querySelector('verb-greeting .vg-bump') && document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #0'),
         { timeout: 8000 },
       );
       await sleep(700);
+      // No action RPC on hydration: the GET resolves from the SSR seed before any
+      // fetch, so this holds regardless of the browser-cache state.
       assert.equal(actionReqs.length, 0, `no action RPC on hydration (the GET was seeded); saw:\n${actionReqs.map((r) => r.method + ' ' + r.url).join('\n')}`);
 
-      // Bump: a POST mutation that invalidates, then a fresh GET re-read (this
-      // GET response is now in the browser cache, max-age=30).
+      // Bump: a POST mutation that invalidates, then a fresh GET re-read. This GET
+      // response is now stored in the browser cache (max-age=30).
       await page.evaluate(() => document.querySelector('verb-greeting .vg-bump').click());
       await page.waitForFunction(
         () => document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #1'),
@@ -448,9 +451,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       assert.ok(methods.includes('POST'), 'the bump fired the POST mutation');
       assert.ok(methods.includes('GET'), 'the re-read fired a GET action after invalidation');
 
-      // Bump AGAIN within the 30s window: the prior GET (#1) is browser-cached,
-      // so showing #2 proves the tag-invalidation forced a cache BYPASS (a plain
-      // cached read would still say #1). This is the real coordinator test.
+      // Bump AGAIN within the 30s window: #1 is now browser-cached, so reaching #2
+      // proves the tag-invalidation forced a cache BYPASS (a plain cached read,
+      // or a broken coordinator, would still say #1). The real coordinator test.
       await page.evaluate(() => document.querySelector('verb-greeting .vg-bump').click());
       await page.waitForFunction(
         () => document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #2'),
@@ -460,7 +463,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       assert.ok(fresh.includes('Hello #2'), 'invalidation bypassed the browser cache to show the fresh value');
     } finally {
       page.off('request', onRequest);
-      await page.setCacheEnabled(true);
     }
   });
 

@@ -49,6 +49,16 @@ before(async () => {
   const postFile = write('actions/log-event.server.js',
     `'use server';\n` +
     `export async function logEvent(e) { return { ok: true, e }; }\n`); // no method => POST
+  const delFile = write('actions/delete-thing.server.js',
+    `'use server';\n` +
+    `export const method = 'DELETE';\n` +
+    `export const invalidates = (id) => ['thing:' + id];\n` +
+    `export async function deleteThing(id) { return { deleted: id }; }\n`);
+  const pubFile = write('actions/get-public.server.js',
+    `'use server';\n` +
+    `export const method = 'GET';\n` +
+    `export const cache = { maxAge: 30, public: true };\n` +
+    `export async function getPublic() { return { v: 1 }; }\n`);
 
   write('app/layout.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ({ children }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   write('app/page.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default () => html\`<main>ok</main>\`;\n`);
@@ -59,7 +69,16 @@ before(async () => {
   hashes.get = await hashFile(getFile);
   hashes.put = await hashFile(putFile);
   hashes.post = await hashFile(postFile);
+  hashes.del = await hashFile(delFile);
+  hashes.pub = await hashFile(pubFile);
 });
+
+async function csrf() {
+  const res = await handle(new Request(url('/')));
+  const m = (res.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
+  const token = m ? decodeURIComponent(m[1]) : '';
+  return { 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` };
+}
 
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
@@ -69,7 +88,7 @@ test('a GET action is served at GET with Cache-Control + X-Webjs-Tags + ETag, no
   assert.equal(res.status, 200);
   assert.match(res.headers.get('cache-control') || '', /private, max-age=60/);
   assert.equal(res.headers.get('x-webjs-tags'), 'user:5');
-  assert.ok(res.headers.get('etag'), 'conditional-GET funnel attached an ETag');
+  assert.ok(res.headers.get('etag'), 'the GET action attached a weak ETag');
   assert.deepEqual(parse(await res.text()), { id: 5, name: 'u5' });
 });
 
@@ -104,6 +123,37 @@ test('a PUT mutation reports X-Webjs-Invalidate and requires CSRF', async () => 
   }));
   assert.equal(ok.status, 200, await ok.text());
   assert.equal(ok.headers.get('x-webjs-invalidate'), 'user:1');
+});
+
+test('a DELETE action rides the URL, requires CSRF, and invalidates', async () => {
+  const a = encodeURIComponent(await stringify([9]));
+  // No CSRF -> 403.
+  const noCsrf = await handle(new Request(url(`/__webjs/action/${hashes.del}/deleteThing?a=${a}`), { method: 'DELETE' }));
+  assert.equal(noCsrf.status, 403);
+  // With CSRF -> 200 + X-Webjs-Invalidate, args read from the URL.
+  const ok = await handle(new Request(url(`/__webjs/action/${hashes.del}/deleteThing?a=${a}`), { method: 'DELETE', headers: await csrf() }));
+  const okBody = await ok.text();
+  assert.equal(ok.status, 200, okBody);
+  assert.equal(ok.headers.get('x-webjs-invalidate'), 'thing:9');
+  assert.deepEqual(parse(okBody), { deleted: 9 });
+});
+
+test('a GET action accepts the POST fallback (over-large args), still CSRF-exempt', async () => {
+  // The stub falls back to POST when the URL args exceed the cap. The endpoint
+  // accepts POST for a GET action and reads the body, staying CSRF-exempt.
+  const res = await handle(new Request(url(`/__webjs/action/${hashes.get}/getUser`), {
+    method: 'POST', body: await stringify([3]),
+    headers: { 'content-type': 'application/vnd.webjs+json' }, // no CSRF
+  }));
+  const body = await res.text();
+  assert.equal(res.status, 200, body);
+  assert.deepEqual(parse(body), { id: 3, name: 'u3' });
+});
+
+test('a public GET action is served with a public Cache-Control', async () => {
+  const res = await handle(new Request(url(`/__webjs/action/${hashes.pub}/getPublic?a=${encodeURIComponent(await stringify([]))}`)));
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('cache-control') || '', /public, max-age=30/);
 });
 
 test('a plain action with no method export still works as a POST', async () => {
