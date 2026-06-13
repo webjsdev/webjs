@@ -96,6 +96,10 @@ export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } f
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';
+// Streaming RPC wire protocol (#489).
+export {
+  STREAM_CONTENT_TYPE, FRAME_CHUNK, FRAME_END, FRAME_ERROR, encodeFrame, createFrameDecoder,
+} from './src/action-stream.js';
 export { stringify, parse, serialize, deserialize } from './src/serialize.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';

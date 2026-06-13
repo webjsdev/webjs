@@ -47,6 +47,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { stringify } from '@webjsdev/core';
 import { hashFile } from './actions.js';
+import { isStreamable } from './action-stream.js';
 
 /** Ambient per-render seed collector. `Map<key, value>` or undefined. */
 const als = new AsyncLocalStorage();
@@ -103,6 +104,10 @@ async function hashFor(absPath) {
  * @param {unknown} value resolved action result
  */
 async function recordSeed(collector, file, fnName, args, value) {
+  // A streamed result (#489) is not a serializer-safe value: recording it would
+  // make buildSeedScript's stringify throw and drop EVERY seed on the page. A
+  // streamed action is never seeded; the client streams it fresh on each call.
+  if (isStreamable(value)) return;
   try {
     const hash = await hashFor(file);
     const argsKey = await stringify(args);
