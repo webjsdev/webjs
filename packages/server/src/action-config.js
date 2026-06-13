@@ -23,7 +23,7 @@
 export const RPC_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Reserved config export names (special only in a `'use server'` file). */
-export const RESERVED_CONFIG = new Set(['method', 'cache', 'tags', 'invalidates', 'validate']);
+export const RESERVED_CONFIG = new Set(['method', 'cache', 'tags', 'invalidates', 'validate', 'middleware']);
 
 /** Verbs whose args ride the URL (so the read is cacheable / the URL is the key). */
 export const URL_ARG_VERBS = new Set(['GET', 'DELETE']);
@@ -89,6 +89,18 @@ export function actionCache(mod) {
     return { maxAge, swr, public: raw.public === true };
   }
   return null;
+}
+
+/**
+ * The action's per-action middleware chain (#490): the `middleware` export, an
+ * array of `(ctx, next) => result` functions, or [] when absent / malformed.
+ * @param {Record<string, unknown>} mod
+ * @returns {Function[]}
+ */
+export function actionMiddleware(mod) {
+  const raw = mod && mod.middleware;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((m) => typeof m === 'function');
 }
 
 /**

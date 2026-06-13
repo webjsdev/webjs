@@ -11,10 +11,11 @@ import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body
 import {
   actionMethod, actionFunctionNames, actionCache, actionConfigFn, resolveTags,
   cacheControlFor, allowedRequestMethods, URL_ARG_VERBS, SAFE_VERBS, MAX_URL_ARGS,
-  RESERVED_CONFIG,
+  RESERVED_CONFIG, actionMiddleware,
 } from './action-config.js';
 import { revalidateTags } from './cache-tags.js';
 import { runWithActionSignal } from './action-signal.js';
+import { runActionChain } from './action-middleware.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
@@ -530,9 +531,13 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
     args = [v.value, ...args.slice(1)];
   }
   try {
-    // Run inside the request's AbortSignal scope (#492) so the action can read
-    // it via actionSignal() and stop work when the client disconnects / aborts.
-    const result = await runWithActionSignal(req.signal, () => fn(...args));
+    // Run inside the request's AbortSignal scope (#492) and the per-action
+    // middleware chain (#490): the chain wraps the action, can short-circuit
+    // (an auth middleware returning an ActionResult), and accumulates context
+    // the action reads via actionContext().
+    const middleware = actionMiddleware(mod);
+    const result = await runWithActionSignal(req.signal, () =>
+      runActionChain(middleware, { request: req, args, signal: req.signal }, () => fn(...args)));
     if (method === 'GET') return await getActionResponse(result, mod, args, req);
     // A mutation (POST/PUT/PATCH/DELETE): resolve `invalidates`, evict those
     // server `cache()` tags, and report them to the client via
@@ -730,9 +735,11 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   const fn = mod[route.fnName];
   if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
   try {
-    // The REST boundary wires the request signal into actionSignal() too (#492),
-    // symmetric with the RPC path and the #245 validation contract.
-    const result = await runWithActionSignal(req.signal, () => fn(arg, { req, params }));
+    // The REST boundary wires the request signal (#492) and the per-action
+    // middleware chain (#490) too, symmetric with the RPC path.
+    const middleware = actionMiddleware(mod);
+    const result = await runWithActionSignal(req.signal, () =>
+      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => fn(arg, { req, params })));
     if (result instanceof Response) return result;
     return Response.json(result ?? null);
   } catch (e) {
