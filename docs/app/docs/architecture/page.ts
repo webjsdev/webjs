@@ -28,7 +28,6 @@ export default function Architecture() {
       <li><code>renderToString</code>: server-side async HTML renderer with DSD injection</li>
       <li><code>repeat()</code> is the keyed list directive</li>
       <li><code>Suspense()</code> is the streaming SSR boundary</li>
-      <li><code>expose()</code> tags an action for REST exposure</li>
       <li><code>notFound()</code> / <code>redirect()</code> are navigation sentinels</li>
       <li><code>connectWS()</code> is the auto-reconnecting WebSocket client</li>
       <li><code>richFetch()</code> is the rich-type-aware fetch wrapper</li>
@@ -95,7 +94,7 @@ export default function Architecture() {
       <li><strong>HTTP request arrives</strong> at the Node HTTP server (or HTTP/2 if TLS configured).</li>
       <li><strong>Root middleware</strong> (<code>middleware.ts</code>) runs first if present.</li>
       <li><strong>103 Early Hints</strong> sent (prod only) with modulepreload URLs for the matched page.</li>
-      <li><strong>Route matching</strong>: the router tries (in order) internal endpoints, expose()d actions, static files, user source modules, API routes, then page routes.</li>
+      <li><strong>Route matching</strong>: the router tries (in order) internal endpoints, static files, user source modules, API routes (<code>route.ts</code>), then page routes.</li>
       <li><strong>Segment middleware</strong> chain runs (outermost → innermost) for the matched route.</li>
       <li>For <strong>pages</strong>: SSR pipeline runs (load page + layouts, render to HTML, inject DSD, collect metadata, stream response with Suspense).</li>
       <li>For <strong>API routes</strong>: the matched handler function runs, returns a Response.</li>
