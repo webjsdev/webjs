@@ -92,6 +92,23 @@ before(async () => {
     `const deny = async () => ({ success: false, status: 403 });\n` +
     `export const middleware = [deny];\n` +
     `export async function mutGated() { return { ok: true }; }\n`);
+  // A GET with a PASSTHROUGH middleware (calls next): the action runs, so the
+  // result is STILL cached (ranAction true via the closure, not the fast path).
+  const gpf = w('actions/get-pass.server.js',
+    `'use server';\n` +
+    `export const method = 'GET';\n` +
+    `export const cache = 60;\n` +
+    `export const tags = () => ['gp'];\n` +
+    `const pass = async (ctx, next) => next();\n` +
+    `export const middleware = [pass];\n` +
+    `export async function getPass() { return { ok: true }; }\n`);
+  // A mutation with a PASSTHROUGH middleware: the action runs, so it invalidates.
+  const mpf = w('actions/mut-pass.server.js',
+    `'use server';\n` +
+    `export const invalidates = () => ['mp'];\n` +
+    `const pass = async (ctx, next) => next();\n` +
+    `export const middleware = [pass];\n` +
+    `export async function mutPass() { return { ok: true }; }\n`);
   w('app/layout.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ({children})=>html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   w('app/page.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ()=>html\`<main>ok</main>\`;\n`);
   const app = await createRequestHandler({ appDir, dev: true });
@@ -100,6 +117,8 @@ before(async () => {
   hash = await hashFile(f);
   hashes.getGated = await hashFile(gf);
   hashes.mutGated = await hashFile(mf);
+  hashes.getPass = await hashFile(gpf);
+  hashes.mutPass = await hashFile(mpf);
 });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
@@ -139,4 +158,19 @@ test('a mutation short-circuit does NOT invalidate (the action never ran)', asyn
   const res = await handle(new Request(`http://localhost/__webjs/action/${hashes.mutGated}/mutGated`, { method: 'POST', body: await stringify([]), headers }));
   assert.equal(res.headers.get('x-webjs-invalidate'), null, 'a denied mutation does not evict tags');
   assert.deepEqual(parse(await res.text()), { success: false, status: 403 });
+});
+
+test('a PASSTHROUGH middleware (calls next) still caches a GET result (ranAction true)', async () => {
+  const res = await handle(new Request(`http://localhost/__webjs/action/${hashes.getPass}/getPass?a=${encodeURIComponent(await stringify([]))}`));
+  assert.match(res.headers.get('cache-control') || '', /private, max-age=60/, 'the action ran -> cached');
+  assert.ok(res.headers.get('etag'), 'ETag on a completed cached GET');
+  assert.equal(res.headers.get('x-webjs-tags'), 'gp');
+  assert.deepEqual(parse(await res.text()), { ok: true });
+});
+
+test('a PASSTHROUGH middleware still invalidates a completed mutation', async () => {
+  const headers = await csrfHeaders();
+  const res = await handle(new Request(`http://localhost/__webjs/action/${hashes.mutPass}/mutPass`, { method: 'POST', body: await stringify([]), headers }));
+  assert.equal(res.headers.get('x-webjs-invalidate'), 'mp', 'the action ran -> invalidates');
+  assert.deepEqual(parse(await res.text()), { ok: true });
 });
