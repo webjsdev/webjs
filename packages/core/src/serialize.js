@@ -51,6 +51,36 @@
 const TAG = '_$wj';
 const ID_KEY = '_id';
 
+/**
+ * Keys that, assigned with bracket notation, mutate the target instead of
+ * adding an own data property: `out['__proto__'] = x` invokes the prototype
+ * setter (a prototype-pollution vector on decode, reachable because
+ * `JSON.parse` makes a wire `"__proto__"` an OWN key; and on encode it silently
+ * DROPS a legitimate own `__proto__` data property and corrupts the
+ * accumulator's prototype). `constructor` / `prototype` shadow in ways
+ * downstream code can be confused by.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Assign `value` onto a plain accumulator under `key`. A normal key is a plain
+ * assignment (the hot path); an unsafe key is written as an ordinary own
+ * enumerable data property via `defineProperty`, so the value survives as data
+ * (round-trippable, since JSON includes an own enumerable `__proto__`) and the
+ * prototype chain is never touched. Used on BOTH the encode and decode object
+ * loops so `serialize` / `deserialize` stay inverses on these keys.
+ * @param {Record<string, unknown>} out
+ * @param {string} key
+ * @param {unknown} value
+ */
+function safeAssign(out, key, value) {
+  if (UNSAFE_KEYS.has(key)) {
+    Object.defineProperty(out, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    out[key] = value;
+  }
+}
+
 /* ----------------------------------------------------------------- *
  * Public API                                                        *
  * ----------------------------------------------------------------- */
@@ -225,7 +255,7 @@ function encodeOne(v, ctx) {
     for (const k in v) {
       if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
       const escaped = isReservedKey(k) ? '_' + k : k;
-      out[escaped] = encodeOne(v[k], ctx);
+      safeAssign(out, escaped, encodeOne(v[k], ctx));
     }
   }
 
@@ -295,32 +325,6 @@ function newDecodeCtx() {
   };
 }
 
-/**
- * Keys that, assigned with bracket notation, mutate the object instead of
- * adding an own data property: `out['__proto__'] = x` invokes the prototype
- * setter (a prototype-pollution vector, reachable because `JSON.parse` makes a
- * wire `"__proto__"` an OWN key), and `constructor` / `prototype` shadow in a
- * way downstream code can be confused by.
- */
-const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-/**
- * Assign a decoded value onto a plain object from the UNTRUSTED wire. A normal
- * key is a plain assignment (the hot path); an unsafe key is written as an
- * ordinary own data property via `defineProperty`, so the value survives as
- * data and the prototype chain is never touched.
- * @param {Record<string, unknown>} out
- * @param {string} key
- * @param {unknown} value
- */
-function assignDecoded(out, key, value) {
-  if (UNSAFE_KEYS.has(key)) {
-    Object.defineProperty(out, key, { value, writable: true, enumerable: true, configurable: true });
-  } else {
-    out[key] = value;
-  }
-}
-
 function decode(v, ctx) {
   if (v === null || typeof v !== 'object') return v;
   if (Array.isArray(v)) {
@@ -340,7 +344,7 @@ function decode(v, ctx) {
     if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
     if (k === ID_KEY) continue;
     const realKey = isEscapedReservedKey(k) ? k.slice(1) : k;
-    assignDecoded(out, realKey, decode(v[k], ctx));
+    safeAssign(out, realKey, decode(v[k], ctx));
   }
   return out;
 }

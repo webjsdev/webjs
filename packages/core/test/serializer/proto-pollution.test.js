@@ -8,7 +8,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parse, deserialize } from '../../src/serialize.js';
+import { parse, deserialize, serialize, stringify } from '../../src/serialize.js';
+
+/** An object carrying a legitimate OWN `__proto__` data property (as a prior
+ * decode would produce), used to exercise the encode side. */
+function withOwnProto(base, protoValue) {
+  return Object.defineProperty({ ...base }, '__proto__', {
+    value: protoValue, enumerable: true, writable: true, configurable: true,
+  });
+}
 
 test('a __proto__ key in the wire does not pollute the decoded object', () => {
   const obj = parse('{"__proto__":{"isAdmin":true},"name":"ok"}');
@@ -53,6 +61,28 @@ test('deserialize (the non-JSON path) is hardened too', () => {
   assert.equal(obj.name, 'ok');
   assert.equal(Object.getPrototypeOf(obj), Object.prototype);
   assert.equal(obj.isAdmin, undefined);
+});
+
+test('encode keeps an own __proto__ data property and does not corrupt the accumulator', async () => {
+  const o = withOwnProto({ name: 'ok' }, { isAdmin: true });
+  const enc = await serialize(o);
+  // The encode accumulator's prototype must stay clean (not swapped mid-encode).
+  assert.equal(Object.getPrototypeOf(enc), Object.prototype, 'encode accumulator not polluted');
+  // The __proto__ data property must be CARRIED, not dropped.
+  assert.ok(Object.prototype.hasOwnProperty.call(enc, '__proto__'), '__proto__ retained on the wire shape');
+});
+
+test('a legitimate __proto__ data property round-trips (serialize/deserialize are inverses)', async () => {
+  const o = withOwnProto({ name: 'ok' }, { isAdmin: true });
+  const back = parse(await stringify(o));
+  assert.equal(back.name, 'ok');
+  assert.equal(Object.getPrototypeOf(back), Object.prototype, 'no pollution after a full round-trip');
+  assert.deepEqual(Object.getOwnPropertyDescriptor(back, '__proto__').value, { isAdmin: true }, '__proto__ data preserved');
+});
+
+test('global Object.prototype stays clean across an encode of a __proto__ payload', async () => {
+  await serialize(withOwnProto({}, { polluted: true }));
+  assert.equal({}.polluted, undefined);
 });
 
 test('legitimate data round-trips unaffected', () => {
