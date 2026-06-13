@@ -849,3 +849,6 @@ export type { LayoutProps, PageProps, RouteHandlerContext };
 export declare function actionSignal(): AbortSignal;
 /** Run a function with a request AbortSignal available to actionSignal() (#492). */
 export declare function runWithActionSignal<T>(signal: AbortSignal | undefined, fn: () => T): T;
+
+/** The accumulated per-action middleware context (#490), or {} outside an action. */
+export declare function actionContext(): Record<string, unknown>;

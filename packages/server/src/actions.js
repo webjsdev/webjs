@@ -11,10 +11,11 @@ import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body
 import {
   actionMethod, actionFunctionNames, actionCache, actionConfigFn, resolveTags,
   cacheControlFor, allowedRequestMethods, URL_ARG_VERBS, SAFE_VERBS, MAX_URL_ARGS,
-  RESERVED_CONFIG,
+  RESERVED_CONFIG, actionMiddleware,
 } from './action-config.js';
 import { revalidateTags } from './cache-tags.js';
 import { runWithActionSignal } from './action-signal.js';
+import { runActionChain } from './action-middleware.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
@@ -337,7 +338,7 @@ export async function serveActionStub(idx, absFile) {
   const hash = idx.fileToHash.get(absFile) || await hashFile(absFile);
   // HTTP-verb actions (#488): the file declares its verb via `export const
   // method` (default POST). The function exports are the actions; the reserved
-  // config exports (method/cache/tags/invalidates/validate) are excluded.
+  // config exports (method/cache/tags/invalidates/validate/middleware) are excluded.
   const fnNames = actionFunctionNames(mod);
   const method = actionMethod(mod);
   // The RPC endpoint is a framework-emitted same-origin URL, so it must
@@ -461,7 +462,7 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
   const mod = await loadModule(file, idx.dev);
   const fn = fnName === 'default' ? mod.default : mod[fnName];
-  // A reserved config export (method/cache/tags/invalidates/validate) is never
+  // A reserved config export (method/cache/tags/invalidates/validate/middleware) is never
   // a callable action even though some are functions (#488).
   if (typeof fn !== 'function' || RESERVED_CONFIG.has(fnName)) {
     return rpcResponse({ error: `Unknown action ${fnName}` }, { status: 404 });
@@ -530,18 +531,30 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
     args = [v.value, ...args.slice(1)];
   }
   try {
-    // Run inside the request's AbortSignal scope (#492) so the action can read
-    // it via actionSignal() and stop work when the client disconnects / aborts.
-    const result = await runWithActionSignal(req.signal, () => fn(...args));
-    if (method === 'GET') return await getActionResponse(result, mod, args, req);
-    // A mutation (POST/PUT/PATCH/DELETE): resolve `invalidates`, evict those
-    // server `cache()` tags, and report them to the client via
-    // `X-Webjs-Invalidate` so the browser-cache coordinator marks them stale.
+    // Run inside the request's AbortSignal scope (#492) and the per-action
+    // middleware chain (#490): the chain wraps the action, can short-circuit
+    // (an auth middleware returning an ActionResult), and accumulates context
+    // the action reads via actionContext(). `ranAction` distinguishes a real
+    // action completion from a middleware short-circuit (the action never ran).
+    const middleware = actionMiddleware(mod);
+    let ranAction = false;
+    const result = await runWithActionSignal(req.signal, () =>
+      runActionChain(middleware, { request: req, args, signal: req.signal }, () => { ranAction = true; return fn(...args); }));
+    if (method === 'GET') {
+      // A short-circuit (the action did not run, e.g. an auth denial) is NEVER
+      // cached: serve the envelope no-store so a denial is not stored or shared.
+      if (!ranAction) return rpcResponse(result ?? null, { headers: { 'cache-control': 'no-store' } });
+      return await getActionResponse(result, mod, args, req);
+    }
+    // A mutation (POST/PUT/PATCH/DELETE): only a COMPLETED action evicts its
+    // `invalidates` tags; a short-circuit (the action never ran) does not.
     const headers = {};
-    const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
-    if (inv.length) {
-      await revalidateTags(inv);
-      headers['x-webjs-invalidate'] = inv.join(',');
+    if (ranAction) {
+      const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+      if (inv.length) {
+        await revalidateTags(inv);
+        headers['x-webjs-invalidate'] = inv.join(',');
+      }
     }
     return rpcResponse(result ?? null, { headers });
   } catch (e) {
@@ -730,10 +743,21 @@ export async function invokeExposedAction(idx, route, params, req, onError) {
   const fn = mod[route.fnName];
   if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
   try {
-    // The REST boundary wires the request signal into actionSignal() too (#492),
-    // symmetric with the RPC path and the #245 validation contract.
-    const result = await runWithActionSignal(req.signal, () => fn(arg, { req, params }));
+    // The REST boundary wires the request signal (#492) and the per-action
+    // middleware chain (#490) too, symmetric with the RPC path. `ranAction`
+    // marks whether the action ran (vs a middleware short-circuit).
+    const middleware = actionMiddleware(mod);
+    let ranAction = false;
+    const result = await runWithActionSignal(req.signal, () =>
+      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => { ranAction = true; return fn(arg, { req, params }); }));
     if (result instanceof Response) return result;
+    // A middleware short-circuit on the REST boundary maps the envelope's
+    // `status` to the HTTP status (like the validate failure above), so a
+    // non-webjs REST client sees the real status, not a 200 with it in the body.
+    if (!ranAction && result && typeof result === 'object' && typeof result.status === 'number') {
+      const { status, ...payload } = result;
+      return Response.json(payload, { status });
+    }
     return Response.json(result ?? null);
   } catch (e) {
     if (typeof onError === 'function') onError(e);

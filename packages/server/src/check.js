@@ -741,7 +741,7 @@ export async function checkConventions(appDir) {
     for (const { rel, content, scan } of files) {
       if (!/\.server\.m?[jt]s$/.test(rel)) continue;
       if (!hasUseServerDirective(content)) continue;
-      if (!/\bexport\s+const\s+(?:method|cache|tags|invalidates|validate)\b/.test(scan)) continue;
+      if (!/\bexport\s+const\s+(?:method|cache|tags|invalidates|validate|middleware)\b/.test(scan)) continue;
       const names = new Set();
       let m;
       const reFn = /\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g;

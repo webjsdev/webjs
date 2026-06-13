@@ -49,6 +49,7 @@ export { memoryStore, redisStore, getStore, setStore } from './src/cache.js';
 export { cache } from './src/cache-fn.js';
 export { revalidateTag, revalidateTags } from './src/cache-tags.js';
 export { actionSignal, runWithActionSignal } from './src/action-signal.js';
+export { actionContext } from './src/action-middleware.js';
 export { revalidatePath, revalidateAll } from './src/html-cache.js';
 export { Session, session, cookieSessionStorage, storeSessionStorage, cookieSession, storeSession, getSession } from './src/session.js';
 export { broadcast } from './src/broadcast.js';
