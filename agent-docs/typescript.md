@@ -128,6 +128,31 @@ Supported: `Date`, `Map`, `Set`, `BigInt`, `Error`, `undefined`,
 instances come through as plain objects, with prototypes lost and methods
 gone (matches React Server Actions).
 
+#### Catching a non-serializable signature at compile time (`SerializableActionFn`)
+
+The class-instance / function caveat above is a silent runtime surprise: a
+method-valued field or a function argument typechecks fine but vanishes on the
+wire. The opt-in `SerializableActionFn` annotation turns it into a compile-time
+error. webjs actions stay plain `export async function`s (the framework rewrites
+the client import to an RPC stub at runtime, it does not wrap the authored
+function), so the guard is an OPTIONAL type annotation the author applies when
+they want it:
+
+```ts
+import type { SerializableActionFn } from '@webjsdev/core';
+
+export const getUser: SerializableActionFn<(id: number) => Promise<User>> =
+  async (id) => db.user.find(id);
+//  ^ if User carries a method (or any arg is a function), this is a type error
+//    pointing at the offending member, instead of a value that silently loses
+//    it on the wire.
+```
+
+`Serializable<T>` (also exported) maps a fully serializable `T` to itself and a
+non-serializable position (a function / method) to a branded `NonSerializable`
+marker; `SerializableArgs` / `SerializableResult` apply it across an action's
+parameters and (promise-unwrapped) return. All types-only, erased at runtime.
+
 ### API routes: opt in via content negotiation
 
 `route.ts` handlers use standard JSON by default so external consumers

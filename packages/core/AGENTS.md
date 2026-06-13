@@ -86,7 +86,13 @@ opt-in route union (`PageProps`, `LayoutProps`, `RouteHandlerContext`, `Route`,
 `src/webjs-config.d.ts`; it mirrors the `@webjsdev/server` config readers and
 the companion JSON Schema (`packages/server/webjs-config.schema.json`), and
 those three MUST stay in lockstep (the procedure is documented in
-`packages/server/AGENTS.md`). All are pure declaration files (erased at
+`packages/server/AGENTS.md`). The opt-in server-action serializability guard
+(`Serializable`, `SerializableArgs`, `SerializableResult`, `SerializableActionFn`,
+`NonSerializable`, #488) lives in `src/serializable.d.ts`: it maps a fully
+serializable type to itself and a non-serializable position (a function / method)
+to a branded marker, so an author who annotates an action with
+`SerializableActionFn` gets a compile-time error on a non-serializable arg /
+return instead of a silent wire loss. All are pure declaration files (erased at
 runtime, zero build cost). A page imports them with `import type { Metadata,
 PageProps } from '@webjsdev/core'`. The `Metadata` and `PageProps` /
 `LayoutProps` shapes MUST stay in lockstep with what

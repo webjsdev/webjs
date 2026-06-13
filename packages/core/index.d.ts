@@ -54,6 +54,16 @@ export type {
   WebjsCspConfig,
 } from './src/webjs-config.d.ts';
 
+// Compile-time serializability typing for server actions (#488): the opt-in
+// guard that makes a non-serializable action arg / return a type error.
+export type {
+  Serializable,
+  SerializableArgs,
+  SerializableResult,
+  SerializableActionFn,
+  NonSerializable,
+} from './src/serializable.d.ts';
+
 export { html, isTemplate, MARKER } from './src/html.js';
 export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { register, lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
