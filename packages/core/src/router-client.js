@@ -11,6 +11,9 @@ import { renderStream } from './webjs-stream.js';
 // Register <webjs-suspense> (the element-level streaming boundary, #471) so it
 // is layout-neutral and available for the progressive soft-nav streaming apply.
 import './webjs-suspense.js';
+// Ingest SSR action seeds (#472) from an incoming soft-nav document before its
+// components hydrate, so a navigated async component resolves from the seed.
+import { scanSeeds } from './action-seed-client.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
@@ -2067,6 +2070,13 @@ function upgradeCustomElementsInRange(range) {
 }
 
 function applySwap(doc, frameId, revalidating, href, incomingBuild) {
+  // SSR action seeding (#472): ingest any seed payload the incoming page
+  // carries BEFORE its components are grafted into the live DOM and upgrade, so
+  // a soft-navigated async component resolves from the seed instead of
+  // re-fetching. Scanning `doc` (the detached parse) also strips the seed
+  // carriers, so the inert payload never lands in the live document.
+  try { scanSeeds(doc); } catch { /* seeding is best-effort */ }
+
   // Any clean swap (no importmap mismatch, including cache restores
   // and frame swaps where we don't even run the mismatch check) is a
   // signal that the user successfully navigated, so clear the reload

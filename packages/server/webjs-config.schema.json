@@ -3,12 +3,17 @@
   "$id": "https://webjs.dev/schemas/webjs-config.schema.json",
   "title": "webjs config block",
   "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented server reader. An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
-  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
+  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, readSeedEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "elide": {
       "description": "Display-only and inert-route dead-JS elision switch. Default true. Set to false to ship every module's JS app-wide, as before the feature existed. Read by readElideEnabled in dev.js; the WEBJS_ELIDE env override wins over this.",
+      "type": "boolean",
+      "default": true
+    },
+    "seed": {
+      "description": "SSR action-result seeding switch (#472). Default true. When on, a 'use server' action's SSR result is serialized into the page so an async-render component does not re-fetch it over RPC on hydration. Set to false to disable (the client re-fetches as before). Read by readSeedEnabled in dev.js; the WEBJS_SEED env override wins over this.",
       "type": "boolean",
       "default": true
     },

@@ -338,13 +338,25 @@ export async function serveActionStub(idx, absFile) {
   // 404s, breaking every server action when webjs.basePath is set.
   const actionUrl = withBasePath(`/__webjs/action/${hash}/`, basePath());
   const body = `// webjs: generated server-action stub for ${relative(idx.appDir, absFile)}\n` +
-    `import { stringify as __wjStringify, parse as __wjParse } from '@webjsdev/core';\n` +
+    `import { stringify as __wjStringify, parse as __wjParse, takeSeed as __seedTake, SEED_MISS as __SEED_MISS } from '@webjsdev/core';\n` +
+    `const __HASH = ${JSON.stringify(hash)};\n` +
     `function __csrf() {\n` +
     `  const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/);\n` +
     `  return m ? decodeURIComponent(m[1]) : '';\n` +
     `}\n` +
-    `async function __rpc(fn, args) {\n` +
+    // The first client call of an async-render action reads the SSR seed
+    // (#472): __wjStringify(args) is BOTH the seed lookup key and the RPC body,
+    // so a miss reuses it for the POST with no double serialization. A hit
+    // resolves synchronously (no network), so hydration does not re-fetch; a
+    // later refetch / arg-change misses (consume-once) and goes to RPC.
+    `async function __call(fn, args) {\n` +
     `  const body = await __wjStringify(args);\n` +
+    `  const seeded = __seedTake(__HASH, fn, body);\n` +
+    `  if (seeded !== __SEED_MISS) return seeded;\n` +
+    `  return __rpc(fn, args, body);\n` +
+    `}\n` +
+    `async function __rpc(fn, args, body) {\n` +
+    `  if (body === undefined) body = await __wjStringify(args);\n` +
     `  const res = await fetch(${JSON.stringify(actionUrl)} + fn, {\n` +
     `    method: 'POST',\n` +
     `    headers: {\n` +
@@ -368,8 +380,8 @@ export async function serveActionStub(idx, absFile) {
     fnNames
       .map((name) =>
         name === 'default'
-          ? `export default (...args) => __rpc('default', args);`
-          : `export const ${name} = (...args) => __rpc(${JSON.stringify(name)}, args);`
+          ? `export default (...args) => __call('default', args);`
+          : `export const ${name} = (...args) => __call(${JSON.stringify(name)}, args);`
       )
       .join('\n') + '\n';
   return body;

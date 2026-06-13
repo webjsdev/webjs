@@ -37,7 +37,8 @@ with metadata, Suspense, streaming) for HTML, or `api.js` /
 | `dev-error.js` | Dev error overlay frame builder (#264). `buildDevErrorFrame(error, { kind, appDir, file?, line?, hint? })` returns a JSON-serializable frame (message, parsed `file`/`line`/`column`, a source `codeFrame`, an optional `hint`); `parseStackLocation(stack, appDir)` finds the first app frame (preferring non-`node_modules`, splitting off the dev loader's `?t=` cache-bust query); `readCodeFrame(file, line, column)` reads the source excerpt with a `>` line marker + a caret. PURE (the only side effect is a guarded source read) and DEV-ONLY by the caller's contract, so no path / source is built in prod |
 | `frame-render.js` | Server-side `<webjs-frame>` subtree extraction (#253). `requestedFrameId(req)` reads the `x-webjs-frame` header (null when absent, the normal full-page path); `extractFrameSubtree(html, id)` returns the `<webjs-frame id>...</webjs-frame>` slice from rendered HTML verbatim (so byte-equivalent by construction), balancing nested `<webjs-frame>` tags and reading the `id` attribute (not a substring match), or null when the id is absent. Used by `ssr.js`'s frame-render branch |
 | `page-action.js` | Page server actions (#244): `loadPageAction` reads a page module's optional `action` export, `runPageAction` parses the form body, runs the action, and maps the `ActionResult` to a response (303 PRG on success, 422 re-render with `actionData` on failure, honoring thrown `redirect()`/`notFound()`). A page action that returns a `Response` DIRECTLY (e.g. a content-negotiated `streamResponse`, #248) is honored verbatim. `dev.js` routes a non-GET/HEAD page request here only when the page exports `action`, wrapped in the page's segment middleware |
-| `actions.js` | `.server.js` / `.server.ts` scanner. Generates RPC stubs for browser-bound imports; exposes RPC endpoints; honours `expose()`. **Input validation (#245):** `runValidate(validate, input)` is the shared seam both call paths route through, so a validator attached via `validateInput(fn, ...)` or `expose(spec, fn, { validate })` interprets a `{ success, fieldErrors }` envelope, a throw, and a transform-return identically across transports. `invokeAction` (RPC) runs it on the first arg before the body, returning a `{ success: false, fieldErrors, status: 422 }` envelope as a normal 200 RPC payload on a structured failure (the client reads `result.fieldErrors`) and a sanitized error response on a throw; `invokeExposedAction` (REST) returns a 422 JSON on a structured failure, a 400 (keeping a schema lib's `issues`) on a throw, and replaces the input on a transform-return (back-compat) |
+| `action-seed.js` | SSR action-result seeding (#472). `registerSeedHooks()` installs a synchronous `module.registerHooks` load hook that, for a `'use server'` `*.server.*` module, returns a transparent FACADE re-exporting each function wrapped in a `Proxy` (`__seedWrap`); the Proxy records `(file, fn, args) -> result` into an ambient `AsyncLocalStorage` collector when one is active (a pure passthrough otherwise, so the RPC endpoint path is untouched, and `expose()`/`validateInput()` metadata on the function forwards through the Proxy). `collectSeeds(fn)` runs the SSR render inside a fresh collector; `buildSeedScript(collector)` serializes it into an HTML-escaped `<script type="application/json" id="__webjs-seeds">` block (keyed `hashFile(file)/fn/stringify(args)`, the exact key the client stub looks up). `seedingEnabled()` gates the `ssr.js` emitter. Installed at boot by `dev.js` when `readSeedEnabled` is true (default on; `webjs.seed` / `WEBJS_SEED`). Fail-open: a key miss degrades to a normal RPC, never wrong data. No source transform, no build step |
+| `actions.js` | `.server.js` / `.server.ts` scanner. Generates RPC stubs for browser-bound imports; exposes RPC endpoints; honours `expose()`. The generated stub reads the SSR seed before its `fetch` (#472): `__call(fn, args)` computes `stringify(args)` (both the seed lookup key and the RPC body) and returns `takeSeed(hash, fn, key)` on a hit, else POSTs; so a seeded first call does no network and a later refetch / arg-change misses and goes to RPC. **Input validation (#245):** `runValidate(validate, input)` is the shared seam both call paths route through, so a validator attached via `validateInput(fn, ...)` or `expose(spec, fn, { validate })` interprets a `{ success, fieldErrors }` envelope, a throw, and a transform-return identically across transports. `invokeAction` (RPC) runs it on the first arg before the body, returning a `{ success: false, fieldErrors, status: 422 }` envelope as a normal 200 RPC payload on a structured failure (the client reads `result.fieldErrors`) and a sanitized error response on a throw; `invokeExposedAction` (REST) returns a 422 JSON on a structured failure, a 400 (keeping a schema lib's `issues`) on a throw, and replaces the input on a transform-return (back-compat) |
 | `api.js` | `route.ts` `GET` / `POST` / `PUT` / `DELETE` handler dispatch |
 | `auth.js` | `createAuth()` with Credentials / Google / GitHub providers; JWT signing. `readSession()` (reached by `auth()`) calls `markDynamicAccess()`, so an `auth()`-gated page is auto-excluded from the HTML cache even if it wrongly set `revalidate` (#241, the auth-path leak fix). The session-`user` type is opt-in (#451): the overlay exposes an augmentable `AuthUser` interface and a generic `createAuth<TUser>()`, so `auth().user` can be typed with no cast and typo-checked, defaulting to `Record<string, unknown>` when neither is used (types-only, no runtime effect) |
 | `session.js` | `Session` class, cookie + store-backed storage (`cookieSession`, `storeSession`) |
@@ -138,7 +139,8 @@ in THREE co-located places that MUST stay in lockstep:
    `packages/core/src/webjs-config.d.ts` (re-exported from
    `@webjsdev/core`), the typed reference an agent or human authors against.
 3. **The reader functions** that consume each key: `readElideEnabled`
-   (`dev.js`, `elide`), `compileHeaderRules` (`headers.js`, `headers`),
+   (`dev.js`, `elide`), `readSeedEnabled` (`dev.js`, `seed`),
+   `compileHeaderRules` (`headers.js`, `headers`),
    `compileRedirectRules` / `readTrailingSlashPolicy` (`redirects.js`,
    `redirects` / `trailingSlash`), `readBasePath` (`base-path.js`,
    `basePath`), `readCspConfig` (`csp.js`, `csp`), and
@@ -212,8 +214,11 @@ and the reader key set never diverge (a counterfactual unknown key proves
    a stable `data-webjs-build` from its first response and a freshly-deployed
    pinned instance is detected as a new deploy by old-deploy clients with zero
    warmup window. So the complete list of eager boot work is: the route-table
-   scan, the core `package.json` read, the `.env` load, and (pinned apps only)
-   the committed vendor importmap read. Everything else (module graph,
+   scan, the core `package.json` read, the `.env` load, the seed-switch read +
+   load-hook install (`readSeedEnabled` + `registerSeedHooks`, #472, when on,
+   which must precede any action-module import; it reads `package.json` and
+   installs a `module.registerHooks` hook, executing no app source), and (pinned
+   apps only) the committed vendor importmap read. Everything else (module graph,
    browser-bound gate, action index, middleware, elision, and the UNPINNED
    vendor resolve, which needs the bare-import scan plus a jspm call) is built
    lazily on the first request via `ensureReady()` in `dev.js`, so boot reads
@@ -360,7 +365,7 @@ organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 `broadcast/`, `websocket/`, `check/`, `guardrails/`,
 `module-graph/`, `scanner/`, `elision/`, `vendor/`, `env/`, `dev/`,
 `forwarded/`, `body-limit/`, `redirects/`, `base-path/`, `file-storage/`,
-`testing/`.
+`testing/`, `seed/`.
 
 Cross-package tests that exercise the SSR pipeline, scaffolds,
 or full app boots live at the repo root in `test/ssr/`,

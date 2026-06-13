@@ -217,6 +217,7 @@ export default function RootLayout({ children }: LayoutProps) {
         ${navLink('/', 'Posts')}
         ${navLink('/search', 'Search')}
         ${navLink('/stream-demo', 'Stream')}
+        ${navLink('/seeded', 'Seeded')}
         ${navLink('/about', 'About')}
         ${navLink('/dashboard', 'Dashboard')}
         <a href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener" class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">GitHub</a>

@@ -52,6 +52,10 @@ export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.
 // Optimistic-mutation helper (thin signal wrapper, rolls back on failure)
 export { optimistic } from './src/optimistic.js';
 
+// SSR action-seed consumer (#472): the generated RPC stub reads a seed on its
+// first call so async-render hydration does not re-fetch the SSR'd data.
+export { takeSeed, scanSeeds, SEED_MISS } from './src/action-seed-client.js';
+
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported here so the dist browser bundle (which
 // the `@webjsdev/core/directives` subpath collapses onto in dist mode) carries

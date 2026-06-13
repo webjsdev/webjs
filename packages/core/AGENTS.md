@@ -45,6 +45,7 @@ the same output in all three.
 | `lazy-loader.js` | IntersectionObserver-based lazy module loading for `static lazy = true`, plus `observeViewportOnce(el, cb)` (#253): a per-ELEMENT one-shot viewport callback (vs the per-tag module loader) reusing the same `rootMargin: '200px'` budget, used by `<webjs-frame loading="lazy">` to defer its self-load until the frame scrolls into view |
 | `nav.js` | `notFound()`, `redirect()` sentinels for page/action handlers |
 | `optimistic.js` | `optimistic(signal, value, action)` (#246): optimistic-UI helper. Sets the signal to `value`, awaits `action()`, rolls back on a throw or an `ActionResult` `{ success: false }`. A thin wrapper over the signal primitive; re-exported from `index.js` + `index-browser.js`, and classified in `component-elision.js` as a reactive (client-work) import |
+| `action-seed-client.js` | Client consumer for SSR action-result seeding (#472): `takeSeed(hash, fn, argsKey)` (consume-once lookup, `SEED_MISS` sentinel) + `scanSeeds(root)` (ingest the page-level `#__webjs-seeds` JSON block and per-element `[data-webjs-seed]` carriers, stripping them). The generated RPC stub calls `takeSeed` before its `fetch`, so an async-render component's first client call resolves from the SSR seed instead of a hydration round-trip; `router-client.js`'s `applySwap` calls `scanSeeds` so a soft nav ingests seeds too. Inert server-side (DOM access only inside `scanSeeds`). Re-exported from `index.js` + `index-browser.js` |
 | `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging, plus `validateInput(fn, validate)` (#245): attaches an input validator through the SAME `__webjsHttp` metadata `expose` writes (so `getExposed(fn)` surfaces it) WITHOUT creating a REST route, so the validator runs on the RPC path too. Both are server-only (stripped from `index-browser.js`). `getExposed` reads the metadata back |
 | `escape.js` | HTML attribute / text escaping (the only sanitiser) |
 | `csp-nonce.js` | Isomorphic CSP nonce reader: `cspNonce()` (returns the request nonce, `''` in the browser) + `setCspNonceProvider` (server-only wiring). The provider is installed by `@webjsdev/server`'s `context.js`; as of #233 it returns a freshly-MINTED per-request nonce (not just an inbound-header parse). `setCspNonceProvider` is stripped from the browser surface |
@@ -173,7 +174,7 @@ Tests for this package live in **`packages/core/test/`**,
 organised by feature: `signals/`, `rendering/`, `directives/`,
 `slots/`, `lifecycle/`, `context/`, `task/`, `suspense/`,
 `routing/`, `serializer/`, `styling/`, `registry/`, `nav/`,
-`websocket-client/`, `rich-fetch/`. Each feature folder has a
+`websocket-client/`, `rich-fetch/`, `seed/`. Each feature folder has a
 `browser/` subfolder when there are real-Chromium tests for it.
 
 Cross-package tests that exercise core through the SSR pipeline

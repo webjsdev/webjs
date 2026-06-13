@@ -45,6 +45,7 @@ app/                         thin route adapters
     posts/new/page.ts        /dashboard/posts/new
   (marketing)/about/page.ts  /about (route group, parens not in URL)
   ui-demo/page.ts            /ui-demo (showcases the @webjsdev/ui kit)
+  seeded/page.ts             /seeded (SSR action seeding demo, #472)
   api/
     hello/route.ts           GET /api/hello
     posts/route.ts           GET/POST /api/posts
@@ -137,6 +138,15 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
   The observation forces the badge to ship, so the probe asserts its module
   IS downloaded (the cross-module-registration fix, #169). The unobserved
   `build-stamp` is the negative control.
+
+### SSR action seeding (#472)
+`/seeded` renders `<seeded-user>` (`components/seeded-user.ts`), a SHIPPING
+async component whose `async render()` awaits `getSeedUser`
+(`modules/seed/queries/get-user.server.ts`, a `'use server'` action). The SSR
+result is seeded into the page, so the e2e network probe asserts NO
+`/__webjs/action/` RPC fires on hydration (initial load and soft nav), while a
+prop bump to an unseeded id DOES fetch. The `@click` bump is what makes the
+component ship (otherwise a bare async leaf would be elided like `/async-leaf`).
 
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:

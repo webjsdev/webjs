@@ -109,6 +109,15 @@ export interface WebjsConfig {
    */
   elide?: boolean;
 
+  /**
+   * SSR action-result seeding switch (#472). Default `true`. When on, a
+   * `'use server'` action's SSR result is serialized into the page so an
+   * `async render()` component does not re-fetch it over RPC on hydration. Set
+   * to `false` to disable (the client re-fetches as before). The `WEBJS_SEED`
+   * env override wins over this.
+   */
+  seed?: boolean;
+
   /** Per-path response-header rules, shaped like Next's. */
   headers?: WebjsHeaderRule[];
 

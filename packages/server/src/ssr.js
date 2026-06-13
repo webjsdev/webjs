@@ -7,6 +7,7 @@ import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
+import { seedingEnabled, collectSeeds, buildSeedScript } from './action-seed.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
 import {
   readRevalidate,
@@ -94,7 +95,21 @@ export async function ssrPage(route, params, url, opts) {
     const have = haveHeader
       ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
       : null;
-    const body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+    // SSR action-result seeding (#472). When enabled, run the whole render
+    // inside an ambient seed collector so every `'use server'` action a
+    // component awaits in `async render()` records its (args -> result) for the
+    // hydration payload. Disabled -> the plain render, byte-identical to before.
+    let seedCollector = null;
+    let body;
+    if (seedingEnabled()) {
+      const seeded = await collectSeeds(() =>
+        renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule),
+      );
+      body = seeded.value;
+      seedCollector = seeded.collector;
+    } else {
+      body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+    }
 
     // Frame subtree render (#253). A `<webjs-frame src>` self-load (or a
     // click-driven frame nav) sends `x-webjs-frame: <id>` and applies ONLY the
@@ -170,9 +185,20 @@ export async function ssrPage(route, params, url, opts) {
     // shell. Either way the returned `prefix` ends just past the open <body>
     // and `closer` is the matching `</body></html>`.
     const { prefix, streamBody, closer } = buildDocumentParts(body, wrapOpts);
+    // Append the SSR action-seed payload (#472) to the non-streamed body so the
+    // client's first render reads it instead of re-issuing the RPC. Only for a
+    // fully-buffered (non-streaming) render: a streamed page's deferred
+    // boundaries resolve AFTER the first flush, so their seeds cannot ride this
+    // block (those slow regions keep the stale-while-revalidate refetch). An
+    // empty collector yields '' so the output stays byte-identical.
+    let outBody = streamBody;
+    if (seedCollector && suspenseCtx.pending.length === 0) {
+      const seedScript = await buildSeedScript(seedCollector);
+      if (seedScript) outBody = streamBody + seedScript;
+    }
     const res = streamingHtmlResponse(
       prefix,
-      streamBody,
+      outBody,
       closer,
       suspenseCtx,
       // Normally 200. After a failed page `action` submission the caller passes
