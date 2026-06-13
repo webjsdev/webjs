@@ -36,10 +36,13 @@ src/
                          INTROSPECTION tools (read-only, appDir-scoped), each
                          projecting a @webjsdev/server function: list_routes
                          (buildRouteTable), list_actions (buildActionIndex +
-                         hashFile), list_components (scanComponents), check
-                         (checkConventions via projectCheck). Export names are
-                         extracted LEXICALLY (extractExportNames /
-                         extractRouteMethods) so no app module is loaded.
+                         hashFile, now reports verb/cache/tags/invalidates per
+                         #488 and excludes reserved config exports from the
+                         callable-action list), list_components (scanComponents),
+                         check (checkConventions via projectCheck). Export names
+                         are extracted LEXICALLY (extractExportNames /
+                         extractRouteMethods / extractActionConfig) so no app
+                         module is loaded.
                          `deps` / `docsDeps` / `sourceDeps` are injectable for
                          in-process tests.
   mcp-docs.js            KNOWLEDGE layer (#376): resolveDocsLocation (bundled

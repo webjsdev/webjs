@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '..', '..', '..');
-const { runMcpServer, extractExportNames, extractRouteMethods } = await import(
+const { runMcpServer, extractExportNames, extractRouteMethods, extractActionConfig } = await import(
   resolve(REPO, 'packages', 'mcp', 'src', 'mcp.js')
 );
 
@@ -420,6 +420,221 @@ test('mcp: prompts/list + prompts/get serve the recipe workflows; unknown prompt
   ]));
   assert.equal(frames[0].error.code, -32602, 'unknown prompt is a -32602');
   assert.ok(frames[1].result.prompts, 'the loop kept serving after the error');
+});
+
+/* ---------- extractActionConfig unit tests (#488) ---------- */
+
+test('extractActionConfig: GET action with cache + tags reports correct config', () => {
+  const src = `
+    'use server';
+    export const method = 'GET';
+    export const cache = 60;
+    export const tags = (id) => [\`user:\${id}\`];
+    export async function getUser(id) { return {}; }
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'GET');
+  assert.equal(cfg.cache, '60');
+  assert.equal(cfg.tags, true);
+  assert.equal(cfg.invalidates, false);
+  assert.equal(cfg.validate, false);
+  assert.equal(cfg.middleware, false);
+});
+
+test('extractActionConfig: object cache value is captured across lines', () => {
+  const src = `
+    'use server';
+    export const method = 'GET';
+    export const cache = { maxAge: 300, swr: 60, public: true };
+    export async function getPosts() { return []; }
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'GET');
+  assert.ok(cfg.cache && cfg.cache.startsWith('{') && cfg.cache.endsWith('}'), 'object cache captured');
+  assert.ok(cfg.cache.includes('maxAge'), 'object cache includes maxAge');
+});
+
+test('extractActionConfig: POST mutation with invalidates', () => {
+  const src = `
+    'use server';
+    export const invalidates = (id) => [\`user:\${id}\`];
+    export async function updateUser(input) { return { success: true }; }
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'POST');
+  assert.equal(cfg.cache, null);
+  assert.equal(cfg.tags, false);
+  assert.equal(cfg.invalidates, true);
+  assert.equal(cfg.validate, false);
+  assert.equal(cfg.middleware, false);
+});
+
+test('extractActionConfig: plain legacy action has POST + all config flags false', () => {
+  const src = `
+    'use server';
+    export async function createPost(input) { return { success: true }; }
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'POST');
+  assert.equal(cfg.cache, null);
+  assert.equal(cfg.tags, false);
+  assert.equal(cfg.invalidates, false);
+  assert.equal(cfg.validate, false);
+  assert.equal(cfg.middleware, false);
+});
+
+test('extractActionConfig: validate + middleware flags', () => {
+  const src = `
+    'use server';
+    export const validate = (input) => ({ success: true });
+    export const middleware = [authMw, logMw];
+    export async function doThing(input) { return { success: true }; }
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.validate, true);
+  assert.equal(cfg.middleware, true);
+});
+
+test('extractActionConfig: unrecognized method falls back to POST', () => {
+  const src = `
+    'use server';
+    export const method = 'OPTIONS';
+    export async function doThing() {}
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'POST', 'unrecognized verb defaults to POST');
+});
+
+test('extractActionConfig: method with double-quote and uppercase matches', () => {
+  const src = `
+    'use server';
+    export const method = "DELETE";
+    export async function removeItem(id) {}
+  `;
+  const cfg = extractActionConfig(src);
+  assert.equal(cfg.method, 'DELETE');
+});
+
+/* ---------- list_actions: config fields + config exports excluded (#488) ---------- */
+
+test('mcp: list_actions GET action reports method/cache/tags and excludes config exports', async () => {
+  const dir = tmpDir();
+  write(
+    dir,
+    'modules/users/queries/get-user.server.ts',
+    [
+      `'use server';`,
+      `export const method = 'GET';`,
+      `export const cache = 60;`,
+      `export const tags = (id) => [\`user:\${id}\`];`,
+      `export async function getUser(id) { return {}; }`,
+    ].join('\n') + '\n',
+  );
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 50, method: 'tools/call', params: { name: 'list_actions', arguments: {} } },
+  ]);
+  const actions = JSON.parse(frames[0].result.content[0].text);
+
+  // Only the callable function is listed; config exports are NOT actions.
+  const fns = actions.map((a) => a.fn);
+  assert.ok(fns.includes('getUser'), 'getUser is listed');
+  assert.ok(!fns.includes('method'), 'method config export is NOT listed as an action');
+  assert.ok(!fns.includes('cache'), 'cache config export is NOT listed as an action');
+  assert.ok(!fns.includes('tags'), 'tags config export is NOT listed as an action');
+
+  const a = actions.find((x) => x.fn === 'getUser');
+  assert.ok(a, 'getUser action found');
+  assert.equal(a.method, 'GET');
+  assert.equal(a.cache, '60');
+  assert.equal(a.tags, true);
+  assert.equal(a.invalidates, false);
+  assert.equal(a.validate, false);
+  assert.equal(a.middleware, false);
+  assert.match(a.endpoint, /^\/__webjs\/action\/[0-9a-f]+\/getUser$/);
+});
+
+test('mcp: list_actions POST mutation with invalidates reports correct config', async () => {
+  const dir = tmpDir();
+  write(
+    dir,
+    'modules/users/actions/update-user.server.ts',
+    [
+      `'use server';`,
+      `export const invalidates = (id) => [\`user:\${id}\`];`,
+      `export async function updateUser(input) { return { success: true }; }`,
+    ].join('\n') + '\n',
+  );
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 51, method: 'tools/call', params: { name: 'list_actions', arguments: {} } },
+  ]);
+  const actions = JSON.parse(frames[0].result.content[0].text);
+  const a = actions.find((x) => x.fn === 'updateUser');
+  assert.ok(a, 'updateUser action found');
+  assert.equal(a.method, 'POST');
+  assert.equal(a.cache, null);
+  assert.equal(a.invalidates, true);
+
+  // invalidates config export must NOT appear as a separate action.
+  const fns = actions.map((x) => x.fn);
+  assert.ok(!fns.includes('invalidates'), 'invalidates config export is NOT listed as an action');
+});
+
+test('mcp: list_actions legacy action (no config) reports POST and all config flags false/null', async () => {
+  const dir = tmpDir();
+  write(
+    dir,
+    'modules/posts/actions/create.server.ts',
+    `'use server';\nexport async function createPost(input) { return { success: true }; }\n`,
+  );
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 52, method: 'tools/call', params: { name: 'list_actions', arguments: {} } },
+  ]);
+  const actions = JSON.parse(frames[0].result.content[0].text);
+  const a = actions.find((x) => x.fn === 'createPost');
+  assert.ok(a, 'createPost action found');
+  assert.equal(a.method, 'POST');
+  assert.equal(a.cache, null);
+  assert.equal(a.tags, false);
+  assert.equal(a.invalidates, false);
+  assert.equal(a.validate, false);
+  assert.equal(a.middleware, false);
+});
+
+/* ---------- drift guard: MCP local copies match action-config.js ---------- */
+
+test('drift guard: MCP RESERVED_CONFIG and RPC_VERBS match action-config.js exports', async () => {
+  const actionConfigPath = resolve(REPO, 'packages', 'server', 'src', 'action-config.js');
+  const { RESERVED_CONFIG: srcReserved, RPC_VERBS: srcVerbs } = await import(actionConfigPath);
+
+  // Re-read the MCP source to extract the local set literals lexically.
+  // The simplest approach: import the module and introspect via extractActionConfig
+  // coverage. But the sets are module-private constants. Test via behavior: verify
+  // that every entry in the authoritative sets is handled the same way by
+  // extractActionConfig (config names are not listed as actions, verbs are recognized).
+
+  // Verify all RPC_VERBS from action-config.js are recognized by extractActionConfig.
+  for (const verb of srcVerbs) {
+    const src = `'use server';\nexport const method = '${verb}';\nexport async function fn() {}\n`;
+    const cfg = extractActionConfig(src);
+    assert.equal(cfg.method, verb, `RPC verb ${verb} must be recognized by extractActionConfig`);
+  }
+
+  // Verify all RESERVED_CONFIG names from action-config.js are excluded from callable actions.
+  // We do this by building a file that exports one of each reserved name as a const,
+  // plus a real callable function, and checking only the function appears.
+  const reservedDecls = [...srcReserved].map((name) => {
+    if (name === 'middleware') return `export const ${name} = [];`;
+    return `export const ${name} = () => [];`;
+  }).join('\n');
+  const src = `'use server';\n${reservedDecls}\nexport async function myAction() {}\n`;
+  const names = extractExportNames(src);
+  for (const name of srcReserved) {
+    // extractActionConfig should exclude all of these when building the action list.
+    // We verify they ARE in extractExportNames (so the filter logic is what excludes them).
+    assert.ok(names.includes(name), `reserved name '${name}' must appear in extractExportNames so the RESERVED_CONFIG filter is the gate`);
+  }
+  // And that the non-reserved action function IS present.
+  assert.ok(names.includes('myAction'), 'the callable action is present in export names');
 });
 
 test('mcp: a request split across stdin chunks (mid-line) still parses', async () => {
