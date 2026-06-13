@@ -65,6 +65,7 @@ import {
   hasUseServerDirective,
   hashFile,
 } from './actions.js';
+import { registerSeedHooks } from './action-seed.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
 import { applyEnvValidation } from './env-schema.js';
@@ -247,6 +248,48 @@ export async function readElideEnabled(appDir) {
   try {
     const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
     if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
+  } catch {
+    // No package.json, malformed JSON, or unreadable. Keep the default.
+  }
+  return true;
+}
+
+/**
+ * Read the `WEBJS_SEED` environment override, if set. Same grammar as
+ * `WEBJS_ELIDE`: `0`/`false`/`off`/`no` force seeding OFF, `1`/`true`/`on`/`yes`
+ * force it ON, anything else (or unset) falls through to the package.json
+ * switch. The deploy-time / ops escape hatch and the seam tests use to render
+ * an app with seeding on and off in one process.
+ * @returns {boolean | undefined}
+ */
+function seedEnvOverride() {
+  const raw = process.env.WEBJS_SEED;
+  if (raw == null || raw === '') return undefined;
+  const v = String(raw).trim().toLowerCase();
+  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+  if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
+  return undefined;
+}
+
+/**
+ * Read the project-level SSR action-seeding switch (#472). Precedence: the
+ * `WEBJS_SEED` env override wins when set, otherwise the package.json
+ * `{ "webjs": { "seed": false } }` switch disables it (the client re-fetches on
+ * hydration as it did before the feature). Default ON (opt-out), mirroring
+ * elision: any value other than the literal `false` keeps seeding enabled.
+ *
+ * Seeding installs a process-global `module.registerHooks` load hook, so unlike
+ * elision it is read ONCE at boot (not re-read per rebuild): toggling it needs a
+ * restart, like a deploy.
+ * @param {string} appDir
+ * @returns {Promise<boolean>}
+ */
+export async function readSeedEnabled(appDir) {
+  const override = seedEnvOverride();
+  if (override !== undefined) return override;
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.webjs && pkg.webjs.seed === false) return false;
   } catch {
     // No package.json, malformed JSON, or unreadable. Keep the default.
   }
@@ -483,6 +526,14 @@ export async function createRequestHandler(opts) {
   // importmap hash with `{ fingerprint: false }`, so the boot-published build
   // id is a stable deploy fingerprint independent of per-file content hashes.
   setAssetRoots({ appDir, coreDir, enabled: !dev });
+
+  // SSR action-result seeding (#472). Install the process-global module load
+  // hook NOW, at boot, before any `'use server'` action module is imported (ESM
+  // caches by URL, so a module loaded before the hook would never be faceted).
+  // Read once (not per-rebuild): the hook is global and cannot be cleanly
+  // un-installed, so toggling needs a restart. Disabled -> no hook, no ambient
+  // collector wrap in ssr.js, and module loading stays byte-identical.
+  if (await readSeedEnabled(appDir)) registerSeedHooks();
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no

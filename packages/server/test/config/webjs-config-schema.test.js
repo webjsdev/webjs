@@ -35,6 +35,7 @@ const schemaPath = fileURLToPath(
  */
 const KNOWN_KEYS = [
   'elide', // readElideEnabled (dev.js)
+  'seed', // readSeedEnabled (dev.js)
   'headers', // compileHeaderRules (headers.js)
   'redirects', // compileRedirectRules (redirects.js)
   'trailingSlash', // readTrailingSlashPolicy (redirects.js)
