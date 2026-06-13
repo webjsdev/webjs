@@ -376,7 +376,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // GET-only (only a GET is browser-cached).
   const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr'];
   if (method === 'GET') {
-    imports.push('registerKeyTags as __regTags', 'consumeStale as __stale');
+    imports.push('registerKeyTags as __regTags', 'consumeStale as __stale', 'fetchMark as __mark');
   }
   lines.push(`import { ${imports.join(', ')} } from '@webjsdev/core';`);
   lines.push(`const __URL = ${J(actionUrl)};`);
@@ -385,10 +385,12 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   lines.push(`const __MAX = ${MAX_URL_ARGS};`);
   lines.push(`const __CT = ${J(RPC_CONTENT_TYPE)};`);
   lines.push(`function __csrf() { const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }`);
-  // Shared: parse a response, surface invalidation, register a GET's tags.
-  lines.push(`async function __handle(res, fn, key) {`);
+  // Shared: parse a response, surface invalidation, register a GET's tags
+  // (stamped with the clock SAMPLED BEFORE the fetch, so a mutation in flight is
+  // caught on the next read).
+  lines.push(`async function __handle(res, fn, key, since) {`);
   lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
-  lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t); }`);
+  lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
   lines.push(`  const text = await res.text();`);
   lines.push(`  const parsed = ct.includes(__CT) ? __p(text) : (ct.includes('application/json') ? JSON.parse(text) : text);`);
@@ -409,8 +411,9 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'});`);
     if (method === 'GET') {
       lines.push(`  const bypass = __stale(key);`);
+      lines.push(`  const since = __mark();`);
       lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', cache: bypass ? 'no-cache' : 'default' });`);
-      lines.push(`  return __handle(res, fn, key);`);
+      lines.push(`  return __handle(res, fn, key, since);`);
     } else {
       lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, headers: { ${J(CSRF_HEADER)}: __csrf() }, credentials: 'same-origin' });`);
       lines.push(`  return __handle(res, fn, null);`);

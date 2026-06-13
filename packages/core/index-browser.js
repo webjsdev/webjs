@@ -57,7 +57,7 @@ export { optimistic } from './src/optimistic.js';
 export { takeSeed, scanSeeds, SEED_MISS } from './src/action-seed-client.js';
 // Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
 // browser-cache eviction after a mutation. Inert server-side.
-export { markStale, registerKeyTags, consumeStale, parseTagHeader } from './src/action-cache-client.js';
+export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
 
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported here so the dist browser bundle (which

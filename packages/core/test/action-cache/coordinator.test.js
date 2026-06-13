@@ -6,9 +6,21 @@
  */
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { markStale, registerKeyTags, consumeStale, parseTagHeader, __resetActionCache } from '../../src/action-cache-client.js';
+import { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark, __resetActionCache } from '../../src/action-cache-client.js';
 
 beforeEach(() => __resetActionCache());
+
+test('a mutation in flight during a read is caught on the NEXT read (no stale window)', () => {
+  registerKeyTags('[1]', ['user:1']);            // an earlier fetch, since=clock(0)
+  // A read R samples the clock BEFORE its fetch...
+  const since = fetchMark();                      // 0
+  // ...a mutation commits WHILE R is in flight...
+  markStale(['user:1']);                          // clock -> 1
+  // ...and R lands, registering with the BEFORE-fetch sample.
+  registerKeyTags('[1]', ['user:1'], since);      // since=0, not the current clock
+  // The next read must still bypass, because the tag advanced past R's sample.
+  assert.equal(consumeStale('[1]'), true, 'the mid-flight mutation is not absorbed');
+});
 
 test('a fetched key bypasses after its tag is invalidated, once', () => {
   registerKeyTags('[1]', ['user:1']);
