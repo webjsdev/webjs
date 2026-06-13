@@ -415,6 +415,39 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
+    // Start on another page, then soft-navigate to /seeded through the client
+    // router. The navigation response carries the seed payload, the router
+    // ingests it (applySwap -> scanSeeds) before <seeded-user> hydrates, so the
+    // navigated render resolves from the seed with NO action RPC.
+    await page.goto(baseUrl + '/static-info', { waitUntil: 'domcontentloaded', timeout: 12000 });
+    await sleep(500); // let the client router enable
+    /** @type {string[]} */
+    const actionRpcs = [];
+    const onRequest = (req) => { if (req.url().includes('/__webjs/action/')) actionRpcs.push(req.url()); };
+    page.on('request', onRequest);
+    try {
+      await page.evaluate(() => {
+        const a = document.createElement('a');
+        a.href = '/seeded';
+        document.body.appendChild(a);
+        a.click();
+      });
+      await page.waitForFunction(
+        () => location.pathname === '/seeded' && document.querySelector('seeded-user .seeded-name')?.textContent.includes('User 1'),
+        { timeout: 8000 },
+      );
+      await sleep(700);
+      assert.equal(
+        actionRpcs.length,
+        0,
+        `a soft-nav to /seeded must not fire the action RPC (the result was seeded); saw:\n${actionRpcs.join('\n')}`,
+      );
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
   test('a wrapped slow component streams in behind its fallback on initial load (#471)', async () => {
     await page.goto(baseUrl + '/stream-demo', { waitUntil: 'domcontentloaded', timeout: 10000 });
     // The slow fact (400ms) streams in behind its fallback; wait for it.
