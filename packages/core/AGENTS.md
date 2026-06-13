@@ -47,7 +47,6 @@ the same output in all three.
 | `optimistic.js` | `optimistic(signal, value, action)` (#246): optimistic-UI helper. Sets the signal to `value`, awaits `action()`, rolls back on a throw or an `ActionResult` `{ success: false }`. A thin wrapper over the signal primitive; re-exported from `index.js` + `index-browser.js`, and classified in `component-elision.js` as a reactive (client-work) import |
 | `action-stream.js` | Streaming RPC wire protocol (#489), isomorphic. The length-prefixed frame format (`[type:1][length:4 BE][payload]`, CHUNK / END / ERROR frame types, `STREAM_CONTENT_TYPE` = `application/vnd.webjs+stream`) shared by the server (which frames a streamed action result, `encodeFrame`) and the generated client stub (which decodes the body into an async iterable, `createFrameDecoder`, a stateful decoder buffering partial frames across network reads). Pure byte ops, no DOM / `node:*`, so it is safe in the browser bundle and on the server alike. An action that returns a `ReadableStream` / async iterable / async generator streams its chunks over one RPC response; each chunk is rich-serialized so a `Date` / `Map` / `BigInt` round-trips. Re-exported from `index.js` + `index-browser.js` |
 | `action-seed-client.js` | Client consumer for SSR action-result seeding (#472): `takeSeed(hash, fn, argsKey)` (consume-once lookup, `SEED_MISS` sentinel) + `scanSeeds(root)` (ingest the page-level `#__webjs-seeds` JSON block and per-element `[data-webjs-seed]` carriers, stripping them). The generated RPC stub calls `takeSeed` before its `fetch`, so an async-render component's first client call resolves from the SSR seed instead of a hydration round-trip; `router-client.js`'s `applySwap` calls `scanSeeds` so a soft nav ingests seeds too. Inert server-side (DOM access only inside `scanSeeds`). Re-exported from `index.js` + `index-browser.js` |
-| `expose.js` | `expose('METHOD /path', fn)` REST endpoint tagging, plus `validateInput(fn, validate)` (#245): attaches an input validator through the SAME `__webjsHttp` metadata `expose` writes (so `getExposed(fn)` surfaces it) WITHOUT creating a REST route, so the validator runs on the RPC path too. Both are server-only (stripped from `index-browser.js`). `getExposed` reads the metadata back |
 | `escape.js` | HTML attribute / text escaping (the only sanitiser) |
 | `csp-nonce.js` | Isomorphic CSP nonce reader: `cspNonce()` (returns the request nonce, `''` in the browser) + `setCspNonceProvider` (server-only wiring). The provider is installed by `@webjsdev/server`'s `context.js`; as of #233 it returns a freshly-MINTED per-request nonce (not just an inbound-header parse). `setCspNonceProvider` is stripped from the browser surface |
 | `rich-fetch.js` | Content-negotiated fetch helper |
@@ -121,7 +120,7 @@ them per app.
    `webjs-core-lazy-loader.js`, and the test-only `webjs-core-testing.js`.
    Only `@webjsdev/core` has this dual-layout. Other framework packages
    stay source-only. `index-browser.js` (and its `dist/webjs-core-browser.js`
-   build) strip `render-server.js`, `expose.js`, and
+   build) strip `render-server.js` and
    `setCspNonceProvider` from the public surface. `packages/server/src/importmap.js` routes the
    bare specifier `@webjsdev/core` to that browser entry on the
    client side; Node-side consumers (SSR pipeline, framework

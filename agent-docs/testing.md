@@ -74,7 +74,7 @@ packages/
   intellisense/test/plugin/        tsserver plugin tests (.test.mjs)
 test/                              cross-package only
   ssr/                             SSR pipeline (core + server)
-  actions/                         expose() (core + server)
+  actions/                         server actions (core + server)
   serialization/                   json-negotiation (core + server)
   scaffolds/                       full app boots from CLI scaffolds
   blog/                            examples/blog smoke + browser e2e
