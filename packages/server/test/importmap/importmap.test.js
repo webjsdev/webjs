@@ -302,11 +302,10 @@ test('setCoreInstall(true): browser subpaths collapse onto the one dist bundle',
 
 test('browser entry does not re-export server-only symbols', async () => {
   // Read the browser entry's source and confirm it does NOT
-  // re-export renderToString / renderToStream / setCspNonceProvider
-  // / expose / getExposed. Regression guard for #119: if a future
-  // edit to index-browser.js accidentally re-adds a server-only
-  // export, this assertion catches it before the browser bundle
-  // ships server bytes to every page.
+  // re-export renderToString / renderToStream / setCspNonceProvider.
+  // Regression guard for #119: if a future edit to index-browser.js
+  // accidentally re-adds a server-only export, this assertion catches
+  // it before the browser bundle ships server bytes to every page.
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
   const { resolve, dirname } = await import('node:path');
@@ -319,7 +318,7 @@ test('browser entry does not re-export server-only symbols', async () => {
   // search for those names below.
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '');
 
-  const banned = ['renderToString', 'renderToStream', 'setCspNonceProvider', 'expose', 'getExposed'];
+  const banned = ['renderToString', 'renderToStream', 'setCspNonceProvider'];
   for (const symbol of banned) {
     // Match named re-export statements: `export { X } from '...'` or
     // multi-symbol forms.

@@ -183,47 +183,27 @@ test('a pure-RPC server module is hashed at boot but NOT executed until first ca
   }
 });
 
-test('skipExposeLoad builds the hash index WITHOUT loading an expose() module (#262)', async () => {
-  // An expose()-referencing module IS loaded by the default index (the router
-  // needs its REST route before a request). A read-only introspection caller
-  // (the MCP list_actions tool) passes skipExposeLoad so it derives the same
-  // path-only hash without running the module's top-level side effects (Prisma
+test('buildActionIndex hashes a server file WITHOUT loading the module', async () => {
+  // buildActionIndex is a pure file -> hash mapping (it loads no module), so a
+  // read-only introspection caller (the MCP list_actions tool) derives the RPC
+  // endpoint hash without running a module's top-level side effects (Prisma
   // init, DB connect) or risking a stray stdout write into the JSON-RPC channel.
-  // Inject the absolute file:// URL to the real core `expose`, so the scaffolded
-  // module (in a tmpdir) actually resolves it and the default load populates a
-  // REST route, proving the load truly happened.
-  const exposeUrl = new URL('../../../core/src/expose.js', import.meta.url).href;
+  // A module with a top-level side effect must NOT fire when the index is built.
   const files = {
-    'actions/exposed.server.js': `'use server';
-      import { expose } from ${JSON.stringify(exposeUrl)};
-      globalThis.__webjs_expose_probe = (globalThis.__webjs_expose_probe || 0) + 1;
-      async function ping() { return 'pong'; }
-      export const handler = expose('GET /ping', ping);
+    'actions/probe.server.js': `'use server';
+      globalThis.__webjs_index_probe = (globalThis.__webjs_index_probe || 0) + 1;
+      export async function ping() { return 'pong'; }
     `,
   };
-  // Default: loads the expose module (probe fires), and httpRoutes is populated.
-  const dirA = await scaffold(files);
+  const dir = await scaffold(files);
   try {
-    delete globalThis.__webjs_expose_probe;
-    const loaded = await buildActionIndex(dirA, true);
-    assert.equal(globalThis.__webjs_expose_probe, 1, 'default index loads the expose module');
-    assert.ok(loaded.httpRoutes.length >= 1, 'default index populates the expose REST route');
+    delete globalThis.__webjs_index_probe;
+    const idx = await buildActionIndex(dir, false);
+    assert.equal(globalThis.__webjs_index_probe, undefined, 'buildActionIndex must NOT load the module');
+    const file = resolveServerModule(idx, '/actions/probe.server.js');
+    assert.ok(idx.fileToHash.get(file), 'the file is still hashed for RPC dispatch');
   } finally {
-    delete globalThis.__webjs_expose_probe;
-    await rm(dirA, { recursive: true, force: true });
-  }
-  // skipExposeLoad: the module is NOT loaded (probe stays undefined), but the
-  // file IS still hashed (so list_actions can emit its RPC endpoint).
-  const dirB = await scaffold(files);
-  try {
-    delete globalThis.__webjs_expose_probe;
-    const lean = await buildActionIndex(dirB, false, { skipExposeLoad: true });
-    assert.equal(globalThis.__webjs_expose_probe, undefined, 'skipExposeLoad must NOT load the module');
-    assert.equal(lean.httpRoutes.length, 0, 'skipExposeLoad leaves httpRoutes empty');
-    const file = resolveServerModule(lean, '/actions/exposed.server.js');
-    assert.ok(lean.fileToHash.get(file), 'the file is still hashed for RPC dispatch');
-  } finally {
-    delete globalThis.__webjs_expose_probe;
-    await rm(dirB, { recursive: true, force: true });
+    delete globalThis.__webjs_index_probe;
+    await rm(dir, { recursive: true, force: true });
   }
 });

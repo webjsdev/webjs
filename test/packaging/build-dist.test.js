@@ -68,7 +68,7 @@ test('core dist build: the browser bundle actually exports the folded surface', 
     assert.ok(name in mod, `webjs-core-browser.js must export ${name}`);
   }
   // Server-only symbols stay OUT of the browser bundle (the #128 split).
-  for (const serverOnly of ['renderToString', 'renderToStream', 'expose', 'setCspNonceProvider']) {
+  for (const serverOnly of ['renderToString', 'renderToStream', 'setCspNonceProvider']) {
     assert.ok(!(serverOnly in mod), `webjs-core-browser.js must NOT export server-only ${serverOnly}`);
   }
 });
