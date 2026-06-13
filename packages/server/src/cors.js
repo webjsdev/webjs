@@ -1,14 +1,11 @@
 /**
  * Reusable CORS primitive for webjs.
  *
- * Two surfaces share one origin-resolution + header-building core:
- *
- * 1. `cors(options)` returns a webjs MIDDLEWARE `(req, next) => Response`,
- *    usable in `middleware.js` (root or per-segment) or wrapped around a
- *    `route.js` handler. This is the public app-facing API.
- * 2. The `expose()` REST path (`actions.js`) reuses `resolveOrigin` and
- *    `applyCorsHeaders` so a route's `cors` config and a standalone
- *    `cors()` middleware compute identical headers.
+ * `cors(options)` returns a webjs MIDDLEWARE `(req, next) => Response`,
+ * usable in `middleware.js` (root or per-segment) or wrapped around a
+ * `route.js` handler. This is the public app-facing API. The shared
+ * origin-resolution + header-building core (`resolveOrigin` /
+ * `applyCorsHeaders`) is exported for reuse.
  *
  * Web-standards-first: the option shape mirrors the well-trodden
  * `cors` npm package and the Fetch CORS protocol. We reflect the

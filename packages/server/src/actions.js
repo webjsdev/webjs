@@ -1,12 +1,10 @@
 import { digestHex } from './crypto-utils.js';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import { getExposed } from '@webjsdev/core';
+import { join, sep } from 'node:path';
 import { walk } from './fs-walk.js';
 import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
-import { resolveOrigin } from './cors.js';
 import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import {
   actionMethod, actionFunctionNames, actionCache, actionConfigFn, resolveTags,
@@ -45,9 +43,9 @@ export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 
 /**
  * Run an attached input validator against an action's input, shared by the RPC
- * path (`invokeAction`) and the `expose()` REST path (`invokeExposedAction`) so
- * the contract is identical across transports (#245). The framework only CALLS
- * the validator and shapes the result; it ships no validation library.
+ * path (`invokeAction`) and the `route()` REST adapter so the contract is
+ * identical across transports (#245). The framework only CALLS the validator and
+ * shapes the result; it ships no validation library.
  *
  * @param {(input: any) => any} validate the attached validator
  * @param {any} input the value handed to the validator (the action's first arg
@@ -128,56 +126,41 @@ async function rpcResponse(payload, init = {}) {
  * The server:
  *   1. Scans the app tree lazily on the first request (in `ensureReady`),
  *      classifying server files into RPC-callable actions vs. server-only
- *      utilities. Hashing is eager-per-file; only `expose()` files load.
+ *      utilities. Hashing is eager-per-file; no module is loaded here.
  *   2. Serves a generated ES-module stub when the browser imports
  *      the file URL (an RPC stub for actions, a throw-at-load stub
  *      for server-only utilities).
- *   3. Exposes POST endpoints at /__webjs/action/:hash/:fn for
- *      RPC-callable actions only.
- *   4. If an exported function was wrapped in `expose('METHOD /path', fn)`,
- *      also registers it as a first-class REST endpoint.
- *
- * @typedef {{
- *   method: string,
- *   pattern: RegExp,
- *   paramNames: string[],
- *   file: string,
- *   fnName: string,
- *   validate: ((input: any) => any) | null,
- *   cors: { origin: string | string[], credentials: boolean, maxAge: number, headers: string[] | null } | null,
- * }} ExposedRoute
+ *   3. Exposes endpoints at /__webjs/action/:hash/:fn for
+ *      RPC-callable actions only. A public REST endpoint is a `route.ts`
+ *      that imports and calls the action (optionally via the `route()`
+ *      adapter in `action-route.js`).
  *
  * @typedef {{
  *   hashToFile: Map<string,string>,
  *   fileToHash: Map<string,string>,
- *   httpRoutes: ExposedRoute[],
  *   appDir: string,
  *   dev: boolean,
  * }} ActionIndex
  */
 
 /**
- * Build the action index by scanning the app directory.
+ * Build the action index by scanning the app directory. This is a pure
+ * file -> hash mapping: it walks `app/`, classifies `.server.*` + `'use server'`
+ * files as RPC-callable actions, and records the hash both ways. It loads NO
+ * module (the hash index is all the analysis needs; a module is imported on
+ * demand by `invokeAction` / `serveActionStub`), so it is safe for a read-only
+ * introspection caller (the MCP `list_actions` tool, #262) with no top-level
+ * side effects (Prisma init, DB connect).
  *
  * @param {string} appDir
  * @param {boolean} dev
- * @param {{ skipExposeLoad?: boolean }} [opts]
- *   `skipExposeLoad: true` builds the (load-free) `fileToHash` / `hashToFile`
- *   maps WITHOUT importing any `expose()`-referencing module, so `httpRoutes`
- *   stays empty. A read-only introspection caller (the MCP `list_actions` tool,
- *   #262) uses this to derive RPC endpoint hashes without running a server
- *   module's top-level side effects (Prisma init, DB connect) or risking a
- *   stray stdout write. The request pipeline keeps the default (loads expose
- *   routes, which the router must know before a request can hit them).
  * @returns {Promise<ActionIndex>}
  */
-export async function buildActionIndex(appDir, dev, opts = {}) {
+export async function buildActionIndex(appDir, dev) {
   /** @type {Map<string,string>} */
   const hashToFile = new Map();
   /** @type {Map<string,string>} */
   const fileToHash = new Map();
-  /** @type {ExposedRoute[]} */
-  const httpRoutes = [];
 
   for await (const file of walk(appDir, (p) => /\.m?[jt]s$/.test(p))) {
     // Path-level: only `.server.{ts,js,mts,mjs}` files are server-only.
@@ -199,50 +182,10 @@ export async function buildActionIndex(appDir, dev, opts = {}) {
     // serveActionStub import the module on demand (first RPC call / first stub
     // fetch), so the hash index above is all the analysis needs. Eagerly
     // running every server module (and its transitive Prisma init, DB
-    // connects, etc.) would be wasted work. The one thing that DOES need eager loading is expose(),
-    // which registers a REST route the router must know before any request can
-    // hit it. So load only files that REFERENCE expose. We match the bare
-    // `expose` identifier (not `expose(`) so an aliased import
-    // (`import { expose as exp }`, whose import clause still names `expose`) is
-    // not missed: missing it would silently 404 that file's REST route. A stray
-    // mention in a comment or string only over-matches, costing one harmless
-    // extra module load; the common pure-RPC file never names `expose` and so
-    // still defers entirely.
-    // A read-only caller (MCP introspection) only needs the file -> hash maps
-    // above, so skip the expose-load entirely (no module side effects).
-    if (opts.skipExposeLoad) continue;
-    let src = '';
-    try { src = await readFile(file, 'utf8'); } catch {}
-    if (!/\bexpose\b/.test(src)) continue;
-    try {
-      const mod = await loadModule(file, dev);
-      for (const [name, fn] of Object.entries(mod)) {
-        if (typeof fn !== 'function') continue;
-        const http = getExposed(fn);
-        if (!http) continue;
-        // A `validateInput(fn, ...)` attachment writes `__webjsHttp` with a
-        // `validate` but NO `method`/`path` (it does not create a REST route),
-        // so it is not an exposed route. Only `expose()` sets a path; skip a
-        // validate-only attachment here (its validator is read at RPC call
-        // time via getExposed in invokeAction).
-        if (!http.path || !http.method) continue;
-        const { pattern, paramNames } = pathToPattern(http.path);
-        httpRoutes.push({
-          method: http.method,
-          pattern,
-          paramNames,
-          file,
-          fnName: name,
-          validate: http.validate || null,
-          cors: http.cors || null,
-        });
-      }
-    } catch (e) {
-      console.error(`[webjs] failed to scan server module ${file}:`, e);
-    }
+    // connects, etc.) would be wasted work.
   }
 
-  return { hashToFile, fileToHash, httpRoutes, appDir, dev };
+  return { hashToFile, fileToHash, appDir, dev };
 }
 
 /** @param {string} file @returns {Promise<string>} */
@@ -538,17 +481,13 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
   } catch {
     return rpcResponse({ error: 'Invalid request body' }, { status: 400 });
   }
-  // Input validation (#245): a validator attached via `validateInput(fn, ...)`
-  // or `expose(spec, fn, { validate })` runs SERVER-SIDE before the body on
-  // this RPC path too, not just the REST path. The RPC stub sends an args
-  // array; an action conventionally takes one input object, so validate the
-  // FIRST arg (matching how the REST path validates its single merged object).
-  // Validation is a BOUNDARY concern (#488): the validator is the `validate`
-  // config export (the new model), or the legacy `expose`/`validateInput`
-  // attachment. It runs on this RPC boundary on the FIRST arg (the conventional
-  // single input object), never on a direct server-to-server call.
-  const attached = getExposed(fn);
-  const validate = actionConfigFn(mod, 'validate') || (attached && attached.validate);
+  // Input validation (#245): a validator declared via the `validate` config
+  // export (#488) runs SERVER-SIDE before the body on this RPC path. The RPC
+  // stub sends an args array; an action conventionally takes one input object,
+  // so validate the FIRST arg. Validation is a BOUNDARY concern: it runs on
+  // this RPC boundary (and the `route()` REST adapter), never on a direct
+  // server-to-server call.
+  const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
     const v = runValidate(validate, args[0]);
     if (!v.ok) {
@@ -643,179 +582,6 @@ async function getActionResponse(result, mod, args, req) {
 }
 
 /**
- * Match an incoming request against an expose()d action route.
- * Returns the single matched route+params for normal methods.
- * @param {ActionIndex} idx
- * @param {string} method
- * @param {string} pathname
- */
-export function matchExposedAction(idx, method, pathname) {
-  for (const r of idx.httpRoutes) {
-    if (r.method !== method) continue;
-    const m = r.pattern.exec(pathname);
-    if (!m) continue;
-    /** @type {Record<string,string>} */
-    const params = {};
-    r.paramNames.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1] || '')));
-    return { route: r, params };
-  }
-  return null;
-}
-
-/**
- * Find ALL exposed routes at a given path (any method). Used to build OPTIONS
- * preflight responses and Allow headers.
- * @param {ActionIndex} idx
- * @param {string} pathname
- */
-export function matchAllAtPath(idx, pathname) {
-  const out = [];
-  for (const r of idx.httpRoutes) {
-    if (r.pattern.exec(pathname)) out.push(r);
-  }
-  return out;
-}
-
-/**
- * Build CORS response headers given a route's CORS config + the request.
- * Returns null if CORS isn't configured for this route.
- *
- * @param {ExposedRoute} route
- * @param {Request} req
- */
-export function corsHeadersFor(route, req) {
-  if (!route.cors) return null;
-  const cfg = route.cors;
-  const origin = req.headers.get('origin') || '';
-  const allowed = matchOrigin(cfg.origin, origin);
-  if (!allowed && origin) return null;
-  const h = new Headers();
-  h.set('access-control-allow-origin', allowed === true ? '*' : allowed || origin);
-  if (cfg.credentials) h.set('access-control-allow-credentials', 'true');
-  h.append('vary', 'Origin');
-  return h;
-}
-
-/** @param {ExposedRoute} route @param {Request} req */
-export function buildPreflightResponse(route, req) {
-  const headers = corsHeadersFor(route, req);
-  if (!headers) return new Response(null, { status: 403 });
-  headers.set('access-control-allow-methods', `${route.method}, OPTIONS`);
-  const reqHdrs =
-    route.cors?.headers?.join(',') || req.headers.get('access-control-request-headers') || 'content-type';
-  headers.set('access-control-allow-headers', reqHdrs);
-  headers.set('access-control-max-age', String(route.cors?.maxAge ?? 86400));
-  return new Response(null, { status: 204, headers });
-}
-
-/** Apply CORS headers (if any) to an existing response. */
-export function withCors(resp, route, req) {
-  const h = corsHeadersFor(route, req);
-  if (!h) return resp;
-  const newHeaders = new Headers(resp.headers);
-  h.forEach((v, k) => newHeaders.set(k, v));
-  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: newHeaders });
-}
-
-/**
- * Match a route's configured origin policy against the request origin,
- * preserving the expose() path's historical contract: `*` returns `true`
- * (literal wildcard), an allowed concrete origin echoes back, and a
- * mismatch returns `null`. Delegates the per-rule decision to the shared
- * cors.js resolver (so RegExp + function policies work here too) but keeps
- * the wildcard-as-`true` and echo-vs-null shape this caller expects.
- *
- * @param {string|string[]|RegExp|((origin: string) => boolean)} configured
- * @param {string} origin
- * @returns {true | string | null}
- */
-function matchOrigin(configured, origin) {
-  if (configured === '*') return true;
-  const resolved = resolveOrigin(configured, origin, false);
-  if (!resolved) return null;
-  return resolved.allowOrigin === '*' ? true : resolved.allowOrigin;
-}
-
-/**
- * Invoke an exposed action as a REST endpoint.
- * Builds a single object argument from URL params + query + JSON body.
- * @param {ActionIndex} idx
- * @param {ExposedRoute} route
- * @param {Record<string,string>} params
- * @param {Request} req
- * @param {(error: unknown) => void} [onError] best-effort sink (issue #239)
- *   invoked when the exposed REST handler throws unexpectedly, BEFORE the
- *   sanitized 500 is returned, so an APM integration sees the original error.
- *   The caller wraps it so a throwing sink can never affect the response.
- */
-export async function invokeExposedAction(idx, route, params, req, onError) {
-  const url = new URL(req.url);
-  const query = Object.fromEntries(url.searchParams.entries());
-  let body = {};
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    // Bounded read (issue #237): an over-limit body is a 413 before any parse.
-    const { tooLarge, text } = await readTextBounded(req, jsonBodyLimit());
-    if (tooLarge) return payloadTooLarge();
-    if (text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) body = parsed;
-        else body = { body: parsed };
-      } catch {
-        return new Response('Invalid JSON body', { status: 400 });
-      }
-    }
-  }
-  let arg = { ...query, ...params, ...body };
-  if (route.validate) {
-    // Run the validator through the SHARED contract (#245) so the REST path and
-    // the RPC path interpret a `{ success, fieldErrors }` envelope, a throw, and
-    // a transform-return identically. A structured failure becomes a 422 JSON
-    // `{ error?, fieldErrors }` (not just a thrown 400); a throw stays a 400; a
-    // transform-return keeps replacing the input (back-compat).
-    const v = runValidate(route.validate, arg);
-    if (!v.ok) {
-      if (v.thrown !== undefined) {
-        // A thrown validator (the classic `Schema.parse` style): keep the exact
-        // legacy REST shape, including a schema lib's structured `issues` array.
-        const msg = v.result.error || 'Invalid input';
-        const issues = v.thrown && typeof v.thrown === 'object' && 'issues' in v.thrown
-          ? /** @type any */ (v.thrown).issues
-          : undefined;
-        return Response.json({ error: msg, issues }, { status: 400 });
-      }
-      const { status, ...payload } = v.result;
-      return Response.json(payload, { status });
-    }
-    arg = v.value;
-  }
-  const mod = await loadModule(route.file, idx.dev);
-  const fn = mod[route.fnName];
-  if (typeof fn !== 'function') return new Response(`Unknown action ${route.fnName}`, { status: 404 });
-  try {
-    // The REST boundary wires the request signal (#492) and the per-action
-    // middleware chain (#490) too, symmetric with the RPC path. `ranAction`
-    // marks whether the action ran (vs a middleware short-circuit).
-    const middleware = actionMiddleware(mod);
-    let ranAction = false;
-    const result = await runWithActionSignal(req.signal, () =>
-      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => { ranAction = true; return fn(arg, { req, params }); }));
-    if (result instanceof Response) return result;
-    // A middleware short-circuit on the REST boundary maps the envelope's
-    // `status` to the HTTP status (like the validate failure above), so a
-    // non-webjs REST client sees the real status, not a 200 with it in the body.
-    if (!ranAction && result && typeof result === 'object' && typeof result.status === 'number') {
-      const { status, ...payload } = result;
-      return Response.json(payload, { status });
-    }
-    return Response.json(result ?? null);
-  } catch (e) {
-    if (typeof onError === 'function') onError(e);
-    return actionErrorResponse(e, idx.dev);
-  }
-}
-
-/**
  * Return a JSON error response with dev-vs-prod sanitization.
  * In prod we return only the error message (not the stack), and we log the
  * full error server-side. Internal errors with no message become a generic
@@ -837,20 +603,6 @@ function actionErrorResponse(err, dev) {
       ? err.message
       : 'Internal server error';
   return rpcResponse({ error: msg }, { status: 500 });
-}
-
-/**
- * Convert an `expose()` path like `/api/posts/:slug` to a regex + param list.
- * Also accepts NextJs-style `[slug]` brackets for familiarity.
- * @param {string} path
- */
-function pathToPattern(path) {
-  const paramNames = [];
-  const re = path.replace(/:([A-Za-z_][A-Za-z0-9_]*)|\[([A-Za-z_][A-Za-z0-9_]*)\]/g, (_, a, b) => {
-    paramNames.push(a || b);
-    return '([^/]+)';
-  });
-  return { pattern: new RegExp(`^${re}/?$`), paramNames };
 }
 
 /**

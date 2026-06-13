@@ -56,11 +56,6 @@ import {
   serveActionStub,
   serveServerOnlyStub,
   invokeAction,
-  matchExposedAction,
-  matchAllAtPath,
-  invokeExposedAction,
-  buildPreflightResponse,
-  withCors,
   isServerFile,
   hasUseServerDirective,
   hashFile,
@@ -1705,34 +1700,6 @@ async function handleCore(req, ctx) {
     // unexpectedly is reported to the APM hook before the sanitized 500.
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
     return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError);
-  }
-
-  // expose()d server actions (first-class REST), with optional CORS support.
-  if (method === 'OPTIONS') {
-    const allAtPath = matchAllAtPath(state.actionIndex, path);
-    if (allAtPath.length) {
-      const corsRoute = allAtPath.find((r) => r.cors);
-      const methods = [...new Set(allAtPath.map((r) => r.method))];
-      if (corsRoute) {
-        // Preflight: respond with cors headers + the union of methods at this path.
-        const preflight = buildPreflightResponse(corsRoute, req);
-        const newHeaders = new Headers(preflight.headers);
-        newHeaders.set('access-control-allow-methods', `${methods.join(', ')}, OPTIONS`);
-        return new Response(null, { status: preflight.status, headers: newHeaders });
-      }
-      return new Response(null, { status: 204, headers: { allow: `${methods.join(', ')}, OPTIONS` } });
-    }
-  } else {
-    const exposed = matchExposedAction(state.actionIndex, method, path);
-    if (exposed) {
-      // Pass the onError sink (issue #239): an exposed REST handler that throws
-      // unexpectedly is reported to the APM hook before the sanitized 500, the
-      // same as the RPC action path (phase 'action' covers both server-action
-      // invocation shapes).
-      const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
-      const resp = await invokeExposedAction(state.actionIndex, exposed.route, exposed.params, req, onActionError);
-      return withCors(resp, exposed.route, req);
-    }
   }
 
   // Static: /public/*
