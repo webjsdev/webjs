@@ -415,6 +415,57 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('HTTP-verb actions: GET read is seeded, POST mutation invalidates + refetches (#488)', async () => {
+    // /verbs reads via a GET action (cacheable, seeded on first paint) and a
+    // POST mutation that invalidates the read's tag. Probe action RPCs: none on
+    // hydration (the GET was seeded), then the bump fires the mutation and a
+    // fresh re-read.
+    const rawHtml = await fetch(baseUrl + '/verbs').then((r) => r.text());
+    assert.ok(/Hello #0/.test(rawHtml), 'the GET-action read is in the first paint (PE-safe)');
+
+    /** @type {{method: string, url: string}[]} */
+    const actionReqs = [];
+    const onRequest = (req) => { if (req.url().includes('/__webjs/action/')) actionReqs.push({ method: req.method(), url: req.url() }); };
+    page.on('request', onRequest);
+    try {
+      // The browser cache is ENABLED (default) so the second bump genuinely
+      // tests the tag-bypass: a broken coordinator would serve the cached value.
+      await page.goto(baseUrl + '/verbs', { waitUntil: 'domcontentloaded', timeout: 12000 });
+      await page.waitForFunction(
+        () => document.querySelector('verb-greeting .vg-bump') && document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #0'),
+        { timeout: 8000 },
+      );
+      await sleep(700);
+      // No action RPC on hydration: the GET resolves from the SSR seed before any
+      // fetch, so this holds regardless of the browser-cache state.
+      assert.equal(actionReqs.length, 0, `no action RPC on hydration (the GET was seeded); saw:\n${actionReqs.map((r) => r.method + ' ' + r.url).join('\n')}`);
+
+      // Bump: a POST mutation that invalidates, then a fresh GET re-read. This GET
+      // response is now stored in the browser cache (max-age=30).
+      await page.evaluate(() => document.querySelector('verb-greeting .vg-bump').click());
+      await page.waitForFunction(
+        () => document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #1'),
+        { timeout: 8000 },
+      );
+      const methods = actionReqs.map((r) => r.method);
+      assert.ok(methods.includes('POST'), 'the bump fired the POST mutation');
+      assert.ok(methods.includes('GET'), 'the re-read fired a GET action after invalidation');
+
+      // Bump AGAIN within the 30s window: #1 is now browser-cached, so reaching #2
+      // proves the tag-invalidation forced a cache BYPASS (a plain cached read,
+      // or a broken coordinator, would still say #1). The real coordinator test.
+      await page.evaluate(() => document.querySelector('verb-greeting .vg-bump').click());
+      await page.waitForFunction(
+        () => document.querySelector('verb-greeting .vg-text')?.textContent.includes('Hello #2'),
+        { timeout: 8000 },
+      );
+      const fresh = await page.evaluate(() => document.querySelector('verb-greeting .vg-text')?.textContent || '');
+      assert.ok(fresh.includes('Hello #2'), 'invalidation bypassed the browser cache to show the fresh value');
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
   test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
     // Start on another page, then soft-navigate to /seeded through the client
     // router. The navigation response carries the seed payload, the router

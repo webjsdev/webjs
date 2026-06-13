@@ -92,6 +92,7 @@ export { Task, TaskStatus } from './src/task.js';
 export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { takeSeed, scanSeeds, SEED_MISS } from './src/action-seed-client.js';
+export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
 export { stringify, parse, serialize, deserialize } from './src/serialize.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';

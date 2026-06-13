@@ -37,6 +37,9 @@ export { optimistic } from './src/optimistic.js';
 // SSR action-seed consumer (#472): the generated RPC stub reads a seed on its
 // first call so async-render hydration does not re-fetch. Inert server-side.
 export { takeSeed, scanSeeds, SEED_MISS } from './src/action-seed-client.js';
+// Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
+// browser-cache eviction after a mutation. Inert server-side.
+export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
 
 // Directives, also available via '@webjsdev/core/directives'. The full
 // lit-html-parity set is re-exported so the bare specifier exposes the same

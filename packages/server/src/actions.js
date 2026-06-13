@@ -8,6 +8,13 @@ import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
 import { resolveOrigin } from './cors.js';
 import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
+import {
+  actionMethod, actionFunctionNames, actionCache, actionConfigFn, resolveTags,
+  cacheControlFor, allowedRequestMethods, URL_ARG_VERBS, SAFE_VERBS, MAX_URL_ARGS,
+  RESERVED_CONFIG,
+} from './action-config.js';
+import { revalidateTags } from './cache-tags.js';
+import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
@@ -327,64 +334,109 @@ throw new Error(${JSON.stringify(msg)});
 export async function serveActionStub(idx, absFile) {
   const mod = await loadModule(absFile, idx.dev);
   const hash = idx.fileToHash.get(absFile) || await hashFile(absFile);
-  const fnNames = Object.keys(mod).filter((k) => typeof mod[k] === 'function');
-  if (typeof mod.default === 'function' && !fnNames.includes('default')) {
-    fnNames.push('default');
-  }
+  // HTTP-verb actions (#488): the file declares its verb via `export const
+  // method` (default POST). The function exports are the actions; the reserved
+  // config exports (method/cache/tags/invalidates/validate) are excluded.
+  const fnNames = actionFunctionNames(mod);
+  const method = actionMethod(mod);
   // The RPC endpoint is a framework-emitted same-origin URL, so it must
   // carry the basePath prefix under a sub-path deploy (#256), exactly like
   // the importmap targets and the boot module specifiers. Without this the
   // stub would POST to a bare /__webjs/action/... that the ingress strip
   // 404s, breaking every server action when webjs.basePath is set.
   const actionUrl = withBasePath(`/__webjs/action/${hash}/`, basePath());
-  const body = `// webjs: generated server-action stub for ${relative(idx.appDir, absFile)}\n` +
-    `import { stringify as __wjStringify, parse as __wjParse, takeSeed as __seedTake, SEED_MISS as __SEED_MISS } from '@webjsdev/core';\n` +
-    `const __HASH = ${JSON.stringify(hash)};\n` +
-    `function __csrf() {\n` +
-    `  const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/);\n` +
-    `  return m ? decodeURIComponent(m[1]) : '';\n` +
-    `}\n` +
-    // The first client call of an async-render action reads the SSR seed
-    // (#472): __wjStringify(args) is BOTH the seed lookup key and the RPC body,
-    // so a miss reuses it for the POST with no double serialization. A hit
-    // resolves synchronously (no network), so hydration does not re-fetch; a
-    // later refetch / arg-change misses (consume-once) and goes to RPC.
-    `async function __call(fn, args) {\n` +
-    `  const body = await __wjStringify(args);\n` +
-    `  const seeded = __seedTake(__HASH, fn, body);\n` +
-    `  if (seeded !== __SEED_MISS) return seeded;\n` +
-    `  return __rpc(fn, args, body);\n` +
-    `}\n` +
-    `async function __rpc(fn, args, body) {\n` +
-    `  if (body === undefined) body = await __wjStringify(args);\n` +
-    `  const res = await fetch(${JSON.stringify(actionUrl)} + fn, {\n` +
-    `    method: 'POST',\n` +
-    `    headers: {\n` +
-    `      'content-type': ${JSON.stringify(RPC_CONTENT_TYPE)},\n` +
-    `      ${JSON.stringify(CSRF_HEADER)}: __csrf()\n` +
-    `    },\n` +
-    `    credentials: 'same-origin',\n` +
-    `    body\n` +
-    `  });\n` +
-    `  const ct = res.headers.get('content-type') || '';\n` +
-    `  const text = await res.text();\n` +
-    `  const parsed = ct.includes(${JSON.stringify(RPC_CONTENT_TYPE)})\n` +
-    `    ? __wjParse(text)\n` +
-    `    : (ct.includes('application/json') ? JSON.parse(text) : text);\n` +
-    `  if (!res.ok) {\n` +
-    `    const msg = (parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status);\n` +
-    `    throw new Error(msg);\n` +
-    `  }\n` +
-    `  return parsed;\n` +
-    `}\n` +
-    fnNames
-      .map((name) =>
-        name === 'default'
-          ? `export default (...args) => __call('default', args);`
-          : `export const ${name} = (...args) => __call(${JSON.stringify(name)}, args);`
-      )
-      .join('\n') + '\n';
+  const body = buildStubBody({ hash, method, fnNames, actionUrl });
   return body;
+}
+
+/**
+ * Build the generated client stub source for a `'use server'` action file. The
+ * transport depends on the file's declared `method`:
+ *   - GET: args ride the URL (`?a=`), the SSR seed (#472) is read first, the
+ *     browser HTTP cache is consulted, and a tag-invalidated key revalidates;
+ *     CSRF-exempt (a safe read). Over-large args fall back to a POST.
+ *   - DELETE: args ride the URL, CSRF-protected, over-large args fall back to a
+ *     POST.
+ *   - POST / PUT / PATCH: rich body, CSRF-protected.
+ * Every path reads `X-Webjs-Invalidate` (mark tags stale) and a GET reads
+ * `X-Webjs-Tags` (register the key's tags), so a later read sees a mutation.
+ * @param {{ hash: string, method: string, fnNames: string[], actionUrl: string }} opts
+ * @returns {string}
+ */
+function buildStubBody({ hash, method, fnNames, actionUrl }) {
+  const URL_ARG = URL_ARG_VERBS.has(method);
+  const SAFE = SAFE_VERBS.has(method);
+  const J = JSON.stringify;
+  const lines = [];
+  lines.push(`// webjs: generated server-action stub (${method})`);
+  // Every verb reads the SSR seed (#472) first: an async-render READ invoked
+  // during SSR is seeded regardless of its declared verb (a read with no
+  // `method` is a default POST), so the first client call resolves from the
+  // seed with no hydration round-trip. The browser-cache staleness check is
+  // GET-only (only a GET is browser-cached).
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr'];
+  if (method === 'GET') {
+    imports.push('registerKeyTags as __regTags', 'consumeStale as __stale', 'fetchMark as __mark');
+  }
+  lines.push(`import { ${imports.join(', ')} } from '@webjsdev/core';`);
+  lines.push(`const __URL = ${J(actionUrl)};`);
+  lines.push(`const __HASH = ${J(hash)};`);
+  lines.push(`const __METHOD = ${J(method)};`);
+  lines.push(`const __MAX = ${MAX_URL_ARGS};`);
+  lines.push(`const __CT = ${J(RPC_CONTENT_TYPE)};`);
+  lines.push(`function __csrf() { const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }`);
+  // Shared: parse a response, surface invalidation, register a GET's tags
+  // (stamped with the clock SAMPLED BEFORE the fetch, so a mutation in flight is
+  // caught on the next read).
+  lines.push(`async function __handle(res, fn, key, since) {`);
+  lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
+  lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
+  lines.push(`  const ct = res.headers.get('content-type') || '';`);
+  lines.push(`  const text = await res.text();`);
+  lines.push(`  const parsed = ct.includes(__CT) ? __p(text) : (ct.includes('application/json') ? JSON.parse(text) : text);`);
+  lines.push(`  if (!res.ok) throw new Error((parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status));`);
+  lines.push(`  return parsed;`);
+  lines.push(`}`);
+  // Body sender (POST/PUT/PATCH, and the URL-arg too-large fallback).
+  lines.push(`async function __body(fn, body, m, csrf) {`);
+  lines.push(`  const headers = { 'content-type': __CT }; if (csrf) headers[${J(CSRF_HEADER)}] = __csrf();`);
+  lines.push(`  const res = await fetch(__URL + fn, { method: m, headers, credentials: 'same-origin', body });`);
+  lines.push(`  return __handle(res, fn, null);`);
+  lines.push(`}`);
+  if (URL_ARG) {
+    // GET/DELETE: args in the URL, with a POST fallback when too large.
+    lines.push(`async function __call(fn, args) {`);
+    lines.push(`  const key = await __s(args);`);
+    lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
+    lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'});`);
+    if (method === 'GET') {
+      lines.push(`  const bypass = __stale(key);`);
+      lines.push(`  const since = __mark();`);
+      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', cache: bypass ? 'no-cache' : 'default' });`);
+      lines.push(`  return __handle(res, fn, key, since);`);
+    } else {
+      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, headers: { ${J(CSRF_HEADER)}: __csrf() }, credentials: 'same-origin' });`);
+      lines.push(`  return __handle(res, fn, null);`);
+    }
+    lines.push(`}`);
+  } else {
+    // POST/PUT/PATCH: rich body. The seed read makes a default-POST async-render
+    // read resolve from the SSR seed on hydration (#472); a true mutation is
+    // never SSR-invoked, so the seed simply misses.
+    lines.push(`async function __call(fn, args) {`);
+    lines.push(`  const key = await __s(args);`);
+    lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
+    lines.push(`  return __body(fn, key, __METHOD, true);`);
+    lines.push(`}`);
+  }
+  for (const name of fnNames) {
+    lines.push(
+      name === 'default'
+        ? `export default (...args) => __call('default', args);`
+        : `export const ${name} = (...args) => __call(${J(name)}, args);`,
+    );
+  }
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -399,34 +451,62 @@ export async function serveActionStub(idx, absFile) {
  *   it so a throwing sink can never affect the response.
  */
 export async function invokeAction(idx, hash, fnName, req, onError) {
-  if (!verifyCsrf(req)) {
-    return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
-  }
   const file = idx.hashToFile.get(hash);
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
-  // Bounded read (issue #237): reject an over-limit RPC body with 413 without
-  // buffering it whole (Content-Length fast-reject, plus a streaming cap for a
-  // chunked body with no declared length).
-  const { tooLarge, text: body } = await readTextBounded(req, jsonBodyLimit());
-  if (tooLarge) return payloadTooLarge();
+  const mod = await loadModule(file, idx.dev);
+  const fn = fnName === 'default' ? mod.default : mod[fnName];
+  // A reserved config export (method/cache/tags/invalidates/validate) is never
+  // a callable action even though some are functions (#488).
+  if (typeof fn !== 'function' || RESERVED_CONFIG.has(fnName)) {
+    return rpcResponse({ error: `Unknown action ${fnName}` }, { status: 404 });
+  }
+
+  // HTTP-verb dispatch (#488). The action declares its method (default POST). A
+  // URL-arg verb (GET/DELETE) also accepts a POST fallback for over-large args.
+  const method = actionMethod(mod);
+  const reqMethod = req.method.toUpperCase();
+  const allowed = allowedRequestMethods(method);
+  if (!allowed.has(reqMethod)) {
+    return rpcResponse(
+      { error: `expected ${method} for ${fnName}, got ${reqMethod}` },
+      { status: 405, headers: { allow: [...allowed].join(', ') } },
+    );
+  }
+  // CSRF: required for every verb except a safe GET (a read with no state
+  // change, which is also browser-cacheable so it cannot carry a fresh token).
+  if (!SAFE_VERBS.has(method) && !verifyCsrf(req)) {
+    return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
+  }
+
+  // Args ride the URL for a URL-arg request (GET / DELETE), else the body.
   let args = [];
+  const fromUrl = reqMethod === 'GET' || reqMethod === 'DELETE';
   try {
-    args = body ? getSerializer().deserialize(body) : [];
+    if (fromUrl) {
+      const a = new URL(req.url).searchParams.get('a');
+      args = a ? getSerializer().deserialize(a) : [];
+    } else {
+      const { tooLarge, text: body } = await readTextBounded(req, jsonBodyLimit());
+      if (tooLarge) return payloadTooLarge();
+      args = body ? getSerializer().deserialize(body) : [];
+    }
     if (!Array.isArray(args)) args = [args];
   } catch {
     return rpcResponse({ error: 'Invalid request body' }, { status: 400 });
   }
-  const mod = await loadModule(file, idx.dev);
-  const fn = fnName === 'default' ? mod.default : mod[fnName];
-  if (typeof fn !== 'function') return rpcResponse({ error: `Unknown action ${fnName}` }, { status: 404 });
   // Input validation (#245): a validator attached via `validateInput(fn, ...)`
   // or `expose(spec, fn, { validate })` runs SERVER-SIDE before the body on
   // this RPC path too, not just the REST path. The RPC stub sends an args
   // array; an action conventionally takes one input object, so validate the
   // FIRST arg (matching how the REST path validates its single merged object).
+  // Validation is a BOUNDARY concern (#488): the validator is the `validate`
+  // config export (the new model), or the legacy `expose`/`validateInput`
+  // attachment. It runs on this RPC boundary on the FIRST arg (the conventional
+  // single input object), never on a direct server-to-server call.
   const attached = getExposed(fn);
-  if (attached && typeof attached.validate === 'function') {
-    const v = runValidate(attached.validate, args[0]);
+  const validate = actionConfigFn(mod, 'validate') || (attached && attached.validate);
+  if (typeof validate === 'function') {
+    const v = runValidate(validate, args[0]);
     if (!v.ok) {
       if (v.thrown !== undefined) {
         // A THROWN validator behaves like a thrown action: a sanitized error
@@ -445,11 +525,50 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
   }
   try {
     const result = await fn(...args);
-    return rpcResponse(result ?? null);
+    if (method === 'GET') return await getActionResponse(result, mod, args, req);
+    // A mutation (POST/PUT/PATCH/DELETE): resolve `invalidates`, evict those
+    // server `cache()` tags, and report them to the client via
+    // `X-Webjs-Invalidate` so the browser-cache coordinator marks them stale.
+    const headers = {};
+    const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+    if (inv.length) {
+      await revalidateTags(inv);
+      headers['x-webjs-invalidate'] = inv.join(',');
+    }
+    return rpcResponse(result ?? null, { headers });
   } catch (e) {
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
+}
+
+/**
+ * Build a GET action's response (#488): the serialized body plus a weak ETag
+ * (content hash), the `Cache-Control` from the `cache` config (else `no-store`),
+ * and `X-Webjs-Tags`. Answers `If-None-Match` with a 304 itself rather than
+ * relying on the conditional-GET funnel, which EXCLUDES `private` responses (the
+ * default here); a per-user browser cache may still revalidate to a 304.
+ * @param {unknown} result
+ * @param {Record<string, unknown>} mod
+ * @param {unknown[]} args
+ * @param {Request} req
+ * @returns {Promise<Response>}
+ */
+async function getActionResponse(result, mod, args, req) {
+  const s = getSerializer();
+  const bodyStr = await s.serialize(result ?? null);
+  const cache = actionCache(mod);
+  const etag = `W/"${(await digestHex('SHA-256', bodyStr)).slice(0, 16)}"`;
+  const headers = new Headers({ 'content-type': s.contentType, etag });
+  headers.set('cache-control', cacheControlFor('GET', cache) || 'no-store');
+  if (cache) {
+    const tags = resolveTags(actionConfigFn(mod, 'tags'), args);
+    if (tags.length) headers.set('x-webjs-tags', tags.join(','));
+  }
+  if (ifNoneMatchSatisfied(req.headers.get('if-none-match'), etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(bodyStr, { status: 200, headers });
 }
 
 /**
