@@ -73,6 +73,21 @@ class Report extends WebComponent {
     <p>When an async component DOES ship (it has an interactivity signal, so it cannot be elided), webjs still avoids the redundant hydration fetch. Each <code>'use server'</code> action result invoked during the SSR render is serialized into the page, and the generated RPC stub reads that seed on its first client call. So <code>const u = await getUser(this.id)</code> runs once, on the server, and the client's first render reuses the result with <strong>no network round-trip</strong>. A later refetch (a prop or signal change, a new argument) misses the seed and goes to the server as normal, so the seed never serves stale data.</p>
     <p>It is automatic and needs no code: the same <code>async render()</code> you already wrote. There is no source transform and no build step (the capture is a transparent server-side facade over the action module), so what you write is what you see in the browser source tab. It is on by default; disable it with <code>"webjs": { "seed": false }</code> in <code>package.json</code> or <code>WEBJS_SEED=0</code>, in which case the client re-fetches on hydration (the stale-while-revalidate default hides the flicker). Streamed <code>&lt;webjs-suspense&gt;</code> regions are not seeded, since their data resolves after the first byte.</p>
 
+    <h2>HTTP-verb actions: cacheable reads and tag invalidation</h2>
+    <p>An action declares its HTTP semantics through reserved sibling exports, the same way a page declares <code>export const revalidate</code>. The function stays a plain <code>export async function</code> (one per file); a <code>method</code> export picks the verb, and a GET can be cached.</p>
+    <pre>// modules/users/queries/get-user.server.ts
+'use server';
+export const method = 'GET';                  // 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; absent =&gt; POST
+export const cache = 60;                       // seconds, or { maxAge, swr, public }; default private
+export const tags = (id) =&gt; ['user:' + id];
+export async function getUser(id) { return db.user.find(id); }</pre>
+    <pre>// modules/users/actions/update-user.server.ts
+'use server';
+export const invalidates = (id) =&gt; ['user:' + id];
+export async function updateUser(id, data) { /* ... */ }</pre>
+    <p>The call site never changes (<code>await getUser(7)</code>). A <strong>GET</strong> rides its args in the URL, is CSRF-exempt, and is served with <code>Cache-Control</code> + an ETag, so a repeat read within the window comes from the browser cache and a stale one revalidates with a 304. A <strong>mutation</strong> sends a body, is CSRF-protected, and its <code>invalidates</code> tags evict the matching server cache and tell the client to refetch the affected reads. A wrong request method is a <code>405</code>. It is additive: an action with no <code>method</code> stays a POST, exactly as before.</p>
+    <p>A public REST endpoint is a <code>route.ts</code> that imports and calls the action; <code>validate</code> is a boundary concern (the RPC endpoint and the route handler), not a direct server-to-server call.</p>
+
     <h2>Decision rules</h2>
     <ol>
       <li><strong>Server data knowable at request time.</strong> Fetch it IN the component with <code>async render()</code>. Co-located, no prop-drilling, data in the first paint. The default, simplest case.</li>
