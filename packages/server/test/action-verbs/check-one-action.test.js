@@ -54,3 +54,21 @@ test('a plain non-function const export is not counted as an action', async () =
   assert.equal(has(await checkConventions(dir)), false, 'a value const is not an action');
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('counts a TYPE-ANNOTATED arrow action (#495)', async () => {
+  const dir = app({ 'a.server.ts': `'use server';\nexport const method='GET';\nexport const getA: (id: number) => Promise<number> = async (id) => id;\nexport async function getB(){return 1}\n` });
+  assert.ok(has(await checkConventions(dir)), 'annotated arrow + fn => two actions');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('a function-type annotation does not break the parse (single annotated action is fine)', async () => {
+  const dir = app({ 'a.server.ts': `'use server';\nexport const method='GET';\nexport const getA: (n: number) => string = (n) => String(n);\n` });
+  assert.equal(has(await checkConventions(dir)), false, 'one annotated action only => not flagged');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('a plain annotated value const is still NOT counted (#495)', async () => {
+  const dir = app({ 'a.server.ts': `'use server';\nexport const method='GET';\nexport const MAX: number = 5;\nexport async function getA(id){return id+MAX}\n` });
+  assert.equal(has(await checkConventions(dir)), false, 'an annotated value const is not an action');
+  rmSync(dir, { recursive: true, force: true });
+});
