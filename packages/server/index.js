@@ -13,6 +13,7 @@ export {
   serveActionStub,
   invokeAction,
 } from './src/actions.js';
+export { route } from './src/action-route.js';
 export { buildImportMap, importMapTag, setVendorEntries } from './src/importmap.js';
 export {
   scanBareImports,
