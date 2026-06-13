@@ -338,7 +338,7 @@ export async function serveActionStub(idx, absFile) {
   const hash = idx.fileToHash.get(absFile) || await hashFile(absFile);
   // HTTP-verb actions (#488): the file declares its verb via `export const
   // method` (default POST). The function exports are the actions; the reserved
-  // config exports (method/cache/tags/invalidates/validate) are excluded.
+  // config exports (method/cache/tags/invalidates/validate/middleware) are excluded.
   const fnNames = actionFunctionNames(mod);
   const method = actionMethod(mod);
   // The RPC endpoint is a framework-emitted same-origin URL, so it must
@@ -462,7 +462,7 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
   const mod = await loadModule(file, idx.dev);
   const fn = fnName === 'default' ? mod.default : mod[fnName];
-  // A reserved config export (method/cache/tags/invalidates/validate) is never
+  // A reserved config export (method/cache/tags/invalidates/validate/middleware) is never
   // a callable action even though some are functions (#488).
   if (typeof fn !== 'function' || RESERVED_CONFIG.has(fnName)) {
     return rpcResponse({ error: `Unknown action ${fnName}` }, { status: 404 });
