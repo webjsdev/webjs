@@ -309,9 +309,11 @@ function stampRemoteIp(req, srv) {
  * `listener-core.js`). `node:zlib` runs natively on Bun, so this gives **brotli
  * on Bun** (the web `CompressionStream` used before had no brotli) and full
  * compression parity with the node shell. The body is bridged web -> node ->
- * web (`Readable.fromWeb` -> `compressor` -> `Readable.toWeb`). Skips an already-
- * encoded body and a non-compressible media type (`isCompressible` already
- * excludes `text/event-stream`).
+ * web (`Readable.from(webStreamChunks(...))` -> `compressor` -> `Readable.toWeb`,
+ * driven by `pipeline`; NOT `Readable.fromWeb`, which does not propagate a
+ * mid-stream source error through `pipeline` on Bun, the #509 hang). Skips an
+ * already-encoded body and a non-compressible media type (`isCompressible`
+ * already excludes `text/event-stream`).
  * @param {Response} resp
  * @param {Request} req
  */

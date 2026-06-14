@@ -46,6 +46,7 @@ import { dirname, join, resolve, sep, extname } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
+import { webStreamChunks } from './listener-core.js';
 
 /**
  * @typedef {Object} StoredObjectHandle
@@ -204,33 +205,6 @@ function toNodeStream(file) {
     return { stream: Readable.from([Buffer.from(file.buffer, file.byteOffset, file.byteLength)]), contentType: null };
   }
   throw new Error('file-storage: put() expects a Blob, File, ReadableStream, or Uint8Array');
-}
-
-/**
- * Read a web `ReadableStream` chunk by chunk as an async iterable. A read error
- * (a source that errors mid-stream) throws OUT of the generator, which
- * `Readable.from` surfaces as a stream `error` that `pipeline` rejects on. This
- * is the cross-runtime-reliable alternative to `Readable.fromWeb`, whose error
- * does not propagate through `pipeline` on Bun (#509).
- * @param {ReadableStream} web
- */
-async function* webStreamChunks(web) {
-  const reader = web.getReader();
-  let finished = false;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) { finished = true; return; }
-      yield value;
-    }
-  } finally {
-    // On EARLY termination (the consumer errored / aborted before the source
-    // finished, e.g. a disk-write failure mid-upload), cancel the source so an
-    // upstream producer (a request body) stops sending, matching the behavior
-    // `Readable.fromWeb` gave. Skip cancel on normal completion.
-    if (!finished) { try { await reader.cancel(); } catch {} }
-    try { reader.releaseLock(); } catch {}
-  }
 }
 
 /**
