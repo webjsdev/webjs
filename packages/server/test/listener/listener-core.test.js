@@ -14,6 +14,9 @@ import {
   isCompressible,
   EVENTS_PATH,
   loadWsModule,
+  negotiateEncoding,
+  createCompressor,
+  varyWithAcceptEncoding,
 } from '../../src/listener-core.js';
 import { setBasePath } from '../../src/importmap.js';
 
@@ -127,6 +130,50 @@ test('isCompressible covers text + the structured-text application types', () =>
   assert.equal(isCompressible('text/event-stream; charset=utf-8'), false, 'SSE with params must not compress');
   // An array-valued header (node's multi-value shape) reads its first entry.
   assert.equal(isCompressible(['text/html', 'x']), true);
+});
+
+/* ---------------- compression negotiation (#517) ---------------- */
+
+test('negotiateEncoding prefers brotli, then gzip, then deflate', () => {
+  assert.equal(negotiateEncoding('br, gzip, deflate'), 'br');
+  assert.equal(negotiateEncoding('gzip, deflate'), 'gzip');
+  assert.equal(negotiateEncoding('deflate'), 'deflate');
+  assert.equal(negotiateEncoding('gzip, br'), 'br', 'order in the header does not matter; brotli still wins');
+  // Token-boundary: a substring must not false-match.
+  assert.equal(negotiateEncoding('xbr, notgzip'), '', 'partial tokens do not match');
+  assert.equal(negotiateEncoding(''), '');
+  assert.equal(negotiateEncoding(undefined), '');
+  assert.equal(negotiateEncoding(['br', 'gzip']), 'br', 'an array header (node multi-value) is joined');
+});
+
+test('createCompressor returns a node:zlib Transform per encoding, null otherwise', () => {
+  for (const enc of ['br', 'gzip', 'deflate']) {
+    const c = createCompressor(enc);
+    assert.ok(c && typeof c.pipe === 'function' && typeof c.write === 'function', `${enc} yields a stream`);
+    c.destroy();
+  }
+  assert.equal(createCompressor(''), null, 'no encoding yields null');
+  assert.equal(createCompressor('identity'), null, 'an unknown encoding yields null');
+});
+
+test('createCompressor brotli actually round-trips (and works on this runtime)', async () => {
+  const { brotliDecompressSync } = await import('node:zlib');
+  const c = createCompressor('br');
+  const chunks = [];
+  c.on('data', (d) => chunks.push(d));
+  const done = new Promise((r) => c.on('end', r));
+  c.end(Buffer.from('hello brotli '.repeat(50)));
+  await done;
+  const out = brotliDecompressSync(Buffer.concat(chunks)).toString();
+  assert.ok(out.startsWith('hello brotli'), 'brotli compress -> decompress round-trips');
+});
+
+test('varyWithAcceptEncoding merges without duplicating', () => {
+  assert.equal(varyWithAcceptEncoding(''), 'Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding(null), 'Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding('Cookie'), 'Cookie, Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding('Accept-Encoding'), 'Accept-Encoding', 'no duplicate');
+  assert.equal(varyWithAcceptEncoding('Origin, Accept-Encoding'), 'Origin, Accept-Encoding', 'already present, unchanged');
 });
 
 /* ---------------- serverRuntime ---------------- */

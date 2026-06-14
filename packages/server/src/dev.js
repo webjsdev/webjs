@@ -1,7 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
-import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -41,6 +40,9 @@ import {
   isCompressible,
   installProcessHandlers,
   makeShutdown,
+  negotiateEncoding,
+  createCompressor,
+  varyWithAcceptEncoding,
 } from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
@@ -2034,26 +2036,18 @@ async function sendWebResponse(res, webRes, req, opts) {
     headers[k] = v;
   });
 
-  // Negotiate compression. Skip a body that is already content-encoded (a
-  // route.ts returning pre-compressed bytes) so we never double-compress, and
-  // merge into any pre-existing `Vary` rather than clobbering it: parity with
-  // the Bun shell's `maybeCompress`, which guards both (`isCompressible` already
-  // excludes `text/event-stream` so an SSE route is never buffered).
+  // Negotiate compression via the SHARED seam (listener-core.js), so the node and
+  // Bun shells negotiate + compress identically (brotli > gzip > deflate, node:zlib
+  // both sides). Skip a body that is already content-encoded (a route.ts returning
+  // pre-compressed bytes), and merge into any pre-existing `Vary` rather than
+  // clobbering it (`isCompressible` already excludes `text/event-stream`).
   let compressor = null;
   if (opts?.compress && req && webRes.body && !headers['content-encoding'] && isCompressible(headers['content-type'])) {
-    const accept = String(req.headers['accept-encoding'] || '');
-    if (/(?:^|,\s*)br(?:;|,|$)/.test(accept)) {
-      compressor = createBrotliCompress({
-        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 },
-      });
-      headers['content-encoding'] = 'br';
-    } else if (/(?:^|,\s*)gzip(?:;|,|$)/.test(accept)) {
-      compressor = createGzip({ level: 6 });
-      headers['content-encoding'] = 'gzip';
-    }
+    const encoding = negotiateEncoding(req.headers['accept-encoding']);
+    compressor = createCompressor(encoding);
     if (compressor) {
-      const vary = typeof headers['vary'] === 'string' ? headers['vary'] : '';
-      headers['vary'] = vary && !/accept-encoding/i.test(vary) ? `${vary}, Accept-Encoding` : (vary || 'Accept-Encoding');
+      headers['content-encoding'] = encoding;
+      headers['vary'] = varyWithAcceptEncoding(typeof headers['vary'] === 'string' ? headers['vary'] : '');
       delete headers['content-length'];
     }
   }

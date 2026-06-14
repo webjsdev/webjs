@@ -16,6 +16,7 @@
  * and its own `closeServer` thunk, and reuses everything else verbatim.
  */
 import { pathToFileURL } from 'node:url';
+import { createBrotliCompress, createGzip, createDeflate, constants as zlibConstants } from 'node:zlib';
 import { stripBasePath } from './base-path.js';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
@@ -60,6 +61,51 @@ export function isCompressible(contentType) {
   // user-authored one on both shells.
   if (/^text\/event-stream/i.test(ct)) return false;
   return /^(?:text\/|application\/(?:javascript|json|xml|wasm|manifest)|image\/svg\+xml)/i.test(ct);
+}
+
+/**
+ * Negotiate a response content-encoding from a request's `Accept-Encoding`,
+ * preferring brotli (best ratio), then gzip, then deflate. Returns `''` when
+ * none is acceptable. Shared by BOTH listener shells so they negotiate
+ * identically; the matching uses the same `(?:^|,\s*)<enc>(?:;|,|$)` token test
+ * the node shell has always used.
+ * @param {string | string[] | undefined | null} acceptEncoding
+ * @returns {'br' | 'gzip' | 'deflate' | ''}
+ */
+export function negotiateEncoding(acceptEncoding) {
+  const accept = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : String(acceptEncoding || '');
+  if (/(?:^|,\s*)br(?:;|,|$)/.test(accept)) return 'br';
+  if (/(?:^|,\s*)gzip(?:;|,|$)/.test(accept)) return 'gzip';
+  if (/(?:^|,\s*)deflate(?:;|,|$)/.test(accept)) return 'deflate';
+  return '';
+}
+
+/**
+ * Create a `node:zlib` compressor Transform for a negotiated encoding, or null.
+ * `node:zlib` runs NATIVELY on Bun, so both shells get brotli through it (the web
+ * `CompressionStream` the Bun shell used before had gzip/deflate only, no brotli).
+ * Brotli quality 4 / gzip + deflate level 6 match the node shell's prior tuning
+ * (fast, good ratio for on-the-fly compression).
+ * @param {'br' | 'gzip' | 'deflate' | ''} encoding
+ * @returns {import('node:stream').Transform | null}
+ */
+export function createCompressor(encoding) {
+  if (encoding === 'br') return createBrotliCompress({ params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 } });
+  if (encoding === 'gzip') return createGzip({ level: 6 });
+  if (encoding === 'deflate') return createDeflate({ level: 6 });
+  return null;
+}
+
+/**
+ * Merge `Accept-Encoding` into an existing `Vary` header (or create it) without
+ * duplicating, so compressing a response that already varies (on `Cookie`, an
+ * `Origin`, etc.) does not clobber that. Shared so both shells behave identically.
+ * @param {string | null | undefined} existingVary
+ * @returns {string}
+ */
+export function varyWithAcceptEncoding(existingVary) {
+  const vary = existingVary || '';
+  return vary && !/accept-encoding/i.test(vary) ? `${vary}, Accept-Encoding` : (vary || 'Accept-Encoding');
 }
 
 /**
