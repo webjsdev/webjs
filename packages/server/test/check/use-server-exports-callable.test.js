@@ -49,6 +49,16 @@ test('flags a use-server file exporting only a type', async () => {
   assert.ok(flagged(await run({ 'a.server.ts': `'use server';\nexport type Payload = { id: number };\n` })));
 });
 
+test('flags a config-only file whose config is an arrow (no action)', async () => {
+  // `validate` is config, not an action; the registrar excludes reserved names,
+  // so this file registers zero actions even though `validate` is a function.
+  assert.ok(flagged(await run({ 'a.server.ts': `'use server';\nexport const method = 'GET';\nexport const validate = (i) => i;\n` })));
+});
+
+test('flags a config-only file whose tags config is a factory call (no action)', async () => {
+  assert.ok(flagged(await run({ 'a.server.ts': `'use server';\nexport const tags = makeTags('user');\n` })));
+});
+
 // --- passes: a callable is exported ---
 
 test('passes a function-declaration action', async () => {

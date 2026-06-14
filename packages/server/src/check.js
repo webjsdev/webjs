@@ -785,7 +785,16 @@ export async function checkConventions(appDir) {
       if (/\bexport\s*\{/.test(scan)) continue;
       if (/\bexport\s*\*/.test(scan)) continue;
       if (/\bexport\s+(?:const|let|var)\s*[{[]/.test(scan)) continue;
-      if (/\bexport\s+(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::(?:[^=]|=>)*?)?=\s*[A-Za-z_$(]/.test(scan)) continue;
+      // A factory / identifier-valued const could be a callable ACTION, so skip,
+      // BUT only when its name is NOT a reserved config key: the registrar
+      // excludes reserved names from actions (`actionFunctionNames`), so a file
+      // whose only ambiguous const is `validate` / `tags` / ... (config produced
+      // by an arrow or a factory) still has zero actions and must flag. Skip only
+      // for a NON-reserved ambiguous const (a real possible action).
+      const reFactory = /\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::(?:[^=]|=>)*?)?=\s*[A-Za-z_$(]/g;
+      let ambiguousAction = false;
+      while ((m = reFactory.exec(scan))) { if (!RESERVED_CONFIG.has(m[1])) { ambiguousAction = true; break; } }
+      if (ambiguousAction) continue;
       // Every export is provably non-callable (a literal const, a type) or there
       // are none: the directive exposes nothing.
       violations.push({
