@@ -81,6 +81,26 @@ jobs:
           npx prisma db seed
       - run: npm test
 
+  bun:
+    name: Bun runtime smoke (#508)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      # npm ci installs the workspace + the `amaro` optionalDependency that the
+      # Bun stripper backend needs.
+      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # Boot a webjs app under Bun: SSR + TypeScript strip (via amaro, since Bun
+      # has no built-in stripper) + a server-action RPC round-trip.
+      - name: webjs runtime smoke on Bun
+        run: bun test/bun/smoke.mjs
+
   browser:
     name: Browser (web-test-runner / Playwright)
     runs-on: ubuntu-latest
