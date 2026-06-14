@@ -13,10 +13,13 @@
 # built-in `module.stripTypeScriptTypes` stripper and recursive fs.watch need it),
 # which is why the base pins a current Node major. The SERVING process runs on
 # Bun: each service's start command is `bun ... webjs.js start`, so `startServer`
-# selects the native `Bun.serve` listener shell (more req/s on the listening path,
-# faster SSR vs Node, full feature parity) and strips `.ts` via `amaro`. The Bun
-# binary is copied from the official `oven/bun` image below; nothing is BUILT on
-# Bun, so there is no build-toolchain risk.
+# selects the native `Bun.serve` listener shell (more req/s on the listening path)
+# and strips `.ts` via `amaro`. The one behavioral difference from the node:http
+# shell is that 103 Early Hints are node-only (Bun.serve has no informational-
+# response API), so the modulepreload head-start is dropped on Bun; the preloads
+# still ship in the document head. The Bun binary is copied from the official
+# `oven/bun` image below; nothing is BUILT on Bun, so there is no build-toolchain
+# risk.
 #
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The
 # blog runs `prisma generate` at build and `prisma migrate deploy` at
