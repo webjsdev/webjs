@@ -82,7 +82,7 @@ jobs:
       - run: npm test
 
   bun:
-    name: Bun runtime smoke (#508)
+    name: Bun runtime smoke (#508, #511)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -100,6 +100,12 @@ jobs:
       # has no built-in stripper) + a server-action RPC round-trip.
       - name: webjs runtime smoke on Bun
         run: bun test/bun/smoke.mjs
+      # Boot the full LISTENER on the Bun.serve shell (#511): SSR + a route.ts GET
+      # + the SSE live-reload stream + a WebSocket WS-export echo over a real
+      # socket. The same assertions run on the node:http shell under `npm test`,
+      # so this is the cross-shell parity proof.
+      - name: webjs listener parity on Bun
+        run: bun test/bun/listener.mjs
 
   browser:
     name: Browser (web-test-runner / Playwright)

@@ -1,8 +1,8 @@
 import { WebSocketServer } from 'ws';
-import { pathToFileURL } from 'node:url';
 import { matchApi } from './router.js';
 import { urlFromRequest } from './forwarded.js';
 import { registerClient } from './broadcast.js';
+import { loadWsModule } from './listener-core.js';
 
 /**
  * WebSocket support.
@@ -48,7 +48,7 @@ export function attachWebSocket(server, getRouteTable, opts) {
         return reject(socket, 404, 'Not Found');
       }
 
-      const mod = await loadModule(match.route.file, opts.dev);
+      const mod = await loadWsModule(match.route.file, opts.dev);
       if (typeof mod.WS !== 'function') {
         return reject(socket, 426, 'Upgrade not supported at this route');
       }
@@ -108,14 +108,4 @@ function buildRequestFromUpgrade(req, url) {
     headers[k] = Array.isArray(v) ? v.join(',') : String(v ?? '');
   }
   return new Request(url, { method: 'GET', headers });
-}
-
-/**
- * @param {string} file
- * @param {boolean} dev
- */
-async function loadModule(file, dev) {
-  const url = pathToFileURL(file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  return import(url + bust);
 }

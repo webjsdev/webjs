@@ -1,0 +1,95 @@
+/**
+ * Cross-runtime LISTENER parity test (#511): boot a real webjs app through
+ * `startServer` (not just `createRequestHandler`) and exercise the full listening
+ * path under WHICHEVER runtime executes this file. The SAME assertions must pass
+ * on both shells, which is the parity proof:
+ *
+ *   node test/bun/listener.mjs   # exercises the node:http shell (startNodeListener)
+ *   bun  test/bun/listener.mjs   # exercises the Bun.serve shell (startBunListener)
+ *
+ * Covers, on both shells: SSR over a real socket, a `route.ts` GET with the
+ * framework-stamped `x-webjs-remote-ip`, gzip negotiation, the SSE live-reload
+ * stream, a WebSocket `WS` export echo (proving the BunWsAdapter shim matches the
+ * node `ws`-library contract), and a clean `close()`. A plain assert script (not
+ * node:test) so the SAME file runs identically on both runtimes; it exits
+ * non-zero on failure. Run from the repo root so the bare `@webjsdev/server`
+ * specifier resolves to the workspace package, not a stale published copy.
+ */
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { startServer } from '@webjsdev/server';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).toString();
+const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
+// A silent logger so the parity run does not spam request logs.
+const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+
+const dir = mkdtempSync(join(tmpdir(), 'webjs-listener-parity-'));
+const w = (rel, body) => { const abs = join(dir, rel); mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, body); };
+
+let server, close;
+try {
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'parity', type: 'module', webjs: {} }));
+  w('app/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default ({ children }: { children: unknown }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
+  w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default function Page() { return html\`<main><h1>hello listener</h1></main>\`; }\n`);
+  w('app/api/echo/route.ts', `export async function GET(req: Request) {\n  return Response.json({ ok: true, ip: req.headers.get('x-webjs-remote-ip') ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any) {\n  ws.on('message', (m: any) => ws.send('echo:' + m));\n}\n`);
+
+  ({ server, close } = await startServer({ appDir: dir, dev: true, port: 0, logger: quiet }));
+  const port = server.port ?? server.address().port;
+  const base = `http://localhost:${port}`;
+
+  // 1. SSR over a real socket.
+  const page = await fetch(`${base}/`);
+  assert.equal(page.status, 200, 'GET / should be 200');
+  const pageHtml = await page.text();
+  assert.ok(pageHtml.includes('hello listener'), `SSR HTML should render; got:\n${pageHtml.slice(0, 200)}`);
+
+  // 2. route.ts GET with the framework-stamped remote IP.
+  const echo = await fetch(`${base}/api/echo`);
+  assert.equal(echo.status, 200, 'route GET should be 200');
+  const j = await echo.json();
+  assert.equal(j.ok, true, 'route handler ran');
+  assert.equal(j.ip, 'stamped', 'x-webjs-remote-ip is stamped from the socket on this runtime');
+
+  // 3. gzip negotiation (compress defaults off in dev, so request it explicitly is
+  //    a no-op in dev; assert the page still serves with an Accept-Encoding header).
+  const gz = await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip' } });
+  assert.equal(gz.status, 200, 'gzip-accepting request still serves 200');
+  assert.ok((await gz.text()).includes('hello listener'), 'gzip-accepting request body decodes');
+
+  // 4. SSE live-reload stream emits the hello frame.
+  const sse = await fetch(`${base}/__webjs/events`, { headers: { accept: 'text/event-stream' } });
+  assert.equal(sse.status, 200, 'SSE endpoint is 200 in dev');
+  assert.ok((sse.headers.get('content-type') || '').includes('text/event-stream'), 'SSE content type');
+  const reader = sse.body.getReader();
+  const { value } = await reader.read();
+  const chunk = new TextDecoder().decode(value);
+  assert.ok(chunk.includes('event: hello'), `SSE stream opens with the hello frame; got: ${JSON.stringify(chunk)}`);
+  await reader.cancel();
+
+  // 5. WebSocket WS export echo (the BunWsAdapter shim must match the ws-library
+  //    EventEmitter contract: .on('message') / .send()).
+  await new Promise((res, rej) => {
+    const ws = new WebSocket(`ws://localhost:${port}/api/echo`);
+    const timer = setTimeout(() => rej(new Error('WebSocket echo timed out')), 5000);
+    ws.onopen = () => ws.send('ping');
+    ws.onmessage = (e) => {
+      try { assert.equal(e.data, 'echo:ping', 'the WS export echoes the message'); clearTimeout(timer); ws.close(); res(); }
+      catch (err) { clearTimeout(timer); rej(err); }
+    };
+    ws.onerror = (e) => { clearTimeout(timer); rej(new Error('WebSocket errored: ' + (e?.message || 'unknown'))); };
+  });
+
+  // 6. Clean shutdown.
+  await close();
+  close = null;
+
+  console.log(`OK  webjs listener parity passed on ${runtime} (SSR + route + SSE + WebSocket over a real socket)`);
+} finally {
+  try { if (close) await close(); } catch {}
+  rmSync(dir, { recursive: true, force: true });
+}

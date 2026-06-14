@@ -35,6 +35,13 @@ import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as get
 import { buildInfoResponse } from './build-info.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
 import { attachWebSocket } from './websocket.js';
+import {
+  SseHub,
+  serverRuntime,
+  isCompressible,
+  installProcessHandlers,
+  makeShutdown,
+} from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
@@ -1373,26 +1380,28 @@ export async function startServer(opts) {
   const compress = opts.compress ?? !dev;
   const logger = opts.logger || defaultLogger({ dev });
 
-  /** @type {Set<import('node:http').ServerResponse>} */
-  const sseClients = new Set();
-  const app = await createRequestHandler({
-    ...opts,
-    logger,
-    onReload: () => {
-      for (const res of sseClients) {
-        try { res.write(`event: reload\ndata: now\n\n`); } catch {}
-      }
-    },
-    // Dev error overlay (#264): push a frame to every open tab over the SAME
-    // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
-    // EventSource's native connection-error event) carries the JSON frame.
-    onDevError: (frame) => {
-      const data = JSON.stringify(frame);
-      for (const res of sseClients) {
-        try { res.write(`event: webjs-error\ndata: ${data}\n\n`); } catch {}
-      }
-    },
-  });
+  // Runtime-neutral SSE registry + fanout (shared by the node:http and Bun.serve
+  // shells via listener-core.js, so live-reload + the dev error overlay behave
+  // identically on both). Built before the handler so its onReload / onDevError
+  // callbacks can fan out through it.
+  const hub = new SseHub();
+  let app;
+  try {
+    app = await createRequestHandler({
+      ...opts,
+      logger,
+      onReload: () => hub.reload(),
+      // Dev error overlay (#264): push a frame to every open tab over the SAME
+      // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
+      // EventSource's native connection-error event) carries the JSON frame.
+      onDevError: (frame) => hub.devError(frame),
+    });
+  } catch (e) {
+    // The hub starts its keepalive interval in its constructor (before this
+    // await), so a boot failure must clear it rather than leak a live timer.
+    hub.closeAll();
+    throw e;
+  }
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
@@ -1422,14 +1431,42 @@ export async function startServer(opts) {
     })();
   }
 
-  // SSE keepalive: send a comment frame every 25s to defeat proxy idle timeouts.
-  // Cheap (no event listeners on the client side) and safe: comments are ignored.
-  const keepalive = setInterval(() => {
-    for (const res of sseClients) {
-      try { res.write(`: ka\n\n`); } catch {}
-    }
-  }, 25_000);
-  keepalive.unref();
+  // Inbound server timeouts (issue #237). On node these are the node:http
+  // built-ins; on Bun the node `requestTimeout` maps to Bun's single
+  // `idleTimeout`. Defends against slowloris and hung connections. Overridable
+  // via `webjs.requestTimeoutMs` / `headersTimeoutMs` / `keepAliveTimeoutMs` in
+  // package.json or the matching WEBJS_*_MS env vars; `0` disables that timeout.
+  const timeouts = await readServerTimeoutsFromApp(app.appDir);
+
+  // The shared context both listener shells consume. The transport-specific glue
+  // (node:http `res.write`, Bun.serve streaming Response) lives in each shell;
+  // the SSE registry, the live-reload path predicate, the WS module loader, and
+  // the lifecycle wiring are shared via listener-core.js so the shells can't drift.
+  /** @type {import('./listener-types.js').ListenerContext} */
+  const ctx = { app, dev, compress, logger, hub, port, basePathStr: basePath(), timeouts, watcherAbort };
+
+  // Pick the adapter by runtime. Bun is Request/Response-native, so its shell
+  // skips the node:http bridge (toWebRequest/sendWebResponse) for ~1.9x more
+  // req/s on the listening path (#511); the Bun shell is dynamically imported so
+  // the `Bun.*` global is never referenced on Node.
+  if (serverRuntime() === 'bun') {
+    const { startBunListener } = await import('./listener-bun.js');
+    return startBunListener(ctx);
+  }
+  return startNodeListener(ctx);
+}
+
+/**
+ * The node:http listener shell: the original `startServer` socket path, now
+ * reading the shared `ListenerContext`. Bridges node `IncomingMessage` ->
+ * `Request` (`toWebRequest`) and `Response` -> `ServerResponse`
+ * (`sendWebResponse`), emits 103 Early Hints, and drives SSE + WS over node
+ * primitives, sharing the SSE registry + lifecycle wiring with the Bun shell.
+ * @param {import('./listener-types.js').ListenerContext} ctx
+ * @returns {{ server: import('node:http').Server, close: () => Promise<void> }}
+ */
+function startNodeListener(ctx) {
+  const { app, dev, compress, logger, hub, port, basePathStr, timeouts, watcherAbort } = ctx;
 
   const server = makeHttpServer(async (req, res) => {
     try {
@@ -1439,7 +1476,7 @@ export async function startServer(opts) {
       // base-path-stripped pathname so the reload stream answers at
       // `<basePath>/__webjs/events` under a sub-path deploy (#256). With no
       // basePath this is a pure pass-through (the bare path still matches).
-      if (stripBasePath(url.pathname, basePath()) === '/__webjs/events') {
+      if (stripBasePath(url.pathname, basePathStr) === '/__webjs/events') {
         if (!dev) { res.writeHead(404); res.end(); return; }
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -1447,7 +1484,13 @@ export async function startServer(opts) {
           connection: 'keep-alive',
         });
         res.write(`event: hello\ndata: webjs\n\n`);
-        sseClients.add(res);
+        // Register a node client wrapper in the shared hub: the fanout + keepalive
+        // live in SseHub; only the transport write (res.write / res.end) is local.
+        const client = {
+          send: (s) => { try { res.write(s); } catch {} },
+          close: () => { try { res.end(); } catch {} },
+        };
+        hub.add(client);
         // Replay an unresolved dev error (#264) so a tab that connects AFTER the
         // breaking edit (e.g. opened via a fresh navigation) still shows the
         // overlay, not only the tab that was open when the error fired.
@@ -1455,7 +1498,7 @@ export async function startServer(opts) {
         if (pending) {
           try { res.write(`event: webjs-error\ndata: ${JSON.stringify(pending)}\n\n`); } catch {}
         }
-        res.socket?.on('close', () => sseClients.delete(res));
+        res.socket?.on('close', () => hub.remove(client));
         return;
       }
 
@@ -1490,16 +1533,10 @@ export async function startServer(opts) {
     }
   });
 
-  // Inbound server timeouts (issue #237), node:http built-ins. Defends against
-  // slowloris and hung connections: `requestTimeout` bounds the time to receive
-  // the WHOLE request, `headersTimeout` the time to receive just the headers
-  // (node measures both from the same request start, so it is kept strictly
-  // under requestTimeout to actually fire), and `keepAliveTimeout` the idle
-  // window before a kept-alive socket is closed. Secure production defaults,
-  // overridable via `webjs.requestTimeoutMs` / `headersTimeoutMs` /
-  // `keepAliveTimeoutMs` in package.json or the matching WEBJS_*_MS env vars.
-  // A value of 0 disables that timeout (node's own no-limit sentinel).
-  const timeouts = await readServerTimeoutsFromApp(app.appDir);
+  // node:http built-in timeouts: `requestTimeout` bounds the time to receive the
+  // WHOLE request, `headersTimeout` just the headers (kept strictly under
+  // requestTimeout so it actually fires), `keepAliveTimeout` the idle window
+  // before a kept-alive socket is closed.
   server.requestTimeout = timeouts.requestTimeout;
   server.headersTimeout = timeouts.headersTimeout;
   server.keepAliveTimeout = timeouts.keepAliveTimeout;
@@ -1517,7 +1554,10 @@ export async function startServer(opts) {
     app.warmup();
   });
 
-  const shutdown = gracefulShutdown(server, sseClients, logger);
+  const closeServer = () => new Promise((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve(undefined)));
+  });
+  const shutdown = makeShutdown({ closeServer, hub, logger });
   process.once('SIGINT', () => shutdown('SIGINT'));
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 
@@ -1530,6 +1570,9 @@ export async function startServer(opts) {
     server,
     close: () => new Promise((r) => {
       if (watcherAbort) watcherAbort.abort();
+      // Clear the shared SSE keepalive timer so repeated startServer/close cycles
+      // (e.g. across a test run) don't accumulate live intervals.
+      hub.closeAll();
       server.close(() => r());
     }),
   };
@@ -1934,54 +1977,6 @@ function makeHttpServer(handler) {
   return createHttp1Server(handler);
 }
 
-/**
- * Install once-only process error handlers. Idempotent across multiple
- * `startServer` calls in the same process.
- *
- * @param {import('./logger.js').Logger} logger
- * @param {() => void} onFatal
- */
-function installProcessHandlers(logger, onFatal) {
-  if (/** @type any */ (globalThis).__webjsProcHandlers) return;
-  /** @type any */ (globalThis).__webjsProcHandlers = true;
-  process.on('unhandledRejection', (reason) => {
-    logger.error('unhandledRejection', {
-      err: reason instanceof Error ? reason.stack || reason.message : String(reason),
-    });
-  });
-  process.on('uncaughtException', (err) => {
-    logger.error('uncaughtException', { err: err.stack || err.message });
-    // Begin orderly shutdown; process state may be corrupt.
-    try { onFatal(); } catch {}
-  });
-}
-
-function gracefulShutdown(server, sseClients, logger) {
-  let shuttingDown = false;
-  return (signal) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info(`received ${signal}, shutting down`);
-    for (const res of sseClients) {
-      try { res.end(); } catch {}
-    }
-    sseClients.clear();
-    server.close((err) => {
-      if (err) {
-        logger.error('server close error', { err: String(err) });
-        process.exit(1);
-      }
-      logger.info('bye');
-      process.exit(0);
-    });
-    // Hard-fail after 10s if we can't drain.
-    setTimeout(() => {
-      logger.warn('shutdown timed out, forcing exit');
-      process.exit(1);
-    }, 10_000).unref();
-  };
-}
-
 /* ------------ helpers ------------ */
 
 /** @param {import('node:http').IncomingMessage} req @param {URL} url */
@@ -2039,9 +2034,13 @@ async function sendWebResponse(res, webRes, req, opts) {
     headers[k] = v;
   });
 
-  // Negotiate compression.
+  // Negotiate compression. Skip a body that is already content-encoded (a
+  // route.ts returning pre-compressed bytes) so we never double-compress, and
+  // merge into any pre-existing `Vary` rather than clobbering it: parity with
+  // the Bun shell's `maybeCompress`, which guards both (`isCompressible` already
+  // excludes `text/event-stream` so an SSE route is never buffered).
   let compressor = null;
-  if (opts?.compress && req && webRes.body && isCompressible(headers['content-type'])) {
+  if (opts?.compress && req && webRes.body && !headers['content-encoding'] && isCompressible(headers['content-type'])) {
     const accept = String(req.headers['accept-encoding'] || '');
     if (/(?:^|,\s*)br(?:;|,|$)/.test(accept)) {
       compressor = createBrotliCompress({
@@ -2053,7 +2052,8 @@ async function sendWebResponse(res, webRes, req, opts) {
       headers['content-encoding'] = 'gzip';
     }
     if (compressor) {
-      headers['vary'] = 'Accept-Encoding';
+      const vary = typeof headers['vary'] === 'string' ? headers['vary'] : '';
+      headers['vary'] = vary && !/accept-encoding/i.test(vary) ? `${vary}, Accept-Encoding` : (vary || 'Accept-Encoding');
       delete headers['content-length'];
     }
   }
@@ -2083,13 +2083,6 @@ async function sendWebResponse(res, webRes, req, opts) {
     res.write(value);
   }
   res.end();
-}
-
-/** @param {string | string[] | undefined} contentType */
-function isCompressible(contentType) {
-  if (!contentType) return false;
-  const ct = Array.isArray(contentType) ? contentType[0] : contentType;
-  return /^(?:text\/|application\/(?:javascript|json|xml|wasm|manifest)|image\/svg\+xml)/i.test(ct);
 }
 
 /**
