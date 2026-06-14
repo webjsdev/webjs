@@ -86,6 +86,27 @@ test('does NOT flag a factory-produced const action (export const get = wrap(fn)
   assert.equal(flagged(await run({ 'a.server.ts': `'use server';\nfunction wrap(f){ return f; }\nexport const getX = wrap(async () => 1);\n` })), false);
 });
 
+test('does NOT flag a local function surfaced via export { getX } (no from)', async () => {
+  // The runtime registrar keeps any function-valued export regardless of syntax,
+  // so `function getX(){}; export { getX }` is a working action and must not flag.
+  assert.equal(flagged(await run({ 'a.server.ts': `'use server';\nasync function getX(id) { return { id }; }\nexport { getX };\n` })), false);
+});
+
+test('does NOT flag a renamed local export (export { impl as getThing })', async () => {
+  assert.equal(flagged(await run({ 'a.server.ts': `'use server';\nasync function impl(id) { return id; }\nexport { impl as getThing };\n` })), false);
+});
+
+test('does NOT flag an imported function re-surfaced via export { x } (no from)', async () => {
+  assert.equal(flagged(await run({
+    'a.server.ts': `'use server';\nimport { realAction } from './impl.ts';\nexport { realAction };\n`,
+    'impl.ts': `export async function realAction(){ return 1; }\n`,
+  })), false);
+});
+
+test('does NOT flag a destructured export of a function (export const { x } = obj)', async () => {
+  assert.equal(flagged(await run({ 'a.server.ts': `'use server';\nconst api = { getX: async () => 1 };\nexport const { getX } = api;\n` })), false);
+});
+
 // --- scoping: not this rule's job ---
 
 test('does NOT double-flag a use-server file missing the .server extension', async () => {

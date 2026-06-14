@@ -767,12 +767,24 @@ export async function checkConventions(appDir) {
       if (callables.length > 0) continue; // exports at least one callable -> fine
       // A default export is assumed callable (an action commonly default-exports).
       if (/\bexport\s+default\b/.test(scan)) continue;
-      // Conservative, avoid a false positive: a re-export could re-export a
-      // function (the registrar loads the module and sees `typeof === 'function'`),
-      // and an `export const NAME = <identifier-or-call>` could be a factory-
-      // produced function (`export const get = cache(fetch)`). In either case we
-      // cannot prove statically that there is NO callable, so do not flag.
-      if (/\bexport\b[^\n;]*\bfrom\b/.test(scan) || /\bexport\s*\*/.test(scan)) continue;
+      // Conservative, avoid a FALSE POSITIVE: the runtime registrar
+      // (`actionFunctionNames`) keeps EVERY export whose value is a function at
+      // load time, regardless of the export syntax, so any export shape these
+      // patterns cannot prove is non-callable must NOT be flagged. Skip when the
+      // file has:
+      //   - a named-export clause `export { a, b as c }` (with or WITHOUT `from`):
+      //     it can surface a local function (`function getX(){}; export { getX }`)
+      //     or a re-exported / imported function, neither matched above;
+      //   - a star re-export `export * from ...`;
+      //   - a destructuring export `export const { x } = obj` / `export const [x] = arr`,
+      //     which may bind a function;
+      //   - an `export const NAME = <identifier-or-call>`, a factory-produced
+      //     function (`export const get = cache(fetch)`).
+      // A sole `export { aConst }` of a non-function is then a tolerated FALSE
+      // NEGATIVE, which is the right bias for a non-overridable correctness rule.
+      if (/\bexport\s*\{/.test(scan)) continue;
+      if (/\bexport\s*\*/.test(scan)) continue;
+      if (/\bexport\s+(?:const|let|var)\s*[{[]/.test(scan)) continue;
       if (/\bexport\s+(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::(?:[^=]|=>)*?)?=\s*[A-Za-z_$(]/.test(scan)) continue;
       // Every export is provably non-callable (a literal const, a type) or there
       // are none: the directive exposes nothing.
