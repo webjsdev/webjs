@@ -37,7 +37,7 @@ const PER_FILE_TIMEOUT_MS = Number(process.env.WEBJS_BUN_TEST_TIMEOUT_MS || 120_
  * the exact repo-relative path (normalized to `/`).
  */
 const DENYLIST = [
-  { match: 'packages/server/test/api/dev-cache-bust.test.js', reason: 'asserts the dev ?t= import cache-bust, which Bun ignores (a documented Bun limitation, #514; see agent-docs/testing.md). The rest of handleApi runs on Bun via api.test.js.' },
+  { match: 'packages/server/test/api/dev-cache-bust.test.js', reason: 'asserts the bare server-level dev ?t= import cache-bust directly (no supervisor), which Bun ignores by keying its module cache on path. The USER-FACING hot reload is fixed for Bun at the CLI level via `bun --hot` (#514), proven cross-runtime by test/bun/dev-hot-reload.mjs; this unit test exercises the Node-only `?t=` mechanism. The rest of handleApi runs on Bun via api.test.js.' },
   { match: 'packages/server/test/body-limit/server-timeouts.test.js', reason: 'asserts node:http server.requestTimeout/headersTimeout/keepAliveTimeout; the Bun shell uses Bun.serve idleTimeout instead (#511). The runtime-agnostic 413 body-limit tests run on Bun via integration.test.js.' },
   { match: 'packages/server/test/seed/seed-hook.test.js', reason: 'SSR action-result seeding needs module.registerHooks, unavailable on Bun (no-ops by design, #508).' },
   { match: 'packages/server/test/seed/seed-ssr.test.js', reason: 'SSR action-result seeding needs module.registerHooks, unavailable on Bun (no-ops by design, #508).' },

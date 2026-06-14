@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
+import { planDevSupervisor } from '../lib/dev-supervisor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -83,7 +84,8 @@ async function main() {
   }
   switch (cmd) {
     case 'dev': {
-      // If we're already inside the --watch child, start the server directly.
+      // If we're already inside the reload child (node --watch or bun --hot),
+      // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
         const { startServer } = await import('@webjsdev/server');
         // Load `.env` BEFORE resolving the port so a `PORT` set there is in
@@ -104,36 +106,31 @@ async function main() {
       const hint = prismaDevHint(process.cwd());
       if (hint) console.error(hint);
 
-      // Otherwise, spawn ourselves as a child with node --watch.
-      // This restarts the process on file changes, guaranteeing a fresh
-      // Node ESM module cache. Without this, edits to transitively-imported
-      // modules (actions, queries, components, utils) don't take effect
-      // because Node caches ESM by URL with no public invalidation API.
-      // Build watch paths from directories that exist in the project.
+      // Decide how to run: in-process (`--no-hot`), or re-exec'd under the host
+      // runtime's hot-reload supervisor (`node --watch` on Node, `bun --hot` on
+      // Bun, #514). The branch logic lives in the pure `planDevSupervisor` so it
+      // is unit-testable without spawning a process.
       const { existsSync } = await import('node:fs');
-      const watchPaths = [];
-      for (const dir of ['app', 'components', 'modules', 'lib', 'actions']) {
-        if (existsSync(dir)) watchPaths.push('--watch-path', dir);
-      }
-      // Watch root middleware/config if present
-      for (const f of ['middleware.ts', 'middleware.js']) {
-        if (existsSync(f)) watchPaths.push('--watch-path', f);
+      const plan = planDevSupervisor({
+        isBun: !!process.versions.bun,
+        argv: process.argv.slice(1),
+        noHot: rest.includes('--no-hot'),
+        exists: (p) => existsSync(p),
+      });
+
+      if (plan.mode === 'inline') {
+        const { startServer } = await import('@webjsdev/server');
+        loadAppEnv(process.cwd());
+        const port = resolvePort(flag(rest, '--port'));
+        await startServer({ appDir: process.cwd(), port, dev: true });
+        break;
       }
 
-      const child = spawn(
-        process.execPath,
-        [
-          '--watch',
-          '--watch-preserve-output',
-          ...watchPaths,
-          ...process.argv.slice(1),
-        ],
-        {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-          env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
-        },
-      );
+      const child = spawn(process.execPath, plan.args, {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+        env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
+      });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
