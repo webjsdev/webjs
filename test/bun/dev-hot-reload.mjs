@@ -75,11 +75,14 @@ try {
   child.stdout.on('data', (d) => { log += d; });
   child.stderr.on('data', (d) => { log += d; });
 
-  const ready = await until(async () => (await fetch(`${BASE}/__webjs/health`)).ok, { timeoutMs: 30_000 });
-  assert.ok(ready, `dev server did not become ready on ${runtime}\n--- server log ---\n${log}`);
-
-  const first = await (await fetch(`${BASE}/api/ping`)).text();
-  assert.equal(first, 'VERSION_ONE', `first fetch should serve the original module on ${runtime}`);
+  // Poll the ROUTE itself (not just /__webjs/health) until it serves the
+  // original content. Health is liveness-only and flips green before the route
+  // table is warm, so a single first fetch can race it to a 404 under load; the
+  // route serving VERSION_ONE gates on the server being up AND the route warm.
+  const firstReady = await until(async () => {
+    try { return (await (await fetch(`${BASE}/api/ping`)).text()) === 'VERSION_ONE'; } catch { return false; }
+  }, { timeoutMs: 30_000 });
+  assert.ok(firstReady, `dev server never served the original module on ${runtime}\n--- server log ---\n${log}`);
 
   // Edit the re-imported module and wait for the edit to take effect. No manual
   // restart: the runtime's supervisor (node --watch / bun --hot) must pick it up.
