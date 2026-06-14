@@ -94,9 +94,16 @@ RUN npm run build:dist --workspace=@webjsdev/core
 # Blog: generate Prisma client (needs schema.prisma in context).
 RUN cd examples/blog && npx prisma generate
 
-# UI registry: no build step. The ui-website composes registry JSON on
-# demand from packages/ui/packages/registry/ sources via its route handlers
-# (see packages/ui/packages/website/app/_lib/registry.server.ts).
+# UI registry: the registry JSON is composed on demand by the route handlers
+# (no build step). But the ui-website's component DETAIL pages statically import
+# the component SOURCES from `components/ui/*.ts`, which the `prestart` hook
+# generates by copying them out of packages/ui/packages/registry/. A start
+# command that serves directly (the `bun webjs.js start` form, which bypasses
+# npm `prestart`, the same way the Tailwind step below is needed) would 500 on
+# every component page without these files, so bake them at build time here.
+# `copy-registry.js` is pure filesystem (no runtime / network / DB), so it is
+# build-safe.
+RUN cd packages/ui/packages/website && node scripts/copy-registry.js
 
 # Tailwind: compile per-app CSS (all four use the CLI, no browser runtime).
 # Each compose service's command invokes `webjs.js start` directly, which
