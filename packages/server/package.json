@@ -51,5 +51,8 @@
   ],
   "engines": {
     "node": ">=24.0.0"
+  },
+  "optionalDependencies": {
+    "amaro": "^1.1.10"
   }
 }

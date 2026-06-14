@@ -89,6 +89,15 @@ export function requiredNodeMajor() {
  * @returns {void}
  */
 export function assertNodeVersion(opts = {}) {
+  // Bun (#508) satisfies webjs's requirements through a different mechanism: the
+  // TS strip comes from `amaro` (resolved by ts-strip.js), and `fs.watch` /
+  // `node:crypto` are provided by its node-compat layer, even though Bun reports
+  // a Node version string. The Node-major gate is a proxy for "the Node built-ins
+  // exist", which does not hold on Bun, so skip it there. Only when no explicit
+  // `current` is passed (real runtime detection, not a unit test override).
+  if (opts.current === undefined && typeof process !== 'undefined' && process.versions && process.versions.bun) {
+    return;
+  }
   const current = opts.current ?? process.versions.node;
   const requiredMajor = opts.requiredMajor ?? requiredNodeMajor();
   const onFail = opts.onFail ?? 'throw';

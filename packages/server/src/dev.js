@@ -61,6 +61,7 @@ import {
   hashFile,
 } from './actions.js';
 import { registerSeedHooks } from './action-seed.js';
+import { stripTypeScript, ensureStripper } from './ts-strip.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
 import { applyEnvValidation } from './env-schema.js';
@@ -441,6 +442,10 @@ export async function createRequestHandler(opts) {
   // Throw a clear Error here so an embedded host (Express/Fastify/Bun/Deno)
   // gets the actionable message at boot, not a cryptic API failure mid-request.
   assertNodeVersion({ onFail: 'throw' });
+  // Resolve the TS stripper backend at boot (#508): the Node built-in, or amaro
+  // on Bun. Doing it here pays the (one-time) amaro import up front and surfaces
+  // a missing-amaro error at boot rather than on the first `.ts` request.
+  await ensureStripper();
   const appDir = resolve(opts.appDir);
   // Load <appDir>/.env into process.env BEFORE anything else.
   // buildActionIndex below imports server-only files (lib/*.server.ts,
@@ -2201,12 +2206,16 @@ async function exists(p) {
  * rules catch these at edit time. There is no bundler fallback;
  * webjs is buildless end-to-end.
  *
+ * The backend is the runtime-appropriate stripper (#508): Node 24+'s built-in
+ * `module.stripTypeScriptTypes`, or `amaro` on Bun (byte-identical, equally
+ * position-preserving), resolved once via `./ts-strip.js`.
+ *
  * @param {string} source
  * @param {string} _abs  (unused; preserved for symmetry with prior signature)
  * @returns {Promise<string>}
  */
 async function stripTs(source, _abs) {
-  return nodeModule.stripTypeScriptTypes(source);
+  return stripTypeScript(source);
 }
 
 /**
