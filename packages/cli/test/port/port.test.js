@@ -114,9 +114,10 @@ test('webjs.js loads .env before resolving the port, for BOTH dev and start', as
     !/process\.env\.PORT\s*\|\|\s*8080/.test(src),
     'the pre-load `process.env.PORT || 8080` read must not return',
   );
-  // Both commands resolve via the shared helper.
+  // Every command resolves via the shared helper: `start`, the `dev` reload
+  // child (`__WEBJS_DEV_CHILD`), and the `dev --no-hot` in-process path (#514).
   const resolveCount = (src.match(/resolvePort\(/g) || []).length;
-  assert.equal(resolveCount, 2, 'dev + start both call resolvePort');
+  assert.equal(resolveCount, 3, 'start + dev-child + dev --no-hot all call resolvePort');
   // Each resolvePort call is preceded by a loadAppEnv call (ordering matters).
   for (const m of src.matchAll(/resolvePort\(/g)) {
     const before = src.slice(0, m.index);

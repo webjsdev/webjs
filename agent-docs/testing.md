@@ -134,15 +134,24 @@ edge case, an error-message-format quirk).
   (`startServer` over a real socket: SSR + route + SSE + WebSocket). Plain assert
   scripts (not `node:test`) so the same file runs identically on each runtime.
 
-**Known Bun limitation (dev hot-reload of server modules).** webjs's dev server
+**Dev hot-reload of server modules (cross-runtime, #514).** webjs's dev server
 re-imports a `route.ts` / `.server.ts` / page module per request with a
-`?t=<timestamp>` query cache-bust to pick up edits. Bun's ESM loader IGNORES the
-query string (Node honors it and re-imports), and Bun exposes no module-eviction
-API, so on Bun a server-side module edit is not reflected until a dev-server
-restart. Component / page / layout SOURCE edits hot-reload fine on Bun (the
-served `.ts`/`.js` is read from disk per request, not imported). This is a Bun
-runtime gap, not a webjs bug; the `api` dev-cache-bust test is skipped under the
-Bun matrix for this reason.
+`?t=<timestamp>` query cache-bust to pick up edits. Node honors that query and
+re-imports, so under `node --watch` an edit is picked up live. Bun's ESM loader
+IGNORES the query string and exposes no module-eviction API, so that mechanism
+alone leaves a server-side edit stale on Bun. The CLI closes the gap by
+re-execing `webjs dev` under `bun --hot` on Bun (vs `node --watch` on Node),
+whose file-watching cache invalidation makes the next re-import fresh with no
+restart (`Bun.serve` is reused across hot reloads, so the listener is not
+duplicated). The cross-runtime test `test/bun/dev-hot-reload.mjs` proves the
+edit-picked-up behaviour on BOTH runtimes (and runs as a dedicated CI step on
+Bun). The `api` dev-cache-bust UNIT test asserts the bare server-level `?t=`
+mechanism directly (no supervisor), which Bun ignores by design, so it stays on
+the Bun-matrix denylist; the user-facing hot reload it underpins is covered on
+Bun by the dev-hot-reload script instead. A `--no-hot` flag opts out of the
+supervisor on either runtime (run the server in-process, edits need a manual
+restart). Component / page / layout SOURCE edits already hot-reload on both
+runtimes (the served `.ts`/`.js` is read from disk per request, not imported).
 
 ### In-repo app tests in CI (#342)
 

@@ -320,7 +320,7 @@ Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a 
 ## CLI reference
 
 ```sh
-webjs dev    [--port N]            # dev server with live reload
+webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch on Node, bun --hot on Bun). --no-hot runs in-process
 webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2)
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop

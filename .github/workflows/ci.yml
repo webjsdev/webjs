@@ -117,6 +117,13 @@ jobs:
       # Readable.fromWeb, which hangs on Bun).
       - name: webjs compression on Bun
         run: bun test/bun/compression.mjs
+      # Dev hot reload on Bun (#514): start `webjs dev` under Bun, edit a
+      # re-imported route module, and assert the response updates with NO manual
+      # restart. The CLI re-execs under `bun --hot` on Bun (vs `node --watch` on
+      # Node); without it Bun ignores the dev `?t=` cache-bust and the edit stays
+      # stale. The same script proves no Node regression under `npm test`.
+      - name: webjs dev hot reload on Bun
+        run: bun test/bun/dev-hot-reload.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are

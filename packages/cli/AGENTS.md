@@ -55,6 +55,17 @@ lib/
                          `resolvePort` so a `.env` PORT is in `process.env` at
                          resolution time; the server loads `.env` too but too late
                          to affect the port the CLI computes. Tests: `test/port/`.
+  dev-supervisor.js      `webjs dev` reload-supervisor planner (#514). PURE
+                         `planDevSupervisor({ isBun, argv, noHot, exists })`
+                         returns the spawn decision: `bun --hot` on Bun (Bun
+                         ignores the dev `?t=` cache-bust, so `node --watch`
+                         would leave a server-module edit stale), `node --watch`
+                         + the existing `--watch-path` set on Node, or `inline`
+                         (run in-process) when `--no-hot` is passed. Kept pure so
+                         the branch logic is unit-testable without spawning a
+                         process; the bin owns the actual spawn + the
+                         `__WEBJS_DEV_CHILD` re-entry. Tests: `test/dev-supervisor/`
+                         (unit) + `test/bun/dev-hot-reload.mjs` (cross-runtime).
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Prisma schema,
@@ -77,7 +88,7 @@ README.md                npm-facing package readme.
 
 | Command | Implementation |
 |---|---|
-| `webjs dev` | Spawns `node --watch` re-entry, then `startServer({ dev: true })`. In the parent (pre-spawn) it runs the Prisma-client preflight (`lib/prisma-preflight.js`, #452): for a Prisma app (a `prisma/schema.prisma` or an `@prisma/client` dep) whose generated client is missing/stale, it prints a hint pointing at `npm run dev` (the canonical command, which runs the `predev` `prisma generate` hook) or `webjs db generate`. A bare `webjs dev` skips `predev`; the hint replaces the raw crash. Non-Prisma apps get nothing. A hint only, never an auto-run. |
+| `webjs dev` | Re-execs itself under the host runtime's hot-reload supervisor, then `startServer({ dev: true })` in the child. The supervisor is runtime-specific (#514, `lib/dev-supervisor.js`): `node --watch` on Node (restart-on-change, fresh ESM cache, plus the dev re-import's `?t=` query); `bun --hot` on Bun (in-place module invalidation, since Bun keys its cache by path and ignores `?t=`, so `node --watch` would leave a server-module edit stale). `--no-hot` opts out and runs the server in-process on either runtime. In the parent (pre-spawn) it runs the Prisma-client preflight (`lib/prisma-preflight.js`, #452): for a Prisma app (a `prisma/schema.prisma` or an `@prisma/client` dep) whose generated client is missing/stale, it prints a hint pointing at `npm run dev` (the canonical command, which runs the `predev` `prisma generate` hook) or `webjs db generate`. A bare `webjs dev` skips `predev`; the hint replaces the raw crash. Non-Prisma apps get nothing. A hint only, never an auto-run. |
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules] [--json]` | `checkConventions()` from `@webjsdev/server/check`. `--rules` lists the checks. `--json` emits the structured violations + a summary count as JSON (via `projectCheck` from `@webjsdev/mcp/check-report`, the same projector the MCP `check` tool uses, #415), so an agent in a loop consumes structured data instead of regex-scraping stdout; the non-zero exit on violations is preserved. Report-only: each violation carries a prose `fix` hint, but there is no `--fix` autofix flag (the rules either rewrite code or rename files, so an automatic codemod is not safe) |
