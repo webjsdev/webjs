@@ -393,6 +393,23 @@ In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
 start`) as the CMD over `node ... webjs.js start ...`. The npm form
 fires `prestart`; the direct binary form skips it.
 
+### Running on Bun instead of Node
+
+webjs runs on **Node 24+ or Bun**. The same `package.json` scripts work on
+either; to run under Bun, force it with `--bun` so the server executes on Bun
+rather than the `webjs` bin's Node shebang:
+
+```sh
+bun install
+bun --bun run dev      # or: bun --bun run start
+```
+
+On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
+on Bun (which has no built-in) it comes from `amaro` automatically, so the same
+source serves identically. SSR action-result seeding (an internal hydration
+optimization) is off on Bun (it needs `module.registerHooks`), which only means
+an async-render component re-fetches once on hydration, no behavior change.
+
 **Containerized deploy ships with the scaffold.** `Dockerfile`,
 `compose.yaml`, and `.dockerignore` are scaffolded at the app root. The
 Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs
@@ -1126,7 +1143,7 @@ composition, so a nested shell ends up dropped by the HTML parser.
    browser-only). Never fetch initial data in `connectedCallback` /
    `firstUpdated`. Fetch in the page function (server) and pass it as
    a prop. See *Component pattern* above.
-8. **Erasable TypeScript only.** Node 24+ strips types via
+8. **Erasable TypeScript only.** The runtime (Node 24+ or Bun) strips types via
    `module.stripTypeScriptTypes` (whitespace replacement, byte-exact
    line and column position preservation, no sourcemap shipped to the
    browser). Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so

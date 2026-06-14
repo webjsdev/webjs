@@ -6,12 +6,13 @@ run is part of the user-visible workflow, no separate build step:
 
 - **Editor** (VS Code) runs the TypeScript language server continuously. Red-squiggle on wrong types, including non-erasable syntax (see below).
 - **CI** (optional) runs `tsc --noEmit` against `tsconfig.json`. Type-check only. Also catches non-erasable syntax via `erasableSyntaxOnly`.
-- **Dev + prod server** (runtime, both directions): Node 24+'s built-in TypeScript type-stripping handles server-side `.ts` imports automatically (`process.features.typescript === 'strip'`). Browser-bound `.ts` requests go through `module.stripTypeScriptTypes` on the dev server, which performs whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap needs to be shipped and stack traces are byte-exact. The transform is cached by mtime (~microseconds per cache hit). Implementation backing: Node ships the [`amaro`](https://github.com/nodejs/amaro) package internally, which wraps SWC's WASM TypeScript transform in a position-preserving strip-only mode. If the framework ever needs to run on a non-Node runtime (Bun, Deno) we will install `amaro` directly or an equivalent position-preserving stripper (Sucrase preserves lines but not columns; SWC's strip mode also works).
+- **Dev + prod server** (runtime, both directions): the runtime's TypeScript type-stripping handles server-side `.ts` imports automatically (on Node, `process.features.typescript === 'strip'`; Bun runs `.ts` natively). Browser-bound `.ts` requests go through the pluggable stripper in `packages/server/src/ts-strip.js` (#508) on the dev server, which performs whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap needs to be shipped and stack traces are byte-exact. The transform is cached by mtime (~microseconds per cache hit). Implementation backing: on **Node 24+** it is the built-in `module.stripTypeScriptTypes` (which itself wraps the [`amaro`](https://github.com/nodejs/amaro) package, SWC's WASM TypeScript transform in position-preserving strip-only mode); on **Bun** (no such built-in) it is `amaro` loaded directly, an `optionalDependency` of `@webjsdev/server`, producing byte-identical output. `WEBJS_TS_STRIPPER=builtin|amaro` forces a backend. Edge runtimes without a filesystem are a separate, later target.
 
 ## TypeScript feature support: erasable only
 
-The framework uses Node 24+'s built-in `module.stripTypeScriptTypes`,
-which only supports **erasable TypeScript**: type annotations,
+The framework strips with Node 24+'s built-in `module.stripTypeScriptTypes`
+(or `amaro` on Bun, the same engine), which only supports **erasable
+TypeScript**: type annotations,
 `interface`, `type`, `declare`, generics, `import type`, `as` casts,
 and `satisfies`. Non-erasable syntax is rejected.
 
@@ -62,8 +63,8 @@ off so you catch the configuration drift before runtime.
 
 ## Import convention
 
-Use explicit `.ts` extensions in imports. Node 24+'s built-in
-type-stripping and the dev server's HTTP handler both key on the
+Use explicit `.ts` extensions in imports. The runtime's type-stripping
+and the dev server's HTTP handler both key on the
 file URL ending in `.ts` / `.mts`. For mixed codebases, `.js` imports
 that point at a `.ts` sibling also resolve in the dev server. Still
 prefer explicit `.ts`.

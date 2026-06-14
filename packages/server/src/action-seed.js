@@ -258,6 +258,18 @@ function seedLoadHook(url, context, nextLoad) {
  * second call.
  */
 export function registerSeedHooks() {
+  // The seed facade rides Node's synchronous `module.registerHooks` (#472).
+  // Bun (and any runtime without that API, #508) cannot install the hook, so
+  // seeding simply stays OFF there: `seedingEnabled()` returns false, ssr.js
+  // emits no seed block, and the client RPC stub falls back to a normal fetch.
+  // This is the same fail-open posture as a key miss, never wrong data.
+  if (typeof nodeModule.registerHooks !== 'function') {
+    if (!_registered) {
+      _registered = true;
+      console.warn('[webjs] SSR action-result seeding (#472) is disabled: module.registerHooks is unavailable on this runtime (e.g. Bun). Async-render components will re-fetch on hydration; no correctness impact.');
+    }
+    return;
+  }
   _enabled = true;
   if (_registered) return;
   _registered = true;

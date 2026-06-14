@@ -31,7 +31,7 @@ const ICON = {
 };
 
 const PILLARS = [
-  { icon: ICON.bolt, title: 'No build step', desc: 'Source files are served as native ES modules. Edit, refresh, see it. TypeScript is stripped by Node 24, no bundler, no compile.' },
+  { icon: ICON.bolt, title: 'No build step', desc: 'Source files are served as native ES modules. Edit, refresh, see it. TypeScript is stripped by the runtime (Node or Bun), no bundler, no compile.' },
   { icon: ICON.cube, title: 'Web components, light DOM', desc: 'A thin reactive base class with html and css tagged templates, signals, and the full lit lifecycle. Light DOM by default so Tailwind just works.' },
   { icon: ICON.layers, title: 'Progressive enhancement', desc: 'Everything renders to real HTML on the server. JavaScript is opt-in per interactive behavior. Dead JS is statically elided and never shipped.' },
   { icon: ICON.plug, title: 'Server actions, rich types', desc: 'Mark a file with use server and import it from the client. Date, Map, Set, BigInt, Blob, and cycles all round-trip through the wire.' },

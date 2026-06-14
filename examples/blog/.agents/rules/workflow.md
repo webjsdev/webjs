@@ -96,7 +96,7 @@ self-review loop.
 ## Framework rules
 
 - No build step: ES modules served directly.
-- **Erasable TypeScript only.** Node 24+ strips types via
+- **Erasable TypeScript only.** The runtime (Node 24+ or Bun) strips types via
   `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position
   preservation, no sourcemap). The scaffold's `tsconfig.json` sets
   `erasableSyntaxOnly: true`, so the TS compiler rejects `enum`, `namespace`
