@@ -29,7 +29,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 const CLI = join(ROOT, 'packages/cli/bin/webjs.js');
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
-// A per-pid port keeps parallel runs (the node + bun jobs) from colliding.
+// The node (`npm test`) and bun (`bun ...mjs`) runs are SEQUENTIAL CI steps, so
+// they do not race for a port; the per-pid offset is only defensive against a
+// leftover socket from a prior run lingering in TIME_WAIT.
 const PORT = 9700 + (process.pid % 250);
 const BASE = `http://localhost:${PORT}`;
 
