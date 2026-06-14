@@ -19,8 +19,10 @@
  * Design notes:
  *
  *   - **Streaming write.** `put` never buffers the whole file. It pipes
- *     `file.stream()` -> `Readable.fromWeb` -> `createWriteStream` via
- *     `node:stream/promises.pipeline`, so a large upload uses constant memory.
+ *     `file.stream()` -> a reader-loop async generator (`webStreamChunks`) ->
+ *     `createWriteStream` via `node:stream/promises.pipeline`, so a large upload
+ *     uses constant memory (the reader loop instead of `Readable.fromWeb` so a
+ *     mid-stream source error propagates through `pipeline` on Bun too, #509).
  *     The upstream body-size cap (#237, `maxMultipartBytes`) bounds the size
  *     BEFORE the bytes ever reach the store, so the store does not re-implement
  *     a limit; it only stays streaming.
@@ -181,15 +183,19 @@ export function assertSafeKey(dir, key) {
  * @returns {{ stream: import('node:stream').Readable, contentType: string | null }}
  */
 function toNodeStream(file) {
-  // A Blob / File exposes a web ReadableStream via `.stream()`; converting it
-  // with Readable.fromWeb keeps it streaming (no `.arrayBuffer()`).
+  // A Blob / File exposes a web ReadableStream via `.stream()`; consuming it
+  // through a reader-loop async generator (NOT `Readable.fromWeb`) keeps it
+  // streaming AND propagates a mid-stream source error reliably on both Node and
+  // Bun. `Readable.fromWeb` does NOT forward a web-stream error through
+  // `stream/promises.pipeline` on Bun (the `pipeline` promise never settles, so
+  // `put` would hang instead of rejecting + cleaning up the partial file, #509).
   if (file && typeof file.stream === 'function' && typeof file.size === 'number') {
     const contentType = typeof file.type === 'string' && file.type ? file.type : null;
-    return { stream: Readable.fromWeb(file.stream()), contentType };
+    return { stream: Readable.from(webStreamChunks(file.stream())), contentType };
   }
   // A web ReadableStream directly.
   if (file && typeof file.getReader === 'function') {
-    return { stream: Readable.fromWeb(/** @type {ReadableStream} */ (file)), contentType: null };
+    return { stream: Readable.from(webStreamChunks(/** @type {ReadableStream} */ (file))), contentType: null };
   }
   // A Uint8Array / Buffer: wrap as a single-chunk readable. This DOES hold the
   // bytes the caller already has in memory, but it does not COPY-buffer them
@@ -198,6 +204,27 @@ function toNodeStream(file) {
     return { stream: Readable.from([Buffer.from(file.buffer, file.byteOffset, file.byteLength)]), contentType: null };
   }
   throw new Error('file-storage: put() expects a Blob, File, ReadableStream, or Uint8Array');
+}
+
+/**
+ * Read a web `ReadableStream` chunk by chunk as an async iterable. A read error
+ * (a source that errors mid-stream) throws OUT of the generator, which
+ * `Readable.from` surfaces as a stream `error` that `pipeline` rejects on. This
+ * is the cross-runtime-reliable alternative to `Readable.fromWeb`, whose error
+ * does not propagate through `pipeline` on Bun (#509).
+ * @param {ReadableStream} web
+ */
+async function* webStreamChunks(web) {
+  const reader = web.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
 }
 
 /**
