@@ -16,9 +16,11 @@ services:
     build: .
     working_dir: /app/website
     # @webjsdev/cli installed in the root node_modules/.bin by npm workspaces;
-    # invoke its binary directly rather than via `webjs`. The server reads PORT
-    # (set below) with no --port flag, so the image HEALTHCHECK probes the same port.
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
+    # invoke its binary directly rather than via `webjs`. Run it under `bun` so
+    # `startServer` selects the native Bun.serve listener shell; the image carries
+    # the Bun binary (see Dockerfile). The server reads PORT (set below) with no
+    # --port flag, so the image HEALTHCHECK probes the same port.
+    command: ["bun", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15001:5001"
     environment:
@@ -31,7 +33,7 @@ services:
     image: webjs
     build: .
     working_dir: /app/docs
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
+    command: ["bun", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15002:5002"
     environment:
@@ -41,14 +43,15 @@ services:
     image: webjs
     build: .
     working_dir: /app/examples/blog
-    # Apply migrations, then start. `migrate deploy` is idempotent; a
-    # second boot on an already-migrated DB is a quick no-op.
+    # Apply migrations on Node (the proven Prisma CLI path), then serve on Bun.
+    # `migrate deploy` is idempotent; a second boot on an already-migrated DB is
+    # a quick no-op.
     command:
       - sh
       - -c
       - |
         node /app/node_modules/prisma/build/index.js migrate deploy && \
-        node /app/node_modules/@webjsdev/cli/bin/webjs.js start
+        bun /app/node_modules/@webjsdev/cli/bin/webjs.js start
     ports:
       - "15004:5004"
     environment:
@@ -68,7 +71,7 @@ services:
     #   GET /r/index.json           flat list of all items
     #   GET /docs/components/<name> per-component docs page
     # The registry JSON is built at image time (see Dockerfile RUN step).
-    command: ["node", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
+    command: ["bun", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
     ports:
       - "15003:5003"
     environment:
