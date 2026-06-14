@@ -67,6 +67,20 @@ function blogRuntimeExec() {
   return process.execPath;
 }
 
+/** Whether the blog under test is served on Bun (WEBJS_E2E_RUNTIME=bun). */
+const BLOG_ON_BUN = (process.env.WEBJS_E2E_RUNTIME || '').toLowerCase() === 'bun';
+
+/**
+ * Skip reason for tests that assert SSR action-result SEEDING (#472 / the #488
+ * GET seed). Seeding rides Node's `module.registerHooks`, which Bun lacks, so on
+ * Bun seeding is disabled FAIL-OPEN: the data is still correct (the component
+ * re-fetches over RPC instead of reading a seed), but the "no RPC because seeded"
+ * assertion does not hold. Node-only, the same carve-out the Bun unit-test matrix
+ * makes for the seed-hook tests. `false` when the blog runs on Node (tests run).
+ */
+const SEED_SKIP = BLOG_ON_BUN &&
+  'SSR action seeding (#472) needs module.registerHooks, unavailable on Bun (disabled fail-open); the seeded-vs-RPC assertion is node-only.';
+
 /**
  * Start the blog example dev server and wait until it's ready.
  * @param {number} port
@@ -388,7 +402,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(greeting.includes('Hello, world!'), 'the greeting survived the re-render');
   });
 
-  test('SSR action seeding: no action RPC on hydration, RPC on a prop bump (#472)', async () => {
+  test('SSR action seeding: no action RPC on hydration, RPC on a prop bump (#472)', { skip: SEED_SKIP }, async () => {
     // The /seeded page renders a shipping <seeded-user> whose async render()
     // awaits the getSeedUser 'use server' action. SSR bakes the result into the
     // first paint AND seeds it into the page, so the client's first render must
@@ -439,7 +453,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('HTTP-verb actions: GET read is seeded, POST mutation invalidates + refetches (#488)', async () => {
+  test('HTTP-verb actions: GET read is seeded, POST mutation invalidates + refetches (#488)', { skip: SEED_SKIP }, async () => {
     // /verbs reads via a GET action (cacheable, seeded on first paint) and a
     // POST mutation that invalidates the read's tag. Probe action RPCs: none on
     // hydration (the GET was seeded), then the bump fires the mutation and a
@@ -551,7 +565,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
+  test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', { skip: SEED_SKIP }, async () => {
     // Start on another page, then soft-navigate to /seeded through the client
     // router. The navigation response carries the seed payload, the router
     // ingests it (applySwap -> scanSeeds) before <seeded-user> hydrates, so the
