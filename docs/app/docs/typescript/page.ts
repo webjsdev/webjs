@@ -5,10 +5,10 @@ export const metadata = { title: 'TypeScript | webjs' };
 export default function TypeScript() {
   return html`
     <h1>TypeScript</h1>
-    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. The framework requires Node 24+, which strips TypeScript types natively (<code>process.features.typescript === 'strip'</code>). Server-side <code>.ts</code> imports work without any loader registration; browser-bound <code>.ts</code> requests go through <code>module.stripTypeScriptTypes</code> on the dev server. Both paths perform whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap is shipped and stack traces are byte-exact.</p>
+    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. It runs on <strong>Node 24+ or Bun</strong>; on Node the type-stripping is the built-in (<code>process.features.typescript === 'strip'</code>), on Bun it is <code>amaro</code> (byte-identical). Server-side <code>.ts</code> imports work without any loader registration; browser-bound <code>.ts</code> requests go through the runtime stripper on the dev server. Both paths perform whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap is shipped and stack traces are byte-exact.</p>
 
     <h2>No-Build TypeScript</h2>
-    <p>Node 24+'s built-in type stripping does the heavy lifting. The dev server reads each <code>.ts</code> request from disk, runs <code>module.stripTypeScriptTypes</code>, and serves the result. Transform time is around 1ms per file; the result is cached by mtime, so subsequent loads are instant. SSR and hydration produce identical JS because both halves use the same stripper.</p>
+    <p>The runtime's type stripping does the heavy lifting: Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on Bun (the same engine Node wraps internally, so the output is byte-identical). The dev server reads each <code>.ts</code> request from disk, strips it, and serves the result. Transform time is around 1ms per file; the result is cached by mtime, so subsequent loads are instant. SSR and hydration produce identical JS because both halves use the same stripper.</p>
     <p>On the server side, your pages, layouts, server actions, and middleware run as-is. On the client side, browsers fetch <code>.ts</code> URLs and receive whitespace-stripped JS with no sourcemap appended. The URL keeps its <code>.ts</code> extension; only the response body changes. In production, <code>webjs start</code> uses the same code path, with the same mtime cache.</p>
     <p>The "no build" promise is literal: every position in source maps to itself in runtime. DevTools shows accurate stack traces without consulting a sourcemap, and wire bytes drop by roughly 70% vs a bundler-with-sourcemap pipeline.</p>
 
@@ -67,8 +67,8 @@ import { slugify } from '../utils/slugify.js';
 import { prisma } from '../lib/prisma';       // ERROR</pre>
     <p>This convention works because:</p>
     <ul>
-      <li>Node 24+ strips types from <code>.ts</code> imports server-side natively. No loader hook required.</li>
-      <li>The dev server reads <code>.ts</code> files from disk, runs <code>module.stripTypeScriptTypes</code>, and serves the result with position-preserving whitespace replacement.</li>
+      <li>The runtime strips types from <code>.ts</code> imports server-side natively (Node 24+, or Bun). No loader hook required.</li>
+      <li>The dev server reads <code>.ts</code> files from disk, strips them (Node's <code>module.stripTypeScriptTypes</code> or <code>amaro</code> on Bun), and serves the result with position-preserving whitespace replacement.</li>
       <li>When the browser requests a <code>.js</code> file that doesn't exist but a sibling <code>.ts</code> does, webjs falls back to the <code>.ts</code> version automatically. This means libraries that import without extensions can still work.</li>
     </ul>
 

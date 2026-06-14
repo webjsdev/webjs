@@ -334,7 +334,7 @@ HEALTHCHECK CMD curl -f http://localhost:8080/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine. webjs strips TypeScript via Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, so no extra system packages are needed.</li>
+      <li><code>node:slim</code> works fine. webjs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
       <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
