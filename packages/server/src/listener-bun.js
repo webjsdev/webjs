@@ -60,7 +60,10 @@ export function startBunListener(ctx) {
   const server = Bun.serve({
     port,
     idleTimeout: bunIdleTimeout(timeouts),
-    development: dev,
+    // webjs owns its dev error overlay (over SSE) and handles thrown errors in
+    // `fetch`, so Bun's own development error page must never interfere; keep it
+    // deterministic (off) rather than tied to NODE_ENV.
+    development: false,
     /**
      * @param {Request} req
      * @param {any} srv  the Bun server (requestIP / upgrade)
@@ -142,6 +145,7 @@ export function startBunListener(ctx) {
     server,
     close: () => {
       if (watcherAbort) watcherAbort.abort();
+      hub.closeAll();
       return Promise.resolve(server.stop(true)).then(() => undefined);
     },
   };

@@ -1562,6 +1562,9 @@ function startNodeListener(ctx) {
     server,
     close: () => new Promise((r) => {
       if (watcherAbort) watcherAbort.abort();
+      // Clear the shared SSE keepalive timer so repeated startServer/close cycles
+      // (e.g. across a test run) don't accumulate live intervals.
+      hub.closeAll();
       server.close(() => r());
     }),
   };
