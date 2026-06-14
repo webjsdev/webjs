@@ -508,7 +508,7 @@ export async function createRequestHandler(opts) {
   // Read once (not per-rebuild): the hook is global and cannot be cleanly
   // un-installed, so toggling needs a restart. Disabled -> no hook, no ambient
   // collector wrap in ssr.js, and module loading stays byte-identical.
-  if (await readSeedEnabled(appDir)) registerSeedHooks();
+  if (await readSeedEnabled(appDir)) await registerSeedHooks();
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no

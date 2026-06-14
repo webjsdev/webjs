@@ -23,7 +23,7 @@ import { stringify } from '@webjsdev/core';
 let dir;
 let actionUrl, utilUrl;
 
-before(() => {
+before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'webjs-seedhook-'));
   const action = join(dir, 'users.server.js');
   writeFileSync(
@@ -39,7 +39,7 @@ before(() => {
   utilUrl = pathToFileURL(util).toString();
 
   // Install the global hook BEFORE importing the fixtures (ESM caches by URL).
-  registerSeedHooks();
+  await registerSeedHooks();
 });
 
 after(() => { rmSync(dir, { recursive: true, force: true }); });

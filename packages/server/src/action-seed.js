@@ -18,11 +18,18 @@
  * The framework promise is "what you write is what you see in the browser source
  * tab", not "what you write is the exact function object that runs server-side"
  * (the RPC stub already replaces the action on the client). So we install a
- * SERVER-SIDE transparent facade via Node's synchronous `module.registerHooks`
- * (Node 24+, main-thread): for a `'use server'` `*.server.*` module, the load
- * hook returns a facade that re-exports each function wrapped in a `Proxy`. The
- * Proxy records `(file, fn, args) -> result` into an ambient `AsyncLocalStorage`
- * collector WHENEVER a collector is active, and is a pure passthrough otherwise.
+ * SERVER-SIDE transparent facade at module load: for a `'use server'`
+ * `*.server.*` module, the load hook returns a facade that re-exports each
+ * function wrapped in a `Proxy`. The Proxy records `(file, fn, args) -> result`
+ * into an ambient `AsyncLocalStorage` collector WHENEVER a collector is active,
+ * and is a pure passthrough otherwise.
+ *
+ * The facade SOURCE and the wrapping (`__seedWrap`, `buildSeedFacade`) are
+ * runtime-neutral; only the INSTALL mechanism differs by runtime (`#529`), chosen
+ * by `serverRuntime()`: Node uses the synchronous `module.registerHooks` load
+ * hook (Node 24+, main-thread); Bun uses a `Bun.plugin` `onLoad` (Bun has no
+ * `module.registerHooks`). Both feed the same `AsyncLocalStorage` collector and
+ * emit the same seed wire, so a page seeds identically on either runtime.
  *
  * Recording is gated entirely by the ALS collector, which is established ONLY
  * around the SSR page render (`collectSeeds`). The RPC endpoint path runs with
@@ -48,6 +55,7 @@ import { fileURLToPath } from 'node:url';
 import { stringify } from '@webjsdev/core';
 import { hashFile } from './actions.js';
 import { isStreamable } from './action-stream.js';
+import { serverRuntime } from './listener-core.js';
 
 /** Ambient per-render seed collector. `Map<key, value>` or undefined. */
 const als = new AsyncLocalStorage();
@@ -215,13 +223,46 @@ function buildFacade(origUrl, absPath, exports) {
   return out;
 }
 
-/** Match `*.server.{js,ts,mjs,mts}` (optionally with a query). */
-const SERVER_FILE_RE = /\.server\.m?[jt]s(\?|$)/;
+/** Match `*.server.{js,ts,mjs,mts}` (optionally with a query). Also the Bun plugin filter. */
+export const SERVER_FILE_RE = /\.server\.m?[jt]s(\?|$)/;
 /** The `'use server'` directive in the file head. */
 const USE_SERVER_RE = /^\s*(['"])use server\1\s*;?\s*$/m;
 
 /**
- * The synchronous `module.registerHooks` load hook. For a `'use server'`
+ * Whether a load specifier (a Node file URL or a Bun file path, with an optional
+ * query) is a faceting candidate: a `*.server.*` module that is NOT the facade's
+ * own `?webjs-seed-orig` passthrough of the real module. Runtime-neutral.
+ * @param {string} specifier
+ * @returns {boolean}
+ */
+export function isSeedCandidate(specifier) {
+  return SERVER_FILE_RE.test(specifier) && !specifier.includes('webjs-seed-orig');
+}
+
+/**
+ * Build the wrapping facade for a candidate module's source, or null to pass it
+ * through unwrapped (no `'use server'`, a non-enumerable `export *`, or no
+ * exports). Runtime-neutral: the caller passes the load specifier (URL on Node,
+ * path on Bun) used as the facade's `?webjs-seed-orig` import base, plus the
+ * absolute file path (the hash basis) and the already-read source.
+ * @param {string} origSpec the real module's load specifier (URL or path), no seed query
+ * @param {string} absPath the real module's absolute file path
+ * @param {string} src the module source
+ * @returns {string | null} facade source, or null for passthrough
+ */
+export function buildSeedFacade(origSpec, absPath, src) {
+  const head = src.split('\n').slice(0, 5).join('\n');
+  if (!USE_SERVER_RE.test(head)) return null;
+  const exports = extractExportNames(src);
+  // A `export *` re-export cannot be enumerated; skip faceting (passthrough)
+  // so we never emit a facade that silently drops re-exported bindings.
+  if (exports.hasStar) return null;
+  if (exports.names.length === 0 && !exports.hasDefault) return null;
+  return buildFacade(origSpec, absPath, exports);
+}
+
+/**
+ * The synchronous `module.registerHooks` load hook (Node). For a `'use server'`
  * `*.server.*` module it returns a wrapping facade; for everything else
  * (including the `?webjs-seed-orig` passthrough of the real module) it defers to
  * `nextLoad`. Fail-open: any error defers to `nextLoad`, so a load that the hook
@@ -232,19 +273,11 @@ const USE_SERVER_RE = /^\s*(['"])use server\1\s*;?\s*$/m;
  */
 function seedLoadHook(url, context, nextLoad) {
   try {
-    if (!SERVER_FILE_RE.test(url)) return nextLoad(url, context);
-    // The facade's own `?webjs-seed-orig` import must load the REAL module.
-    if (url.includes('webjs-seed-orig')) return nextLoad(url, context);
+    if (!isSeedCandidate(url)) return nextLoad(url, context);
     const absPath = fileURLToPath(url.split('?')[0]);
     const src = readFileSync(absPath, 'utf8');
-    const head = src.split('\n').slice(0, 5).join('\n');
-    if (!USE_SERVER_RE.test(head)) return nextLoad(url, context);
-    const exports = extractExportNames(src);
-    // A `export *` re-export cannot be enumerated; skip faceting (passthrough)
-    // so we never emit a facade that silently drops re-exported bindings.
-    if (exports.hasStar) return nextLoad(url, context);
-    if (exports.names.length === 0 && !exports.hasDefault) return nextLoad(url, context);
-    const source = buildFacade(url, absPath, exports);
+    const source = buildSeedFacade(url, absPath, src);
+    if (source == null) return nextLoad(url, context);
     return { source, format: 'module', shortCircuit: true };
   } catch {
     return nextLoad(url, context);
@@ -253,27 +286,36 @@ function seedLoadHook(url, context, nextLoad) {
 
 /**
  * Install the seed load hook (idempotent). Called once at boot from `dev.js`
- * when seeding is enabled, BEFORE any action module is imported (ESM caches by
- * URL, so a module loaded before the hook would never be faceted). A no-op on a
- * second call.
+ * when seeding is enabled, BEFORE any action module is imported (a module loaded
+ * before the hook would already be cached unwrapped). The install mechanism is
+ * chosen by `serverRuntime()` (#529): Node's synchronous `module.registerHooks`,
+ * or a `Bun.plugin` `onLoad` on Bun. A no-op on a second call. Async because the
+ * Bun path dynamically imports `action-seed-bun.js` (so the `Bun.*` global is
+ * never referenced on Node); the Node path resolves synchronously.
+ * @returns {Promise<void>}
  */
-export function registerSeedHooks() {
-  // The seed facade rides Node's synchronous `module.registerHooks` (#472).
-  // Bun (and any runtime without that API, #508) cannot install the hook, so
-  // seeding simply stays OFF there: `seedingEnabled()` returns false, ssr.js
-  // emits no seed block, and the client RPC stub falls back to a normal fetch.
-  // This is the same fail-open posture as a key miss, never wrong data.
-  if (typeof nodeModule.registerHooks !== 'function') {
-    if (!_registered) {
-      _registered = true;
-      console.warn('[webjs] SSR action-result seeding (#472) is disabled: module.registerHooks is unavailable on this runtime (e.g. Bun). Async-render components will re-fetch on hydration; no correctness impact.');
-    }
-    return;
-  }
-  _enabled = true;
+export async function registerSeedHooks() {
   if (_registered) return;
   _registered = true;
+
+  if (serverRuntime() === 'bun') {
+    // Bun has no module.registerHooks; install the same facade via Bun.plugin.
+    const { installBunSeedPlugin } = await import('./action-seed-bun.js');
+    installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE });
+    _enabled = true;
+    return;
+  }
+
+  // A runtime that is neither Node-with-registerHooks nor Bun: seeding stays
+  // OFF (fail-open). `seedingEnabled()` is false, ssr.js emits no seed block,
+  // and the client RPC stub falls back to a normal fetch. Never wrong data.
+  if (typeof nodeModule.registerHooks !== 'function') {
+    console.warn('[webjs] SSR action-result seeding (#472) is disabled: this runtime has neither module.registerHooks nor Bun.plugin. Async-render components re-fetch on hydration; no correctness impact.');
+    return;
+  }
+
   nodeModule.registerHooks({ load: seedLoadHook });
+  _enabled = true;
 }
 
 /**
