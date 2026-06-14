@@ -142,6 +142,12 @@ function newEncodeCtx() {
     emitted: new Set(),   // ids already emitted as the canonical encoding
     nextId: 0,
     blobBytes: new Map(), // Blob → Uint8Array (precomputed during countRefs)
+    // FormData → its entries captured ONCE. Bun returns a FRESH Blob/File
+    // identity on every FormData.entries()/get() call (Node returns a stable
+    // one), so countRefs and encode must iterate the SAME captured array or the
+    // identity-keyed blobBytes lookup misses on Bun (crash). Captured here so
+    // both passes see the same Blob objects on every runtime.
+    fdEntries: new Map(),
   };
 }
 
@@ -164,7 +170,11 @@ async function countRefs(value, ctx) {
       continue;
     }
     if (typeof FormData !== 'undefined' && v instanceof FormData) {
-      for (const [, val] of v.entries()) {
+      // Capture entries ONCE (see fdEntries note) and traverse THOSE Blob
+      // objects, so encode reuses the exact instances whose bytes we precompute.
+      const captured = ctx.fdEntries.get(v) || [...v.entries()];
+      ctx.fdEntries.set(v, captured);
+      for (const [, val] of captured) {
         if (typeof val !== 'string') stack.push(val);
       }
       continue;
@@ -233,8 +243,12 @@ function encodeOne(v, ctx) {
       out = { [TAG]: 'Blob', v: bytesToB64(bytes), t: v.type || '' };
     }
   } else if (typeof FormData !== 'undefined' && v instanceof FormData) {
+    // Reuse the entries captured in countRefs so the Blob/File instances match
+    // the ones whose bytes were precomputed (Bun yields fresh identities per
+    // entries() call; see the fdEntries note in newEncodeCtx).
+    const captured = ctx.fdEntries.get(v) || [...v.entries()];
     const entries = [];
-    for (const [k, val] of v.entries()) entries.push([k, encodeOne(val, ctx)]);
+    for (const [k, val] of captured) entries.push([k, encodeOne(val, ctx)]);
     out = { [TAG]: 'FD', v: entries };
   } else if (ArrayBuffer.isView(v) || v instanceof ArrayBuffer) {
     out = encodeBinary(v);

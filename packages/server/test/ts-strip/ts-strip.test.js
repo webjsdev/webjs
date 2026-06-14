@@ -82,3 +82,39 @@ test('stripperName is null before resolution', () => {
   __resetStripper();
   assert.equal(stripperName(), null);
 });
+
+/* ---------------- non-erasable error parity (#509) ---------------- */
+
+// A non-erasable construct must fail strip on BOTH backends with the SAME error
+// code, so the one downstream classifier (dev.js's tsResponse ts-strip frame +
+// 500) fires identically on Node and Bun. Node's built-in throws
+// `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`; amaro reports `UnsupportedSyntax`, which
+// the seam normalizes to the same code. Found by the Bun test matrix: without
+// the normalization the dev-error overlay never classified the failure on Bun.
+const NON_ERASABLE = 'export enum Color { Red, Green }\n';
+
+test('the amaro backend tags a non-erasable error with Node\'s code (#509)', async () => {
+  process.env.WEBJS_TS_STRIPPER = 'amaro';
+  __resetStripper();
+  await assert.rejects(
+    () => stripTypeScript(NON_ERASABLE),
+    (err) => {
+      assert.equal(err.code, 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX', 'amaro error normalized to the Node code');
+      return true;
+    },
+  );
+  delete process.env.WEBJS_TS_STRIPPER;
+});
+
+test('the built-in backend throws the same code for the same construct', async () => {
+  process.env.WEBJS_TS_STRIPPER = 'builtin';
+  __resetStripper();
+  await assert.rejects(
+    () => stripTypeScript(NON_ERASABLE),
+    (err) => {
+      assert.equal(err.code, 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX', 'built-in uses the Node code');
+      return true;
+    },
+  );
+  delete process.env.WEBJS_TS_STRIPPER;
+});

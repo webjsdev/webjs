@@ -27,7 +27,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stripTypeScriptTypes } from 'node:module';
+// Use the framework's OWN runtime-portable stripper (Node's built-in on Node,
+// amaro on Bun), NOT a named `import { stripTypeScriptTypes } from 'node:module'`
+// (which is a LINK-TIME SyntaxError on Bun, where that export is absent). This
+// also pins the served bytes against the EXACT stripper the server used on this
+// runtime, so the byte-identity assertion holds on both.
+import { stripTypeScript } from '../../packages/server/src/ts-strip.js';
 
 import { createRequestHandler } from '@webjsdev/server';
 
@@ -80,7 +85,7 @@ test('TS type-strip is position-preserving: served line/column equals authored',
   // shift a line or column). This also closes the gap where positionPreserved
   // alone would tolerate a real code character being blanked to a space: only
   // genuine type syntax is blanked here.
-  assert.equal(s, stripTypeScriptTypes(a),
+  assert.equal(s, await stripTypeScript(a),
     'served bytes must equal the position-preserving type-strip of the authored source, nothing more');
   // Sampled column fidelity: a code line with no types is byte-identical and
   // at the same line index.

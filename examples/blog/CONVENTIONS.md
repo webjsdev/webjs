@@ -785,7 +785,7 @@ export async function createPost(input: {
 
 <!-- OVERRIDE -->
 - TypeScript with explicit `.ts` extensions in imports
-- **Erasable TypeScript only.** The framework strips types via Node 24+'s built-in `module.stripTypeScriptTypes` (whitespace replacement, byte-exact line + column preservation, no sourcemap shipped). Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so the compiler rejects: `enum`, `namespace` with values, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`, and `import = require`. Write the erasable equivalents:
+- **Erasable TypeScript only.** The runtime strips types at the runtime layer (Node 24+'s built-in `module.stripTypeScriptTypes`, or `amaro` on Bun, byte-identical) with whitespace replacement, so line + column positions are byte-exact and no sourcemap ships. Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so the compiler rejects: `enum`, `namespace` with values, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`, and `import = require`. Write the erasable equivalents:
   ```ts
   // Not allowed
   enum Color { Red, Green, Blue }

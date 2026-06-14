@@ -3,8 +3,10 @@
  *   - the action RPC endpoint returns 413 for an over-limit body, driven through
  *     `createRequestHandler` (the real handle pipeline);
  *   - the `route.{js,ts}` `readBody` path returns 413 via `handleApi`, exercised
- *     with the per-request limit stamped in the request context;
- *   - a real ephemeral `startServer` carries the configured node:http timeouts.
+ *     with the per-request limit stamped in the request context.
+ *
+ * The node:http server-timeout assertions moved to server-timeouts.test.js (#509),
+ * leaving this file's 413 body-limit tests runtime-agnostic (they run under Bun).
  *
  * tmpdir app fixtures, like dev-handler.test.js. Route fixtures that need the
  * `html` tag import it from core's source by absolute file URL (a random tmpdir
@@ -17,15 +19,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createRequestHandler, startServer } from '../../src/dev.js';
+import { createRequestHandler } from '../../src/dev.js';
 import { handleApi } from '../../src/api.js';
 import { readBody } from '../../src/json.js';
 import { withRequest, setBodyLimits } from '../../src/context.js';
-import {
-  DEFAULT_REQUEST_TIMEOUT_MS,
-  DEFAULT_HEADERS_TIMEOUT_MS,
-  DEFAULT_KEEP_ALIVE_TIMEOUT_MS,
-} from '../../src/body-limit.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML_URL = pathToFileURL(resolve(__dirname, '../../../core/src/html.js')).toString();
@@ -222,34 +219,7 @@ test('page action form: over-limit multipart/urlencoded body is 413, under-limit
   assert.equal(big.status, 413);
 });
 
-/* --------------- server timeouts on the real node:http server --------------- */
-
-test('startServer applies node:http timeouts (secure defaults)', async () => {
-  const appDir = makeApp({ 'app/page.js': `export default () => 'home';` });
-  const { server, close } = await startServer({ appDir, port: 0, dev: false });
-  try {
-    assert.equal(server.requestTimeout, DEFAULT_REQUEST_TIMEOUT_MS);
-    assert.equal(server.headersTimeout, DEFAULT_HEADERS_TIMEOUT_MS);
-    assert.equal(server.keepAliveTimeout, DEFAULT_KEEP_ALIVE_TIMEOUT_MS);
-    assert.ok(server.headersTimeout < server.requestTimeout, 'headersTimeout must be under requestTimeout');
-  } finally {
-    await close();
-  }
-});
-
-test('startServer honors webjs.* timeout config', async () => {
-  const appDir = makeApp({
-    'app/page.js': `export default () => 'home';`,
-    'package.json': JSON.stringify({
-      webjs: { requestTimeoutMs: 45000, headersTimeoutMs: 12000, keepAliveTimeoutMs: 8000 },
-    }),
-  });
-  const { server, close } = await startServer({ appDir, port: 0, dev: false });
-  try {
-    assert.equal(server.requestTimeout, 45000);
-    assert.equal(server.headersTimeout, 12000);
-    assert.equal(server.keepAliveTimeout, 8000);
-  } finally {
-    await close();
-  }
-});
+// The node:http server-timeout tests moved to server-timeouts.test.js (#509):
+// they assert node:http-only `server.*Timeout` properties (the Bun shell uses
+// Bun.serve's idleTimeout), so they are denylisted in the Bun matrix while the
+// runtime-agnostic 413 body-limit tests above DO run under Bun.

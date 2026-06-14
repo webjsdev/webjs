@@ -37,7 +37,11 @@ before(async () => {
   w('app/api/sse/route.ts', `export async function GET() {\n  const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('data: hi\\n\\n')); c.close(); } });\n  return new Response(body, { headers: { 'content-type': 'text/event-stream' } });\n}\n`);
 
   ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: quiet }));
-  base = `http://localhost:${server.address().port}`;
+  // The node shell exposes the port via server.address(); the Bun shell via
+  // server.port. Support both so this runs on either runtime (it then exercises
+  // each shell's own compression negotiation).
+  const port = typeof server.port === 'number' ? server.port : server.address().port;
+  base = `http://localhost:${port}`;
 });
 
 after(async () => {

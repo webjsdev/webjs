@@ -104,17 +104,6 @@ test('handleApi: params are also attached to the Request object', async () => {
   assert.deepEqual(body, { params: { id: '42', slug: 'hello' } });
 });
 
-test('handleApi: dev=true cache-busts the import (re-reads the module from disk)', async () => {
-  const file = join(dir, 'live.js');
-  await writeFile(file, `export async function GET() { return new Response('v1'); }`);
-
-  const route = { file };
-  const r1 = await handleApi(route, {}, new Request('http://x/api/live'), true);
-  assert.equal(await r1.text(), 'v1');
-
-  // Overwrite module and call again with dev=true; cache-busting query should
-  // force re-import.
-  await writeFile(file, `export async function GET() { return new Response('v2'); }`);
-  const r2 = await handleApi(route, {}, new Request('http://x/api/live'), true);
-  assert.equal(await r2.text(), 'v2');
-});
+// The dev cache-bust test moved to dev-cache-bust.test.js (#509): it is the one
+// handleApi behavior that is Node-only (Bun ignores the ?t= import cache-bust),
+// so it is denylisted in the Bun matrix while the rest of this file runs on Bun.
