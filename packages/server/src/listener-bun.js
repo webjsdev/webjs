@@ -36,7 +36,7 @@
  * Node (the global is only read inside functions), but it is never loaded there.
  */
 import { EventEmitter } from 'node:events';
-import { Readable } from 'node:stream';
+import { Readable, pipeline } from 'node:stream';
 import { matchApi } from './router.js';
 import { registerClient } from './broadcast.js';
 import {
@@ -48,6 +48,7 @@ import {
   negotiateEncoding,
   createCompressor,
   varyWithAcceptEncoding,
+  webStreamChunks,
 } from './listener-core.js';
 
 /* global Bun */
@@ -326,7 +327,16 @@ function maybeCompress(resp, req) {
   headers.set('content-encoding', encoding);
   headers.delete('content-length');
   headers.set('vary', varyWithAcceptEncoding(headers.get('vary')));
-  const body = Readable.toWeb(Readable.fromWeb(resp.body).pipe(compressor));
+  // Feed the web body into the compressor through the reader-loop generator (NOT
+  // Readable.fromWeb, which does not propagate a mid-stream source error through
+  // `pipeline` on Bun, the #509 hang) and drive it with `pipeline` so a source
+  // error (or a client disconnect destroying the output) tears down the whole
+  // chain instead of leaking/hanging the compressor. Backpressure is preserved:
+  // a slow client stalls `toWeb`, which stalls the compressor, which pauses the
+  // source.
+  const source = Readable.from(webStreamChunks(resp.body));
+  pipeline(source, compressor, () => {});
+  const body = Readable.toWeb(compressor);
   return new Response(body, { status: resp.status, statusText: resp.statusText, headers });
 }
 

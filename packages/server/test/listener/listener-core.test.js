@@ -17,6 +17,7 @@ import {
   negotiateEncoding,
   createCompressor,
   varyWithAcceptEncoding,
+  webStreamChunks,
 } from '../../src/listener-core.js';
 import { setBasePath } from '../../src/importmap.js';
 
@@ -174,6 +175,37 @@ test('varyWithAcceptEncoding merges without duplicating', () => {
   assert.equal(varyWithAcceptEncoding('Cookie'), 'Cookie, Accept-Encoding');
   assert.equal(varyWithAcceptEncoding('Accept-Encoding'), 'Accept-Encoding', 'no duplicate');
   assert.equal(varyWithAcceptEncoding('Origin, Accept-Encoding'), 'Origin, Accept-Encoding', 'already present, unchanged');
+});
+
+/* ---------------- webStreamChunks (the compression body bridge) ---------------- */
+
+test('webStreamChunks yields a web stream chunk by chunk', async () => {
+  const ws = new ReadableStream({
+    start(c) { c.enqueue(new Uint8Array([1, 2])); c.enqueue(new Uint8Array([3])); c.close(); },
+  });
+  const out = [];
+  for await (const chunk of webStreamChunks(ws)) out.push(...chunk);
+  assert.deepEqual(out, [1, 2, 3]);
+});
+
+test('webStreamChunks PROPAGATES a mid-stream source error (the #509 anti-hang)', async () => {
+  let pulls = 0;
+  const ws = new ReadableStream({
+    pull(c) { if (pulls++ === 0) c.enqueue(new Uint8Array([1])); else c.error(new Error('boom')); },
+  });
+  await assert.rejects(async () => { for await (const _ of webStreamChunks(ws)) { void _; } }, /boom/);
+});
+
+test('webStreamChunks cancels the source on early break', async () => {
+  let cancelled = false;
+  const ws = new ReadableStream({
+    pull(c) { c.enqueue(new Uint8Array([1])); },
+    cancel() { cancelled = true; },
+  });
+  for await (const _ of webStreamChunks(ws)) { void _; break; } // take one, then break early
+  // microtask for the async cancel in the generator's finally to settle
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(cancelled, true, 'the source web stream is cancelled when the consumer stops early');
 });
 
 /* ---------------- serverRuntime ---------------- */

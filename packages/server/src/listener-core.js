@@ -109,6 +109,33 @@ export function varyWithAcceptEncoding(existingVary) {
 }
 
 /**
+ * Read a web `ReadableStream` chunk by chunk as an async iterable. A read error
+ * (a source body that errors mid-stream) throws OUT of the generator, which
+ * `Readable.from` surfaces as a node stream `error` that `pipeline` then
+ * propagates by destroying the whole chain. This is the cross-runtime-reliable
+ * way to feed a web body into a node stream: `Readable.fromWeb` does NOT
+ * propagate a web-stream error through `pipeline` on Bun (the #509 hang), so the
+ * Bun compression path must NOT use it. On early termination (the consumer
+ * aborted, e.g. a client disconnect destroyed the compressor) the source is
+ * cancelled so an upstream producer stops.
+ * @param {ReadableStream} web
+ */
+export async function* webStreamChunks(web) {
+  const reader = web.getReader();
+  let finished = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) { finished = true; return; }
+      yield value;
+    }
+  } finally {
+    if (!finished) { try { await reader.cancel(); } catch {} }
+    try { reader.releaseLock(); } catch {}
+  }
+}
+
+/**
  * Load a `route.{js,ts}` module for its `WS` export, cache-busting in dev so a
  * code edit is picked up per connection. Shared by the node WebSocket subsystem
  * (`websocket.js`) and the Bun upgrade path so both resolve the handler identically.
