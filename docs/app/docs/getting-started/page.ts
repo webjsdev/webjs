@@ -9,7 +9,7 @@ export default function GettingStarted() {
 
     <h2>Prerequisites</h2>
     <ul>
-      <li><strong>Node.js 24+</strong>: webjs uses Node's built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>), which is default-on and stable from Node 24.</li>
+      <li><strong>Node.js 24+ or Bun</strong>: on Node, webjs uses the built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>), default-on and stable from Node 24. On Bun (which has no such built-in), it strips via <code>amaro</code> automatically. Run a Bun app with <code>bun --bun run dev</code> / <code>bun --bun run start</code>.</li>
       <li><strong>npm</strong> (or any package manager).</li>
     </ul>
 

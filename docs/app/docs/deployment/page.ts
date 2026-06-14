@@ -5,7 +5,7 @@ export const metadata = { title: 'Deployment | webjs' };
 export default function Deployment() {
   return html`
     <h1>Deployment</h1>
-    <p>webjs runs as a standard Node.js server. There is no static export, no serverless adapter, no edge runtime. Deploy it anywhere you can run Node 24+ (the minimum is set by Node's built-in TypeScript type-stripping): a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal.</p>
+    <p>webjs runs as a standard server on <strong>Node 24+ or Bun</strong>. There is no static export, no serverless adapter, and no edge runtime yet. Deploy it anywhere you can run Node or Bun: a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal. On Node the minimum is set by the built-in TypeScript type-stripping; on Bun the stripping comes from <code>amaro</code> automatically, so the same source runs on either.</p>
 
     <h2>Dev vs Prod</h2>
     <p>webjs has two modes, controlled by the npm script (which wraps the underlying <code>webjs dev</code> / <code>webjs start</code> CLI):</p>
@@ -400,7 +400,7 @@ pm2 start "webjs start" --name my-app</pre>
 
     <h2>Deployment Checklist</h2>
     <ul>
-      <li>Node 24+ installed (required for the built-in TypeScript type-stripping that the framework uses for both server-side imports and browser-bound <code>.ts</code> files).</li>
+      <li>Node 24+ or Bun installed (the TypeScript type-stripping for both server-side imports and browser-bound <code>.ts</code> files comes from Node's built-in on Node, or <code>amaro</code> on Bun).</li>
       <li><code>npm ci --omit=dev</code> to install only runtime dependencies.</li>
       <li>Run <code>npx prisma generate</code> if you use Prisma.</li>
       <li>No build step. Source <code>.js</code> / <code>.ts</code> files are deployed as-is. TypeScript types are stripped on first request via Node's built-in stripper (whitespace replacement, byte-exact positions, no sourcemap overhead) and cached by mtime.</li>
