@@ -128,7 +128,7 @@ Two.
 
 `<webjs-frame>` is an escape hatch for partial-swap regions not tied to a folder structure. Wrap a chunk of your page in `<webjs-frame id="cart-summary">`, and you can use `revalidate('/cart-summary')` to refresh just that fragment without a full navigation. It is for cases where you want to re-fetch data in place without leaving the page. Implementation is at `packages/core/src/webjs-frame.js`.
 
-`expose()` lets a server action also live at a REST URL. The same function powers both call paths. From a client component: `import { createPost }` and call it as RPC. From curl: `POST /api/posts`. One implementation, two protocols. The function lives in `packages/core/src/expose.js`.
+A server action can also live at a REST URL. The same function powers both call paths. From a client component: `import { createPost }` and call it as RPC. From curl: drop it into a `route.ts` (`export const POST = route(createPost)`), so `POST /api/posts` hits the same implementation. One function, two protocols. The `route()` helper lives in `packages/server/src/action-route.js`.
 
 
 # What I am still figuring out
