@@ -14,7 +14,6 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { gzipSync, gunzipSync } from 'node:zlib';
 
 import { startServer } from '../../index.js';
 
@@ -60,10 +59,14 @@ test('a pre-encoded (content-encoding: gzip) body is NOT double-compressed', asy
   const r = await fetch(`${base}/api/preenc`, { headers: { 'accept-encoding': 'gzip' } });
   assert.equal(r.headers.get('content-encoding'), 'gzip', 'the original single gzip encoding is preserved');
   const raw = Buffer.from(await r.arrayBuffer());
-  // undici already decompressed one gzip layer (content-encoding: gzip). If the
-  // server had re-compressed, `raw` would still be gzip; assert it is the JSON.
-  const text = looksGzip(raw) ? gunzipSync(raw).toString() : raw.toString();
-  assert.deepEqual(JSON.parse(text), { hello: 'world', n: 42 }, 'body decodes with a single gunzip (no double-compress)');
+  // undici auto-decompresses ONE gzip layer (content-encoding: gzip). With the
+  // guard the wire is a single gzip, so `raw` is now plain JSON. WITHOUT the
+  // guard the server double-compresses (wire = gzip(gzip(json))), undici peels
+  // one layer, and `raw` would STILL be gzip. So the discriminating assertion is
+  // that `raw` is NOT gzip-framed: a tautological "gunzip if it looks gzip" would
+  // launder the bug away (the double-gzip case passes too), so do NOT do that.
+  assert.ok(!looksGzip(raw), 'undici fully decoded in one pass: the server did not double-compress');
+  assert.deepEqual(JSON.parse(raw.toString()), { hello: 'world', n: 42 }, 'the single-gunzip body is the JSON');
 });
 
 test('an existing Vary header is merged, not clobbered, on compression', async () => {
