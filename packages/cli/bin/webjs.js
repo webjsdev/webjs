@@ -40,7 +40,8 @@ if (cmd !== 'help' && cmd !== undefined) {
 const TEMPLATES = ['full-stack', 'api', 'saas'];
 
 const USAGE = `webjs commands:
-  webjs dev   [--port 8080]                       Start dev server with live reload
+  webjs dev   [--port 8080] [--no-hot]            Start dev server with live reload
+                                                  (--no-hot: run in-process, no hot-reload supervisor)
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
