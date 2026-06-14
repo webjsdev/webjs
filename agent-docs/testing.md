@@ -108,6 +108,42 @@ cross-package suite (`packages/*/test/` + `test/`). They do NOT walk the in-repo
 apps' own test dirs (`website/test/`, `examples/blog/test/`), so those run from
 each app's OWN `webjs test` script, not the root runner.
 
+### The Bun test matrix (#509)
+
+webjs runs on Node 24+ or Bun (#508). The **Node suite (`npm test`) is the
+source of truth**; a separate, additive **Bun matrix** re-runs the
+runtime-sensitive suite under Bun to catch the long tail of cross-runtime
+incompatibilities (a `node:*` API Bun implements differently, a crypto/stream
+edge case, an error-message-format quirk).
+
+- `node scripts/run-bun-tests.js` (needs `bun` on PATH; `BUN=…` overrides) runs
+  the `node:test` files under `test/`, `packages/core/test/`, and
+  `packages/server/test/` (excluding `browser/`, `e2e/`, the network-bound
+  `vendor/`) file by file via `bun test <file>`, and CLASSIFIES each result:
+  **pass**, **skip(node-only)** (a documented file that asserts Node-only
+  behavior or trips a Bun-test-runner quirk, listed with a reason in the
+  script's `DENYLIST`, its Bun behavior covered elsewhere), **skip(harness)**
+  (a Bun `node:test` compat gap, auto-detected by error signature),
+  **skip(env)** (needs Redis / a DOM), and **genuine fail** (a real Bun
+  failure, which fails the job). Set `WEBJS_BUN_TESTS=<substr,…>` to scope a
+  local run.
+- CI runs it in the `bun` job alongside `test/bun/smoke.mjs` (#508) and
+  `test/bun/listener.mjs` (#511, the listener-shell parity).
+- Two cross-runtime test scripts also run under BOTH runtimes: `test/bun/smoke.mjs`
+  (boot + SSR + TS strip + a server-action RPC) and `test/bun/listener.mjs`
+  (`startServer` over a real socket: SSR + route + SSE + WebSocket). Plain assert
+  scripts (not `node:test`) so the same file runs identically on each runtime.
+
+**Known Bun limitation (dev hot-reload of server modules).** webjs's dev server
+re-imports a `route.ts` / `.server.ts` / page module per request with a
+`?t=<timestamp>` query cache-bust to pick up edits. Bun's ESM loader IGNORES the
+query string (Node honors it and re-imports), and Bun exposes no module-eviction
+API, so on Bun a server-side module edit is not reflected until a dev-server
+restart. Component / page / layout SOURCE edits hot-reload fine on Bun (the
+served `.ts`/`.js` is read from disk per request, not imported). This is a Bun
+runtime gap, not a webjs bug; the `api` dev-cache-bust test is skipped under the
+Bun matrix for this reason.
+
 ### In-repo app tests in CI (#342)
 
 Each in-repo app (`website`, `examples/blog`) carries its own test suite under

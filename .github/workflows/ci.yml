@@ -82,7 +82,7 @@ jobs:
       - run: npm test
 
   bun:
-    name: Bun runtime smoke (#508, #511)
+    name: Bun runtime smoke + test matrix (#508, #509, #511)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -106,6 +106,13 @@ jobs:
       # so this is the cross-shell parity proof.
       - name: webjs listener parity on Bun
         run: bun test/bun/listener.mjs
+      # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
+      # (core + server + cross-package test/) under Bun, file by file, classifying
+      # each result. Documented Node-only files + Bun-test-runner-quirk files are
+      # skipped with a reason; genuine Bun failures fail the job. This is what
+      # catches the long tail of cross-runtime incompatibilities.
+      - name: webjs Bun test matrix
+        run: node scripts/run-bun-tests.js
 
   browser:
     name: Browser (web-test-runner / Playwright)
