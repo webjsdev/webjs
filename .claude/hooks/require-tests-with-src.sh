@@ -74,6 +74,8 @@ Walk the layers the change can affect, do NOT stop at unit:
   browser: */test/**/browser/*   (hydration, client render, DOM, router)
   e2e:     test/e2e/*.test.mjs    (full stack, network probes, navigation)
   smoke:   test/examples/*/smoke/*   (example apps still serve)
+  bun:     node scripts/run-bun-tests.js + test/bun/*.mjs   (cross-runtime;
+           required for serializer / listener / streams / crypto / node:* changes)
 
 For a client-router / component / browser-facing change a unit test is
 necessary but NOT sufficient. Add the browser and/or e2e coverage that
@@ -109,10 +111,29 @@ EOF
   fi
 fi
 
+# Accumulate non-blocking layer reminders, then emit ONE additionalContext (two
+# jq objects would be invalid hook output).
+reminder=""
+
 client_facing=$(printf '%s\n' "$src_touched" | grep -E 'router-client|render-client|component\.js|slot\.js|lazy-loader|websocket-client|client-router|directives' || true)
 if [ -n "$client_facing" ]; then
   list=$(printf '%s' "$client_facing" | tr '\n' ' ')
-  jq -n --arg ctx "Reminder: this commit changes client/browser-facing source ($list). A unit test alone is not sufficient. Confirm browser and/or e2e coverage (network probes, navigation, hydration) asserts the real behaviour, and run a test-audit review before declaring the PR ready." '{
+  reminder="${reminder}Client/browser-facing source changed ($list). A unit test alone is not sufficient; confirm browser and/or e2e coverage (network probes, navigation, hydration) asserts the real behaviour. "
+fi
+
+# Runtime-sensitive source: webjs runs on Node 24+ AND Bun (#508), and these
+# surfaces are where the two runtimes diverge (the serializer's Blob/File/FormData
+# identity, the node:http vs Bun.serve listener shells, node stream/fs error
+# propagation, the TS stripper's error shape, JSC vs V8 error messages). A change
+# here MUST be proven on Bun, not just Node. The Bun matrix is a separate runner.
+runtime_sensitive=$(printf '%s\n' "$src_touched" | grep -E 'serialize|file-storage|listener-core|listener-bun|ts-strip|action-stream|render-server|websocket|node-version' || true)
+if [ -n "$runtime_sensitive" ]; then
+  rlist=$(printf '%s' "$runtime_sensitive" | tr '\n' ' ')
+  reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See agent-docs/testing.md. "
+fi
+
+if [ -n "$reminder" ]; then
+  jq -n --arg ctx "Reminder: ${reminder}Run a test-audit review before declaring the PR ready." '{
     hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: $ctx }
   }'
 fi
