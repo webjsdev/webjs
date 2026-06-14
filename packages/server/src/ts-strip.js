@@ -94,7 +94,25 @@ async function resolve() {
   if (typeof tx !== 'function') {
     throw new Error('webjs: the resolved `amaro` module has no `transformSync` export.');
   }
-  return { fn: (source) => tx(source, { mode: 'strip-only' }).code, name: 'amaro' };
+  return {
+    fn: (source) => {
+      try {
+        return tx(source, { mode: 'strip-only' }).code;
+      } catch (e) {
+        // Normalize amaro's non-erasable-syntax error code to Node's, so a
+        // single downstream check (`err.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'`
+        // in dev.js's tsResponse) classifies the failure identically on both
+        // runtimes (amaro reports `code: 'UnsupportedSyntax'` for an enum /
+        // namespace-with-values / parameter-property / legacy-decorator). The
+        // strip-error contract is part of this seam, like the strip itself.
+        if (e && e.code === 'UnsupportedSyntax') {
+          try { e.code = 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'; } catch {}
+        }
+        throw e;
+      }
+    },
+    name: 'amaro',
+  };
 }
 
 /**
