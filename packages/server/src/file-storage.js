@@ -216,13 +216,19 @@ function toNodeStream(file) {
  */
 async function* webStreamChunks(web) {
   const reader = web.getReader();
+  let finished = false;
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) return;
+      if (done) { finished = true; return; }
       yield value;
     }
   } finally {
+    // On EARLY termination (the consumer errored / aborted before the source
+    // finished, e.g. a disk-write failure mid-upload), cancel the source so an
+    // upstream producer (a request body) stops sending, matching the behavior
+    // `Readable.fromWeb` gave. Skip cancel on normal completion.
+    if (!finished) { try { await reader.cancel(); } catch {} }
     try { reader.releaseLock(); } catch {}
   }
 }
