@@ -4,47 +4,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createGzip, createBrotliCompress, constants as zlibConstants } from 'node:zlib';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
-// Namespace import, NOT `import { stripTypeScriptTypes }`. On Node < 22.13 the
-// `stripTypeScriptTypes` named export does not exist, and a NAMED import of a
-// missing builtin export is a LINK-TIME SyntaxError that fires before any
-// module body runs, which would defeat the Node-version preflight (issue #238)
-// by crashing the import of @webjsdev/server itself. A namespace import links
-// on every Node (the property is just `undefined` at runtime on old Node), so
-// importing @webjsdev/server succeeds and `assertNodeVersion()` at the top of
-// createRequestHandler throws the clean "you need Node 24+" message instead.
-import * as nodeModule from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
-// type-stripping (`process.features.typescript === 'strip'`). No loader
-// hook required. The browser-bound TypeScript request handler uses
-// `module.stripTypeScriptTypes` for the same transform, so SSR and
-// hydration produce identical JS.
-//
-// Runtime backing: Node ships `stripTypeScriptTypes` via the `amaro`
-// package internally (wraps SWC's WASM TypeScript transform in a
-// position-preserving strip-only mode). If the framework ever needs
-// to run on Bun, Deno, or another runtime that does NOT expose the
-// equivalent built-in, we will need to install `amaro` directly (or
-// an equivalent: Sucrase preserves lines but not columns; SWC's
-// strip-only also works). The fast-path `stripTs` helper would
-// change one import line.
-//
-// Suppress the one-shot ExperimentalWarning that Node prints the
-// first time `stripTypeScriptTypes` is called. The API is committed
-// per Node 24's release notes; the warning is a holdover. We keep
-// every other warning intact.
-const _origEmitWarning = process.emitWarning.bind(process);
-process.emitWarning = function (warning, type, code, ctor) {
-  const msg = warning && warning.message ? warning.message : String(warning);
-  if (
-    (type === 'ExperimentalWarning' || (warning && warning.name === 'ExperimentalWarning')) &&
-    msg.includes('stripTypeScriptTypes')
-  ) {
-    return;
-  }
-  return _origEmitWarning(warning, type, code, ctor);
-};
+// type-stripping (`process.features.typescript === 'strip'`) or by Bun. The
+// BROWSER-bound `.ts` request handler erases types via the pluggable stripper in
+// `./ts-strip.js` (Node's built-in `module.stripTypeScriptTypes`, or `amaro` on
+// Bun), so SSR and hydration produce identical JS on either runtime (#508).
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
 import { generateRouteTypes } from './route-types.js';

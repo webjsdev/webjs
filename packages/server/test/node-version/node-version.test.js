@@ -143,35 +143,59 @@ test('assertNodeVersion exits non-zero on an old Node (exit mode)', () => {
   assert.ok(logged.includes('24'));
 });
 
-/* ---------------- link-safety regression (dev.js) ---------------- */
+/* ---------------- Bun admission (#508) ---------------- */
 
-test('dev.js does NOT NAMED-import stripTypeScriptTypes from node:module', async () => {
+test('assertNodeVersion is a no-op on Bun even when it reports a low Node version', () => {
+  // Bun (#508) gets its TS strip from amaro and node:* from its compat layer, so
+  // the Node-major gate (a proxy for "the Node built-ins exist") must not block
+  // it, even if a future Bun reports a Node version below the floor.
+  const orig = process.versions.bun;
+  try {
+    process.versions.bun = '1.3.14';
+    assert.doesNotThrow(() => assertNodeVersion({ requiredMajor: 24 }));
+  } finally {
+    if (orig === undefined) delete process.versions.bun; else process.versions.bun = orig;
+  }
+});
+
+test('an explicit `current` still enforces the gate even under Bun (unit-test override)', () => {
+  // The Bun bypass only applies to real runtime detection (no `current` passed),
+  // so a test that injects an old `current` still exercises the failure path.
+  const orig = process.versions.bun;
+  try {
+    process.versions.bun = '1.3.14';
+    assert.throws(() => assertNodeVersion({ current: '20.0.0', requiredMajor: 24, onFail: 'throw' }), /20\.0\.0/);
+  } finally {
+    if (orig === undefined) delete process.versions.bun; else process.versions.bun = orig;
+  }
+});
+
+/* ---------------- link-safety regression (ts-strip.js) ---------------- */
+
+test('ts-strip.js does NOT NAMED-import stripTypeScriptTypes from node:module', async () => {
   // Regression for the PR #282 defeat: a NAMED import of a missing builtin
-  // export (`import { stripTypeScriptTypes }`) is a LINK-TIME SyntaxError on
-  // Node < 22.13, which crashes the import of @webjsdev/server BEFORE
-  // assertNodeVersion can fire, so an embedded host (and the CLI's server-side
-  // belt) gets the cryptic error the guard exists to replace. dev.js must use a
-  // namespace import (`import * as nodeModule from 'node:module'`) so the module
-  // LINKS on every Node and the clean preflight message wins instead.
+  // export (`import { stripTypeScriptTypes }`) is a LINK-TIME SyntaxError on a
+  // runtime lacking it (Node < 22.13, Bun), which crashes the import of
+  // @webjsdev/server BEFORE the runtime check can fire. The strip seam (now in
+  // ts-strip.js) must use a namespace import so the module LINKS everywhere and
+  // the built-in-vs-amaro branch is taken at runtime instead.
   const { readFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const src = readFileSync(
-    fileURLToPath(new URL('../../src/dev.js', import.meta.url)),
+    fileURLToPath(new URL('../../src/ts-strip.js', import.meta.url)),
     'utf8',
   );
-  // No named import of stripTypeScriptTypes from node:module.
   assert.equal(
     /import\s*\{[^}]*\bstripTypeScriptTypes\b[^}]*\}\s*from\s*['"]node:module['"]/.test(src),
     false,
-    'dev.js must not name-import stripTypeScriptTypes from node:module',
+    'ts-strip.js must not name-import stripTypeScriptTypes from node:module',
   );
-  // And it must reach the API through a namespace binding instead.
   assert.ok(
     /import\s*\*\s*as\s+\w+\s+from\s*['"]node:module['"]/.test(src),
-    'dev.js must namespace-import node:module',
+    'ts-strip.js must namespace-import node:module',
   );
   assert.ok(
-    /\bnodeModule\.stripTypeScriptTypes\(/.test(src),
-    'the strip call site must use the namespace binding',
+    /\bnodeModule\.stripTypeScriptTypes\b/.test(src),
+    'the strip seam must reach the built-in through the namespace binding',
   );
 });

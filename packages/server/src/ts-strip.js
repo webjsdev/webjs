@@ -25,7 +25,30 @@
  * throws at strip time, which the `erasable-typescript-only` /
  * `no-non-erasable-typescript` lint rules catch at edit time.
  */
+// Namespace import, NOT `import { stripTypeScriptTypes }`. On Node < 22.13 the
+// named export does not exist, and a NAMED import of a missing builtin export is
+// a LINK-TIME SyntaxError that fires before any module body runs, which would
+// defeat the Node-version preflight by crashing the import of @webjsdev/server
+// itself. A namespace import links on every runtime (the property is just
+// `undefined` where absent, e.g. Bun) and we branch on it at runtime instead.
 import * as nodeModule from 'node:module';
+
+// Suppress the one-shot ExperimentalWarning Node prints the first time
+// `stripTypeScriptTypes` is called (the API is committed per Node 24's release
+// notes; the warning is a holdover). Installed here, co-located with the strip
+// call, so it covers every consumer of this module (dev.js, the CLI, tests),
+// not just the dev server. Every other warning passes through untouched.
+const _origEmitWarning = process.emitWarning.bind(process);
+process.emitWarning = function (warning, type, code, ctor) {
+  const msg = warning && warning.message ? warning.message : String(warning);
+  if (
+    (type === 'ExperimentalWarning' || (warning && warning.name === 'ExperimentalWarning')) &&
+    msg.includes('stripTypeScriptTypes')
+  ) {
+    return;
+  }
+  return _origEmitWarning(warning, type, code, ctor);
+};
 
 /** @typedef {{ fn: (source: string) => string, name: 'builtin' | 'amaro' }} Stripper */
 
