@@ -2,17 +2,17 @@
 # same image with a different start command. Locally:
 # `docker compose up --build` runs all three via compose.yaml.
 #
-# No build step for JS. webjs serves .ts directly via Node's built-in
-# `module.stripTypeScriptTypes` (position-preserving whitespace
-# replacement, no sourcemap shipped to the browser).
+# No build step for JS. webjs serves .ts directly by stripping types at the
+# runtime layer (position-preserving whitespace replacement, no sourcemap shipped
+# to the browser). webjs is buildless end to end; there is NO bundler or esbuild
+# fallback.
 #
-# **Node 24+ is REQUIRED** for that path. On Node 22, the runtime falls
-# back to esbuild for every .ts file. esbuild's class-declaration
-# transformation has been observed to break webjs's SSR walker for
-# multi-class component files: Tier-2 components (dialog, tooltip,
-# dropdown-menu, etc.) all rendered with the wrong shell because the
-# first class's render() was being invoked for every sub-tag. Pinning
-# Node 24 here pairs with the AGENTS.md "Node 24+ required" invariant.
+# This image runs on Node, where the strip is the built-in
+# `module.stripTypeScriptTypes`. **Node 24+ is REQUIRED** on the Node path (the
+# built-in stripper and recursive fs.watch need it), which is why the base below
+# pins a current Node major. webjs ALSO runs on Bun (where the strip comes from
+# `amaro`); to deploy on Bun, swap the base for an `oven/bun` image and start with
+# `bun --bun run start`.
 #
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The
 # blog runs `prisma generate` at build and `prisma migrate deploy` at
