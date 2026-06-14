@@ -10,6 +10,14 @@
  * Run:   WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs
  * (gated behind WEBJS_E2E so the default `npm test` run skips it; CI runs
  * it as its own job, see .github/workflows/ci.yml)
+ *
+ * Cross-runtime (#523): the harness always runs under `node --test` (its
+ * node:test hook lifecycle does not survive `bun test`), but the BLOG SERVER it
+ * spawns can be served on Bun by setting WEBJS_E2E_RUNTIME=bun (point
+ * WEBJS_BUN_PATH at the bun binary if it is not `bun` on PATH). This exercises
+ * the full browser stack against a Bun-served blog, proving the Bun.serve shell
+ * and Prisma-on-Bun in a real browser:
+ *   WEBJS_E2E=1 WEBJS_E2E_RUNTIME=bun node --test test/e2e/e2e.test.mjs
  */
 
 import { test, describe, before, after } from 'node:test';
@@ -44,6 +52,22 @@ function freePort() {
 }
 
 /**
+ * The runtime executable that SERVES the blog under test. Defaults to the
+ * runtime running this harness (`process.execPath`, i.e. node under
+ * `node --test`). Set WEBJS_E2E_RUNTIME=bun to serve the blog on Bun instead
+ * (the cross-runtime e2e for #523); WEBJS_BUN_PATH overrides the bun binary
+ * location when it is not `bun` on PATH. Only the spawned blog process changes
+ * runtime; the harness itself stays on node.
+ * @returns {string}
+ */
+function blogRuntimeExec() {
+  if ((process.env.WEBJS_E2E_RUNTIME || '').toLowerCase() === 'bun') {
+    return process.env.WEBJS_BUN_PATH || 'bun';
+  }
+  return process.execPath;
+}
+
+/**
  * Start the blog example dev server and wait until it's ready.
  * @param {number} port
  * @returns {Promise<import('node:child_process').ChildProcess>}
@@ -52,7 +76,7 @@ function startBlog(port, extraEnv = {}) {
   const cliPath = resolve(ROOT, 'packages', 'cli', 'bin', 'webjs.js');
   return new Promise((res, reject) => {
     const child = spawn(
-      process.execPath,
+      blogRuntimeExec(),
       [cliPath, 'dev', '--port', String(port)],
       {
         cwd: BLOG_DIR,
