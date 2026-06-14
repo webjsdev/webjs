@@ -3,11 +3,14 @@
 # Works with a plain `docker build` / `docker compose up`, and is the same
 # artifact the webdeploy hosting tool (ubicloud + uncloud) builds and ships.
 #
-# webjs serves .ts directly via Node's built-in type-stripping, so there is
-# NO JavaScript build step. **Node 24+ is REQUIRED**: on older Node the runtime
-# falls back to esbuild, whose class-declaration transform breaks webjs's SSR
-# walker for multi-class component files. Do not lower this base image
-# below 24 (the same version the CI workflow and the framework pin).
+# webjs serves .ts directly by stripping types at the runtime layer, so there is
+# NO JavaScript build step (webjs is buildless end to end; there is no bundler or
+# esbuild fallback). This image runs the app on **Node 24+**, where the strip is
+# the built-in `module.stripTypeScriptTypes`. webjs ALSO runs on **Bun** (where
+# the strip comes from `amaro` automatically), so you can swap this base for an
+# `oven/bun` image and start the app with `bun --bun run start`. Do not lower the
+# Node base below 24 (the floor the CI workflow and the framework pin enforce),
+# since the built-in stripper and recursive fs.watch need it.
 #
 # Security headers are set by the framework, not the proxy. webjs emits
 # X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and

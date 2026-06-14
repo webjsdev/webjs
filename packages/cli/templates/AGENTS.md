@@ -1143,10 +1143,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
    browser-only). Never fetch initial data in `connectedCallback` /
    `firstUpdated`. Fetch in the page function (server) and pass it as
    a prop. See *Component pattern* above.
-8. **Erasable TypeScript only.** The runtime (Node 24+ or Bun) strips types via
-   `module.stripTypeScriptTypes` (whitespace replacement, byte-exact
-   line and column position preservation, no sourcemap shipped to the
-   browser). Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so
+8. **Erasable TypeScript only.** The runtime strips types at the runtime
+   layer (Node 24+'s built-in `module.stripTypeScriptTypes`, or `amaro`
+   on Bun, which is byte-identical), with whitespace replacement so
+   line and column positions are byte-exact and no sourcemap ships to
+   the browser. Your `tsconfig.json` sets `erasableSyntaxOnly: true`, so
    the TS compiler rejects: `enum`, `namespace` with values,
    constructor parameter properties, legacy decorators with
    `emitDecoratorMetadata`, and `import = require`. Use the erasable
