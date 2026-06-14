@@ -249,7 +249,7 @@ server.all('*', async (req, res) =&gt; {
 server.listen(8080);</pre>
 
     <h3>Bun</h3>
-    <p>Running a webjs app with <code>bun --bun run start</code> already uses <code>Bun.serve</code> natively: <code>startServer</code> detects Bun and selects a <code>Bun.serve</code> listener shell (skipping the node:http compatibility bridge for ~1.9x more requests/sec on the listening path), with full feature parity (SSR, <code>route.ts</code>, SSE live-reload, WebSocket upgrade, brotli/gzip compression, timeouts, proxy-IP). So you only need the snippet below to <em>embed</em> webjs inside your own <code>Bun.serve</code> alongside other routes:</p>
+    <p>Running a webjs app with <code>bun --bun run start</code> already uses <code>Bun.serve</code> natively: <code>startServer</code> detects Bun and selects a <code>Bun.serve</code> listener shell (skipping the node:http compatibility bridge for ~1.9x more requests/sec on the listening path), with near-complete feature parity (SSR, <code>route.ts</code>, SSE live-reload, WebSocket upgrade, brotli/gzip compression, timeouts, proxy-IP). The one node-only exception is 103 Early Hints, which <code>Bun.serve</code> cannot send (no informational-response API). So you only need the snippet below to <em>embed</em> webjs inside your own <code>Bun.serve</code> alongside other routes:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });
@@ -336,6 +336,7 @@ CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
       <li><code>node:slim</code> works fine. webjs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
+      <li>To <strong>serve on Bun</strong> (more requests/sec on the listening path) while keeping the buildless Node toolchain for the image build, drop the Bun binary into a Node image with <code>COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun</code> and start with <code>bun node_modules/@webjsdev/cli/bin/webjs.js start</code>. <code>startServer</code> auto-selects the native <code>Bun.serve</code> shell. Nothing is built on Bun, so the Node install / generate steps are unchanged. This is exactly how the in-repo example apps deploy. One trade-off: <code>Bun.serve</code> has no informational-response API, so the 103 Early Hints modulepreload head-start (covered above) is node-only. The preload hints still ship in the document head, so this costs a small first-load latency edge only where your edge forwards 103, not correctness.</li>
       <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>

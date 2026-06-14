@@ -7,12 +7,19 @@
 # to the browser). webjs is buildless end to end; there is NO bundler or esbuild
 # fallback.
 #
-# This image runs on Node, where the strip is the built-in
-# `module.stripTypeScriptTypes`. **Node 24+ is REQUIRED** on the Node path (the
-# built-in stripper and recursive fs.watch need it), which is why the base below
-# pins a current Node major. webjs ALSO runs on Bun (where the strip comes from
-# `amaro`); to deploy on Bun, swap the base for an `oven/bun` image and start with
-# `bun --bun run start`.
+# The image carries BOTH runtimes by design. The BUILD toolchain runs on Node
+# (npm install, the core dist bundle, `prisma generate`, Tailwind), which keeps
+# the proven buildless toolchain unchanged; **Node 24+ is REQUIRED** there (the
+# built-in `module.stripTypeScriptTypes` stripper and recursive fs.watch need it),
+# which is why the base pins a current Node major. The SERVING process runs on
+# Bun: each service's start command is `bun ... webjs.js start`, so `startServer`
+# selects the native `Bun.serve` listener shell (more req/s on the listening path)
+# and strips `.ts` via `amaro`. The one behavioral difference from the node:http
+# shell is that 103 Early Hints are node-only (Bun.serve has no informational-
+# response API), so the modulepreload head-start is dropped on Bun; the preloads
+# still ship in the document head. The Bun binary is copied from the official
+# `oven/bun` image below; nothing is BUILT on Bun, so there is no build-toolchain
+# risk.
 #
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The
 # blog runs `prisma generate` at build and `prisma migrate deploy` at
@@ -21,6 +28,13 @@ FROM node:26-alpine
 
 # openssl is required by Prisma's query engine at runtime.
 RUN apk add --no-cache openssl ca-certificates
+
+# Drop the Bun binary into the Node image (musl/alpine build) so the serving
+# process runs on Bun while the build steps keep using Node. `COPY --from=<image>`
+# pulls only the static binary, no extra layers. The dockerfile-copy-paths
+# repo-health test skips `--from=` lines, so this image source is not validated
+# as a repo path.
+COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun
 
 WORKDIR /app
 
