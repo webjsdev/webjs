@@ -94,6 +94,11 @@ export const RULES = [
       'Files that declare the `\'use server\'` directive at the top must also have the `.server.{js,ts,mts,mjs}` extension. The two markers are complementary, not interchangeable: `.server.ts` is the path-level boundary that triggers source protection by the file router; `\'use server\'` is the semantic opt-in that registers exports as RPC-callable from client code. A `\'use server\'` directive without the extension is silently ignored: the file is served to the browser as plain source, exports are NOT registered as RPC, and code the developer expects to run on the server actually runs in the browser. Rename the file to add the `.server.` infix.',
   },
   {
+    name: 'use-server-exports-callable',
+    description:
+      'A `.server.{js,ts}` file that declares the `\'use server\'` directive registers its function exports as RPC-callable server actions, but only its FUNCTION exports: `buildActionIndex` / the stub generator register an export only when `typeof export === \'function\'`, so a `\'use server\'` file that exports zero functions (or only a non-function `const` / a type / only verb config like `method` / `cache`) registers NOTHING and gives no signal. The developer believes they exposed an action; nothing did, and the failure only surfaces as a 404 / undefined at the first call site. This is the complement of `use-server-needs-extension` (the directive without the extension) and of `one-action-per-configured-file` (more than one action in a configured file); this rule catches the directive-present-but-nothing-callable case. The rule asserts only that the file exports at least one callable, NOT that the action returns a value (a server action may be a void side-effect or throw `redirect()` / `notFound()` and never return). Conservative: a re-export (`export ... from`, `export *`) or an `export const NAME = <identifier-or-call>` (a possible factory-produced function such as `export const get = cache(fetch)`) is treated as a possible callable and NOT flagged, so the rule fires only when every export is provably non-callable. Fix: export an `async function` action, or drop the `\'use server\'` directive if the file is a plain server-only utility.',
+  },
+  {
     name: 'no-non-erasable-typescript',
     description:
       'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
@@ -729,6 +734,54 @@ export async function checkConventions(appDir) {
         message:
           "File declares `'use server'` but its name does not match `.server.{js,ts,mts,mjs}`. The directive is silently ignored: the file is served to the browser as plain source and its exports are not RPC-callable. Code the developer expects to run on the server actually runs in the browser.",
         fix: `Rename to ${renamedBase} (add the .server. infix before the extension)`,
+      });
+    }
+  }
+
+  // --- Rule: use-server-exports-callable (#464) ---
+  // A `.server.{js,ts}` file with the `'use server'` directive registers only
+  // its FUNCTION exports as RPC actions (the registrar checks `typeof === 'function'`).
+  // A file that declares the directive but exports no callable registers nothing,
+  // silently: the developer thinks they exposed an action, and the only signal is
+  // a 404 / undefined at the first call site. Flag it. The complement of
+  // use-server-needs-extension (the directive without the extension) and of
+  // one-action-per-configured-file (more than one action).
+  {
+    for (const { rel, content, scan } of files) {
+      // Only properly-marked action files (the extension boundary). A `'use
+      // server'` file WITHOUT the .server. extension is the use-server-needs-
+      // extension rule's job; do not double-flag it here.
+      if (!/\.server\.m?[jt]s$/.test(rel)) continue;
+      if (!hasUseServerDirective(content)) continue;
+      // Count function-shaped EXPORTED callables, the SAME way the action
+      // registrar sees them: function declarations + arrow / function-expression
+      // consts (with an optional `: Type` annotation, #495). Reserved verb-config
+      // names (method/cache/...) are config, never a callable action.
+      const names = new Set();
+      let m;
+      const reFn = /\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g;
+      while ((m = reFn.exec(scan))) names.add(m[1]);
+      const reArrow = /\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*(?::(?:[^=]|=>)*?)?=(?!>)\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g;
+      while ((m = reArrow.exec(scan))) names.add(m[1]);
+      const callables = [...names].filter((n) => !RESERVED_CONFIG.has(n));
+      if (callables.length > 0) continue; // exports at least one callable -> fine
+      // A default export is assumed callable (an action commonly default-exports).
+      if (/\bexport\s+default\b/.test(scan)) continue;
+      // Conservative, avoid a false positive: a re-export could re-export a
+      // function (the registrar loads the module and sees `typeof === 'function'`),
+      // and an `export const NAME = <identifier-or-call>` could be a factory-
+      // produced function (`export const get = cache(fetch)`). In either case we
+      // cannot prove statically that there is NO callable, so do not flag.
+      if (/\bexport\b[^\n;]*\bfrom\b/.test(scan) || /\bexport\s*\*/.test(scan)) continue;
+      if (/\bexport\s+(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::(?:[^=]|=>)*?)?=\s*[A-Za-z_$(]/.test(scan)) continue;
+      // Every export is provably non-callable (a literal const, a type) or there
+      // are none: the directive exposes nothing.
+      violations.push({
+        rule: 'use-server-exports-callable',
+        file: rel,
+        message:
+          "File declares `'use server'` but exports no callable action. The `'use server'` directive registers FUNCTION exports as RPC-callable; a file exporting only a non-function (a `const` / a type / only verb config) registers nothing, so a client import resolves to nothing and the call 404s.",
+        fix: "Export an `async function` action from this file, or remove the `'use server'` directive if it is a plain server-only utility.",
       });
     }
   }
