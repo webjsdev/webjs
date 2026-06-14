@@ -336,6 +336,7 @@ CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
       <li><code>node:slim</code> works fine. webjs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
+      <li>To <strong>serve on Bun</strong> (the faster listening path) while keeping the buildless Node toolchain for the image build, drop the Bun binary into a Node image with <code>COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun</code> and start with <code>bun node_modules/@webjsdev/cli/bin/webjs.js start</code>. <code>startServer</code> auto-selects the native <code>Bun.serve</code> shell. Nothing is built on Bun, so the Node install / generate steps are unchanged. This is exactly how the in-repo example apps deploy.</li>
       <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
