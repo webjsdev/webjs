@@ -105,7 +105,15 @@ async function resolve() {
  */
 export async function ensureStripper() {
   if (_strip) return _strip;
-  if (!_resolving) _resolving = resolve().then((s) => { _strip = s; _resolving = null; return s; });
+  // Clear `_resolving` on BOTH settle paths so a failed resolve (e.g. a missing
+  // amaro on a runtime lacking the built-in) re-detects on the next call instead
+  // of caching the rejection forever (self-healing, matching `__resetStripper`).
+  if (!_resolving) {
+    _resolving = resolve().then(
+      (s) => { _strip = s; _resolving = null; return s; },
+      (e) => { _resolving = null; throw e; },
+    );
+  }
   return _resolving;
 }
 
