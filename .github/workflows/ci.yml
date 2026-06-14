@@ -124,6 +124,13 @@ jobs:
       # stale. The same script proves no Node regression under `npm test`.
       - name: webjs dev hot reload on Bun
         run: bun test/bun/dev-hot-reload.mjs
+      # SSR action-result seeding on Bun (#529): seeding rode Node's
+      # module.registerHooks, which Bun lacks; it now installs via a Bun.plugin
+      # onLoad, so a shipping async component seeds during SSR (the __webjs-seeds
+      # block) and does NOT re-fetch on hydration. The same script proves the Node
+      # install under `npm test`.
+      - name: webjs action seeding on Bun
+        run: bun test/bun/seed.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are
