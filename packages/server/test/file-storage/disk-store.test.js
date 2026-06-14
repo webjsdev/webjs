@@ -163,7 +163,11 @@ test('STRUCTURAL: put streams (createWriteStream + pipeline, no arrayBuffer)', a
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
   assert.match(src, /createWriteStream/, 'uses createWriteStream');
   assert.match(src, /pipeline\(/, 'uses stream pipeline');
-  assert.match(src, /Readable\.fromWeb/, 'converts the web stream without buffering');
+  // Converts the web stream without buffering via a reader-loop async generator
+  // (`Readable.from(webStreamChunks(...))`), NOT `Readable.fromWeb` (whose error
+  // does not propagate through `pipeline` on Bun, #509).
+  assert.match(src, /Readable\.from\(webStreamChunks\(/, 'converts the web stream chunk-by-chunk without buffering');
+  assert.doesNotMatch(src, /Readable\.fromWeb/, 'avoids Readable.fromWeb on the put path (Bun error-propagation gap)');
   assert.doesNotMatch(src, /\.arrayBuffer\(\)/, 'never calls arrayBuffer() on the put path');
   assert.doesNotMatch(src, /writeFile\(/, 'never uses writeFile for the object body');
 });
