@@ -3,8 +3,10 @@
  *   - the action RPC endpoint returns 413 for an over-limit body, driven through
  *     `createRequestHandler` (the real handle pipeline);
  *   - the `route.{js,ts}` `readBody` path returns 413 via `handleApi`, exercised
- *     with the per-request limit stamped in the request context;
- *   - a real ephemeral `startServer` carries the configured node:http timeouts.
+ *     with the per-request limit stamped in the request context.
+ *
+ * The node:http server-timeout assertions moved to server-timeouts.test.js (#509),
+ * leaving this file's 413 body-limit tests runtime-agnostic (they run under Bun).
  *
  * tmpdir app fixtures, like dev-handler.test.js. Route fixtures that need the
  * `html` tag import it from core's source by absolute file URL (a random tmpdir

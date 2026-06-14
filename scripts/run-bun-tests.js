@@ -83,6 +83,14 @@ const files = all
   .filter((f) => filter.length === 0 || filter.some((q) => f.includes(q)))
   .sort();
 
+// Guard against a silent green from validating nothing: if discovery found no
+// files (a moved test root or a broken walk) and no explicit filter was given,
+// that is a failure, not a pass.
+if (files.length === 0 && filter.length === 0) {
+  console.error('[bun-matrix] FAIL: discovered 0 test files (the test roots moved or the walk broke).');
+  process.exit(1);
+}
+
 const results = { pass: [], deny: [], fail: [] };
 
 console.log(`[bun-matrix] running ${files.length} test files under ${BUN}\n`);
