@@ -361,11 +361,15 @@ const SSR_HTMLELEMENT_METHODS = new Set([
  */
 function browserMemberHint(e) {
   const msg = e && typeof (/** @type any */ (e).message) === 'string' ? /** @type any */ (e).message : '';
-  let m = /^(\w+) is not defined$/.exec(msg);
+  // Match on a word boundary, NOT end-of-string: V8 (Node) ends the message at
+  // "is not defined" / "is not a function", but JSC (Bun) appends a detail
+  // clause (e.g. ". (In '({}).querySelector(\"p\")', '...' is undefined)"), so an
+  // anchored `$` would miss the Bun message and drop the actionable hint.
+  let m = /^(\w+) is not defined\b/.exec(msg);
   if (e instanceof ReferenceError && m && SSR_BROWSER_GLOBALS.has(m[1])) {
     return `\`${m[1]}\` is a browser-only global and is undefined during SSR.`;
   }
-  m = /\.(\w+) is not a function$/.exec(msg);
+  m = /\.(\w+) is not a function\b/.exec(msg);
   if (e instanceof TypeError && m && SSR_HTMLELEMENT_METHODS.has(m[1])) {
     return `\`${m[1]}\` is an HTMLElement method that does not exist on the server-side component instance during SSR.`;
   }
