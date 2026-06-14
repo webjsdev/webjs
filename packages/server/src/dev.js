@@ -1385,15 +1385,23 @@ export async function startServer(opts) {
   // identically on both). Built before the handler so its onReload / onDevError
   // callbacks can fan out through it.
   const hub = new SseHub();
-  const app = await createRequestHandler({
-    ...opts,
-    logger,
-    onReload: () => hub.reload(),
-    // Dev error overlay (#264): push a frame to every open tab over the SAME
-    // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
-    // EventSource's native connection-error event) carries the JSON frame.
-    onDevError: (frame) => hub.devError(frame),
-  });
+  let app;
+  try {
+    app = await createRequestHandler({
+      ...opts,
+      logger,
+      onReload: () => hub.reload(),
+      // Dev error overlay (#264): push a frame to every open tab over the SAME
+      // SSE channel. A distinct `webjs-error` event name (NOT `error`, which is
+      // EventSource's native connection-error event) carries the JSON frame.
+      onDevError: (frame) => hub.devError(frame),
+    });
+  } catch (e) {
+    // The hub starts its keepalive interval in its constructor (before this
+    // await), so a boot failure must clear it rather than leak a live timer.
+    hub.closeAll();
+    throw e;
+  }
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
