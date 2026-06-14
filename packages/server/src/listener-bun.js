@@ -158,6 +158,11 @@ export function startBunListener(ctx) {
  * per-socket events. Constructed at upgrade time and bound to the real socket in
  * the `open` handler; messages/close are forwarded to its emitter from the
  * `websocket.message` / `websocket.close` handlers.
+ *
+ * Only `'message'` and `'close'` are forwarded (the events webjs WS handlers and
+ * `broadcast()` use). Bun exposes no per-socket `'error'` / `'ping'` / `'pong'`
+ * handler to bridge; a socket failure on Bun surfaces as a `'close'`, so
+ * `'close'`-keyed cleanup still runs. Documented in the WebSockets doc.
  */
 class BunWsAdapter extends EventEmitter {
   constructor() {

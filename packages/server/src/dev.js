@@ -2026,9 +2026,13 @@ async function sendWebResponse(res, webRes, req, opts) {
     headers[k] = v;
   });
 
-  // Negotiate compression.
+  // Negotiate compression. Skip a body that is already content-encoded (a
+  // route.ts returning pre-compressed bytes) so we never double-compress, and
+  // merge into any pre-existing `Vary` rather than clobbering it: parity with
+  // the Bun shell's `maybeCompress`, which guards both (`isCompressible` already
+  // excludes `text/event-stream` so an SSE route is never buffered).
   let compressor = null;
-  if (opts?.compress && req && webRes.body && isCompressible(headers['content-type'])) {
+  if (opts?.compress && req && webRes.body && !headers['content-encoding'] && isCompressible(headers['content-type'])) {
     const accept = String(req.headers['accept-encoding'] || '');
     if (/(?:^|,\s*)br(?:;|,|$)/.test(accept)) {
       compressor = createBrotliCompress({
@@ -2040,7 +2044,8 @@ async function sendWebResponse(res, webRes, req, opts) {
       headers['content-encoding'] = 'gzip';
     }
     if (compressor) {
-      headers['vary'] = 'Accept-Encoding';
+      const vary = typeof headers['vary'] === 'string' ? headers['vary'] : '';
+      headers['vary'] = vary && !/accept-encoding/i.test(vary) ? `${vary}, Accept-Encoding` : (vary || 'Accept-Encoding');
       delete headers['content-length'];
     }
   }

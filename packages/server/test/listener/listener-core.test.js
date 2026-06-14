@@ -121,6 +121,10 @@ test('isCompressible covers text + the structured-text application types', () =>
   for (const ct of ['image/png', 'application/octet-stream', 'video/mp4', 'font/woff2', undefined, null, '']) {
     assert.equal(isCompressible(ct), false, `${String(ct)} should NOT compress`);
   }
+  // text/event-stream is text/* but must NOT compress: a compressor would buffer
+  // an SSE body that is meant to flush incrementally (both shells guard on this).
+  assert.equal(isCompressible('text/event-stream'), false, 'an SSE stream must not be compressed');
+  assert.equal(isCompressible('text/event-stream; charset=utf-8'), false, 'SSE with params must not compress');
   // An array-valued header (node's multi-value shape) reads its first entry.
   assert.equal(isCompressible(['text/html', 'x']), true);
 });

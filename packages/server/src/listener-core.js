@@ -53,6 +53,12 @@ export function isEventsPath(pathname, basePathStr) {
 export function isCompressible(contentType) {
   if (!contentType) return false;
   const ct = Array.isArray(contentType) ? contentType[0] : contentType;
+  // Never compress an event stream: a compressor buffers/chunk-delays bytes that
+  // an SSE body (a user route.ts returning text/event-stream) is meant to flush
+  // incrementally, so it would stall the stream. The framework's own
+  // /__webjs/events stream is intercepted before compression; this guards a
+  // user-authored one on both shells.
+  if (/^text\/event-stream/i.test(ct)) return false;
   return /^(?:text\/|application\/(?:javascript|json|xml|wasm|manifest)|image\/svg\+xml)/i.test(ct);
 }
 
