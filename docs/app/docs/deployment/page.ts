@@ -93,7 +93,7 @@ npm run start -- --port 8080</pre>
 
     <h3>Request body limits &amp; server timeouts</h3>
     <p>The server hardens its request ingress by default. Every request body it reads (the action RPC endpoint, <code>route.&#123;js,ts&#125;</code> handlers via <code>readBody</code>, and the no-JS page-action form path) is size-capped: 1 MiB for JSON / RPC (<code>webjs.maxBodyBytes</code> / <code>WEBJS_MAX_BODY_BYTES</code>) and 10 MiB for form / multipart (<code>webjs.maxMultipartBytes</code> / <code>WEBJS_MAX_MULTIPART_BYTES</code>). An over-limit body responds <code>413 Payload Too Large</code> without being buffered whole, so a hostile large upload cannot exhaust memory.</p>
-    <p>The HTTP server also sets node:http timeouts to defend against slowloris and hung connections: <code>requestTimeout</code> (30s, <code>webjs.requestTimeoutMs</code> / <code>WEBJS_REQUEST_TIMEOUT_MS</code>), <code>headersTimeout</code> (20s, <code>webjs.headersTimeoutMs</code> / <code>WEBJS_HEADERS_TIMEOUT_MS</code>), and <code>keepAliveTimeout</code> (5s, <code>webjs.keepAliveTimeoutMs</code> / <code>WEBJS_KEEP_ALIVE_TIMEOUT_MS</code>). Per node semantics <code>headersTimeout</code> must be under <code>requestTimeout</code> to fire; an inconsistent config is clamped automatically. A value of <code>0</code> disables any of these (e.g. when an edge proxy already enforces them).</p>
+    <p>The HTTP server also sets node:http timeouts to defend against slowloris and hung connections: <code>requestTimeout</code> (30s, <code>webjs.requestTimeoutMs</code> / <code>WEBJS_REQUEST_TIMEOUT_MS</code>), <code>headersTimeout</code> (20s, <code>webjs.headersTimeoutMs</code> / <code>WEBJS_HEADERS_TIMEOUT_MS</code>), and <code>keepAliveTimeout</code> (5s, <code>webjs.keepAliveTimeoutMs</code> / <code>WEBJS_KEEP_ALIVE_TIMEOUT_MS</code>). Per node semantics <code>headersTimeout</code> must be under <code>requestTimeout</code> to fire; an inconsistent config is clamped automatically. A value of <code>0</code> disables any of these (e.g. when an edge proxy already enforces them). On Bun the server uses <code>Bun.serve</code> (see below), which has one inactivity bound rather than three; <code>requestTimeout</code> maps to Bun's <code>idleTimeout</code>, clamped above the live-reload keepalive so a dev SSE stream is never reaped.</p>
 
     <h3>Graceful Shutdown</h3>
     <p>On <code>SIGINT</code> or <code>SIGTERM</code>, webjs:</p>
@@ -249,6 +249,7 @@ server.all('*', async (req, res) =&gt; {
 server.listen(8080);</pre>
 
     <h3>Bun</h3>
+    <p>Running a webjs app with <code>bun --bun run start</code> already uses <code>Bun.serve</code> natively: <code>startServer</code> detects Bun and selects a <code>Bun.serve</code> listener shell (skipping the node:http compatibility bridge for ~1.9x more requests/sec on the listening path), with full feature parity (SSR, <code>route.ts</code>, SSE live-reload, WebSocket upgrade, gzip, timeouts, proxy-IP). So you only need the snippet below to <em>embed</em> webjs inside your own <code>Bun.serve</code> alongside other routes:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });

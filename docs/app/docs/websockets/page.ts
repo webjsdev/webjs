@@ -49,6 +49,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
       <li>If no match is found or the route does not export <code>WS</code>, the socket is rejected with an HTTP error (404 or 426) and destroyed.</li>
     </ol>
     <p>WebSocket connections use HTTP/1.1 Upgrade. Even when the server is configured for HTTP/2 (with <code>allowHTTP1: true</code>), WebSocket upgrades happen over the HTTP/1.1 fallback path, which is the universally supported approach.</p>
+    <p>On <strong>Bun</strong>, the same <code>WS(ws, req, ctx)</code> export works unchanged. Bun's native WebSocket dispatches messages through server-level handlers rather than the <code>ws</code>-library per-socket events, so webjs wraps Bun's socket in a thin adapter that re-exposes the same contract (<code>ws.on('message', …)</code>, <code>ws.send(…)</code>, <code>ws.readyState</code>, <code>ws.close()</code>). Your handler and <code>broadcast()</code> code are identical across runtimes.</p>
 
     <h3>Accessing Cookies, Headers, and Auth</h3>
     <p>The <code>req</code> parameter carries the full HTTP upgrade request, so you can authenticate the connection before accepting messages:</p>
