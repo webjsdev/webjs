@@ -16,6 +16,14 @@
  * Bun's `onLoad` `args.path` includes any query (verified), so the facade's
  * `?webjs-seed-orig` passthrough and a dev `?t=` re-import are both seen, exactly
  * like the Node hook's URL.
+ *
+ * UNLIKE Node's hook, a Bun `onLoad` registered for a filter MUST return a
+ * `{ contents, loader }` object for EVERY match; returning `undefined` to defer
+ * to the default loader is an error ("onLoad() expects an object returned"). So
+ * the non-facet cases (the `?webjs-seed-orig` passthrough, a `.server.*` with no
+ * `'use server'`, an unenumerable `export *`) are handled by reading and
+ * RETURNING the real source ourselves with the extension's loader, which is the
+ * same module Bun would have loaded.
  */
 
 /**
@@ -32,21 +40,27 @@ export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverF
   Bun.plugin({
     name: 'webjs-action-seed',
     setup(build) {
-      // The filter is a cheap path pre-screen (`*.server.*`, optional query);
-      // `isSeedCandidate` then excludes the `?webjs-seed-orig` passthrough.
+      // The filter is a cheap path pre-screen (`*.server.*`, optional query).
       build.onLoad({ filter: serverFileRe }, async (args) => {
+        const absPath = args.path.split('?')[0];
+        // `.ts` / `.mts` strip via the `ts` loader; `.js` / `.mjs` via `js`.
+        const loader = /\.m?ts$/.test(absPath) ? 'ts' : 'js';
+        // Read the real source. A genuine read failure (missing file) propagates,
+        // which Bun reports as a load error exactly as it would without the plugin.
+        const src = await Bun.file(absPath).text();
         try {
-          if (!isSeedCandidate(args.path)) return undefined;
-          const absPath = args.path.split('?')[0];
-          const src = await Bun.file(absPath).text();
-          const source = buildSeedFacade(args.path, absPath, src);
-          if (source == null) return undefined;
-          return { contents: source, loader: 'js' };
+          // Facet only a `'use server'` candidate (not the `?webjs-seed-orig`
+          // passthrough); a non-candidate or a passthrough falls through to the
+          // raw source below.
+          if (isSeedCandidate(args.path)) {
+            const source = buildSeedFacade(args.path, absPath, src);
+            if (source != null) return { contents: source, loader: 'js' };
+          }
         } catch {
-          // Fail-open: a load the plugin cannot facade runs unwrapped (no
-          // seeding for it), exactly like the Node hook's `nextLoad` fallback.
-          return undefined;
+          // Fail-open: any faceting error serves the raw source (no seeding for
+          // this module), the Bun analog of the Node hook's `nextLoad` fallback.
         }
+        return { contents: src, loader };
       });
     },
   });
