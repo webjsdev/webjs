@@ -16,7 +16,10 @@ import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { stripTypeScriptTypes } from 'node:module';
+// Framework's runtime-portable stripper (built-in on Node, amaro on Bun), NOT a
+// named `import { stripTypeScriptTypes } from 'node:module'` (a LINK-TIME error
+// on Bun, where the export is absent).
+import { stripTypeScript } from '../../server/src/ts-strip.js';
 
 const UTILS_SRC = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -28,7 +31,7 @@ const UTILS_SRC = join(
 );
 
 const ts = readFileSync(UTILS_SRC, 'utf8');
-const js = stripTypeScriptTypes(ts);
+const js = await stripTypeScript(ts);
 const dir = mkdtempSync(join(tmpdir(), 'webjs-ui-cn-'));
 const file = join(dir, 'utils.mjs');
 writeFileSync(file, js);
