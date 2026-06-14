@@ -18,10 +18,9 @@
  *     `BunWsAdapter` re-exposes `.on('message')` / `.on('close')` / `.send()` /
  *     `.readyState` over Bun's `ServerWebSocket`, keeping the handler contract and
  *     the `broadcast()` registry identical across runtimes.
- *   - **Compression**: gzip / deflate via the web `CompressionStream`. Bun's
- *     `CompressionStream` has no brotli (not in the web standard), so the node
- *     shell's brotli-preferred path narrows to gzip on Bun; same media-type set
- *     (`isCompressible`).
+ *   - **Compression**: brotli / gzip / deflate via `node:zlib` (which runs
+ *     natively on Bun), the SAME negotiation + compressor factory the node shell
+ *     uses (shared in `listener-core.js`), so the Bun path gets brotli too (#517).
  *   - **Timeouts** (#237): the node `requestTimeout` maps to Bun's single
  *     `idleTimeout` (seconds), clamped above the 25s SSE keepalive so a dev
  *     live-reload stream is never reaped.
@@ -37,6 +36,7 @@
  * Node (the global is only read inside functions), but it is never loaded there.
  */
 import { EventEmitter } from 'node:events';
+import { Readable, pipeline } from 'node:stream';
 import { matchApi } from './router.js';
 import { registerClient } from './broadcast.js';
 import {
@@ -45,6 +45,10 @@ import {
   loadWsModule,
   installProcessHandlers,
   makeShutdown,
+  negotiateEncoding,
+  createCompressor,
+  varyWithAcceptEncoding,
+  webStreamChunks,
 } from './listener-core.js';
 
 /* global Bun */
@@ -300,10 +304,16 @@ function stampRemoteIp(req, srv) {
 }
 
 /**
- * Apply gzip/deflate compression to a buffered/streamed `Response` via the web
- * `CompressionStream`. Skips an already-encoded body and a non-compressible media
- * type, mirroring the node `sendWebResponse` negotiation (minus brotli, which the
- * web `CompressionStream` does not provide).
+ * Compress a `Response` via `node:zlib` (brotli / gzip / deflate), the SAME
+ * negotiation + compressor factory the node shell uses (shared in
+ * `listener-core.js`). `node:zlib` runs natively on Bun, so this gives **brotli
+ * on Bun** (the web `CompressionStream` used before had no brotli) and full
+ * compression parity with the node shell. The body is bridged web -> node ->
+ * web (`Readable.from(webStreamChunks(...))` -> `compressor` -> `Readable.toWeb`,
+ * driven by `pipeline`; NOT `Readable.fromWeb`, which does not propagate a
+ * mid-stream source error through `pipeline` on Bun, the #509 hang). Skips an
+ * already-encoded body and a non-compressible media type (`isCompressible`
+ * already excludes `text/event-stream`).
  * @param {Response} resp
  * @param {Request} req
  */
@@ -311,18 +321,24 @@ function maybeCompress(resp, req) {
   if (!resp.body) return resp;
   if (resp.headers.has('content-encoding')) return resp;
   if (!isCompressible(resp.headers.get('content-type'))) return resp;
-  const accept = req.headers.get('accept-encoding') || '';
-  let format = null;
-  if (/(?:^|,\s*)gzip(?:;|,|$)/.test(accept)) format = 'gzip';
-  else if (/(?:^|,\s*)deflate(?:;|,|$)/.test(accept)) format = 'deflate';
-  if (!format) return resp;
+  const encoding = negotiateEncoding(req.headers.get('accept-encoding'));
+  const compressor = createCompressor(encoding);
+  if (!compressor) return resp;
 
   const headers = new Headers(resp.headers);
-  headers.set('content-encoding', format);
+  headers.set('content-encoding', encoding);
   headers.delete('content-length');
-  const vary = headers.get('vary');
-  headers.set('vary', vary && !/accept-encoding/i.test(vary) ? `${vary}, Accept-Encoding` : (vary || 'Accept-Encoding'));
-  const body = resp.body.pipeThrough(new CompressionStream(format));
+  headers.set('vary', varyWithAcceptEncoding(headers.get('vary')));
+  // Feed the web body into the compressor through the reader-loop generator (NOT
+  // Readable.fromWeb, which does not propagate a mid-stream source error through
+  // `pipeline` on Bun, the #509 hang) and drive it with `pipeline` so a source
+  // error (or a client disconnect destroying the output) tears down the whole
+  // chain instead of leaking/hanging the compressor. Backpressure is preserved:
+  // a slow client stalls `toWeb`, which stalls the compressor, which pauses the
+  // source.
+  const source = Readable.from(webStreamChunks(resp.body));
+  pipeline(source, compressor, () => {});
+  const body = Readable.toWeb(compressor);
   return new Response(body, { status: resp.status, statusText: resp.statusText, headers });
 }
 

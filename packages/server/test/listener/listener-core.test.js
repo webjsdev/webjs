@@ -14,6 +14,10 @@ import {
   isCompressible,
   EVENTS_PATH,
   loadWsModule,
+  negotiateEncoding,
+  createCompressor,
+  varyWithAcceptEncoding,
+  webStreamChunks,
 } from '../../src/listener-core.js';
 import { setBasePath } from '../../src/importmap.js';
 
@@ -127,6 +131,81 @@ test('isCompressible covers text + the structured-text application types', () =>
   assert.equal(isCompressible('text/event-stream; charset=utf-8'), false, 'SSE with params must not compress');
   // An array-valued header (node's multi-value shape) reads its first entry.
   assert.equal(isCompressible(['text/html', 'x']), true);
+});
+
+/* ---------------- compression negotiation (#517) ---------------- */
+
+test('negotiateEncoding prefers brotli, then gzip, then deflate', () => {
+  assert.equal(negotiateEncoding('br, gzip, deflate'), 'br');
+  assert.equal(negotiateEncoding('gzip, deflate'), 'gzip');
+  assert.equal(negotiateEncoding('deflate'), 'deflate');
+  assert.equal(negotiateEncoding('gzip, br'), 'br', 'order in the header does not matter; brotli still wins');
+  // Token-boundary: a substring must not false-match.
+  assert.equal(negotiateEncoding('xbr, notgzip'), '', 'partial tokens do not match');
+  assert.equal(negotiateEncoding(''), '');
+  assert.equal(negotiateEncoding(undefined), '');
+  assert.equal(negotiateEncoding(['br', 'gzip']), 'br', 'an array header (node multi-value) is joined');
+});
+
+test('createCompressor returns a node:zlib Transform per encoding, null otherwise', () => {
+  for (const enc of ['br', 'gzip', 'deflate']) {
+    const c = createCompressor(enc);
+    assert.ok(c && typeof c.pipe === 'function' && typeof c.write === 'function', `${enc} yields a stream`);
+    c.destroy();
+  }
+  assert.equal(createCompressor(''), null, 'no encoding yields null');
+  assert.equal(createCompressor('identity'), null, 'an unknown encoding yields null');
+});
+
+test('createCompressor brotli actually round-trips (and works on this runtime)', async () => {
+  const { brotliDecompressSync } = await import('node:zlib');
+  const c = createCompressor('br');
+  const chunks = [];
+  c.on('data', (d) => chunks.push(d));
+  const done = new Promise((r) => c.on('end', r));
+  c.end(Buffer.from('hello brotli '.repeat(50)));
+  await done;
+  const out = brotliDecompressSync(Buffer.concat(chunks)).toString();
+  assert.ok(out.startsWith('hello brotli'), 'brotli compress -> decompress round-trips');
+});
+
+test('varyWithAcceptEncoding merges without duplicating', () => {
+  assert.equal(varyWithAcceptEncoding(''), 'Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding(null), 'Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding('Cookie'), 'Cookie, Accept-Encoding');
+  assert.equal(varyWithAcceptEncoding('Accept-Encoding'), 'Accept-Encoding', 'no duplicate');
+  assert.equal(varyWithAcceptEncoding('Origin, Accept-Encoding'), 'Origin, Accept-Encoding', 'already present, unchanged');
+});
+
+/* ---------------- webStreamChunks (the compression body bridge) ---------------- */
+
+test('webStreamChunks yields a web stream chunk by chunk', async () => {
+  const ws = new ReadableStream({
+    start(c) { c.enqueue(new Uint8Array([1, 2])); c.enqueue(new Uint8Array([3])); c.close(); },
+  });
+  const out = [];
+  for await (const chunk of webStreamChunks(ws)) out.push(...chunk);
+  assert.deepEqual(out, [1, 2, 3]);
+});
+
+test('webStreamChunks PROPAGATES a mid-stream source error (the #509 anti-hang)', async () => {
+  let pulls = 0;
+  const ws = new ReadableStream({
+    pull(c) { if (pulls++ === 0) c.enqueue(new Uint8Array([1])); else c.error(new Error('boom')); },
+  });
+  await assert.rejects(async () => { for await (const _ of webStreamChunks(ws)) { void _; } }, /boom/);
+});
+
+test('webStreamChunks cancels the source on early break', async () => {
+  let cancelled = false;
+  const ws = new ReadableStream({
+    pull(c) { c.enqueue(new Uint8Array([1])); },
+    cancel() { cancelled = true; },
+  });
+  for await (const _ of webStreamChunks(ws)) { void _; break; } // take one, then break early
+  // microtask for the async cancel in the generator's finally to settle
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(cancelled, true, 'the source web stream is cancelled when the consumer stops early');
 });
 
 /* ---------------- serverRuntime ---------------- */

@@ -111,6 +111,12 @@ jobs:
       # fix, which Readable.fromWeb hangs on under Bun).
       - name: webjs FileStore streaming on Bun
         run: bun test/bun/file-storage.mjs
+      # Compression on the Bun.serve shell (#517): brotli served via node:zlib
+      # (the web CompressionStream had no brotli), plus the no-hang-on-mid-stream-
+      # error guard (the body is fed through a reader-loop + pipeline, not
+      # Readable.fromWeb, which hangs on Bun).
+      - name: webjs compression on Bun
+        run: bun test/bun/compression.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are

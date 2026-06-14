@@ -56,6 +56,17 @@ test('a normal compressible body IS gzipped when accepted', async () => {
   assert.ok((await r.text()).includes('compressible page body'), 'decodes back to the page');
 });
 
+test('brotli is served when accepted (parity on both shells, #517)', async () => {
+  // Both the node:http shell (node:zlib) and the Bun.serve shell (node:zlib,
+  // which is native on Bun) prefer brotli now. This test runs under whichever
+  // runtime executes it, so it asserts brotli on BOTH shells.
+  const r = await fetch(`${base}/`, { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(r.headers.get('content-encoding'), 'br', 'brotli is preferred over gzip when both are accepted');
+  assert.ok((await r.text()).includes('compressible page body'), 'the brotli body decodes back to the page');
+  const vary = r.headers.get('vary') || '';
+  assert.ok(/accept-encoding/i.test(vary), 'Accept-Encoding is in Vary on the brotli response');
+});
+
 test('a pre-encoded (content-encoding: gzip) body is NOT double-compressed', async () => {
   // Use a manual request that does NOT auto-decompress, so we can inspect the raw
   // bytes: gunzip ONCE must yield the JSON. A double-compress would need two
