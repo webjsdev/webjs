@@ -171,6 +171,20 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/e2e.test.mjs
+      # Cross-runtime e2e (#523): re-run the SAME suite under node --test (its
+      # node:test hook lifecycle does not survive `bun test`) but with the blog
+      # SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns the blog under the bun binary).
+      # This proves the Bun.serve shell + Prisma-on-Bun in a real browser. The few
+      # node-only assertions (SSR seeding, #472/#488) and the #528-blocked abort
+      # test skip themselves on Bun.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Run e2e with the blog served on Bun
+        env:
+          WEBJS_E2E: '1'
+          WEBJS_E2E_RUNTIME: 'bun'
+        run: node --test test/e2e/e2e.test.mjs
 
   dist:
     name: Build (@webjsdev/core dist)
