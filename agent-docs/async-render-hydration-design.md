@@ -448,3 +448,46 @@ WHAT WEBJS WOULD PORT for Axis 2:
    reconciler's posture, with a dev-only warning).
 4. Composition with `<webjs-suspense>` streaming, soft-nav apply, and the elision
    carve-outs (`static shadow`, `static refresh`).
+
+## Appendix: the Qwik resumability blueprint (read firsthand), and the buildless boundary
+
+Read `packages/qwik/src/qwikloader.ts` (the Qwik clone) directly. It is the
+reference for decoupling interactivity from render, and it draws a clear line on
+what webjs can and cannot borrow.
+
+THE DELEGATION CORE (buildless-compatible, webjs CAN adopt):
+- qwikloader is a tiny inline script that registers ONE capture-phase listener per
+  event type on the document root and window (`processEventOrNode`, `capture: true`).
+  It is live the instant the inline script parses, before any framework JS loads
+  and before any component hydrates.
+- On an event, `processDocumentEvent` manually walks UP from `ev.target` (its own
+  bubbling, honoring `stoppropagation:` / `preventdefault:` attributes), and
+  `dispatch` reads the handler reference off each element.
+
+THE HANDLER RESOLUTION (build-dependent, webjs CANNOT adopt):
+- The `on:click` attribute holds a QRL like `chunk.js#symbol`. `dispatch` does
+  `import(uri)` then calls `module[symbol]`. Handlers are lazily imported PER EVENT,
+  nothing is bound at load. A sync variant indexes a build-emitted `qFuncs_<hash>`
+  array via `#index`.
+- This depends on Qwik's BUILD-TIME OPTIMIZER splitting every handler into a
+  separately-importable symbol. webjs is NO-BUILD: its handlers are inline closures
+  inside the shipped component module, not separately addressable symbols. So webjs
+  cannot do import-handler-on-demand. State is a `<script type="qwik/json">` blob
+  parsed lazily on first dispatch; no render runs at load (pure resumption).
+
+THE BUILDLESS BOUNDARY AND WEBJS'S ADAPTATION:
+- webjs ALREADY ships the whole component module (no per-handler splitting), so the
+  only interactivity gap is the window before the (async) `render()` resolves and
+  binds its closures. webjs does not need Qwik's lazy import to close that gap.
+- webjs's adaptation is DELEGATION + HYDRATE-ON-INTERACTION: a capture-phase root
+  listener (qwikloader-shaped, buildless) catches an event in the pre-bound window,
+  walks to the owning custom element, ensures it is hydrated (awaiting the async
+  render if pending), then replays the event to the now-bound handler. No dropped
+  clicks, no per-element binding at mount, and crucially NO dependence on the async
+  render having already resolved. This is the targeted, buildless fix for the #528
+  async-interactivity window.
+
+NET refinement to Axis 2: the interactivity-window fix is delegation, and webjs can
+take Qwik's delegation pattern but NOT its handler-chunk lazy-import (that needs a
+build). The delegation piece is buildless and small; marker-based adopt (the Lit
+piece) remains the separate, optional lever for removing mount-time DOM churn.
