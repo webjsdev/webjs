@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import {
   __seedWrap,
   extractExportNames,
+  buildSeedFacade,
   collectSeeds,
   buildSeedScript,
 } from '../../src/action-seed.js';
@@ -54,6 +55,31 @@ test('extractExportNames finds function / const / class / list / default exports
 test('extractExportNames flags a star re-export (skips faceting)', () => {
   const { hasStar } = extractExportNames(`export * from './other.js';`);
   assert.equal(hasStar, true);
+});
+
+test('buildSeedFacade emits an export* catch-all so a MISSED export is fail-open (#535)', () => {
+  // `export const { BRAND } = ...` is a destructuring export. The
+  // identifier-after-`const` regex in extractExportNames does NOT match it, so
+  // BRAND is the canonical "missed" export. Before the catch-all, the facade
+  // omitted BRAND entirely, so `import { BRAND }` resolved to `undefined` and
+  // crashed the importer. The facade must now carry BRAND via `export *`.
+  const src =
+    `'use server';\n` +
+    `export async function getUser(id) { return id; }\n` +
+    `export const { BRAND } = { BRAND: 'acme' };\n`;
+  const facade = buildSeedFacade('file:///app/x.server.js', '/app/x.server.js', src);
+  assert.ok(facade, 'a use-server module is faceted');
+  assert.match(
+    facade,
+    /export \* from "file:\/\/\/app\/x\.server\.js\?webjs-seed-orig"/,
+    'the facade re-exports everything via a star catch-all (the fail-open guard)',
+  );
+  assert.match(facade, /export const getUser = __w\(/, 'an enumerated export is still wrapped + seeded');
+  assert.doesNotMatch(
+    facade,
+    /export const BRAND =/,
+    'the destructuring export is NOT enumerated (the regex misses it), so it relies on the star',
+  );
 });
 
 test('__seedWrap records a resolved async result inside a collector', async () => {

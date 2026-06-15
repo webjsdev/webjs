@@ -21,7 +21,7 @@ import { hashFile } from '../../src/actions.js';
 import { stringify } from '@webjsdev/core';
 
 let dir;
-let actionUrl, utilUrl;
+let actionUrl, utilUrl, exoticUrl;
 
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'webjs-seedhook-'));
@@ -35,8 +35,19 @@ before(async () => {
   // A `.server.js` WITHOUT the 'use server' directive: a server-only utility.
   const util = join(dir, 'helpers.server.js');
   writeFileSync(util, `export async function helper(x) { return x * 2; }\n`);
+  // A `'use server'` module with an export the facade's regex MISSES: the
+  // destructuring `export const { BRAND }` is not matched by the
+  // identifier-after-`const` pattern, so it is the canonical fail-open case (#535).
+  const exotic = join(dir, 'exotic.server.js');
+  writeFileSync(
+    exotic,
+    `'use server';\n` +
+      `export async function getThing(id) { return id * 10; }\n` +
+      `export const { BRAND, REGION } = { BRAND: 'acme', REGION: 'us' };\n`,
+  );
   actionUrl = pathToFileURL(action).toString();
   utilUrl = pathToFileURL(util).toString();
+  exoticUrl = pathToFileURL(exotic).toString();
 
   // Install the global hook BEFORE importing the fixtures (ESM caches by URL).
   await registerSeedHooks();
@@ -69,4 +80,18 @@ test('a .server.js WITHOUT use server is NOT faceted (no seeding)', async () => 
   const { value, collector } = await collectSeeds(async () => mod.helper(21));
   assert.equal(value, 42, 'the util still runs');
   assert.equal(collector.size, 0, 'a non-action util records no seed');
+});
+
+test('an export the facade regex MISSES flows through the export* catch-all, not undefined (#535)', async () => {
+  const mod = await import(exoticUrl);
+  // The catch-all carries the destructuring exports through unwrapped: they
+  // RESOLVE (not undefined) instead of crashing the importer. Without the
+  // `export * from '?webjs-seed-orig'` line in the facade, these are undefined.
+  assert.equal(mod.BRAND, 'acme', 'a regex-missed export resolves through the catch-all (fail-open)');
+  assert.equal(mod.REGION, 'us', 'every missed binding flows through, not just the first');
+  // The enumerated export is still faceted: it records inside a collector.
+  assert.equal(typeof mod.getThing, 'function');
+  const { value, collector } = await collectSeeds(async () => mod.getThing(4));
+  assert.equal(value, 40, 'the enumerated action still runs and is seeded');
+  assert.equal(collector.size, 1, 'the enumerated action seeds; the missed (unwrapped) ones do not');
 });
