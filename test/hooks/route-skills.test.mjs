@@ -11,11 +11,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOOK = resolve(here, '../../.claude/hooks/route-skills.sh');
+const REPO = resolve(here, '../..');
 
 /**
  * Run the hook with a prompt and return { code, ctx } where ctx is the
@@ -116,4 +118,21 @@ test('a single prompt routes each matched skill exactly once', () => {
   const { ctx } = run('file a task for dark mode');
   const count = (ctx.match(/^- webjs-file-issue:/gm) || []).length;
   assert.equal(count, 1);
+});
+
+test('every skill the hook can route to is committed in-repo (no dangling reference)', () => {
+  // The hook names skills it routes to; each MUST have a committed
+  // `.claude/skills/<name>/SKILL.md`, or a fresh clone routes a prompt at a
+  // skill that does not exist (the #543 portability bug). Extract the skill
+  // names from the hook source and assert each is present in the repo.
+  const hookSrc = readFileSync(HOOK, 'utf8');
+  const names = [...new Set((hookSrc.match(/\b(?:webjs-[a-z-]+|use-railway)\b/g) || []))];
+  assert.ok(names.length >= 4, `expected the hook to reference its skills; found ${names.join(', ')}`);
+  for (const name of names) {
+    const skillFile = resolve(REPO, '.claude/skills', name, 'SKILL.md');
+    assert.ok(
+      existsSync(skillFile),
+      `route-skills.sh routes to '${name}' but ${skillFile} is not committed; a clone would dangle`,
+    );
+  }
 });
