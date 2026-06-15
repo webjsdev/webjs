@@ -67,34 +67,11 @@ function blogRuntimeExec() {
   return process.execPath;
 }
 
-/** Whether the blog under test is served on Bun (WEBJS_E2E_RUNTIME=bun). */
-const BLOG_ON_BUN = (process.env.WEBJS_E2E_RUNTIME || '').toLowerCase() === 'bun';
-
-/**
- * Skip reason for tests that assert SSR action-result SEEDING (#472 / the #488
- * GET seed). Seeding rides Node's `module.registerHooks`, which Bun lacks, so on
- * Bun seeding is disabled FAIL-OPEN: the data is still correct (the component
- * re-fetches over RPC instead of reading a seed), but the "no RPC because seeded"
- * assertion does not hold. Node-only, the same carve-out the Bun unit-test matrix
- * makes for the seed-hook tests. `false` when the blog runs on Node (tests run).
- */
-const SEED_SKIP = BLOG_ON_BUN &&
-  'SSR action seeding (#472) needs module.registerHooks, unavailable on Bun (disabled fail-open); the seeded-vs-RPC assertion is node-only.';
-
-/**
- * Skip reason for the async-render abort test when the blog runs on Bun. The
- * component is NOT broken (it is fully reactive once its first async commit
- * lands, #528). The cause is the cold on-hydration re-fetch: with seeding off
- * (always on Bun until #529, or WEBJS_SEED=0 on Node), a SHIPPING async-render
- * component re-fetches on hydration, and its first client commit, the one that
- * binds the `@click` handler, is deferred until that fetch resolves. So during
- * the fetch the SSR button has no listener and the test's early bumps are lost,
- * leaving no superseded fetch to abort. Seeding resolves the first render
- * synchronously and binds listeners immediately, which is why the test passes on
- * Node. Making seeding work on Bun (#529) closes the window; un-skip this then.
- */
-const ASYNC_REACTIVITY_SKIP = BLOG_ON_BUN &&
-  'cold on-hydration re-fetch window (seeding off on Bun): the async component is not interactive until its first commit lands, so the early bumps are lost. Closed by #529 (seeding on Bun). Not a reactivity defect (#528).';
+// SSR action-result seeding (#472 / the #488 GET seed) and the async-render abort
+// test (#492) used to skip on Bun, because seeding rode Node's
+// `module.registerHooks`. As of #529 seeding installs on Bun too (a `Bun.plugin`
+// onLoad), so a shipping async component seeds and does NOT re-fetch on hydration
+// on either runtime, and these tests now run on both.
 
 /**
  * Start the blog example dev server and wait until it's ready.
@@ -367,14 +344,18 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       home.click();
     });
 
-    // Wait until the URL has advanced to the homepage.
-    await page.waitForFunction(() => location.pathname === '/', { timeout: 8000 });
-
-    // At URL-advance time the slow boundary has not resolved, so its fallback
-    // is live in the DOM (progressive). Read it immediately.
-    const fallbackLiveAtAdvance = await page.evaluate(() =>
-      document.body.innerText.includes('computing timestamp'),
-    );
+    // Assert the fallback is live the moment the URL is the homepage, checked
+    // ATOMICALLY in the browser so there is no test-to-browser round-trip gap in
+    // which the fast (400ms) boundary could resolve before we read (the gap made
+    // this flake under heavy load). A progressive swap satisfies both conditions
+    // together; a buffered swap never shows the fallback at "/" and times out.
+    const fallbackLiveAtAdvance = await page
+      .waitForFunction(
+        () => location.pathname === '/' && document.body.innerText.includes('computing timestamp'),
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false);
     assert.ok(
       fallbackLiveAtAdvance,
       'the Suspense fallback was live when the URL advanced (progressive streaming); a buffered swap would already show resolved content',
@@ -417,7 +398,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(greeting.includes('Hello, world!'), 'the greeting survived the re-render');
   });
 
-  test('SSR action seeding: no action RPC on hydration, RPC on a prop bump (#472)', { skip: SEED_SKIP }, async () => {
+  test('SSR action seeding: no action RPC on hydration, RPC on a prop bump (#472)', async () => {
     // The /seeded page renders a shipping <seeded-user> whose async render()
     // awaits the getSeedUser 'use server' action. SSR bakes the result into the
     // first paint AND seeds it into the page, so the client's first render must
@@ -468,7 +449,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('HTTP-verb actions: GET read is seeded, POST mutation invalidates + refetches (#488)', { skip: SEED_SKIP }, async () => {
+  test('HTTP-verb actions: GET read is seeded, POST mutation invalidates + refetches (#488)', async () => {
     // /verbs reads via a GET action (cacheable, seeded on first paint) and a
     // POST mutation that invalidates the read's tag. Probe action RPCs: none on
     // hydration (the GET was seeded), then the bump fires the mutation and a
@@ -519,7 +500,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('a superseded async render aborts its in-flight action fetch (#492)', { skip: ASYNC_REACTIVITY_SKIP }, async () => {
+  test('a superseded async render aborts its in-flight action fetch (#492)', async () => {
     // <abort-demo> awaits a slow (800ms) GET action. Bumping n while the fetch
     // is in flight supersedes the render, and the framework aborts the previous
     // render's fetch (net::ERR_ABORTED on the action URL).
@@ -580,7 +561,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', { skip: SEED_SKIP }, async () => {
+  test('SSR action seeding rides a soft navigation: no RPC on the navigated render (#472)', async () => {
     // Start on another page, then soft-navigate to /seeded through the client
     // router. The navigation response carries the seed payload, the router
     // ingests it (applySwap -> scanSeeds) before <seeded-user> hydrates, so the

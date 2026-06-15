@@ -407,8 +407,9 @@ bun --bun run dev      # or: bun --bun run start
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
 on Bun (which has no built-in) it comes from `amaro` automatically, so the same
 source serves identically. SSR action-result seeding (an internal hydration
-optimization) is off on Bun (it needs `module.registerHooks`), which only means
-an async-render component re-fetches once on hydration, no behavior change.
+optimization) works on both runtimes: Node installs it via `module.registerHooks`,
+Bun via a `Bun.plugin` `onLoad`, so an async-render component does not re-fetch
+on hydration on either runtime.
 
 **Containerized deploy ships with the scaffold.** `Dockerfile`,
 `compose.yaml`, and `.dockerignore` are scaffolded at the app root. The
