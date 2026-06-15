@@ -390,3 +390,61 @@ moving webjs to Lit-style marker-based adopt hydration (Axis 2), framework-wide,
 with a prototype and measurement, since the cross-framework + lit-parity evidence
 makes it the likely better long-term model and it is the real fix for the
 re-render cost and the #528 window.
+
+## Appendix: the Lit `hydrate()` blueprint (read firsthand)
+
+Read `packages/labs/ssr-client/src/lib/hydrate-lit-html.ts` and the marker
+emission in `packages/labs/ssr/src/lib/render-value.ts` directly. This is the
+concrete reference design for an Axis-2 adopt path in webjs.
+
+MARKERS (emitted by SSR, walked on the client):
+- `<!--lit-part DIGEST-->` opens the root/template ChildPart; DIGEST is a hash of
+  the template `strings` (a small DJB2-ish hash, base64, explicitly designed to be
+  reproducible across languages/environments and safe inside a comment).
+- `<!--lit-part-->` opens a nested dynamic child-expression part; `<!--/lit-part-->`
+  closes a part.
+- `<!--lit-node N-->` is emitted ONLY for an element that has attribute / property
+  / element / event bindings (or a custom element needing `defer-hydration`
+  removal); N is the depth-first node index in the template. So markers are
+  proportional to the BINDING count, not the node count.
+
+CLIENT `hydrate(rootValue, container, options)`:
+- `rootValue` is the EVALUATED `TemplateResult`. So the render function DOES run
+  on hydrate (to recover handler references and prime dirty-check values); what is
+  avoided is the clone-and-replace of DOM.
+- A `TreeWalker` over comment nodes reconstructs `ChildPart` / `TemplateInstance` /
+  `AttributePart` objects bound to the EXISTING SSR nodes, then sets
+  `container._$litPart$ = rootPart` so subsequent `render()` calls patch in place
+  via the normal update path. No DOM is created or replaced.
+- The event/attribute split (lines ~408 to 426) is the key trick: plain attribute
+  parts are primed with `noCommit` (the value is already correct in the SSR DOM,
+  so the DOM is not touched), but EVENT and PROPERTY parts ARE committed during
+  hydrate (they were never serialized into HTML, so the listener is attached to the
+  existing node). This is precisely "bind interactivity onto the SSR DOM without
+  rebuilding it".
+
+MISMATCH POLICY (correction to Finding 6): Lit is STRICT, not graceful. The root
+marker's digest is recomputed on the client and compared (line ~278); a mismatch
+THROWS (line ~302), the same adopt-and-throw posture as React. The graceful
+adopt-and-patch exemplar is Remix 3 (and Vue logs a warning). So for webjs, the
+mismatch policy is an explicit DESIGN CHOICE that does not come free with adoption:
+Lit-strict (digest-validated, throw, simplest, surfaces author errors loudly) vs
+Remix3-graceful (patch in place, log, never user-visible breakage). Given webjs's
+PE/correctness thesis and that it ALREADY has graceful in-place patching (the
+soft-nav reconciler with `LIVE_ATTRS` / `data-webjs-permanent` / `cache()`), the
+graceful policy is the natural fit, but it is a deliberate divergence from Lit's
+own hydrate, not something inherited.
+
+WHAT WEBJS WOULD PORT for Axis 2:
+1. SSR-side: emit the digest + `lit-part` / `lit-node`-equivalent markers, scoped
+   to SHIPPING (non-elided) components, computing the digest identically to the
+   client.
+2. Client-side: a new `adopt()` path (parallel to `createInstance`) that walks the
+   markers and binds the existing `compile()` part list onto the SSR nodes, reusing
+   the existing `updateInstance` for subsequent renders. The event/attr `noCommit`
+   split maps directly onto webjs's part kinds (event/prop committed, plain attr
+   primed).
+3. A chosen mismatch policy (recommend graceful patch, reusing the soft-nav
+   reconciler's posture, with a dev-only warning).
+4. Composition with `<webjs-suspense>` streaming, soft-nav apply, and the elision
+   carve-outs (`static shadow`, `static refresh`).
