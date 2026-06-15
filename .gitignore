@@ -58,6 +58,8 @@ Thumbs.db
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/**
+!.claude/skills/
+!.claude/skills/**
 
 # test artifacts
 coverage/
