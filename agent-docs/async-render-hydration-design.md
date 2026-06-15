@@ -109,13 +109,84 @@ independent of both: it keeps the CURRENT (Model A) feature consistent across
 runtimes regardless of the eventual outcome here, since Model B, even if chosen,
 is a large change that will not ship for a while.
 
-## Findings (filled in as the research proceeds)
+## Findings
 
-To be completed: the binding-feasibility analysis (question 1), the wire-cost
-measurement (question 2), the reconciliation analysis (question 3), the
-composition analysis (question 4), and the examples/blog prototype numbers
-(question 5).
+### Finding 1: webjs has NO DOM-adoption hydration today (the decisive constraint)
+
+This is the finding that reframes the whole comparison. webjs "hydration" is not
+hydration in the React/Lit sense of attaching listeners to existing SSR nodes.
+It is RE-RENDER AND REPLACE. Traced in `packages/core/src/render-client.js`:
+
+- `render(value, container)` (L88) on a light-DOM host sees the
+  `<!--webjs-hydrate-->` marker, REMOVES it (L105 to L107), then calls
+  `createInstance(tr, container)` (L109).
+- `createInstance` (L456) does `templateEl.content.cloneNode(true)` (L458) and
+  `container.replaceChildren(startNode, ...frag.childNodes, endNode)` (L471).
+
+So the SSR DOM is DISCARDED and replaced by a freshly cloned template instance.
+The "no flash" guarantee rests entirely on the client output being byte-identical
+to the SSR output (the comment at L100 to L103 says exactly this). This is true
+for EVERY component, sync and async alike. There is no code path anywhere that
+binds a listener onto an existing SSR node.
+
+Consequence for the two models:
+
+- This is WHY seeding (Model A) exists and why it is shaped the way it is. Since
+  hydration always re-runs `render()`, a sync component re-renders for free, and
+  an async component re-renders by re-fetching. You cannot serialize the rendered
+  template to skip the re-run, because the template contains FUNCTION holes (the
+  `@event` handlers) that are not serializable. So the framework serializes the
+  DATA (the action result, which IS serializable) and re-runs `render()` locally
+  to regenerate both the data holes AND the function holes. Seeding is the
+  minimal, well-matched adaptation of "hydration re-renders" to "render is async",
+  not invasiveness for its own sake.
+- This is also WHY the #528 window exists: the async first commit is DEFERRED
+  (the SSR DOM stays, with listeners UNBOUND, until the fetch resolves and the
+  replace happens). The window is a direct consequence of re-render-and-replace
+  meeting an awaited render.
+- Model B (hydrate-in-place / adopt the SSR DOM) is therefore NOT a localized
+  async-render change. It requires giving webjs a DOM-adoption hydration path it
+  does not have for ANY component: walk the SSR DOM, match it to the compiled
+  template's part positions, and bind listeners onto the existing nodes instead
+  of cloning and replacing. That is a framework-wide hydration rewrite (the
+  Qwik / resumability model), far larger than the async-render case that
+  motivated the question.
+
+### Implication: the real decision is bigger than async render
+
+The lever is not "make async first-mount hydrate-in-place" in isolation. It is
+"should webjs adopt a DOM-adoption (resumable) hydration model framework-wide,
+replacing re-render-and-replace". That is a strategic architecture question with
+broad blast radius (it touches every component's hydration, the patcher, the SSR
+walker, and the byte-identical-output contract), and async render is just the
+case where the current model's cost is most visible.
+
+A narrower intermediate option worth measuring (does NOT need full resumability):
+EARLY-BIND on the SSR DOM. On first mount of an async component, bind the
+`@event` listeners onto the existing SSR nodes immediately (before the fetch
+resolves), then let the normal re-render-and-replace run when the data arrives.
+That would close the #528 window without seeding being on the interactivity
+critical path, while keeping re-render-and-replace everywhere else. It still
+needs a partial DOM-adoption capability (bind events to SSR nodes) that does not
+exist today, but it is a far smaller change than full Model B.
+
+### Still to measure
+
+- Finding 2: wire cost of a hydration annotation vs the current seed block.
+- Finding 3: keyed-list / directive reconciliation on the first dependency-change
+  render under each model.
+- Finding 4: composition with `<webjs-suspense>` (#471), soft-nav, and the
+  `static shadow` / `static refresh` elision carve-outs.
+- Finding 5: examples/blog prototype numbers (interactivity window, bytes, code
+  delta) for the early-bind intermediate option specifically, since it looks like
+  the best cost/benefit point so far.
 
 ## Recommendation (pending)
 
-To be completed once the findings above are in.
+Leaning, pending the measurements: do NOT pursue full Model B (a framework-wide
+resumable-hydration rewrite is disproportionate to the async-render problem that
+prompted this). Instead evaluate the EARLY-BIND intermediate as the way to close
+the #528 window, and treat seeding (Model A) as the correct steady-state
+mechanism given webjs's re-render-and-replace hydration. If that holds, #535
+proceeds (Model A stays), rather than becoming a no-op. To be confirmed by
+findings 2 to 5.
