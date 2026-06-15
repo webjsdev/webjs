@@ -1,11 +1,17 @@
 # Design record: async-render first-mount hydration (#536)
 
-Status: COMPLETE. Recommendation: KEEP Model A (re-render-and-replace + seeding);
-do NOT adopt Model B (resumable / DOM-adoption hydration). See Recommendation
-below. This document is the design record for #536. It compares two client
-strategies for how an async-render component (#469) behaves on its FIRST client
-mount. It does NOT propose removing bare-await async render; the authoring
-primitive stays. Only the client's first-mount strategy was under research.
+Status: COMPLETE, revised after a cross-framework review. The recommendation
+SPLIT into two orthogonal axes (see "Revised recommendation" at the end, which
+supersedes the earlier single-axis "Recommendation" section, kept below for the
+reasoning trail):
+  1. Server-data embed ("seeding"): KEEP. It is the universal industry pattern.
+     #535 proceeds.
+  2. Hydration model (re-render-and-replace vs marker-based adopt): webjs is the
+     lone outlier; every mainstream framework AND Lit (webjs's API model) adopts.
+     This is now a genuine open initiative worth its own issue, NOT settled.
+This document is the design record for #536. It does NOT propose removing
+bare-await async render; the authoring primitive stays. Only the client's
+first-mount strategy was under research.
 
 ## Background: the three decoupled concerns of async render (#469)
 
@@ -283,3 +289,104 @@ PROCEEDS as scoped. #536 does NOT make #535 a no-op. This is the opposite of the
 initial hunch when #536 was filed; the grounded finding is that seeding is the
 right steady-state, so hardening it (the #535 fail-open refactor) is worth doing.
 #534 (seeding on Bun, merged) was independent of this outcome and remains correct.
+
+## Finding 6: cross-framework comparison (the input that split the decision)
+
+Surveyed local clones of Next.js (16.3, App Router / RSC), Remix v2, Remix 3
+(remix-the-web), Nuxt 3, Astro, and Lit (`@lit-labs/ssr`). They split cleanly on
+the two axes webjs had been conflating.
+
+SERVER-DATA EMBED (the seeding equivalent): UNIVERSAL. Every framework embeds the
+server-computed data into the HTML so the client does NOT re-fetch on hydration:
+
+- Next.js: the RSC Flight payload, inlined as `self.__next_f.push([type, data])`
+  `<script>` chunks; the client reconstructs the tree via `createFromReadableStream`,
+  no re-fetch.
+- Remix v2: `window.__remixContext.state.loaderData` in an inline `<script>`;
+  loaders re-run via fetch only on client navigation, not on initial hydrate.
+- Remix 3: `<script type="application/json" id="rmx-data">` carrying per-entry
+  `{ moduleUrl, exportName, props }`; entries hydrate with the embedded props.
+- Nuxt 3: `<script type="application/json" id="__NUXT_DATA__">` (devalue); the
+  `isHydrating` flag makes `useAsyncData` read `payload.data[key]` instead of
+  fetching.
+- Astro: each island's server props serialized into the `<astro-island props>`
+  attribute, revived on hydrate, never recomputed.
+
+So webjs seeding is the INDUSTRY-STANDARD pattern, near-identical to Remix 3's
+`rmx-data` block and Nuxt's `__NUXT_DATA__`. It is table stakes, not exotic. The
+"most invasive feature" label was always about HOW webjs CAPTURES the data (the
+load-hook facade), never about the embed itself. This strongly validates keeping
+seeding and hardening the capture mechanism (#535).
+
+HYDRATION MODEL: webjs is the LONE OUTLIER. Every surveyed framework ADOPTS the
+existing SSR DOM; none re-renders-and-replaces:
+
+- Next.js (React), Remix v2 (React), Nuxt (Vue), Astro (delegated to the island
+  framework): adopt via `hydrateRoot` / `createSSRApp`. React surfaces a mismatch
+  as a recoverable error and re-renders the subtree; Vue logs a warning (and has
+  `data-allow-mismatch`).
+- Remix 3 (custom, non-React reconciler): adopts and PATCHES attributes in place,
+  guided by `<!-- rmx:h:id -->` markers, logging a mismatch rather than throwing.
+  No React-style mismatch error class.
+- Lit (`@lit-labs/ssr`), which webjs's component API deliberately mirrors: adopts
+  via per-part position markers, `<!--lit-part DIGEST-->`, `<!--/lit-part-->`, and
+  `<!--lit-node N-->`. `hydrate()` walks those markers and reconstructs the Part
+  data structures bound to the EXISTING DOM, then patches on update. It does not
+  clone-and-replace.
+
+This is the input that weakens the earlier mismatch-immunity argument. Two points:
+
+1. Adoption does NOT force React's brittle mismatch behavior. Remix 3 and Vue
+   degrade gracefully (patch-in-place / log), and webjs ALREADY has graceful
+   in-place patching: the `updateInstance` fast-path and the soft-nav reconciler
+   (keyed match, `LIVE_ATTRS`, `data-webjs-permanent`, `cache()`). So "adoption
+   reintroduces a corruption bug class" was overstated; the mismatch policy is a
+   design choice, and webjs has the pieces for the graceful one.
+2. Lit is webjs's stated API north-star ("lit training data transfers directly").
+   Lit's OWN SSR hydration is marker-based adopt. webjs re-rendering-and-replacing
+   is a divergence from the very model it claims parity with, and it is the
+   divergence that produces the per-island re-render + DOM churn and the #528
+   window.
+
+## Revised recommendation (supersedes the earlier Recommendation)
+
+The decision splits into two INDEPENDENT axes. They were conflated; separating
+them is the main result of this research.
+
+AXIS 1, server-data embed (seeding): KEEP, SETTLED. It is the universal pattern
+(Next / Remix / Nuxt / Astro all embed). webjs seeding is correct and should stay
+on by default. #535 (harden the capture to be fail-open) PROCEEDS. This is firm.
+
+AXIS 2, hydration model (re-render-and-replace vs marker-based adopt): OPEN, and
+the evidence now leans TOWARD adopting the Lit-style marker-based model, NOT
+toward keeping re-render-and-replace. Reasons:
+
+- webjs is the only surveyed framework that re-renders-and-replaces; everyone,
+  including Lit (the API webjs mirrors), adopts.
+- Adoption addresses the real cost the re-render model pays: a per-interactive-island
+  render + clone + `replaceChildren` (DOM churn) on first mount, and it closes the
+  #528 window by construction (listeners bind to existing DOM immediately).
+- The marker byte cost is real but universally accepted, and can be scoped to
+  shipping (non-elided) components via webjs's existing elision analysis, so it
+  tracks the same interactive surface that pays the re-render today.
+- The mismatch concern is manageable: adopt-and-patch-gracefully (Remix 3 / Vue /
+  webjs's own soft-nav reconciler), not adopt-and-throw (React).
+
+What keeps Axis 2 OPEN rather than decided: it is a large framework-wide change
+(SSR emits per-part markers, a new adopt path in the patcher reusing
+`updateInstance`, a mismatch policy), and the current re-render model is simpler
+and brute-force mismatch-immune. The upside is real but so is the cost, so it
+deserves its own scoped initiative with a prototype + measurement (interactivity
+window, bytes, code delta), not a snap decision here.
+
+Crucially, the two axes are ORTHOGONAL. Adoption does NOT remove the need for
+seeding: an adopting async component still runs `render()` to recover handlers and
+dirty-check values, which still re-invokes the action, which still needs the seed
+to avoid a network re-fetch. So even if Axis 2 moves to adoption, seeding stays
+and #535 stays relevant. Adoption removes the clone-and-replace, not the data need.
+
+NET: keep seeding (Axis 1, #535 proceeds). Open a SEPARATE initiative to evaluate
+moving webjs to Lit-style marker-based adopt hydration (Axis 2), framework-wide,
+with a prototype and measurement, since the cross-framework + lit-parity evidence
+makes it the likely better long-term model and it is the real fix for the
+re-render cost and the #528 window.
