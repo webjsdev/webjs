@@ -35,7 +35,11 @@ try {
   w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nimport '../components/seeded-thing.ts';\nexport default function Page() { return html\`<main><seeded-thing></seeded-thing></main>\`; }\n`);
   // A `'use server'` action invoked during SSR by the component's async render().
   const actionRel = 'actions/get-thing.server.ts';
-  w(actionRel, `'use server';\nexport async function getThing(id: number) { return { id, label: 'thing-' + id }; }\n`);
+  // `getThing` is the enumerated/seeded action. `BRAND` is a destructuring
+  // export the facade's regex MISSES, so it exercises the #535 export* catch-all
+  // (it must resolve through the facade, not be dropped to undefined) on
+  // whichever runtime runs this file.
+  w(actionRel, `'use server';\nexport async function getThing(id: number) { return { id, label: 'thing-' + id }; }\nexport const { BRAND } = { BRAND: 'acme-co' };\n`);
   // A SHIPPING async component (a signal + @click make it ship, so the seed
   // matters): its async render() awaits the action, so SSR runs it.
   w('components/seeded-thing.ts', `import { WebComponent, html, signal } from ${JSON.stringify(CORE)};\nimport { getThing } from '../actions/get-thing.server.ts';\nexport class SeededThing extends WebComponent {\n  private bump = signal(0);\n  async render() {\n    const t = await getThing(7);\n    return html\`<p class="lbl">\${t.label}</p><button @click=\${() => this.bump.set(this.bump.get() + 1)}>+</button>\`;\n  }\n}\nSeededThing.register('seeded-thing');\n`);
@@ -63,7 +67,16 @@ try {
   assert.ok(block[1].includes(seedKey), `the seed is keyed for getThing([7]); expected key ${seedKey} in:\n${block[1].slice(0, 400)}`);
   assert.ok(block[1].includes('thing-7'), 'the seed payload carries the resolved value');
 
-  console.log(`OK  SSR action seeding emits the seed block on ${runtime} (#472, #529)`);
+  // 3. Fail-open catch-all (#535): a destructuring export the facade's regex
+  //    MISSES must still resolve through the `export *`, not be dropped to
+  //    undefined. The action module was loaded through the facade during SSR;
+  //    re-importing returns that faceted namespace. Without the catch-all,
+  //    BRAND is undefined here on both runtimes.
+  const actionMod = await import(pathToFileURL(join(dir, actionRel)).toString());
+  assert.equal(actionMod.BRAND, 'acme-co', 'a regex-missed export flows through the export* catch-all (fail-open)');
+  assert.equal(typeof actionMod.getThing, 'function', 'the enumerated export stays usable');
+
+  console.log(`OK  SSR action seeding emits the seed block + is fail-open on a missed export on ${runtime} (#472, #529, #535)`);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

@@ -213,6 +213,17 @@ function buildFacade(origUrl, absPath, exports) {
   const file = JSON.stringify(absPath);
   let out = `import * as __orig from ${origSpec};\n`;
   out += `import { __seedWrap as __w } from ${JSON.stringify(SELF_URL)};\n`;
+  // Fail-open catch-all (#535). Re-export every named binding of the real module.
+  // An explicit `export const NAME = __w(...)` below SHADOWS the matching star
+  // binding (an explicit export wins over a star re-export of the same name, with
+  // no SyntaxError), so an enumerated export is still wrapped and seeded. A named
+  // export the `extractExportNames` regex MISSED (exotic syntax, an unusual
+  // re-export form, a codegen-produced export) is NOT enumerated below, so it
+  // flows through this star unwrapped: it resolves and works over a normal RPC,
+  // just is not seeded, instead of being dropped and crashing the importer with
+  // `undefined`. `export *` does not carry `default`, which the explicit default
+  // line below still handles.
+  out += `export * from ${origSpec};\n`;
   for (const n of exports.names) {
     const k = JSON.stringify(n);
     out += `export const ${n} = __w(${file}, ${k}, __orig[${k}]);\n`;
