@@ -1,10 +1,11 @@
 # Design record: async-render first-mount hydration (#536)
 
-Status: research in progress. This document is the design record for #536. It
-compares two client strategies for how an async-render component (#469) behaves
-on its FIRST client mount, and will end in a recommendation plus the measured
-trade. It does NOT propose removing bare-await async render; the authoring
-primitive stays. Only the client's first-mount strategy is under research.
+Status: COMPLETE. Recommendation: KEEP Model A (re-render-and-replace + seeding);
+do NOT adopt Model B (resumable / DOM-adoption hydration). See Recommendation
+below. This document is the design record for #536. It compares two client
+strategies for how an async-render component (#469) behaves on its FIRST client
+mount. It does NOT propose removing bare-await async render; the authoring
+primitive stays. Only the client's first-mount strategy was under research.
 
 ## Background: the three decoupled concerns of async render (#469)
 
@@ -170,23 +171,115 @@ critical path, while keeping re-render-and-replace everywhere else. It still
 needs a partial DOM-adoption capability (bind events to SSR nodes) that does not
 exist today, but it is a far smaller change than full Model B.
 
-### Still to measure
+### Finding 2: Model B needs per-part SSR markers on EVERY hole, page-wide
 
-- Finding 2: wire cost of a hydration annotation vs the current seed block.
-- Finding 3: keyed-list / directive reconciliation on the first dependency-change
-  render under each model.
-- Finding 4: composition with `<webjs-suspense>` (#471), soft-nav, and the
-  `static shadow` / `static refresh` elision carve-outs.
-- Finding 5: examples/blog prototype numbers (interactivity window, bytes, code
-  delta) for the early-bind intermediate option specifically, since it looks like
-  the best cost/benefit point so far.
+The patcher locates parts via client-compile artifacts that SSR does NOT emit.
+Verified: `MARKER` appears 19 times in `render-client.js` and ZERO times in
+`render-server.js`. The client `compile()` inserts a `<!--w$N-->` comment for
+every child hole and a `data-w$N` sentinel attribute for every
+element/event/prop/bool hole (`render-client.js` ~L294 to L320), then
+`assignPaths` walks the clone to record each part's node path (~L409). SSR emits
+none of these. Its only hydration-relevant annotations are `data-webjs-prop-*`
+(custom-element props, position-INDEPENDENT because the attribute name carries
+the prop name), a single `<!--webjs-hydrate-->` BOUNDARY marker (one per host,
+not per part), and the suspense `data-webjs-resolve` / `data-webjs-fallback`.
 
-## Recommendation (pending)
+So DOM-adoption (binding parts to existing SSR nodes) is impossible today: given
+`<p>Alice and Bob</p>` from SSR, the client cannot tell which text is a static
+string and which is a resolved hole, nor how many holes there are. Model B would
+require SSR to emit a position marker for EVERY dynamic hole on EVERY page (every
+child hole, every event/element hole; props already round-trip). That is a
+page-wide byte cost (a comment or sentinel per hole, on all SSR output), and it
+is paid by every component, not just async ones.
 
-Leaning, pending the measurements: do NOT pursue full Model B (a framework-wide
-resumable-hydration rewrite is disproportionate to the async-render problem that
-prompted this). Instead evaluate the EARLY-BIND intermediate as the way to close
-the #528 window, and treat seeding (Model A) as the correct steady-state
-mechanism given webjs's re-render-and-replace hydration. If that holds, #535
-proceeds (Model A stays), rather than becoming a no-op. To be confirmed by
-findings 2 to 5.
+This is the cost/benefit crux: Model B's cost is page-wide, but its benefit is
+async-narrow (see Finding 4). That mismatch is the central argument against it.
+
+### Finding 3: re-render-and-replace loses little, because of WHEN and WHAT
+
+The "replace destroys DOM state" worry is much weaker than it first looks.
+
+- FIRST LOAD: the first client render is deferred to a microtask AFTER
+  `connectedCallback` (`component.js` ~L793), and on first mount there is no prior
+  instance, so it always goes through `createInstance` + `replaceChildren`
+  (`render-client.js` ~L94 fast-path is skipped, ~L471 replaces). But this runs
+  before user interaction is plausible (the page is static HTML, nothing focused,
+  no text typed, no scroll). So the replace is effectively invisible: there is no
+  live state to lose yet.
+- SOFT NAV: the client router does NOT blindly replace. It reconciles by key
+  (`id` / `data-key`), preserves `LIVE_ATTRS` (value/checked/selected/open/...),
+  honors `data-webjs-permanent`, and the `cache()` directive detaches-and-reattaches
+  instead of destroying (`router-client.js` reconcile path + `render-client.js`
+  `cache`). And the `updateInstance` fast-path (same template strings) patches in
+  place without replacing nodes, preserving focus/selection/scroll.
+
+So there is no significant correctness bug that DOM-adoption would fix. The
+state-preservation that matters is ALREADY provided by keyed reconciliation,
+LIVE_ATTRS, `data-webjs-permanent`, `cache()`, and the same-strings fast-path.
+Resumable hydration would be solving a problem webjs has largely already solved
+by other means.
+
+### Finding 4: seeding is narrow, fail-open, and skipped where it would hurt
+
+Seeding (Model A) is far less pervasive than "most invasive feature" suggests:
+
+- It is SKIPPED for streamed pages: a page with any `<webjs-suspense>` boundary
+  emits no seed block (`ssr.js` appends the seed script only when
+  `suspenseCtx.pending.length === 0`; a streamable result is never recorded,
+  `action-seed.js` ~L114).
+- It is MOOT for elided components: a bare async leaf (async render, no other
+  client signal, light DOM) is elided (#474), so it never ships and never
+  re-fetches, so it never needs a seed. Seeding is load-bearing ONLY for the
+  minority of async components that ALSO carry an interactivity signal (the ones
+  that ship).
+- Its byte cost IS the data the component needs anyway (the rich-serialized
+  action result), so it buys a saved round-trip, it is not gratuitous overhead.
+- It is consume-once and fail-open: a miss degrades to a normal RPC, and a later
+  refetch / arg-change goes to the network.
+
+### Finding 5: #528 is already adequately handled by seeding
+
+The #528 interactivity window is the gap before the deferred async first commit
+binds listeners. With seeding ON (now on both runtimes after #534), that first
+commit resolves from the embedded seed in roughly one promise tick, NOT a network
+round-trip, so the window is small. The EARLY-BIND intermediate (bind `@event`
+listeners onto the SSR nodes before the fetch resolves) would ITSELF need an SSR
+annotation, because SSR drops `@event` holes entirely (no sentinel, Finding 2),
+so it is not free either. Given the window is already small with seeding on,
+early-bind is not worth its own SSR-annotation cost right now. If the window ever
+proves to matter in practice (measure first), early-bind is the cheaper lever
+than full Model B, since it needs only event-position markers, not a marker per
+hole.
+
+## Recommendation
+
+KEEP Model A (re-render-and-replace hydration + seeding). Do NOT pursue Model B
+(resumable / DOM-adoption hydration). The reasoning, grounded in the findings:
+
+1. Cost/benefit mismatch (Finding 2 + 4). Model B's cost is page-wide (a position
+   marker per dynamic hole on all SSR output, for every component). Its benefit is
+   async-narrow (skipping a re-fetch that only shipping async components do, which
+   seeding already handles and which is skipped for streamed / elided cases).
+2. Weak correctness case (Finding 3). First-load replace happens before any live
+   state exists, and soft-nav already preserves DOM via keyed reconciliation,
+   LIVE_ATTRS, `data-webjs-permanent`, `cache()`, and the same-strings fast-path.
+   Resumable hydration fixes no significant real bug.
+3. Seeding fits the architecture (Finding 4). Given hydration re-runs `render()`,
+   serializing the DATA and re-running locally is the natural minimal adaptation,
+   not invasiveness for its own sake.
+
+This decision was made deliberately WITHOUT a backward-compat constraint (webjs
+has no users yet, so Model B was weighed on engineering merit alone and still
+loses). It can be revisited if real apps later show (a) a measurable #528 window
+even with seeding on, or (b) a state-loss bug keyed reconciliation does not cover.
+The first would point at EARLY-BIND (event-position markers only), not full
+resumability.
+
+### Consequence for #535
+
+Because Model A stays, the seed subsystem stays, so #535 (capture seeds by
+wrapping the evaluated module namespace, retiring the source-rewrite facade)
+PROCEEDS as scoped. #536 does NOT make #535 a no-op. This is the opposite of the
+initial hunch when #536 was filed; the grounded finding is that seeding is the
+right steady-state, so hardening it (the #535 fail-open refactor) is worth doing.
+#534 (seeding on Bun, merged) was independent of this outcome and remains correct.
