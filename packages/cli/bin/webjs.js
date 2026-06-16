@@ -73,6 +73,42 @@ function flag(args, name, def) {
   return args[i + 1];
 }
 
+/**
+ * Run the configured `before` steps (#550) for a phase, aborting the boot on
+ * the first failure. The orchestration lives in `lib/run-tasks.js` (pure,
+ * unit-tested); this owns the phase-prefixed logging + the non-zero exit (a
+ * failed generate/migrate must not serve stale code/schema).
+ *
+ * @param {string} phase 'dev' | 'start' (for the log line)
+ * @param {string[]} steps
+ * @param {string} cwd
+ */
+async function runPhaseBeforeSteps(phase, steps, cwd) {
+  const { runBeforeSteps } = await import('../lib/run-tasks.js');
+  const r = await runBeforeSteps(steps, cwd, {
+    onStep: (step) => console.log(`webjs ${phase}: running before-step \`${step}\`…`),
+  });
+  if (!r.ok) {
+    console.error(`webjs ${phase}: before-step failed (exit ${r.code}): ${r.step}`);
+    process.exit(r.code);
+  }
+}
+
+/**
+ * Spawn the configured dev `parallel` tasks (#550) with phase-prefixed logging,
+ * delegating the spawn + teardown to `lib/run-tasks.js`'s `startParallelTasks`.
+ *
+ * @param {string[]} commands
+ * @param {string} cwd
+ * @returns {Promise<() => void>} the killer
+ */
+async function startDevParallelTasks(commands, cwd) {
+  const { startParallelTasks } = await import('../lib/run-tasks.js');
+  return startParallelTasks(commands, cwd, {
+    onStart: (cmd) => console.log(`webjs dev: starting parallel task \`${cmd}\`…`),
+  });
+}
+
 async function main() {
   // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Run before any subcommand so an older Node fails fast with a clear,
@@ -98,14 +134,23 @@ async function main() {
         break;
       }
 
-      // A bare `webjs dev` (not `npm run dev`) skips the `predev` hook, so a
-      // Prisma app boots against an ungenerated client and crashes with no
-      // hint (#452). Detect that here, in the PARENT only, so the message
-      // prints once rather than on every watch restart. Scoped to Prisma apps;
-      // a non-Prisma app sees nothing. A hint, not an auto-run.
-      const { prismaDevHint } = await import('../lib/prisma-preflight.js');
-      const hint = prismaDevHint(process.cwd());
-      if (hint) console.error(hint);
+      // (#550 superseded the #452 prisma-generate hint: `webjs dev` now RUNS
+      // the configured `webjs.dev.before` step `prisma generate` itself, below,
+      // so a bare `webjs dev` self-generates the client instead of only warning
+      // about it.)
+
+      // Run the configured dev orchestration in the PARENT only (#550), so a
+      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot, e.g.
+      // `prisma generate`) runs to completion first; `dev.parallel` (Tailwind's
+      // watcher, etc.) then runs as children alongside the server. Spawned once
+      // here, NOT in the watch child (which re-execs on every restart). Torn
+      // down on exit so a watcher cannot outlive the server.
+      const { readAppTasks } = await import('../lib/app-tasks.js');
+      const devTasks = readAppTasks(process.cwd());
+      await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
+      const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
+      process.on('SIGINT', () => { killTasks(); process.exit(0); });
+      process.on('SIGTERM', () => { killTasks(); process.exit(0); });
 
       // Decide how to run: in-process (`--no-hot`), or re-exec'd under the host
       // runtime's hot-reload supervisor (`node --watch` on Node, `bun --hot` on
@@ -124,6 +169,7 @@ async function main() {
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
         await startServer({ appDir: process.cwd(), port, dev: true });
+        killTasks();
         break;
       }
 
@@ -132,7 +178,7 @@ async function main() {
         cwd: process.cwd(),
         env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
       });
-      child.on('exit', (code) => process.exit(code ?? 0));
+      child.on('exit', (code) => { killTasks(); process.exit(code ?? 0); });
       break;
     }
     case 'start': {
@@ -140,6 +186,11 @@ async function main() {
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
       loadAppEnv(process.cwd());
+      // Run the configured `start.before` steps (e.g. `webjs db migrate`)
+      // before serving (#550), so a bare `webjs start` is not a degraded run
+      // that skips the `prestart` hook. Aborts the boot on a failed step.
+      const { readAppTasks } = await import('../lib/app-tasks.js');
+      await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;

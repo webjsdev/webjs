@@ -25,8 +25,8 @@ generated output to commit.
 npm run dev      # http://localhost:5003
 ```
 
-A `predev` hook runs `scripts/copy-registry.js`, which mirrors the
-registry's component sources into `components/ui/` and `lib/utils.ts`
+A `webjs.dev.before` step (#550) runs `scripts/copy-registry.js`, which mirrors
+the registry's component sources into `components/ui/` and `lib/utils.ts`
 so the docs preview pages can import them directly.
 
 ## ⚠️ Important: directory conventions (read before adding files)
@@ -37,7 +37,7 @@ directory will break a live deploy. The rule:
 
 | Directory | Tracked in git? | Purpose | Add hand-written files here? |
 |---|---|---|---|
-| `components/` (and `components/ui/`, `components/site/`) | **NO: gitignored** | Auto-populated at `predev`/`prestart` by `scripts/copy-registry.js`. Mirrors `../registry/components/*.ts` with relative-import paths rewritten so the docs preview pages can import them locally. | **NEVER.** Anything you write here is silently deleted/overwritten every dev cycle and won't make it into a deploy. |
+| `components/` (and `components/ui/`, `components/site/`) | **NO: gitignored** | Auto-populated by `webjs.dev.before` / `webjs.start.before` (`scripts/copy-registry.js`, #550). Mirrors `../registry/components/*.ts` with relative-import paths rewritten so the docs preview pages can import them locally. | **NEVER.** Anything you write here is silently deleted/overwritten every dev cycle and won't make it into a deploy. |
 | `lib/` | **NO: gitignored** | Same as above for `../registry/lib/utils.ts`. | **NEVER.** Same reason. |
 | `app/_components/` | **YES: tracked** | Hand-written website-chrome custom elements (theme-toggle, etc.). The leading `_` makes it a webjs private folder (not routable). | **Yes, this is the place.** |
 | `app/`, `public/`, `scripts/`, etc. | **YES: tracked** | Normal webjs source. | Yes, the usual way. |
@@ -91,7 +91,7 @@ behaves the way a shadcn user expects:
 
 - **Scaffolded apps** (`webjs create my-app`): `components/ui/` is
   normal tracked source. `webjs ui add dialog` adds files; users
-  commit them. No prestart copy step.
+  commit them. No registry-copy step.
 - **Example blog** (`examples/blog`): same: `components/ui/` is
   fully tracked, edited freely.
 - **Any user's app**: same, standard shadcn-style "you own the

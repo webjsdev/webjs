@@ -32,9 +32,9 @@ user asked for, never leftover scaffold code.
 
 1. **Use Prisma + SQLite for persistence.** It's already wired up
    (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`,
-   `predev` hook running `prisma generate`). For any data the app
-   stores (todos, posts, messages, products, comments, anything),
-   define a Prisma model and persist there.
+   and `webjs.dev.before` running `prisma generate` inside `webjs dev`).
+   For any data the app stores (todos, posts, messages, products,
+   comments, anything), define a Prisma model and persist there.
    - **NEVER** store app data in JSON files (`data/todos.json`,
      `db.json`, …). It resets on reload and cannot scale. This is a project convention,
      and the user's prompt explicitly forbids it.
@@ -367,31 +367,35 @@ First-run workflow:
 ```sh
 cp .env.example .env          # DATABASE_URL is pre-filled for SQLite
 npm run db:migrate            # creates prisma/dev.db + migration
-npm run dev                   # webjs dev + prisma generate via predev
+npm run dev                   # webjs dev (runs prisma generate, then serves)
 ```
 
-### Always `npm run dev` / `npm start`, never `webjs dev` / `webjs start` directly
+### `npm run dev` / `npm start` and `webjs dev` / `webjs start` behave identically
 
-`webjs dev` and `webjs start` are framework primitives, they only run
-the webjs server. They do **not** run `prisma generate`, do **not** run
-`prisma migrate deploy`, do **not** spawn the Tailwind watcher, do
-**not** run any other per-app process this `package.json` composes.
+`npm run dev` and `npm start` are the documented entrypoints, and they
+are thin aliases for `webjs dev` / `webjs start`. The dev/start
+orchestration (the one-shot `prisma generate` / `prisma migrate deploy`,
+and any parallel watcher like the Tailwind CLI) lives in the `webjs`
+block of `package.json` and runs INSIDE `webjs dev` / `webjs start`:
 
-`npm run dev` and `npm start` are the app-level entrypoints. They run
-the webjs server **plus** every other process the app needs, wired
-together via `predev` / `prestart` hooks and (where present)
-`concurrently` for parallel watchers. Skipping the npm wrapper produces
-silent breakage: a stale Prisma client, missing `public/tailwind.css`,
-an unmigrated database in production, etc.
+```jsonc
+"webjs": {
+  "dev":   { "before": ["prisma generate"] },
+  "start": { "before": ["prisma migrate deploy"] }
+}
+```
 
-Same split Rails 7+ uses: `bin/rails server` is the framework
-primitive, `bin/dev` is the orchestrator. webjs uses npm scripts +
-hooks for the same role, because as a no-build framework Tailwind /
-Prisma / etc. cannot be bundler plugins.
+So a bare `webjs dev` is NOT a degraded run, it runs the same before-steps
+(and `webjs.dev.parallel` watchers) the npm script would. An app that adds
+the Tailwind CLI puts its `--watch` command under `webjs.dev.parallel` and
+it runs alongside the server, torn down on exit. `before` steps run to
+completion first; a failed `prisma generate` / `migrate` aborts the boot
+with a clear message rather than serving stale code/schema.
 
-In Docker / Railway, prefer `npm start` (or `node node_modules/.bin/npm
-start`) as the CMD over `node ... webjs.js start ...`. The npm form
-fires `prestart`; the direct binary form skips it.
+In Docker / Railway, `CMD ["npm", "start"]` and `CMD ["webjs", "start"]`
+are equivalent: `webjs start` runs `webjs.start.before` (`prisma migrate
+deploy`) in-process before serving, so the migrate no longer depends on an
+npm `prestart` hook.
 
 ### Running on Bun instead of Node
 
@@ -414,8 +418,9 @@ on hydration on either runtime.
 **Containerized deploy ships with the scaffold.** `Dockerfile`,
 `compose.yaml`, and `.dockerignore` are scaffolded at the app root. The
 Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs
-deps, runs `prisma generate`, and starts via `npm start` so `prestart`
-applies migrations. Run it locally with `docker compose up --build` (the
+deps, runs `prisma generate` at build time, and starts via `npm start`
+(`webjs start` runs `webjs.start.before` = `prisma migrate deploy` before
+serving). Run it locally with `docker compose up --build` (the
 app comes up on http://localhost:8080 against a SQLite file on a named
 volume). For production, point `DATABASE_URL` at managed Postgres and set
 `AUTH_SECRET`. The `.dockerignore` keeps the `.webjs/vendor/` importmap in
@@ -442,11 +447,11 @@ default-exports an async check; `/__webjs/ready` runs it once warm and reports
 
 Scripts:
 
-- `npm run db:migrate`: `prisma migrate dev` (dev-time schema changes + migration + generate)
-- `npm run db:generate`: `prisma generate` (regenerate client only)
-- `npm run db:studio`: `prisma studio` (GUI)
-- `predev` hook auto-runs `prisma generate` before `npm run dev`
-- `prestart` hook runs `prisma migrate deploy` before `npm start` (idempotent in prod)
+- `npm run db:migrate`: `webjs db migrate` (-> `prisma migrate dev`: dev-time schema change + migration + generate)
+- `npm run db:generate`: `webjs db generate` (-> `prisma generate`: regenerate client only)
+- `npm run db:studio`: `webjs db studio` (-> `prisma studio` GUI)
+- `webjs.dev.before` auto-runs `prisma generate` inside `webjs dev` (#550, replaces the old `predev` hook)
+- `webjs.start.before` runs `prisma migrate deploy` inside `webjs start` (idempotent in prod; replaces the old `prestart` hook)
 
 Always import the client from `lib/prisma.server.ts` (never `new PrismaClient()` directly -
 the singleton avoids opening a new connection on every dev-server reload):
@@ -522,9 +527,9 @@ committed manifest, optional `--download` for full offline capability,
 and a `--from` knob to swap the resolver CDN if jspm.io has an
 incident.
 
-**Don't auto-run `webjs vendor pin` in `predev` / `prestart`.** Auto-pin
-would silently churn the committed importmap.json as jspm.io resolves
-URLs or transitive deps drift. Pin is a deliberate developer action,
+**Don't auto-run `webjs vendor pin` in a `webjs.dev.before` / `webjs.start.before`
+step.** Auto-pin would silently churn the committed importmap.json as jspm.io
+resolves URLs or transitive deps drift. Pin is a deliberate developer action,
 like `npm install` itself.
 
 **Do NOT modify the `.webjs/` lines in `.gitignore` / `.dockerignore`.**

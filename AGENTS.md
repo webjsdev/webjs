@@ -14,7 +14,7 @@ reference there.
 | `agent-docs/components.md` | WebComponent deep-dive (controllers, hooks, light/shadow DOM, slots) |
 | `agent-docs/styling.md` | Tailwind helpers + vanilla-CSS opt-out conventions |
 | `agent-docs/built-ins.md` | Auth, sessions, env vars, caching (cache(), HTTP cache, asset-hash, conditional GET), rate-limit, broadcast, file storage |
-| `agent-docs/configuration.md` | The `package.json` `"webjs"` block (security headers, CSP, redirects, trailing-slash, basePath, ingress caps) + observability |
+| `agent-docs/configuration.md` | The `package.json` `"webjs"` block (security headers, CSP, redirects, trailing-slash, basePath, ingress caps, dev/start task orchestration) + observability |
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router (prefetch, frames, view transitions, stream actions), WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
 | `agent-docs/deployment.md` | Production, runtime targets, embedded use |
@@ -320,8 +320,8 @@ Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a 
 ## CLI reference
 
 ```sh
-webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch on Node, bun --hot on Bun). --no-hot runs in-process
-webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2)
+webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch on Node, bun --hot on Bun). --no-hot runs in-process. Runs webjs.dev.before + webjs.dev.parallel (#550)
+webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2). Runs webjs.start.before first (#550)
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
@@ -334,14 +334,14 @@ webjs ui init | add <names...> | list | view <name>
 webjs vendor pin|unpin|list|audit|outdated|update [--from PROVIDER]   # importmap pinning, .webjs/vendor/importmap.json
 ```
 
-`--from PROVIDER` accepts `jspm` (default), `jsdelivr`, `unpkg`, `skypack` and is persisted in the pin file. `PORT` is honoured when `--port` is absent; `webjs dev` emits `routes.d.ts` automatically. Running this repo's own apps (`website/`, `docs/`, `examples/blog/`, `packages/ui/packages/website/`): always `cd` in and use **its** `npm run dev` / `npm start`, never `webjs dev` / `webjs start` directly (each composes extra watchers via `npm`).
+`--from PROVIDER` accepts `jspm` (default), `jsdelivr`, `unpkg`, `skypack` and is persisted in the pin file. `PORT` is honoured when `--port` is absent; `webjs dev` emits `routes.d.ts` automatically. Running this repo's own apps (`website/`, `docs/`, `examples/blog/`, `packages/ui/packages/website/`): `cd` in and use **its** `npm run dev` / `npm start`; as of #550 a bare `webjs dev` / `webjs start` is equivalent (the per-app orchestration moved into the `webjs.dev` / `webjs.start` tasks config, which the primitive runs), so the npm scripts are now just thin aliases.
 
 ---
 
 ## Environment, server config, caching, observability
 
 - **Env vars.** `process.env.X` reads are server-only; `WEBJS_PUBLIC_`-prefixed names are exposed in the browser via an inline `<script>` (no build); `NODE_ENV` is defined both sides. See `agent-docs/built-ins.md`.
-- **The `package.json` `"webjs"` block.** Security headers (on by default, per-path `webjs.headers` overrides), CSP (opt-in nonce, `webjs.csp`), declarative `webjs.redirects` (#254), `webjs.trailingSlash` (#255), `webjs.basePath` (#256), and ingress caps (`maxBodyBytes` / `maxMultipartBytes` / server timeouts). Type it with `WebjsConfig` + the JSON Schema. See `agent-docs/configuration.md`.
+- **The `package.json` `"webjs"` block.** Security headers (on by default, per-path `webjs.headers` overrides), CSP (opt-in nonce, `webjs.csp`), declarative `webjs.redirects` (#254), `webjs.trailingSlash` (#255), `webjs.basePath` (#256), ingress caps (`maxBodyBytes` / `maxMultipartBytes` / server timeouts), and dev/start task orchestration (`webjs.dev.before` / `webjs.dev.parallel` / `webjs.start.before`, #550, the orchestration `webjs dev`/`start` run so they match `npm run dev`/`start`). Type it with `WebjsConfig` + the JSON Schema. See `agent-docs/configuration.md`.
 - **Caching + file storage** (`agent-docs/built-ins.md`). HTTP `Cache-Control`, the `cache()` query helper + `revalidateTag`, the server HTML response cache (`export const revalidate` + `revalidatePath`, #241), content-hash asset URLs (`?v=`, #243), conditional GET (ETag, #240), and `FileStore` + `diskStore` (streaming, traversal-safe, signed URLs, S3-pluggable, #247).
 - **Observability** (`agent-docs/configuration.md`). Access log, `requestId()` + `X-Request-Id`, the `onError` APM hook, `GET /__webjs/version` (#239).
 

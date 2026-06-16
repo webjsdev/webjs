@@ -11,9 +11,9 @@ import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 // ---------------------------------------------------------------------------
 // Side-effect imports: load every ui-* component module so the custom
 // elements register, and the preview pane can render any of them. Modules
-// are copied from the registry into `components/ui/` at prestart
-// (see `scripts/copy-registry.js`), so the same source webjs serves to the
-// browser is what SSR uses.
+// are copied from the registry into `components/ui/` by the webjs.dev.before /
+// webjs.start.before step (see `scripts/copy-registry.js`), so the same source
+// webjs serves to the browser is what SSR uses.
 // ---------------------------------------------------------------------------
 import '../../../../components/ui/accordion.ts';
 import '../../../../components/ui/alert.ts';

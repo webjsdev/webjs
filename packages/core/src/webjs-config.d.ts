@@ -80,6 +80,32 @@ export interface WebjsRedirectRule {
 /** The trailing-slash canonicalization policy in `webjs.trailingSlash`. */
 export type WebjsTrailingSlash = 'never' | 'always' | 'ignore';
 
+/** Dev task orchestration in `webjs.dev` (#550). Read by the CLI, not the server. */
+export interface WebjsDevTasks {
+  /**
+   * One-shot commands run sequentially to completion BEFORE the dev server
+   * boots (the old `predev` hook: `prisma generate`, a registry copy). A
+   * non-zero exit aborts the boot.
+   */
+  before?: string[];
+  /**
+   * Long-lived commands run as child processes ALONGSIDE the dev server (the
+   * old `concurrently` watchers: the Tailwind CLI `--watch`). Spawned once in
+   * the parent and torn down on exit, so a watcher cannot leak past the server.
+   */
+  parallel?: string[];
+}
+
+/** Start task orchestration in `webjs.start` (#550). Read by the CLI, not the server. */
+export interface WebjsStartTasks {
+  /**
+   * One-shot commands run sequentially to completion BEFORE the prod server
+   * boots (the old `prestart` hook: `prisma migrate deploy`). A non-zero exit
+   * aborts the boot.
+   */
+  before?: string[];
+}
+
 /** The object form of `webjs.csp` (the non-boolean shape). */
 export interface WebjsCspConfig {
   /**
@@ -117,6 +143,14 @@ export interface WebjsConfig {
    * env override wins over this.
    */
   seed?: boolean;
+
+  /**
+   * Dev/start task orchestration (#550). `webjs dev` / `webjs start` run these
+   * so a bare CLI invocation matches `npm run dev` / `start`. Read by the CLI
+   * (`packages/cli/lib/app-tasks.js`), NOT the server readers.
+   */
+  dev?: WebjsDevTasks;
+  start?: WebjsStartTasks;
 
   /** Per-path response-header rules, shaped like Next's. */
   headers?: WebjsHeaderRule[];

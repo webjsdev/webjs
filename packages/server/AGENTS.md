@@ -152,7 +152,11 @@ in THREE co-located places that MUST stay in lockstep:
    `redirects` / `trailingSlash`), `readBasePath` (`base-path.js`,
    `basePath`), `readCspConfig` (`csp.js`, `csp`), and
    `readBodyLimits` / `computeServerTimeouts` (`body-limit.js`, the byte
-   caps + timeouts).
+   caps + timeouts). The `dev` / `start` task keys (#550) are the one
+   exception: they are read by the CLI's `readAppTasks`
+   (`packages/cli/lib/app-tasks.js`), NOT a server reader, but they live in
+   the same `webjs` block so they are in the schema + type + `KNOWN_KEYS`
+   all the same (or `additionalProperties:false` would flag a valid app).
 
 **To add or change a `webjs.*` key, update all three (schema + type +
 reader), and the `KNOWN_KEYS` list in the drift test.** The drift test

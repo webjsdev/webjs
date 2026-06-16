@@ -185,23 +185,23 @@ npm run db:migrate            # creates prisma/dev.db + applies migrations
 npm run dev                   # http://localhost:5004
 ```
 
-**Always `npm run dev` / `npm start`, never `webjs dev` / `webjs start`
-directly.** `webjs dev` and `webjs start` are framework primitives,
-they only run the webjs server. They do **not** run `prisma generate`,
-do **not** run `prisma migrate deploy`, do **not** spawn the Tailwind
-watcher. `npm run dev` and `npm start` are the app-level entrypoints,
-they run the server **plus** every other process the app needs, wired
-via `predev` / `prestart` hooks and `concurrently` for parallel
-watchers. Skipping the npm wrapper produces silent breakage: stale
-Prisma client, missing `public/tailwind.css`, unmigrated DB in prod.
+`npm run dev` / `npm start` and `webjs dev` / `webjs start` behave
+identically (#550). The orchestration (the one-shot `prisma generate` /
+`prisma migrate deploy`, and the Tailwind `--watch`) lives in the `webjs`
+block of `package.json` and runs INSIDE `webjs dev` / `webjs start`:
 
-Same split Rails 7+ uses: `bin/rails server` is the framework
-primitive, `bin/dev` is the orchestrator. webjs uses npm scripts +
-hooks for the same role.
+```jsonc
+"webjs": {
+  "dev":   { "before": ["prisma generate"], "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
+  "start": { "before": ["prisma migrate deploy"] }
+}
+```
 
-In Docker / Railway, prefer `npm start` as the CMD over `node ...
-webjs.js start ...`. The npm form fires `prestart` (which runs
-`prisma migrate deploy`); the direct binary form skips it.
+So a bare `webjs dev` is NOT degraded: it runs `prisma generate` (dev
+`before`), spawns the Tailwind watcher (dev `parallel`, torn down on exit),
+then serves. `npm run dev` (a thin alias) does the same. In Docker / Railway,
+`CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent: `webjs
+start` runs `prisma migrate deploy` (start `before`) in-process before serving.
 
 ## Tests
 

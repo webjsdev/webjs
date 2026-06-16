@@ -260,8 +260,10 @@ docs". That is the agent's default behavior in a webjs project.
 
 Every webjs app uses **Prisma + SQLite** for persistence by default. The
 scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` (singleton), the
-`predev` / `prestart` hooks that run `prisma generate` / `prisma migrate
-deploy`, and `npm run db:migrate` / `db:generate` / `db:studio` scripts.
+`webjs.dev.before` / `webjs.start.before` steps that run `prisma generate` /
+`prisma migrate deploy` inside `webjs dev` / `webjs start` (#550), and the
+`npm run db:migrate` / `db:generate` / `db:studio` scripts (which route through
+`webjs db`).
 
 **AI agents: these rules are absolute.**
 

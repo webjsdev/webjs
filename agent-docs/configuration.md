@@ -208,6 +208,37 @@ Returns JSON describing the live build, alongside the `/__webjs/health` and `/__
 
 ---
 
+## Dev/start task orchestration: `webjs.dev` / `webjs.start` (#550)
+
+`webjs dev` and `webjs start` run an app's per-environment orchestration
+themselves, read from the `package.json` `"webjs"` block, so the framework
+primitive is not a degraded run versus `npm run dev` / `npm start`. The npm
+scripts become thin aliases (`"dev": "webjs dev"`), and both forms behave
+identically. This replaces the old `predev` / `prestart` npm hooks +
+`concurrently` watchers (which a bare `webjs dev` silently skipped, #452).
+
+```jsonc
+"webjs": {
+  "dev": {
+    "before":   ["prisma generate"],                                   // one-shot, runs to completion first
+    "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]  // long-lived, runs alongside the server
+  },
+  "start": {
+    "before":   ["prisma migrate deploy"]                              // one-shot, before serving
+  }
+}
+```
+
+- **`before`** (dev and start): commands run sequentially to completion BEFORE the server boots (the old `predev` / `prestart`: `prisma generate`, `prisma migrate deploy`, a registry copy). A non-zero exit ABORTS the boot with a clear message, so a failed generate/migrate never serves stale code/schema.
+- **`parallel`** (dev only): long-lived child processes that run ALONGSIDE the server (the old `concurrently` watchers: the Tailwind CLI `--watch`). They are spawned once in the parent (not on every hot-reload restart) and TORN DOWN on exit (SIGINT / SIGTERM / server exit), so a watcher cannot leak past the dev server.
+- Each command runs through a shell, so a normal command line works. An empty / absent block means `webjs dev` / `start` run unchanged, so a plain app with no Tailwind/DB needs no config.
+- The scaffold uses the Tailwind browser runtime (no CSS build step), so it ships only `dev.before` / `start.before` (Prisma); an app that adds the Tailwind CLI puts its `--watch` under `webjs.dev.parallel`. The in-repo apps (`examples/blog`, `website`, `docs`, ui-website) show the Tailwind `parallel` watcher pattern.
+- **Prod note:** `before` runs at boot, so `webjs start` runs `prisma migrate deploy` in-process. The CLIENT-CODE generate (`prisma generate`) for prod still belongs at image-BUILD time (`RUN npx prisma generate`), NOT a start `before` step, since a read-only prod container must not codegen. So `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent.
+
+Read by `readAppTasks` in `packages/cli/lib/app-tasks.js` (pure, unit-tested); orchestrated in `packages/cli/bin/webjs.js` (`runBeforeSteps` / `startParallelTasks`).
+
+---
+
 ## Server port resolution (`--port` / `PORT` / `.env`) (#447)
 
 Both `webjs dev` and `webjs start` resolve the listen port with a single

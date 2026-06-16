@@ -5,14 +5,17 @@
   "private": true,
   "description": "Registry host + docs site for @webjsdev/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {
-    "predev": "node scripts/copy-registry.js",
-    "prestart": "node scripts/copy-registry.js && npm run css:build",
-    "dev": "concurrently --names css,web --prefix-colors magenta,cyan --kill-others-on-fail \"npm:css:watch\" \"npm:webjs:dev\"",
+    "dev": "webjs dev --port ${PORT:-5003}",
     "start": "webjs start",
-    "webjs:dev": "webjs dev --port ${PORT:-5003}",
-    "css:watch": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
     "preview:build": "node scripts/copy-registry.js"
+  },
+  "webjs": {
+    "dev": {
+      "before": ["node scripts/copy-registry.js"],
+      "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
+    },
+    "start": { "before": ["node scripts/copy-registry.js", "npm run css:build"] }
   },
   "dependencies": {
     "@webjsdev/cli": "^0.10.0",
@@ -22,7 +25,6 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.2",
-    "@types/node": "^24.0.0",
-    "concurrently": "^9.2.1"
+    "@types/node": "^24.0.0"
   }
 }
