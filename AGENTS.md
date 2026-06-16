@@ -17,7 +17,6 @@ reference there.
 | `agent-docs/configuration.md` | The `package.json` `"webjs"` block (security headers, CSP, redirects, trailing-slash, basePath, ingress caps, dev/start task orchestration) + observability |
 | `agent-docs/advanced.md` | Suspense streaming, performance, bundling, client router (prefetch, frames, view transitions, stream actions), WebSockets |
 | `agent-docs/typescript.md` | TS at runtime + full-stack type safety |
-| `agent-docs/deployment.md` | Production, runtime targets, embedded use |
 | `agent-docs/service-worker.md` | The opt-in progressive-enhancement service worker (`public/sw.js`) |
 | `agent-docs/testing.md` | Unit, browser, convention validation, the `handle()` test harness (`@webjsdev/server/testing`) |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself): commands, repo-health git config, changelog flow, dev error overlay |
@@ -406,4 +405,4 @@ Not in v1. Do not implement as part of other tasks:
 - **Bundling and per-route code splitting.** webjs is **no-build** (the Rails 7 + importmap model); prod perf comes from HTTP/2 multiplex + `<link rel="modulepreload">` hints, not concatenation. **Do not propose a bundler or `webjs build`.**
 - **Vite-grade HMR with state preservation.** Custom elements only `define` once, so full reload is necessary; data reloads are near-instant via `fs.watch` to SSE.
 - **React Server Components Flight.** Server actions + `Suspense` streaming cover the need.
-- **Edge-runtime bundling / full portability** (see `agent-docs/deployment.md`), **i18n, image optimization** (layer libraries on top).
+- **Edge-runtime bundling / full portability** (deployment guidance lives in the docs site at `/docs/deployment`), **i18n, image optimization** (layer libraries on top).
