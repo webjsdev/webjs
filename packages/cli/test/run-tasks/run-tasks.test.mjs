@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runBeforeSteps, startParallelTasks } from '../../lib/run-tasks.js';
 
 /**
@@ -55,6 +58,25 @@ test('runBeforeSteps with no steps is a no-op ok', async () => {
   const f = fakeSpawn();
   assert.deepEqual(await runBeforeSteps([], '/app', { spawn: f.spawn }), { ok: true });
   assert.deepEqual(f.calls, []);
+});
+
+test('runBeforeSteps resolves a LOCAL-only binary via node_modules/.bin (the PATH fix, finding #1)', async () => {
+  // A binary present ONLY in <cwd>/node_modules/.bin, never on the ambient
+  // PATH. Success proves envWithLocalBin prepends node_modules/.bin npm-style,
+  // so a bare `webjs dev` (no npm lifecycle PATH) resolves `prisma` /
+  // `tailwindcss` instead of exiting 127 and aborting the boot.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-tasks-'));
+  try {
+    const binDir = join(dir, 'node_modules', '.bin');
+    mkdirSync(binDir, { recursive: true });
+    const binFile = join(binDir, 'webjs-localonly');
+    writeFileSync(binFile, '#!/bin/sh\nexit 0\n');
+    chmodSync(binFile, 0o755);
+    const r = await runBeforeSteps(['webjs-localonly'], dir, {}); // real spawn
+    assert.deepEqual(r, { ok: true }, 'the local-only binary resolved via injected PATH');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('startParallelTasks spawns each command and the killer tears them all down, idempotently', () => {

@@ -1,4 +1,29 @@
 import { spawn as nodeSpawn } from 'node:child_process';
+import { delimiter, dirname, join } from 'node:path';
+
+/**
+ * Build a PATH the way `npm run` does: prepend every ANCESTOR
+ * `node_modules/.bin` (the app's, then up to the repo root for a hoisted
+ * monorepo) so a `before` / `parallel` command naming a LOCAL-only binary
+ * (`prisma`, `tailwindcss`) resolves under a bare `webjs dev` / `start`, exactly
+ * as it does under `npm run dev`. Without this a bare `webjs dev` exits 127 on
+ * the first such step and aborts the boot, defeating the whole #550 point.
+ *
+ * @param {string} cwd
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+function envWithLocalBin(cwd, env = process.env) {
+  const bins = [];
+  let dir = cwd;
+  // Walk up to the filesystem root, collecting each node_modules/.bin.
+  for (;;) {
+    bins.push(join(dir, 'node_modules', '.bin'));
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return { ...env, PATH: [...bins, env.PATH || ''].join(delimiter) };
+}
 
 /**
  * Run the configured `before` steps (#550) sequentially to completion. Returns
@@ -14,10 +39,11 @@ import { spawn as nodeSpawn } from 'node:child_process';
  */
 export async function runBeforeSteps(steps, cwd, opts = {}) {
   const spawn = opts.spawn || nodeSpawn;
+  const env = envWithLocalBin(cwd);
   for (const step of steps) {
     if (opts.onStep) opts.onStep(step);
     const code = await new Promise((res) => {
-      const c = spawn(step, { shell: true, stdio: 'inherit', cwd });
+      const c = spawn(step, { shell: true, stdio: 'inherit', cwd, env });
       c.on('exit', (code) => res(code ?? 0));
       c.on('error', () => res(1));
     });
@@ -38,9 +64,10 @@ export async function runBeforeSteps(steps, cwd, opts = {}) {
  */
 export function startParallelTasks(commands, cwd, opts = {}) {
   const spawn = opts.spawn || nodeSpawn;
+  const env = envWithLocalBin(cwd);
   const children = commands.map((cmd) => {
     if (opts.onStart) opts.onStart(cmd);
-    return spawn(cmd, { shell: true, stdio: 'inherit', cwd });
+    return spawn(cmd, { shell: true, stdio: 'inherit', cwd, env });
   });
   let killed = false;
   return () => {
