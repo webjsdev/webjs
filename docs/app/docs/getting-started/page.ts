@@ -121,13 +121,13 @@ Counter.register('my-counter');</pre>
     <p>That's it. No build step, no bundler config, no compilation. Edit any <code>.ts</code> file, refresh, and see it.</p>
 
     <p>
-      <strong>Always start the dev server with <code>npm run dev</code>, not a
-      bare <code>webjs dev</code>.</strong> The scaffold wires a
-      <code>predev</code> npm hook (<code>prisma generate</code>) that npm runs
-      automatically before <code>dev</code>; invoking the <code>webjs dev</code>
-      binary directly skips it. For a database app that means booting against an
-      ungenerated Prisma client, so <code>webjs dev</code> will warn you and
-      point you back at <code>npm run dev</code>.
+      <strong><code>npm run dev</code> and a bare <code>webjs dev</code> are
+      equivalent.</strong> The scaffold puts <code>prisma generate</code> under
+      <code>webjs.dev.before</code> in the <code>webjs</code> block of
+      package.json, and <code>webjs dev</code> runs it (and any
+      <code>webjs.dev.parallel</code> watcher) before serving. So
+      <code>npm run dev</code> is a thin alias and either command boots a
+      correctly-generated database app.
     </p>
 
     <h2>How It Works</h2>
