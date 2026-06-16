@@ -123,7 +123,7 @@ packages/ui/
       registry/[name]/route.ts           GET /registry/<name>.json, single item (CLI fetches here)
       docs/page.ts                docs root
       docs/components/[name]/page.ts  per-component docs page
-    components/                   GITIGNORED, auto-populated at prestart by scripts/copy-registry.js
+    components/                   GITIGNORED, auto-populated by webjs.dev.before / webjs.start.before (scripts/copy-registry.js, #550)
     lib/                          GITIGNORED, same as above (for utils.ts)
 ```
 
@@ -131,7 +131,8 @@ packages/ui/
 
 `packages/website/` is the publisher AND a consumer of the kit, so its
 `components/` and `lib/` directories are wholesale gitignored , 
-`scripts/copy-registry.js` regenerates them at prestart by mirroring
+`scripts/copy-registry.js` regenerates them via `webjs.dev.before` /
+`webjs.start.before` (#550) by mirroring
 `../registry/` with each component's `'../lib/utils.ts'` import rewritten
 to the website's depth. **Anything hand-written you put in
 `packages/website/components/*` or `packages/website/lib/*` is invisible
