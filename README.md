@@ -102,10 +102,11 @@ CLAUDE.md           # Claude Code quick-reference
 
 ## Local development
 
-Contributing to the framework itself? Run the monorepo's apps with
-`npm run dev` (never `webjs dev` directly: each app's `npm run dev`
-also spawns its Tailwind watcher, and the blog and UI site run extra
-prep steps via `predev` hooks).
+Contributing to the framework itself? Run the monorepo's apps from their
+own dir with `npm run dev`; as of #550 a bare `webjs dev` is equivalent
+(each app's Tailwind watcher and prep steps, `prisma generate`/`migrate`,
+the registry copy, moved into its `webjs.dev` / `webjs.start` tasks config,
+which `webjs dev`/`start` run, so the npm scripts are thin aliases).
 
 ```sh
 npm install                          # once, from the repo root (installs every workspace)

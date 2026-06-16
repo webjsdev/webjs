@@ -32,14 +32,11 @@ transition agents most often get wrong, so it is the first recipe.
    }
    ```
 
-   Start the dev server with `npm run dev` (the canonical command), NOT a bare
-   `webjs dev`: `npm run dev` runs the `predev` hook (`prisma generate`) first,
-   while `webjs dev` skips it and boots against an ungenerated client. A bare
-   `webjs dev` will now warn and point you back at `npm run dev`, but use the
-   npm script from the start.
+   Start the dev server with `npm run dev` or a bare `webjs dev` (equivalent
+   as of #550): the `webjs.dev.before` step `prisma generate` runs inside
+   `webjs dev` either way, so the client is generated before the server boots.
 
-2. **Migrate.** Run the npm script (not the `webjs`/`prisma` binary directly,
-   so the `predev` / `db:*` hooks fire):
+2. **Migrate.** Run `npm run db:migrate` or `webjs db migrate` (equivalent):
 
    ```sh
    npm run db:migrate -- --name add_post
