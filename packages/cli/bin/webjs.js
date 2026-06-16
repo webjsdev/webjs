@@ -73,6 +73,57 @@ function flag(args, name, def) {
   return args[i + 1];
 }
 
+/**
+ * Run the configured `start.before` steps (#550) sequentially to completion
+ * before the prod server boots, e.g. `webjs db migrate`. A non-zero exit aborts
+ * the boot with a clear message (a failed migration must not serve stale
+ * schema). No-op when there are no steps. Runs through a shell so a step can be
+ * a normal command line.
+ *
+ * @param {string[]} steps
+ * @param {string} cwd
+ */
+async function runBeforeSteps(steps, cwd) {
+  for (const step of steps) {
+    console.log(`webjs start: running before-step \`${step}\`…`);
+    const code = await new Promise((res) => {
+      const c = spawn(step, { shell: true, stdio: 'inherit', cwd });
+      c.on('exit', (code) => res(code ?? 0));
+      c.on('error', () => res(1));
+    });
+    if (code !== 0) {
+      console.error(`webjs start: before-step failed (exit ${code}): ${step}`);
+      process.exit(code);
+    }
+  }
+}
+
+/**
+ * Spawn the configured dev `parallel` tasks (#550) as long-lived children
+ * ALONGSIDE the server, so a bare `webjs dev` runs the same watchers (Tailwind,
+ * etc.) that `npm run dev` ran via `concurrently` + `pre*` hooks. Returns a
+ * killer that tears them all down, so a leaked watcher cannot outlive the dev
+ * server. A no-op when there are no parallel tasks, so a plain app is unchanged.
+ *
+ * @param {string[]} commands
+ * @param {string} cwd
+ * @returns {() => void}
+ */
+function startParallelTasks(commands, cwd) {
+  const children = commands.map((cmd) => {
+    console.log(`webjs dev: starting parallel task \`${cmd}\`…`);
+    return spawn(cmd, { shell: true, stdio: 'inherit', cwd });
+  });
+  let killed = false;
+  return () => {
+    if (killed) return;
+    killed = true;
+    for (const c of children) {
+      try { c.kill(); } catch {}
+    }
+  };
+}
+
 async function main() {
   // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Run before any subcommand so an older Node fails fast with a clear,
@@ -107,6 +158,19 @@ async function main() {
       const hint = prismaDevHint(process.cwd());
       if (hint) console.error(hint);
 
+      // Start the configured dev `parallel` tasks (Tailwind's watcher, etc.) in
+      // the PARENT only (#550), so a bare `webjs dev` runs them exactly like
+      // `npm run dev` did via `concurrently`. Spawned once here, NOT in the
+      // watch child (which re-execs on every restart). Torn down on exit so a
+      // watcher cannot outlive the server.
+      const { readAppTasks } = await import('../lib/app-tasks.js');
+      const killTasks = startParallelTasks(
+        readAppTasks(process.cwd()).dev.parallel,
+        process.cwd(),
+      );
+      process.on('SIGINT', () => { killTasks(); process.exit(0); });
+      process.on('SIGTERM', () => { killTasks(); process.exit(0); });
+
       // Decide how to run: in-process (`--no-hot`), or re-exec'd under the host
       // runtime's hot-reload supervisor (`node --watch` on Node, `bun --hot` on
       // Bun, #514). The branch logic lives in the pure `planDevSupervisor` so it
@@ -124,6 +188,7 @@ async function main() {
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
         await startServer({ appDir: process.cwd(), port, dev: true });
+        killTasks();
         break;
       }
 
@@ -132,7 +197,7 @@ async function main() {
         cwd: process.cwd(),
         env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
       });
-      child.on('exit', (code) => process.exit(code ?? 0));
+      child.on('exit', (code) => { killTasks(); process.exit(code ?? 0); });
       break;
     }
     case 'start': {
@@ -140,6 +205,11 @@ async function main() {
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
       loadAppEnv(process.cwd());
+      // Run the configured `start.before` steps (e.g. `webjs db migrate`)
+      // before serving (#550), so a bare `webjs start` is not a degraded run
+      // that skips the `prestart` hook. Aborts the boot on a failed step.
+      const { readAppTasks } = await import('../lib/app-tasks.js');
+      await runBeforeSteps(readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;
