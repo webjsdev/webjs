@@ -74,57 +74,39 @@ function flag(args, name, def) {
 }
 
 /**
- * Run the configured `before` steps (#550) sequentially to completion before the
- * server boots: `dev.before` (e.g. `prisma generate`) for `webjs dev`,
- * `start.before` (e.g. `prisma migrate deploy`) for `webjs start`. These replace
- * the old `predev` / `prestart` npm hooks, so a bare `webjs dev`/`start` is not a
- * degraded run. A non-zero exit aborts the boot with a clear message (a failed
- * generate/migrate must not serve stale code/schema). No-op when there are no
- * steps. Runs through a shell so a step can be a normal command line.
+ * Run the configured `before` steps (#550) for a phase, aborting the boot on
+ * the first failure. The orchestration lives in `lib/run-tasks.js` (pure,
+ * unit-tested); this owns the phase-prefixed logging + the non-zero exit (a
+ * failed generate/migrate must not serve stale code/schema).
  *
  * @param {string} phase 'dev' | 'start' (for the log line)
  * @param {string[]} steps
  * @param {string} cwd
  */
-async function runBeforeSteps(phase, steps, cwd) {
-  for (const step of steps) {
-    console.log(`webjs ${phase}: running before-step \`${step}\`…`);
-    const code = await new Promise((res) => {
-      const c = spawn(step, { shell: true, stdio: 'inherit', cwd });
-      c.on('exit', (code) => res(code ?? 0));
-      c.on('error', () => res(1));
-    });
-    if (code !== 0) {
-      console.error(`webjs ${phase}: before-step failed (exit ${code}): ${step}`);
-      process.exit(code);
-    }
+async function runPhaseBeforeSteps(phase, steps, cwd) {
+  const { runBeforeSteps } = await import('../lib/run-tasks.js');
+  const r = await runBeforeSteps(steps, cwd, {
+    onStep: (step) => console.log(`webjs ${phase}: running before-step \`${step}\`…`),
+  });
+  if (!r.ok) {
+    console.error(`webjs ${phase}: before-step failed (exit ${r.code}): ${r.step}`);
+    process.exit(r.code);
   }
 }
 
 /**
- * Spawn the configured dev `parallel` tasks (#550) as long-lived children
- * ALONGSIDE the server, so a bare `webjs dev` runs the same watchers (Tailwind,
- * etc.) that `npm run dev` ran via `concurrently` + `pre*` hooks. Returns a
- * killer that tears them all down, so a leaked watcher cannot outlive the dev
- * server. A no-op when there are no parallel tasks, so a plain app is unchanged.
+ * Spawn the configured dev `parallel` tasks (#550) with phase-prefixed logging,
+ * delegating the spawn + teardown to `lib/run-tasks.js`'s `startParallelTasks`.
  *
  * @param {string[]} commands
  * @param {string} cwd
- * @returns {() => void}
+ * @returns {Promise<() => void>} the killer
  */
-function startParallelTasks(commands, cwd) {
-  const children = commands.map((cmd) => {
-    console.log(`webjs dev: starting parallel task \`${cmd}\`…`);
-    return spawn(cmd, { shell: true, stdio: 'inherit', cwd });
+async function startDevParallelTasks(commands, cwd) {
+  const { startParallelTasks } = await import('../lib/run-tasks.js');
+  return startParallelTasks(commands, cwd, {
+    onStart: (cmd) => console.log(`webjs dev: starting parallel task \`${cmd}\`…`),
   });
-  let killed = false;
-  return () => {
-    if (killed) return;
-    killed = true;
-    for (const c of children) {
-      try { c.kill(); } catch {}
-    }
-  };
 }
 
 async function main() {
@@ -169,8 +151,8 @@ async function main() {
       // down on exit so a watcher cannot outlive the server.
       const { readAppTasks } = await import('../lib/app-tasks.js');
       const devTasks = readAppTasks(process.cwd());
-      await runBeforeSteps('dev', devTasks.dev.before, process.cwd());
-      const killTasks = startParallelTasks(devTasks.dev.parallel, process.cwd());
+      await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
+      const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
       process.on('SIGINT', () => { killTasks(); process.exit(0); });
       process.on('SIGTERM', () => { killTasks(); process.exit(0); });
 
@@ -212,7 +194,7 @@ async function main() {
       // before serving (#550), so a bare `webjs start` is not a degraded run
       // that skips the `prestart` hook. Aborts the boot on a failed step.
       const { readAppTasks } = await import('../lib/app-tasks.js');
-      await runBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
+      await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;
