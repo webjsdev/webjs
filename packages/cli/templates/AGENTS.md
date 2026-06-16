@@ -527,9 +527,9 @@ committed manifest, optional `--download` for full offline capability,
 and a `--from` knob to swap the resolver CDN if jspm.io has an
 incident.
 
-**Don't auto-run `webjs vendor pin` in `predev` / `prestart`.** Auto-pin
-would silently churn the committed importmap.json as jspm.io resolves
-URLs or transitive deps drift. Pin is a deliberate developer action,
+**Don't auto-run `webjs vendor pin` in a `webjs.dev.before` / `webjs.start.before`
+step.** Auto-pin would silently churn the committed importmap.json as jspm.io
+resolves URLs or transitive deps drift. Pin is a deliberate developer action,
 like `npm install` itself.
 
 **Do NOT modify the `.webjs/` lines in `.gitignore` / `.dockerignore`.**
