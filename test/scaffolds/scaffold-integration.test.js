@@ -165,7 +165,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(dockerfile, /FROM node:24-alpine/,
       'Dockerfile pins the same Node major as CI (24)');
     assert.match(dockerfile, /CMD \["npm", "start"\]/,
-      'Dockerfile starts via npm so prestart hooks fire');
+      'Dockerfile starts via npm start (a thin alias for webjs start; the ' +
+      'migrate runs via webjs.start.before in-process, #550)');
     // Platform-neutral readiness gate: a HEALTHCHECK probing /__webjs/ready, so
     // the gate works on any Docker-based deploy without a per-platform file.
     assert.match(dockerfile, /HEALTHCHECK[\s\S]*\/__webjs\/ready/,

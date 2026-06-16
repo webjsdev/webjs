@@ -55,6 +55,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/__webjs/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 
-# `npm start` runs `prestart: prisma migrate deploy` (idempotent, a no-op when
-# there are no migrations yet) and then `webjs start`, which serves on $PORT.
+# `npm start` is a thin alias for `webjs start` (#550). `webjs start` runs the
+# `webjs.start.before` step (`prisma migrate deploy`, idempotent / a no-op with
+# no migrations) IN-PROCESS, then serves on $PORT. `CMD ["webjs", "start"]` is
+# now equivalent: the migrate no longer depends on an npm `prestart` hook.
 CMD ["npm", "start"]
