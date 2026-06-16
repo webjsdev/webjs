@@ -79,12 +79,10 @@ they are correct in dev and prod). Integration test:
 cd docs && npm run dev          # http://localhost:5002
 ```
 
-**Use `npm run dev`, not `webjs dev` directly.** `webjs dev` only runs
-the server; this app's `npm run dev` uses `concurrently` to also spawn
-`tailwindcss --watch`, which is what produces `public/tailwind.css`.
-Running `webjs dev` alone ships pages with no Tailwind utilities applied
-(code blocks, sidebar, headings all look broken). Same in prod: prefer
-`npm start` over `webjs start` so the `prestart: css:build` hook fires.
+`npm run dev` and `webjs dev` behave identically (#550): the Tailwind
+`--watch` (which produces `public/tailwind.css`) lives in `webjs.dev.parallel`
+and runs INSIDE `webjs dev`. In prod, `npm start` and `webjs start` are
+equivalent too: `webjs.start.before` runs `npm run css:build` before serving.
 
 ---
 
