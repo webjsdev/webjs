@@ -134,14 +134,10 @@ async function main() {
         break;
       }
 
-      // A bare `webjs dev` (not `npm run dev`) skips the `predev` hook, so a
-      // Prisma app boots against an ungenerated client and crashes with no
-      // hint (#452). Detect that here, in the PARENT only, so the message
-      // prints once rather than on every watch restart. Scoped to Prisma apps;
-      // a non-Prisma app sees nothing. A hint, not an auto-run.
-      const { prismaDevHint } = await import('../lib/prisma-preflight.js');
-      const hint = prismaDevHint(process.cwd());
-      if (hint) console.error(hint);
+      // (#550 superseded the #452 prisma-generate hint: `webjs dev` now RUNS
+      // the configured `webjs.dev.before` step `prisma generate` itself, below,
+      // so a bare `webjs dev` self-generates the client instead of only warning
+      // about it.)
 
       // Run the configured dev orchestration in the PARENT only (#550), so a
       // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot, e.g.
