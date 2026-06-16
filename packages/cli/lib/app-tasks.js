@@ -10,22 +10,26 @@ import { join } from 'node:path';
  *
  * Shape:
  *   "webjs": {
- *     "dev":   { "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
- *     "start": { "before":   ["webjs db migrate"] }
+ *     "dev":   {
+ *       "before":   ["prisma generate"],
+ *       "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
+ *     },
+ *     "start": { "before": ["prisma migrate deploy"] }
  *   }
  *
- * `parallel` (dev) commands run as long-lived child processes ALONGSIDE the
- * server; `before` (start) commands run sequentially to completion BEFORE the
- * server boots. Returns normalized arrays (never undefined) so callers iterate
- * without guards, and a missing/empty config yields empty arrays so a plain app
- * with no Tailwind/DB runs `webjs dev`/`start` exactly as before.
+ * `before` commands run sequentially to completion BEFORE the server boots (the
+ * old `predev` / `prestart` hooks: a one-shot `prisma generate` / `migrate`).
+ * `parallel` (dev only) commands run as long-lived child processes ALONGSIDE the
+ * server (the old `concurrently` watchers: Tailwind). Returns normalized arrays
+ * (never undefined) so callers iterate without guards, and a missing/empty
+ * config yields empty arrays so a plain app runs `webjs dev`/`start` unchanged.
  *
  * Pure (reads one file, never spawns / prints / exits) so it is unit-testable
  * without a process, matching `lib/port.js` and `lib/dev-supervisor.js`.
  *
  * @param {string} appDir
  * @param {(p: string) => string} [readFile] injectable reader for tests
- * @returns {{ dev: { parallel: string[] }, start: { before: string[] } }}
+ * @returns {{ dev: { before: string[], parallel: string[] }, start: { before: string[] } }}
  */
 export function readAppTasks(appDir, readFile) {
   const read = readFile || ((p) => readFileSync(p, 'utf8'));
@@ -44,12 +48,15 @@ export function readAppTasks(appDir, readFile) {
     Array.isArray(v) ? v.filter((s) => typeof s === 'string' && s.trim().length > 0) : [];
 
   return {
-    dev: { parallel: cmds(webjs.dev && webjs.dev.parallel) },
+    dev: {
+      before: cmds(webjs.dev && webjs.dev.before),
+      parallel: cmds(webjs.dev && webjs.dev.parallel),
+    },
     start: { before: cmds(webjs.start && webjs.start.before) },
   };
 }
 
-/** @returns {{ dev: { parallel: string[] }, start: { before: string[] } }} */
+/** @returns {{ dev: { before: string[], parallel: string[] }, start: { before: string[] } }} */
 function emptyTasks() {
-  return { dev: { parallel: [] }, start: { before: [] } };
+  return { dev: { before: [], parallel: [] }, start: { before: [] } };
 }

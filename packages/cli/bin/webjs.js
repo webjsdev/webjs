@@ -74,25 +74,28 @@ function flag(args, name, def) {
 }
 
 /**
- * Run the configured `start.before` steps (#550) sequentially to completion
- * before the prod server boots, e.g. `webjs db migrate`. A non-zero exit aborts
- * the boot with a clear message (a failed migration must not serve stale
- * schema). No-op when there are no steps. Runs through a shell so a step can be
- * a normal command line.
+ * Run the configured `before` steps (#550) sequentially to completion before the
+ * server boots: `dev.before` (e.g. `prisma generate`) for `webjs dev`,
+ * `start.before` (e.g. `prisma migrate deploy`) for `webjs start`. These replace
+ * the old `predev` / `prestart` npm hooks, so a bare `webjs dev`/`start` is not a
+ * degraded run. A non-zero exit aborts the boot with a clear message (a failed
+ * generate/migrate must not serve stale code/schema). No-op when there are no
+ * steps. Runs through a shell so a step can be a normal command line.
  *
+ * @param {string} phase 'dev' | 'start' (for the log line)
  * @param {string[]} steps
  * @param {string} cwd
  */
-async function runBeforeSteps(steps, cwd) {
+async function runBeforeSteps(phase, steps, cwd) {
   for (const step of steps) {
-    console.log(`webjs start: running before-step \`${step}\`…`);
+    console.log(`webjs ${phase}: running before-step \`${step}\`…`);
     const code = await new Promise((res) => {
       const c = spawn(step, { shell: true, stdio: 'inherit', cwd });
       c.on('exit', (code) => res(code ?? 0));
       c.on('error', () => res(1));
     });
     if (code !== 0) {
-      console.error(`webjs start: before-step failed (exit ${code}): ${step}`);
+      console.error(`webjs ${phase}: before-step failed (exit ${code}): ${step}`);
       process.exit(code);
     }
   }
@@ -158,16 +161,16 @@ async function main() {
       const hint = prismaDevHint(process.cwd());
       if (hint) console.error(hint);
 
-      // Start the configured dev `parallel` tasks (Tailwind's watcher, etc.) in
-      // the PARENT only (#550), so a bare `webjs dev` runs them exactly like
-      // `npm run dev` did via `concurrently`. Spawned once here, NOT in the
-      // watch child (which re-execs on every restart). Torn down on exit so a
-      // watcher cannot outlive the server.
+      // Run the configured dev orchestration in the PARENT only (#550), so a
+      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot, e.g.
+      // `prisma generate`) runs to completion first; `dev.parallel` (Tailwind's
+      // watcher, etc.) then runs as children alongside the server. Spawned once
+      // here, NOT in the watch child (which re-execs on every restart). Torn
+      // down on exit so a watcher cannot outlive the server.
       const { readAppTasks } = await import('../lib/app-tasks.js');
-      const killTasks = startParallelTasks(
-        readAppTasks(process.cwd()).dev.parallel,
-        process.cwd(),
-      );
+      const devTasks = readAppTasks(process.cwd());
+      await runBeforeSteps('dev', devTasks.dev.before, process.cwd());
+      const killTasks = startParallelTasks(devTasks.dev.parallel, process.cwd());
       process.on('SIGINT', () => { killTasks(); process.exit(0); });
       process.on('SIGTERM', () => { killTasks(); process.exit(0); });
 
@@ -209,7 +212,7 @@ async function main() {
       // before serving (#550), so a bare `webjs start` is not a degraded run
       // that skips the `prestart` hook. Aborts the boot on a failed step.
       const { readAppTasks } = await import('../lib/app-tasks.js');
-      await runBeforeSteps(readAppTasks(process.cwd()).start.before, process.cwd());
+      await runBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
       await startServer({ appDir: process.cwd(), port, dev: false });
       break;

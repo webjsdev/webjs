@@ -278,8 +278,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     type: 'module',
     private: true,
     scripts: {
-      predev: 'prisma generate',
-      prestart: 'prisma migrate deploy',
+      // No `predev` / `prestart` hooks (#550): the one-shot `prisma generate` /
+      // `migrate deploy` orchestration lives in the `webjs` block below and runs
+      // INSIDE `webjs dev` / `webjs start`, so a bare `webjs dev` is not a
+      // degraded run and `npm run dev` (a thin alias) behaves identically.
       dev: 'webjs dev',
       start: 'webjs start',
       test: 'webjs test',
@@ -292,9 +294,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
       // (its env-drift + network pin-freshness checks would make CI flaky).
       doctor: 'webjs doctor',
-      'db:migrate': 'prisma migrate dev',
-      'db:generate': 'prisma generate',
-      'db:studio': 'prisma studio',
+      'db:migrate': 'webjs db migrate',
+      'db:generate': 'webjs db generate',
+      'db:studio': 'webjs db studio',
     },
     dependencies: {
       '@prisma/client': '^6.0.0',
@@ -329,6 +331,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // shadcn-style copy-in: `webjs ui add <name>` copies component source
       // into components/ui/ (they import @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
+    },
+    // Dev/start task orchestration (#550). `webjs dev`/`start` read these and
+    // run them in-process, replacing the old `predev`/`prestart` npm hooks, so
+    // a bare `webjs dev` is not a degraded run (no ungenerated Prisma client)
+    // and `npm run dev`/`start` (thin aliases above) behave identically. The
+    // scaffold uses the Tailwind browser runtime (no CSS build step), so there
+    // is no dev `parallel` watcher here; an app that adds the Tailwind CLI puts
+    // its `--watch` command under `webjs.dev.parallel`.
+    webjs: {
+      dev: { before: ['prisma generate'] },
+      start: { before: ['prisma migrate deploy'] },
     },
   }, null, 2) + '\n');
 
