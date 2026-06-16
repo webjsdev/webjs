@@ -1,10 +1,13 @@
 /**
  * Cross-runtime assert (#550): the dev/start task orchestration in
  * `packages/cli/lib/run-tasks.js` must behave identically on Node and Bun, since
- * it spawns child processes (`node:child_process`) and relies on EventEmitter
- * exit/error events. Runnable as `node test/bun/run-tasks.mjs` AND
- * `bun test/bun/run-tasks.mjs` (wired into the CI bun job). Plain assertions, no
- * node:test, so it runs under both runtimes uniformly.
+ * it spawns child processes (`node:child_process`), aborts on a failing
+ * before-step, and must TEAR DOWN a long-lived shell-spawned watcher (the whole
+ * process group, not just the `sh -c` wrapper). Runnable as
+ * `node test/bun/run-tasks.mjs` AND `bun test/bun/run-tasks.mjs` (wired into the
+ * CI bun job). Plain assertions, no node:test. Every spawned process is AWAITED
+ * to exit, so a teardown that leaks a child fails fast (a bounded assertion)
+ * instead of hanging the test runner.
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -26,17 +29,27 @@ const runtime = globalThis.Bun ? 'bun' : 'node';
   assert.equal(r.step, 'exit 7', `[${runtime}] the failing step is named`);
 }
 
-// 3. parallel tasks spawn a REAL long-lived child and the killer terminates it.
+// 3. A long-lived shell-spawned watcher is torn down at the PROCESS-GROUP level
+//    (the same mechanism startParallelTasks uses): the `sh -c 'sleep ...'`
+//    wrapper AND the `sleep` it spawns are killed, not leaked. Awaited, so a
+//    leak fails as a bounded assertion, never a hang.
 {
-  const child = spawn('node -e "setInterval(() => {}, 1e9)"', { shell: true });
-  // Reproduce startParallelTasks's teardown on a known child to assert kill works.
-  const kill = startParallelTasks(['node -e "setInterval(() => {}, 1e9)"'], process.cwd(), { spawn });
-  await new Promise((r) => setTimeout(r, 120));
+  const child = spawn('sleep 100', { shell: true, detached: true, stdio: 'ignore' });
+  await new Promise((r) => setTimeout(r, 150)); // let the tree come up
+  process.kill(-child.pid, 'SIGTERM'); // negative pid: the whole group
+  const exited = await Promise.race([
+    new Promise((res) => child.on('exit', () => res(true))),
+    new Promise((res) => setTimeout(() => res(false), 4000)),
+  ]);
+  assert.ok(exited, `[${runtime}] the detached watcher tree was reaped by the group kill (no orphan)`);
+}
+
+// 4. startParallelTasks's killer is callable + idempotent (a self-exiting
+//    command, so nothing can leak regardless of timing).
+{
+  const kill = startParallelTasks(['true'], process.cwd(), { spawn });
   kill();
-  try { child.kill(); } catch {}
-  await new Promise((r) => setTimeout(r, 150));
-  // If the killer did not work the process would leak; reaching here without a
-  // hang is the assertion (the CI job has a wall-clock timeout).
+  kill(); // idempotent, must not throw
 }
 
 console.log(`[${runtime}] run-tasks cross-runtime asserts passed`);

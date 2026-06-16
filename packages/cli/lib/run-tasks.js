@@ -67,14 +67,34 @@ export function startParallelTasks(commands, cwd, opts = {}) {
   const env = envWithLocalBin(cwd);
   const children = commands.map((cmd) => {
     if (opts.onStart) opts.onStart(cmd);
-    return spawn(cmd, { shell: true, stdio: 'inherit', cwd, env });
+    // `detached: true` puts the child in its OWN process group, so the killer
+    // can take down the whole tree (the `sh -c` wrapper AND the watcher it
+    // spawns, e.g. tailwindcss) rather than just the shell, which would leak the
+    // watcher as an orphan.
+    return spawn(cmd, { shell: true, stdio: 'inherit', cwd, env, detached: true });
   });
   let killed = false;
   return () => {
     if (killed) return;
     killed = true;
-    for (const c of children) {
-      try { c.kill(); } catch {}
-    }
+    for (const c of children) killChildTree(c);
   };
+}
+
+/**
+ * Tear down a shell-spawned child's whole process GROUP. A `sh -c '<watcher>'`
+ * child run with `detached: true` is a group leader, so a NEGATIVE pid signals
+ * the group (the shell + the watcher). Falls back to a direct `kill()` when
+ * there is no numeric pid (a fake child in a test) or the group kill is
+ * unsupported (a non-POSIX runtime), so the killer never throws.
+ *
+ * @param {import('node:child_process').ChildProcess} child
+ */
+function killChildTree(child) {
+  try {
+    if (typeof child.pid === 'number') process.kill(-child.pid, 'SIGTERM');
+    else child.kill();
+  } catch {
+    try { child.kill(); } catch {}
+  }
 }
