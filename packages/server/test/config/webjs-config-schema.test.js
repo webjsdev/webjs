@@ -28,10 +28,14 @@ const schemaPath = fileURLToPath(
 );
 
 /**
- * The complete set of `webjs.*` config keys the server readers accept.
- * Hand-maintained alongside the readers (the lockstep procedure in
- * packages/server/AGENTS.md). The drift assertions below cross-check this
- * list against the schema in BOTH directions.
+ * The complete set of `webjs.*` config keys a reader accepts. Most are
+ * consumed by a SERVER reader; `dev` / `start` are consumed by the CLI
+ * (readAppTasks in packages/cli/lib/app-tasks.js, #550) rather than the
+ * server, but they still live in the same `webjs` block and so must be in
+ * the schema (or `additionalProperties:false` would flag a valid app's
+ * tasks config). Hand-maintained alongside the readers (the lockstep
+ * procedure in packages/server/AGENTS.md). The drift assertions below
+ * cross-check this list against the schema in BOTH directions.
  */
 const KNOWN_KEYS = [
   'elide', // readElideEnabled (dev.js)
@@ -46,6 +50,8 @@ const KNOWN_KEYS = [
   'requestTimeoutMs', // computeServerTimeouts (body-limit.js)
   'headersTimeoutMs', // computeServerTimeouts (body-limit.js)
   'keepAliveTimeoutMs', // computeServerTimeouts (body-limit.js)
+  'dev', // readAppTasks (cli/lib/app-tasks.js), CLI-read not server (#550)
+  'start', // readAppTasks (cli/lib/app-tasks.js), CLI-read not server (#550)
 ];
 
 test('schema file is valid JSON and parses', () => {

@@ -2,8 +2,8 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://webjs.dev/schemas/webjs-config.schema.json",
   "title": "webjs config block",
-  "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented server reader. An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
-  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the server reader functions (readElideEnabled in dev.js, readSeedEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
+  "description": "Schema for the `webjs` object in a webjs app's package.json. Each key maps to a documented reader (a server reader, or for `dev`/`start` the CLI's readAppTasks). An unknown key is flagged (additionalProperties is false) so a typo no longer silently falls back to the default.",
+  "$comment": "Single source of truth lives in THREE co-located places that must stay in lockstep: this schema, the TS type at packages/core/src/webjs-config.d.ts, and the reader functions (readElideEnabled in dev.js, readSeedEnabled in dev.js, compileHeaderRules in headers.js, compileRedirectRules / readTrailingSlashPolicy in redirects.js, readBasePath in base-path.js, readCspConfig in csp.js, readBodyLimits / computeServerTimeouts in body-limit.js, and the CLI's readAppTasks in packages/cli/lib/app-tasks.js for dev/start, #550). Adding a webjs.* key means updating all three. See packages/server/AGENTS.md for the one documented procedure.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -147,6 +147,35 @@
       "type": "integer",
       "minimum": 0,
       "default": 5000
+    },
+    "dev": {
+      "description": "Dev task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs dev runs `before` (one-shot, e.g. prisma generate) to completion, then `parallel` (long-lived watchers, e.g. tailwindcss --watch) alongside the server. Replaces the old predev hook + concurrently watchers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "description": "One-shot commands run sequentially to completion before the dev server boots. A non-zero exit aborts the boot.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parallel": {
+          "description": "Long-lived commands run as child processes alongside the dev server, torn down on exit so a watcher cannot leak past it.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "start": {
+      "description": "Start task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs start runs `before` (one-shot, e.g. prisma migrate deploy) to completion before serving. Replaces the old prestart hook.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "description": "One-shot commands run sequentially to completion before the prod server boots. A non-zero exit aborts the boot.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
     }
   }
 }
