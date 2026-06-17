@@ -14,10 +14,18 @@
   },
   "webjs": {
     "dev": {
-      "before": ["prisma generate"],
-      "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
+      "before": [
+        "prisma generate"
+      ],
+      "parallel": [
+        "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"
+      ]
     },
-    "start": { "before": ["prisma migrate deploy"] }
+    "start": {
+      "before": [
+        "prisma migrate deploy"
+      ]
+    }
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -27,11 +35,14 @@
     "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0",
-    "dayjs": "^1.11.21"
+    "better-sqlite3": "^12.11.1",
+    "dayjs": "^1.11.21",
+    "drizzle-orm": "^1.0.0-rc.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@webjsdev/intellisense": "^0.5.0",
+    "drizzle-kit": "^1.0.0-rc.3",
     "prisma": "^5.22.0",
     "typescript": "^6.0.3"
   },
