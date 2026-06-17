@@ -35,9 +35,9 @@ const usage = `Usage:
   npx create-webjs@latest <app-name> [--template full-stack|api|saas] [--no-install]
 
 Templates:
-  full-stack (default)  pages + components + API + Prisma/SQLite
+  full-stack (default)  pages + components + API + Drizzle/SQLite
   api                   route handlers + modules, no SSR/UI
-  saas                  auth + login/signup + protected dashboard + Prisma User model
+  saas                  auth + login/signup + protected dashboard + Drizzle User model
 
 Options:
   --no-install          skip running the package manager's install in the new directory
