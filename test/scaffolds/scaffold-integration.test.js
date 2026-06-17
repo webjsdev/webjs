@@ -45,7 +45,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(appDir), 'app directory created');
 
     // Core directories
-    for (const d of ['app', 'components', 'modules', 'lib', 'public', 'prisma', 'test/unit', 'test/e2e']) {
+    for (const d of ['app', 'components', 'modules', 'lib', 'public', 'db', 'test/unit', 'test/e2e']) {
       assert.ok(existsSync(join(appDir, d)), `${d}/ should exist`);
     }
 
@@ -113,9 +113,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
     assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
 
-    // Prisma + lib singleton wired up
-    assert.ok(existsSync(join(appDir, 'prisma', 'schema.prisma')), 'prisma schema written');
-    assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts written');
+    // Drizzle db layer wired up
+    assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
+    assert.ok(existsSync(join(appDir, 'db', 'columns.server.ts')), 'db/columns.server.ts written');
+    assert.ok(existsSync(join(appDir, 'db', 'connection.server.ts')), 'db/connection.server.ts written');
+    assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
+    assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
+    assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
 
     // The require-tests hook still reaches the scaffolded app for Claude
     // Code: the hook file is copied and the Claude settings wire it into
@@ -188,7 +192,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.equal(pkg.scripts.start, 'webjs start');
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);
-    assert.ok(pkg.dependencies['@prisma/client']);
+    assert.ok(pkg.dependencies['drizzle-orm'], 'drizzle-orm dep present');
+    assert.ok(!pkg.dependencies['@prisma/client'], 'no prisma dep');
     // intellisense (@webjsdev/intellisense) stays: it gives editor INTELLIGENCE from node_modules via the
     // tsconfig plugin (any tsserver editor, no editor plugin needed).
     assert.ok(pkg.devDependencies['@webjsdev/intellisense']);
@@ -212,7 +217,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
 
     // .gitignore mentions the SQLite dev DB
     const gitignore = readFileSync(join(appDir, '.gitignore'), 'utf8');
-    assert.match(gitignore, /prisma\/dev\.db/, '.gitignore covers SQLite');
+    assert.match(gitignore, /db\/dev\.db/, '.gitignore covers SQLite');
 
     // .gitignore ignores .webjs/ at ANY depth (#365): a scaffolded app
     // nested below its repo root must not leak its generated
@@ -250,7 +255,7 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
     const appDir = join(cwd, 'my-api');
 
     // Core skeleton still exists
-    for (const d of ['app', 'modules', 'lib', 'prisma', 'test/unit']) {
+    for (const d of ['app', 'modules', 'lib', 'db', 'test/unit']) {
       assert.ok(existsSync(join(appDir, d)), `${d}/ should exist`);
     }
 
@@ -292,7 +297,7 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
   }
 });
 
-test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () => {
+test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
@@ -315,13 +320,13 @@ test('scaffoldApp saas: writes auth + dashboard + Prisma User model', async () =
     assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'saas ships public/offline.html');
 
     // SaaS-specific lib files
-    assert.ok(existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'lib/prisma.server.ts present');
     assert.ok(existsSync(join(appDir, 'lib', 'password.server.ts')), 'lib/password.server.ts present');
     assert.ok(existsSync(join(appDir, 'lib', 'auth.server.ts')), 'lib/auth.server.ts present');
+    assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
 
-    // Prisma User model
-    const schema = readFileSync(join(appDir, 'prisma', 'schema.prisma'), 'utf8');
-    assert.match(schema, /model User/, 'User model present');
+    // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
+    const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /export const users = table\('users'/, 'users table present');
     assert.match(schema, /passwordHash/, 'User has passwordHash field');
 
     // Signup page is the canonical no-JS form write-path (#244): it exports a
