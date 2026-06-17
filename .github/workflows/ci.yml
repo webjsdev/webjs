@@ -148,6 +148,39 @@ jobs:
       - name: webjs Bun test matrix
         run: node scripts/run-bun-tests.js
 
+  db-postgres:
+    name: Postgres prod-engine round-trip (#563)
+    runs-on: ubuntu-latest
+    # The cross-database Drizzle abstraction (#563) makes the schema, queries,
+    # and actions portable, but migrations + runtime behavior are per-dialect.
+    # The rest of CI runs on SQLite, so this job proves the SAME unified schema
+    # round-trips on a REAL Postgres engine (a service container), the
+    # dev-SQLite / prod-Postgres workflow the abstraction promises.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: webjs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Postgres round-trip (unified schema on the prod engine)
+        env:
+          WEBJS_PG_URL: postgres://postgres:postgres@localhost:5432/webjs_test
+        run: node --test test/pg/pg-roundtrip.test.mjs
+
   browser:
     name: Browser (web-test-runner / Playwright)
     runs-on: ubuntu-latest
