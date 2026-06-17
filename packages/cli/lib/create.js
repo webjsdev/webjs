@@ -574,11 +574,18 @@ export const relations = defineRelations({ users }, () => ({}));
 export type User = typeof users.$inferSelect;
 `);
 
-  const connSqlite = `import * as schema from './schema.server.ts';
+  const connSqlite = `import { isAbsolute, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Runtime-neutral: native bun:sqlite on
 // Bun, better-sqlite3 on Node. Cached on globalThis across dev reloads.
-const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
+// A relative SQLite path resolves against the app root (the parent of db/), not
+// process.cwd(), so the connection works under \`webjs dev\` AND when the app is
+// embedded via createRequestHandler from a different working directory.
+const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const raw = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
+const url = raw === ':memory:' || isAbsolute(raw) ? raw : resolve(appRoot, raw);
 const g = globalThis as unknown as { __webjs_db?: unknown };
 
 async function open() {
