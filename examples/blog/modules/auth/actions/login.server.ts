@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 import { verifyPassword } from '../../../lib/password.server.ts';
 import { createSession } from '../../../lib/session.server.ts';
 import { validateLogin } from '../utils/validate.ts';
@@ -15,7 +15,7 @@ export async function login(
   catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e), status: 400 };
   }
-  const user = await prisma.user.findUnique({ where: { email: parsed.email } });
+  const user = await db.query.users.findFirst({ where: { email: parsed.email } });
   // Constant-ish time: always run verifyPassword even when user is missing.
   const valid = user
     ? await verifyPassword(parsed.password, user.passwordHash)

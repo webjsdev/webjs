@@ -9,29 +9,22 @@
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
     "db:generate": "webjs db generate",
     "db:migrate": "webjs db migrate",
-    "db:seed": "prisma db seed",
+    "db:seed": "webjs db seed",
     "test": "webjs test --server"
   },
   "webjs": {
     "dev": {
-      "before": [
-        "prisma generate"
-      ],
       "parallel": [
         "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"
       ]
     },
     "start": {
       "before": [
-        "prisma migrate deploy"
+        "webjs db migrate"
       ]
     }
   },
-  "prisma": {
-    "seed": "node prisma/seed.js"
-  },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
     "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0",
@@ -43,7 +36,6 @@
     "@types/node": "^24.0.0",
     "@webjsdev/intellisense": "^0.5.0",
     "drizzle-kit": "^1.0.0-rc.3",
-    "prisma": "^5.22.0",
     "typescript": "^6.0.3"
   },
   "engines": {
