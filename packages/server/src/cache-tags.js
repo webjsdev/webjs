@@ -104,7 +104,7 @@ export async function addKeyToTags(tags, cacheKey, ttlMs) {
  * 'use server';
  * import { revalidateTag } from '@webjsdev/server';
  * export async function createComment(input) {
- *   await prisma.comment.create({ data: input });
+ *   await db.insert(comments).values(input);
  *   await revalidateTag('post:' + input.postId); // postById(postId) recomputes
  *   return { success: true };
  * }

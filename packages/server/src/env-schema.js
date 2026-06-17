@@ -3,7 +3,7 @@
  *
  * webjs auto-loads `<appDir>/.env` into `process.env` at boot, but does no
  * validation, so a missing or misconfigured required var (DATABASE_URL,
- * AUTH_SECRET, ...) fails late and cryptically (a Prisma connect error
+ * AUTH_SECRET, ...) fails late and cryptically (a database connect error
  * mid-request, an undefined secret signing a token). This module adds an
  * optional boot-time validation hook that fails fast with one clear message
  * listing EVERY missing or invalid var at once, before the app serves a

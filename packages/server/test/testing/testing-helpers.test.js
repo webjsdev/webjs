@@ -148,7 +148,7 @@ test('invokeActionForTest surfaces a thrown action as a throw with a status', as
 
 /**
  * A fixture app wiring createAuth (jwt strategy) with an in-memory user, the
- * auth route handler, and a protected route gated by `auth()`. No Prisma: the
+ * auth route handler, and a protected route gated by `auth()`. No database: the
  * authorize callback checks a hard-coded credential so the test needs no DB.
  */
 function authApp() {
