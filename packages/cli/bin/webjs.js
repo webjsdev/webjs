@@ -50,12 +50,14 @@ const USAGE = `webjs commands:
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
-                                                  (only 3 templates exist. default: full-stack with Prisma+SQLite)
+                                                  (only 3 templates exist. default: full-stack with Drizzle+SQLite)
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
-  webjs db generate                               Run \`prisma generate\`
-  webjs db migrate [name]                         Run \`prisma migrate dev\`
-  webjs db studio                                 Run \`prisma studio\`
+  webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
+  webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
+  webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
+  webjs db studio                                 Open the database browser (drizzle-kit studio)
+  webjs db seed                                   Run the app's db/seed.server.ts
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
@@ -198,10 +200,28 @@ async function main() {
     case 'db': {
       const sub = rest[0];
       const args = rest.slice(1);
-      const map = { generate: ['generate'], migrate: ['migrate', 'dev', ...args], studio: ['studio'] };
-      const prismaArgs = map[sub];
-      if (!prismaArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
-      const child = spawn('npx', ['prisma', ...prismaArgs], { stdio: 'inherit', cwd: process.cwd() });
+      // `webjs db seed` runs the app's own seed script directly (not a
+      // drizzle-kit command); Drizzle has no codegen, so there is no
+      // `generate`-the-client step, only schema-to-SQL `generate`.
+      if (sub === 'seed') {
+        const { existsSync } = await import('node:fs');
+        const seedFile = ['db/seed.server.ts', 'db/seed.server.js']
+          .map((p) => join(process.cwd(), p)).find(existsSync);
+        if (!seedFile) {
+          console.error('No db/seed.server.ts found in this app.');
+          process.exit(1);
+        }
+        const child = spawn(process.execPath, [seedFile], { stdio: 'inherit', cwd: process.cwd() });
+        child.on('exit', (code) => process.exit(code ?? 0));
+        break;
+      }
+      // generate (schema -> SQL migration), migrate (apply), push (dev
+      // schema sync), studio. All wrap drizzle-kit; the verbose name stays
+      // hidden behind `webjs db`.
+      const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
+      const kitArgs = map[sub];
+      if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
+      const child = spawn('npx', ['drizzle-kit', ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }

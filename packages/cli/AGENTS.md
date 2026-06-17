@@ -97,7 +97,7 @@ README.md                npm-facing package readme.
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
-| `webjs db <generate\|migrate\|studio>` | Passthrough to `prisma` |
+| `webjs db <generate\|migrate\|push\|studio>` | Passthrough to `drizzle-kit` (no codegen step; `generate` is schema-to-SQL). `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 
 ## UI subcommand: proxies to `@webjsdev/ui`
