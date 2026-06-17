@@ -155,7 +155,7 @@ const TOOL_DEFS = [
 /**
  * Lexically extract the names exported from a module source. Recognises the
  * common forms a server-action / route file uses without LOADING the module
- * (loading would run its top-level side effects: Prisma init, DB connects).
+ * (loading would run its top-level side effects: DB init, connections).
  *
  *   export async function foo() {}   export function foo() {}
  *   export const foo = ...           export let/var foo = ...
@@ -216,7 +216,7 @@ export function extractRouteMethods(src) {
 /**
  * Lexically extract the HTTP-verb action config declared as reserved sibling
  * exports in a `'use server'` file (#488). Reads source text only (no module
- * load) so there are no DB-init or Prisma side effects.
+ * load) so there are no DB-init side effects.
  *
  * Returned shape:
  *   {
@@ -343,7 +343,7 @@ export function makeToolRunners(deps) {
 
     async list_actions(appDir) {
       // buildActionIndex is a pure file -> hash mapping that imports no module,
-      // so this stays truly read-only (no Prisma/DB init, and no stray stdout
+      // so this stays truly read-only (no DB init, and no stray stdout
       // from a loaded module corrupting the JSON-RPC channel). The RPC hash is
       // over the file path only, so no module load is needed.
       const idx = await buildActionIndex(appDir, false);
