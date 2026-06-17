@@ -133,6 +133,13 @@ jobs:
       # install under `npm test`.
       - name: webjs action seeding on Bun
         run: bun test/bun/seed.mjs
+      # Blog Drizzle DB round-trip on Bun (#551/#563): the connection picks
+      # bun:sqlite + drizzle-orm/bun-sqlite on Bun (vs better-sqlite3 on Node),
+      # so prove the blog's real schema round-trips an insert().returning(), a
+      # timestamp_ms Date column, and a relational read on the Bun driver. The
+      # same script proves the Node path under `npm test`.
+      - name: webjs blog DB round-trip on Bun
+        run: bun test/bun/blog-db.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are
