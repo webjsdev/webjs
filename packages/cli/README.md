@@ -40,15 +40,15 @@ Both `webjs create` and `create-webjs-app` auto-install dependencies in the new 
 ```sh
 webjs create <name>            # scaffold a full-stack app (default)
 webjs create <name> --template api   # backend-only API app
-webjs create <name> --template saas  # auth + dashboard + Prisma User model
+webjs create <name> --template saas  # auth + dashboard + Drizzle User model
 
-webjs dev                      # dev server with live reload (runs webjs.dev.before, e.g. prisma generate, then serves; npm run dev is a thin alias)
+webjs dev                      # dev server with live reload (runs webjs.dev.before, e.g. webjs db migrate, then serves; npm run dev is a thin alias)
 webjs start                    # production server (no build step, serves source directly)
 webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (local onboarding, not CI)
 webjs test                     # run server + browser tests
 webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
-webjs db <prisma-subcommand>   # prisma passthrough (saas template)
+webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed)
 
 webjs ui init                  # initialise @webjsdev/ui in this project
 webjs ui add <names...>        # copy components from the registry (https://ui.webjs.dev/registry/<name>.json)

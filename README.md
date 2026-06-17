@@ -35,7 +35,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > **AI agents, read this before scaffolding.** Only three templates exist
 > (`full-stack` default, `--template api`, `--template saas`), and the CLI
 > rejects anything else. Always start from one of them. Never hand-roll
-> the directory structure. Default to **full-stack with Prisma + SQLite**.
+> the directory structure. Default to **full-stack with Drizzle + SQLite**.
 > Never store app data in JSON files, in-memory arrays, or localStorage
 > as a substitute for the database. The scaffold is **reference only**.
 > Replace the example layout, page, components, and `User` model with
@@ -50,14 +50,14 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ```sh
 # Get started in one command (no global install required)
-npm create webjs@latest my-app   # full-stack (pages + API + components + Prisma/SQLite)
+npm create webjs@latest my-app   # full-stack (pages + API + components + Drizzle/SQLite)
 cd my-app && npm run dev
 # → http://localhost:8080
 
 # Backend-only API
 npm create webjs@latest my-api  -- --template api
 
-# SaaS starter (auth + dashboard + Prisma)
+# SaaS starter (auth + dashboard + Drizzle)
 npm create webjs@latest my-saas -- --template saas
 
 # Or with the CLI installed globally for repeated use.
@@ -68,7 +68,7 @@ cd my-app && npm run dev
 # or run everything in the monorepo (website + docs + blog + UI registry together)
 git clone https://github.com/webjsdev/webjs
 cd webjs && npm install
-cd examples/blog && npx prisma migrate dev --name init && cd ..
+cd examples/blog && npm run db:migrate && cd ..
 npm run dev
 # → Website     → http://localhost:5001
 # → Docs        → http://localhost:5002
@@ -104,7 +104,7 @@ CLAUDE.md           # Claude Code quick-reference
 
 Contributing to the framework itself? Run the monorepo's apps from their
 own dir with `npm run dev`; as of #550 a bare `webjs dev` is equivalent
-(each app's Tailwind watcher and prep steps, `prisma generate`/`migrate`,
+(each app's Tailwind watcher and prep steps, `webjs db migrate`,
 the registry copy, moved into its `webjs.dev` / `webjs.start` tasks config,
 which `webjs dev`/`start` run, so the npm scripts are thin aliases).
 
@@ -201,10 +201,10 @@ projection, same API).
 ```ts
 // modules/posts/queries/list-posts.server.ts: one function per file
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 
 export async function listPosts() {
-  return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+  return db.query.posts.findMany({ orderBy: { createdAt: 'desc' } });
 }
 ```
 
