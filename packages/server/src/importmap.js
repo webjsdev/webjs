@@ -29,6 +29,17 @@ function escapeAttr(s) {
 let _extraEntries = {};
 
 /**
+ * Browser importmap entries for the app's `package.json "imports"` subpath
+ * aliases (#555), e.g. `{ "#/": "/" }` for `"#/*": "./*"`. Kept in lockstep
+ * with the server-side resolver (`module-graph.js`'s `expandImportAlias`):
+ * BOTH are derived from the one `"imports"` map, so an alias that resolves in
+ * SSR never 404s in the browser (the #158/#159 preload-mismatch class). Set at
+ * boot by `dev.js` via `setImportAliasEntries`.
+ * @type {Record<string, string>}
+ */
+let _aliasEntries = {};
+
+/**
  * The normalized `webjs.basePath` for a sub-path deployment (issue #256),
  * `''` (the default) for a root mount. When non-empty, every same-origin
  * absolute importmap TARGET (the `/__webjs/core/*` core entries and any
@@ -65,6 +76,49 @@ export async function setBasePath(basePath) {
  */
 export function basePath() {
   return _basePath;
+}
+
+/**
+ * Derive the BROWSER importmap entries for an app's `package.json "imports"`
+ * subpath-alias map (#555). A wildcard key `"#/*": "./*"` becomes the
+ * trailing-slash prefix scope `"#/": "/"` (so `#/lib/x.ts` resolves to
+ * `/lib/x.ts`); a non-default base `"#/*": "./src/*"` becomes `"#/": "/src/"`;
+ * an exact key `"#db": "./lib/db.server.ts"` becomes `"#db": "/lib/db.server.ts"`.
+ * The leading `./` becomes a root-absolute `/` and the `*` is dropped (the
+ * trailing slash carries the prefix match). Only string targets are mappable
+ * (a conditional-export object is skipped). Pure, so the server resolver and
+ * this stay in lockstep by both reading the one `"imports"` map.
+ *
+ * @param {Record<string, unknown> | null | undefined} importsMap
+ * @returns {Record<string, string>}
+ */
+export function importAliasBrowserEntries(importsMap) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  if (!importsMap || typeof importsMap !== 'object') return out;
+  for (const [key, value] of Object.entries(importsMap)) {
+    if (typeof value !== 'string') continue;
+    if (!value.startsWith('./')) continue; // only app-root-relative targets map to a URL
+    const browserKey = key.replace('*', '');
+    const browserVal = value.replace(/^\./, '').replace('*', '');
+    out[browserKey] = browserVal;
+  }
+  return out;
+}
+
+/**
+ * Bind the browser importmap to the app's `package.json "imports"` aliases
+ * (#555). Called once at boot by `dev.js`, derived from the SAME `"imports"`
+ * map the server resolver reads, so SSR and the browser agree. The hash is
+ * recomputed eagerly (like `setBasePath` / `setCoreInstall`) so
+ * `importMapHash()` stays synchronous on the per-request path.
+ *
+ * @param {Record<string, string>} entries  browser entries from `importAliasBrowserEntries`
+ * @returns {Promise<void>}
+ */
+export async function setImportAliasEntries(entries) {
+  _aliasEntries = entries && typeof entries === 'object' ? entries : {};
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
 /**
@@ -338,6 +392,7 @@ export function buildImportMap(opts = {}) {
   const merged = {
     ..._coreEntries,
     ..._extraEntries,
+    ..._aliasEntries,
   };
   // Sort keys so logically-identical importmaps serialize byte-for-byte
   // identically. The client router compares textContent to detect

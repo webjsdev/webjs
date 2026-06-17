@@ -45,7 +45,7 @@ import {
   varyWithAcceptEncoding,
 } from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
-import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport } from './module-graph.js';
+import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport, appImportsMap } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 
@@ -85,7 +85,7 @@ function resolveRequestId(req) {
 function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
-import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, versionModuleImports } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
@@ -492,6 +492,13 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core.js')) &&
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
+
+  // Path-alias imports (#555). Emit the browser importmap scope for the app's
+  // `package.json "imports"` aliases (`"#/*": "./*"` -> `"#/": "/"`), derived
+  // from the SAME map the server resolver (`expandImportAlias`) reads, so SSR
+  // and the browser agree. An app with no `"imports"` block yields {} (a no-op,
+  // byte-identical to before this feature).
+  await setImportAliasEntries(importAliasBrowserEntries(appImportsMap(appDir)));
 
   // Content-hash asset URLs for immutable caching (issue #243). Bind the
   // asset-hash module to the app + core roots and enable fingerprinting in
