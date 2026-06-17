@@ -97,13 +97,13 @@ s.regenerateId(true);  // new ID, old store entry deleted</pre>
     <h2>Example: Login Flow</h2>
     <pre>// app/api/login/route.ts
 import { getSession } from '@webjsdev/server';
-import { prisma } from '../../lib/prisma.server.ts';
+import { db } from '../../db/connection.server.ts';
 import { verifyPassword } from '../../lib/auth.server.ts';
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await db.query.users.findFirst({ where: { email } });
   if (!user || !await verifyPassword(password, user.passwordHash)) {
     return Response.json({ error: 'Invalid credentials' }, { status: 401 });
   }

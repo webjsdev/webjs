@@ -55,12 +55,15 @@ export async function verifyPassword(
 
     <h2>Session Cookies</h2>
     <pre>// lib/session.server.ts
+import { db } from '../db/connection.server.ts';
+import { sessions } from '../db/schema.server.ts';
+
 export const SESSION_COOKIE = 'my_session';
 
 export async function createSession(userId: number) {
   const token = randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await prisma.session.create({ data: { token, userId, expiresAt } });
+  await db.insert(sessions).values({ token, userId, expiresAt });
   return { token, expiresAt };
 }
 

@@ -51,7 +51,7 @@ export default function Architecture() {
     <ul>
       <li><code>webjs dev</code>: dev server with file watching + live reload via SSE</li>
       <li><code>webjs start</code>: production server, speaks plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2). No build step: serves source directly.</li>
-      <li><code>webjs db generate/migrate/studio</code>: Prisma CLI wrappers</li>
+      <li><code>webjs db generate/migrate/studio</code>: Drizzle Kit wrappers (drizzle-kit)</li>
     </ul>
 
     <h2>Modules Architecture (Recommended)</h2>
@@ -61,8 +61,10 @@ export default function Architecture() {
 │   ├── layout.ts
 │   ├── page.ts
 │   └── api/posts/route.ts  # delegates to modules/posts
+├── db/                     # data layer (Drizzle)
+│   ├── connection.server.ts
+│   └── schema.server.ts
 ├── lib/                    # cross-cutting infra
-│   ├── prisma.ts
 │   └── session.ts
 ├── modules/                # feature-scoped business logic
 │   ├── auth/
@@ -78,15 +80,14 @@ export default function Architecture() {
 │       ├── utils/
 │       └── types.ts
 ├── components/             # shared UI primitives
-├── middleware.ts            # root middleware
-└── prisma/schema.prisma</pre>
+└── middleware.ts            # root middleware</pre>
 
     <h3>Rules</h3>
     <ul>
       <li><strong>Routes stay thin.</strong> If a route.ts has more than ~20 lines of business logic, extract it into a module action.</li>
       <li><strong>One module per feature.</strong> auth, posts, comments, etc. each get their own folder.</li>
       <li><strong>Actions return <code>ActionResult&lt;T&gt;</code></strong>: a <code>{ success, data } | { success: false, error, status }</code> envelope that routes translate to HTTP responses mechanically.</li>
-      <li><strong>Server-only imports</strong> (<code>@prisma/client</code>, <code>node:*</code>, anything needing Node APIs) stay in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components, because page modules also load in the browser to register transitively imported components. Pages and components import functions from a <code>.server.{js,ts}</code> file; the framework rewrites that import into an RPC stub for the browser.</li>
+      <li><strong>Server-only imports</strong> (the DB driver <code>better-sqlite3</code> / <code>pg</code>, <code>node:*</code>, anything needing Node APIs) stay in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components, because page modules also load in the browser to register transitively imported components. Pages and components import functions from a <code>.server.{js,ts}</code> file; the framework rewrites that import into an RPC stub for the browser.</li>
     </ul>
 
     <h2>Request Lifecycle</h2>

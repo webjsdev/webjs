@@ -37,8 +37,10 @@ export default function BackendOnly() {
     middleware.ts           # segment middleware for all /api/* (CORS, etc.)
   actions/
     users.server.ts        # server actions (exposed over REST via route.ts)
+  db/
+    connection.server.ts
+    schema.server.ts
   lib/
-    prisma.ts
     session.ts
   middleware.ts             # root middleware (logging, timing)
   package.json
@@ -48,42 +50,40 @@ export default function BackendOnly() {
     <h2>File-Based API Routing</h2>
     <p>A <code>route.ts</code> file anywhere under <code>app/</code> becomes an API endpoint. Export functions named after HTTP methods:</p>
     <pre>// app/api/users/route.ts
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { users } from '../../../db/schema.server.ts';
 
 export async function GET(req: Request, { params }: { params: Record&lt;string, string&gt; }) {
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, createdAt: true },
+  const rows = await db.query.users.findMany({
+    columns: { id: true, name: true, email: true, createdAt: true },
   });
-  return Response.json(users);
+  return Response.json(rows);
 }
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const user = await prisma.user.create({
-    data: { name: body.name, email: body.email },
-  });
+  const [user] = await db.insert(users).values({ name: body.name, email: body.email }).returning();
   return Response.json(user, { status: 201 });
 }</pre>
     <pre>// app/api/users/[id]/route.ts
-import { prisma } from '../../../../lib/prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../../db/connection.server.ts';
+import { users } from '../../../../db/schema.server.ts';
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const user = await prisma.user.findUnique({ where: { id: Number(params.id) } });
+  const user = await db.query.users.findFirst({ where: { id: Number(params.id) } });
   if (!user) return Response.json({ error: 'Not found' }, { status: 404 });
   return Response.json(user);
 }
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const user = await prisma.user.update({
-    where: { id: Number(params.id) },
-    data: body,
-  });
+  const [user] = await db.update(users).set(body).where(eq(users.id, Number(params.id))).returning();
   return Response.json(user);
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  await prisma.user.delete({ where: { id: Number(params.id) } });
+  await db.delete(users).where(eq(users.id, Number(params.id)));
   return new Response(null, { status: 204 });
 }</pre>
     <p>Dynamic segments (<code>[id]</code>), catch-all segments (<code>[...rest]</code>), and route groups (<code>(groupName)</code>) all work the same way as with pages.</p>
@@ -129,22 +129,24 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
     <p>Define your API logic as plain server-action functions, then expose them over HTTP through a <code>route.ts</code> handler. The <code>route()</code> adapter from <code>@webjsdev/server</code> writes the common handler (merge query + params + JSON body, run an optional validator, JSON-respond) in one line:</p>
     <pre>// actions/users.server.ts
 'use server';
-import { prisma } from '../lib/prisma.server.ts';
+import { db } from '../db/connection.server.ts';
+import { users } from '../db/schema.server.ts';
 
 export async function listUsers() {
-  return prisma.user.findMany({
-    select: { id: true, name: true, email: true },
+  return db.query.users.findMany({
+    columns: { id: true, name: true, email: true },
   });
 }
 
 export async function getUser({ id }: { id: string }) {
-  const user = await prisma.user.findUnique({ where: { id: Number(id) } });
+  const user = await db.query.users.findFirst({ where: { id: Number(id) } });
   if (!user) throw new Error('User not found');
   return user;
 }
 
 export async function createUser({ name, email }: { name: string; email: string }) {
-  return prisma.user.create({ data: { name, email } });
+  const [user] = await db.insert(users).values({ name, email }).returning();
+  return user;
 }</pre>
     <pre>// app/api/v2/users/route.ts
 import { route } from '@webjsdev/server';
@@ -195,9 +197,10 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
     <p>Use the <code>json()</code> helper from <code>@webjsdev/server</code> and the <code>richFetch()</code> client helper from <code>webjs</code> for rich-encoded responses that preserve <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, <code>FormData</code>, and reference cycles:</p>
     <pre>// app/api/events/route.ts
 import { json } from '@webjsdev/server';
+import { db } from '../../../db/connection.server.ts';
 
 export async function GET() {
-  const events = await prisma.event.findMany();
+  const events = await db.query.events.findMany();
   return json(events); // dates stay as Dates for richFetch callers
 }</pre>
     <pre>// Internal client (another webjs app or same-app component)
@@ -291,10 +294,11 @@ fastify.listen({ port: 8080 });</pre>
     "@webjsdev/cli": "0.1.0",
     "@webjsdev/core": "0.1.0",
     "@webjsdev/server": "0.1.0",
-    "@prisma/client": "^6.0.0"
+    "drizzle-orm": "^1.0.0-rc.3"
   },
   "devDependencies": {
-    "prisma": "^6.0.0",
+    "better-sqlite3": "^11.0.0",
+    "drizzle-kit": "^1.0.0-rc.3",
     "typescript": "^5.7.0"
   }
 }</pre>
@@ -313,21 +317,22 @@ fastify.listen({ port: 8080 });</pre>
 
     <h3>app/api/posts/route.ts</h3>
     <pre>import { json } from '@webjsdev/server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 export async function GET() {
-  const posts = await prisma.post.findMany({
+  const rows = await db.query.posts.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { author: { select: { name: true } } },
+    with: { author: { columns: { name: true } } },
   });
-  return json(posts);
+  return json(rows);
 }
 
 export async function POST(req: Request) {
   const { title, body, authorId } = await req.json();
-  const post = await prisma.post.create({
-    data: { title, body, slug: title.toLowerCase().replace(/\s+/g, '-'), authorId },
-  });
+  const [post] = await db.insert(posts).values({
+    title, body, slug: title.toLowerCase().replace(/\s+/g, '-'), authorId,
+  }).returning();
   return json(post, { status: 201 });
 }</pre>
 

@@ -16,7 +16,7 @@ export default function ServerActions() {
       </thead>
       <tbody>
         <tr><td><code>*.server.{js,ts}</code></td><td>yes</td><td><strong>Server action.</strong> Source-protected AND RPC-callable: client imports are rewritten to RPC stubs that POST to <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code>.</td></tr>
-        <tr><td><code>*.server.{js,ts}</code></td><td>no</td><td><strong>Server-only utility.</strong> Source-protected; browser imports get a throw-at-load stub. Use for the Prisma singleton, session helpers, password hashing.</td></tr>
+        <tr><td><code>*.server.{js,ts}</code></td><td>no</td><td><strong>Server-only utility.</strong> Source-protected; browser imports get a throw-at-load stub. Use for the Drizzle connection (<code>db/connection.server.ts</code>), session helpers, password hashing.</td></tr>
         <tr><td>Plain <code>.ts</code></td><td>yes</td><td><strong>Lint violation</strong> (<code>use-server-needs-extension</code>). The directive alone is silently ignored, and the file serves to the browser as plain source. Rename to add the <code>.server.</code> infix.</td></tr>
         <tr><td>Plain <code>.ts</code></td><td>no</td><td>Browser-safe; standard behaviour.</td></tr>
       </tbody>
@@ -27,27 +27,41 @@ export default function ServerActions() {
     <h3>Server action (path boundary + RPC marker)</h3>
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
-  const post = await prisma.post.create({ data: input });
+  const [post] = await db.insert(posts).values(input).returning();
   return post;
 }
 
 export async function deletePost(id: number) {
-  await prisma.post.delete({ where: { id } });
+  await db.delete(posts).where(eq(posts.id, id));
   return { ok: true };
 }</pre>
 
     <h3>Server-only utility (path boundary, no RPC)</h3>
-    <p>Drop the <code>'use server'</code> directive when the file should be unreachable from the browser but is NOT called as a server action (Prisma singleton, password hashing, helpers used by other server files). Browser imports throw at load time.</p>
+    <p>Drop the <code>'use server'</code> directive when the file should be unreachable from the browser but is NOT called as a server action (the Drizzle connection, password hashing, helpers used by other server files). Browser imports throw at load time.</p>
 
-    <pre>// lib/prisma.server.ts
-import { PrismaClient } from '@prisma/client';
+    <pre>// db/connection.server.ts
+import * as schema from './schema.server.ts';
 
-declare global { var __prisma: PrismaClient | undefined; }
-export const prisma = globalThis.__prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== 'production') globalThis.__prisma = prisma;</pre>
+const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
+const g = globalThis as unknown as { __webjs_db?: unknown };
+
+async function open() {
+  if ((globalThis as { Bun?: unknown }).Bun) {
+    const { Database } = await import('bun:sqlite');
+    const { drizzle } = await import('drizzle-orm/bun-sqlite');
+    return drizzle({ client: new Database(url), relations: schema.relations });
+  }
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  return drizzle({ client: new Database(url), relations: schema.relations });
+}
+
+export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</pre>
 
     <p><strong>Do not import a server-only utility directly into a page, layout, or component.</strong> The stub throws when the module <em>loads</em> (not when called), so it works during SSR but crashes when a component hydrates or a page/layout module loads in the browser. Use server-only utilities <em>inside</em> server actions, <code>route.{js,ts}</code> handlers, or <code>middleware</code> (which only ever run on the server). A page reaches server logic by importing a <code>'use server'</code> <strong>action</strong> instead: its RPC stub loads safely on the client and isn't even called there.</p>
 
@@ -154,10 +168,12 @@ PostForm.register('post-form');</pre>
 
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 export async function createPost({ title, body }: { title: string; body: string }) {
-  return prisma.post.create({ data: { title, body } });
+  const [post] = await db.insert(posts).values({ title, body }).returning();
+  return post;
 }</pre>
 
     <pre>// app/api/posts/route.ts
@@ -197,7 +213,8 @@ export const GET = route(getPost);</pre>
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
 import { z } from 'zod';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 const CreatePostSchema = z.object({
   title: z.string().min(1).max(200),
@@ -208,7 +225,8 @@ const CreatePostSchema = z.object({
 export const validate = CreatePostSchema.parse;
 
 export async function createPost(input: { title: string; body: string }) {
-  return prisma.post.create({ data: input });
+  const [post] = await db.insert(posts).values(input).returning();
+  return post;
 }</pre>
 
     <pre>// app/api/posts/route.ts: the REST boundary passes the same validator
@@ -247,9 +265,7 @@ export async function createPost(input: unknown): Promise&lt;ActionResult&lt;Pos
   const { title, body } = input as { title: string; body: string };
   if (!title) return { success: false, error: 'title is required', status: 400 };
 
-  const post = await prisma.post.create({
-    data: { title, body, authorId: user.id },
-  });
+  const [post] = await db.insert(posts).values({ title, body, authorId: user.id }).returning();
   return { success: true, data: post };
 }</pre>
 

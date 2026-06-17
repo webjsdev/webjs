@@ -30,9 +30,11 @@ export default function Configuration() {
     </ul>
 
     <h3>webjs db</h3>
-    <pre>webjs db generate     # prisma generate
-webjs db migrate &lt;name&gt;  # prisma migrate dev
-webjs db studio       # prisma studio</pre>
+    <pre>webjs db generate     # drizzle-kit generate
+webjs db migrate      # drizzle-kit migrate
+webjs db push         # drizzle-kit push
+webjs db studio       # drizzle-kit studio
+webjs db seed         # run db/seed.server.ts</pre>
 
     <h2>tsconfig.json</h2>
     <p>Optional but recommended for editor + CI type-checking:</p>
@@ -103,7 +105,7 @@ webjs db studio       # prisma studio</pre>
     <pre>DATABASE_URL=postgres://... npm start</pre>
 
     <h3>Validating env vars at boot (env.{js,ts})</h3>
-    <p>The auto-load populates <code>process.env</code> but does not check it, so a missing or misconfigured required var (an absent <code>DATABASE_URL</code>, a too-short <code>AUTH_SECRET</code>) fails late and cryptically: a Prisma connect error mid-request, an undefined secret signing a token. Add an optional <code>env.{js,ts}</code> module at the app root (a sibling of <code>middleware.js</code> and <code>readiness.js</code>) that default-exports a schema, and webjs validates the environment at boot and <strong>fails fast</strong> with one message listing every problem at once.</p>
+    <p>The auto-load populates <code>process.env</code> but does not check it, so a missing or misconfigured required var (an absent <code>DATABASE_URL</code>, a too-short <code>AUTH_SECRET</code>) fails late and cryptically: a database connection error mid-request, an undefined secret signing a token. Add an optional <code>env.{js,ts}</code> module at the app root (a sibling of <code>middleware.js</code> and <code>readiness.js</code>) that default-exports a schema, and webjs validates the environment at boot and <strong>fails fast</strong> with one message listing every problem at once.</p>
     <pre>// env.ts (app root)
 export default {
   DATABASE_URL: 'string',                                   // required by default

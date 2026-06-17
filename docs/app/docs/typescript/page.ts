@@ -40,7 +40,7 @@ export default function TypeScript() {
     "lib/**/*",
     "middleware.ts"
   ],
-  "exclude": ["node_modules", ".webjs", "prisma/migrations"]
+  "exclude": ["node_modules", ".webjs", "db/migrations"]
 }</pre>
     <p>Key settings explained:</p>
     <ul>
@@ -56,7 +56,7 @@ export default function TypeScript() {
     <h2>Import Convention: Explicit .ts Extensions</h2>
     <p>In webjs projects, always use the real file extension in your imports:</p>
     <pre>// Good: explicit .ts extension
-import { prisma } from '../lib/prisma.server.ts';
+import { db } from '../db/connection.server.ts';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 import type { PostFormatted } from '../types.ts';
 
@@ -64,7 +64,7 @@ import type { PostFormatted } from '../types.ts';
 import { slugify } from '../utils/slugify.js';
 
 // Avoid: extensionless imports don't work with Node's ESM or in browsers
-import { prisma } from '../lib/prisma';       // ERROR</pre>
+import { db } from '../db/connection.server';       // ERROR</pre>
     <p>This convention works because:</p>
     <ul>
       <li>The runtime strips types from <code>.ts</code> imports server-side natively (Node 24+, or Bun). No loader hook required.</li>
@@ -105,7 +105,7 @@ if (result.success) {
     <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. webjs ships its own pure-ESM serializer (in <code>@webjsdev/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip, including binary content (file uploads through actions just work).</p>
     <pre>// Server action
 export async function getEvents(): Promise&lt;Event[]&gt; {
-  return prisma.event.findMany(); // createdAt is a Date
+  return db.query.events.findMany(); // createdAt is a Date
 }
 
 // Client: createdAt arrives as a real Date, not a string
@@ -131,9 +131,11 @@ session?.user.role; // typed, no cast</pre>
 
     <h2>JSDoc Alternative</h2>
     <p>If you prefer <code>.js</code> files, you can achieve the same type safety using JSDoc annotations with <code>checkJs: true</code> in your tsconfig:</p>
-    <pre>// lib/prisma.js
-/** @type {import('@prisma/client').PrismaClient} */
-export const prisma = new PrismaClient();
+    <pre>// db/connection.server.js
+import * as schema from './schema.server.js';
+const { default: Database } = await import('better-sqlite3');
+const { drizzle } = await import('drizzle-orm/better-sqlite3');
+export const db = drizzle({ client: new Database('db/dev.db'), relations: schema.relations });
 
 /**
  * @param {{ title: string, body: string }} input
@@ -204,8 +206,9 @@ app/
 components/
   counter.ts               # TypeScript component
   footer.js                # JavaScript component
+db/
+  connection.server.ts
 lib/
-  prisma.ts
   utils.js                 # JSDoc-typed JavaScript
 middleware.ts              # TypeScript
 tsconfig.json</pre>
@@ -213,7 +216,7 @@ tsconfig.json</pre>
 import '../components/counter.ts';
 
 // lib/utils.js can import from .ts files
-import { prisma } from './prisma.ts';
+import { db } from '../db/connection.server.ts';
 
 // app/blog/page.ts can import from .js files
 import '../components/footer.js';</pre>

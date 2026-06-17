@@ -10,13 +10,13 @@ export default function Auth() {
     <h2>Setup</h2>
     <pre>// lib/auth.server.ts: create once
 import { createAuth, Credentials, Google, GitHub } from '@webjsdev/server';
-import { prisma } from './prisma.ts';
+import { db } from '../db/connection.server.ts';
 
 export const { auth, signIn, signOut, handlers } = createAuth({
   providers: [
     Credentials({
       async authorize(credentials) {
-        const user = await prisma.user.findUnique({
+        const user = await db.query.users.findFirst({
           where: { email: credentials.email }
         });
         if (!user || !verifyPassword(credentials.password, user.passwordHash)) {
