@@ -139,6 +139,21 @@ db/*.server.{js,ts}         data layer (Drizzle: schema, columns, connection)
 
 Every file is a plain ES module.
 
+### Imports: prefer the `#` root alias over deep relatives (#555)
+
+App-internal imports use the **`#` path alias** instead of deep `../../../`
+relatives: `import { db } from '#db/connection.server.ts'`, `import { Button }
+from '#components/ui/button.ts'`, `#lib/...`, `#modules/...`. It is Node's native
+`package.json "imports"` field (the scaffold ships the single catch-all `"#*":
+"./*"`, so any top-level folder is aliased with no config change), resolved at
+runtime by Node 24+ AND Bun with **no build step and no tsconfig `paths`**. The
+sigil is `#` (not `@`) and there is **no slash after it** (`#lib/...`, not
+`#/lib/...`): a `#/`-prefixed key does not resolve on Bun. The webjs server
+expands the same map for the import graph / auth gate / elision / browser
+importmap, so a `#`-aliased `.server.ts` still trips the server-only boundary.
+A same-directory import stays relative (`./sibling.ts`); only deep relatives
+become `#`. Opt out anywhere by writing a plain relative import.
+
 ---
 
 ## Public API of `@webjsdev/core`
