@@ -73,15 +73,14 @@ jobs:
       - run: npm ci
       # Some integration tests boot the blog example in-process (e.g. the
       # differential elision test renders its mixed `/` page), which calls
-      # listPosts() and needs a migrated Prisma DB, the same setup the e2e job
+      # listPosts() and needs a migrated SQLite DB, the same setup the e2e job
       # does.
       - name: Prepare the blog example database
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - run: npm test
 
   bun:
@@ -174,9 +173,8 @@ jobs:
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - name: Run e2e
         env:
           WEBJS_E2E: '1'
@@ -184,7 +182,7 @@ jobs:
       # Cross-runtime e2e (#523): re-run the SAME suite under node --test (its
       # node:test hook lifecycle does not survive `bun test`) but with the blog
       # SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns the blog under the bun binary).
-      # This proves the Bun.serve shell + Prisma-on-Bun in a real browser. The few
+      # This proves the Bun.serve shell + Drizzle-on-Bun in a real browser. The few
       # node-only assertions (SSR seeding, #472/#488) and the #528-blocked abort
       # test skip themselves on Bun.
       - uses: oven-sh/setup-bun@v2
@@ -219,7 +217,7 @@ jobs:
     # script), which the root runners do not discover, so a regression in an
     # app's tests gates the merge (issue #342). The website's `test` runs both
     # its node + browser suites (hence Playwright); the blog is node-only and
-    # touches its Prisma DB (the same setup the unit + e2e jobs do). docs and
+    # touches its SQLite DB (the same setup the unit + e2e jobs do). docs and
     # the ui-website ship no test suite yet, so they are not listed.
     steps:
       - uses: actions/checkout@v6
@@ -234,9 +232,8 @@ jobs:
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - name: website tests (node + browser)
         run: npm test --workspace=@webjsdev/website
       - name: blog tests (node)
@@ -251,7 +248,7 @@ jobs:
     # path that broke all four live deploys for a day (#409): a COPY of a
     # missing source is a hard Docker error, invisible to every in-process
     # check. Building the image here catches that class (stale COPY paths, a
-    # broken npm install / dist / tailwind / prisma step in the image) on the
+    # broken npm install / dist / tailwind / db-migrate step in the image) on the
     # PR instead of at deploy time. Build only, no push.
     steps:
       - uses: actions/checkout@v6

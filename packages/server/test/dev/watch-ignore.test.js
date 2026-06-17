@@ -13,12 +13,12 @@ test('shouldIgnoreWatchPath ignores the generated .webjs/ artefact dir (#258 loo
   assert.equal(shouldIgnoreWatchPath('.webjs'), true);
 });
 
-test('shouldIgnoreWatchPath ignores node_modules, .git, and prisma dev artefacts', () => {
+test('shouldIgnoreWatchPath ignores node_modules, .git, and the SQLite dev DB', () => {
   assert.equal(shouldIgnoreWatchPath('node_modules/foo/index.js'), true);
   assert.equal(shouldIgnoreWatchPath('.git/HEAD'), true);
-  assert.equal(shouldIgnoreWatchPath('prisma/dev.db'), true);
-  assert.equal(shouldIgnoreWatchPath('prisma/dev.db-journal'), true);
-  assert.equal(shouldIgnoreWatchPath('prisma/migrations/0001_init/migration.sql'), true);
+  assert.equal(shouldIgnoreWatchPath('db/dev.db'), true);
+  assert.equal(shouldIgnoreWatchPath('db/dev.db-journal'), true);
+  assert.equal(shouldIgnoreWatchPath('db/migrations/0001_init/migration.sql'), true);
 });
 
 // Counterfactual: real app changes MUST still trigger a rebuild, otherwise the
@@ -29,6 +29,9 @@ test('shouldIgnoreWatchPath does NOT ignore real app source (rebuilds still fire
   assert.equal(shouldIgnoreWatchPath('app/blog/[slug]/page.ts'), false);
   assert.equal(shouldIgnoreWatchPath('components/counter.ts'), false);
   assert.equal(shouldIgnoreWatchPath('lib/utils/format.ts'), false);
+  // db/*.server.ts are SOURCE files (only db/dev.db* + db/migrations are ignored).
+  assert.equal(shouldIgnoreWatchPath('db/schema.server.ts'), false);
+  assert.equal(shouldIgnoreWatchPath('db/connection.server.ts'), false);
   // Separator-anchored: a sibling whose name merely starts with an ignored
   // token is not caught.
   assert.equal(shouldIgnoreWatchPath('node_modules.bak/foo.js'), false);

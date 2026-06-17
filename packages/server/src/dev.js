@@ -1353,16 +1353,18 @@ export async function createRequestHandler(opts) {
  * artefact dir (the #258 routes.d.ts and the vendor pin) that the dev server
  * itself writes on startup and on every rebuild, so without this skip the
  * write fires a watch event, triggers a rebuild, re-writes the file, and loops
- * forever. `prisma/dev*` / `prisma/migrations` churn during db:migrate. The
- * prisma branch is prefix-only (no trailing separator) so the SQLite sidecars
- * `prisma/dev.db` / `prisma/dev.db-journal` match too; the others stay
+ * forever. `db/dev.db*` (the SQLite file + sidecars) and `db/migrations`
+ * (drizzle-kit output) churn during db:migrate. The `db/dev.db` branch is
+ * prefix-only (no trailing separator) so the `-journal` / `-wal` sidecars match
+ * too, while staying anchored to `db/dev.db` so a SOURCE file like
+ * `db/schema.server.ts` still triggers a reload. The others stay
  * separator-anchored so an unrelated name like `node_modules.bak/foo` does not.
  *
  * @param {string} filename relative path from an fs.watch `event.filename`
  * @returns {boolean} true when the change should be ignored
  */
 export function shouldIgnoreWatchPath(filename) {
-  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])prisma[\\/](?:dev|migrations)/.test(filename || '');
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations)/.test(filename || '');
 }
 
 /**
@@ -1414,7 +1416,7 @@ export async function startServer(opts) {
     //
     // fs.watch returns relative paths in event.filename. `shouldIgnoreWatchPath`
     // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
-    // prisma's dev artefacts so a file the dev server itself writes never loops.
+    // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
     (async () => {

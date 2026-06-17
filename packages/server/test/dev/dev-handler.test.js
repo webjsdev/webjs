@@ -1377,10 +1377,10 @@ test('fileResponse prod: ETag is a WEAK 16-char SHA-1 hex digest in quotes', asy
   assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');
 });
 
-test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writes', async () => {
+test('startServer dev=true: fs.watch does NOT fire reload for db/dev.db writes', async () => {
   // Regression coverage for the IGNORE-regex bug surfaced during
   // PR #110 review: the chokidar substring-style ignore on
-  // /prisma\/(dev|migrations)/ caught `prisma/dev.db`, but the
+  // /db\/(dev\.db|migrations)/ caught `db/dev.db`, but the
   // first cut of the fs.watch replacement required a trailing
   // separator and missed the SQLite sidecar file, causing a
   // rebuild loop on every db:migrate.
@@ -1388,7 +1388,7 @@ test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writ
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default function P() { return html\`<p>v1</p>\`; }\n`,
-    'prisma/dev.db': 'placeholder',
+    'db/dev.db': 'placeholder',
   });
   const logger = { info: () => {}, warn: () => {}, error: () => {} };
   const { server, close } = await startServer({ appDir, dev: true, port: 0, logger, compress: false });
@@ -1404,10 +1404,10 @@ test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writ
     let buf = '';
     // Drain the head of the SSE stream so we know the connection is open.
     await reader.read();
-    // Touch prisma/dev.db plus the journal sidecar. Both are written
+    // Touch db/dev.db plus the journal sidecar. Both are written
     // during db:migrate and must NOT trigger a reload.
-    writeFileSync(join(appDir, 'prisma/dev.db'), 'updated');
-    writeFileSync(join(appDir, 'prisma/dev.db-journal'), 'wal');
+    writeFileSync(join(appDir, 'db/dev.db'), 'updated');
+    writeFileSync(join(appDir, 'db/dev.db-journal'), 'wal');
     // Wait longer than the 80ms debounce window so any rebuild would
     // have fired by now.
     await new Promise((r) => setTimeout(r, 250));
@@ -1417,7 +1417,7 @@ test('startServer dev=true: fs.watch does NOT fire reload for prisma/dev.db writ
     if (value) buf += decoder.decode(value, { stream: true });
     ac.abort();
     assert.ok(!buf.includes('event: reload'),
-      `prisma/dev.db writes must NOT fire a reload; got SSE buffer: ${JSON.stringify(buf)}`);
+      `db/dev.db writes must NOT fire a reload; got SSE buffer: ${JSON.stringify(buf)}`);
   } finally {
     await close();
   }
