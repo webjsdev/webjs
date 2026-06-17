@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/server",
-  "version": "0.8.29",
+  "version": "0.8.30",
   "type": "module",
   "description": "webjs dev/prod server: SSR, router, API, server actions, live reload",
   "main": "index.js",
