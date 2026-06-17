@@ -8,7 +8,7 @@
 # fallback.
 #
 # The image carries BOTH runtimes by design. The BUILD toolchain runs on Node
-# (npm install, the core dist bundle, `prisma generate`, Tailwind), which keeps
+# (npm install, the core dist bundle, Tailwind), which keeps
 # the proven buildless toolchain unchanged; **Node 24+ is REQUIRED** there (the
 # built-in `module.stripTypeScriptTypes` stripper and recursive fs.watch need it),
 # which is why the base pins a current Node major. The SERVING process runs on
@@ -22,11 +22,12 @@
 # risk.
 #
 # Tailwind CSS IS built at image time (CLI, no browser runtime). The
-# blog runs `prisma generate` at build and `prisma migrate deploy` at
-# start.
+# blog applies its Drizzle migrations (`webjs db migrate`) at start via
+# `webjs.start.before`; there is no DB codegen step.
 FROM node:26-alpine
 
-# openssl is required by Prisma's query engine at runtime.
+# ca-certificates for outbound TLS (e.g. the jspm vendor resolve); openssl is
+# kept as a small, harmless base lib several native modules link against.
 RUN apk add --no-cache openssl ca-certificates
 
 # Drop the Bun binary into the Node image (musl/alpine build) so the serving
@@ -91,8 +92,9 @@ COPY blog ./blog
 # requests per page instead of one chunk per subpath.
 RUN npm run build:dist --workspace=@webjsdev/core
 
-# Blog: generate Prisma client (needs schema.prisma in context).
-RUN cd examples/blog && npx prisma generate
+# Blog: no DB codegen step. Drizzle has no generated client (the schema IS the
+# types). The committed migrations are applied at container START by the blog's
+# `webjs.start.before` (`webjs db migrate`), not at build time.
 
 # UI registry: the registry JSON is composed on demand by the route handlers
 # (no build step). But the ui-website's component DETAIL pages statically import
