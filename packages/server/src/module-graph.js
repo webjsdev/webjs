@@ -19,7 +19,7 @@ import { redactStringsAndTemplates } from './js-scan.js';
 /**
  * Per-appDir cache of the parsed `package.json "imports"` subpath-alias map
  * (#555). `null` means "no imports block" (the common case for an app that
- * does not use the `#/` alias). Read once per appDir; cleared with the parse
+ * does not use the `#` alias). Read once per appDir; cleared with the parse
  * cache on rebuild.
  * @type {Map<string, Record<string,string> | null>}
  */
@@ -350,7 +350,7 @@ async function parseFile(file, appDir, graph, seen) {
       // and is not a real import edge.
       if (masked[m.index] === ' ') continue;
       const spec = m[1];
-      // Only resolve relative imports + `#/`-style subpath aliases (#555)
+      // Only resolve relative imports + `#`-style subpath aliases (#555)
       // within the project. A bare npm specifier (dayjs) has no alias match
       // and is skipped; an aliased `#lib/x.server.ts` IS followed so the
       // graph / auth gate / elision see the real path through the alias.
@@ -377,7 +377,7 @@ export function resolveImport(spec, fromFile, appDir) {
   let target;
   const aliased = expandImportAlias(spec, appDir);
   if (aliased) {
-    // `#/`-style subpath alias (#555): the app-relative target is resolved
+    // `#`-style subpath alias (#555): the app-relative target is resolved
     // against the app root, then run through the same extension fallback below
     // so the boundary / elision / preload all see the real on-disk path.
     target = resolve(appDir, aliased);

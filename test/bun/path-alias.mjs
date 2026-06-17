@@ -1,5 +1,5 @@
 /**
- * Cross-runtime proof that the `#/` path alias (#555) resolves natively under
+ * Cross-runtime proof that the `#` path alias (#555) resolves natively under
  * WHICHEVER runtime runs it. The alias is Node's `package.json "imports"` field,
  * which both Node 24+ and Bun resolve at module-load with no build step. webjs
  * runs on both (#508), so the alias must load identically on each:

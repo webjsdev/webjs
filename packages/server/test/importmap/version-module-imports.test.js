@@ -194,8 +194,8 @@ test('counterfactual: with the pass active the served import URL matches the pre
   assert.notEqual(versioned, bare, 'the pass changes the served bytes');
 });
 
-test('versions a #/ path-alias import as a base-path-safe relative specifier (#555)', () => {
-  // A `#/` alias resolves via the importmap (`#/`->`/`), which carries NO `?v`,
+test('versions a # path-alias import as a base-path-safe relative specifier (#555)', () => {
+  // A `#` alias resolves via the importmap (`#components/`->`/components/`), which carries NO `?v`,
   // so without this the alias import would fetch the un-versioned URL while the
   // preload points at `?v=hash` (the #369 wasted-preload class, but for aliases).
   // The pass rewrites it to a versioned RELATIVE specifier: base-path-safe (the
@@ -218,7 +218,7 @@ test('versions a #/ path-alias import as a base-path-safe relative specifier (#5
   assert.equal(withAssetHash('/components/badge.ts'), `/components/badge.ts?v=${h}`);
 });
 
-test('a #/ alias to a .server.ts is NOT versioned (server stub, bare URL, not preloaded)', () => {
+test('a # alias to a .server.ts is NOT versioned (server stub, bare URL, not preloaded)', () => {
   writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }));
   writeFileSync(join(appDir, 'lib', 'db.server.ts'), "export const db = {};\n");
   setAssetRoots({ appDir, coreDir, enabled: true });

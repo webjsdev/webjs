@@ -493,11 +493,11 @@ test('an app with no app/ directory is not analysed', async () => {
 });
 
 // SECURITY COUNTERFACTUAL (#555): a server-only `.server.ts` imported via a
-// `#/` PATH ALIAS into a shipping module must STILL be flagged. The whole risk
+// `#` PATH ALIAS into a shipping module must STILL be flagged. The whole risk
 // of an import alias is that it could launder a server import past the boundary
 // (resolveImport historically skipped any non-`.`/`/` specifier). The alias is
 // expanded to the real path inside resolveImport, so the rule sees through it.
-test('a server import via a #/ alias into a shipping page IS flagged (alias does not launder the boundary)', async () => {
+test('a server import via a # alias into a shipping page IS flagged (alias does not launder the boundary)', async () => {
   const appDir = await makeApp({
     'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
     'lib/auth.server.ts': AUTH_SERVER,
@@ -513,17 +513,17 @@ export default async function ProjectPage() {
   try {
     const violations = await checkConventions(appDir);
     const hits = find(violations, 'project/page.ts');
-    assert.equal(hits.length, 1, 'a #/-aliased server import into a shipping page must still be flagged');
+    assert.equal(hits.length, 1, 'a #-aliased server import into a shipping page must still be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the real server file behind the alias');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-// The complement: a #/-aliased server import into an ELIDED display-only page is
+// The complement: a #-aliased server import into an ELIDED display-only page is
 // NOT flagged (the framework strips it), proving the alias resolves through to
 // the SAME elision verdict a relative import gets, not a blanket pass/fail.
-test('a #/ alias server import into an elided display-only page is NOT flagged', async () => {
+test('a # alias server import into an elided display-only page is NOT flagged', async () => {
   const appDir = await makeApp({
     'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
     'lib/auth.server.ts': AUTH_SERVER,

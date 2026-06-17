@@ -308,7 +308,7 @@ const JS_SPEC_EXTS = new Set(['.js', '.mjs', '.jsx', '.cjs']);
  */
 /**
  * A base-path-safe relative specifier from the importing module to a resolved
- * target file, used to rewrite a `#/`-alias import in served source (#555). The
+ * target file, used to rewrite a `#`-alias import in served source (#555). The
  * browser resolves a relative specifier against the importer's own URL (already
  * base-path-prefixed), so the result needs no importmap and no basePath fix-up,
  * and it carries the `?v` the caller appends. Uses the resolved file's actual
@@ -410,7 +410,7 @@ export function versionModuleImports(source, importerAbs) {
       if (masked[/** @type {number} */ (m.index)] === ' ') continue;
       const spec = m[2];
       const isRelative = spec[0] === '.';
-      // A `#/`-style subpath alias (#555) is rewritten to a base-path-safe
+      // A `#`-style subpath alias (#555) is rewritten to a base-path-safe
       // RELATIVE specifier below (so it carries `?v` and matches the preload,
       // exactly like a relative import). Only `./`/`../` relatives and
       // app-imports aliases qualify: a bare specifier is importmap-resolved and
