@@ -11,7 +11,7 @@ companion and reach for docs.webjs.com whenever you need more detail.
 
 This project was created with `webjs create`. The files you see right
 now (`app/page.ts` printing "Hello from {{APP_NAME}}", the example `User`
-model in `prisma/schema.prisma`, the `theme-toggle` component, the
+model in `db/schema.server.ts`, the `theme-toggle` component, the
 example users module in api/saas templates) are **starting-point
 references, not the final product**. Your job is to replace them with
 the app the user actually asked for. That includes adapting
@@ -30,11 +30,11 @@ user asked for, never leftover scaffold code.
 
 **Non-negotiables for every webjs app:**
 
-1. **Use Prisma + SQLite for persistence.** It's already wired up
-   (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`,
-   and `webjs.dev.before` running `prisma generate` inside `webjs dev`).
-   For any data the app stores (todos, posts, messages, products,
-   comments, anything), define a Prisma model and persist there.
+1. **Use Drizzle + SQLite for persistence.** It's already wired up
+   (`db/schema.server.ts`, `db/connection.server.ts`, `npm run db:generate`
+   + `npm run db:migrate`). For any data the app stores (todos, posts,
+   messages, products, comments, anything), define a Drizzle table and
+   persist there.
    - **NEVER** store app data in JSON files (`data/todos.json`,
      `db.json`, …). It resets on reload and cannot scale. This is a project convention,
      and the user's prompt explicitly forbids it.
@@ -47,10 +47,10 @@ user asked for, never leftover scaffold code.
    `full-stack` (default), `--template api`, `--template saas`. Don't
    reach for a `--template blog` / `--template todo` / `--template
    ecommerce`. They don't exist and the CLI will reject them.
-3. **First step after scaffolding:** edit `prisma/schema.prisma` to the
+3. **First step after scaffolding:** edit `db/schema.server.ts` to the
    app's real domain models (delete the example `User` model unless the
-   app actually needs users), run `webjs db migrate <name>`, then build
-   pages / actions / queries against those models.
+   app actually needs users), run `webjs db generate` then
+   `webjs db migrate`, then build pages / actions / queries against them.
 
 **Picking the right scaffold from the user's prompt** (you do this BEFORE
 running `webjs create`; if you're reading this you've already scaffolded.
@@ -322,12 +322,15 @@ modules/<feature>/
   utils/*.ts             feature-scoped helpers
   types.ts               feature types
 lib/
-  prisma.ts              PrismaClient singleton (import from here, never `new PrismaClient()`)
-  ...                    other cross-cutting infra (session, auth config, etc.)
-prisma/
-  schema.prisma          Prisma schema, SQLite by default, switch provider for Postgres/MySQL
-  dev.db                 SQLite file (gitignored); run `npm run db:migrate` to create
-  migrations/            generated migration SQL
+  ...                    cross-cutting infra (session, auth config, etc.)
+db/
+  schema.server.ts       Drizzle models + relations (your data layer)
+  columns.server.ts      column helpers (dialect-specific; the only file to swap for Postgres)
+  connection.server.ts   opens the driver, exports the \`db\` singleton (import \`db\` from here)
+  seed.server.ts         optional seed (run via \`webjs db seed\`)
+  dev.db                 SQLite file (gitignored); run \`npm run db:migrate\` to create
+  migrations/            generated migration SQL (committed)
+drizzle.config.ts        drizzle-kit config (root; SQLite by default, --db postgres to switch)
 public/                  static assets, served at /public/*
 test/<feature>/                feature-scoped tests, one folder per concern
   <name>.test.ts                node unit / integration test (node --test)
@@ -359,43 +362,44 @@ Run `webjs types` once (and ensure `tsconfig.json` `include` lists
 startup, so it stays current. Without it, `params` is `Record<string, string>`
 and `navigate()` accepts any string (non-breaking).
 
-## Database (Prisma + SQLite by default)
+## Database (Drizzle + SQLite by default)
 
-Every scaffold includes a Prisma setup pointed at a local SQLite file.
+Every scaffold includes a Drizzle setup pointed at a local SQLite file,
+under a `db/` folder (`schema.server.ts`, `columns.server.ts`,
+`connection.server.ts`). Drizzle has no codegen and no engine binary.
 First-run workflow:
 
 ```sh
 cp .env.example .env          # DATABASE_URL is pre-filled for SQLite
-npm run db:migrate            # creates prisma/dev.db + migration
-npm run dev                   # webjs dev (runs prisma generate, then serves)
+npm run db:generate           # schema -> SQL migration (drizzle-kit)
+npm run db:migrate            # apply it (creates db/dev.db)
+npm run dev                   # webjs dev, then serves
 ```
 
 ### `npm run dev` / `npm start` and `webjs dev` / `webjs start` behave identically
 
 `npm run dev` and `npm start` are the documented entrypoints, and they
-are thin aliases for `webjs dev` / `webjs start`. The dev/start
-orchestration (the one-shot `prisma generate` / `prisma migrate deploy`,
-and any parallel watcher like the Tailwind CLI) lives in the `webjs`
-block of `package.json` and runs INSIDE `webjs dev` / `webjs start`:
+are thin aliases for `webjs dev` / `webjs start`. The start orchestration
+(applying migrations, and any parallel watcher like the Tailwind CLI)
+lives in the `webjs` block of `package.json` and runs INSIDE
+`webjs dev` / `webjs start`:
 
 ```jsonc
 "webjs": {
-  "dev":   { "before": ["prisma generate"] },
-  "start": { "before": ["prisma migrate deploy"] }
+  "start": { "before": ["webjs db migrate"] }
 }
 ```
 
-So a bare `webjs dev` is NOT a degraded run, it runs the same before-steps
-(and `webjs.dev.parallel` watchers) the npm script would. An app that adds
-the Tailwind CLI puts its `--watch` command under `webjs.dev.parallel` and
-it runs alongside the server, torn down on exit. `before` steps run to
-completion first; a failed `prisma generate` / `migrate` aborts the boot
-with a clear message rather than serving stale code/schema.
+Drizzle has no codegen, so there is no dev `before` step. An app that
+adds the Tailwind CLI puts its `--watch` command under
+`webjs.dev.parallel` and it runs alongside the server, torn down on exit.
+`before` steps run to completion first; a failed `webjs db migrate`
+aborts the boot with a clear message rather than serving a stale schema.
 
 In Docker / Railway, `CMD ["npm", "start"]` and `CMD ["webjs", "start"]`
-are equivalent: `webjs start` runs `webjs.start.before` (`prisma migrate
-deploy`) in-process before serving, so the migrate no longer depends on an
-npm `prestart` hook.
+are equivalent: `webjs start` runs `webjs.start.before` (`webjs db
+migrate`) in-process before serving, so the migrate no longer depends on
+an npm `prestart` hook.
 
 ### Running on Bun instead of Node
 
@@ -418,9 +422,9 @@ on hydration on either runtime.
 **Containerized deploy ships with the scaffold.** `Dockerfile`,
 `compose.yaml`, and `.dockerignore` are scaffolded at the app root. The
 Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs
-deps, runs `prisma generate` at build time, and starts via `npm start`
-(`webjs start` runs `webjs.start.before` = `prisma migrate deploy` before
-serving). Run it locally with `docker compose up --build` (the
+deps (no build step, since Drizzle has no codegen), and starts via
+`npm start` (`webjs start` runs `webjs.start.before` = `webjs db migrate`
+before serving). Run it locally with `docker compose up --build` (the
 app comes up on http://localhost:8080 against a SQLite file on a named
 volume). For production, point `DATABASE_URL` at managed Postgres and set
 `AUTH_SECRET`. The `.dockerignore` keeps the `.webjs/vendor/` importmap in
@@ -445,24 +449,28 @@ live DB ping), add an optional `readiness.{js,ts}` at the app root that
 default-exports an async check; `/__webjs/ready` runs it once warm and reports
 503 if it returns `false` or throws.
 
-Scripts:
+Scripts (all wrap `drizzle-kit`):
 
-- `npm run db:migrate`: `webjs db migrate` (-> `prisma migrate dev`: dev-time schema change + migration + generate)
-- `npm run db:generate`: `webjs db generate` (-> `prisma generate`: regenerate client only)
-- `npm run db:studio`: `webjs db studio` (-> `prisma studio` GUI)
-- `webjs.dev.before` auto-runs `prisma generate` inside `webjs dev` (#550, replaces the old `predev` hook)
-- `webjs.start.before` runs `prisma migrate deploy` inside `webjs start` (idempotent in prod; replaces the old `prestart` hook)
+- `npm run db:generate`: `webjs db generate` (schema -> SQL migration)
+- `npm run db:migrate`: `webjs db migrate` (apply pending migrations)
+- `npm run db:push`: `webjs db push` (push the schema straight to the dev DB)
+- `npm run db:studio`: `webjs db studio` (visual DB browser)
+- `npm run db:seed`: `webjs db seed` (run `db/seed.server.ts`)
+- `webjs.start.before` runs `webjs db migrate` inside `webjs start` (idempotent; replaces the old `prestart` hook). No dev `before` step (no codegen).
 
-Always import the client from `lib/prisma.server.ts` (never `new PrismaClient()` directly -
-the singleton avoids opening a new connection on every dev-server reload):
+Always import `db` from `db/connection.server.ts` (the globalThis-cached
+singleton avoids opening a new connection on every dev-server reload), and
+the tables from `db/schema.server.ts`:
 
 ```ts
-import { prisma } from '../../../lib/prisma.server.ts';
-const users = await prisma.user.findMany();
+import { db } from '../../../db/connection.server.ts';
+const users = await db.query.users.findMany();
 ```
 
-To switch to Postgres or MySQL: change `provider` in `prisma/schema.prisma`
-and the `DATABASE_URL` in `.env`.
+To switch to Postgres: scaffold with `--db postgres`, or swap
+`db/columns.server.ts` + `db/connection.server.ts` for the Postgres
+variants and point `DATABASE_URL` at Postgres. The schema, queries, and
+actions are unchanged.
 
 ## NPM packages (vendor pipeline)
 
@@ -746,11 +754,12 @@ legitimately use `static styles = css\`\`` for scoped CSS.
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   if (!input.title) return { success: false, error: 'title required', status: 400 };
-  const post = await prisma.post.create({ data: input });
+  const [post] = await db.insert(posts).values(input).returning();
   return { success: true, data: post };
 }
 ```
@@ -1123,13 +1132,14 @@ composition, so a nested shell ends up dropped by the HTML parser.
 1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
 2. **Server-only code goes in `.server.{js,ts}` files, `route.ts`
    handlers, or `middleware.ts`. Never in pages, layouts, or
-   components.** Direct imports of `@prisma/client`, `node:*`, or any
-   server-only dependency from a page, layout, loading.ts, error.ts,
-   not-found.ts, or component will crash the browser at module load.
+   components.** Direct imports of a DB driver (`better-sqlite3` / `pg`),
+   `node:*`, or any server-only dependency from a page, layout, loading.ts,
+   error.ts, not-found.ts, or component will crash the browser at module load.
    Wrap the access in a `.server.{js,ts}` file; the framework
-   rewrites that import into an RPC stub for the browser. `lib/`
-   holds both server-only infra (`lib/prisma.server.ts`, `lib/session.server.ts`)
-   and browser-safe utilities (`lib/utils/cn.ts` with `cn`, design-
+   rewrites that import into an RPC stub for the browser. Server-only
+   infra lives in `db/*.server.ts` (the DB) and `lib/*.server.ts`
+   (`lib/session.server.ts`); browser-safe utilities live in
+   `lib/utils/cn.ts` with `cn`, design-
    system helpers). Server-only `lib/*` files must only be imported
    from `.server.ts`/`route.ts`/`middleware.ts`; browser-safe `lib/*`
    files (like `lib/utils/cn.ts`) can be imported anywhere.
