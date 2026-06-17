@@ -102,6 +102,28 @@ test('use-railway routes on infra phrases', () => {
   }
 });
 
+test('webjs-research-record routes on research/design phrases', () => {
+  for (const p of [
+    'research whether we should switch the default ORM',
+    'investigate the SSR partial-nav approach and write it up',
+    'evaluate Drizzle vs Prisma and record the decision',
+    'write up the design for the streaming protocol',
+    'this is a design record, where should it go',
+    'spike path-alias imports and capture the findings',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-research-record'), `expected research-record route for: ${p}`);
+  }
+});
+
+test('research-record stays quiet on a plain file-issue prompt', () => {
+  // "add a new task to investigate the SSR race" is file-issue work, not a
+  // research writeup; research-record must not steal it.
+  const { ctx } = run('add a new task to investigate the SSR race');
+  assert.ok(routed(ctx, 'webjs-file-issue'));
+  assert.ok(!routed(ctx, 'webjs-research-record'));
+});
+
 test('unrelated prompt routes to no skill but still carries the policy', () => {
   const { ctx } = run('explain how the SSR pipeline works');
   assert.match(ctx, /skill policy/i);
@@ -109,6 +131,7 @@ test('unrelated prompt routes to no skill but still carries the policy', () => {
   assert.ok(!routed(ctx, 'webjs-start-work'));
   assert.ok(!routed(ctx, 'webjs-list-todos'));
   assert.ok(!routed(ctx, 'use-railway'));
+  assert.ok(!routed(ctx, 'webjs-research-record'));
   // The no-match branch tells the model to apply the policy if the task
   // turns out to match a skill mid-stream.
   assert.match(ctx, /if you determine mid-task that the work matches a skill/i);
