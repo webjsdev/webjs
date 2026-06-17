@@ -1,77 +1,101 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Database (Prisma) | webjs' };
+export const metadata = { title: 'Database (Drizzle) | webjs' };
 
 export default function Database() {
   return html`
-    <h1>Database (Prisma)</h1>
-    <p>webjs recommends <strong>Prisma</strong> as the default ORM. It's schema-first (single source of truth), generates a fully-typed client, and works with SQLite, PostgreSQL, MySQL, and more. The only non-runtime step in a webjs app is <code>prisma generate</code> after schema edits. Everything else is no-build.</p>
+    <h1>Database (Drizzle)</h1>
+    <p>webjs uses <strong>Drizzle</strong> as the default ORM. It fits the buildless thesis: there is <strong>no codegen and no engine binary</strong> (what you write is what runs), it runs on Node and Bun, and the types are inferred straight from your schema. SQLite is the default; Postgres is a flag away. The scaffold wires it all up under a <code>db/</code> folder.</p>
 
-    <h2>Setup</h2>
-    <pre>npm install prisma @prisma/client
-npx prisma init --datasource-provider sqlite</pre>
-    <p>This creates <code>prisma/schema.prisma</code> with a SQLite datasource. Edit it to define your models:</p>
-    <pre>// prisma/schema.prisma
-generator client {
-  provider = "prisma-client-js"
+    <h2>What the scaffold gives you</h2>
+    <pre>db/
+  columns.server.ts      column helpers (the few bits that differ per dialect)
+  schema.server.ts       your models + relations
+  connection.server.ts   opens the driver, exports \`db\`
+  seed.server.ts         optional seed (run via \`webjs db seed\`)
+  migrations/            generated SQL (committed)
+drizzle.config.ts        drizzle-kit config (root)</pre>
+    <p>Only <code>db/columns.server.ts</code> and <code>db/connection.server.ts</code> are dialect-specific. <code>schema.server.ts</code>, your queries, and your actions are identical whether you run SQLite or Postgres.</p>
+
+    <h2>The schema</h2>
+    <p>Write models against the helpers in <code>db/columns.server.ts</code> (which re-export the raw Drizzle builders like <code>text</code> / <code>integer</code> plus thin helpers for the columns that differ across dialects: <code>table</code>, <code>pk</code>, <code>uuidPk</code>, <code>bool</code>, <code>createdAt</code>, <code>updatedAt</code>, <code>index</code>):</p>
+    <pre>// db/schema.server.ts
+import { defineRelations } from 'drizzle-orm';
+import { table, pk, text, integer, createdAt, index } from './columns.server.ts';
+
+export const users = table('users', {
+  id: pk(),
+  email: text().notNull().unique(),
+  name: text(),
+  createdAt: createdAt(),
+});
+
+export const posts = table('posts', {
+  id: pk(),
+  slug: text().notNull().unique(),
+  title: text().notNull(),
+  body: text().notNull(),
+  authorId: integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+}, (t) => [index(t.authorId), index(t.createdAt)]);
+
+export const relations = defineRelations({ users, posts }, (r) => ({
+  users: { posts: r.many.posts({ from: r.users.id, to: r.posts.authorId }) },
+  posts: { author: r.one.users({ from: r.posts.authorId, to: r.users.id }) },
+}));
+
+export type Post = typeof posts.$inferSelect;</pre>
+    <p>Column keys map to <code>snake_case</code> SQL automatically (no per-column name strings). A primary key is <code>pk()</code> (auto-increment integer, <code>id: number</code>) or <code>uuidPk()</code> (<code>id: string</code>). <code>createdAt()</code> defaults to now at the database level.</p>
+
+    <h2>Migrations</h2>
+    <p>Drizzle has no client to generate. <code>generate</code> turns your schema into SQL; <code>migrate</code> applies it.</p>
+    <pre>npm run db:generate     # webjs db generate -> drizzle-kit generate (schema to SQL)
+npm run db:migrate      # webjs db migrate  -> drizzle-kit migrate (apply)</pre>
+    <p>In production, <code>webjs start</code> runs <code>webjs db migrate</code> for you (the <code>webjs.start.before</code> step), so a deploy applies pending migrations before serving. There is no dev <code>before</code> step, because there is no codegen.</p>
+
+    <h2>The connection</h2>
+    <pre>// db/connection.server.ts (SQLite, runtime-neutral)
+import * as schema from './schema.server.ts';
+
+const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
+const g = globalThis as unknown as { __webjs_db?: unknown };
+
+async function open() {
+  if ((globalThis as { Bun?: unknown }).Bun) {
+    const { Database } = await import('bun:sqlite');
+    const { drizzle } = await import('drizzle-orm/bun-sqlite');
+    return drizzle({ client: new Database(url), relations: schema.relations });
+  }
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  return drizzle({ client: new Database(url), relations: schema.relations });
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
-}
+export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</pre>
+    <p>The <code>globalThis</code> cache reuses one connection across dev-server reloads. This is the only file that opens the driver, and it is server-only (<code>.server.ts</code>), so it never reaches the browser.</p>
 
-model Post {
-  id        Int      @id @default(autoincrement())
-  slug      String   @unique
-  title     String
-  body      String
-  createdAt DateTime @default(now())
-}</pre>
-
-    <h3>Run Migrations</h3>
-    <pre>npx prisma migrate dev --name init
-# or via the webjs CLI wrapper:
-webjs db migrate init</pre>
-
-    <h3>Generate the Client</h3>
-    <pre>npx prisma generate
-# or:
-webjs db generate</pre>
-    <p>This writes the typed client to <code>node_modules/.prisma/client</code>. Run it once after schema changes. It's not in the request hot path.</p>
-
-    <h3><code>npm run dev</code> and <code>webjs dev</code> are equivalent</h3>
-    <p>
-      The scaffold puts <code>prisma generate</code> under
-      <code>webjs.dev.before</code> in the <code>webjs</code> block of
-      package.json, and <code>webjs dev</code> runs that step to completion
-      before it serves. So a bare <code>webjs dev</code> generates the client
-      itself, exactly like <code>npm run dev</code> (now a thin alias).
-      <code>npm run db:migrate</code> and <code>webjs db migrate</code> are
-      equivalent in the same way.
-    </p>
-
-    <h2>Using Prisma in Server Actions</h2>
-    <pre>// lib/prisma.server.ts
-import { PrismaClient } from '@prisma/client';
-
-declare global {
-  var __prisma: PrismaClient | undefined;
-}
-
-// Singleton: reuse across dev-mode module reloads.
-export const prisma: PrismaClient =
-  globalThis.__prisma ?? (globalThis.__prisma = new PrismaClient());</pre>
-
+    <h2>Queries and mutations</h2>
+    <p>Reads use the relational query builder with object filters; writes use the builder with <code>.returning()</code> (both SQLite and Postgres support it).</p>
     <pre>// modules/posts/queries/list-posts.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 
 export async function listPosts() {
-  return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+  return db.query.posts.findMany({
+    orderBy: { createdAt: 'desc' },
+    with: { author: { columns: { name: true } } },
+  });
 }</pre>
+    <pre>// modules/posts/actions/create-post.server.ts
+'use server';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
-    <p>Import the query from a page or component. webjs handles the rest:</p>
+export async function createPost(input: { slug: string; title: string; body: string; authorId: number }) {
+  const [row] = await db.insert(posts).values(input).returning();
+  return { success: true as const, data: row };
+}</pre>
+    <p>Import the query or action from a page or component as a normal import; webjs rewrites it into a typed RPC stub on the client.</p>
     <pre>// app/page.ts
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
 
@@ -80,43 +104,21 @@ export default async function Home() {
   return html\`&lt;ul&gt;\${posts.map(p =&gt; html\`&lt;li&gt;\${p.title}&lt;/li&gt;\`)}&lt;/ul&gt;\`;
 }</pre>
 
-    <p><strong>Why the <code>.server.ts</code> indirection?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser as ES modules so transitively imported components can register. A top-level <code>import { prisma } from '../lib/prisma.server.ts'</code> would pull <code>@prisma/client</code> into the browser graph, which needs Node APIs and would crash. Wrapping the access in a <code>.server.{js,ts}</code> file lets the framework rewrite the import into an RPC stub for the browser; prisma source never reaches the client. The rule across the framework: server-only code (<code>@prisma/client</code>, <code>node:*</code>, anything needing Node APIs) goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
+    <p><strong>Why the <code>.server.ts</code> boundary?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser so transitively imported components register. A top-level import of <code>db/connection.server.ts</code> would pull the DB driver (<code>better-sqlite3</code> / <code>pg</code>, which need Node APIs) into the browser graph and crash. The <code>.server.{js,ts}</code> extension lets the framework rewrite the import into an RPC stub; the driver and your DB code never reach the client. The rule across the framework: server-only code goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
 
-    <h2>Type Safety</h2>
-    <p>Prisma generates TypeScript types for every model. In a <code>.ts</code> server action, the return type flows through the RPC boundary to the client component, so <code>Post.createdAt</code> is a <code>Date</code> on the server, and thanks to webjs's built-in rich-type serializer, it's a <code>Date</code> on the client too.</p>
-    <p>For DTOs (where you want to control the exact shape returned to the client), create a <code>format*</code> function in your module's <code>utils/</code>:</p>
-    <pre>// modules/posts/utils/format.ts
-import type { PostFormatted } from '../types.ts';
+    <h2>Type safety</h2>
+    <p>Types are inferred from the schema, never hand-written. <code>typeof posts.$inferSelect</code> is the row type; a <code>.ts</code> server action's return type flows through the RPC boundary to the client, and webjs's rich-type serializer keeps a <code>Date</code> a <code>Date</code> on both sides.</p>
 
-export function formatPost(row: any): PostFormatted {
-  return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    body: row.body,
-    authorName: row.author?.name ?? null,
-    createdAt: row.createdAt.toISOString(),
-  };
-}</pre>
+    <h2>Switching to Postgres</h2>
+    <p>Scaffold with the dialect you want:</p>
+    <pre>webjs create my-app --db postgres</pre>
+    <p>That writes the Postgres variants of <code>db/columns.server.ts</code> and <code>db/connection.server.ts</code> (and the <code>pg</code> driver). Your <code>schema.server.ts</code>, queries, and actions are unchanged. To move an existing app, swap those two files for the Postgres variants and point <code>DATABASE_URL</code> at your Postgres instance. Migrations are generated per dialect, and runtime behaviour differs (case-sensitivity, constraints), so run your tests against the production engine before relying on a dev-SQLite / prod-Postgres setup.</p>
 
-    <h2>The globalThis Singleton Pattern</h2>
-    <p>In dev mode, webjs cache-busts module imports so file edits take effect immediately. But this means <code>new PrismaClient()</code> runs on every import, creating too many DB connections. The fix: stash the client on <code>globalThis</code>, which persists across module reloads:</p>
-    <pre>export const prisma =
-  globalThis.__prisma ?? (globalThis.__prisma = new PrismaClient());</pre>
-    <p>Use the same pattern for any stateful singleton (WebSocket client sets, pub/sub buses, etc.).</p>
-
-    <h2>Switching Databases</h2>
-    <p>Change the <code>provider</code> and <code>url</code> in <code>schema.prisma</code>:</p>
-    <pre>datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}</pre>
-    <p>Then re-run <code>npx prisma migrate dev</code>. The rest of your code stays the same, because Prisma abstracts the SQL dialect.</p>
-
-    <h2>CLI Integration</h2>
-    <p>The webjs CLI wraps common Prisma commands:</p>
-    <pre>webjs db generate      # prisma generate
-webjs db migrate init  # prisma migrate dev --name init
-webjs db studio        # prisma studio (visual DB browser)</pre>
+    <h2>CLI</h2>
+    <pre>webjs db generate    # schema -> SQL migration (drizzle-kit generate)
+webjs db migrate     # apply pending migrations (drizzle-kit migrate)
+webjs db push        # push the schema straight to the dev DB (drizzle-kit push)
+webjs db studio      # visual DB browser (drizzle-kit studio)
+webjs db seed        # run db/seed.server.ts</pre>
   `;
 }
