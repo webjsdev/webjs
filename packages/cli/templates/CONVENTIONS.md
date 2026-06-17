@@ -388,6 +388,7 @@ modules/
 ```
 
 **Rules:**
+- **Prefer the `#` root alias over deep relatives.** Write `import { db } from '#db/connection.server.ts'`, `import { Button } from '#components/ui/button.ts'`, `#lib/...`, `#modules/...` instead of `../../../`. It is native `package.json "imports"` (the single `"#*": "./*"` key covers every top-level folder, so a new folder needs no config), resolved by Node and Bun with no build step. There is no slash after the `#` (`#lib/...`, not `#/lib/...`). A same-directory import stays relative (`./sibling.ts`).
 - One exported function per server action/query file
 - Server actions need BOTH the `.server.{js,ts}` extension AND a `'use server'` directive at the top. Extension alone marks a server-only utility (source-protected, not RPC-callable). Directive alone is a lint violation (`use-server-needs-extension`).
 - Components must call `Class.register('tag')`
