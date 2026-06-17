@@ -69,9 +69,9 @@ export function Counter({ start }: { start: number }) {
     <p>The webjs equivalent. The page is an async server function that reads data through a <code>.server</code> query, and the interactive part is a web component that hydrates:</p>
     <pre>// modules/stats/queries/get-stats.server.ts  (webjs: the server boundary)
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 export async function getStats() {
-  return prisma.stat.findFirst();
+  return db.query.stats.findFirst();
 }
 
 // app/dashboard/page.ts  (webjs: an async page function, no hydration)

@@ -49,13 +49,15 @@ const USAGE = `webjs commands:
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
-                                                  (only 3 templates exist. default: full-stack with Prisma+SQLite)
+  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--no-install]  Scaffold a new webjs app
+                                                  (only 3 templates exist. default: full-stack, Drizzle, --db sqlite)
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
-  webjs db generate                               Run \`prisma generate\`
-  webjs db migrate [name]                         Run \`prisma migrate dev\`
-  webjs db studio                                 Run \`prisma studio\`
+  webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
+  webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
+  webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
+  webjs db studio                                 Open the database browser (drizzle-kit studio)
+  webjs db seed                                   Run the app's db/seed.server.ts
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
@@ -134,14 +136,9 @@ async function main() {
         break;
       }
 
-      // (#550 superseded the #452 prisma-generate hint: `webjs dev` now RUNS
-      // the configured `webjs.dev.before` step `prisma generate` itself, below,
-      // so a bare `webjs dev` self-generates the client instead of only warning
-      // about it.)
-
       // Run the configured dev orchestration in the PARENT only (#550), so a
-      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot, e.g.
-      // `prisma generate`) runs to completion first; `dev.parallel` (Tailwind's
+      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot tasks)
+      // runs to completion first; `dev.parallel` (Tailwind's
       // watcher, etc.) then runs as children alongside the server. Spawned once
       // here, NOT in the watch child (which re-execs on every restart). Torn
       // down on exit so a watcher cannot outlive the server.
@@ -198,10 +195,28 @@ async function main() {
     case 'db': {
       const sub = rest[0];
       const args = rest.slice(1);
-      const map = { generate: ['generate'], migrate: ['migrate', 'dev', ...args], studio: ['studio'] };
-      const prismaArgs = map[sub];
-      if (!prismaArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
-      const child = spawn('npx', ['prisma', ...prismaArgs], { stdio: 'inherit', cwd: process.cwd() });
+      // `webjs db seed` runs the app's own seed script directly (not a
+      // drizzle-kit command); Drizzle has no codegen, so there is no
+      // `generate`-the-client step, only schema-to-SQL `generate`.
+      if (sub === 'seed') {
+        const { existsSync } = await import('node:fs');
+        const seedFile = ['db/seed.server.ts', 'db/seed.server.js']
+          .map((p) => join(process.cwd(), p)).find(existsSync);
+        if (!seedFile) {
+          console.error('No db/seed.server.ts found in this app.');
+          process.exit(1);
+        }
+        const child = spawn(process.execPath, [seedFile], { stdio: 'inherit', cwd: process.cwd() });
+        child.on('exit', (code) => process.exit(code ?? 0));
+        break;
+      }
+      // generate (schema -> SQL migration), migrate (apply), push (dev
+      // schema sync), studio. All wrap drizzle-kit; the verbose name stays
+      // hidden behind `webjs db`.
+      const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
+      const kitArgs = map[sub];
+      if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
+      const child = spawn('npx', ['drizzle-kit', ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
@@ -456,18 +471,18 @@ async function main() {
         console.error(`Error: unknown template '${template}'.
 
 Only three scaffolds exist:
-  full-stack   (default): pages + components + API + Prisma/SQLite.
+  full-stack   (default): pages + components + API + Drizzle/SQLite.
                 Pick this for any app the user describes in product terms
                 (todo app, blog, dashboard, marketplace, social feed, …).
   api          backend-only: route handlers + modules, no pages/SSR.
                 Pick this only if the user explicitly asks for an HTTP/JSON
                 API with no UI.
-  saas         auth + login/signup + protected dashboard + Prisma User
+  saas         auth + login/signup + protected dashboard + Drizzle User
                 model. Pick this only if the user explicitly asks for auth
                 or a SaaS-shaped product.
 
 The scaffold is a starting point. Replace the example layout/page/
-components/schema with the actual app the user requested. Use Prisma +
+components/schema with the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
@@ -475,8 +490,10 @@ Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
       const noInstall = rest.includes('--no-install');
+      // --db picks the database dialect: sqlite (default) or postgres.
+      const db = flag(rest, '--db', 'sqlite');
       const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
+      await scaffoldApp(name, process.cwd(), { template, db, install: !noInstall });
       break;
     }
     case 'vendor': {

@@ -45,7 +45,7 @@ function freePort() {
 
 const skip =
   !existsSync(resolve(BLOG_DIR, 'package.json')) ||
-  !existsSync(resolve(BLOG_DIR, 'prisma', 'dev.db'));
+  !existsSync(resolve(BLOG_DIR, 'db', 'dev.db'));
 
 describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB not present' }, () => {
   let proc, baseUrl;
@@ -58,8 +58,8 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
       cwd: BLOG_DIR,
       env: { ...process.env, WEBJS_TS_VERBOSE: '0' },
       // ignore stdio so the OS doesn't fill an unread pipe buffer and
-      // block webjs dev's output. The Prisma deprecation warnings + request
-      // logs would otherwise saturate ~64KB and freeze the child.
+      // block webjs dev's output. The request logs would otherwise
+      // saturate ~64KB and freeze the child.
       stdio: 'ignore',
       // Detach so SIGTERM in `after()` cleans up the whole process group
       // (webjs dev spawns its own node --watch child).

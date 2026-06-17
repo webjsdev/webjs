@@ -130,5 +130,5 @@ test('does NOT double-flag a use-server file missing the .server extension', asy
 test('does NOT flag a server-only utility (.server with NO use-server directive)', async () => {
   // A `.server.ts` without the directive is a server-only util; it may export
   // anything (a singleton, a const). Not subject to this rule.
-  assert.equal(flagged(await run({ 'db.server.ts': `export const prisma = { connect() {} };\n` })), false);
+  assert.equal(flagged(await run({ 'db.server.ts': `export const db = { connect() {} };\n` })), false);
 });

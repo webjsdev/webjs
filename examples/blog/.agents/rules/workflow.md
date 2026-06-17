@@ -7,10 +7,10 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
 
 ## Persistence + scaffold rules (non-negotiable)
 
-- **Use Prisma + SQLite for data, never JSON files.** It is already wired up
-  (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`). For
+- **Use Drizzle + SQLite for data, never JSON files.** It is already wired up
+  (`db/schema.server.ts`, `db/connection.server.ts`, `npm run db:generate` + `npm run db:migrate`). For
   ANY data the app stores (todos, posts, messages, products, comments), define
-  a Prisma model. NEVER create `data/*.json`, `db.json`, or any JSON file as a
+  a Drizzle table. NEVER create `data/*.json`, `db.json`, or any JSON file as a
   fake database. NEVER use module-scope arrays / Maps as a substitute. NEVER
   use localStorage for app data. These are project conventions in
   CONVENTIONS.md (a JSON file used as a database resets on reload and
@@ -117,12 +117,12 @@ self-review loop.
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
 - One function per server action file (`*.server.ts`).
-- Server-only code (`@prisma/client`, `node:*`, anything that needs Node APIs)
+- Server-only code (a DB driver like `better-sqlite3`/`pg`, `node:*`, anything that needs Node APIs)
   goes only in `.server.{js,ts}` files, `route.ts` handlers, or
   `middleware.ts`. Never in pages, layouts, or components. Wrap the access in
   a `.server.{js,ts}` file; the framework rewrites that import into an RPC
   stub for the browser. `lib/` holds both server-only infra
-  (`lib/prisma.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
+  (the DB in `db/*.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
   `cn`); follow the same rule per file.
 - Directives are deliberately minimal: only `unsafeHTML`, `live`, and `repeat`
   ship. Use plain template-literal expressions

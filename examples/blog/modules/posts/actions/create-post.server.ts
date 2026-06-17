@@ -1,6 +1,7 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 import { slugify, formatPost } from '../utils/slugify.ts';
 import { currentUser } from '../../auth/queries/current-user.server.ts';
 import { listPosts } from '../queries/list-posts.server.ts';
@@ -31,12 +32,13 @@ export async function createPost(
   const base = slugify(title) || 'post';
   let slug = base;
   let n = 1;
-  while (await prisma.post.findUnique({ where: { slug } })) slug = `${base}-${++n}`;
+  while (await db.query.posts.findFirst({ where: { slug }, columns: { id: true } })) {
+    slug = `${base}-${++n}`;
+  }
 
-  const row = await prisma.post.create({
-    data: { title, body, slug, authorId: me.id },
-    include: { author: { select: { name: true, email: true } } },
-  });
+  // insert().returning() yields columns only (no relations), so splice the
+  // author we already hold (the current user) for formatPost.
+  const [row] = await db.insert(posts).values({ title, body, slug, authorId: me.id }).returning();
   await listPosts.invalidate();
-  return { success: true, data: formatPost(row) };
+  return { success: true, data: formatPost({ ...row, author: { name: me.name, email: me.email } }) };
 }

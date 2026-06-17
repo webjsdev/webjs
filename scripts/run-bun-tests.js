@@ -47,7 +47,8 @@ const DENYLIST = [
   { match: 'packages/server/test/cache/cache-redis.test.js', reason: 'needs a running Redis + an ioredis/redis client, not provisioned in the matrix (skipped on Node too).' },
   { match: 'packages/server/test/websocket/websocket.test.js', reason: 'exercises the node `ws`-library upgrade subsystem directly (node:http createServer + attachWebSocket, which do not interoperate on Bun). The Bun WebSocket path (Bun.serve + the BunWsAdapter, #511) is covered by test/bun/listener.mjs.' },
   { match: 'test/cli/typecheck.test.mjs', reason: 'spawns process.execPath (the webjs CLI typecheck, a Node tsc tool); under the matrix process.execPath is bun, which resolves TypeScript differently, so the Node-tooling assertion does not hold.' },
-  { match: 'packages/server/test/elision/differential-elision.test.js', reason: 'boots the examples/blog app and renders its DB-backed home page, which needs a migrated Prisma dev.db + jspm vendor resolution the matrix job does not provision (only the e2e / in-repo-app jobs do). The elision LOGIC is covered by the other unit tests in elision/; a real app boot on Bun is covered deterministically by test/bun/listener.mjs.' },
+  { match: 'packages/server/test/elision/differential-elision.test.js', reason: 'boots the examples/blog app and renders its DB-backed home page, which needs a migrated Drizzle dev.db + jspm vendor resolution the matrix job does not provision (only the e2e / in-repo-app jobs do). The elision LOGIC is covered by the other unit tests in elision/; a real app boot on Bun is covered deterministically by test/bun/listener.mjs.' },
+  { match: 'test/docs/deployment-secrets.test.mjs', reason: "boots the docs app via createRequestHandler and asserts the rendered /docs/deployment HTML (a docs-CONTENT check, not runtime-sensitive code). The cold boot resolves the docs code-sample bare imports via jspm, which exceeds bun test's 5s default per-test timeout (node --test has no default timeout), the same app-boot + vendor-resolution class as differential-elision. Covered on the Node path by the unit job." },
 ];
 
 /** @param {string} dir @param {string[]} out */
@@ -74,7 +75,7 @@ walk(join(ROOT, 'packages', 'server', 'test'), all);
 const SEP = sep;
 // Exclude browser (needs wtr), e2e (gated), the network-bound vendor suite, and
 // the example-app smoke/probe tests (test/examples/**), which boot a real app
-// that needs a migrated Prisma DB + jspm vendor resolution the matrix job does
+// that needs a migrated Drizzle DB + jspm vendor resolution the matrix job does
 // not provision (the dedicated e2e / in-repo-app CI jobs do; on Bun a real app
 // boot is covered deterministically by the test/bun/*.mjs scripts).
 const excludeSegs = [`${SEP}browser${SEP}`, `${SEP}e2e${SEP}`, `${SEP}vendor${SEP}`, `${SEP}examples${SEP}`];

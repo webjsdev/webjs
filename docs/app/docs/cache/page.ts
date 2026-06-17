@@ -11,10 +11,11 @@ export default function Cache() {
     <p>Wrap any async function with <code>cache()</code> to cache its return value on the server. Same function + same arguments = cached result until TTL expires or you call <code>invalidate()</code>.</p>
 
     <pre>import { cache } from '@webjsdev/server';
+import { db } from '../../db/connection.server.ts';
 
 export const listPosts = cache(
   async () => {
-    return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+    return db.query.posts.findMany({ orderBy: { createdAt: 'desc' } });
   },
   { key: 'posts', ttl: 60 }
 );
@@ -32,9 +33,11 @@ const posts = await listPosts();</pre>
     <p>The cached function has an <code>invalidate()</code> method. Call it after mutations to clear the cache:</p>
 
     <pre>import { listPosts } from '../queries/list-posts.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 export async function createPost(input) {
-  await prisma.post.create({ data: input });
+  await db.insert(posts).values(input);
   await listPosts.invalidate();  // next call to listPosts() will hit DB
 }</pre>
 
@@ -73,7 +76,7 @@ export default async function Blog() {
 import { revalidatePath } from '@webjsdev/server';
 
 export async function publishPost(input) {
-  // ... persist via Prisma ...
+  // ... persist via Drizzle ...
   await revalidatePath('/blog');   // next /blog request re-renders fresh
   return { success: true };
 }</pre>

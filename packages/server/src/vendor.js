@@ -409,7 +409,7 @@ async function jspmCall(installs, provider) {
       // A 5xx/429 is a transient jspm problem worth retrying. A 401/4xx
       // means at least one install is genuinely unresolvable (jspm uses
       // 401 for that): a private / workspace / server-only package (e.g.
-      // @webjsdev/server, @prisma/client) the browser never fetches
+      // @webjsdev/server, better-sqlite3) the browser never fetches
       // anyway. Permanent failures must NOT block readiness.
       const transient = response.status >= 500 || response.status === 429;
       return { ok: false, imports: {}, transient };

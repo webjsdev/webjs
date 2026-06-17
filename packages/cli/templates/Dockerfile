@@ -21,8 +21,9 @@
 # framework AGENTS.md "Secure response headers" section.
 FROM node:24-alpine
 
-# openssl + ca-certificates are required by Prisma's query engine at runtime.
-RUN apk add --no-cache openssl ca-certificates
+# ca-certificates for outbound TLS (e.g. a managed Postgres). better-sqlite3
+# is a prebuilt native module, so no build toolchain is needed here.
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
@@ -35,9 +36,9 @@ RUN npm install --no-audit --no-fund
 # App source. node_modules and local state are excluded via .dockerignore.
 COPY . .
 
-# Generate the Prisma client at build time (every scaffold ships a
-# prisma/schema.prisma). If you remove Prisma from the app, delete this line.
-RUN npx prisma generate
+# Drizzle has no client-codegen step, so there is nothing to build here. The
+# database is migrated at boot via `webjs start` (the `webjs.start.before`
+# step runs `webjs db migrate`). See the CMD note below.
 
 ENV NODE_ENV=production
 # webjs start reads $PORT (default 8080). compose / uncloud / Railway set it.
@@ -56,7 +57,7 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/__webjs/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 
 # `npm start` is a thin alias for `webjs start` (#550). `webjs start` runs the
-# `webjs.start.before` step (`prisma migrate deploy`, idempotent / a no-op with
-# no migrations) IN-PROCESS, then serves on $PORT. `CMD ["webjs", "start"]` is
-# now equivalent: the migrate no longer depends on an npm `prestart` hook.
+# `webjs.start.before` step (`webjs db migrate`, idempotent / a no-op with no
+# pending migrations) IN-PROCESS, then serves on $PORT. `CMD ["webjs", "start"]`
+# is now equivalent: the migrate no longer depends on an npm `prestart` hook.
 CMD ["npm", "start"]

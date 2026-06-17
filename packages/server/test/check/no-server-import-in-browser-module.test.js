@@ -159,7 +159,7 @@ test('a server import that only appears inside a code-example string is NOT flag
 // A code sample shown in the page body; the import below is a STRING, not a
 // real import, and points at a file that does not exist on disk.
 const SAMPLE = [
-  "import { prisma } from '../lib/prisma.server.ts';",
+  "import { db } from '../lib/db.server.ts';",
   "export const x = 1;",
 ];
 export default function DocsPage() {
@@ -403,18 +403,18 @@ export default async function ErrorBoundary() {
 // A code-example `import` written as a plain quoted STRING whose path resolves
 // to a REAL in-repo `.server.ts` must NOT create a graph edge and must NOT be
 // flagged. This is the live false-positive webjs's own docs / website pages hit:
-// a shipping page that shows `import { prisma } from '…lib/prisma.server.ts'` in
+// a shipping page that shows `import { db } from '…lib/db.server.ts'` in
 // a code sample, where that path is a real file. The module-graph scanner now
 // masks string-embedded imports (blankStrings), so the string never becomes an
 // edge; a REAL import statement to the same file still does.
 test('a real-path server import inside a code-example string is NOT flagged', async () => {
   const appDir = await makeApp({
     // A REAL server file the example string names.
-    'lib/prisma.server.ts': `export const prisma = { user: { findMany() { return []; } } };\n`,
+    'lib/db.server.ts': `export const db = { user: { findMany() { return []; } } };\n`,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
     // A shipping page (registers a component) that shows the import in a STRING.
     'app/docs/page.ts': `import '../../modules/workspace/components/crisp-workspace.ts';
-const SAMPLE = "import { prisma } from '../../lib/prisma.server.ts';";
+const SAMPLE = "import { db } from '../../lib/db.server.ts';";
 export default function DocsPage() {
   return \`<pre>\${SAMPLE}</pre><crisp-workspace></crisp-workspace>\`;
 }
@@ -434,12 +434,12 @@ export default function DocsPage() {
 // flags. This proves the string mask did not over-blank real imports.
 test('a real server import statement on a shipping page IS still flagged', async () => {
   const appDir = await makeApp({
-    'lib/prisma.server.ts': `export const prisma = { user: { findMany() { return []; } } };\n`,
+    'lib/db.server.ts': `export const db = { user: { findMany() { return []; } } };\n`,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
-    'app/docs/page.ts': `import { prisma } from '../../lib/prisma.server.ts';
+    'app/docs/page.ts': `import { db } from '../../lib/db.server.ts';
 import '../../modules/workspace/components/crisp-workspace.ts';
 export default async function DocsPage() {
-  const users = prisma.user.findMany();
+  const users = db.user.findMany();
   return \`<crisp-workspace count="\${users.length}"></crisp-workspace>\`;
 }
 `,
@@ -448,7 +448,7 @@ export default async function DocsPage() {
     const violations = await checkConventions(appDir);
     const hits = find(violations, 'docs/page.ts');
     assert.equal(hits.length, 1, 'a real server import statement on a shipping page must still be flagged');
-    assert.ok(hits[0].message.includes('prisma.server.ts'), 'names the real server import');
+    assert.ok(hits[0].message.includes('db.server.ts'), 'names the real server import');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

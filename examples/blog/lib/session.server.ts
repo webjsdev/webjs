@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import type { User } from '@prisma/client';
-import { prisma } from './prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/connection.server.ts';
+import { sessions } from '../db/schema.server.ts';
+import type { User } from '../db/schema.server.ts';
 
 export const SESSION_COOKIE = 'blog_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -15,14 +17,14 @@ export async function createSession(
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await prisma.session.create({ data: { token, userId, expiresAt } });
+  await db.insert(sessions).values({ token, userId, expiresAt });
   return { token, expiresAt };
 }
 
 /** Destroy a session by token. Idempotent. */
 export async function destroySession(token: string | null | undefined): Promise<void> {
   if (!token) return;
-  await prisma.session.deleteMany({ where: { token } });
+  await db.delete(sessions).where(eq(sessions.token, token));
 }
 
 /** Resolve a session token to its user, or null. Expired tokens auto-cleanup. */
@@ -30,13 +32,13 @@ export async function getUserByToken(
   token: string | null | undefined,
 ): Promise<User | null> {
   if (!token) return null;
-  const s = await prisma.session.findUnique({
+  const s = await db.query.sessions.findFirst({
     where: { token },
-    include: { user: true },
+    with: { user: true },
   });
   if (!s) return null;
   if (s.expiresAt <= new Date()) {
-    await prisma.session.delete({ where: { token } }).catch(() => { });
+    try { await db.delete(sessions).where(eq(sessions.token, token)); } catch { /* ignore */ }
     return null;
   }
   return s.user;

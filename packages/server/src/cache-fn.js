@@ -8,7 +8,7 @@
  * import { cache } from '@webjsdev/server';
  *
  * export const listPosts = cache(
- *   async () => prisma.post.findMany({ orderBy: { createdAt: 'desc' } }),
+ *   async () => db.query.posts.findMany({ orderBy: { createdAt: 'desc' } }),
  *   { key: 'posts', ttl: 60 }
  * );
  *
@@ -107,7 +107,7 @@ export function cache(fn, opts) {
    *
    * ```js
    * export async function createPost(input) {
-   *   await prisma.post.create({ data: input });
+   *   await db.insert(posts).values(input);
    *   await listPosts.invalidate();
    * }
    * ```

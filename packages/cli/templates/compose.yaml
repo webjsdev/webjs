@@ -12,9 +12,9 @@ services:
       - "8080:8080"
     environment:
       PORT: 8080
-      # SQLite on a volume for local dev. For production, point DATABASE_URL at
-      # your managed Postgres and switch prisma/schema.prisma's provider to
-      # "postgresql".
+      # SQLite on a volume for local dev. For production, scaffold with
+      # --db postgres (or swap db/columns.server.ts + db/connection.server.ts
+      # for the pg variant) and point DATABASE_URL at your managed Postgres.
       DATABASE_URL: file:/data/dev.db
       # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
       AUTH_SECRET: ${AUTH_SECRET:-change-me-please-at-least-32-characters!}

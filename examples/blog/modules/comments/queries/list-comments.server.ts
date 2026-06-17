@@ -1,14 +1,14 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 import { formatComment } from '../utils/format.ts';
 import type { CommentFormatted } from '../types.ts';
 
 export async function listComments(input: { postId: number }): Promise<CommentFormatted[]> {
-  const rows = await prisma.comment.findMany({
+  const rows = await db.query.comments.findMany({
     where: { postId: input.postId },
     orderBy: { createdAt: 'asc' },
-    include: { author: { select: { name: true, email: true } } },
+    with: { author: { columns: { name: true, email: true } } },
   });
   return rows.map(formatComment);
 }

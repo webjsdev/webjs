@@ -75,8 +75,8 @@ function assertNoSourceLeak(text) {
   // that only show up in the scaffolded fixture source.
   assert.ok(!/SECRET_DB_PASSWORD/.test(text),
     `stub leaked the source: found SECRET_DB_PASSWORD:\n${text.slice(0, 400)}`);
-  assert.ok(!/fakePrismaClient/.test(text),
-    `stub leaked the source: found fakePrismaClient reference`);
+  assert.ok(!/fakeDbClient/.test(text),
+    `stub leaked the source: found fakeDbClient reference`);
 }
 
 test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, async () => {
@@ -87,7 +87,7 @@ test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, a
     'modules/posts/queries/list-posts.server.ts':
       `'use server';\n` +
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
-      `const fakePrismaClient = () => ({ findMany: () => [] });\n` +
+      `const fakeDbClient = () => ({ findMany: () => [] });\n` +
       `export async function listPosts() { return []; }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -105,16 +105,16 @@ test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, a
 test(`guardrail: .server.ts without 'use server' returns throw-at-load stub`, async () => {
   const appDir = makeApp({
     'app/page.ts':
-      `import { prisma } from '../lib/prisma.server.ts';\n` +
-      `export default function P() { return prisma; }\n`,
-    'lib/prisma.server.ts':
+      `import { db } from '../lib/db.server.ts';\n` +
+      `export default function P() { return db; }\n`,
+    'lib/db.server.ts':
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
-      `const fakePrismaClient = () => ({ findMany: () => [] });\n` +
-      `export const prisma = fakePrismaClient();\n`,
+      `const fakeDbClient = () => ({ findMany: () => [] });\n` +
+      `export const db = fakeDbClient();\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request(
-    'http://localhost/lib/prisma.server.ts'
+    'http://localhost/lib/db.server.ts'
   ));
   assert.equal(resp.status, 200);
   const text = await resp.text();

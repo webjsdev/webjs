@@ -9,7 +9,7 @@ import { readTextBounded, BodyLimitError, DEFAULT_MAX_BODY_BYTES } from './body-
  *   // GET /api/posts
  *   import { json } from '@webjsdev/server';
  *   export async function GET() {
- *     return json(await listPosts());   // plain Prisma rows with Date columns
+ *     return json(await listPosts());   // plain Drizzle rows with Date columns
  *   }
  *
  * The helper reads the in-flight Request from the AsyncLocalStorage

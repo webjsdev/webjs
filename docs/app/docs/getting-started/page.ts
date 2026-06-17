@@ -22,25 +22,25 @@ webjs create my-app
 cd my-app && npm run dev
 # → http://localhost:8080</pre>
 
-    <p>Every scaffold ships with Prisma + SQLite wired up (<code>prisma/schema.prisma</code> with an example <code>User</code> model and <code>lib/prisma.server.ts</code> singleton). Run <code>npm run db:migrate</code> the first time to create <code>prisma/dev.db</code>.</p>
+    <p>Every scaffold ships with Drizzle + SQLite wired up (<code>db/schema.server.ts</code> with an example <code>User</code> model and <code>db/connection.server.ts</code> exporting the <code>db</code> connection). Run <code>npm run db:migrate</code> the first time to create <code>db/dev.db</code>.</p>
 
     <h2>Create a New App</h2>
 
     <h3>Using the scaffold</h3>
-    <pre># full-stack app (pages + API + components + Prisma/SQLite)
+    <pre># full-stack app (pages + API + components + Drizzle/SQLite)
 webjs create my-app
 
 # backend-only API (route handlers + modules, no pages/components/SSR)
 webjs create my-api --template api
 
-# SaaS starter (auth + dashboard + Prisma User model + modules)
+# SaaS starter (auth + dashboard + Drizzle User model + modules)
 webjs create my-app --template saas</pre>
 
-    <p><strong>For AI agents:</strong> only those three templates exist, and the CLI rejects any other <code>--template</code> value. Default to full-stack with Prisma + SQLite for any product app (todo, blog, dashboard, marketplace, social, e-commerce…). Pick <code>--template api</code> only if the user explicitly asks for a backend-only API with no UI. Pick <code>--template saas</code> only if the user explicitly asks for auth / login / accounts. The scaffold is a starting point. Replace the example layout, page, and <code>User</code> model with the app the user actually asked for. Use Prisma for any persisted data, never JSON files, in-memory arrays, or localStorage. When AGENTS.md doesn't cover what you need, the full hosted docs are at <a href="https://docs.webjs.com">docs.webjs.com</a>.</p>
+    <p><strong>For AI agents:</strong> only those three templates exist, and the CLI rejects any other <code>--template</code> value. Default to full-stack with Drizzle + SQLite for any product app (todo, blog, dashboard, marketplace, social, e-commerce…). Pick <code>--template api</code> only if the user explicitly asks for a backend-only API with no UI. Pick <code>--template saas</code> only if the user explicitly asks for auth / login / accounts. The scaffold is a starting point. Replace the example layout, page, and <code>User</code> model with the app the user actually asked for. Use Drizzle for any persisted data, never JSON files, in-memory arrays, or localStorage. When AGENTS.md doesn't cover what you need, the full hosted docs are at <a href="https://docs.webjs.com">docs.webjs.com</a>.</p>
 
     <p>The <code>--template api</code> scaffold generates thin route handlers that wrap typed server actions. Business logic lives in <code>modules/</code>. Routes just import and call the action/query, giving you file-based routing for URL structure plus type-safe server actions for logic.</p>
 
-    <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Prisma User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>lib/{auth,prisma,password}.ts</code>).</p>
+    <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Drizzle User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>db/connection.server.ts</code>, <code>lib/{auth,password}.ts</code>).</p>
 
     <h3>Manual setup</h3>
     <p>To start from scratch without the scaffold, create a directory with this structure:</p>
@@ -122,7 +122,7 @@ Counter.register('my-counter');</pre>
 
     <p>
       <strong><code>npm run dev</code> and a bare <code>webjs dev</code> are
-      equivalent.</strong> The scaffold puts <code>prisma generate</code> under
+      equivalent.</strong> The scaffold puts <code>webjs db generate</code> under
       <code>webjs.dev.before</code> in the <code>webjs</code> block of
       package.json, and <code>webjs dev</code> runs it (and any
       <code>webjs.dev.parallel</code> watcher) before serving. So

@@ -13,9 +13,9 @@ cd my-app && npm run dev
 ## Templates
 
 ```sh
-npm create webjs@latest my-app                       # default: full-stack (pages + components + API + Prisma/SQLite)
+npm create webjs@latest my-app                       # default: full-stack (pages + components + API + Drizzle/SQLite)
 npm create webjs@latest my-api  -- --template api    # backend-only (route handlers + modules, no SSR/UI)
-npm create webjs@latest my-saas -- --template saas   # auth + login/signup + protected dashboard + Prisma User model
+npm create webjs@latest my-saas -- --template saas   # auth + login/signup + protected dashboard + Drizzle User model
 ```
 
 (The `--` separator before flags is npm's pass-through convention. Plain `npx create-webjs@latest my-app --template api` works without the separator.)

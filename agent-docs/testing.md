@@ -161,7 +161,7 @@ its `test/` dir and runs it through its own `webjs test` script (the website's
 not discover these, so a dedicated `.github/workflows/ci.yml` job, **In-repo app
 tests (website + blog)**, runs `npm test --workspace=@webjsdev/website` and
 `npm test --workspace=@webjsdev/example-blog` (with Playwright installed for the
-website browser tests and the Prisma DB prepared for the blog, the same setup
+website browser tests and the SQLite DB prepared for the blog, the same setup
 the `unit` + `e2e` jobs use). It is a required status check, so a regression in
 an app's tests gates the merge. The app test dirs are not walked by the root
 runner, so the framework-package tests never double-run. `docs` and the

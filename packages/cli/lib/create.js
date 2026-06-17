@@ -249,6 +249,15 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   const isApi = template === 'api';
   const isSaas = template === 'saas';
+
+  // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
+  // the schema/queries/actions are identical across dialects, only db/columns
+  // + db/connection + the driver dep differ.
+  const dialect = opts.db || 'sqlite';
+  const VALID_DIALECTS = ['sqlite', 'postgres'];
+  if (!VALID_DIALECTS.includes(dialect)) {
+    throw new Error(`Unknown --db '${dialect}'. Only ${VALID_DIALECTS.join(' / ')} are supported.`);
+  }
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -264,7 +273,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'modules',
     'lib',
     'public',
-    'prisma',
+    'db',
     'test/unit',
     'test/e2e',
   ];
@@ -278,10 +287,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     type: 'module',
     private: true,
     scripts: {
-      // No `predev` / `prestart` hooks (#550): the one-shot `prisma generate` /
-      // `migrate deploy` orchestration lives in the `webjs` block below and runs
-      // INSIDE `webjs dev` / `webjs start`, so a bare `webjs dev` is not a
-      // degraded run and `npm run dev` (a thin alias) behaves identically.
+      // No `predev` / `prestart` hooks (#550): the `webjs` block below holds
+      // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
+      // so `npm run start` (a thin alias) behaves identically. Drizzle has no
+      // codegen, so there is no dev `before` step.
       dev: 'webjs dev',
       start: 'webjs start',
       test: 'webjs test',
@@ -294,18 +303,24 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
       // (its env-drift + network pin-freshness checks would make CI flaky).
       doctor: 'webjs doctor',
-      'db:migrate': 'webjs db migrate',
       'db:generate': 'webjs db generate',
+      'db:migrate': 'webjs db migrate',
+      'db:push': 'webjs db push',
       'db:studio': 'webjs db studio',
+      'db:seed': 'webjs db seed',
     },
     dependencies: {
-      '@prisma/client': '^6.0.0',
+      // Drizzle ORM (no codegen, no engine binary). Pinned to the 1.0 line
+      // for relations v2. The SQLite/Postgres driver below is dialect-picked.
+      'drizzle-orm': '^1.0.0-rc.3',
+      ...(dialect === 'postgres' ? { pg: '^8.13.0' } : { 'better-sqlite3': '^12.11.1' }),
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
       '@webjsdev/server': 'latest',
     },
     devDependencies: {
-      prisma: '^6.0.0',
+      'drizzle-kit': '^1.0.0-rc.3',
+      ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
       // to type-check the app.
@@ -332,16 +347,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // into components/ui/ (they import @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
     },
-    // Dev/start task orchestration (#550). `webjs dev`/`start` read these and
-    // run them in-process, replacing the old `predev`/`prestart` npm hooks, so
-    // a bare `webjs dev` is not a degraded run (no ungenerated Prisma client)
-    // and `npm run dev`/`start` (thin aliases above) behave identically. The
-    // scaffold uses the Tailwind browser runtime (no CSS build step), so there
-    // is no dev `parallel` watcher here; an app that adds the Tailwind CLI puts
-    // its `--watch` command under `webjs.dev.parallel`.
+    // Start task orchestration (#550). `webjs start` reads `start.before` and
+    // runs it in-process, so `npm run start` (a thin alias above) behaves
+    // identically. Drizzle has no codegen, so there is no dev `before` step;
+    // production applies pending migrations via `webjs db migrate`. The scaffold
+    // uses the Tailwind browser runtime (no CSS build step), so there is no dev
+    // `parallel` watcher here; an app that adds the Tailwind CLI puts its
+    // `--watch` command under `webjs.dev.parallel`.
     webjs: {
-      dev: { before: ['prisma generate'] },
-      start: { before: ['prisma migrate deploy'] },
+      // Drizzle has no codegen, so there is no dev `before` step. Production
+      // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
+      start: { before: ['webjs db migrate'] },
     },
   }, null, 2) + '\n');
 
@@ -394,7 +410,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'middleware.ts',
       '.webjs/routes.d.ts',
     ],
-    exclude: ['node_modules', '.webjs/vendor', 'prisma/migrations'],
+    exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],
   }, null, 2) + '\n');
 
   // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---
@@ -411,8 +427,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Environment variables
     '.env.example',
     // Project-level gitignore (node_modules, .webjs, .env, OS junk).
-    // The Prisma dev.db rule is appended programmatically below so it
-    // only appears in templates that actually use SQLite.
+    // The SQLite dev.db rule is appended programmatically below so it
+    // only appears for the sqlite dialect.
     '.gitignore',
     // Git hooks (blocks commits on main)
     '.hooks/pre-commit',
@@ -484,62 +500,172 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   const preCommitPath = join(appDir, '.hooks', 'pre-commit');
   if (existsSync(preCommitPath)) await chmod(preCommitPath, 0o755);
 
-  // --- Prisma schema + client singleton (all templates) ---
+  // --- Drizzle db layer (all templates), dialect-selected (#563) ---
+  //
+  // The schema, queries, and actions are identical across dialects; only
+  // db/columns.server.ts + db/connection.server.ts + drizzle.config.ts + the
+  // driver dep differ. Switching dialect (e.g. SQLite in dev, Postgres in
+  // prod) is a config + module swap, not a code rewrite. Pinned to drizzle-orm
+  // 1.0.0-rc.3 (relations v2). See research #562.
 
-  await writeFile(join(appDir, 'prisma', 'schema.prisma'), `generator client {
-  provider = "prisma-client-js"
-}
+  const columnsSqlite = `import { sqliteTableCreator, integer, text, real, blob, index as _index } from 'drizzle-orm/sqlite-core';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { getTableName, type Table } from 'drizzle-orm';
 
-datasource db {
-  // Defaults to SQLite at ./prisma/dev.db. Switch to postgresql / mysql
-  // by changing the provider + DATABASE_URL in .env.
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
+// Raw drizzle builders, re-exported so the schema reads like drizzle.
+export { text, integer, real, blob };
+
+// Casing factory: column keys map to snake_case SQL names.
+export const table = sqliteTableCreator((name) => name, 'snake_case');
+
+export const pk = () => integer().primaryKey({ autoIncrement: true });
+export const uuidPk = () => text().primaryKey().$defaultFn(() => crypto.randomUUID());
+export const uuid = () => text();
+export const bool = () => integer({ mode: 'boolean' });
+export const timestamp = () => integer({ mode: 'timestamp_ms' });
+export const createdAt = () => timestamp().notNull().defaultNow();
+export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
+
+// Anonymous-style index helper (rc.3 requires a name; this derives a
+// table-qualified one, matching drizzle-kit's own convention).
+export const index = (...cols: SQLiteColumn[]) =>
+  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [SQLiteColumn, ...SQLiteColumn[]]));
+`;
+
+  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
+import type { PgColumn } from 'drizzle-orm/pg-core';
+import { getTableName, type Table } from 'drizzle-orm';
+
+export { text, integer, real };
+
+export const table = pgTableCreator((name) => name, 'snake_case');
+
+export const pk = () => serial().primaryKey();
+export const uuidPk = () => pgUuid().primaryKey().defaultRandom();
+export const uuid = () => pgUuid();
+export const bool = () => boolean();
+export const timestamp = () => pgTimestamp({ withTimezone: true });
+export const createdAt = () => timestamp().notNull().defaultNow();
+export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
+
+export const index = (...cols: PgColumn[]) =>
+  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [PgColumn, ...PgColumn[]]));
+`;
+
+  await writeFile(join(appDir, 'db', 'columns.server.ts'), dialect === 'postgres' ? columnsPg : columnsSqlite);
+
+  // Example schema (dialect-agnostic). Replace the User model with your own.
+  await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
+import { table, pk, text, createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+export const users = table('users', {
+  id: pk(),
+  email: text().notNull().unique(),
+  name: text(),
+  createdAt: createdAt(),
+});
+
+// Relations live here (one defineRelations for the whole schema). Empty
+// for now; add per-model relations as your schema grows.
+export const relations = defineRelations({ users }, () => ({}));
+
+// Derived types, never hand-written.
+export type User = typeof users.$inferSelect;
+`);
+
+  const connSqlite = `import { isAbsolute, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as schema from './schema.server.ts';
+
+// The only file that opens the driver. Runtime-neutral: native bun:sqlite on
+// Bun, better-sqlite3 on Node. Cached on globalThis across dev reloads.
+// A relative SQLite path resolves against the app root (the parent of db/), not
+// process.cwd(), so the connection works under \`webjs dev\` AND when the app is
+// embedded via createRequestHandler from a different working directory.
+const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const raw = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
+const url = raw === ':memory:' || isAbsolute(raw) ? raw : resolve(appRoot, raw);
+const g = globalThis as unknown as { __webjs_db?: unknown };
+
+async function open() {
+  if ((globalThis as { Bun?: unknown }).Bun) {
+    const { Database } = await import('bun:sqlite');
+    const { drizzle } = await import('drizzle-orm/bun-sqlite');
+    return drizzle({ client: new Database(url), relations: schema.relations });
+  }
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  return drizzle({ client: new Database(url), relations: schema.relations });
 }
+
+export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;
+`;
+
+  const connPg = `import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema.server.ts';
+
+// The only file that opens the driver. Cached on globalThis across dev reloads.
+const g = globalThis as unknown as { __webjs_db?: unknown };
+function open() {
+  return drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }), relations: schema.relations });
+}
+export const db = (g.__webjs_db ??= open()) as ReturnType<typeof open>;
+`;
+
+  await writeFile(join(appDir, 'db', 'connection.server.ts'), dialect === 'postgres' ? connPg : connSqlite);
+
+  // drizzle-kit config (root, must be this exact filename). DB url from env.
+  await writeFile(join(appDir, 'drizzle.config.ts'), dialect === 'postgres'
+    ? `import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  dialect: 'postgresql',
+  schema: './db/schema.server.ts',
+  out: './db/migrations',
+  dbCredentials: { url: process.env.DATABASE_URL! },
+});
+`
+    : `import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  dialect: 'sqlite',
+  schema: './db/schema.server.ts',
+  out: './db/migrations',
+  dbCredentials: { url: process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db' },
+});
 `);
 
-  await writeFile(join(appDir, 'lib', 'prisma.server.ts'), `/**
- * Prisma client singleton. The \`globalThis\` trick keeps a single
- * instance across dev-server module reloads, so we don't open a new
- * DB connection on every file change.
- */
-import { PrismaClient } from '@prisma/client';
-
-const g = globalThis as unknown as { __prisma?: PrismaClient };
-
-export const prisma = g.__prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== 'production') g.__prisma = prisma;
-`);
-
-  // Env vars: append DATABASE_URL to the .env.example the template
-  // already copied (if present). The scaffold's root .env.example
-  // lists auth secrets etc.; we just add the DB line idempotently.
+  // Env vars: append DATABASE_URL to the .env.example the template already
+  // copied (if present), idempotently.
+  const dbUrlLine = dialect === 'postgres'
+    ? 'DATABASE_URL=postgres://user:password@localhost:5432/' + name.replace(/[^a-z0-9_]/gi, '_')
+    : 'DATABASE_URL=file:./db/dev.db';
   const envExample = join(appDir, '.env.example');
   if (existsSync(envExample)) {
-    const cur = await readFile(envExample, 'utf8');
-    if (!cur.includes('DATABASE_URL')) {
-      await writeFile(envExample, cur.replace(/\n?$/, '\n') + '\nDATABASE_URL=file:./prisma/dev.db\n');
+    let cur = await readFile(envExample, 'utf8');
+    // Replace any existing DATABASE_URL line so it is dialect-correct; else append.
+    if (/^DATABASE_URL=.*$/m.test(cur)) {
+      cur = cur.replace(/^DATABASE_URL=.*$/m, dbUrlLine);
+    } else {
+      cur = cur.replace(/\n?$/, '\n') + '\n' + dbUrlLine + '\n';
     }
+    await writeFile(envExample, cur);
   } else {
-    await writeFile(envExample, 'DATABASE_URL=file:./prisma/dev.db\n');
+    await writeFile(envExample, dbUrlLine + '\n');
   }
 
-  // .gitignore the generated SQLite file.
-  const gitignore = join(appDir, '.gitignore');
-  const gitignoreExtra = '\n# SQLite dev database\nprisma/dev.db\nprisma/dev.db-journal\n';
-  if (existsSync(gitignore)) {
-    const cur = await readFile(gitignore, 'utf8');
-    if (!cur.includes('prisma/dev.db')) await writeFile(gitignore, cur + gitignoreExtra);
-  } else {
-    await writeFile(gitignore, 'node_modules\n.webjs\n' + gitignoreExtra);
+  // .gitignore the generated SQLite file (sqlite only; postgres has no local file).
+  if (dialect !== 'postgres') {
+    const gitignore = join(appDir, '.gitignore');
+    const gitignoreExtra = '\n# SQLite dev database\ndb/dev.db\ndb/dev.db-journal\ndb/dev.db-*\n';
+    if (existsSync(gitignore)) {
+      const cur = await readFile(gitignore, 'utf8');
+      if (!cur.includes('db/dev.db')) await writeFile(gitignore, cur + gitignoreExtra);
+    } else {
+      await writeFile(gitignore, 'node_modules\n.webjs\n' + gitignoreExtra);
+    }
   }
 
   // --- App files (template-specific) ---
@@ -1032,7 +1158,7 @@ ThemeToggle.register('theme-toggle');
 `);
   } // end if (!isApi)
 
-  // --- SaaS template extras: auth, dashboard, prisma ---
+  // --- SaaS template extras: auth, dashboard, drizzle User model ---
   if (isSaas) {
     const { writeSaasFiles } = await import('./saas-template.js');
     await writeSaasFiles(appDir);
@@ -1069,9 +1195,9 @@ ThemeToggle.register('theme-toggle');
                     dialog,form,field,switch,checkbox}.ts
     components/theme-toggle.ts
     modules/auth/{actions,queries,types.ts}
-    lib/{auth,prisma,password}.server.ts
+    lib/{auth,password}.server.ts
     lib/utils/cn.ts                      ← cn() helper for ui-* components
-    prisma/schema.prisma                 ← User model
+    db/{schema,columns,connection}.server.ts  ← Drizzle (User model)
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   } else {
@@ -1109,10 +1235,10 @@ For AI agents, read this before editing scaffolded files:
     no-scaffold-placeholder violations (app/page.ts, app/layout.ts).
     That is the signal to replace the example content. Delete each
     marker comment line as you do, and the check goes green.
-  • Use Prisma + SQLite for app data. It's already wired up. Define
-    real models in prisma/schema.prisma and run \`webjs db migrate\`.
-    NEVER store app data in JSON files, in-memory arrays, or
-    localStorage as a substitute for the database.
+  • Use Drizzle + SQLite for app data. It's already wired up. Define
+    real models in db/schema.server.ts, then run \`webjs db generate\`
+    and \`webjs db migrate\`. NEVER store app data in JSON files,
+    in-memory arrays, or localStorage as a substitute for the database.
   • Only three scaffolds exist: full-stack (default), api, saas. Don't
     invent template names. If you need a different kind of app, pick
     the closest scaffold and adapt it.
@@ -1142,11 +1268,12 @@ For AI agents, read this before editing scaffolded files:
   // to "dev server up" in one command. The full-stack and saas
   // templates ship with @webjsdev/ui already initialised; the api
   // template has no UI but may add one later. Saas needs a one-time
-  // prisma migrate before the first run (the example User model wants
-  // its table to exist).
+  // generate + migrate before the first run (the example User model wants
+  // its table to exist). Drizzle splits Prisma's `migrate dev` into
+  // `db:generate` (schema to SQL) then `db:migrate` (apply).
   const installSegment = installed ? '' : `${pm} install && `;
-  const prismaSegment = isSaas ? `npx prisma migrate dev --name init && ` : '';
-  const runCommand = `cd ${name} && ${installSegment}${prismaSegment}${pm} run dev`;
+  const dbSegment = isSaas ? `${pm} run db:generate && ${pm} run db:migrate && ` : '';
+  const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs
   // <cmd>` would fetch THAT package instead of ours when run outside

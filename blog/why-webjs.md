@@ -37,7 +37,7 @@ The features are comparable. webjs ships:
 - Client router that preserves layout DOM across navigations (no white flash)
 - Built-in auth, sessions, cookies, cache, and rate limiting, all sharing one pluggable store
 - WebSockets on the same route file
-- Prisma + SQLite (or PostgreSQL, MySQL) configured out of the box
+- Drizzle + SQLite (or Postgres) configured out of the box
 - Tailwind CSS configured out of the box
 - A component library (`@webjsdev/ui`) with `webjs ui add button card dialog`
 
@@ -78,7 +78,7 @@ None of this is a special-case for AI tools. It is what you get when you build a
 
 The scaffold ships with sensible defaults so you can write features instead of integrating libraries:
 
-- **Database:** Prisma + SQLite (change one line in `schema.prisma` to swap to Postgres or MySQL).
+- **Database:** Drizzle + SQLite (swap one file, `db/columns.server.ts`, to move the same schema and queries to Postgres).
 - **Styling:** Tailwind via the CLI (no browser runtime; CSS is built at startup, served as a static file).
 - **Auth:** built-in `createAuth()` with Google, GitHub, and Credentials providers.
 - **Server actions:** a `.server.ts` file with `'use server'` plus an import from client code, rewritten at request time into a typed RPC stub.
@@ -102,7 +102,7 @@ Auto-installs dependencies. The scaffold lands you with:
 - `AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, and per-tool agent configs
 - A pre-commit hook that blocks commits to `main`, runs `npm test`, and auto-generates changelog entries on version bumps
 - `@webjsdev/ui` installed and ready (`webjs ui add button card dialog`)
-- A `.env.example` and a Prisma schema with a working example
+- A `.env.example` and a Drizzle schema with a working example
 
 
 # Where it stands

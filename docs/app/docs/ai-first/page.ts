@@ -25,7 +25,7 @@ export default function AIFirst() {
     <ul>
       <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
       <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjsdev/server</code> with a one-line description.</li>
-      <li><strong>Invariants</strong>: rules that must never be broken ("never import @prisma/client from a component", "event holes must be unquoted").</li>
+      <li><strong>Invariants</strong>: rules that must never be broken ("never import better-sqlite3 from a component", "event holes must be unquoted").</li>
       <li><strong>Recipes</strong>: step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
       <li><strong>What's deliberately deferred</strong>, so agents don't try to implement features that aren't supported yet.</li>
     </ul>
@@ -102,8 +102,8 @@ export async function createPost(
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. webjs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
-      <li><strong>Prisma + SQLite wired up by default.</strong> Every scaffold ships <code>prisma/schema.prisma</code>, <code>lib/prisma.server.ts</code> (singleton), the <code>webjs.dev.before</code> / <code>webjs.start.before</code> steps for <code>prisma generate</code> / <code>prisma migrate deploy</code> (run inside <code>webjs dev</code> / <code>webjs start</code>), and <code>npm run db:migrate</code> / <code>db:generate</code> / <code>db:studio</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
-      <li><strong>Persist with Prisma, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in CONVENTIONS.md, so an agent reading it takes the database path.</li>
+      <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.start.before</code> step running <code>webjs db migrate</code> (Drizzle has no codegen step, so there is no dev.before generate), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent doesn't have to set anything up, and won't accidentally fall back to JSON files for persistence.</li>
+      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in CONVENTIONS.md, so an agent reading it takes the database path.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
     <pre>User asks for…                                          Scaffold
@@ -111,7 +111,7 @@ export async function createPost(
 Todo app, blog, notes, dashboard, marketplace, social   default
 HTTP/JSON API only, no UI                                --template api
 Auth / login / signup / SaaS                            --template saas</pre>
-    <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>prisma/schema.prisma</code>, and the example components with the app the user actually requested. The infrastructure (Prisma wiring, test config, agent rules, route conventions) stays.</p>
+    <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>db/schema.server.ts</code>, and the example components with the app the user actually requested. The infrastructure (Drizzle wiring, test config, agent rules, route conventions) stays.</p>
 
     <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases), the full hosted documentation is at <a href="https://docs.webjs.com">docs.webjs.com</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>
 
@@ -123,7 +123,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
       <li><strong>Add a component</strong>: create a file, extend <code>WebComponent</code>, set <code>static properties</code>, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
       <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.server.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
-      <li><strong>Add a database model</strong>: edit <code>prisma/schema.prisma</code>, run <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
+      <li><strong>Add a database model</strong>: edit <code>db/schema.server.ts</code>, run <code>webjs db generate</code> then <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>
 

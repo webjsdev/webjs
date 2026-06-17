@@ -72,12 +72,13 @@ const COMPONENT_SAMPLE = [
 
 const ACTION_SAMPLE = [
   "'use server';",
-  "import { prisma } from '../lib/prisma.server.ts';",
+  "import { db } from '../db/connection.server.ts';",
+  "import { posts } from '../db/schema.server.ts';",
   "",
   "// Import this from a client component. webjs rewrites the",
   "// import into a typed RPC stub. No fetch by hand.",
   "export async function createPost(input) {",
-  "  const post = await prisma.post.create({ data: input });",
+  "  const [post] = await db.insert(posts).values(input).returning();",
   "  return { success: true, data: post };",
   "}",
 ].join('\n');
@@ -294,7 +295,7 @@ export default function LandingPage() {
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
             <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">Full-stack</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Pages + API + components</h3>
-            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Prisma, auth, and streaming. The default.</p>
+            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Drizzle, auth, and streaming. The default.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/page.ts
 components/counter.ts
 actions/posts.server.ts</pre>

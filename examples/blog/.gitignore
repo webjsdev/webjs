@@ -22,9 +22,10 @@ public/tailwind.css
 .env.*
 !.env.example
 
-# prisma local db
-prisma/dev.db
-prisma/dev.db-journal
+# sqlite dev database
+db/dev.db
+db/dev.db-journal
+db/dev.db-*
 
 # logs
 *.log

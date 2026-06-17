@@ -59,9 +59,9 @@ app/                         thin route adapters
       logout/route.ts         POST /api/auth/logout
 middleware.ts                root middleware (request logging)
 lib/                         cross-cutting infra
-  prisma.ts                  PrismaClient singleton
   password.ts                scrypt hash/verify
   session.ts                 session cookie helpers
+db/                          Drizzle: schema.server.ts, columns.server.ts, connection.server.ts
 modules/
   auth/
     actions/signup.server.ts, login.server.ts, logout.server.ts
@@ -90,7 +90,7 @@ components/                  shared UI primitives
   counter.ts, error-card.ts, theme-toggle.ts, blog-shell.ts, muted-text.ts
   ui/                        @webjsdev/ui standard kit (button, card, input, dialog, …)
                               installed via `webjs ui add …` from https://ui.webjs.dev
-prisma/schema.prisma         User, Session, Post, Comment
+db/schema.server.ts          User, Session, Post, Comment (Drizzle)
 ```
 
 ## Feature usage in this app
@@ -181,33 +181,34 @@ their custom element on import.
 
 ```sh
 cp .env.example .env          # AUTH_SECRET, SESSION_SECRET, DATABASE_URL
-npm run db:migrate            # creates prisma/dev.db + applies migrations
+npm run db:migrate            # creates db/dev.db + applies migrations
+npm run db:seed               # demo author + posts (optional)
 npm run dev                   # http://localhost:5004
 ```
 
 `npm run dev` / `npm start` and `webjs dev` / `webjs start` behave
-identically (#550). The orchestration (the one-shot `prisma generate` /
-`prisma migrate deploy`, and the Tailwind `--watch`) lives in the `webjs`
-block of `package.json` and runs INSIDE `webjs dev` / `webjs start`:
+identically (#550). The orchestration (applying migrations at start, and the
+Tailwind `--watch`) lives in the `webjs` block of `package.json` and runs
+INSIDE `webjs dev` / `webjs start`:
 
 ```jsonc
 "webjs": {
-  "dev":   { "before": ["prisma generate"], "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
-  "start": { "before": ["prisma migrate deploy"] }
+  "dev":   { "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
+  "start": { "before": ["webjs db migrate"] }
 }
 ```
 
-So a bare `webjs dev` is NOT degraded: it runs `prisma generate` (dev
-`before`), spawns the Tailwind watcher (dev `parallel`, torn down on exit),
-then serves. `npm run dev` (a thin alias) does the same. In Docker / Railway,
+Drizzle has no codegen, so there is no dev `before` step. A bare `webjs dev`
+spawns the Tailwind watcher (dev `parallel`, torn down on exit) then serves;
+`npm run dev` (a thin alias) does the same. In Docker / Railway,
 `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent: `webjs
-start` runs `prisma migrate deploy` (start `before`) in-process before serving.
+start` runs `webjs db migrate` (start `before`) in-process before serving.
 
 ## Tests
 
 The blog's own tests live under `test/` (`auth`, `posts`, `comments`, `chat`)
 and run via `npm test` (the `webjs test --server` script; the blog has no
-browser tests). They touch the Prisma DB, so run `npm run db:migrate` (and the
+browser tests). They touch the SQLite DB, so run `npm run db:migrate` (and the
 seed) first, exactly like running the app. These tests are NOT discovered by the
 framework's root `npm test`; CI runs them in the dedicated **In-repo app tests
 (website + blog)** job (issue #342), which prepares the DB the same way the
@@ -220,14 +221,14 @@ holds its smoke + browser probes.
 - **One exported function per action/query file.** Name the file after the function.
 - **ActionResult<T> envelope** for all actions: `{ success: true, data } | { success: false, error, status }`.
 - **Routes are thin adapters.** Business logic lives in modules. A route imports a module function, calls it, translates the result to a Response.
-- **Server-only imports** (prisma, node:crypto, etc.) only in `.server.ts` files or `lib/`.
+- **Server-only imports** (the DB driver, node:crypto, etc.) only in `.server.ts` files, `db/`, or `lib/`.
 - **No barrel files.** Import from the specific file.
 - **Types per module** in `types.ts`. Shared types (ActionResult) live in `modules/auth/types.ts`.
-- **globalThis for dev singletons** (Prisma, WS clients, comment bus): survives module cache-busting.
+- **globalThis for dev singletons** (the Drizzle `db`, WS clients, comment bus): survives module cache-busting.
 
 ## Invariants
 
-1. Never import `@prisma/client` or `node:*` from components or pages.
+1. Never import a DB driver (`better-sqlite3`) or `node:*` from components or pages.
 2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
 4. Component state lives in signals from `@webjsdev/core`. Read with
@@ -253,4 +254,4 @@ Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
 Extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen.
 
 ### Add a database model
-Edit `prisma/schema.prisma`. Run `webjs db migrate <name>` then `webjs db generate`.
+Edit `db/schema.server.ts`. Run `webjs db generate` then `webjs db migrate`.

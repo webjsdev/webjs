@@ -100,7 +100,7 @@ A page/layout module still **loads** in the browser for its top-level side effec
 
 `route.{js,ts}` is the one routing file that is NOT isomorphic: a server-only HTTP handler (named `GET` / `POST` exports), the webjs equivalent of a Next route handler. It never ships to the client.
 
-**`.server.{js,ts}` is the one server boundary, an RPC + source-protection mechanism, NOT an RSC component.** With `'use server'` exports are RPC-callable (the browser import becomes a stub POSTing to `/__webjs/action/<hash>/<fn>`); without it the file is a server-only utility whose browser import **throws at module load** (Prisma, secrets, `node:*`, hashing). Consequence: **never import a no-`'use server'` util directly into a page, layout, or component** (it works at SSR but the client stub crashes on load); use it inside `'use server'` actions, `route.{js,ts}`, or `middleware`, and reach it from a page by importing a `'use server'` action (whose RPC stub loads safely client-side). This boundary, not a component annotation, is how a dependency is kept off the client (a date library used only during SSR belongs in `lib/format.server.ts`). See `agent-docs/components.md`.
+**`.server.{js,ts}` is the one server boundary, an RPC + source-protection mechanism, NOT an RSC component.** With `'use server'` exports are RPC-callable (the browser import becomes a stub POSTing to `/__webjs/action/<hash>/<fn>`); without it the file is a server-only utility whose browser import **throws at module load** (the DB driver, secrets, `node:*`, hashing). Consequence: **never import a no-`'use server'` util directly into a page, layout, or component** (it works at SSR but the client stub crashes on load); use it inside `'use server'` actions, `route.{js,ts}`, or `middleware`, and reach it from a page by importing a `'use server'` action (whose RPC stub loads safely client-side). This boundary, not a component annotation, is how a dependency is kept off the client (a date library used only during SSR belongs in `lib/format.server.ts`). See `agent-docs/components.md`.
 
 ---
 
@@ -134,7 +134,7 @@ lib/                        app-wide code (lib/*.server.js infra, lib/utils/ bro
 modules/<feature>/          feature-scoped: actions/ (mutations), queries/ (reads), components/, utils/, types.js
 components/*.js             SHARED presentational primitives
 public/*                    static assets, served at /<name>
-prisma/schema.prisma        data models
+db/*.server.{js,ts}         data layer (Drizzle: schema, columns, connection)
 ```
 
 Every file is a plain ES module.
@@ -258,7 +258,7 @@ One custom element per file; call `Class.register('tag')` at module top level. S
 ## Modules architecture (preferred for non-trivial apps)
 
 - **`modules/<feature>/actions/*.server.{js,ts}`** mutations, **`queries/*.server.{js,ts}`** reads (one function per file), **`components/*.{js,ts}`** feature-owned components (shared UI in top-level `components/`), **`utils/*.{js,ts}`** pure helpers (no `'use server'`, no DB), **`types.{js,ts}`** typedefs.
-- **`lib/`** cross-cutting: `lib/*.server.{js,ts}` server-only infra (Prisma, session, hashing), `lib/utils/*` browser-safe helpers, `lib/*.ts` app-wide values.
+- **`lib/`** cross-cutting: `lib/*.server.{js,ts}` server-only infra (session, hashing; the DB connection lives in `db/connection.server.ts`), `lib/utils/*` browser-safe helpers, `lib/*.ts` app-wide values.
 
 ### The `ActionResult<T>` envelope
 
@@ -293,7 +293,7 @@ The advanced client-router surface is in `agent-docs/advanced.md`: **link prefet
 
 > Hit one of these as a runtime error? The [Troubleshooting page](https://docs.webjs.com/docs/troubleshooting) is keyed by symptom (the throw-at-load server import, the backtick-in-template 500, the TypeScript strip failure, the SSR browser-global crash, the missing-frame swap) and maps each back to the invariant and the `webjs check` rule below.
 
-1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** The `.server.{js,ts}` extension is the path-level boundary (the file router refuses to serve the source); a `'use server'` directive additionally makes exports RPC-callable, else the file is a server-only utility whose browser import is a throw-at-load stub. Importing `@prisma/client`, `node:*`, or any server-only dep from a component or an `app/**` page / layout / loading / error / not-found file crashes the browser at module load.
+1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Never in pages, layouts, or components.** The `.server.{js,ts}` extension is the path-level boundary (the file router refuses to serve the source); a `'use server'` directive additionally makes exports RPC-callable, else the file is a server-only utility whose browser import is a throw-at-load stub. Importing a DB driver (`better-sqlite3` / `pg`), `node:*`, or any server-only dep from a component or an `app/**` page / layout / loading / error / not-found file crashes the browser at module load.
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field. Any short-string quote works: `'tag-name'`, `"tag-name"`, or `` `tag-name` `` (single-line, no interpolation).
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
@@ -310,9 +310,9 @@ The advanced client-router surface is in `agent-docs/advanced.md`: **link prefet
 
 ## Scaffolding
 
-Three scaffolds exist (do not invent template names): `webjs create <name>` (full-stack: layout, page, components, modules, Prisma+SQLite), `webjs create <name> --template api` (backend-only routes + modules + Prisma, no SSR), `webjs create <name> --template saas` (auth + login/signup + protected dashboard + User model). Pick from the request: default for any product with UI (todo, blog, dashboard, marketplace, social, e-commerce), `api` for an HTTP/JSON API with no UI, `saas` for accounts/login/signup; default to full-stack when ambiguous.
+Three scaffolds exist (do not invent template names): `webjs create <name>` (full-stack: layout, page, components, modules, Drizzle+SQLite), `webjs create <name> --template api` (backend-only routes + modules + Drizzle, no SSR), `webjs create <name> --template saas` (auth + login/signup + protected dashboard + User model). The `--db sqlite|postgres` flag (default sqlite) picks the dialect; the schema/queries/actions are identical across dialects (see #563). Pick from the request: default for any product with UI (todo, blog, dashboard, marketplace, social, e-commerce), `api` for an HTTP/JSON API with no UI, `saas` for accounts/login/signup; default to full-stack when ambiguous.
 
-Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a real database (Prisma + SQLite); NEVER use JSON files, in-memory arrays, or localStorage for persistence.** Update `prisma/schema.prisma` to real models FIRST, then `webjs db migrate <name>`, then build pages/actions/queries. **Treat the scaffold as REFERENCE, not the final product:** replace the example page / `User` model / components and adapt `app/layout.ts` (brand, nav, content width; the default `<main class="max-w-[760px]">` reading column needs widening for a full-bleed app). ENFORCED: examples carry a `webjs-scaffold-placeholder` comment and `no-scaffold-placeholder` fails until the content is replaced and the marker deleted. Docs at https://docs.webjs.com.
+Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a real database (Drizzle + SQLite); NEVER use JSON files, in-memory arrays, or localStorage for persistence.** Update `db/schema.server.ts` to real models FIRST, then `webjs db generate` + `webjs db migrate`, then build pages/actions/queries. **Treat the scaffold as REFERENCE, not the final product:** replace the example page / `User` model / components and adapt `app/layout.ts` (brand, nav, content width; the default `<main class="max-w-[760px]">` reading column needs widening for a full-bleed app). ENFORCED: examples carry a `webjs-scaffold-placeholder` comment and `no-scaffold-placeholder` fails until the content is replaced and the marker deleted. Docs at https://docs.webjs.com.
 
 ---
 
@@ -328,7 +328,7 @@ webjs doctor                       # project-health checklist; non-zero exit on 
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]
-webjs db <prisma-subcommand> [...]
+webjs db <generate|migrate|push|studio|seed>   # wraps drizzle-kit (+ runs db/seed.server.ts)
 webjs ui init | add <names...> | list | view <name>
 webjs vendor pin|unpin|list|audit|outdated|update [--from PROVIDER]   # importmap pinning, .webjs/vendor/importmap.json
 ```
@@ -385,11 +385,13 @@ export default async function User({ params }: { params: { id: string } }) {
 ```ts
 // modules/users/actions/update-profile.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../db/connection.server.ts';
+import { users } from '../../../db/schema.server.ts';
 export async function updateProfile(input: { name: string }) {
   const name = String(input?.name || '').trim();
   if (!name) return { success: false, error: 'name required', status: 400 };
-  const row = await prisma.user.update({ where: { id: me.id }, data: { name } });
+  const [row] = await db.update(users).set({ name }).where(eq(users.id, me.id)).returning();
   return { success: true, data: row };
 }
 ```

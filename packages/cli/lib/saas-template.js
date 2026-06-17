@@ -50,16 +50,10 @@ export async function writeSaasFiles(appDir) {
   // the saas auth pages use raw <form> + label/input class helpers instead.
   await copyUiComponents(appDir, ['dialog', 'switch', 'checkbox']);
 
-  // lib/prisma.server.ts
+  // The db/ layer (columns/connection) is written by the full-stack scaffold
+  // already; this template overwrites db/schema.server.ts below to add the
+  // User.passwordHash column auth needs.
   await mkdir(join(appDir, 'lib'), { recursive: true });
-  await writeFile(join(appDir, 'lib', 'prisma.server.ts'), [
-    "import { PrismaClient } from '@prisma/client';",
-    "",
-    "const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };",
-    "export const prisma = globalForPrisma.prisma || new PrismaClient();",
-    "if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;",
-    "",
-  ].join('\n'));
 
   // lib/password.server.ts
   await writeFile(join(appDir, 'lib', 'password.server.ts'), [
@@ -85,14 +79,14 @@ export async function writeSaasFiles(appDir) {
   // lib/auth.server.ts
   await writeFile(join(appDir, 'lib', 'auth.server.ts'), [
     "import { createAuth, Credentials } from '@webjsdev/server';",
-    "import { prisma } from './prisma.server.ts';",
+    "import { db } from '../db/connection.server.ts';",
     "import { compare } from './password.server.ts';",
     "",
     "export const { auth, signIn, signOut, handlers } = createAuth({",
     "  providers: [",
     "    Credentials({",
     "      async authorize(credentials: { email: string; password: string }) {",
-    "        const user = await prisma.user.findUnique({ where: { email: credentials.email } });",
+    "        const user = await db.query.users.findFirst({ where: { email: credentials.email } });",
     "        if (!user || !await compare(credentials.password, user.passwordHash)) return null;",
     "        return { id: String(user.id), name: user.name, email: user.email };",
     "      },",
@@ -103,26 +97,24 @@ export async function writeSaasFiles(appDir) {
     "",
   ].join('\n'));
 
-  // prisma/schema.prisma
-  await mkdir(join(appDir, 'prisma'), { recursive: true });
-  await writeFile(join(appDir, 'prisma', 'schema.prisma'), [
-    'datasource db {',
-    '  provider = "sqlite"',
-    '  url      = env("DATABASE_URL")',
-    '}',
-    '',
-    'generator client {',
-    '  provider = "prisma-client-js"',
-    '}',
-    '',
-    'model User {',
-    '  id           Int      @id @default(autoincrement())',
-    '  email        String   @unique',
-    '  name         String?',
-    '  passwordHash String',
-    '  createdAt    DateTime @default(now())',
-    '}',
-    '',
+  // db/schema.server.ts: overwrite the full-stack scaffold's example User to
+  // add passwordHash (the column auth needs). Drizzle, dialect-agnostic.
+  await writeFile(join(appDir, 'db', 'schema.server.ts'), [
+    "import { defineRelations } from 'drizzle-orm';",
+    "import { table, pk, text, createdAt } from './columns.server.ts';",
+    "",
+    "export const users = table('users', {",
+    "  id: pk(),",
+    "  email: text().notNull().unique(),",
+    "  name: text(),",
+    "  passwordHash: text().notNull(),",
+    "  createdAt: createdAt(),",
+    "});",
+    "",
+    "export const relations = defineRelations({ users }, () => ({}));",
+    "",
+    "export type User = typeof users.$inferSelect;",
+    "",
   ].join('\n'));
 
   // modules/auth/actions/signup.server.ts
@@ -132,15 +124,14 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'modules', 'auth', 'actions', 'signup.server.ts'), [
     "'use server';",
     "",
-    "import { prisma } from '../../../lib/prisma.server.ts';",
+    "import { db } from '../../../db/connection.server.ts';",
+    "import { users } from '../../../db/schema.server.ts';",
     "import { hash } from '../../../lib/password.server.ts';",
     "",
     "export async function signup(input: { name: string; email: string; password: string }) {",
-    "  const exists = await prisma.user.findUnique({ where: { email: input.email } });",
+    "  const exists = await db.query.users.findFirst({ where: { email: input.email }, columns: { id: true } });",
     "  if (exists) return { success: false as const, error: 'Email already registered', status: 409 };",
-    "  const user = await prisma.user.create({",
-    "    data: { name: input.name, email: input.email, passwordHash: await hash(input.password) },",
-    "  });",
+    "  const [user] = await db.insert(users).values({ name: input.name, email: input.email, passwordHash: await hash(input.password) }).returning();",
     "  return { success: true as const, data: { id: user.id, name: user.name, email: user.email } };",
     "}",
     "",
@@ -183,11 +174,10 @@ export async function writeSaasFiles(appDir) {
   //   - The protected-route gate (unauthenticated /dashboard -> 302 /login) runs
   //     ALWAYS once the app modules import: auth() only reads a cookie, no DB
   //     query. This is the headline security assertion and it is REAL.
-  //   - The signup -> login -> protected-route flow writes + reads a user, so it
-  //     needs Prisma generated AND migrated (`npm run db:generate` +
-  //     `npm run db:migrate`). When the Prisma client is not yet generated the
-  //     app modules can't import at all, so the whole suite skips with a clear
-  //     message instead of crashing. After you set up the DB it runs for real.
+  //   The signup, login, and protected-route flow writes + reads a user, so it
+  //   needs the DB migrated (`npm run db:generate` then `npm run db:migrate`).
+  //   Until the users table exists those flows error, so the suite skips with a
+  //   clear message instead of crashing. After DB setup it runs for real.
   await mkdir(join(appDir, 'test', 'auth'), { recursive: true });
   await writeFile(join(appDir, 'test', 'auth', 'auth.test.ts'), [
     "import { test } from 'node:test';",
@@ -200,20 +190,20 @@ export async function writeSaasFiles(appDir) {
     "",
     "const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');",
     "",
-    "// The auth pages + dashboard middleware import lib/prisma.server.ts, which",
-    "// imports @prisma/client. Until `npm run db:generate` (prisma generate) has",
-    "// run, that import is missing, so a request hitting those modules 500s. We",
-    "// detect that at the RESPONSE level (a 5xx on the dashboard) and SKIP with a",
-    "// clear message rather than reporting a misleading failure. After you run",
+    "// The auth pages + dashboard middleware query the users table via Drizzle.",
+    "// Until `npm run db:generate` + `npm run db:migrate` have created it, a",
+    "// request hitting those modules 500s. We detect that at the RESPONSE level",
+    "// (a 5xx on the dashboard) and SKIP with a clear message rather than report",
+    "// a misleading failure. After you run",
     "//   npm install && npm run db:generate && npm run db:migrate",
     "// every assertion below runs for real.",
     "process.env.DATABASE_URL ||= 'file:./dev.db';",
     "process.env.AUTH_SECRET ||= 'test-secret-at-least-32-characters-long!!';",
     "",
     "function makeHandler() {",
-    "  // createRequestHandler builds lazily, so it succeeds even before prisma is",
-    "  // generated; the missing dependency only surfaces when a request reaches",
-    "  // the prisma-importing module. That is why readiness is probed per-response.",
+    "  // createRequestHandler builds lazily, so it succeeds even before the DB",
+    "  // is migrated; the missing table only surfaces when a request reaches a",
+    "  // module that queries it. That is why readiness is probed per-response.",
     "  return createRequestHandler({ appDir, dev: true });",
     "}",
     "",

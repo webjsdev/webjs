@@ -7,10 +7,10 @@ the full hosted docs are at **https://docs.webjs.com**.
 
 ## Persistence + scaffold rules (non-negotiable)
 
-- **Use Prisma + SQLite for data, never JSON files.** It's already wired up
-  (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`). For ANY
+- **Use Drizzle + SQLite for data, never JSON files.** It's already wired up
+  (`db/schema.server.ts`, `db/connection.server.ts`, `npm run db:generate` + `npm run db:migrate`). For ANY
   data the app stores (todos, posts, messages, products, comments…),
-  define a Prisma model. NEVER create `data/*.json`, `db.json`, or any
+  define a Drizzle table. NEVER create `data/*.json`, `db.json`, or any
   JSON file as a fake database. NEVER use module-scope arrays / Maps as
   a substitute. NEVER use localStorage for app data. It resets on reload and cannot scale. This is a project convention
   (CONVENTIONS.md).
@@ -103,7 +103,7 @@ each change must include.
   Don't use inline `style="..."` on components (use `static styles = css\`...\``).
 - Components: extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), call `Class.register('tag-name')` at the bottom of the file. The tag name is the argument to `.register()`, not a static field.
 - Server actions: *.server.ts files with one exported async function each.
-- Server-only code (@prisma/client, node:*, anything needing Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap in a .server.{js,ts} file; the framework rewrites that import to an RPC stub for the browser. lib/ holds both server-only infra (lib/prisma.server.ts) and browser-safe utilities (lib/utils/cn.ts with cn); apply the same rule per file.
+- Server-only code (a DB driver like better-sqlite3/pg, node:*, anything needing Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap in a .server.{js,ts} file; the framework rewrites that import to an RPC stub for the browser. The DB lives in db/*.server.ts; lib/ holds other server-only infra and browser-safe utilities (lib/utils/cn.ts with cn); apply the same rule per file.
 - Directives: webjs ships only `unsafeHTML`, `live`, and `repeat`. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported. Use plain template-literal expressions and lifecycle hooks instead.
 - Context: import { createContext, ContextProvider, ContextConsumer } from '@webjsdev/core/context'
 - Task: import { Task, TaskStatus } from '@webjsdev/core/task'

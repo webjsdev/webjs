@@ -61,7 +61,7 @@ const ports = {
 };
 
 // Use each workspace's `npm run dev` so the concurrently-spawned
-// tailwind CLI watcher (and, for the blog, prisma generate; for the UI
+// tailwind CLI watcher (and, for the blog, the db migrate; for the UI
 // site, the predev copy-registry step) runs too.
 start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: ports.website });
 start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: ports.docs });

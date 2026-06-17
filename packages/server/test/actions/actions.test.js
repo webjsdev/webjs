@@ -154,7 +154,7 @@ test('hashFile: returns a 10-char hex string, stable per input', async () => {
 
 test('a pure-RPC server module is hashed at boot but NOT executed until first call', async () => {
   // Runtime-first boot (#141): buildActionIndex must not import every server
-  // module (which would fire Prisma init etc.). It hashes them so RPC dispatch
+  // module (which would fire DB driver init etc.). It hashes them so RPC dispatch
   // can resolve them, and the module loads on the first invoke.
   const dir = await scaffold({
     'actions/side.server.js': `'use server';
@@ -186,7 +186,7 @@ test('a pure-RPC server module is hashed at boot but NOT executed until first ca
 test('buildActionIndex hashes a server file WITHOUT loading the module', async () => {
   // buildActionIndex is a pure file -> hash mapping (it loads no module), so a
   // read-only introspection caller (the MCP list_actions tool) derives the RPC
-  // endpoint hash without running a module's top-level side effects (Prisma
+  // endpoint hash without running a module's top-level side effects (DB driver
   // init, DB connect) or risking a stray stdout write into the JSON-RPC channel.
   // A module with a top-level side effect must NOT fire when the index is built.
   const files = {

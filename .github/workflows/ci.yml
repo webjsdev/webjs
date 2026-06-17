@@ -73,15 +73,14 @@ jobs:
       - run: npm ci
       # Some integration tests boot the blog example in-process (e.g. the
       # differential elision test renders its mixed `/` page), which calls
-      # listPosts() and needs a migrated Prisma DB, the same setup the e2e job
+      # listPosts() and needs a migrated SQLite DB, the same setup the e2e job
       # does.
       - name: Prepare the blog example database
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - run: npm test
 
   bun:
@@ -134,6 +133,13 @@ jobs:
       # install under `npm test`.
       - name: webjs action seeding on Bun
         run: bun test/bun/seed.mjs
+      # Blog Drizzle DB round-trip on Bun (#551/#563): the connection picks
+      # bun:sqlite + drizzle-orm/bun-sqlite on Bun (vs better-sqlite3 on Node),
+      # so prove the blog's real schema round-trips an insert().returning(), a
+      # timestamp_ms Date column, and a relational read on the Bun driver. The
+      # same script proves the Node path under `npm test`.
+      - name: webjs blog DB round-trip on Bun
+        run: bun test/bun/blog-db.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are
@@ -141,6 +147,44 @@ jobs:
       # catches the long tail of cross-runtime incompatibilities.
       - name: webjs Bun test matrix
         run: node scripts/run-bun-tests.js
+
+  db-postgres:
+    name: Postgres prod-engine round-trip (#563)
+    runs-on: ubuntu-latest
+    # The cross-database Drizzle abstraction (#563) makes the schema, queries,
+    # and actions portable, but migrations + runtime behavior are per-dialect.
+    # The rest of CI runs on SQLite, so this job proves the SAME unified schema
+    # round-trips on a REAL Postgres engine (a service container), the
+    # dev-SQLite / prod-Postgres workflow the abstraction promises.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: webjs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # The `pg` driver is installed only in THIS job (not a root devDependency),
+      # so it stays out of the shared package-lock. --no-save keeps the lock
+      # untouched; this job does not run the type fixtures, so the extra install
+      # cannot affect them.
+      - run: npm install --no-save pg@^8.13.0
+      - name: Postgres round-trip (unified schema on the prod engine)
+        env:
+          WEBJS_PG_URL: postgres://postgres:postgres@localhost:5432/webjs_test
+        run: node --test test/pg/pg-roundtrip.test.mjs
 
   browser:
     name: Browser (web-test-runner / Playwright)
@@ -174,9 +218,8 @@ jobs:
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - name: Run e2e
         env:
           WEBJS_E2E: '1'
@@ -184,7 +227,7 @@ jobs:
       # Cross-runtime e2e (#523): re-run the SAME suite under node --test (its
       # node:test hook lifecycle does not survive `bun test`) but with the blog
       # SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns the blog under the bun binary).
-      # This proves the Bun.serve shell + Prisma-on-Bun in a real browser. The few
+      # This proves the Bun.serve shell + Drizzle-on-Bun in a real browser. The few
       # node-only assertions (SSR seeding, #472/#488) and the #528-blocked abort
       # test skip themselves on Bun.
       - uses: oven-sh/setup-bun@v2
@@ -219,7 +262,7 @@ jobs:
     # script), which the root runners do not discover, so a regression in an
     # app's tests gates the merge (issue #342). The website's `test` runs both
     # its node + browser suites (hence Playwright); the blog is node-only and
-    # touches its Prisma DB (the same setup the unit + e2e jobs do). docs and
+    # touches its SQLite DB (the same setup the unit + e2e jobs do). docs and
     # the ui-website ship no test suite yet, so they are not listed.
     steps:
       - uses: actions/checkout@v6
@@ -234,9 +277,8 @@ jobs:
         working-directory: examples/blog
         run: |
           cp .env.example .env
-          npx prisma generate
-          npx prisma migrate deploy
-          npx prisma db seed
+          npm run db:migrate
+          npm run db:seed
       - name: website tests (node + browser)
         run: npm test --workspace=@webjsdev/website
       - name: blog tests (node)
@@ -251,7 +293,7 @@ jobs:
     # path that broke all four live deploys for a day (#409): a COPY of a
     # missing source is a hard Docker error, invisible to every in-process
     # check. Building the image here catches that class (stale COPY paths, a
-    # broken npm install / dist / tailwind / prisma step in the image) on the
+    # broken npm install / dist / tailwind / db-migrate step in the image) on the
     # PR instead of at deploy time. Build only, no push.
     steps:
       - uses: actions/checkout@v6

@@ -1,6 +1,7 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { comments } from '../../../db/schema.server.ts';
 import { currentUser } from '../../auth/queries/current-user.server.ts';
 import { publish } from '../utils/bus.ts';
 import { formatComment } from '../utils/format.ts';
@@ -22,14 +23,12 @@ export async function createComment(
   if (!body) return { success: false, error: 'body is required', status: 400 };
   if (body.length > 2000) return { success: false, error: 'body too long', status: 400 };
 
-  const post = await prisma.post.findUnique({ where: { id: postId } });
+  const post = await db.query.posts.findFirst({ where: { id: postId }, columns: { id: true } });
   if (!post) return { success: false, error: 'Post not found', status: 404 };
 
-  const row = await prisma.comment.create({
-    data: { postId, authorId: me.id, body },
-    include: { author: { select: { name: true, email: true } } },
-  });
-  const formatted = formatComment(row);
+  const [row] = await db.insert(comments).values({ postId, authorId: me.id, body }).returning();
+  // returning() gives columns only; splice the author we already hold.
+  const formatted = formatComment({ ...row, author: { name: me.name, email: me.email } });
   publish(postId, formatted);
   return { success: true, data: formatted };
 }

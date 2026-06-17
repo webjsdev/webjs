@@ -68,12 +68,12 @@ lib/
                          (unit) + `test/bun/dev-hot-reload.mjs` (cross-runtime).
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
-                         package.json + tsconfig + Prisma schema,
+                         package.json + tsconfig + Drizzle db layer,
                          template-specific app/ files, prints the
                          post-scaffold guidance for AI agents.
   saas-template.js       Extra files written when --template saas:
                          auth + login/signup + protected dashboard
-                         + Prisma User model.
+                         + Drizzle User model.
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
                          copy time. The AGENTS.md / CLAUDE.md /
@@ -88,7 +88,7 @@ README.md                npm-facing package readme.
 
 | Command | Implementation |
 |---|---|
-| `webjs dev` | Re-execs itself under the host runtime's hot-reload supervisor, then `startServer({ dev: true })` in the child. The supervisor is runtime-specific (#514, `lib/dev-supervisor.js`): `node --watch` on Node (restart-on-change, fresh ESM cache, plus the dev re-import's `?t=` query); `bun --hot` on Bun (in-place module invalidation, since Bun keys its cache by path and ignores `?t=`, so `node --watch` would leave a server-module edit stale). `--no-hot` opts out and runs the server in-process on either runtime. In the parent (pre-spawn) it runs the configured dev orchestration (#550, `lib/run-tasks.js`): the `webjs.dev.before` steps (one-shot, e.g. `prisma generate`) to completion, then the `webjs.dev.parallel` watchers (e.g. the Tailwind CLI) alongside the server, torn down on exit. So a bare `webjs dev` self-generates the Prisma client (and runs the Tailwind watcher) exactly like `npm run dev`, no longer a degraded run, which superseded the old #452 prisma-generate hint. Local binaries (`prisma`, `tailwindcss`) resolve because the spawn PATH is prepended with the ancestor `node_modules/.bin` dirs, npm-style. |
+| `webjs dev` | Re-execs itself under the host runtime's hot-reload supervisor, then `startServer({ dev: true })` in the child. The supervisor is runtime-specific (#514, `lib/dev-supervisor.js`): `node --watch` on Node (restart-on-change, fresh ESM cache, plus the dev re-import's `?t=` query); `bun --hot` on Bun (in-place module invalidation, since Bun keys its cache by path and ignores `?t=`, so `node --watch` would leave a server-module edit stale). `--no-hot` opts out and runs the server in-process on either runtime. In the parent (pre-spawn) it runs the configured dev orchestration (#550, `lib/run-tasks.js`): the `webjs.dev.before` steps (one-shot) to completion, then the `webjs.dev.parallel` watchers (e.g. the Tailwind CLI) alongside the server, torn down on exit. So a bare `webjs dev` runs the same before-steps and watchers as `npm run dev`. Drizzle has no codegen, so there is no dev before-step by default; production applies migrations via `webjs db migrate` in `start.before`. Local binaries (`drizzle-kit`, `tailwindcss`) resolve because the spawn PATH is prepended with the ancestor `node_modules/.bin` dirs, npm-style. |
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2) |
 | `webjs test [--server\|--browser]` | `node --test` for server tests, `wtr` for browser tests |
 | `webjs check [--rules] [--json]` | `checkConventions()` from `@webjsdev/server/check`. `--rules` lists the checks. `--json` emits the structured violations + a summary count as JSON (via `projectCheck` from `@webjsdev/mcp/check-report`, the same projector the MCP `check` tool uses, #415), so an agent in a loop consumes structured data instead of regex-scraping stdout; the non-zero exit on violations is preserved. Report-only: each violation carries a prose `fix` hint, but there is no `--fix` autofix flag (the rules either rewrite code or rename files, so an automatic codemod is not safe) |
@@ -97,7 +97,7 @@ README.md                npm-facing package readme.
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
-| `webjs db <generate\|migrate\|studio>` | Passthrough to `prisma` |
+| `webjs db <generate\|migrate\|push\|studio>` | Passthrough to `drizzle-kit` (no codegen step; `generate` is schema-to-SQL). `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 
 ## UI subcommand: proxies to `@webjsdev/ui`
@@ -129,14 +129,15 @@ verbatim.
    with a guidance message.
 2. **Scaffold is reference, not the final product.** The scaffold
    output ships an example `app/page.ts` ("Hello from …"), an example
-   `User` Prisma model, an example `theme-toggle` component. AI agents
+   `User` Drizzle model, an example `theme-toggle` component. AI agents
    asked to build a real app MUST replace those with the actual app.
    The post-scaffold success message in `lib/create.js` prints this
    rule verbatim.
-3. **Prisma + SQLite is wired up for ALL templates.** `prisma/schema.prisma`,
-   `lib/prisma.ts`, `npm run db:migrate`, and the `webjs.dev.before` /
-   `webjs.start.before` steps (`prisma generate` / `prisma migrate deploy`, run
-   inside `webjs dev` / `webjs start`, #550).
+3. **Drizzle + SQLite is wired up for ALL templates.** The `db/` folder
+   (`schema.server.ts`, `columns.server.ts`, `connection.server.ts`),
+   `npm run db:generate` + `npm run db:migrate`, and the `webjs.start.before`
+   step (`webjs db migrate`, run inside `webjs start`, #550). Drizzle has no
+   codegen, so there is no dev before-step.
    Apps must NEVER use JSON files for persistence. This is a project
    convention (documented in the scaffold's CONVENTIONS.md).
 4. **Template files are verbatim copies** with `{{APP_NAME}}` substitution.

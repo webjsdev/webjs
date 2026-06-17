@@ -32,15 +32,15 @@ enforced by `webjs check`; follow them by judgment.
 
 - **Server actions and queries live in `modules/<feature>/actions/` and
   `modules/<feature>/queries/`** (`*.server.{js,ts}`), not loose in the
-  app root. Cross-cutting server infrastructure (the Prisma singleton,
+  app root. The DB connection lives in `db/connection.server.ts`; other cross-cutting server infrastructure (the
   session helpers, auth config) lives in `lib/`.
 - **One exported function per action/query file.** Name the file after
   the function (`create-post.server.ts` exports `createPost`).
 - **Every feature has tests.** A `modules/<feature>/` directory should
   have matching test files under `test/<feature>/`.
-- **Persist data with Prisma + SQLite, never JSON files.** A
+- **Persist data with Drizzle + SQLite, never JSON files.** A
   `data/todos.json` or `db.json` used as a database resets on reload and
-  cannot scale; define a Prisma model instead.
+  cannot scale; define a Drizzle table instead.
 
 ---
 
@@ -112,20 +112,20 @@ docs". That is the agent's default behavior in a webjs project.
 
 ---
 
-## Data persistence: Prisma + SQLite, never JSON files
+## Data persistence: Drizzle + SQLite, never JSON files
 
 <!-- OVERRIDE -->
 
-Every webjs app uses **Prisma + SQLite** for persistence by default. The
-scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` (singleton), the
-`webjs.dev.before` / `webjs.start.before` steps that run `prisma generate` /
-`prisma migrate deploy` inside `webjs dev` / `webjs start` (#550), and the
+Every webjs app uses **Drizzle + SQLite** for persistence by default. The
+scaffold ships the `db/` folder (`schema.server.ts`, `columns.server.ts`,
+`connection.server.ts`), the `webjs.start.before` step that runs
+`webjs db migrate` inside `webjs start` (#550), and the
 `npm run db:migrate` / `db:generate` / `db:studio` scripts.
 
 **AI agents: these rules are absolute.**
 
 1. For ANY data the app stores (todos, posts, messages, products,
-   comments, users…), define a Prisma model in `prisma/schema.prisma`
+   comments, users…), define a Drizzle table in `db/schema.server.ts`
    and persist there.
 2. **NEVER** create JSON files under `data/`, `db.json`, `posts.json`,
    `todos.json`, etc. as a fake database. It resets on reload and cannot scale; this is a
@@ -135,12 +135,12 @@ scaffold ships `prisma/schema.prisma`, `lib/prisma.server.ts` (singleton), the
 4. **NEVER** use `localStorage` / `sessionStorage` to persist app data -
    it's per-browser and never reaches the server. Use it only for UI
    preferences (theme, sidebar collapsed, etc.).
-5. To add a model: edit `prisma/schema.prisma`, then `npm run db:migrate
-   -- --name <description>`. Access via `import { prisma } from
-   '../../../lib/prisma.server.ts'`. Never `new PrismaClient()`.
+5. To add a model: edit `db/schema.server.ts`, then `npm run db:generate`
+   and `npm run db:migrate`. Access via `import { db } from
+   '../../../db/connection.server.ts'` (and the tables from db/schema.server.ts).
 
 To switch to Postgres or MySQL: change `provider` in
-`prisma/schema.prisma` and the `DATABASE_URL` in `.env`. Do this only
+the `db/` columns + connection files (or scaffold with --db postgres) and the `DATABASE_URL` in `.env`. Do this only
 if the user explicitly asks for it. SQLite is the right default for
 dev and small production workloads.
 
@@ -157,7 +157,7 @@ saas templates) is a **starting point**.
 
 When the user asks the agent to build their actual app:
 
-1. **Replace the example `User` model** in `prisma/schema.prisma` with
+1. **Replace the example `User` model** in `db/schema.server.ts` with
    the real domain models the app needs (e.g. `Todo`, `Post`, `Message`)
    - unless the app actually has users.
 2. **Replace `app/page.ts`** with the app's real homepage. Don't ship
@@ -166,13 +166,13 @@ When the user asks the agent to build their actual app:
    need a theme picker.
 4. **Delete the example users module** (api/saas templates) if the app
    doesn't use it.
-5. **Keep:** the Prisma setup, the test config, the agent config files
+5. **Keep:** the Drizzle setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
-   `lib/prisma.server.ts`, the directory conventions, the design tokens in
+   `db/connection.server.ts`, the directory conventions, the design tokens in
    `app/layout.ts`. These are the infrastructure, not the example app.
 
 The scaffold exists so the agent doesn't reinvent the directory layout,
-the Prisma wiring, the test runner config, or the convention files. It
+the Drizzle wiring, the test runner config, or the convention files. It
 does NOT exist so the agent ships the example homepage.
 
 ---
@@ -223,7 +223,7 @@ modules/
 - One exported function per server action/query file
 - Server actions need BOTH the `.server.{js,ts}` extension AND a `'use server'` directive at the top. Extension alone marks a server-only utility (source-protected, not RPC-callable). Directive alone is a lint violation (`use-server-needs-extension`).
 - Components must call `Class.register('tag')`
-- Never import `@prisma/client`, `node:*`, or `lib/` directly from components. Use server actions instead
+- Never import a DB driver (`better-sqlite3`), `node:*`, or `db/`/`lib/` server files directly from components. Use server actions instead
 - Routes (`app/**/page.ts`, `app/**/route.ts`) must be thin: import logic from modules
 
 ---
@@ -656,7 +656,8 @@ route imports and calls it.
 // modules/posts/actions/create-post.server.ts
 'use server';
 export async function createPost({ title, body }) {
-  return prisma.post.create({ data: { title, body } });
+  const [post] = await db.insert(posts).values({ title, body }).returning();
+  return post;
 }
 ```
 
@@ -762,7 +763,8 @@ Where the data lives, where to read it:
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 import type { ActionResult } from '../types.ts';
 
 export async function createPost(input: {
@@ -870,7 +872,7 @@ Create new projects with `webjs create`:
 ```sh
 webjs create <name>                  # full-stack (default)
 webjs create <name> --template api   # backend-only API
-webjs create <name> --template saas  # auth + dashboard + Prisma User model
+webjs create <name> --template saas  # auth + dashboard + Drizzle User model
 ```
 
 **Route-wrapping pattern (especially for `--template api` apps):**

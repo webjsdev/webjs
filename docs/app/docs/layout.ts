@@ -44,7 +44,7 @@ const NAV_SECTIONS = [
       { href: '/docs/server-actions', label: 'Server Actions' },
       { href: '/docs/api-routes', label: 'API Routes' },
       { href: '/docs/websockets', label: 'WebSockets' },
-      { href: '/docs/database', label: 'Database (Prisma)' },
+      { href: '/docs/database', label: 'Database (Drizzle)' },
       { href: '/docs/authentication', label: 'Authentication' },
       { href: '/docs/backend-only', label: 'Backend-Only Mode' },
     ],

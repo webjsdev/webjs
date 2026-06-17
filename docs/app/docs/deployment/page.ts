@@ -126,12 +126,12 @@ readinessProbe:
   initialDelaySeconds: 3
   periodSeconds: 5</pre>
     <h4>Gating readiness on dependencies (optional)</h4>
-    <p>Warm-complete does not by itself prove the database or a queue is reachable: Prisma connects lazily on the first query, not at warm-up. To gate readiness on live dependency health, add a <code>readiness.&#123;js,ts&#125;</code> file at the app root that default-exports an async function. Once the analysis is warm, <code>/ready</code> runs it on every probe; returning <code>false</code> or throwing reports <code>503 { "status": "unready" }</code>, so the orchestrator holds traffic off an instance whose dependencies are down.</p>
+    <p>Warm-complete does not by itself prove the database or a queue is reachable: the database driver connects lazily on the first query (better-sqlite3 opens the file, pg connects), not at warm-up. To gate readiness on live dependency health, add a <code>readiness.&#123;js,ts&#125;</code> file at the app root that default-exports an async function. Once the analysis is warm, <code>/ready</code> runs it on every probe; returning <code>false</code> or throwing reports <code>503 { "status": "unready" }</code>, so the orchestrator holds traffic off an instance whose dependencies are down.</p>
     <pre>// readiness.ts
-import { prisma } from './lib/prisma.server.ts';
+import { db } from './db/connection.server.ts';
 
 export default async function ready() {
-  await prisma.user.findFirst();  // throws if the database is unreachable
+  await db.query.users.findFirst();  // throws if the database is unreachable
   return true;
 }</pre>
 
@@ -298,23 +298,25 @@ API_KEY="sk-..."</pre>
     <p><code>AUTH_SECRET</code> signs session cookies and auth tokens, so treat it like any signing key: use 32 or more random characters, keep it only in the platform secret store, and rotate it periodically and immediately on any suspected exposure. Rotating it invalidates existing sessions and tokens (everyone is signed out), which is the point. For a zero-downtime rotation, deploy the new value during a low-traffic window and accept that active sessions end. The same applies to any <code>SESSION_SECRET</code> and to OAuth provider secrets.</p>
     <p>See the <a href="/docs/configuration">Configuration</a> page for the precedence rules and the optional <code>env.{js,ts}</code> boot-time validation that fails fast on a missing or malformed secret.</p>
 
-    <h2>Database connections (Prisma + Postgres)</h2>
+    <h2>Database connections (Drizzle + Postgres)</h2>
     <p>SQLite needs no pool tuning. When you move to Postgres in production, size the connection pool, because connection exhaustion is the most common scaling surprise and webjs gives no prior signal in dev (SQLite has no pool).</p>
-    <p>A webjs server is ONE Node process per instance, and Prisma opens its own connection pool inside that process. The default pool size is <code>num_cpus * 2 + 1</code>, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
+    <p>A webjs server is ONE Node process per instance, and the <code>pg</code> driver behind Drizzle opens its own connection pool inside that process. A <code>pg.Pool</code> defaults to a max of 10 connections, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
     <p><strong>Bound the per-instance pool with <code>connection_limit</code> in the <code>DATABASE_URL</code></strong>, sized so <code>instances * connection_limit</code> stays comfortably under the database's <code>max_connections</code> (leave headroom for migrations and admin tools):</p>
     <pre># One pool of at most 10 connections per instance.
 DATABASE_URL="postgresql://user:pass@db.example.com:5432/app?connection_limit=10"</pre>
-    <p><strong>Front Postgres with a pooler when instance count is high or variable</strong> (autoscaling, many small instances, or a low <code>max_connections</code> plan). Point <code>DATABASE_URL</code> at a transaction-mode pooler (PgBouncer, or a managed pooler like Supabase, Neon, or PlanetScale) so many app connections share a small set of real database connections. With PgBouncer in transaction mode, tell Prisma so it disables prepared statements, and give migrations a DIRECT connection (the pooler does not support the session features migrations need):</p>
+    <p><strong>Front Postgres with a pooler when instance count is high or variable</strong> (autoscaling, many small instances, or a low <code>max_connections</code> plan). Point <code>DATABASE_URL</code> at a transaction-mode pooler (PgBouncer, or a managed pooler like Supabase, Neon, or PlanetScale) so many app connections share a small set of real database connections. With PgBouncer in transaction mode, the <code>pg</code> pool must NOT use prepared statements, and migrations need a DIRECT connection (the pooler does not support the session features migrations need):</p>
     <pre># App traffic goes through the pooler (port 6543), migrations go direct (5432).
-DATABASE_URL="postgresql://user:pass@pooler.example.com:6543/app?pgbouncer=true&amp;connection_limit=1"
+DATABASE_URL="postgresql://user:pass@pooler.example.com:6543/app?pgbouncer=true"
 DIRECT_URL="postgresql://user:pass@db.example.com:5432/app"</pre>
-    <pre>// prisma/schema.prisma
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}</pre>
-    <p>Behind a transaction pooler, set <code>connection_limit=1</code> per instance (the pooler does the multiplexing). Without a pooler, set <code>connection_limit</code> to a per-instance budget and keep the instance count bounded. Either way, always import the Prisma client from the scaffolded <code>lib/prisma.server.ts</code> singleton, never <code>new PrismaClient()</code> per request, so a process opens one pool, not one per call.</p>
+    <pre>// db/connection.server.ts (Postgres variant)
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema.server.ts';
+
+// max bounds the per-instance pool; 1 behind a transaction pooler.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10 });
+export const db = drizzle({ client: pool, relations: schema.relations });</pre>
+    <p>Behind a transaction pooler, set <code>max: 1</code> per instance (the pooler does the multiplexing). Without a pooler, set <code>max</code> to a per-instance budget and keep the instance count bounded. Point <code>drizzle-kit</code> (via <code>DIRECT_URL</code>) at the direct connection for migrations. Either way, import <code>db</code> from the scaffolded <code>db/connection.server.ts</code> singleton, never construct a new <code>Pool</code> per request, so a process opens one pool, not one per call.</p>
 
     <h2>Docker / Containerisation</h2>
     <p>A minimal Dockerfile for a webjs app:</p>
@@ -336,10 +338,10 @@ CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
       <li><code>node:slim</code> works fine. webjs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
-      <li>To <strong>serve on Bun</strong> (more requests/sec on the listening path) while keeping the buildless Node toolchain for the image build, drop the Bun binary into a Node image with <code>COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun</code> and start with <code>bun node_modules/@webjsdev/cli/bin/webjs.js start</code>. <code>startServer</code> auto-selects the native <code>Bun.serve</code> shell. Nothing is built on Bun, so the Node install / generate steps are unchanged. This is exactly how the in-repo example apps deploy. Note: a direct <code>bun webjs.js start</code> bypasses npm lifecycle hooks, so any per-app asset a <code>prestart</code> hook generates (Tailwind css, generated component sources) must be baked at BUILD time in the image; only runtime-dependent steps (a DB <code>prisma migrate deploy</code>) belong in the start command. One trade-off: <code>Bun.serve</code> has no informational-response API, so the 103 Early Hints modulepreload head-start (covered above) is node-only. The preload hints still ship in the document head, so this costs a small first-load latency edge only where your edge forwards 103, not correctness.</li>
+      <li>To <strong>serve on Bun</strong> (more requests/sec on the listening path) while keeping the buildless Node toolchain for the image build, drop the Bun binary into a Node image with <code>COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun</code> and start with <code>bun node_modules/@webjsdev/cli/bin/webjs.js start</code>. <code>startServer</code> auto-selects the native <code>Bun.serve</code> shell. Nothing is built on Bun, so the Node install step is unchanged (Drizzle has no client codegen step to run). This is exactly how the in-repo example apps deploy. Note: a direct <code>bun webjs.js start</code> bypasses npm lifecycle hooks, so any per-app asset a <code>prestart</code> hook generates (Tailwind css, generated component sources) must be baked at BUILD time in the image; only runtime-dependent steps (a DB <code>webjs db migrate</code>) belong in the start command. One trade-off: <code>Bun.serve</code> has no informational-response API, so the 103 Early Hints modulepreload head-start (covered above) is node-only. The preload hints still ship in the document head, so this costs a small first-load latency edge only where your edge forwards 103, not correctness.</li>
       <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
-      <li>For apps with Prisma, add <code>RUN npx prisma generate</code> before the CMD.</li>
+      <li>Drizzle has no client codegen step, so nothing to run at build time. Apply migrations at start instead. The scaffold puts <code>webjs db migrate</code> under <code>webjs.start.before</code>, which runs before the server serves (a read-only prod container still applies pending migrations against its writable database).</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
     </ul>
 
@@ -404,7 +406,7 @@ pm2 start "webjs start" --name my-app</pre>
     <ul>
       <li>Node 24+ or Bun installed (the TypeScript type-stripping for both server-side imports and browser-bound <code>.ts</code> files comes from Node's built-in on Node, or <code>amaro</code> on Bun).</li>
       <li><code>npm ci --omit=dev</code> to install only runtime dependencies.</li>
-      <li>Run <code>npx prisma generate</code> if you use Prisma.</li>
+      <li>No database client codegen step (Drizzle). Pending migrations apply via <code>webjs db migrate</code>, which the scaffold runs under <code>webjs.start.before</code>.</li>
       <li>No build step. Source <code>.js</code> / <code>.ts</code> files are deployed as-is. TypeScript types are stripped on first request via Node's built-in stripper (whitespace replacement, byte-exact positions, no sourcemap overhead) and cached by mtime.</li>
       <li>Set environment variables (<code>DATABASE_URL</code>, <code>SESSION_SECRET</code>, etc.).</li>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>

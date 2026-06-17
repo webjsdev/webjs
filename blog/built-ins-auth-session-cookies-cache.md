@@ -100,7 +100,7 @@ import { cache } from '@webjsdev/server';
 
 export const getUser = cache(
   (id: string) => `user:${id}`,
-  async (id: string) => prisma.user.findUnique({ where: { id } }),
+  async (id: string) => db.query.users.findFirst({ where: { id } }),
   { ttl: 60_000 },
 );
 ```

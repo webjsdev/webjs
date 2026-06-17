@@ -2,8 +2,7 @@
  * Integration tests for the auth module (signup, login, currentUser).
  *
  * Prerequisites:
- *   - Prisma client generated: npx prisma generate
- *   - Database migrated:       npx prisma migrate dev
+ *   - Database migrated: npm run db:migrate (drizzle-kit)
  *
  * Run with Node >= 23.6 (native type-stripping):
  *   node --test test/unit/auth.test.ts
@@ -11,7 +10,9 @@
 import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PrismaClient } from '@prisma/client';
+import { inArray } from 'drizzle-orm';
+import { db } from '../../db/connection.server.ts';
+import { users } from '../../db/schema.server.ts';
 import { withRequest } from '@webjsdev/server';
 import { setStore, memoryStore } from '@webjsdev/server';
 
@@ -21,7 +22,6 @@ import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
 
 // -- helpers ----------------------------------------------------------------
 
-const prisma = new PrismaClient();
 setStore(memoryStore());
 
 const SUFFIX = Date.now();
@@ -47,11 +47,8 @@ const createdEmails: string[] = [];
 after(async () => {
   // Delete all test users (cascades to sessions, posts, comments)
   if (createdEmails.length > 0) {
-    await prisma.user.deleteMany({
-      where: { email: { in: createdEmails } },
-    });
+    await db.delete(users).where(inArray(users.email, createdEmails));
   }
-  await prisma.$disconnect();
 });
 
 // -- tests ------------------------------------------------------------------

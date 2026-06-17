@@ -150,7 +150,7 @@ async function rpcResponse(payload, init = {}) {
  * module (the hash index is all the analysis needs; a module is imported on
  * demand by `invokeAction` / `serveActionStub`), so it is safe for a read-only
  * introspection caller (the MCP `list_actions` tool, #262) with no top-level
- * side effects (Prisma init, DB connect).
+ * side effects (DB driver init, DB connect).
  *
  * @param {string} appDir
  * @param {boolean} dev
@@ -181,7 +181,7 @@ export async function buildActionIndex(appDir, dev) {
     // Pure-RPC actions are NOT executed at boot: invokeAction and
     // serveActionStub import the module on demand (first RPC call / first stub
     // fetch), so the hash index above is all the analysis needs. Eagerly
-    // running every server module (and its transitive Prisma init, DB
+    // running every server module (and its transitive DB driver init, DB
     // connects, etc.) would be wasted work.
   }
 

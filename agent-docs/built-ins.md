@@ -13,7 +13,7 @@ layer to debug.
 ```js
 // route handler
 export async function GET() {
-  const posts = await prisma.post.findMany();
+  const posts = await db.query.posts.findMany();
   return new Response(JSON.stringify(posts), {
     headers: {
       'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
@@ -51,10 +51,10 @@ until the TTL expires:
 // modules/posts/queries/list-posts.server.ts
 'use server';
 import { cache } from '@webjsdev/server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
 
 export const listPosts = cache(
-  async () => prisma.post.findMany({ orderBy: { createdAt: 'desc' } }),
+  async () => db.query.posts.findMany({ orderBy: { createdAt: 'desc' } }),
   { key: 'posts', ttl: 60 }
 );
 ```
@@ -65,12 +65,12 @@ wrapper), add `tags`. It is either a static `string[]` or a function
 
 ```ts
 export const postById = cache(
-  async (id: string) => prisma.post.findUnique({ where: { id } }),
+  async (id: string) => db.query.posts.findFirst({ where: { id } }),
   { key: 'post', ttl: 300, tags: (id) => ['post:' + id] } // per-entity tag
 );
 
 export const listPosts = cache(
-  async () => prisma.post.findMany(),
+  async () => db.query.posts.findMany(),
   { key: 'posts', ttl: 60, tags: ['posts'] } // static tag
 );
 ```
@@ -83,9 +83,11 @@ no import of the wrapper):
 // modules/comments/actions/create-comment.server.ts
 'use server';
 import { revalidateTag, revalidatePath } from '@webjsdev/server';
+import { db } from '../../../db/connection.server.ts';
+import { comments } from '../../../db/schema.server.ts';
 
 export async function createComment(input) {
-  await prisma.comment.create({ data: input });
+  await db.insert(comments).values(input);
   await revalidateTag('post:' + input.postId); // postById(postId) recomputes
   await revalidateTag('posts');                 // listPosts recomputes
   await revalidatePath('/blog');                // also evict the cached HTML
@@ -163,7 +165,7 @@ Evict on a write with `revalidatePath`:
 import { revalidatePath } from '@webjsdev/server';
 
 export async function publishPost(input) {
-  // ... persist via Prisma ...
+  // ... persist via Drizzle ...
   await revalidatePath('/blog');   // next /blog request re-renders fresh
   return { success: true };
 }
@@ -248,7 +250,7 @@ export const { auth, signIn, signOut, handlers } = createAuth({
   providers: [
     Credentials({
       async authorize(credentials) {
-        const user = await prisma.user.findUnique({ where: { email: credentials.email } });
+        const user = await db.query.users.findFirst({ where: { email: credentials.email } });
         if (!user || !verifyPassword(credentials.password, user.passwordHash)) return null;
         return { id: user.id, name: user.name, email: user.email, role: user.role };
       },
