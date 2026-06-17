@@ -2,8 +2,7 @@
  * Integration tests for the comments module (listComments, createComment).
  *
  * Prerequisites:
- *   - Prisma client generated: npx prisma generate
- *   - Database migrated:       npx prisma migrate dev
+ *   - Database migrated: npm run db:migrate (drizzle-kit)
  *
  * Run with Node >= 23.6 (native type-stripping):
  *   node --test test/unit/comments.test.ts
