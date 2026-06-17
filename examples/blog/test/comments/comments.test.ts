@@ -11,7 +11,9 @@
 import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PrismaClient } from '@prisma/client';
+import { eq, inArray } from 'drizzle-orm';
+import { db } from '../../db/connection.server.ts';
+import { posts, users } from '../../db/schema.server.ts';
 import { withRequest } from '@webjsdev/server';
 import { setStore, memoryStore } from '@webjsdev/server';
 
@@ -22,7 +24,6 @@ import { createComment } from '../../modules/comments/actions/create-comment.ser
 
 // -- helpers ----------------------------------------------------------------
 
-const prisma = new PrismaClient();
 setStore(memoryStore());
 
 const SUFFIX = Date.now();
@@ -51,14 +52,11 @@ const createdPostSlugs: string[] = [];
 after(async () => {
   // Comments cascade-delete with posts; posts cascade-delete with users.
   for (const slug of createdPostSlugs) {
-    await prisma.post.deleteMany({ where: { slug } });
+    await db.delete(posts).where(eq(posts.slug, slug));
   }
   if (createdEmails.length > 0) {
-    await prisma.user.deleteMany({
-      where: { email: { in: createdEmails } },
-    });
+    await db.delete(users).where(inArray(users.email, createdEmails));
   }
-  await prisma.$disconnect();
 });
 
 // -- tests ------------------------------------------------------------------
