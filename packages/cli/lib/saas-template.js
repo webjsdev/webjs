@@ -14,7 +14,7 @@ const UI_REGISTRY_ROOT = resolve(
 );
 
 /**
- * Read a registry component and rewrite its `'../lib/utils.ts'` import for
+ * Read a registry component and rewrite its `'#/lib/utils.ts'` import for
  * the scaffolded app's `components/ui/<name>.ts` layout (two-up to lib/).
  * Mirrors the helper in `create.js`, kept private here to avoid coupling.
  */
@@ -23,7 +23,7 @@ async function readUiComponent(name) {
   if (!existsSync(src)) return null;
   const raw = await readFile(src, 'utf8');
   return raw
-    .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
+    .replaceAll("'#/lib/utils.ts'", "'#/lib/utils.ts'")
     .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
 }
 
@@ -79,7 +79,7 @@ export async function writeSaasFiles(appDir) {
   // lib/auth.server.ts
   await writeFile(join(appDir, 'lib', 'auth.server.ts'), [
     "import { createAuth, Credentials } from '@webjsdev/server';",
-    "import { db } from '../db/connection.server.ts';",
+    "import { db } from '#/db/connection.server.ts';",
     "import { compare } from './password.server.ts';",
     "",
     "export const { auth, signIn, signOut, handlers } = createAuth({",
@@ -124,9 +124,9 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'modules', 'auth', 'actions', 'signup.server.ts'), [
     "'use server';",
     "",
-    "import { db } from '../../../db/connection.server.ts';",
-    "import { users } from '../../../db/schema.server.ts';",
-    "import { hash } from '../../../lib/password.server.ts';",
+    "import { db } from '#/db/connection.server.ts';",
+    "import { users } from '#/db/schema.server.ts';",
+    "import { hash } from '#/lib/password.server.ts';",
     "",
     "export async function signup(input: { name: string; email: string; password: string }) {",
     "  const exists = await db.query.users.findFirst({ where: { email: input.email }, columns: { id: true } });",
@@ -141,7 +141,7 @@ export async function writeSaasFiles(appDir) {
   await writeFile(join(appDir, 'modules', 'auth', 'queries', 'current-user.server.ts'), [
     "'use server';",
     "",
-    "import { auth } from '../../../lib/auth.server.ts';",
+    "import { auth } from '#/lib/auth.server.ts';",
     "",
     "export async function currentUser() {",
     "  const session = await auth();",
@@ -263,7 +263,7 @@ export async function writeSaasFiles(appDir) {
   // app/api/auth/[...path]/route.ts
   await mkdir(join(appDir, 'app', 'api', 'auth', '[...path]'), { recursive: true });
   await writeFile(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts'), [
-    "import { handlers } from '../../../../lib/auth.server.ts';",
+    "import { handlers } from '#/lib/auth.server.ts';",
     "export const GET = handlers.GET;",
     "export const POST = handlers.POST;",
     "",
@@ -273,10 +273,10 @@ export async function writeSaasFiles(appDir) {
   await mkdir(join(appDir, 'app', 'login'), { recursive: true });
   await writeFile(join(appDir, 'app', 'login', 'page.ts'), [
     "import { html } from '@webjsdev/core';",
-    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '../../components/ui/card.ts';",
-    "import { buttonClass } from '../../components/ui/button.ts';",
-    "import { inputClass } from '../../components/ui/input.ts';",
-    "import { labelClass } from '../../components/ui/label.ts';",
+    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '#/components/ui/card.ts';",
+    "import { buttonClass } from '#/components/ui/button.ts';",
+    "import { inputClass } from '#/components/ui/input.ts';",
+    "import { labelClass } from '#/components/ui/label.ts';",
     "",
     "export const metadata = { title: 'Login' };",
     "",
@@ -315,11 +315,11 @@ export async function writeSaasFiles(appDir) {
   await mkdir(join(appDir, 'app', 'signup'), { recursive: true });
   await writeFile(join(appDir, 'app', 'signup', 'page.ts'), [
     "import { html } from '@webjsdev/core';",
-    "import { signup } from '../../modules/auth/actions/signup.server.ts';",
-    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '../../components/ui/card.ts';",
-    "import { buttonClass } from '../../components/ui/button.ts';",
-    "import { inputClass } from '../../components/ui/input.ts';",
-    "import { labelClass } from '../../components/ui/label.ts';",
+    "import { signup } from '#/modules/auth/actions/signup.server.ts';",
+    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '#/components/ui/card.ts';",
+    "import { buttonClass } from '#/components/ui/button.ts';",
+    "import { inputClass } from '#/components/ui/input.ts';",
+    "import { labelClass } from '#/components/ui/label.ts';",
     "",
     "export const metadata = { title: 'Sign up' };",
     "",
@@ -387,7 +387,7 @@ export async function writeSaasFiles(appDir) {
   // app/dashboard/middleware.ts
   await mkdir(join(appDir, 'app', 'dashboard', 'settings'), { recursive: true });
   await writeFile(join(appDir, 'app', 'dashboard', 'middleware.ts'), [
-    "import { auth } from '../../lib/auth.server.ts';",
+    "import { auth } from '#/lib/auth.server.ts';",
     "",
     "export default async function requireAuth(req: Request, next: () => Promise<Response>) {",
     "  const session = await auth();",
@@ -402,10 +402,10 @@ export async function writeSaasFiles(appDir) {
   // app/dashboard/page.ts
   await writeFile(join(appDir, 'app', 'dashboard', 'page.ts'), [
     "import { html } from '@webjsdev/core';",
-    "import { currentUser } from '../../modules/auth/queries/current-user.server.ts';",
-    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '../../components/ui/card.ts';",
-    "import { buttonClass } from '../../components/ui/button.ts';",
-    "import { badgeClass } from '../../components/ui/badge.ts';",
+    "import { currentUser } from '#/modules/auth/queries/current-user.server.ts';",
+    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '#/components/ui/card.ts';",
+    "import { buttonClass } from '#/components/ui/button.ts';",
+    "import { badgeClass } from '#/components/ui/badge.ts';",
     "",
     "export const metadata = { title: 'Dashboard' };",
     "",
@@ -433,8 +433,8 @@ export async function writeSaasFiles(appDir) {
   // app/dashboard/settings/page.ts
   await writeFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), [
     "import { html } from '@webjsdev/core';",
-    "import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';",
-    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '../../../components/ui/card.ts';",
+    "import { currentUser } from '#/modules/auth/queries/current-user.server.ts';",
+    "import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '#/components/ui/card.ts';",
     "",
     "export const metadata = { title: 'Settings' };",
     "",

@@ -202,10 +202,10 @@ Pure functions that return Tailwind class strings. You apply them to
 import {
   cardClass, cardHeaderClass, cardTitleClass,
   cardContentClass, cardFooterClass,
-} from '../../components/ui/card.ts';
-import { inputClass } from '../../components/ui/input.ts';
-import { labelClass } from '../../components/ui/label.ts';
-import { buttonClass } from '../../components/ui/button.ts';
+} from '#/components/ui/card.ts';
+import { inputClass } from '#/components/ui/input.ts';
+import { labelClass } from '#/components/ui/label.ts';
+import { buttonClass } from '#/components/ui/button.ts';
 
 return html`
   <div class=${cardClass()}>
@@ -237,13 +237,13 @@ elements. Import them once (typically in `app/layout.ts`) and use
 
 ```ts
 // app/layout.ts (registers the custom elements for every page)
-import '../components/ui/dialog.ts';
-import '../components/ui/tabs.ts';
+import '#/components/ui/dialog.ts';
+import '#/components/ui/tabs.ts';
 ```
 
 ```ts
 // app/some-page/page.ts (uses the registered elements)
-import { buttonClass } from '../../components/ui/button.ts';
+import { buttonClass } from '#/components/ui/button.ts';
 
 return html`
   <ui-dialog>
@@ -463,7 +463,7 @@ singleton avoids opening a new connection on every dev-server reload), and
 the tables from `db/schema.server.ts`:
 
 ```ts
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#/db/connection.server.ts';
 const users = await db.query.users.findMany();
 ```
 
@@ -754,8 +754,8 @@ legitimately use `static styles = css\`\`` for scoped CSS.
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#/db/connection.server.ts';
+import { posts } from '#/db/schema.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   if (!input.title) return { success: false, error: 'title required', status: 400 };
@@ -806,7 +806,7 @@ with a `route.ts` POST handler:
 ```ts
 // app/posts/route.ts
 import { redirect, html } from '@webjsdev/core';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#/modules/posts/actions/create-post.server.ts';
 
 export async function POST(req: Request) {
   const form = await req.formData();
