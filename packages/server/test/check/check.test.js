@@ -807,8 +807,8 @@ test('use-server-needs-extension: .server.ts WITHOUT directive does not trigger 
   try {
     await mkdir(join(appDir, 'lib'), { recursive: true });
     await writeFile(
-      join(appDir, 'lib', 'prisma.server.ts'),
-      `export const prisma = { findMany: () => [] };
+      join(appDir, 'lib', 'db.server.ts'),
+      `export const db = { findMany: () => [] };
 `,
     );
     const violations = await checkConventions(appDir);

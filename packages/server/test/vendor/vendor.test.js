@@ -126,7 +126,7 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
 
   await writeFile(
     join(dir, 'app', 'api', 'posts', 'route.ts'),
-    `import { PrismaClient } from '@prisma/client';
+    `import Database from 'better-sqlite3';
      import 'server-only-helper';`,
   );
 
@@ -149,7 +149,7 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
   const found = await scanBareImports(dir);
 
   assert.ok(found.has('dayjs'), 'page.ts imports should be scanned');
-  assert.ok(!found.has('@prisma/client'), 'route.ts imports must be skipped');
+  assert.ok(!found.has('better-sqlite3'), 'route.ts imports must be skipped');
   assert.ok(!found.has('server-only-helper'), 'route.ts imports must be skipped');
   assert.ok(!found.has('ws'), 'middleware.ts imports must be skipped');
   assert.ok(!found.has('another-server-thing'), 'middleware.ts imports must be skipped');
@@ -181,14 +181,14 @@ test('scanBareImports: skips import type statements (TS erases them)', async () 
 
   await writeFile(join(dir, 'a.ts'), `
     import type { WebSocket } from 'ws';
-    import type { User } from '@prisma/client';
+    import type { Database as DB } from 'better-sqlite3';
     import dayjs from 'dayjs';
   `);
 
   const found = await scanBareImports(dir);
   assert.ok(found.has('dayjs'), 'real value imports remain');
   assert.ok(!found.has('ws'), 'type-only imports must be skipped');
-  assert.ok(!found.has('@prisma/client'), 'type-only imports must be skipped');
+  assert.ok(!found.has('better-sqlite3'), 'type-only imports must be skipped');
 
   await rm(dir, { recursive: true, force: true });
 });
