@@ -71,7 +71,7 @@ prefer explicit `.ts`.
 
 ```ts
 // modules/posts/queries/list-posts.server.ts
-import { prisma } from '../../../lib/prisma.js';         // JS file unchanged
+import { db } from '../../../db/connection.server.js';   // .js specifier resolves the .ts sibling
 import { formatPost } from '../utils/slugify.ts';         // TS file
 ```
 

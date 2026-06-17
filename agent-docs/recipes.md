@@ -13,37 +13,35 @@ schema with the real domain models, then build features on top. This is the
 transition agents most often get wrong, so it is the first recipe.
 
 > **Two non-negotiables.** NEVER leave the example `User` model in
-> `schema.prisma` if the app does not actually have users (delete or replace
-> it). NEVER persist app data in JSON files (`data/todos.json`, `db.json`), in
-> a module-scope array or `Map`, or in `localStorage`. Those reset on every
-> reload and cannot scale. Every piece of stored data is a Prisma model.
+> `db/schema.server.ts` if the app does not actually have users (delete or
+> replace it). NEVER persist app data in JSON files (`data/todos.json`,
+> `db.json`), in a module-scope array or `Map`, or in `localStorage`. Those
+> reset on every reload and cannot scale. Every piece of stored data is a
+> Drizzle table.
 
-1. **Edit `prisma/schema.prisma`** to the real domain. Replace the example
-   `User` model with the models the app needs.
+1. **Edit `db/schema.server.ts`** to the real domain. Replace the example
+   `User` model with the models the app needs (the helpers come from
+   `db/columns.server.ts`).
 
-   ```prisma
-   // prisma/schema.prisma
-   model Post {
-     id        String   @id @default(cuid())
-     title     String
-     body      String
-     published Boolean  @default(false)
-     createdAt DateTime @default(now())
-   }
+   ```ts
+   // db/schema.server.ts
+   import { table, pk, text, bool, createdAt, index } from './columns.server.ts';
+   export const posts = table('posts', {
+     id: pk(),
+     title: text().notNull(),
+     body: text().notNull(),
+     published: bool().notNull().default(false),
+     createdAt: createdAt(),
+   }, (t) => [index(t.createdAt)]);
    ```
 
-   Start the dev server with `npm run dev` or a bare `webjs dev` (equivalent
-   as of #550): the `webjs.dev.before` step `prisma generate` runs inside
-   `webjs dev` either way, so the client is generated before the server boots.
-
-2. **Migrate.** Run `npm run db:migrate` or `webjs db migrate` (equivalent):
+2. **Generate + migrate.** Drizzle has no codegen; `generate` turns the schema
+   into SQL, `migrate` applies it:
 
    ```sh
-   npm run db:migrate -- --name add_post
+   npm run db:generate      # schema -> SQL migration (drizzle-kit)
+   npm run db:migrate       # apply it to the dev SQLite database
    ```
-
-   This creates the migration, applies it to the dev SQLite database, and
-   regenerates the Prisma client.
 
 3. **Generate one query and one action per operation**, one exported function
    per file, named after the file, under the feature module. Reads go in
@@ -53,27 +51,28 @@ transition agents most often get wrong, so it is the first recipe.
    ```ts
    // modules/posts/queries/list-posts.server.ts
    'use server';
-   import { prisma } from '../../../lib/prisma.server.ts';
+   import { db } from '../../../db/connection.server.ts';
    export async function listPosts() {
-     return prisma.post.findMany({ where: { published: true }, orderBy: { createdAt: 'desc' } });
+     return db.query.posts.findMany({ where: { published: true }, orderBy: { createdAt: 'desc' } });
    }
    ```
 
    ```ts
    // modules/posts/actions/create-post.server.ts
    'use server';
-   import { prisma } from '../../../lib/prisma.server.ts';
+   import { db } from '../../../db/connection.server.ts';
+   import { posts } from '../../../db/schema.server.ts';
    export async function createPost(input: { title: string; body: string }) {
      const title = String(input?.title || '').trim();
      if (!title) return { success: false, error: 'title required', status: 400 };
-     const post = await prisma.post.create({ data: { title, body: String(input?.body || '') } });
+     const [post] = await db.insert(posts).values({ title, body: String(input?.body || '') }).returning();
      return { success: true, data: post };
    }
    ```
 
 4. **Wire it into a page** by calling the query (the page runs on the server,
    so it imports the `.server` query directly and awaits it). Never import
-   `@prisma/client` into a page; reach the database through the query.
+   the DB driver into a page; reach the database through the query.
 
    ```ts
    // app/posts/page.ts
@@ -115,11 +114,13 @@ export default async function User({ params }: { params: { id: string } }) {
 ```ts
 // modules/users/actions/update-profile.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../db/connection.server.ts';
+import { users } from '../../../db/schema.server.ts';
 export async function updateProfile(input: { name: string }) {
   const name = String(input?.name || '').trim();
   if (!name) return { success: false, error: 'name required', status: 400 };
-  const row = await prisma.user.update({ where: { id: me.id }, data: { name } });
+  const [row] = await db.update(users).set({ name }).where(eq(users.id, me.id)).returning();
   return { success: true, data: row };
 }
 ```
@@ -140,7 +141,8 @@ validator is a plain function (or a three-line zod adapter).
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
 
 // the validator: receives the action's FIRST argument
 export const validate = (input: any) => {
@@ -154,7 +156,7 @@ export const validate = (input: any) => {
 
 // the action body: runs ONLY when validation passes
 export async function createPost(input: { title: string; body: string }) {
-  const row = await prisma.post.create({ data: input });
+  const [row] = await db.insert(posts).values(input).returning();
   return { success: true, data: row };
 }
 ```
@@ -407,7 +409,9 @@ the user-supplied filename as a key; `generateKey` makes an opaque one.
 // modules/avatar/actions/save-avatar.server.ts
 'use server';
 import { getFileStore, generateKey } from '@webjsdev/server';
-import { prisma } from '../../../lib/prisma.server.ts';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../db/connection.server.ts';
+import { users } from '../../../db/schema.server.ts';
 
 export async function saveAvatar(file: File) {
   const key = generateKey(file.name);                // <uuid>.<ext>, safe
@@ -416,7 +420,7 @@ export async function saveAvatar(file: File) {
     await getFileStore().delete(key);
     return { success: false, fieldErrors: { avatar: 'Max 5 MB' }, status: 422 };
   }
-  await prisma.user.update({ where: { id: 'me' }, data: { avatarKey: key } });
+  await db.update(users).set({ avatarKey: key }).where(eq(users.id, 'me'));
   return { success: true, data: { key, contentType } };
 }
 ```
