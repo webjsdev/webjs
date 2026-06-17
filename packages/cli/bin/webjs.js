@@ -136,14 +136,9 @@ async function main() {
         break;
       }
 
-      // (#550 superseded the #452 prisma-generate hint: `webjs dev` now RUNS
-      // the configured `webjs.dev.before` step `prisma generate` itself, below,
-      // so a bare `webjs dev` self-generates the client instead of only warning
-      // about it.)
-
       // Run the configured dev orchestration in the PARENT only (#550), so a
-      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot, e.g.
-      // `prisma generate`) runs to completion first; `dev.parallel` (Tailwind's
+      // bare `webjs dev` matches `npm run dev`. `dev.before` (one-shot tasks)
+      // runs to completion first; `dev.parallel` (Tailwind's
       // watcher, etc.) then runs as children alongside the server. Spawned once
       // here, NOT in the watch child (which re-execs on every restart). Torn
       // down on exit so a watcher cannot outlive the server.

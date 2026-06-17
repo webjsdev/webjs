@@ -36,6 +36,6 @@
   "exclude": [
     "node_modules",
     ".webjs",
-    "prisma/migrations"
+    "db/migrations"
   ]
 }
