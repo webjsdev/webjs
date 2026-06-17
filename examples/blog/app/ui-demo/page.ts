@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import { buttonClass } from '#/components/ui/button.ts';
-import { badgeClass } from '#/components/ui/badge.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { badgeClass } from '#components/ui/badge.ts';
 import {
   cardClass,
   cardHeaderClass,
@@ -8,14 +8,14 @@ import {
   cardDescriptionClass,
   cardContentClass,
   cardFooterClass,
-} from '#/components/ui/card.ts';
+} from '#components/ui/card.ts';
 import {
   alertClass,
   alertTitleClass,
   alertDescriptionClass,
-} from '#/components/ui/alert.ts';
-import { inputClass } from '#/components/ui/input.ts';
-import { labelClass } from '#/components/ui/label.ts';
+} from '#components/ui/alert.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
 // Tier-2 components are real custom elements: register by side-effect import.
 import '../../components/ui/dialog.ts';
 

@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '#/components/seeded-user.ts';
+import '#components/seeded-user.ts';
 
 export const metadata = {
   title: 'Seeded user · webjs blog',

@@ -43,15 +43,18 @@ export function appImportsMap(appDir) {
 }
 
 /**
- * Expand a `package.json "imports"` subpath alias (e.g. `#/lib/db.server.ts`
- * with `"#/*": "./*"`) to its real APP-RELATIVE target string (`./lib/db.server.ts`).
+ * Expand a `package.json "imports"` subpath alias (e.g. `#lib/db.server.ts`
+ * with `"#lib/*": "./lib/*"`) to its real APP-RELATIVE target string
+ * (`./lib/db.server.ts`).
  * The security-critical seam (#555): the graph walker, auth gate, elision, and
  * `no-server-import-in-browser-module` all route through `resolveImport`, so
  * expanding the alias here (to the real path) is what stops an alias from
  * laundering a `.server.ts` past those checks. Driven off the actual `"imports"`
- * map so a non-default base (`"#/*": "./src/*"`) is honored; never hardcodes `./`.
- * Supports one trailing `*` wildcard per key (Node's rule) plus exact keys.
- * @param {string} spec  the import specifier, e.g. `'#/lib/db.server.ts'`
+ * map so a non-default base (`"#lib/*": "./src/lib/*"`) is honored; never
+ * hardcodes `./`. Supports one trailing `*` wildcard per key (Node's rule) plus
+ * exact keys. (A `#/`-prefixed key is avoided in the scaffold because Bun's
+ * native resolver rejects it; the expansion here is key-shape-agnostic.)
+ * @param {string} spec  the import specifier, e.g. `'#lib/db.server.ts'`
  * @param {string} appDir
  * @returns {string | null}  the app-relative target (e.g. `'./lib/db.server.ts'`), or null if no alias matches
  */
@@ -349,7 +352,7 @@ async function parseFile(file, appDir, graph, seen) {
       const spec = m[1];
       // Only resolve relative imports + `#/`-style subpath aliases (#555)
       // within the project. A bare npm specifier (dayjs) has no alias match
-      // and is skipped; an aliased `#/lib/x.server.ts` IS followed so the
+      // and is skipped; an aliased `#lib/x.server.ts` IS followed so the
       // graph / auth gate / elision see the real path through the alias.
       if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
       const resolved = resolveImport(spec, file, appDir);

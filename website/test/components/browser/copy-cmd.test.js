@@ -11,7 +11,7 @@
  * component swallows a rejected write, so without the stub the flip would
  * never happen and there would be nothing to assert).
  */
-import '#/components/copy-cmd.ts';
+import '#components/copy-cmd.ts';
 
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },

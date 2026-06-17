@@ -121,11 +121,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
 
-    // #/ path-alias imports (#555/#556): the scaffold ships the imports block
-    // and uses #/ for app-internal imports, with no within-app deep relatives.
+    // # path-alias imports (#555/#556): the scaffold ships the imports block
+    // and uses # aliases for app-internal imports, no within-app deep relatives.
     const aliasPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
-    assert.deepEqual(aliasPkg.imports, { '#/*': './*' }, 'package.json ships the #/* imports alias');
-    assert.match(pageSrc, /from '#\//, 'the example page imports via #/');
+    assert.deepEqual(aliasPkg.imports, { '#app/*': './app/*', '#components/*': './components/*', '#db/*': './db/*', '#lib/*': './lib/*', '#modules/*': './modules/*' }, 'package.json ships the per-dir # imports aliases');
+    assert.match(pageSrc, /from '#[a-z]/, 'the example page imports via #');
     // No app-internal deep relative (../../) survives the codemod in any .ts.
     const tsFiles = [];
     (function walk(d) {

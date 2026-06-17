@@ -1,4 +1,4 @@
-import { loadRegistryManifest } from '#/app/_lib/registry.server.ts';
+import { loadRegistryManifest } from '#app/_lib/registry.server.ts';
 
 /** GET /registry: full registry manifest with content inlined per item. */
 export async function GET() {

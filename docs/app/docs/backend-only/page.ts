@@ -50,7 +50,7 @@ export default function BackendOnly() {
     <h2>File-Based API Routing</h2>
     <p>A <code>route.ts</code> file anywhere under <code>app/</code> becomes an API endpoint. Export functions named after HTTP methods:</p>
     <pre>// app/api/users/route.ts
-import { db } from '#/db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 import { users } from '../../../db/schema.server.ts';
 
 export async function GET(req: Request, { params }: { params: Record&lt;string, string&gt; }) {

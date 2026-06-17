@@ -1,4 +1,4 @@
-import { loadRegistryIndex } from '#/app/_lib/registry.server.ts';
+import { loadRegistryIndex } from '#app/_lib/registry.server.ts';
 
 /** GET /registry/index.json: flat list of registry items (metadata only, used by `webjsui list`). */
 export async function GET() {

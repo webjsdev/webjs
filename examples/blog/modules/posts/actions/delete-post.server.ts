@@ -1,11 +1,11 @@
 'use server';
 
 import { eq } from 'drizzle-orm';
-import { db } from '#/db/connection.server.ts';
-import { posts } from '#/db/schema.server.ts';
-import { currentUser } from '#/modules/auth/queries/current-user.server.ts';
-import { listPosts } from '#/modules/posts/queries/list-posts.server.ts';
-import type { ActionResult } from '#/modules/auth/types.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+import type { ActionResult } from '#modules/auth/types.ts';
 
 export async function deletePost(
   input: { slug: string },

@@ -1,4 +1,4 @@
-import type { CommentFormatted } from '#/modules/comments/types.ts';
+import type { CommentFormatted } from '#modules/comments/types.ts';
 
 export function formatComment(c: any): CommentFormatted {
   return {

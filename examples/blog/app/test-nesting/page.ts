@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import '#/components/test/shadow-parent.ts';
-import '#/components/test/light-parent.ts';
+import '#components/test/shadow-parent.ts';
+import '#components/test/light-parent.ts';
 
 export const metadata = { title: 'Nested DSD Test' };
 

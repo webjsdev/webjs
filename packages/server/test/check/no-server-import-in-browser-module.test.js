@@ -499,11 +499,11 @@ test('an app with no app/ directory is not analysed', async () => {
 // expanded to the real path inside resolveImport, so the rule sees through it.
 test('a server import via a #/ alias into a shipping page IS flagged (alias does not launder the boundary)', async () => {
   const appDir = await makeApp({
-    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#/*': './*' } }),
+    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#lib/*': './lib/*', '#modules/*': './modules/*' } }),
     'lib/auth.server.ts': AUTH_SERVER,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
-    'app/project/page.ts': `import { auth } from '#/lib/auth.server.ts';
-import '#/modules/workspace/components/crisp-workspace.ts';
+    'app/project/page.ts': `import { auth } from '#lib/auth.server.ts';
+import '#modules/workspace/components/crisp-workspace.ts';
 export default async function ProjectPage() {
   const session = await auth();
   return \`<crisp-workspace></crisp-workspace>\`;
@@ -525,9 +525,9 @@ export default async function ProjectPage() {
 // the SAME elision verdict a relative import gets, not a blanket pass/fail.
 test('a #/ alias server import into an elided display-only page is NOT flagged', async () => {
   const appDir = await makeApp({
-    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#/*': './*' } }),
+    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#lib/*': './lib/*', '#modules/*': './modules/*' } }),
     'lib/auth.server.ts': AUTH_SERVER,
-    'app/dashboard/page.ts': `import { auth } from '#/lib/auth.server.ts';
+    'app/dashboard/page.ts': `import { auth } from '#lib/auth.server.ts';
 export default async function DashboardPage() {
   const session = await auth();
   return \`<h1>Hello \${session.user ?? 'guest'}</h1>\`;

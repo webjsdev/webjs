@@ -3,7 +3,7 @@
  * GET returns a status snapshot; WS upgrades to a live connection.
  */
 import type { WebSocket } from 'ws';
-import { clients, broadcast } from '#/modules/chat/utils/clients.ts';
+import { clients, broadcast } from '#modules/chat/utils/clients.ts';
 
 export async function GET() {
   return new Response(

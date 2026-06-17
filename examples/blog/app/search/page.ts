@@ -1,5 +1,5 @@
 import { html, type PageProps } from '@webjsdev/core';
-import { listPosts } from '#/modules/posts/queries/list-posts.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 
 export const metadata = { title: 'Search posts' };
 

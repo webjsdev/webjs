@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import { listPosts } from '#/modules/blog/queries/list-posts.server.ts';
+import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 
 /**
  * /blog

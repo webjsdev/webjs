@@ -30,7 +30,7 @@ let _extraEntries = {};
 
 /**
  * Browser importmap entries for the app's `package.json "imports"` subpath
- * aliases (#555), e.g. `{ "#/": "/" }` for `"#/*": "./*"`. Kept in lockstep
+ * aliases (#555), e.g. `{ "#lib/": "/lib/" }` for `"#lib/*": "./lib/*"`. Kept in lockstep
  * with the server-side resolver (`module-graph.js`'s `expandImportAlias`):
  * BOTH are derived from the one `"imports"` map, so an alias that resolves in
  * SSR never 404s in the browser (the #158/#159 preload-mismatch class). Set at
@@ -80,9 +80,9 @@ export function basePath() {
 
 /**
  * Derive the BROWSER importmap entries for an app's `package.json "imports"`
- * subpath-alias map (#555). A wildcard key `"#/*": "./*"` becomes the
- * trailing-slash prefix scope `"#/": "/"` (so `#/lib/x.ts` resolves to
- * `/lib/x.ts`); a non-default base `"#/*": "./src/*"` becomes `"#/": "/src/"`;
+ * subpath-alias map (#555). A wildcard key `"#lib/*": "./lib/*"` becomes the
+ * trailing-slash prefix scope `"#lib/": "/lib/"` (so `#lib/x.ts` resolves to
+ * `/lib/x.ts`); a non-default base `"#lib/*": "./src/lib/*"` becomes `"#lib/": "/src/lib/"`;
  * an exact key `"#db": "./lib/db.server.ts"` becomes `"#db": "/lib/db.server.ts"`.
  * The leading `./` becomes a root-absolute `/` and the `*` is dropped (the
  * trailing slash carries the prefix match). Only string targets are mappable

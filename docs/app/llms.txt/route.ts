@@ -10,7 +10,7 @@
  * to the `/llms.txt` URL. This routes cleanly because a webjs route.ts
  * handler is matched BEFORE the static-asset / source-file gate.
  */
-import { renderLlmsIndex, textResponse } from '#/lib/llms.server.ts';
+import { renderLlmsIndex, textResponse } from '#lib/llms.server.ts';
 
 export async function GET(req: Request) {
   return textResponse(await renderLlmsIndex(req));

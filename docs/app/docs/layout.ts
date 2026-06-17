@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import '#/components/theme-toggle.ts';
-import '#/components/doc-search.ts';
+import '#components/theme-toggle.ts';
+import '#components/doc-search.ts';
 
 /**
  * Docs sub-layout: sidebar + content shell. Light DOM throughout.

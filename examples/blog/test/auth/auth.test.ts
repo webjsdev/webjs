@@ -11,14 +11,14 @@ import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { inArray } from 'drizzle-orm';
-import { db } from '#/db/connection.server.ts';
-import { users } from '#/db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
 import { withRequest } from '@webjsdev/server';
 import { setStore, memoryStore } from '@webjsdev/server';
 
-import { signup } from '#/modules/auth/actions/signup.server.ts';
-import { login } from '#/modules/auth/actions/login.server.ts';
-import { currentUser } from '#/modules/auth/queries/current-user.server.ts';
+import { signup } from '#modules/auth/actions/signup.server.ts';
+import { login } from '#modules/auth/actions/login.server.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 
 // -- helpers ----------------------------------------------------------------
 

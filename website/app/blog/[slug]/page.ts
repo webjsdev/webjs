@@ -1,6 +1,6 @@
 import { html, unsafeHTML, notFound } from '@webjsdev/core';
-import { getPost } from '#/modules/blog/queries/get-post.server.ts';
-import { renderPostBody } from '#/modules/blog/utils/render-post.ts';
+import { getPost } from '#modules/blog/queries/get-post.server.ts';
+import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 /**
  * /blog/[slug]

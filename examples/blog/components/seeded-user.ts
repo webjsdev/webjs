@@ -1,5 +1,5 @@
 import { WebComponent, html } from '@webjsdev/core';
-import { getSeedUser } from '#/modules/seed/queries/get-user.server.ts';
+import { getSeedUser } from '#modules/seed/queries/get-user.server.ts';
 
 /**
  * `<seeded-user>`: the SSR action-seeding fixture (#472). It awaits a real

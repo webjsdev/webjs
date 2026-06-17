@@ -1,7 +1,7 @@
 import { html, unsafeHTML } from '@webjsdev/core';
-import { listEntries } from '#/modules/changelog/queries/list-entries.server.ts';
-import { renderEntryBody } from '#/modules/changelog/utils/render-entry.ts';
-import { pkgBadge } from '#/modules/changelog/utils/pkg-badge.ts';
+import { listEntries } from '#modules/changelog/queries/list-entries.server.ts';
+import { renderEntryBody } from '#modules/changelog/utils/render-entry.ts';
+import { pkgBadge } from '#modules/changelog/utils/pkg-badge.ts';
 
 /**
  * /changelog

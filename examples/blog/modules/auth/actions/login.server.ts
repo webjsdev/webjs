@@ -1,10 +1,10 @@
 'use server';
 
-import { db } from '#/db/connection.server.ts';
-import { verifyPassword } from '#/lib/password.server.ts';
-import { createSession } from '#/lib/session.server.ts';
-import { validateLogin } from '#/modules/auth/utils/validate.ts';
-import type { ActionResult, PublicUser } from '#/modules/auth/types.ts';
+import { db } from '#db/connection.server.ts';
+import { verifyPassword } from '#lib/password.server.ts';
+import { createSession } from '#lib/session.server.ts';
+import { validateLogin } from '#modules/auth/utils/validate.ts';
+import type { ActionResult, PublicUser } from '#modules/auth/types.ts';
 
 /** Authenticate by email + password; open a new session. */
 export async function login(

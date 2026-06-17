@@ -11,15 +11,15 @@ import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { eq, inArray } from 'drizzle-orm';
-import { db } from '#/db/connection.server.ts';
-import { posts, users } from '#/db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts, users } from '#db/schema.server.ts';
 import { withRequest } from '@webjsdev/server';
 import { setStore, memoryStore } from '@webjsdev/server';
 
-import { signup } from '#/modules/auth/actions/signup.server.ts';
-import { createPost } from '#/modules/posts/actions/create-post.server.ts';
-import { listComments } from '#/modules/comments/queries/list-comments.server.ts';
-import { createComment } from '#/modules/comments/actions/create-comment.server.ts';
+import { signup } from '#modules/auth/actions/signup.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
+import { listComments } from '#modules/comments/queries/list-comments.server.ts';
+import { createComment } from '#modules/comments/actions/create-comment.server.ts';
 
 // -- helpers ----------------------------------------------------------------
 

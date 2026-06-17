@@ -1,5 +1,5 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { streamTokens } from '#/modules/verbdemo/actions/stream-tokens.server.ts';
+import { streamTokens } from '#modules/verbdemo/actions/stream-tokens.server.ts';
 
 /**
  * `<token-stream>`: the streaming-RPC demo (#489). Clicking "start" calls the

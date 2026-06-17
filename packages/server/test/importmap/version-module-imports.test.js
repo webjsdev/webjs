@@ -202,13 +202,13 @@ test('versions a #/ path-alias import as a base-path-safe relative specifier (#5
   // browser resolves it against the importer's own URL, not the importmap) and
   // carrying the same `?v` as the preload, collapsing fetch + preload to one
   // immutable cache key.
-  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#/*': './*' } }));
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#components/*': './components/*', '#lib/*': './lib/*' } }));
   const badgeBytes = 'export class B {}\n';
   writeFileSync(join(appDir, 'components', 'badge.ts'), badgeBytes);
   setAssetRoots({ appDir, coreDir, enabled: true });
 
   const pageAbs = join(appDir, 'app', 'page.ts');
-  const out = versionModuleImports("import '#/components/badge.ts';\n", pageAbs);
+  const out = versionModuleImports("import '#components/badge.ts';\n", pageAbs);
 
   const h = shortHash(badgeBytes);
   // app/page.ts -> components/badge.ts is `../components/badge.ts`.
@@ -219,12 +219,12 @@ test('versions a #/ path-alias import as a base-path-safe relative specifier (#5
 });
 
 test('a #/ alias to a .server.ts is NOT versioned (server stub, bare URL, not preloaded)', () => {
-  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#/*': './*' } }));
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#components/*': './components/*', '#lib/*': './lib/*' } }));
   writeFileSync(join(appDir, 'lib', 'db.server.ts'), "export const db = {};\n");
   setAssetRoots({ appDir, coreDir, enabled: true });
 
   const pageAbs = join(appDir, 'app', 'page.ts');
-  const src = "import { db } from '#/lib/db.server.ts';\n";
+  const src = "import { db } from '#lib/db.server.ts';\n";
   // A .server.* target serves as a stub at a bare URL and is never in the
   // preload set, so it is left untouched (same as a relative .server import).
   assert.equal(versionModuleImports(src, pageAbs), src);

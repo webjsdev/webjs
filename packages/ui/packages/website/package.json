@@ -4,7 +4,11 @@
   "type": "module",
   "private": true,
   "imports": {
-    "#/*": "./*"
+    "#app/*": "./app/*",
+    "#components/*": "./components/*",
+    "#db/*": "./db/*",
+    "#lib/*": "./lib/*",
+    "#modules/*": "./modules/*"
   },
   "description": "Registry host + docs site for @webjsdev/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {

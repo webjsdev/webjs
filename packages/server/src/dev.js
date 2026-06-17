@@ -494,7 +494,7 @@ export async function createRequestHandler(opts) {
   await setCoreInstall(coreDir, distComplete);
 
   // Path-alias imports (#555). Emit the browser importmap scope for the app's
-  // `package.json "imports"` aliases (`"#/*": "./*"` -> `"#/": "/"`), derived
+  // `package.json "imports"` aliases (`"#lib/*": "./lib/*"` -> `"#lib/": "/lib/"`), derived
   // from the SAME map the server resolver (`expandImportAlias`) reads, so SSR
   // and the browser agree. An app with no `"imports"` block yields {} (a no-op,
   // byte-identical to before this feature).
