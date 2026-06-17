@@ -121,8 +121,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
 
-    // # path-alias imports (#555/#556): the scaffold ships the imports block
-    // and uses # aliases for app-internal imports, no within-app deep relatives.
+    // # path-alias imports (#555/#556): the scaffold ships the single #* catch-all
+    // imports key and uses # aliases for app-internal imports, no within-app deep relatives.
     const aliasPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
     assert.deepEqual(aliasPkg.imports, { '#*': './*' }, 'package.json ships the per-dir # imports aliases');
     assert.match(pageSrc, /from '#[a-z]/, 'the example page imports via #');
@@ -343,6 +343,18 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.ok(existsSync(join(appDir, 'lib', 'password.server.ts')), 'lib/password.server.ts present');
     assert.ok(existsSync(join(appDir, 'lib', 'auth.server.ts')), 'lib/auth.server.ts present');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
+
+    // The copied ui-* components import cn() via the #lib/utils/cn.ts alias, not
+    // a stale relative `../lib/utils.ts` that would ERR_MODULE_NOT_FOUND from
+    // components/ui/ (saas-template's readUiComponent rewrite, #556). The cn
+    // helper itself lives at lib/utils/cn.ts. Counterfactual: the no-op rewrite
+    // bug left `'../lib/utils.ts'` and this fails.
+    assert.ok(existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'cn helper at lib/utils/cn.ts');
+    for (const c of readdirSync(join(appDir, 'components', 'ui'))) {
+      if (!c.endsWith('.ts')) continue;
+      const src = readFileSync(join(appDir, 'components', 'ui', c), 'utf8');
+      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/utils\.ts['"]/, `${c} must not keep the stale ../lib/utils.ts cn import`);
+    }
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');

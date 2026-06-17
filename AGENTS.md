@@ -152,7 +152,10 @@ sigil is `#` (not `@`) and there is **no slash after it** (`#lib/...`, not
 expands the same map for the import graph / auth gate / elision / browser
 importmap, so a `#`-aliased `.server.ts` still trips the server-only boundary.
 A same-directory import stays relative (`./sibling.ts`); only deep relatives
-become `#`. Opt out anywhere by writing a plain relative import.
+become `#`. The alias addresses a top-level SUBDIRECTORY (`#lib/...`,
+`#components/...`); a bare root-level file (`./env.ts`) is imported relatively
+(the browser importmap scope is per-directory, so a `#`-imported root file has
+no browser mapping in dev). Opt out anywhere by writing a plain relative import.
 
 ---
 

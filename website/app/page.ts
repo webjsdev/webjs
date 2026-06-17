@@ -11,7 +11,7 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.
 // code through one would just duplicate the raw sample in the HTML). Its only
 // dependency, html, is already loaded by the components, so the real cost is a
 // single tiny module fetch.
-import { highlight } from '../lib/highlight.ts';
+import { highlight } from '#lib/highlight.ts';
 
 // The home page intentionally has no `metadata` export. The root layout's
 // generateMetadata is the single source for the <title>, description, and the
@@ -72,8 +72,8 @@ const COMPONENT_SAMPLE = [
 
 const ACTION_SAMPLE = [
   "'use server';",
-  "import { db } from '../db/connection.server.ts';",
-  "import { posts } from '../db/schema.server.ts';",
+  "import { db } from '#db/connection.server.ts';",
+  "import { posts } from '#db/schema.server.ts';",
   "",
   "// Import this from a client component. webjs rewrites the",
   "// import into a typed RPC stub. No fetch by hand.",

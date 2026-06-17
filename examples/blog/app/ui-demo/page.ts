@@ -17,7 +17,7 @@ import {
 import { inputClass } from '#components/ui/input.ts';
 import { labelClass } from '#components/ui/label.ts';
 // Tier-2 components are real custom elements: register by side-effect import.
-import '../../components/ui/dialog.ts';
+import '#components/ui/dialog.ts';
 
 export const metadata = {
   title: 'UI Demo · webjs',

@@ -7,8 +7,8 @@
  *   node test/bun/path-alias.mjs
  *   bun  test/bun/path-alias.mjs
  *
- * Builds a throwaway package with `"imports": { "#/*": "./*" }`, a target module,
- * and an entry that imports it via `#/`, then dynamically imports the entry and
+ * Builds a throwaway package with `"imports": { "#*": "./*" }`, a target module,
+ * and an entry that imports it via `#lib/...`, then dynamically imports the entry and
  * asserts the aliased value round-tripped. This is the runtime-loading half (the
  * server graph / importmap half is covered by the Node unit tests). Run from the
  * repo root so node:* resolves.

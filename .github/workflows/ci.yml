@@ -141,9 +141,9 @@ jobs:
       - name: webjs blog DB round-trip on Bun
         run: bun test/bun/blog-db.mjs
       # # path-alias resolution on Bun (#555): the alias is Node's native
-      # package.json "imports" field; Bun must resolve the same per-directory
-      # `#lib/*` keys (a `#/*` catch-all does NOT resolve on Bun, which is why
-      # the scaffold ships per-dir keys). The same script proves the Node path
+      # package.json "imports" field; Bun must resolve the same
+      # `#*` catch-all key (a `#/`-prefixed key does NOT resolve on Bun, which is
+      # why the scaffold ships the slash-free `#*` form). The same script proves the Node path
       # under `npm test`.
       - name: webjs # path alias on Bun
         run: bun test/bun/path-alias.mjs

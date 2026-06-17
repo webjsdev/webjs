@@ -15,16 +15,18 @@ const UI_REGISTRY_ROOT = resolve(
 
 /**
  * Read a registry component and rewrite its `'#lib/utils.ts'` import for
- * the scaffolded app's `components/ui/<name>.ts` layout (two-up to lib/).
- * Mirrors the helper in `create.js`, kept private here to avoid coupling.
+ * the scaffolded app's `components/ui/<name>.ts` layout (the `#lib/utils/cn.ts`
+ * alias). Mirrors the helper in `create.js`, kept private here to avoid coupling.
  */
 async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
   if (!existsSync(src)) return null;
   const raw = await readFile(src, 'utf8');
+  // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
+  // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
   return raw
-    .replaceAll("'#lib/utils.ts'", "'#lib/utils.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+    .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
+    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"');
 }
 
 /** Copy named registry components into `<appDir>/components/ui/`. */
