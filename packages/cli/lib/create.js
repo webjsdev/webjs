@@ -286,6 +286,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     version: '0.1.0',
     type: 'module',
     private: true,
+    // Native package.json subpath aliases (#555): write app-internal imports as
+    // `#/lib/...`, `#/components/...`, `#/db/...` instead of deep `../../../`
+    // relatives. Base = project root. Node 24+ and Bun resolve this natively (no
+    // build step, no tsconfig paths); the webjs server expands the same map for
+    // the import graph + browser importmap. Opt out by using a plain relative.
+    imports: {
+      '#/*': './*',
+    },
     scripts: {
       // No `predev` / `prestart` hooks (#550): the `webjs` block below holds
       // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
