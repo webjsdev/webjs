@@ -5,7 +5,7 @@ import { delimiter, dirname, join } from 'node:path';
  * Build a PATH the way `npm run` does: prepend every ANCESTOR
  * `node_modules/.bin` (the app's, then up to the repo root for a hoisted
  * monorepo) so a `before` / `parallel` command naming a LOCAL-only binary
- * (`prisma`, `tailwindcss`) resolves under a bare `webjs dev` / `start`, exactly
+ * (`drizzle-kit`, `tailwindcss`) resolves under a bare `webjs dev` / `start`, exactly
  * as it does under `npm run dev`. Without this a bare `webjs dev` exits 127 on
  * the first such step and aborts the boot, defeating the whole #550 point.
  *

@@ -149,7 +149,7 @@
       "default": 5000
     },
     "dev": {
-      "description": "Dev task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs dev runs `before` (one-shot, e.g. prisma generate) to completion, then `parallel` (long-lived watchers, e.g. tailwindcss --watch) alongside the server. Replaces the old predev hook + concurrently watchers.",
+      "description": "Dev task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs dev runs `before` (one-shot, e.g. webjs db migrate) to completion, then `parallel` (long-lived watchers, e.g. tailwindcss --watch) alongside the server. Replaces the old predev hook + concurrently watchers.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -166,7 +166,7 @@
       }
     },
     "start": {
-      "description": "Start task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs start runs `before` (one-shot, e.g. prisma migrate deploy) to completion before serving. Replaces the old prestart hook.",
+      "description": "Start task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs start runs `before` (one-shot, e.g. webjs db migrate) to completion before serving. Replaces the old prestart hook.",
       "type": "object",
       "additionalProperties": false,
       "properties": {

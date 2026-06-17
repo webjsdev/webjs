@@ -84,7 +84,7 @@ export type WebjsTrailingSlash = 'never' | 'always' | 'ignore';
 export interface WebjsDevTasks {
   /**
    * One-shot commands run sequentially to completion BEFORE the dev server
-   * boots (the old `predev` hook: `prisma generate`, a registry copy). A
+   * boots (the old `predev` hook: `webjs db migrate`, a registry copy). A
    * non-zero exit aborts the boot.
    */
   before?: string[];
@@ -100,7 +100,7 @@ export interface WebjsDevTasks {
 export interface WebjsStartTasks {
   /**
    * One-shot commands run sequentially to completion BEFORE the prod server
-   * boots (the old `prestart` hook: `prisma migrate deploy`). A non-zero exit
+   * boots (the old `prestart` hook: `webjs db migrate`). A non-zero exit
    * aborts the boot.
    */
   before?: string[];

@@ -11,14 +11,14 @@ import { join } from 'node:path';
  * Shape:
  *   "webjs": {
  *     "dev":   {
- *       "before":   ["prisma generate"],
+ *       "before":   ["webjs db migrate"],
  *       "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
  *     },
- *     "start": { "before": ["prisma migrate deploy"] }
+ *     "start": { "before": ["webjs db migrate"] }
  *   }
  *
  * `before` commands run sequentially to completion BEFORE the server boots (the
- * old `predev` / `prestart` hooks: a one-shot `prisma generate` / `migrate`).
+ * old `predev` / `prestart` hooks: a one-shot `webjs db migrate`).
  * `parallel` (dev only) commands run as long-lived child processes ALONGSIDE the
  * server (the old `concurrently` watchers: Tailwind). Returns normalized arrays
  * (never undefined) so callers iterate without guards, and a missing/empty
