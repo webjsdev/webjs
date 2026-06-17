@@ -1,6 +1,7 @@
 'use server';
 
-import { prisma } from '../../../lib/prisma.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { users } from '../../../db/schema.server.ts';
 import { hashPassword } from '../../../lib/password.server.ts';
 import { createSession } from '../../../lib/session.server.ts';
 import { validateSignup } from '../utils/validate.ts';
@@ -18,13 +19,14 @@ export async function signup(
   catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e), status: 400 };
   }
-  const existing = await prisma.user.findUnique({ where: { email: parsed.email } });
+  const existing = await db.query.users.findFirst({
+    where: { email: parsed.email },
+    columns: { id: true },
+  });
   if (existing) return { success: false, error: 'That email is already registered', status: 409 };
 
   const passwordHash = await hashPassword(parsed.password);
-  const user = await prisma.user.create({
-    data: { email: parsed.email, passwordHash, name: parsed.name },
-  });
+  const [user] = await db.insert(users).values({ email: parsed.email, passwordHash, name: parsed.name }).returning();
   const { token } = await createSession(user.id);
   return {
     success: true,
