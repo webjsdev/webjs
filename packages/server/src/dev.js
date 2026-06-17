@@ -1,6 +1,6 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -493,12 +493,15 @@ export async function createRequestHandler(opts) {
     existsSync(join(distDir, 'webjs-core-browser.js'));
   await setCoreInstall(coreDir, distComplete);
 
-  // Path-alias imports (#555). Emit the browser importmap scope for the app's
-  // `package.json "imports"` aliases (`"#lib/*": "./lib/*"` -> `"#lib/": "/lib/"`), derived
-  // from the SAME map the server resolver (`expandImportAlias`) reads, so SSR
-  // and the browser agree. An app with no `"imports"` block yields {} (a no-op,
-  // byte-identical to before this feature).
-  await setImportAliasEntries(importAliasBrowserEntries(appImportsMap(appDir)));
+  // Path-alias imports (#555). Emit the browser importmap scopes for the app's
+  // `package.json "imports"` aliases, derived from the SAME map the server
+  // resolver (`expandImportAlias`) reads, so SSR and the browser agree. The
+  // scaffold ships the single catch-all `"#*": "./*"` (one key, zero
+  // maintenance, Bun-safe), which expands to one browser prefix scope per
+  // top-level dir (`#lib/` -> `/lib/`, ...); the dir scan is here so a new
+  // folder is picked up on boot. An app with no `"imports"` block yields {}
+  // (a no-op, byte-identical to before this feature).
+  await setImportAliasEntries(importAliasBrowserEntries(appImportsMap(appDir), appTopLevelDirs(appDir)));
 
   // Content-hash asset URLs for immutable caching (issue #243). Bind the
   // asset-hash module to the app + core roots and enable fingerprinting in
@@ -2366,6 +2369,26 @@ function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
   // the graph walk covers both eager and lazy paths.
   for (const c of components) entries.add(c.file);
   return reachableFromEntries(moduleGraph, [...entries], appDir);
+}
+
+/**
+ * List the app's top-level source directory names, for expanding a `#*`
+ * catch-all import alias into one browser importmap prefix scope per dir (#555).
+ * Excludes infra dirs that are never imported via `#` (node_modules, dotfiles,
+ * the build/vendor caches). A new top-level folder is picked up on the next boot
+ * (dev restarts on changes), so the alias stays zero-maintenance.
+ * @param {string} appDir
+ * @returns {string[]}
+ */
+function appTopLevelDirs(appDir) {
+  const SKIP = new Set(['node_modules', 'dist', 'public']);
+  try {
+    return readdirSync(appDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIP.has(e.name))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
 }
 
 /**

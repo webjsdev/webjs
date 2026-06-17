@@ -80,28 +80,44 @@ export function basePath() {
 
 /**
  * Derive the BROWSER importmap entries for an app's `package.json "imports"`
- * subpath-alias map (#555). A wildcard key `"#lib/*": "./lib/*"` becomes the
- * trailing-slash prefix scope `"#lib/": "/lib/"` (so `#lib/x.ts` resolves to
- * `/lib/x.ts`); a non-default base `"#lib/*": "./src/lib/*"` becomes `"#lib/": "/src/lib/"`;
- * an exact key `"#db": "./lib/db.server.ts"` becomes `"#db": "/lib/db.server.ts"`.
- * The leading `./` becomes a root-absolute `/` and the `*` is dropped (the
- * trailing slash carries the prefix match). Only string targets are mappable
- * (a conditional-export object is skipped). Pure, so the server resolver and
- * this stay in lockstep by both reading the one `"imports"` map.
+ * subpath-alias map (#555). The scaffold ships a single root catch-all key
+ * `"#*": "./*"` (one key, zero maintenance: a new top-level folder is aliased
+ * with no config change, and `#*` resolves natively on Node AND Bun, unlike a
+ * `#/`-prefixed key which Bun rejects). A browser importmap needs a
+ * trailing-slash PREFIX key to match, and a bare `#` is not one, so a catch-all
+ * is expanded into one prefix scope PER top-level directory (`topLevelDirs`):
+ * `#lib/` -> `/lib/`, `#components/` -> `/components/`, etc. The dirs are scanned
+ * by the caller (dev.js) so this stays pure; a new folder produces a new scope
+ * on the next boot. A non-catch-all key is mapped directly: a per-dir wildcard
+ * `"#lib/*": "./lib/*"` becomes `"#lib/": "/lib/"`, an exact `"#db": "./x.ts"`
+ * becomes `"#db": "/x.ts"`. The leading `./` becomes a root-absolute `/` and the
+ * `*` is dropped (the trailing slash carries the prefix match). A non-default
+ * base (`"#*": "./src/*"`) folds into the emitted URL. Only string targets are
+ * mappable (a conditional-export object is skipped). Derived from the SAME map
+ * the server resolver reads, so SSR and the browser agree.
  *
  * @param {Record<string, unknown> | null | undefined} importsMap
+ * @param {string[]} [topLevelDirs]  app top-level dir names, for expanding a `#*` catch-all
  * @returns {Record<string, string>}
  */
-export function importAliasBrowserEntries(importsMap) {
+export function importAliasBrowserEntries(importsMap, topLevelDirs = []) {
   /** @type {Record<string, string>} */
   const out = {};
   if (!importsMap || typeof importsMap !== 'object') return out;
   for (const [key, value] of Object.entries(importsMap)) {
     if (typeof value !== 'string') continue;
     if (!value.startsWith('./')) continue; // only app-root-relative targets map to a URL
-    const browserKey = key.replace('*', '');
-    const browserVal = value.replace(/^\./, '').replace('*', '');
-    out[browserKey] = browserVal;
+    const star = key.indexOf('*');
+    if (star !== -1 && key.slice(0, star) === '#') {
+      // Root catch-all `#*` -> `./<base>*`: expand to a prefix scope per dir.
+      // base is the part of the value between `.` and `*` (`'' ` for `./*`,
+      // `/src/` for `./src/*`), so `#<dir>/` -> `/<base><dir>/`.
+      const base = value.slice(1, value.lastIndexOf('*')); // './*' -> '/', './src/*' -> '/src/'
+      for (const dir of topLevelDirs) out[`#${dir}/`] = `${base}${dir}/`;
+      continue;
+    }
+    // Per-dir wildcard or exact key: map directly.
+    out[key.replace('*', '')] = value.replace(/^\./, '').replace('*', '');
   }
   return out;
 }

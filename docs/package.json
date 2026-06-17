@@ -4,11 +4,7 @@
   "type": "module",
   "private": true,
   "imports": {
-    "#app/*": "./app/*",
-    "#components/*": "./components/*",
-    "#db/*": "./db/*",
-    "#lib/*": "./lib/*",
-    "#modules/*": "./modules/*"
+    "#*": "./*"
   },
   "scripts": {
     "dev": "webjs dev --port ${PORT:-5002}",

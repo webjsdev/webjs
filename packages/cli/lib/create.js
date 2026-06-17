@@ -288,18 +288,15 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     type: 'module',
     private: true,
     // Native package.json subpath aliases (#555): write app-internal imports as
-    // `#lib/...`, `#components/...`, `#db/...` instead of deep `../../../`
-    // relatives. One key per top-level dir (a `#/`-prefixed key is rejected by
-    // Bun's resolver, so the per-dir form is the cross-runtime-safe shape). Node
-    // 24+ and Bun resolve these natively (no build step, no tsconfig paths); the
-    // webjs server expands the same map for the import graph + browser importmap.
-    // Opt out by using a plain relative import.
+    // `#lib/...`, `#components/...`, `#db/...`, `#<any-dir>/...` instead of deep
+    // `../../../` relatives. ONE catch-all key, so a new top-level folder is
+    // aliased with no config change. Node 24+ and Bun both resolve `#*` natively
+    // (a `#/`-prefixed key is rejected by Bun, so this slash-free form is the
+    // cross-runtime-safe shape; no build step, no tsconfig paths). The webjs
+    // server expands the same map for the import graph + browser importmap. Opt
+    // out by using a plain relative import.
     imports: {
-      '#app/*': './app/*',
-      '#components/*': './components/*',
-      '#db/*': './db/*',
-      '#lib/*': './lib/*',
-      '#modules/*': './modules/*',
+      '#*': './*',
     },
     scripts: {
       // No `predev` / `prestart` hooks (#550): the `webjs` block below holds

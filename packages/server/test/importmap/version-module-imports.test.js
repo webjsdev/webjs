@@ -202,7 +202,7 @@ test('versions a #/ path-alias import as a base-path-safe relative specifier (#5
   // browser resolves it against the importer's own URL, not the importmap) and
   // carrying the same `?v` as the preload, collapsing fetch + preload to one
   // immutable cache key.
-  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#components/*': './components/*', '#lib/*': './lib/*' } }));
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }));
   const badgeBytes = 'export class B {}\n';
   writeFileSync(join(appDir, 'components', 'badge.ts'), badgeBytes);
   setAssetRoots({ appDir, coreDir, enabled: true });
@@ -219,7 +219,7 @@ test('versions a #/ path-alias import as a base-path-safe relative specifier (#5
 });
 
 test('a #/ alias to a .server.ts is NOT versioned (server stub, bare URL, not preloaded)', () => {
-  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#components/*': './components/*', '#lib/*': './lib/*' } }));
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }));
   writeFileSync(join(appDir, 'lib', 'db.server.ts'), "export const db = {};\n");
   setAssetRoots({ appDir, coreDir, enabled: true });
 

@@ -22,7 +22,7 @@ import { pathToFileURL } from 'node:url';
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 const dir = mkdtempSync(join(tmpdir(), 'webjs-pathalias-x-'));
 try {
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'alias-fixture', type: 'module', imports: { '#lib/*': './lib/*' } }));
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'alias-fixture', type: 'module', imports: { '#*': './*' } }));
   mkdirSync(join(dir, 'lib'), { recursive: true });
   writeFileSync(join(dir, 'lib', 'value.js'), 'export const value = 42;\n');
   // The entry imports its sibling via the # root alias, not a relative path.

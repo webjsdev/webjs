@@ -44,8 +44,8 @@ export function appImportsMap(appDir) {
 
 /**
  * Expand a `package.json "imports"` subpath alias (e.g. `#lib/db.server.ts`
- * with `"#lib/*": "./lib/*"`) to its real APP-RELATIVE target string
- * (`./lib/db.server.ts`).
+ * with the scaffold's catch-all `"#*": "./*"`) to its real APP-RELATIVE target
+ * string (`./lib/db.server.ts`).
  * The security-critical seam (#555): the graph walker, auth gate, elision, and
  * `no-server-import-in-browser-module` all route through `resolveImport`, so
  * expanding the alias here (to the real path) is what stops an alias from
