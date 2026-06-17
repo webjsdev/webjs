@@ -49,8 +49,8 @@ const USAGE = `webjs commands:
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--no-install]  Scaffold a new webjs app
-                                                  (only 3 templates exist. default: full-stack with Drizzle+SQLite)
+  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--no-install]  Scaffold a new webjs app
+                                                  (only 3 templates exist. default: full-stack, Drizzle, --db sqlite)
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
@@ -476,18 +476,18 @@ async function main() {
         console.error(`Error: unknown template '${template}'.
 
 Only three scaffolds exist:
-  full-stack   (default): pages + components + API + Prisma/SQLite.
+  full-stack   (default): pages + components + API + Drizzle/SQLite.
                 Pick this for any app the user describes in product terms
                 (todo app, blog, dashboard, marketplace, social feed, …).
   api          backend-only: route handlers + modules, no pages/SSR.
                 Pick this only if the user explicitly asks for an HTTP/JSON
                 API with no UI.
-  saas         auth + login/signup + protected dashboard + Prisma User
+  saas         auth + login/signup + protected dashboard + Drizzle User
                 model. Pick this only if the user explicitly asks for auth
                 or a SaaS-shaped product.
 
 The scaffold is a starting point. Replace the example layout/page/
-components/schema with the actual app the user requested. Use Prisma +
+components/schema with the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
@@ -495,8 +495,10 @@ Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
       const noInstall = rest.includes('--no-install');
+      // --db picks the database dialect: sqlite (default) or postgres.
+      const db = flag(rest, '--db', 'sqlite');
       const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
+      await scaffoldApp(name, process.cwd(), { template, db, install: !noInstall });
       break;
     }
     case 'vendor': {
