@@ -96,6 +96,22 @@ if has '(railway|redeploy|deploy(ed|ment)?|provision)' \
   add_match "use-railway: the request touches deployment or infrastructure. Invoke the use-railway skill for any Railway operation rather than ad-hoc commands."
 fi
 
+# --- webjs-research-record: research / design / decision writeup --------
+# Triggers: research whether/into X, investigate X and write it up,
+# evaluate X vs Y, a design/decision record, write up the design, spike X.
+# The deliverable is a writeup with no code diff. It belongs in a CLOSED
+# `research`-labeled issue (the same issue if one already exists in the
+# backlog), never a file under agent-docs and never a comment on an
+# unrelated PR (the #548 mistake this routing prevents).
+if has 'research (whether|if|into|on|the|to|question)' \
+   || has '(design|decision|research) (record|note|write-?up|history|doc)' \
+   || has 'write ?(up|out)? ?(the |a )?(design|decision|research)' \
+   || has 'investigate.{0,80}(write|design|approach|record|decision|trade-?off)' \
+   || has '(evaluate|compare).{0,40}(vs|versus|against)' \
+   || has 'spike (on|the|a|into|[a-z])'; then
+  add_match "webjs-research-record: the deliverable is a research/design/decision writeup with no code diff. Invoke the webjs-research-record skill. The record lives in a \`research\`-labeled issue (append to the existing backlog issue if there is one, else create one), writeup in the body + comments, then CLOSE it. NOT a file under agent-docs/, NOT a PR, NOT a comment on an unrelated PR. File the follow-up implementation via webjs-file-issue."
+fi
+
 # Assemble the additional context. The standing rule is always present; the
 # per-skill routing block appears only when something matched.
 read -r -d '' standing <<'EOF' || true
