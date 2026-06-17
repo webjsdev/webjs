@@ -176,6 +176,11 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # The `pg` driver is installed only in THIS job (not a root devDependency),
+      # so it stays out of the shared package-lock. --no-save keeps the lock
+      # untouched; this job does not run the type fixtures, so the extra install
+      # cannot affect them.
+      - run: npm install --no-save pg@^8.13.0
       - name: Postgres round-trip (unified schema on the prod engine)
         env:
           WEBJS_PG_URL: postgres://postgres:postgres@localhost:5432/webjs_test
