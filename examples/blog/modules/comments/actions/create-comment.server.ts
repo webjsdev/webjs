@@ -1,12 +1,12 @@
 'use server';
 
-import { db } from '../../../db/connection.server.ts';
-import { comments } from '../../../db/schema.server.ts';
-import { currentUser } from '../../auth/queries/current-user.server.ts';
-import { publish } from '../utils/bus.ts';
-import { formatComment } from '../utils/format.ts';
-import type { ActionResult } from '../../auth/types.ts';
-import type { CommentFormatted } from '../types.ts';
+import { db } from '#/db/connection.server.ts';
+import { comments } from '#/db/schema.server.ts';
+import { currentUser } from '#/modules/auth/queries/current-user.server.ts';
+import { publish } from '#/modules/comments/utils/bus.ts';
+import { formatComment } from '#/modules/comments/utils/format.ts';
+import type { ActionResult } from '#/modules/auth/types.ts';
+import type { CommentFormatted } from '#/modules/comments/types.ts';
 
 /**
  * Add a comment to a post. Requires auth. Publishes to the comments bus

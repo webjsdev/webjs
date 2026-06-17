@@ -3,6 +3,9 @@
   "version": "0.1.1",
   "type": "module",
   "private": true,
+  "imports": {
+    "#/*": "./*"
+  },
   "scripts": {
     "dev": "webjs dev --port ${PORT:-5001}",
     "start": "webjs start",

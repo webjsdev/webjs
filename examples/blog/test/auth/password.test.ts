@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hashPassword, verifyPassword } from '../../lib/password.server.ts';
+import { hashPassword, verifyPassword } from '#/lib/password.server.ts';
 
 test('hashPassword produces a scrypt$salt$hash string', async () => {
   const hash = await hashPassword('test-password-123');

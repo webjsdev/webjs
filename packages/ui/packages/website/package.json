@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "imports": {
+    "#/*": "./*"
+  },
   "description": "Registry host + docs site for @webjsdev/ui. Serves /r/<name>.json and renders per-component docs.",
   "scripts": {
     "dev": "webjs dev --port ${PORT:-5003}",

@@ -1,6 +1,6 @@
 import { html, css } from '@webjsdev/core';
-import { loadRegistryIndex } from '../_lib/registry.server.ts';
-import { splitByTier } from '../_lib/tier.ts';
+import { loadRegistryIndex } from '#/app/_lib/registry.server.ts';
+import { splitByTier } from '#/app/_lib/tier.ts';
 
 // Subtle, hover-revealed scrollbar for the sidenav.
 //

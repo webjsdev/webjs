@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import { highlight } from '../../lib/highlight.ts';
+import { highlight } from '#/lib/highlight.ts';
 
 const render = (code: string) => renderToString(html`<pre>${highlight(code)}</pre>`);
 

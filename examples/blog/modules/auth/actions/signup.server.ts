@@ -1,11 +1,11 @@
 'use server';
 
-import { db } from '../../../db/connection.server.ts';
-import { users } from '../../../db/schema.server.ts';
-import { hashPassword } from '../../../lib/password.server.ts';
-import { createSession } from '../../../lib/session.server.ts';
-import { validateSignup } from '../utils/validate.ts';
-import type { ActionResult, PublicUser } from '../types.ts';
+import { db } from '#/db/connection.server.ts';
+import { users } from '#/db/schema.server.ts';
+import { hashPassword } from '#/lib/password.server.ts';
+import { createSession } from '#/lib/session.server.ts';
+import { validateSignup } from '#/modules/auth/utils/validate.ts';
+import type { ActionResult, PublicUser } from '#/modules/auth/types.ts';
 
 /**
  * Register a new user + open a session. The session token is returned for

@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '../../components/inline-quote.ts';
+import '#/components/inline-quote.ts';
 
 export const metadata = {
   title: 'Async leaf · webjs blog',

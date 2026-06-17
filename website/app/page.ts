@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import '../components/copy-cmd.ts';
-import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '../lib/links.ts';
+import '#/components/copy-cmd.ts';
+import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#/lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
 // in the browser to register copy-cmd, and that pulls in its

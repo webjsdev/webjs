@@ -12,16 +12,16 @@ import { test, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { eq, inArray } from 'drizzle-orm';
-import { db } from '../../db/connection.server.ts';
-import { posts, users } from '../../db/schema.server.ts';
+import { db } from '#/db/connection.server.ts';
+import { posts, users } from '#/db/schema.server.ts';
 import { withRequest } from '@webjsdev/server';
 import { setStore, memoryStore } from '@webjsdev/server';
 
-import { signup } from '../../modules/auth/actions/signup.server.ts';
-import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
-import { getPost } from '../../modules/posts/queries/get-post.server.ts';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
-import { deletePost } from '../../modules/posts/actions/delete-post.server.ts';
+import { signup } from '#/modules/auth/actions/signup.server.ts';
+import { listPosts } from '#/modules/posts/queries/list-posts.server.ts';
+import { getPost } from '#/modules/posts/queries/get-post.server.ts';
+import { createPost } from '#/modules/posts/actions/create-post.server.ts';
+import { deletePost } from '#/modules/posts/actions/delete-post.server.ts';
 
 // -- helpers ----------------------------------------------------------------
 

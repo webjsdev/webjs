@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { ChatMessage } from '../../modules/chat/types.ts';
-import { broadcast, clients } from '../../modules/chat/utils/clients.ts';
+import type { ChatMessage } from '#/modules/chat/types.ts';
+import { broadcast, clients } from '#/modules/chat/utils/clients.ts';
 
 /**
  * The chat module pieces are very small:

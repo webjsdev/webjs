@@ -21,7 +21,7 @@
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
  * --background, --input, --ring.
  */
-import { cn } from '../../lib/utils/cn.ts';
+import { cn } from '#/lib/utils/cn.ts';
 
 // cursor-pointer is on the BASE so every variant (default, outline,
 // ghost, link, …) gets the right hover affordance. Native <button>

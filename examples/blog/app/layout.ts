@@ -1,6 +1,6 @@
 import { html, cspNonce, type Metadata, type LayoutProps } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
-import '../components/theme-toggle.ts';
+import '#/components/theme-toggle.ts';
 
 const navLink = (href: string, label: string) => html`
   <a href=${href} class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">${label}</a>

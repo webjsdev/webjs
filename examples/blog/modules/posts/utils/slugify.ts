@@ -1,4 +1,4 @@
-import type { PostFormatted } from '../types.ts';
+import type { PostFormatted } from '#/modules/posts/types.ts';
 
 /** Produce a URL-safe slug from a title. Truncates at 60 chars. */
 export function slugify(s: string): string {

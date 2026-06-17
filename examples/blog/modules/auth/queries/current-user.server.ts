@@ -1,8 +1,8 @@
 'use server';
 
 import { cookies } from '@webjsdev/server';
-import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.server.ts';
-import type { PublicUser } from '../types.ts';
+import { getUserByToken, SESSION_COOKIE } from '#/lib/session.server.ts';
+import type { PublicUser } from '#/modules/auth/types.ts';
 
 /**
  * Resolve the currently-logged-in user from the in-flight Request's

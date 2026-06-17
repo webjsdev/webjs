@@ -1,5 +1,5 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { getSlow } from '../modules/verbdemo/queries/get-slow.server.ts';
+import { getSlow } from '#/modules/verbdemo/queries/get-slow.server.ts';
 
 /**
  * `<abort-demo>`: the AbortSignal demo (#492). Its async render() awaits a slow

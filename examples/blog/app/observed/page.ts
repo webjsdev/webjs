@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
-import '../../components/observed-badge.ts';
-import '../../components/observe-badge.ts';
-import '../../components/ssr-derived-badge.ts';
+import '#/components/observed-badge.ts';
+import '#/components/observe-badge.ts';
+import '#/components/ssr-derived-badge.ts';
 
 export const metadata = {
   title: 'Observed badge · webjs blog',

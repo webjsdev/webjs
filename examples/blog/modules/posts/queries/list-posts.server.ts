@@ -1,9 +1,9 @@
 'use server';
 
 import { cache } from '@webjsdev/server';
-import { db } from '../../../db/connection.server.ts';
-import { formatPost } from '../utils/slugify.ts';
-import type { PostFormatted } from '../types.ts';
+import { db } from '#/db/connection.server.ts';
+import { formatPost } from '#/modules/posts/utils/slugify.ts';
+import type { PostFormatted } from '#/modules/posts/types.ts';
 
 /** List the most recent posts, newest first, with author info denormalised. */
 export const listPosts = cache(

@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '../../components/abort-demo.ts';
+import '#/components/abort-demo.ts';
 
 export const metadata = {
   title: 'Abort demo · webjs blog',

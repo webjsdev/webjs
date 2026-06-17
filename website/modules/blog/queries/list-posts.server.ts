@@ -3,8 +3,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseFrontmatter } from '../../../lib/frontmatter.ts';
-import type { Post } from '../types.ts';
+import { parseFrontmatter } from '#/lib/frontmatter.ts';
+import type { Post } from '#/modules/blog/types.ts';
 
 // website/modules/blog/queries/list-posts.server.ts is 4 levels deep
 // from the repo root (website/modules/blog/queries/...).

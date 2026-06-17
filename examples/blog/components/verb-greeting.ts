@@ -1,6 +1,6 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { getGreeting } from '../modules/verbdemo/queries/get-greeting.server.ts';
-import { bumpGreeting } from '../modules/verbdemo/actions/bump-greeting.server.ts';
+import { getGreeting } from '#/modules/verbdemo/queries/get-greeting.server.ts';
+import { bumpGreeting } from '#/modules/verbdemo/actions/bump-greeting.server.ts';
 
 /**
  * `<verb-greeting>`: the HTTP-verb action demo (#488). Its async render() awaits

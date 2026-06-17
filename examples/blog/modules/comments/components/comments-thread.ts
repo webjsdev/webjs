@@ -1,8 +1,8 @@
 import { WebComponent, html, repeat, connectWS, signal } from '@webjsdev/core';
-import '../../../components/muted-text.ts';
-import { inputClass } from '../../../components/ui/input.ts';
-import { buttonClass } from '../../../components/ui/button.ts';
-import type { CommentFormatted } from '../types.ts';
+import '#/components/muted-text.ts';
+import { inputClass } from '#/components/ui/input.ts';
+import { buttonClass } from '#/components/ui/button.ts';
+import type { CommentFormatted } from '#/modules/comments/types.ts';
 
 /**
  * `<comments-thread>`: live thread. Editorial card list, mono meta,
