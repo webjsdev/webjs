@@ -394,15 +394,13 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: { postId: 
     <pre>// components/live-comments.ts
 import { WebComponent, html, css, connectWS } from '@webjsdev/core';
 
-export class LiveComments extends WebComponent {
-  static properties = { postId: { type: Number } };
+export class LiveComments extends WebComponent({ postId: Number }) {
   static styles = css\`
     :host { display: block; }
     .comment { padding: 8px 0; border-bottom: 1px solid #eee; }
     .author { font-weight: bold; }
   \`;
 
-  declare postId: number;
   conn = null;
   comments = signal&lt;any[]&gt;([]);
 

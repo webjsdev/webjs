@@ -15,10 +15,7 @@ export default function TaskPage() {
     <pre>import { WebComponent, html } from '@webjsdev/core';
 import { Task } from '@webjsdev/core/task';
 
-class UserProfile extends WebComponent {
-  static properties = { userId: { type: String } };
-  declare userId: string;
-
+class UserProfile extends WebComponent({ userId: String }) {
   constructor() {
     super();
     this.userId = '';
@@ -138,15 +135,10 @@ handleSubmit(e) {
     <h2>Reactive Args</h2>
     <p>The <code>args</code> function is called on every host update. When the returned array differs from the previous one (shallow comparison per element), the task re-runs. This creates a reactive chain: property change triggers host update, host update evaluates <code>args</code>, changed args trigger the task.</p>
 
-    <pre>class SearchResults extends WebComponent {
-  static properties = {
-    query: { type: String },
-    page:  { type: Number },
-  };
-
-  query = '';
-  page = 1;
-
+    <pre>class SearchResults extends WebComponent({
+  query: prop(String, { default: '' }),
+  page:  prop(Number, { default: 1 }),
+}) {
   // Re-runs whenever query OR page changes
   #results = new Task(this, {
     task: async ([q, p], { signal }) =&gt; {

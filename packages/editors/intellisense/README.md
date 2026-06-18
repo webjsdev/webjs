@@ -38,7 +38,8 @@ method call, no decorator, no `HTMLElementTagNameMap`), which a generic
 TypeScript setup cannot statically trace, so it offers no intelligence for
 webjs tags. This plugin scans the program for `Class.register('tag')` and
 `customElements.define('tag', Class)` calls, builds a registry of each
-component's `static properties`, parses the markup inside `` html`` ``
+component's factory-declared reactive props (the `WebComponent({ ... })`
+shape), parses the markup inside `` html`` ``
 templates itself, and serves the features above. It used to wrap
 `ts-lit-plugin`; as of `0.5.0` it is fully self-contained.
 
@@ -94,8 +95,7 @@ A class counts as a webjs component when it appears in the program with
 either registration call referencing a locally-declared class:
 
 ```ts
-class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
+class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');                // method form
 // or
@@ -103,7 +103,7 @@ customElements.define('my-counter', Counter);  // direct DOM API
 ```
 
 The tag name must contain a hyphen (HTML spec). The registration calls and
-the `static properties` keys are extracted by walking the TypeScript AST;
+the reactive props from the `WebComponent({ ... })` factory shape are extracted by walking the TypeScript AST;
 the template markup is parsed by `src/template/parse.js`. Per-file results
 are cached by `SourceFile.version`, so edits incrementally invalidate one
 file at a time.

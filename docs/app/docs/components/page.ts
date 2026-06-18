@@ -8,7 +8,7 @@ export default function Components() {
     <p>webjs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle. There is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
 
     <h2>The WebComponent Base Class</h2>
-    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> as <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
+    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> by passing a shape into the base-class factory (<code>extends WebComponent({ ... })</code>, and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
     <pre>import { WebComponent, html, css, signal } from '@webjsdev/core';
 
@@ -54,10 +54,10 @@ UserCard.register('user-card');</pre>
     <p>If you forget the hyphen, the browser throws at registration time with a clear error message.</p>
 
     <h2>Properties</h2>
-    <p>webjs offers two ways to declare reactive properties that ride HTML attributes:</p>
+    <p>Reactive properties that ride HTML attributes are declared in <strong>one</strong> place: the base-class factory. You pass the property shape directly into <code>WebComponent({ ... })</code>, the types flow to TypeScript automatically (no <code>declare</code> lines), and the runtime installs a reactive accessor for each key. A hand-written <code>static properties = { ... }</code> field in the class body is no longer supported and throws at construction.</p>
 
-    <h3>1. Base-Class Factory (Recommended, Declare-Free)</h3>
-    <p>By passing the property shape directly into the base class <code>WebComponent({ ... })</code>, the property types flow dynamically to TypeScript with no extra <code>declare</code> lines needed. Default values are set in the constructor:</p>
+    <h3>The factory shape</h3>
+    <p>Map each property name to its type constructor. Default values are set with the <code>default</code> option or in the constructor after <code>super()</code> (never a class-field initializer, which runs after <code>super()</code> and clobbers the reactive accessor):</p>
 
     <pre>import { WebComponent, html } from '@webjsdev/core';
 
@@ -87,45 +87,27 @@ class UserCard extends WebComponent({
 }
 UserCard.register('user-card');</pre>
 
-    <h3>2. Static Properties Field</h3>
-    <p>Alternatively, you can declare properties using a <code>static properties</code> field. In TypeScript, this requires using the <code>declare</code> pattern to prevent class-field initializers from clobbering the reactive accessors:</p>
+    <h3>Property options and narrowed types with prop()</h3>
+    <p>When a property needs options (reflection, a renamed attribute, internal-only state) or a narrowed TypeScript type, wrap the type in the <code>prop()</code> helper. A bare constructor (<code>name: String</code>) is shorthand for <code>name: prop(String)</code>.</p>
 
-    <pre>class UserCard extends WebComponent {
+    <pre>import { WebComponent, html, prop } from '@webjsdev/core';
 
-  static properties = {
-    name:     { type: String },
-    age:      { type: Number },
-    active:   { type: Boolean },
-    config:   { type: Object },
-    tags:     { type: Array },
-  };
-  // Compile-time types only. Never use class-field initializers for
-  // reactive props. They would clobber the framework's accessor under
-  // modern class-field semantics. Set defaults in the constructor.
-  declare name: string;
-  declare age: number;
-  declare active: boolean;
-  declare config: Record&lt;string, unknown&gt;;
-  declare tags: string[];
+interface Student { name: string; gpa: number; }
 
-  constructor() {
-    super();
-    this.name = 'Anonymous';
-    this.age = 0;
-    this.active = false;
-    this.config = {};
-    this.tags = [];
-  }
-
+class UserCard extends WebComponent({
+  count:   prop(Number, { reflect: true }),       // reflect to the attribute
+  label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
+  open:    prop({ state: true }),                  // internal, no attribute
+  student: prop&lt;Student&gt;(Object),                  // narrowed object type
+  size:    prop&lt;'sm' | 'lg'&gt;(String, { default: 'sm' }), // narrowed + default
+}) {
   render() {
-    return html\`
-      &lt;p&gt;\${this.name} (age \${this.age})&lt;/p&gt;
-      &lt;p&gt;Active: \${this.active ? 'yes' : 'no'}&lt;/p&gt;
-      &lt;p&gt;Tags: \${this.tags.join(', ')}&lt;/p&gt;
-    \`;
+    return html\`&lt;p&gt;\${this.student.name} (\${this.size})&lt;/p&gt;\`;
   }
 }
 UserCard.register('user-card');</pre>
+
+    <p>Set a default declaratively via the <code>default</code> option (<code>prop(Number, { default: 0 })</code>); a function default is called per instance for fresh object / array defaults, and an applied attribute overrides it.</p>
 
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, webjs coerces the string value to the declared type:</p>
@@ -277,13 +259,8 @@ static styles = css\`
     <h2>Light DOM (default)</h2>
     <p>Light DOM is the default because global CSS and Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. The browser renders a plain custom element with normal children. This is the mode the blog example uses everywhere except when shadow DOM buys something specific.</p>
 
-    <pre>class AppCard extends WebComponent {
-  // static shadow = false is the default, no need to declare it.
-  static properties = {
-    heading: { type: String },
-  };
-  declare heading: string;
-
+    <pre>// static shadow = false is the default, no need to declare it.
+class AppCard extends WebComponent({ heading: String }) {
   constructor() {
     super();
     this.heading = '';
@@ -377,7 +354,7 @@ Card.register('my-card');</pre>
 
     <ol>
       <li>Calls <code>new Cls()</code>: the constructor runs.</li>
-      <li>Applies the element's attributes to the instance (via <code>static properties</code> converters).</li>
+      <li>Applies the element's attributes to the instance (via the factory's property converters).</li>
       <li>Calls <code>instance.render()</code> and awaits the resulting template.</li>
       <li>Inlines the rendered HTML as the element's children (light DOM) or wraps it in <code>&lt;template shadowrootmode="open"&gt;</code> (shadow DOM).</li>
     </ol>
@@ -386,12 +363,10 @@ Card.register('my-card');</pre>
 
     <h3>Rule: SSR-meaningful state goes in the constructor</h3>
 
-    <p>Whatever state should appear in the first paint MUST be set in the constructor (after <code>super()</code>) or be derivable from <code>static properties</code> + the tag's attributes. The SSR pipeline reads exactly these values.</p>
+    <p>Whatever state should appear in the first paint MUST be set in the constructor (after <code>super()</code>) or be derivable from the factory's properties + the tag's attributes. The SSR pipeline reads exactly these values.</p>
 
     <pre>// ❌ first paint is empty (initial state set in browser-only hook)
-class Cart extends WebComponent {
-  declare items: Item[];
-
+class Cart extends WebComponent({ items: prop&lt;Item[]&gt;(Array) }) {
   connectedCallback() {                       // ← server never runs this
     super.connectedCallback();
     this.items = readFromLocalStorage();
@@ -435,10 +410,7 @@ class Cart extends WebComponent {
     <h3>Compound components: reading the parent with closest() at SSR</h3>
     <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to the parent and reading the parent's value. webjs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, so the active or pressed state is marked in the <strong>first server paint</strong>, not only after hydration.</p>
 
-    <pre>class UiTabsTrigger extends WebComponent {
-  static properties = { value: { type: String } };
-  declare value: string;
-
+    <pre>class UiTabsTrigger extends WebComponent({ value: String }) {
   get _tabs() { return this.closest('ui-tabs'); }
 
   render() {
@@ -458,9 +430,7 @@ UiTabsTrigger.register('ui-tabs-trigger');</pre>
 
     <h2>Fetching data in a component (async render)</h2>
     <p>A leaf component can fetch its own server data into the first paint, so you do not have to fetch it in the page and prop-drill it down. Make <code>render()</code> async and call a <code>'use server'</code> action directly:</p>
-    <pre>class UserProfile extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+    <pre>class UserProfile extends WebComponent({ uid: String }) {
   async render() {
     const u = await getUser(this.uid);   // real fn at SSR, RPC stub on the client
     return html\`&lt;h3&gt;\${u.name}&lt;/h3&gt;\`;
@@ -580,7 +550,7 @@ html\`
     <p>You do not need to call <code>super.disconnectedCallback()</code> (the base class is a no-op), but it does not hurt to include it for safety.</p>
 
     <h3>attributeChangedCallback(name, oldValue, newValue)</h3>
-    <p>Called when one of the <code>observedAttributes</code> changes. webjs handles this for you. It coerces the attribute value based on the type declared in <code>static properties</code>, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
+    <p>Called when one of the <code>observedAttributes</code> changes. webjs handles this for you. It coerces the attribute value based on the type declared in the factory shape, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
 
     <pre>attributeChangedCallback(name, oldVal, newVal) {
   super.attributeChangedCallback(name, oldVal, newVal);
@@ -703,10 +673,7 @@ render() {
     <h3>Async Rendering on the Server</h3>
     <p>On the server, <code>render()</code> can be async. This lets you fetch data inside a component:</p>
 
-    <pre>class UserProfile extends WebComponent {
-  static properties = { userId: { type: String } };
-  declare userId: string;
-
+    <pre>class UserProfile extends WebComponent({ userId: String }) {
   constructor() {
     super();
     this.userId = '';
@@ -861,10 +828,10 @@ ChatBox.register('chat-box');</pre>
 
     <h2>Quick Reference</h2>
     <ul>
-      <li><strong>Extend</strong> <code>WebComponent</code> and set <code>static properties</code> (and optionally <code>static styles</code> for shadow-DOM components).</li>
+      <li><strong>Extend</strong> the <code>WebComponent({ ... })</code> factory with your property shape (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
       <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
-      <li><strong>State</strong>: instance signals (<code>foo = signal(...)</code>) or reactive properties (<code>static properties + declare</code>). Both feed the same batched re-render scheduler.</li>
+      <li><strong>State</strong>: instance signals (<code>foo = signal(...)</code>) or reactive properties (the <code>WebComponent({ ... })</code> factory, with <code>prop()</code> for options). Both feed the same batched re-render scheduler.</li>
       <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>

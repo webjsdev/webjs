@@ -144,7 +144,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
       <li><strong>Add a new page</strong>: create <code>app/about/page.ts</code>, export a function returning <code>html\`...\`</code>. Done. No router config.</li>
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
-      <li><strong>Add a component</strong>: create a file, extend <code>WebComponent</code>, set <code>static properties</code>, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
+      <li><strong>Add a component</strong>: create a file, extend the <code>WebComponent({ ... })</code> factory with your property shape, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
       <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.server.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
       <li><strong>Add a database model</strong>: edit <code>db/schema.server.ts</code>, run <code>webjs db generate</code> then <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>

@@ -400,10 +400,11 @@ Any stateful behavior with a Tier-2 element uses the element.
 ```ts
 import { WebComponent, html } from '@webjsdev/core';
 
-export class MyWidget extends WebComponent {
-  static properties = { label: { type: String }, count: { type: Number } };
-  declare label: string;
-  declare count: number;
+// Declare-free base-class factory style
+export class MyWidget extends WebComponent({
+  label: String,
+  count: Number
+}) {
   // Light DOM is the default; Tailwind utility classes apply directly.
 
   constructor() {
@@ -425,11 +426,15 @@ export class MyWidget extends WebComponent {
 MyWidget.register('my-widget');
 ```
 
-`static properties` is the runtime declaration (reactive accessor,
-attribute coercion, reflection). `declare` types the field for
-TypeScript without emitting a class-field initializer that would
-clobber the reactive accessor at construction time. The two
-declarations together give you full intelligence in any tsserver-backed
+The properties shape passed to `WebComponent({ ... })` is the runtime
+declaration (reactive accessor, attribute coercion, reflection), and the
+property types flow to `this.<prop>` with no `declare` lines needed. For
+per-property options use the `prop()` helper inside the shape
+(`count: prop(Number, { reflect: true })`, `mode: prop({ state: true })`);
+narrow a type with `prop<Student>(Object)`. Set defaults via the `default`
+option (`prop(Number, { default: 0 })`) or in the constructor after
+`super()`. A hand-written `static properties = { ... }` throws at
+construction. The factory gives you full intelligence in any tsserver-backed
 editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense`
 (no Lit dependency) that extends this to tag / attribute
 intelligence inside `html\`…\`` templates (go-to-definition, binding-aware
@@ -445,15 +450,14 @@ elements).
   - `my-widget .body`, `my-widget .title` (descendant selector)
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
-- **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
+- **Reactive props are declared via the base-class factory `WebComponent({ ... })`, with defaults set via the `default` option or in `constructor()` after `super()`.** A hand-written `static properties = { ... }` throws at construction (`webjs check` flags it via `no-static-properties`). Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders (`webjs check` flags this via `reactive-props-no-class-field`).
 - Component state lives in signals. Import `signal` from
   `@webjsdev/core`, read via `signal.get()` inside `render()`, write
   via `signal.set(value)`. Module-scope signals share state across
   components; instance signals (created in the constructor) carry
-  component-local state. Reactive properties (`static properties =
-  { foo: { type: ... } }` with a sibling `declare foo: T`) wrap HTML
-  attributes, attribute reflection, and `.prop=${value}` SSR
-  hydration.
+  component-local state. Reactive properties (declared via the
+  `WebComponent({ ... })` factory) wrap HTML attributes, attribute
+  reflection, and `.prop=${value}` SSR hydration.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
 
 ---
@@ -722,8 +726,8 @@ toggle, the tab switch) requires JS.
 component, applies its attributes, and calls `render()`. It does NOT
 call `connectedCallback`, `firstUpdated`, or any other browser-only
 lifecycle hook. Whatever state should appear on first paint MUST be
-set in the constructor (after `super()`) or be derivable from
-`static properties` + attributes on the rendered tag.
+set in the constructor (after `super()`) or be derivable from the
+factory-declared reactive props + attributes on the rendered tag.
 
 ```ts
 import { WebComponent, html, signal } from '@webjsdev/core';

@@ -163,8 +163,9 @@ entry, its own template parser. Inside `` html`…` `` templates you get:
 - Binding-aware completions: reachable tag names after `<`, and
   prefix-keyed attributes (`.prop` property names, `?bool` / plain
   hyphenated attribute names).
-- Diagnostics: value type-checks against `declare propName: T`, unquoted
-  `@`/`.`/`?` bindings, and expressionless `.prop` bindings.
+- Diagnostics: value type-checks against the reactive props declared in
+  `WebComponent({ ... })`, unquoted `@`/`.`/`?` bindings, and
+  expressionless `.prop` bindings.
 - Hover showing the component class / declared member type.
 
 In VS Code / Cursor / Windsurf, the **`webjs` extension** bundles this
@@ -630,8 +631,9 @@ the click handler is inert). Two consequences for how you write code:
 1. **Defaults for the first paint go in `constructor()`** (after
    `super()`), never as class-field initializers (which break
    reactivity) and never in `connectedCallback` (which the server
-   doesn't run). For Web Component properties with `declare`, set the
-   default in the constructor.
+   doesn't run). For reactive properties declared via the
+   `WebComponent({ ... })` factory, set the default in the constructor
+   or pass the `default` option (e.g. `prop(Number, { default: 0 })`).
 2. **`connectedCallback` is browser-only.** Use it for
    `localStorage`, viewport size, online status, or anything that
    genuinely can't be known on the server. Read the value, then
@@ -660,7 +662,8 @@ See [Progressive Enhancement](https://docs.webjs.dev/docs/progressive-enhancemen
 ## Lit muscle-memory gotchas (read if you have written lit before)
 
 Webjs's runtime API matches lit. The `WebComponent` base class,
-`static properties`, the lifecycle hooks, ReactiveControllers, the
+reactive properties (declared via the `WebComponent({ ... })` factory),
+the lifecycle hooks, ReactiveControllers, the
 directive set, `html` / `css` tagged templates. The **rendering
 model**, however, is different. Pure-lit patterns that work fine in a
 client-only lit app break in webjs's SSR pipeline or its reactivity
@@ -715,11 +718,12 @@ Practical consequences for agents writing webjs code.
 | Assuming an `async render()` always ships its module | A bare one (no other client signal) is ELIDED, so it costs zero JS and skips the on-hydration re-fetch, first paint unchanged | Rely on it for a fetch-and-display leaf. `static refresh = true` keeps the on-load refresh, `static shadow = true` always ships |
 | `window.X` / `document.X` in constructor or `render()` | SSR crash | Move to `connectedCallback` |
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
-| Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | Use base-class factory `WebComponent({ student: Student })` with constructor default (no `declare` needed), or `declare student: Student` plus constructor default |
-| `@property()` decorator | Banned by invariant 10 (erasable TS) | Use base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus `declare` |
+| Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | Pass the shape to the base-class factory `WebComponent({ student: Object })` and set the default in the constructor (flagged by `reactive-props-no-class-field`) |
+| `@property()` decorator | Banned by invariant 10 (erasable TS) | Pass the shape to the base-class factory `WebComponent({ ... })` (the only supported form) |
+| Hand-written `static properties = { ... }` | Throws at construction (the factory owns property setup) | Pass the same shape to the base-class factory `WebComponent({ ... })` (flagged by `no-static-properties`) |
 | Scoped `static styles = css` or an inline `<style>` with semantic class names (`.hero`, `.card`) in a light-DOM component | Scoped block does nothing without `static shadow = true`; inline `<style>` class names leak globally | Tailwind utilities (the light-DOM default); or `static shadow = true` for genuinely scoped CSS |
 | `willUpdate` computing SSR-visible derived state | Works (runs at SSR), but overriding it opts the component out of elision | Fine for interactive components; for display-only, derive inline in `render()` |
-| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via base-class factory `WebComponent({ ... })` / `static properties` reactive prop |
+| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or declare a reactive prop via the base-class factory `WebComponent({ ... })` |
 | `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
 
 The full annotated catalog with code examples lives in the framework

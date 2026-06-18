@@ -22,8 +22,7 @@ npm install @webjsdev/core
 ```js
 import { html, css, WebComponent } from '@webjsdev/core';
 
-class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
+class Counter extends WebComponent({ count: Number }) {
   static styles = css`button { padding: 8px 12px; }`;
 
   render() {

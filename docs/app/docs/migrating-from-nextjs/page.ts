@@ -92,9 +92,7 @@ export default async function Dashboard(_props: PageProps) {
 
 // components/counter.ts  (webjs: a component, this is where JS ships)
 import { WebComponent, html } from '@webjsdev/core';
-export class Counter extends WebComponent {
-  static properties = { start: { type: Number } };
-  declare start: number;
+export class Counter extends WebComponent({ start: Number }) {
   constructor() { super(); this.start = 0; }
   render() {
     return html\`&lt;button @click=\${() =&gt; { this.start = this.start + 1; }}&gt;\${this.start}&lt;/button&gt;\`;
