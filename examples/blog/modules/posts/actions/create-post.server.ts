@@ -1,12 +1,12 @@
 'use server';
 
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
-import { slugify, formatPost } from '../utils/slugify.ts';
-import { currentUser } from '../../auth/queries/current-user.server.ts';
-import { listPosts } from '../queries/list-posts.server.ts';
-import type { ActionResult } from '../../auth/types.ts';
-import type { PostFormatted } from '../types.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
+import { slugify, formatPost } from '#modules/posts/utils/slugify.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+import type { ActionResult } from '#modules/auth/types.ts';
+import type { PostFormatted } from '#modules/posts/types.ts';
 
 /**
  * Create a post authored by the currently-logged-in user. Reads the user

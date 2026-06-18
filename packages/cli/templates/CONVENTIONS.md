@@ -281,7 +281,7 @@ codegen, so there is no dev `before` step.
    preferences (theme, sidebar collapsed, etc.).
 5. To add a model: edit `db/schema.server.ts`, then `npm run db:generate`
    and `npm run db:migrate`. Access via `import { db } from
-   '../../../db/connection.server.ts'` (and the tables from
+   '#db/connection.server.ts'` (and the tables from
    `db/schema.server.ts`) **only inside `.server.{js,ts}` files,
    `route.ts` handlers, or `middleware.ts`**. Components, pages, and
    layouts call into the wrapped server query instead; the framework
@@ -388,6 +388,7 @@ modules/
 ```
 
 **Rules:**
+- **Prefer the `#` root alias over deep relatives.** Write `import { db } from '#db/connection.server.ts'`, `import { Button } from '#components/ui/button.ts'`, `#lib/...`, `#modules/...` instead of `../../../`. It is native `package.json "imports"` (the single `"#*": "./*"` key covers every top-level folder, so a new folder needs no config), resolved by Node and Bun with no build step. There is no slash after the `#` (`#lib/...`, not `#/lib/...`). A same-directory import stays relative (`./sibling.ts`).
 - One exported function per server action/query file
 - Server actions need BOTH the `.server.{js,ts}` extension AND a `'use server'` directive at the top. Extension alone marks a server-only utility (source-protected, not RPC-callable). Directive alone is a lint violation (`use-server-needs-extension`).
 - Components must call `Class.register('tag')`
@@ -588,8 +589,8 @@ the module once (typically in `app/layout.ts`) and use the tag.
 ```ts
 // Tier 1: class helpers on native elements (use this for forms,
 // dashboards, cards, layouts, anywhere the value is purely visual)
-import { buttonClass } from '../components/ui/button.ts';
-import { inputClass } from '../components/ui/input.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 return html`
   <button class=${buttonClass({ size: 'lg' })}>Save</button>
   <input class=${inputClass()} placeholder="Email">
@@ -773,7 +774,7 @@ Consume:
 
 ```ts
 // app/page.ts
-import { rubric } from '../lib/utils/ui.ts';
+import { rubric } from '#lib/utils/ui.ts';
 
 export default function Home() {
   return html`
@@ -925,8 +926,8 @@ route imports and calls it.
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 export async function createPost({ title, body }) {
   const [post] = await db.insert(posts).values({ title, body }).returning();
   return post;
@@ -936,7 +937,7 @@ export async function createPost({ title, body }) {
 ```ts
 // app/api/posts/route.ts
 import { route } from '@webjsdev/server';
-import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 // The route() adapter merges query + route params + JSON body into one input
 // object and JSON-responds the result. Pass { validate } to guard the input.
 export const POST = route(createPost);
@@ -1039,8 +1040,8 @@ Where the data lives, where to read it:
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 import type { ActionResult } from '../types.ts';
 
 export async function createPost(input: {
@@ -1167,8 +1168,8 @@ Routes are thin wrappers over typed server actions. Business logic lives in
 
 ```ts
 // app/api/users/route.ts: thin wrapper
-import { listUsers } from '../../../modules/users/queries/list-users.server.ts';
-import { createUser } from '../../../modules/users/actions/create-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import { createUser } from '#modules/users/actions/create-user.server.ts';
 
 export async function GET() { return Response.json(await listUsers()); }
 export async function POST(req: Request) {

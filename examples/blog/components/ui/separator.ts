@@ -15,7 +15,7 @@
  *
  * Design tokens used: --border.
  */
-import { cn } from '../../lib/utils/cn.ts';
+import { cn } from '#lib/utils/cn.ts';
 
 const BASE =
   'shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px';

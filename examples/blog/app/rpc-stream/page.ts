@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '../../components/token-stream.ts';
+import '#components/token-stream.ts';
 
 export const metadata = {
   title: 'Streaming RPC · webjs blog',

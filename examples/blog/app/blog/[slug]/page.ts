@@ -1,11 +1,11 @@
 import { html, notFound, type Metadata, type PageProps } from '@webjsdev/core';
-import '../../../components/muted-text.ts';
-import '../../../modules/comments/components/comments-thread.ts';
+import '#components/muted-text.ts';
+import '#modules/comments/components/comments-thread.ts';
 
-import { getPost } from '../../../modules/posts/queries/get-post.server.ts';
-import { listComments } from '../../../modules/comments/queries/list-comments.server.ts';
-import { currentUser } from '../../../modules/auth/queries/current-user.server.ts';
-import { rubric, backLink, displayH1, stat } from '../../../lib/utils/ui.ts';
+import { getPost } from '#modules/posts/queries/get-post.server.ts';
+import { listComments } from '#modules/comments/queries/list-comments.server.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
+import { rubric, backLink, displayH1, stat } from '#lib/utils/ui.ts';
 
 // Typed against the generated route literal (#258). With `.webjs/routes.d.ts`
 // generated (via `webjs types` / `webjs dev`), `params` narrows to

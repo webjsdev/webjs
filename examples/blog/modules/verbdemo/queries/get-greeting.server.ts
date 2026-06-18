@@ -1,5 +1,5 @@
 'use server';
-import { greetingCount } from '../store.server.ts';
+import { greetingCount } from '#modules/verbdemo/store.server.ts';
 
 /**
  * `getGreeting` is a GET action (#488): a cacheable read, tagged `greeting`,

@@ -12,9 +12,70 @@
  */
 
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname, extname, sep } from 'node:path';
 import { redactStringsAndTemplates } from './js-scan.js';
+
+/**
+ * Per-appDir cache of the parsed `package.json "imports"` subpath-alias map
+ * (#555). `null` means "no imports block" (the common case for an app that
+ * does not use the `#` alias). Read once per appDir; cleared with the parse
+ * cache on rebuild.
+ * @type {Map<string, Record<string,string> | null>}
+ */
+const IMPORTS_CACHE = new Map();
+
+/**
+ * Read an app's `package.json "imports"` subpath-import map (Node's native
+ * import-alias mechanism). Cached per appDir.
+ * @param {string} appDir
+ * @returns {Record<string,string> | null}
+ */
+export function appImportsMap(appDir) {
+  if (IMPORTS_CACHE.has(appDir)) return IMPORTS_CACHE.get(appDir) ?? null;
+  let map = null;
+  try {
+    const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && typeof pkg.imports === 'object' && pkg.imports) map = pkg.imports;
+  } catch { /* no package.json / unparseable: no aliases */ }
+  IMPORTS_CACHE.set(appDir, map);
+  return map;
+}
+
+/**
+ * Expand a `package.json "imports"` subpath alias (e.g. `#lib/db.server.ts`
+ * with the scaffold's catch-all `"#*": "./*"`) to its real APP-RELATIVE target
+ * string (`./lib/db.server.ts`).
+ * The security-critical seam (#555): the graph walker, auth gate, elision, and
+ * `no-server-import-in-browser-module` all route through `resolveImport`, so
+ * expanding the alias here (to the real path) is what stops an alias from
+ * laundering a `.server.ts` past those checks. Driven off the actual `"imports"`
+ * map so a non-default base (`"#lib/*": "./src/lib/*"`) is honored; never
+ * hardcodes `./`. Supports one trailing `*` wildcard per key (Node's rule) plus
+ * exact keys. (A `#/`-prefixed key is avoided in the scaffold because Bun's
+ * native resolver rejects it; the expansion here is key-shape-agnostic.)
+ * @param {string} spec  the import specifier, e.g. `'#lib/db.server.ts'`
+ * @param {string} appDir
+ * @returns {string | null}  the app-relative target (e.g. `'./lib/db.server.ts'`), or null if no alias matches
+ */
+export function expandImportAlias(spec, appDir) {
+  const map = appImportsMap(appDir);
+  if (!map) return null;
+  for (const [key, value] of Object.entries(map)) {
+    if (typeof value !== 'string') continue; // conditional-export objects are not graph-resolvable
+    const star = key.indexOf('*');
+    if (star === -1) {
+      if (spec === key) return value;
+      continue;
+    }
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    if (!spec.startsWith(prefix) || !spec.endsWith(suffix)) continue;
+    const middle = spec.slice(prefix.length, spec.length - suffix.length);
+    return value.replace('*', middle);
+  }
+  return null;
+}
 
 /** @type {RegExp} match static `import … from '…'` and `import '…'` */
 const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
@@ -52,6 +113,9 @@ const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
  * @returns {Promise<ModuleGraph>}
  */
 export async function buildModuleGraph(appDir) {
+  // Re-read the app's `package.json "imports"` each build so an edit to the
+  // alias map (#555) is picked up on rebuild.
+  IMPORTS_CACHE.delete(appDir);
   /** @type {ModuleGraph} */
   const graph = new Map();
   /** @type {Set<string>} every file walked this build (graph holds only files
@@ -286,8 +350,11 @@ async function parseFile(file, appDir, graph, seen) {
       // and is not a real import edge.
       if (masked[m.index] === ' ') continue;
       const spec = m[1];
-      // Only resolve relative imports within the project.
-      if (!spec.startsWith('.') && !spec.startsWith('/')) continue;
+      // Only resolve relative imports + `#`-style subpath aliases (#555)
+      // within the project. A bare npm specifier (dayjs) has no alias match
+      // and is skipped; an aliased `#lib/x.server.ts` IS followed so the
+      // graph / auth gate / elision see the real path through the alias.
+      if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
       const resolved = resolveImport(spec, file, appDir);
       if (resolved) deps.add(resolved);
     }
@@ -308,7 +375,13 @@ async function parseFile(file, appDir, graph, seen) {
 export function resolveImport(spec, fromFile, appDir) {
   const base = dirname(fromFile);
   let target;
-  if (spec.startsWith('/')) {
+  const aliased = expandImportAlias(spec, appDir);
+  if (aliased) {
+    // `#`-style subpath alias (#555): the app-relative target is resolved
+    // against the app root, then run through the same extension fallback below
+    // so the boundary / elision / preload all see the real on-disk path.
+    target = resolve(appDir, aliased);
+  } else if (spec.startsWith('/')) {
     // Absolute from app root (how browser sees it)
     target = join(appDir, spec);
   } else {

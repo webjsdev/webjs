@@ -29,6 +29,17 @@ function escapeAttr(s) {
 let _extraEntries = {};
 
 /**
+ * Browser importmap entries for the app's `package.json "imports"` subpath
+ * aliases (#555), e.g. `{ "#lib/": "/lib/" }` for `"#lib/*": "./lib/*"`. Kept in lockstep
+ * with the server-side resolver (`module-graph.js`'s `expandImportAlias`):
+ * BOTH are derived from the one `"imports"` map, so an alias that resolves in
+ * SSR never 404s in the browser (the #158/#159 preload-mismatch class). Set at
+ * boot by `dev.js` via `setImportAliasEntries`.
+ * @type {Record<string, string>}
+ */
+let _aliasEntries = {};
+
+/**
  * The normalized `webjs.basePath` for a sub-path deployment (issue #256),
  * `''` (the default) for a root mount. When non-empty, every same-origin
  * absolute importmap TARGET (the `/__webjs/core/*` core entries and any
@@ -65,6 +76,65 @@ export async function setBasePath(basePath) {
  */
 export function basePath() {
   return _basePath;
+}
+
+/**
+ * Derive the BROWSER importmap entries for an app's `package.json "imports"`
+ * subpath-alias map (#555). The scaffold ships a single root catch-all key
+ * `"#*": "./*"` (one key, zero maintenance: a new top-level folder is aliased
+ * with no config change, and `#*` resolves natively on Node AND Bun, unlike a
+ * `#/`-prefixed key which Bun rejects). A browser importmap needs a
+ * trailing-slash PREFIX key to match, and a bare `#` is not one, so a catch-all
+ * is expanded into one prefix scope PER top-level directory (`topLevelDirs`):
+ * `#lib/` -> `/lib/`, `#components/` -> `/components/`, etc. The dirs are scanned
+ * by the caller (dev.js) so this stays pure; a new folder produces a new scope
+ * on the next boot. A non-catch-all key is mapped directly: a per-dir wildcard
+ * `"#lib/*": "./lib/*"` becomes `"#lib/": "/lib/"`, an exact `"#db": "./x.ts"`
+ * becomes `"#db": "/x.ts"`. The leading `./` becomes a root-absolute `/` and the
+ * `*` is dropped (the trailing slash carries the prefix match). A non-default
+ * base (`"#*": "./src/*"`) folds into the emitted URL. Only string targets are
+ * mappable (a conditional-export object is skipped). Derived from the SAME map
+ * the server resolver reads, so SSR and the browser agree.
+ *
+ * @param {Record<string, unknown> | null | undefined} importsMap
+ * @param {string[]} [topLevelDirs]  app top-level dir names, for expanding a `#*` catch-all
+ * @returns {Record<string, string>}
+ */
+export function importAliasBrowserEntries(importsMap, topLevelDirs = []) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  if (!importsMap || typeof importsMap !== 'object') return out;
+  for (const [key, value] of Object.entries(importsMap)) {
+    if (typeof value !== 'string') continue;
+    if (!value.startsWith('./')) continue; // only app-root-relative targets map to a URL
+    const star = key.indexOf('*');
+    if (star !== -1 && key.slice(0, star) === '#') {
+      // Root catch-all `#*` -> `./<base>*`: expand to a prefix scope per dir.
+      // base is the part of the value between `.` and `*` (`'' ` for `./*`,
+      // `/src/` for `./src/*`), so `#<dir>/` -> `/<base><dir>/`.
+      const base = value.slice(1, value.lastIndexOf('*')); // './*' -> '/', './src/*' -> '/src/'
+      for (const dir of topLevelDirs) out[`#${dir}/`] = `${base}${dir}/`;
+      continue;
+    }
+    // Per-dir wildcard or exact key: map directly.
+    out[key.replace('*', '')] = value.replace(/^\./, '').replace('*', '');
+  }
+  return out;
+}
+
+/**
+ * Bind the browser importmap to the app's `package.json "imports"` aliases
+ * (#555). Called once at boot by `dev.js`, derived from the SAME `"imports"`
+ * map the server resolver reads, so SSR and the browser agree. The hash is
+ * recomputed eagerly (like `setBasePath` / `setCoreInstall`) so
+ * `importMapHash()` stays synchronous on the per-request path.
+ *
+ * @param {Record<string, string>} entries  browser entries from `importAliasBrowserEntries`
+ * @returns {Promise<void>}
+ */
+export async function setImportAliasEntries(entries) {
+  _aliasEntries = entries && typeof entries === 'object' ? entries : {};
+  _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
 /**
@@ -338,6 +408,7 @@ export function buildImportMap(opts = {}) {
   const merged = {
     ..._coreEntries,
     ..._extraEntries,
+    ..._aliasEntries,
   };
   // Sort keys so logically-identical importmaps serialize byte-for-byte
   // identically. The client router compares textContent to detect

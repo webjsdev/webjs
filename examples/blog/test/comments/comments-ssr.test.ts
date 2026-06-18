@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import '../../modules/comments/components/comments-thread.ts';
+import '#modules/comments/components/comments-thread.ts';
 
 const SAMPLE = [
   { id: 'c1', authorName: 'Ada', createdAt: new Date('2020-01-01').toISOString(), body: 'first-ssr-comment' },

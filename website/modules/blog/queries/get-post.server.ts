@@ -3,8 +3,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseFrontmatter } from '../../../lib/frontmatter.ts';
-import type { PostWithBody } from '../types.ts';
+import { parseFrontmatter } from '#lib/frontmatter.ts';
+import type { PostWithBody } from '#modules/blog/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');

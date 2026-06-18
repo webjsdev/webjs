@@ -1,7 +1,7 @@
 import { html, redirect } from '@webjsdev/core';
-import '../../modules/auth/components/auth-forms.ts';
-import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
-import { rubric } from '../../lib/utils/ui.ts';
+import '#modules/auth/components/auth-forms.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
+import { rubric } from '#lib/utils/ui.ts';
 
 type Ctx = { searchParams?: Record<string, string> };
 

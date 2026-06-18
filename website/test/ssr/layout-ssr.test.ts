@@ -14,11 +14,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import RootLayout from '../../app/layout.ts';
-import LandingPage from '../../app/page.ts';
-import NotFound from '../../app/not-found.ts';
-import ErrorBoundary from '../../app/error.ts';
-import { EXAMPLE_BLOG_URL } from '../../lib/links.ts';
+import RootLayout from '#app/layout.ts';
+import LandingPage from '#app/page.ts';
+import NotFound from '#app/not-found.ts';
+import ErrorBoundary from '#app/error.ts';
+import { EXAMPLE_BLOG_URL } from '#lib/links.ts';
 
 test('the root layout SSR emits no phantom copy-cmd element or copy button', async () => {
   const out = await renderToString(RootLayout({ children: html`<main>content</main>` }));

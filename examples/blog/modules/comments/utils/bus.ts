@@ -5,7 +5,7 @@
  * Redis pub/sub or a message broker: the framework doesn't abstract
  * this; the user decides their infrastructure.
  */
-import type { CommentFormatted } from '../types.ts';
+import type { CommentFormatted } from '#modules/comments/types.ts';
 
 type Subscriber = (comment: CommentFormatted) => void;
 

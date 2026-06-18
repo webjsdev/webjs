@@ -1,15 +1,15 @@
 import { html, repeat } from '@webjsdev/core';
-import '../../components/muted-text.ts';
-import { buttonClass } from '../../components/ui/button.ts';
+import '#components/muted-text.ts';
+import { buttonClass } from '#components/ui/button.ts';
 import {
   cardClass,
   cardHeaderClass,
   cardTitleClass,
   cardContentClass,
-} from '../../components/ui/card.ts';
-import { currentUser } from '../../modules/auth/queries/current-user.server.ts';
-import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
-import { rubric, clampH1, stat, accentLink } from '../../lib/utils/ui.ts';
+} from '#components/ui/card.ts';
+import { currentUser } from '#modules/auth/queries/current-user.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+import { rubric, clampH1, stat, accentLink } from '#lib/utils/ui.ts';
 
 export const metadata = { title: 'Dashboard: webjs blog' };
 

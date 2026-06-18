@@ -39,9 +39,9 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { extname, join, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { redactStringsAndTemplates } from './js-scan.js';
-import { resolveImport } from './module-graph.js';
+import { resolveImport, expandImportAlias } from './module-graph.js';
 
 /**
  * Length of the emitted hex hash. 12 hex chars (48 bits) is plenty to
@@ -306,6 +306,24 @@ const JS_SPEC_EXTS = new Set(['.js', '.mjs', '.jsx', '.cjs']);
  * @param {string} abs   the resolved absolute file path
  * @returns {string}
  */
+/**
+ * A base-path-safe relative specifier from the importing module to a resolved
+ * target file, used to rewrite a `#`-alias import in served source (#555). The
+ * browser resolves a relative specifier against the importer's own URL (already
+ * base-path-prefixed), so the result needs no importmap and no basePath fix-up,
+ * and it carries the `?v` the caller appends. Uses the resolved file's actual
+ * extension (so no `normalizeSpecToResolved` pass is needed).
+ *
+ * @param {string} importerAbs  absolute path of the module being served
+ * @param {string} abs          resolved absolute path of the import target
+ * @returns {string}
+ */
+function relativeSpecifier(importerAbs, abs) {
+  let rel = relative(dirname(importerAbs), abs).split(sep).join('/');
+  if (!rel.startsWith('.')) rel = './' + rel;
+  return rel;
+}
+
 function normalizeSpecToResolved(spec, abs) {
   const absExt = extname(abs);
   if (!absExt) return spec;
@@ -391,9 +409,15 @@ export function versionModuleImports(source, importerAbs) {
       // inside a string / template / comment and is not a real import edge.
       if (masked[/** @type {number} */ (m.index)] === ' ') continue;
       const spec = m[2];
-      // Only `./` `../` relative specifiers (base-path-correct, the app pattern).
-      // Bare -> importmap target; `/`-absolute -> pre-existing basePath gap.
-      if (spec[0] !== '.') continue;
+      const isRelative = spec[0] === '.';
+      // A `#`-style subpath alias (#555) is rewritten to a base-path-safe
+      // RELATIVE specifier below (so it carries `?v` and matches the preload,
+      // exactly like a relative import). Only `./`/`../` relatives and
+      // app-imports aliases qualify: a bare specifier is importmap-resolved and
+      // versioned at its target; a `/`-root-absolute specifier would miss the
+      // basePath prefix.
+      const isAlias = !isRelative && expandImportAlias(spec, _appDir) !== null;
+      if (!isRelative && !isAlias) continue;
       if (spec.includes('?')) continue;
       const abs = resolveImport(spec, importerAbs, _appDir);
       if (!abs || SERVER_FILE_RE.test(abs)) continue;
@@ -402,9 +426,14 @@ export function versionModuleImports(source, importerAbs) {
       if (!hash) continue;
       // `/d` flag: indices[2] is [start, end] of the specifier CONTENT (no
       // quotes). Replace it with the resolved-extension form + `?v` so the
-      // fetched URL is byte-identical to the preload href.
+      // fetched URL is byte-identical to the preload href. An alias is emitted
+      // as a relative specifier to the resolved file (the browser resolves it
+      // against the importer's already-prefixed URL, so it stays base-path-safe
+      // without the importmap, and the `?v` collapses fetch + preload to one
+      // immutable cache key).
       const [start, end] = /** @type {[number, number]} */ (m.indices[2]);
-      edits.push({ start, end, text: `${normalizeSpecToResolved(spec, abs)}?v=${hash}` });
+      const versioned = isAlias ? relativeSpecifier(importerAbs, abs) : normalizeSpecToResolved(spec, abs);
+      edits.push({ start, end, text: `${versioned}?v=${hash}` });
     }
   }
   if (edits.length === 0) return source;

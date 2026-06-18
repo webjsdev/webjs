@@ -6,7 +6,7 @@ import {
   getIconSizeExamples,
 } from './examples.ts';
 import { getComponentApi, type ComponentApi } from './component-api.ts';
-import { loadRegistryItem } from '../../../_lib/registry.server.ts';
+import { loadRegistryItem } from '#app/_lib/registry.server.ts';
 
 // ---------------------------------------------------------------------------
 // Side-effect imports: load every ui-* component module so the custom
@@ -15,42 +15,42 @@ import { loadRegistryItem } from '../../../_lib/registry.server.ts';
 // webjs.start.before step (see `scripts/copy-registry.js`), so the same source
 // webjs serves to the browser is what SSR uses.
 // ---------------------------------------------------------------------------
-import '../../../../components/ui/accordion.ts';
-import '../../../../components/ui/alert.ts';
-import '../../../../components/ui/alert-dialog.ts';
-import '../../../../components/ui/aspect-ratio.ts';
-import '../../../../components/ui/avatar.ts';
-import '../../../../components/ui/badge.ts';
-import '../../../../components/ui/breadcrumb.ts';
-import '../../../../components/ui/button.ts';
+import '#components/ui/accordion.ts';
+import '#components/ui/alert.ts';
+import '#components/ui/alert-dialog.ts';
+import '#components/ui/aspect-ratio.ts';
+import '#components/ui/avatar.ts';
+import '#components/ui/badge.ts';
+import '#components/ui/breadcrumb.ts';
+import '#components/ui/button.ts';
 // NOTE: calendar.ts is intentionally NOT imported here: its `default` import
 // of `date-fns` doesn't round-trip through webjs's auto-vendor bundler, and
 // its SSR path calls DOM APIs that aren't available in linkedom. The
 // calendar example renders a static visual scaffold instead.
-import '../../../../components/ui/card.ts';
-import '../../../../components/ui/checkbox.ts';
-import '../../../../components/ui/collapsible.ts';
-import '../../../../components/ui/dialog.ts';
-import '../../../../components/ui/dropdown-menu.ts';
-import '../../../../components/ui/hover-card.ts';
-import '../../../../components/ui/input.ts';
-import '../../../../components/ui/kbd.ts';
-import '../../../../components/ui/label.ts';
-import '../../../../components/ui/native-select.ts';
-import '../../../../components/ui/pagination.ts';
-import '../../../../components/ui/popover.ts';
-import '../../../../components/ui/progress.ts';
-import '../../../../components/ui/radio-group.ts';
-import '../../../../components/ui/separator.ts';
-import '../../../../components/ui/skeleton.ts';
-import '../../../../components/ui/sonner.ts';
-import '../../../../components/ui/switch.ts';
-import '../../../../components/ui/table.ts';
-import '../../../../components/ui/tabs.ts';
-import '../../../../components/ui/textarea.ts';
-import '../../../../components/ui/toggle.ts';
-import '../../../../components/ui/toggle-group.ts';
-import '../../../../components/ui/tooltip.ts';
+import '#components/ui/card.ts';
+import '#components/ui/checkbox.ts';
+import '#components/ui/collapsible.ts';
+import '#components/ui/dialog.ts';
+import '#components/ui/dropdown-menu.ts';
+import '#components/ui/hover-card.ts';
+import '#components/ui/input.ts';
+import '#components/ui/kbd.ts';
+import '#components/ui/label.ts';
+import '#components/ui/native-select.ts';
+import '#components/ui/pagination.ts';
+import '#components/ui/popover.ts';
+import '#components/ui/progress.ts';
+import '#components/ui/radio-group.ts';
+import '#components/ui/separator.ts';
+import '#components/ui/skeleton.ts';
+import '#components/ui/sonner.ts';
+import '#components/ui/switch.ts';
+import '#components/ui/table.ts';
+import '#components/ui/tabs.ts';
+import '#components/ui/textarea.ts';
+import '#components/ui/toggle.ts';
+import '#components/ui/toggle-group.ts';
+import '#components/ui/tooltip.ts';
 
 export function generateMetadata({ params }: { params: { name: string } }) {
   return { title: `${params.name}: Webjs UI` };

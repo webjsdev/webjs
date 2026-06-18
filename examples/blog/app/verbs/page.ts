@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '../../components/verb-greeting.ts';
+import '#components/verb-greeting.ts';
 
 export const metadata = {
   title: 'HTTP-verb actions · webjs blog',

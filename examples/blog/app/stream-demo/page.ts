@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import '../../components/async-greeting.ts';
-import '../../components/slow-fact.ts';
+import '#components/async-greeting.ts';
+import '#components/slow-fact.ts';
 
 export const metadata = {
   title: 'Stream demo · webjs blog',

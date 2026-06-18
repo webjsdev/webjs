@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import '../../components/slot-card.ts';
-import '../../components/slot-card-shadow.ts';
+import '#components/slot-card.ts';
+import '#components/slot-card-shadow.ts';
 
 export const metadata = { title: 'Slot Demo' };
 

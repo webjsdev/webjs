@@ -90,6 +90,15 @@ export default function Architecture() {
       <li><strong>Server-only imports</strong> (the DB driver <code>better-sqlite3</code> / <code>pg</code>, <code>node:*</code>, anything needing Node APIs) stay in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components, because page modules also load in the browser to register transitively imported components. Pages and components import functions from a <code>.server.{js,ts}</code> file; the framework rewrites that import into an RPC stub for the browser.</li>
     </ul>
 
+    <h2>Imports: the <code>#</code> root alias</h2>
+    <p>App-internal imports use the <code>#</code> path alias instead of deep <code>../../../</code> relatives:</p>
+    <pre>import { db } from '#db/connection.server.ts';
+import { Button } from '#components/ui/button.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';</pre>
+    <p>This is Node's native <code>package.json</code> <code>"imports"</code> field. The scaffold ships a single catch-all key, so every top-level folder is aliased and a new one needs no config change:</p>
+    <pre>"imports": { "#*": "./*" }</pre>
+    <p>It resolves at runtime on Node 24+ AND Bun with no build step and no <code>tsconfig</code> <code>paths</code>. The sigil is <code>#</code> (not <code>@</code>) and there is no slash after it (<code>#lib/...</code>, not <code>#/lib/...</code>): a <code>#/</code>-prefixed key does not resolve on Bun. webjs expands the same map for its import graph, so a <code>#</code>-aliased <code>.server.ts</code> still trips the server-only boundary, and the browser importmap gets a matching scope per top-level folder automatically. A same-directory import stays a plain relative (<code>./sibling.ts</code>); opt out anywhere by writing a relative path.</p>
+
     <h2>Request Lifecycle</h2>
     <ol>
       <li><strong>HTTP request arrives</strong> at the Node HTTP server (or HTTP/2 if TLS configured).</li>

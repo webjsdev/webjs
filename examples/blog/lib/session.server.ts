@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { db } from '../db/connection.server.ts';
-import { sessions } from '../db/schema.server.ts';
-import type { User } from '../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { sessions } from '#db/schema.server.ts';
+import type { User } from '#db/schema.server.ts';
 
 export const SESSION_COOKIE = 'blog_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days

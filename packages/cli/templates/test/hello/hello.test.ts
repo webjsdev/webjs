@@ -16,7 +16,7 @@ test('html template renders correctly', async () => {
 
 test('example: your first server action test', async () => {
   // Import your server action:
-  // import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+  // import { createPost } from '#modules/posts/actions/create-post.server.ts';
   //
   // const result = await createPost({ title: 'Test', body: 'Content' });
   // assert.equal(result.success, true);

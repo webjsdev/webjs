@@ -140,6 +140,13 @@ jobs:
       # same script proves the Node path under `npm test`.
       - name: webjs blog DB round-trip on Bun
         run: bun test/bun/blog-db.mjs
+      # # path-alias resolution on Bun (#555): the alias is Node's native
+      # package.json "imports" field; Bun must resolve the same
+      # `#*` catch-all key (a `#/`-prefixed key does NOT resolve on Bun, which is
+      # why the scaffold ships the slash-free `#*` form). The same script proves the Node path
+      # under `npm test`.
+      - name: webjs # path alias on Bun
+        run: bun test/bun/path-alias.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are

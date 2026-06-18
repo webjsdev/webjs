@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import '../components/error-card.ts';
+import '#components/error-card.ts';
 
 /**
  * Root error boundary. Any uncaught error thrown while rendering a page

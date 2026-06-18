@@ -2,7 +2,7 @@ import {
   loadRegistryItem,
   loadRegistryIndex,
   loadRegistryManifest,
-} from '../../_lib/registry.server.ts';
+} from '#app/_lib/registry.server.ts';
 
 const HEADERS = {
   'Content-Type': 'application/json',

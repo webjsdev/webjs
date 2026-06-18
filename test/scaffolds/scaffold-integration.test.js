@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -120,6 +120,26 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
+
+    // # path-alias imports (#555/#556): the scaffold ships the single #* catch-all
+    // imports key and uses # aliases for app-internal imports, no within-app deep relatives.
+    const aliasPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    assert.deepEqual(aliasPkg.imports, { '#*': './*' }, 'package.json ships the per-dir # imports aliases');
+    assert.match(pageSrc, /from '#[a-z]/, 'the example page imports via #');
+    // No app-internal deep relative (../../) survives the codemod in any .ts.
+    const tsFiles = [];
+    (function walk(d) {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+        const full = join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(ts|js)$/.test(e.name)) tsFiles.push(full);
+      }
+    })(appDir);
+    for (const f of tsFiles) {
+      const src = readFileSync(f, 'utf8');
+      assert.ok(!/from '(\.\.\/){2,}/.test(src), `${f.slice(appDir.length)} must not keep a deep relative import`);
+    }
 
     // The require-tests hook still reaches the scaffolded app for Claude
     // Code: the hook file is copied and the Claude settings wire it into
@@ -323,6 +343,18 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.ok(existsSync(join(appDir, 'lib', 'password.server.ts')), 'lib/password.server.ts present');
     assert.ok(existsSync(join(appDir, 'lib', 'auth.server.ts')), 'lib/auth.server.ts present');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
+
+    // The copied ui-* components import cn() via the #lib/utils/cn.ts alias, not
+    // a stale relative `../lib/utils.ts` that would ERR_MODULE_NOT_FOUND from
+    // components/ui/ (saas-template's readUiComponent rewrite, #556). The cn
+    // helper itself lives at lib/utils/cn.ts. Counterfactual: the no-op rewrite
+    // bug left `'../lib/utils.ts'` and this fails.
+    assert.ok(existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'cn helper at lib/utils/cn.ts');
+    for (const c of readdirSync(join(appDir, 'components', 'ui'))) {
+      if (!c.endsWith('.ts')) continue;
+      const src = readFileSync(join(appDir, 'components', 'ui', c), 'utf8');
+      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/utils\.ts['"]/, `${c} must not keep the stale ../lib/utils.ts cn import`);
+    }
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');

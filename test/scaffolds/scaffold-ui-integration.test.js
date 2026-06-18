@@ -89,9 +89,10 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
       );
     }
 
-    // Relative import to cn() helper is rewritten for components/ui/ depth
+    // The registry's relative cn import is rewritten to the app's #lib alias
+    // (#555/#556): #lib/utils/cn.ts, not the registry's `../lib/utils.ts`.
     const button = await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8');
-    assert.match(button, /from '\.\.\/\.\.\/lib\/utils\/cn\.ts'/);
+    assert.match(button, /from '#lib\/utils\/cn\.ts'/);
     assert.doesNotMatch(button, /from '\.\.\/lib\/utils\.ts'/);
 
     // Tier-1 button source exports the buttonClass function (no custom element).
@@ -190,24 +191,24 @@ test('api scaffold deliberately ships no ui-* components', async () => {
 });
 
 test('api scaffold route imports resolve to real modules/ files', async () => {
-  // Regression for an off-by-one in the relative `../` depth: route.ts
-  // lives at app/api/<feature>/route.ts (3 levels deep), so reaching
-  // modules/<feature>/... needs three `..` segments, not four.
+  // The route imports modules via the #modules alias (#555/#556), which
+  // eliminates the relative `../`-depth off-by-one this test originally
+  // guarded: `#modules/<feature>/...` is depth-independent.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'api' });
     const appDir = join(cwd, 'demo');
 
     const route = await readFile(join(appDir, 'app', 'api', 'users', 'route.ts'), 'utf8');
-    // Must NOT contain the 4-dot path (the old bug).
+    // Must NOT contain any relative `../` path to modules (the alias replaces it).
     assert.doesNotMatch(
       route,
-      /from '\.\.\/\.\.\/\.\.\/\.\.\/modules\//,
-      'route.ts should not use four ../ segments to reach modules/',
+      /from '(\.\.\/)+modules\//,
+      'route.ts should reach modules/ via the #modules alias, not a relative ../ path',
     );
-    // Must use the correct 3-dot path.
-    assert.match(route, /from '\.\.\/\.\.\/\.\.\/modules\/users\/queries\/list-users\.server\.ts'/);
-    assert.match(route, /from '\.\.\/\.\.\/\.\.\/modules\/users\/actions\/create-user\.server\.ts'/);
+    // Must use the #modules alias.
+    assert.match(route, /from '#modules\/users\/queries\/list-users\.server\.ts'/);
+    assert.match(route, /from '#modules\/users\/actions\/create-user\.server\.ts'/);
 
     // The imported module files must actually exist on disk.
     assert.ok(

@@ -1,6 +1,6 @@
 import { WebComponent, html, connectWS, signal } from '@webjsdev/core';
-import { inputClass } from '../../../components/ui/input.ts';
-import { buttonClass } from '../../../components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { buttonClass } from '#components/ui/button.ts';
 
 type Line = { id: number; text: string; kind: 'say' | 'meta' };
 type ChatMessage =

@@ -85,11 +85,10 @@ const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
  * Read a single @webjsdev/ui registry component, rewrite its relative import
- * of `../lib/utils.ts` so it resolves correctly when written to
- * `components/ui/<name>.ts` in the scaffolded app. The scaffold puts cn()
- * at `lib/utils/cn.ts` (folder-grouped with other browser-safe helpers).
- * From `components/ui/<x>.ts`, the equivalent path is two-up plus into the
- * utils/ folder: `../../lib/utils/cn.ts`.
+ * of `../lib/utils.ts` to the scaffolded app's aliased path so it resolves
+ * when written to `components/ui/<name>.ts`. The scaffold puts cn() at
+ * `lib/utils/cn.ts` (folder-grouped with other browser-safe helpers), so the
+ * alias form is `#lib/utils/cn.ts` (#555/#556).
  *
  * @param {string} name  component name without `.ts` (e.g. 'button')
  * @returns {Promise<string>} source with import rewritten
@@ -97,9 +96,11 @@ const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
   const raw = await readFile(src, 'utf8');
+  // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
+  // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
   return raw
-    .replaceAll("'../lib/utils.ts'", "'../../lib/utils/cn.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils/cn.ts"');
+    .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
+    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"');
 }
 
 /**
@@ -286,6 +287,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     version: '0.1.0',
     type: 'module',
     private: true,
+    // Native package.json subpath aliases (#555): write app-internal imports as
+    // `#lib/...`, `#components/...`, `#db/...`, `#<any-dir>/...` instead of deep
+    // `../../../` relatives. ONE catch-all key, so a new top-level folder is
+    // aliased with no config change. Node 24+ and Bun both resolve `#*` natively
+    // (a `#/`-prefixed key is rejected by Bun, so this slash-free form is the
+    // cross-runtime-safe shape; no build step, no tsconfig paths). The webjs
+    // server expands the same map for the import graph + browser importmap. Opt
+    // out by using a plain relative import.
+    imports: {
+      '#*': './*',
+    },
     scripts: {
       // No `predev` / `prestart` hooks (#550): the `webjs` block below holds
       // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
@@ -724,8 +736,8 @@ export async function createUser(input: { name: string; email: string }) {
  * /api/users: thin route wrapper over typed server actions.
  * Business logic lives in modules/users/, not here.
  */
-import { listUsers } from '../../../modules/users/queries/list-users.server.ts';
-import { createUser } from '../../../modules/users/actions/create-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import { createUser } from '#modules/users/actions/create-user.server.ts';
 
 export async function GET() {
   return Response.json(await listUsers());
@@ -742,8 +754,8 @@ export async function POST(req: Request) {
     await writeFile(join(appDir, 'test', 'unit', 'users.test.ts'), `import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { listUsers } from '../../modules/users/queries/list-users.server.ts';
-import { createUser } from '../../modules/users/actions/create-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import { createUser } from '#modules/users/actions/create-user.server.ts';
 
 test('listUsers returns an array', async () => {
   const users = await listUsers();
@@ -833,16 +845,16 @@ export type ActionResult<T> =
   await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
 import { html, cspNonce } from '@webjsdev/core';
 import '@webjsdev/core/client-router';
-import '../components/theme-toggle.ts';
+import '#components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
 //     class-helper FUNCTIONS, with no custom element to register. Each page
 //     imports the specific helpers it needs (e.g.
-//     \`import { buttonClass } from '../components/ui/button.ts'\`).
+//     \`import { buttonClass } from '#components/ui/button.ts'\`).
 //   - Tier 2 (dialog, popover, tooltip, tabs, accordion, etc.) ARE custom
 //     elements. Register them by side-effect-importing here once so they
 //     work transitively across every page:
-//       import '../components/ui/dialog.ts';
+//       import '#components/ui/dialog.ts';
 // The example app/page.ts below uses only Tier-1 helpers, so nothing
 // extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
@@ -1014,18 +1026,18 @@ ${SHADCN_THEME}
 
   await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
-import { rubric, displayH1, accentLink } from '../lib/utils/ui.ts';
-import { buttonClass } from '../components/ui/button.ts';
-import { badgeClass } from '../components/ui/badge.ts';
+import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { badgeClass } from '#components/ui/badge.ts';
 import {
   cardClass,
   cardHeaderClass,
   cardTitleClass,
   cardDescriptionClass,
   cardContentClass,
-} from '../components/ui/card.ts';
-import { alertClass, alertTitleClass, alertDescriptionClass } from '../components/ui/alert.ts';
-import { separatorClass } from '../components/ui/separator.ts';
+} from '#components/ui/card.ts';
+import { alertClass, alertTitleClass, alertDescriptionClass } from '#components/ui/alert.ts';
+import { separatorClass } from '#components/ui/separator.ts';
 
 export const metadata = {
   title: '${name}: built with webjs',

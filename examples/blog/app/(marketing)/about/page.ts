@@ -1,5 +1,5 @@
 import { html, type Metadata } from '@webjsdev/core';
-import { rubric, displayH1, codeChip } from '../../../lib/utils/ui.ts';
+import { rubric, displayH1, codeChip } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'About: webjs blog' };
 

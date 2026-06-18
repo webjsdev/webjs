@@ -1,13 +1,13 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { buttonClass } from '../../../components/ui/button.ts';
-import { inputClass } from '../../../components/ui/input.ts';
-import { labelClass } from '../../../components/ui/label.ts';
-import { cardClass, cardContentClass } from '../../../components/ui/card.ts';
-import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
+import { cardClass, cardContentClass } from '#components/ui/card.ts';
+import { alertClass, alertDescriptionClass } from '#components/ui/alert.ts';
 // Server action: dev server rewrites this import into an RPC stub for the
 // browser. At type-check time TS resolves the real source so createPost's
 // input + return types flow across the RPC boundary.
-import { createPost } from '../actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 export class NewPost extends WebComponent {
   busy = signal(false);

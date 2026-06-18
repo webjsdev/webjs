@@ -1,5 +1,5 @@
-import { getPost } from '../../../../modules/posts/queries/get-post.server.ts';
-import { deletePost } from '../../../../modules/posts/actions/delete-post.server.ts';
+import { getPost } from '#modules/posts/queries/get-post.server.ts';
+import { deletePost } from '#modules/posts/actions/delete-post.server.ts';
 
 type Ctx = { params: { slug: string } };
 

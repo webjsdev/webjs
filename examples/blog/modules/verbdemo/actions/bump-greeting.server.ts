@@ -1,5 +1,5 @@
 'use server';
-import { bumpGreeting as bump } from '../store.server.ts';
+import { bumpGreeting as bump } from '#modules/verbdemo/store.server.ts';
 
 /**
  * `bumpGreeting` is a POST mutation (#488) that invalidates the `greeting` tag,

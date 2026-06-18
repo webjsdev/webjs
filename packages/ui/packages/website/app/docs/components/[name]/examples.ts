@@ -17,15 +17,15 @@
  */
 import {
   buttonClass,
-} from '../../../../components/ui/button.ts';
+} from '#components/ui/button.ts';
 import {
   badgeClass,
-} from '../../../../components/ui/badge.ts';
+} from '#components/ui/badge.ts';
 import {
   alertClass,
   alertTitleClass,
   alertDescriptionClass,
-} from '../../../../components/ui/alert.ts';
+} from '#components/ui/alert.ts';
 import {
   cardClass,
   cardHeaderClass,
@@ -33,27 +33,27 @@ import {
   cardDescriptionClass,
   cardContentClass,
   cardFooterClass,
-} from '../../../../components/ui/card.ts';
-import { inputClass } from '../../../../components/ui/input.ts';
-import { labelClass } from '../../../../components/ui/label.ts';
-import { textareaClass } from '../../../../components/ui/textarea.ts';
-import { checkboxClass } from '../../../../components/ui/checkbox.ts';
-import { radioClass, radioGroupClass } from '../../../../components/ui/radio-group.ts';
-import { switchInputClass, switchTrackClass } from '../../../../components/ui/switch.ts';
+} from '#components/ui/card.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
+import { textareaClass } from '#components/ui/textarea.ts';
+import { checkboxClass } from '#components/ui/checkbox.ts';
+import { radioClass, radioGroupClass } from '#components/ui/radio-group.ts';
+import { switchInputClass, switchTrackClass } from '#components/ui/switch.ts';
 import {
   nativeSelectWrapperClass,
   nativeSelectClass,
   nativeSelectIconClass,
-} from '../../../../components/ui/native-select.ts';
+} from '#components/ui/native-select.ts';
 import {
   avatarClass,
   avatarImageClass,
   avatarFallbackClass,
   avatarGroupClass,
-} from '../../../../components/ui/avatar.ts';
-import { separatorClass } from '../../../../components/ui/separator.ts';
-import { skeletonClass } from '../../../../components/ui/skeleton.ts';
-import { kbdClass, kbdGroupClass } from '../../../../components/ui/kbd.ts';
+} from '#components/ui/avatar.ts';
+import { separatorClass } from '#components/ui/separator.ts';
+import { skeletonClass } from '#components/ui/skeleton.ts';
+import { kbdClass, kbdGroupClass } from '#components/ui/kbd.ts';
 import {
   tableContainerClass,
   tableClass,
@@ -62,59 +62,59 @@ import {
   tableRowClass,
   tableHeadClass,
   tableCellClass,
-} from '../../../../components/ui/table.ts';
-import { toggleClass } from '../../../../components/ui/toggle.ts';
-import { progressClass } from '../../../../components/ui/progress.ts';
-import { tabsListClass } from '../../../../components/ui/tabs.ts';
+} from '#components/ui/table.ts';
+import { toggleClass } from '#components/ui/toggle.ts';
+import { progressClass } from '#components/ui/progress.ts';
+import { tabsListClass } from '#components/ui/tabs.ts';
 import {
   breadcrumbListClass,
   breadcrumbItemClass,
   breadcrumbLinkClass,
   breadcrumbPageClass,
   breadcrumbSeparatorClass,
-} from '../../../../components/ui/breadcrumb.ts';
+} from '#components/ui/breadcrumb.ts';
 import {
   paginationClass,
   paginationContentClass,
   paginationLinkClass,
   paginationPreviousClass,
   paginationNextClass,
-} from '../../../../components/ui/pagination.ts';
+} from '#components/ui/pagination.ts';
 import {
   fieldClass,
   hintClass,
   stackClass,
-} from '../../../../lib/utils.ts';
+} from '#lib/utils.ts';
 import {
   dialogHeaderClass,
   dialogTitleClass,
   dialogDescriptionClass,
   dialogFooterClass,
-} from '../../../../components/ui/dialog.ts';
+} from '#components/ui/dialog.ts';
 import {
   popoverContentClass,
   popoverHeaderClass,
   popoverTitleClass,
   popoverDescriptionClass,
-} from '../../../../components/ui/popover.ts';
+} from '#components/ui/popover.ts';
 import {
   accordionClass,
   accordionItemClass,
   accordionTriggerClass,
   accordionContentClass,
-} from '../../../../components/ui/accordion.ts';
+} from '#components/ui/accordion.ts';
 import {
   collapsibleClass,
   collapsibleTriggerClass,
   collapsibleContentClass,
-} from '../../../../components/ui/collapsible.ts';
+} from '#components/ui/collapsible.ts';
 import {
   alertDialogContentClass,
   alertDialogHeaderClass,
   alertDialogTitleClass,
   alertDialogDescriptionClass,
   alertDialogFooterClass,
-} from '../../../../components/ui/alert-dialog.ts';
+} from '#components/ui/alert-dialog.ts';
 
 // --------------------------------------------------------------------------
 // Tier-1 examples (class-helper functions on native HTML)

@@ -193,3 +193,39 @@ test('counterfactual: with the pass active the served import URL matches the pre
   assert.ok(!bare.includes('?v='), 'pre-fix source has no version token, so it 404s the preload cache key');
   assert.notEqual(versioned, bare, 'the pass changes the served bytes');
 });
+
+test('versions a # path-alias import as a base-path-safe relative specifier (#555)', () => {
+  // A `#` alias resolves via the importmap (`#components/`->`/components/`), which carries NO `?v`,
+  // so without this the alias import would fetch the un-versioned URL while the
+  // preload points at `?v=hash` (the #369 wasted-preload class, but for aliases).
+  // The pass rewrites it to a versioned RELATIVE specifier: base-path-safe (the
+  // browser resolves it against the importer's own URL, not the importmap) and
+  // carrying the same `?v` as the preload, collapsing fetch + preload to one
+  // immutable cache key.
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }));
+  const badgeBytes = 'export class B {}\n';
+  writeFileSync(join(appDir, 'components', 'badge.ts'), badgeBytes);
+  setAssetRoots({ appDir, coreDir, enabled: true });
+
+  const pageAbs = join(appDir, 'app', 'page.ts');
+  const out = versionModuleImports("import '#components/badge.ts';\n", pageAbs);
+
+  const h = shortHash(badgeBytes);
+  // app/page.ts -> components/badge.ts is `../components/badge.ts`.
+  assert.equal(out, `import '../components/badge.ts?v=${h}';\n`);
+  // The browser resolves that relative specifier against `/app/page.ts` to
+  // `/components/badge.ts?v=H`, byte-identical to the modulepreload href.
+  assert.equal(withAssetHash('/components/badge.ts'), `/components/badge.ts?v=${h}`);
+});
+
+test('a # alias to a .server.ts is NOT versioned (server stub, bare URL, not preloaded)', () => {
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }));
+  writeFileSync(join(appDir, 'lib', 'db.server.ts'), "export const db = {};\n");
+  setAssetRoots({ appDir, coreDir, enabled: true });
+
+  const pageAbs = join(appDir, 'app', 'page.ts');
+  const src = "import { db } from '#lib/db.server.ts';\n";
+  // A .server.* target serves as a stub at a bare URL and is never in the
+  // preload set, so it is left untouched (same as a relative .server import).
+  assert.equal(versionModuleImports(src, pageAbs), src);
+});

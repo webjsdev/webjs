@@ -1,13 +1,13 @@
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { buttonClass } from '../../../components/ui/button.ts';
-import { inputClass } from '../../../components/ui/input.ts';
-import { labelClass } from '../../../components/ui/label.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
 import {
   cardClass,
   cardHeaderClass,
   cardContentClass,
-} from '../../../components/ui/card.ts';
-import { alertClass, alertDescriptionClass } from '../../../components/ui/alert.ts';
+} from '#components/ui/card.ts';
+import { alertClass, alertDescriptionClass } from '#components/ui/alert.ts';
 
 /**
  * `<auth-forms>`: tabbed sign-in / sign-up.
