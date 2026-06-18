@@ -51,7 +51,16 @@ if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
   process.exit(args.length === 0 ? 1 : 0);
 }
 
-const positional = args.filter((a) => !a.startsWith('-'));
+// Positional args are the non-flag tokens, but a value-taking flag's VALUE
+// (e.g. the `bun` in `--runtime bun`) is not positional. Skip it so
+// `create-webjs --runtime bun my-app` reads `my-app` as the name, not `bun`.
+const VALUE_FLAGS = new Set(['--template', '--runtime']);
+const positional = [];
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a.startsWith('-')) { if (VALUE_FLAGS.has(a)) i++; continue; }
+  positional.push(a);
+}
 const name = positional[0];
 if (!name) {
   console.error('Error: <app-name> is required.\n');

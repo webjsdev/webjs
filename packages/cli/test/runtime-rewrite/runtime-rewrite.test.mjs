@@ -46,6 +46,17 @@ test('bunifyProse: fixes Dockerfile prose claims to match the bun Dockerfile', (
   );
 });
 
+test('bunifyProse: reframes the opt-in "Running on Bun" section as the default', () => {
+  assert.equal(
+    bunifyProse('### Running on Bun instead of Node'),
+    '### Runtime: this app runs on Bun',
+  );
+  const optIn = 'The same `package.json` scripts work on\neither; to run under Bun, force it with `--bun` so the server executes on Bun\nrather than the `webjs` bin\'s Node shebang:';
+  const out = bunifyProse(optIn);
+  assert.match(out, /already force/);
+  assert.doesNotMatch(out, /to run under Bun, force it with/);
+});
+
 test('bunifyDockerfile: switches to the oven/bun base + bun install + bun start', () => {
   const node = [
     '# webjs serves .ts directly by stripping types at the runtime layer, so there is',
@@ -108,4 +119,10 @@ test('bunifyCi: setup-bun + bun install + bun --bun run', () => {
   assert.match(out, /bun --bun run db:generate && bun --bun run db:migrate/);
   assert.match(out, /bun add --no-save puppeteer-core/);
   assert.match(out, /bunx playwright install/);
+});
+
+test('bunifyCi: the e2e Chromium-path step uses bun -e (not node -e)', () => {
+  const node = '      - run: echo "P=$(node -e "console.log(1)")" >> "$GITHUB_ENV"';
+  assert.match(bunifyCi(node), /bun -e /);
+  assert.doesNotMatch(bunifyCi(node), /node -e /);
 });

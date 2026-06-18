@@ -37,6 +37,14 @@ export function bunifyProse(s) {
     // changes. Fixed here so the generated bun app's docs match its Dockerfile.
     .replaceAll('pins `node:24-alpine` (the same Node major CI uses)', 'pins `oven/bun:1`')
     .replaceAll('`CMD ["npm", "start"]`', '`CMD ["bun", "--bun", "run", "start"]`')
+    // The "Running on Bun" section frames Bun as opt-in ("force it with --bun").
+    // In a bun-flavored app the dev/start scripts ALREADY embed --bun, so reframe
+    // it as the configured default (the finding from #569 review).
+    .replaceAll('### Running on Bun instead of Node', '### Runtime: this app runs on Bun')
+    .replaceAll(
+      'The same `package.json` scripts work on\neither; to run under Bun, force it with `--bun` so the server executes on Bun\nrather than the `webjs` bin\'s Node shebang:',
+      'This app is configured for Bun. Its `dev` / `start` scripts already force\n`--bun` (which overrides the `webjs` bin\'s Node shebang), so a plain `bun run dev`\nserves on Bun with no extra flag:',
+    )
     // Invocation styles first, so "npm create webjs@latest" does not get
     // mangled by the generic "npm <x>" rules below.
     .replaceAll('npm create webjs@latest', 'bun create webjs')
@@ -138,5 +146,9 @@ export function bunifyCi(s) {
     .replaceAll('- run: npm ci', '- run: bun install')
     .replaceAll('npm install --no-save ', 'bun add --no-save ')
     .replaceAll('npm run ', 'bun --bun run ')
+    // The e2e job resolves the Chromium path with `node -e`; a fully-Bun CI uses
+    // `bun -e` (bun supports the CommonJS require the snippet uses) so it does not
+    // rely on Node being implicitly present on the runner (#569 review).
+    .replaceAll('node -e ', 'bun -e ')
     .replaceAll('npx ', 'bunx ');
 }
