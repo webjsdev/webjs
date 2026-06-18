@@ -381,7 +381,7 @@ customElements.define('native-comp', NativeComp);
   }
 });
 
-test('reactive-props-use-declare: flags class-field initializer on reactive prop', async () => {
+test('no-static-properties: flags a static properties field in a class body', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -390,55 +390,56 @@ test('reactive-props-use-declare: flags class-field initializer on reactive prop
       `import { WebComponent } from '@webjsdev/core';
 class BadProp extends WebComponent {
   static properties = { count: { type: Number } };
-  count: number = 0;
+  declare count: number;
 }
 BadProp.register('bad-prop');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.ok(v, 'expected reactive-props-use-declare violation');
-    assert.ok(v.message.includes('count'));
-    assert.ok(v.fix.includes('declare'));
+    const v = violations.find((v) => v.rule === 'no-static-properties');
+    assert.ok(v, 'expected no-static-properties violation');
+    assert.ok(v.message.includes('static properties'));
+    assert.ok(v.fix.includes('WebComponent({'));
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('reactive-props-use-declare: also flags untyped initializer', async () => {
+test('no-static-properties: flags even the old declare + constructor form', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
-      join(appDir, 'components', 'bad.ts'),
+      join(appDir, 'components', 'old.ts'),
       `import { WebComponent } from '@webjsdev/core';
-class BadProp extends WebComponent {
-  static properties = { name: { type: String } };
-  name = 'Anonymous';
+class OldStyle extends WebComponent {
+  static properties = { count: { type: Number } };
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
 }
-BadProp.register('bad-prop');
+OldStyle.register('old-style');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.ok(v, 'expected violation for `name = "Anonymous"`');
-    assert.ok(v.message.includes('name'));
+    const v = violations.find((v) => v.rule === 'no-static-properties');
+    assert.ok(v, 'the static-properties + declare pattern is no longer allowed');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('reactive-props-use-declare: passes when declare + constructor are used', async () => {
+test('no-static-properties: passes for the factory form', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'good.ts'),
-      `import { WebComponent } from '@webjsdev/core';
-class GoodProp extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
+      `import { WebComponent, prop } from '@webjsdev/core';
+class GoodProp extends WebComponent({ count: Number, open: prop(Boolean, { reflect: true }) }) {
   constructor() {
     super();
     this.count = 0;
@@ -448,70 +449,14 @@ GoodProp.register('good-prop');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.equal(v, undefined, 'declare + constructor should be clean');
+    const v = violations.find((v) => v.rule === 'no-static-properties');
+    assert.equal(v, undefined, 'the factory form should be clean');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('reactive-props-use-declare: ignores non-reactive plain fields', async () => {
-  // Fields whose names are NOT in `static properties` are free-form -
-  // no reactive accessor exists, so a class-field initializer is fine.
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'mixed.ts'),
-      `import { WebComponent } from '@webjsdev/core';
-class Mixed extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-  _conn: WebSocket | null = null;     // not reactive: fine
-  _retries = 0;                       // not reactive: fine
-
-  constructor() { super(); this.count = 0; }
-}
-Mixed.register('mixed-prop');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.equal(v, undefined, 'non-reactive class fields should not trigger the rule');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('reactive-props-use-declare: does not trip on `this.x = …` inside methods', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'methods.ts'),
-      `import { WebComponent } from '@webjsdev/core';
-class Methods extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
-  constructor() { super(); this.count = 0; }
-
-  increment() {
-    this.count = this.count + 1;
-  }
-}
-Methods.register('methods-prop');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.equal(v, undefined, 'this.x = … inside methods is correct');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('reactive-props-use-declare: flags class-field initializer on factory-declared reactive prop', async () => {
+test('reactive-props-no-class-field: flags class-field initializer on factory-declared reactive prop', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -525,14 +470,16 @@ Counter.register('counter-prop');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.ok(v, 'expected reactive-props-use-declare violation for factory prop');
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.ok(v, 'expected reactive-props-no-class-field violation for factory prop');
+    assert.ok(v.message.includes('count'));
+    assert.ok(v.fix.includes('default'));
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('reactive-props-use-declare: passes for factory-declared reactive prop with constructor default', async () => {
+test('reactive-props-no-class-field: passes with a constructor default', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -549,8 +496,79 @@ Counter.register('counter-prop-ok');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
-    assert.equal(v, undefined, 'expected no violation for factory-declared prop');
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.equal(v, undefined, 'expected no violation for a constructor default');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-no-class-field: passes with the default option', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'factory-default.ts'),
+      `import { WebComponent, prop } from '@webjsdev/core';
+class Counter extends WebComponent({ count: prop(Number, { default: 0 }) }) {
+}
+Counter.register('counter-default');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.equal(v, undefined, 'the default option needs no class field');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-no-class-field: ignores non-reactive plain fields', async () => {
+  // Fields whose names are NOT factory props are free-form: no reactive
+  // accessor exists, so a class-field initializer is fine.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'mixed.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class Mixed extends WebComponent({ count: Number }) {
+  _conn: WebSocket | null = null;     // not reactive: fine
+  _retries = 0;                       // not reactive: fine
+
+  constructor() { super(); this.count = 0; }
+}
+Mixed.register('mixed-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.equal(v, undefined, 'non-reactive class fields should not trigger the rule');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-no-class-field: does not trip on `this.x = …` inside methods', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'methods.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class Methods extends WebComponent({ count: Number }) {
+  constructor() { super(); this.count = 0; }
+
+  increment() {
+    this.count = this.count + 1;
+  }
+}
+Methods.register('methods-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.equal(v, undefined, 'this.x = … inside methods is correct');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -1027,7 +1045,7 @@ test('no-non-erasable-typescript: still flags real top-level enum', async () => 
   }
 });
 
-test('reactive-props-use-declare: ignores fixture-style class strings inside template literals', async () => {
+test('no-static-properties / reactive-props-no-class-field: ignore fixture strings in template literals', async () => {
   // Test files write fixture sources to disk as template-literal
   // strings. Pre-fix, the scanner read those fixture strings as real
   // class declarations in the test file itself, flagging the
@@ -1039,7 +1057,7 @@ test('reactive-props-use-declare: ignores fixture-style class strings inside tem
       join(appDir, 'components', 'test-runner.ts'),
       "import { WebComponent } from '@webjsdev/core';\n" +
       '// This file writes a fixture string. The fixture LOOKS like a\n' +
-      '// reactive-props violation, but inside a template literal.\n' +
+      '// reactive-props violation, but it is inside a template literal.\n' +
       'export const fixture = `\n' +
       '  class FixtureClass extends WebComponent {\n' +
       '    static properties = { x: { type: Number } };\n' +
@@ -1048,29 +1066,30 @@ test('reactive-props-use-declare: ignores fixture-style class strings inside tem
       '`;\n',
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    const v = violations.find(
+      (v) => v.rule === 'no-static-properties' || v.rule === 'reactive-props-no-class-field',
+    );
     assert.equal(v, undefined,
-      'class-field initializer inside a template literal must not trigger the rule');
+      'a class inside a template literal must not trigger the rules');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('reactive-props-use-declare: still flags a real class-field initializer at top level', async () => {
+test('reactive-props-no-class-field: still flags a real class-field initializer at top level', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'real.ts'),
       "import { WebComponent } from '@webjsdev/core';\n" +
-      'class RealBad extends WebComponent {\n' +
-      '  static properties = { x: { type: Number } };\n' +
+      'class RealBad extends WebComponent({ x: Number }) {\n' +
       '  x = 0;\n' + // real top-level violation
       '}\n' +
       "RealBad.register('real-bad');\n",
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
     assert.ok(v, 'real top-level violation must still be flagged');
     assert.equal(v.message.includes('x'), true);
   } finally {

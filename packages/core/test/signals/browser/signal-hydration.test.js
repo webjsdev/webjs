@@ -9,7 +9,7 @@
  * SSR snapshot AND that subsequent signal mutations re-render.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 import { signal, computed } from '../../../src/signal.js';
 
 const assert = {
@@ -168,8 +168,7 @@ suite('Signal + SSR hydration roundtrip', () => {
     // property `mode` drives one part of the template, instance
     // signal `count` drives another. Each works independently.
     const T = newTag('sig-mixed');
-    class C extends WebComponent {
-      static properties = { mode: { type: String, reflect: true } };
+    class C extends WebComponent({ mode: prop(String, { reflect: true }) }) {
       count = signal(0);
       constructor() { super(); this.mode = 'idle'; }
       render() {

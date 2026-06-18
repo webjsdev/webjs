@@ -65,10 +65,7 @@ export default function Controllers() {
 
     <pre>import { WebComponent, html, css } from '@webjsdev/core';
 
-class LazyImage extends WebComponent {
-  static properties = { src: { type: String } };
-  declare src: string;
-
+class LazyImage extends WebComponent({ src: String }) {
   #visibility = new VisibilityController(this, { threshold: 0.1 });
 
   constructor() {
@@ -172,10 +169,7 @@ DashboardWidget.register('dashboard-widget');</pre>
 
     <pre>import { Task } from '@webjsdev/core/task';
 
-class UserProfile extends WebComponent {
-  static properties = { userId: { type: String } };
-  declare userId: string;
-
+class UserProfile extends WebComponent({ userId: String }) {
   #task = new Task(this, {
     task: async ([id], { signal }) =&gt; {
       const res = await fetch(\`/api/users/\${id}\`, { signal });

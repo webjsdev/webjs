@@ -264,9 +264,7 @@ A leaf component fetches its own server data into the first paint, co-located, w
 
 ```ts
 // (a) blocking async render: real data in the first paint, the common case
-class UserProfile extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserProfile extends WebComponent({ uid: String }) {
   async render() {
     const u = await getUser(this.uid);
     return html`<h3>${u.name}</h3>`;
@@ -282,9 +280,7 @@ html`
 `;
 
 // (c) renderFallback() = the CLIENT re-fetch loading state (never the first paint)
-class UserActivity extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserActivity extends WebComponent({ uid: String }) {
   renderFallback() { return html`<div class="skeleton h-24"></div>`; }
   async render() {
     const items = await getActivity(this.uid);

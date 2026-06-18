@@ -62,9 +62,8 @@ test('awaits async template (page-style)', async () => {
 });
 
 test('DSD injection handles attribute values containing slashes', async () => {
-  class SlashTag extends WebComponent {
+  class SlashTag extends WebComponent({ href: String }) {
     static shadow = true;
-    static properties = { href: { type: String } };
     render() { return html`<a href=${this.href}>x</a>`; }
   }
   SlashTag.register('slash-tag');

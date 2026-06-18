@@ -33,8 +33,7 @@ before(async () => {
 });
 
 test('connectedCallback decodes data-webjs-prop-* and strips the attribute', () => {
-  class HydrateProbe extends WebComponent {
-    static properties = { count: { type: Number } };
+  class HydrateProbe extends WebComponent({ count: Number }) {
     constructor() { super(); this.count = 0; }
     render() { return html`<p>${this.count}</p>`; }
   }
@@ -56,8 +55,7 @@ test('connectedCallback decodes data-webjs-prop-* and strips the attribute', () 
 });
 
 test('hydration handles kebab-case attribute names back to camelCase property', () => {
-  class TwoWords extends WebComponent {
-    static properties = { itemCount: { type: Number } };
+  class TwoWords extends WebComponent({ itemCount: Number }) {
     constructor() { super(); this.itemCount = 0; }
     render() { return html`<p>${this.itemCount}</p>`; }
   }
@@ -71,8 +69,7 @@ test('hydration handles kebab-case attribute names back to camelCase property', 
 });
 
 test('hydration is one-time: the attribute is stripped, second connectedCallback is a no-op', () => {
-  class GuardProbe extends WebComponent {
-    static properties = { val: { type: Number } };
+  class GuardProbe extends WebComponent({ val: Number }) {
     constructor() { super(); this.val = 0; }
     render() { return html`<p>${this.val}</p>`; }
   }
@@ -93,8 +90,7 @@ test('hydration is one-time: the attribute is stripped, second connectedCallback
 });
 
 test('subclass without overriding connectedCallback still hydrates', () => {
-  class Base extends WebComponent {
-    static properties = { val: { type: Number } };
+  class Base extends WebComponent({ val: Number }) {
     constructor() { super(); this.val = 0; }
     render() { return html`<p>${this.val}</p>`; }
   }
@@ -113,8 +109,7 @@ test('subclass without overriding connectedCallback still hydrates', () => {
 
 test('subclass that overrides connectedCallback + calls super still hydrates', () => {
   let userHookFired = false;
-  class Base extends WebComponent {
-    static properties = { val: { type: Number } };
+  class Base extends WebComponent({ val: Number }) {
     constructor() { super(); this.val = 0; }
     render() { return html`<p>${this.val}</p>`; }
   }
@@ -140,8 +135,7 @@ test('subclass that overrides connectedCallback and forgets super does NOT hydra
   // including prop-attribute hydration. This matches WebComponent's
   // documented lifecycle contract for every other behaviour
   // (rendering, controllers, etc.).
-  class Base extends WebComponent {
-    static properties = { val: { type: Number } };
+  class Base extends WebComponent({ val: Number }) {
     constructor() { super(); this.val = 0; }
     render() { return html`<p>${this.val}</p>`; }
   }
@@ -163,12 +157,11 @@ test('subclass that overrides connectedCallback and forgets super does NOT hydra
 });
 
 test('multiple data-webjs-prop-* attributes on the same element all decode', () => {
-  class Many extends WebComponent {
-    static properties = {
-      first: { type: Number },
-      second: { type: Number },
-      third: { type: Number },
-    };
+  class Many extends WebComponent({
+    first: Number,
+    second: Number,
+    third: Number,
+  }) {
     constructor() { super(); this.first = 0; this.second = 0; this.third = 0; }
     render() { return html`<p>${this.first}+${this.second}+${this.third}</p>`; }
   }
@@ -194,8 +187,7 @@ test('a malformed data-webjs-prop-* attribute is skipped, others still apply', (
   const warns = [];
   console.warn = (msg) => warns.push(msg);
   try {
-    class Mixed extends WebComponent {
-      static properties = { good: { type: Number }, bad: { type: Object } };
+    class Mixed extends WebComponent({ good: Number, bad: Object }) {
       constructor() { super(); this.good = 0; this.bad = { sentinel: true }; }
       render() { return html`<p>${this.good}</p>`; }
     }

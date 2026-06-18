@@ -41,8 +41,7 @@ before(async () => {
     'components/user-card.js',
     `import { html, WebComponent } from ${JSON.stringify(CORE_URL)};\n` +
       `import { getUser } from '../actions/users.server.js';\n` +
-      `export class UserCard extends WebComponent {\n` +
-      `  static properties = { uid: { type: Number } };\n` +
+      `export class UserCard extends WebComponent({ uid: Number }) {\n` +
       `  constructor() { super(); this.uid = 1; }\n` +
       `  async render() { const u = await getUser(this.uid); return html\`<div class="card"><span @click=\${() => { this.uid++; }}>\${u.name}</span></div>\`; }\n` +
       `}\n` +

@@ -21,8 +21,9 @@ is what runs. Quick map:
 - `node_modules/@webjsdev/cli/`: CLI commands + scaffold templates.
 - `node_modules/@webjsdev/intellisense/`: tsserver plugin (go-to-definition
   on tag names, `<webjs-tag>` "Unknown tag/attribute" diagnostic
-  suppression, attribute auto-complete sourced from `static properties`,
-  gated on the current file's import graph). Inside `` html`` `` templates.
+  suppression, attribute auto-complete sourced from the reactive props
+  declared in `WebComponent({ ... })`, gated on the current file's import
+  graph). Inside `` html`` `` templates.
 
 When in doubt, `grep -rn '<symbol>' node_modules/@webjsdev/`. The
 framework is plain JS with JSDoc types, small, and readable end-to-end.
@@ -251,7 +252,7 @@ Import from auth/types.ts for ActionResult<T>.
 
 ### Add a component
 Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
-Extend WebComponent, declare `static properties` (and `static styles` for shadow-DOM components), implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen.
+Extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults via the `default` option or the constructor, never a class-field initializer.
 
 ### Add a database model
 Edit `db/schema.server.ts`. Run `webjs db generate` then `webjs db migrate`.

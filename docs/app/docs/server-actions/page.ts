@@ -370,7 +370,6 @@ import { WebComponent, html, css } from '@webjsdev/core';
 import { addTodo, listTodos } from '../actions/todos.server.ts';
 
 export class TodoApp extends WebComponent {
-  static properties = {};
   static styles = css\`
     :host { display: block; max-width: 400px; }
     ul { list-style: none; padding: 0; }

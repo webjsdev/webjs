@@ -87,7 +87,7 @@ See `agent-docs/framework-dev.md` for monorepo commands, workspace layout, per-f
 
 ## What webjs is
 
-An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rails. The component runtime API matches lit (reactive `static properties`, the lit lifecycle hooks, ReactiveControllers, the `lit-html` directive set, `html` / `css` templates) so lit training data transfers directly, but webjs ships its own no-build implementation under `packages/core/src/`. Decorators are the one lit exception (invariant 10); use `declare` + `static properties`.
+An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rails. The component runtime API matches lit (reactive properties, the lit lifecycle hooks, ReactiveControllers, the `lit-html` directive set, `html` / `css` templates) so lit training data transfers directly, but webjs ships its own no-build implementation under `packages/core/src/`. Reactive properties are the one deliberate divergence (invariant 10): instead of lit's `@property()` decorator or a `static properties` block, webjs declares them through the declare-free base-class factory `extends WebComponent({ count: Number })`.
 
 - **No build step.** Source files are served as native ES modules. JSDoc `.js` is default; `.ts` / `.mts` is stripped through a pluggable stripper (#508): Node 24+'s built-in `module.stripTypeScriptTypes`, or `amaro` on Bun (byte-identical, position-preserving) (invariant 10 + `agent-docs/typescript.md`). **Runs on Node 24+ or Bun** (run a Bun app with `bun --bun run dev` / `start`); the early `assertNodeVersion()` preflight enforces the Node floor and admits Bun. On Bun, `startServer` selects a native `Bun.serve` listener shell instead of the node:http one (skipping the compat bridge for ~1.9x more req/s on the listening path, at near-complete feature parity, the one node-only gap being 103 Early Hints since `Bun.serve` has no informational-response API), via a runtime-neutral seam that also sets up future `Deno.serve` / embedded adapters. Edge runtimes (no filesystem) are a separate, later target.
 - **SSR + CSR by default.** Pages are server-rendered HTML; components render light DOM by default, shadow DOM opt-in via `static shadow = true` with DSD SSR.
@@ -174,7 +174,7 @@ no browser mapping in dev). Opt out anywhere by writing a plain relative import.
 ## Public API of `@webjsdev/core`
 
 ```js
-import { html, css, WebComponent, render } from '@webjsdev/core';
+import { html, css, WebComponent, prop, render } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
 ```
 
@@ -183,7 +183,8 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | Export | Purpose |
 |---|---|
 | `html` / `css` | Tagged template literals. `css` goes in `static styles`. |
-| `WebComponent` | Base class for interactive components. |
+| `WebComponent` | Base class for interactive components. Called as `WebComponent({ ... })` it returns a typed base declaring reactive properties. |
+| `prop(type?, opts?)` | Declares one reactive property inside the `WebComponent({ ... })` factory with options (`reflect`, `state`, `attribute`, `default`, `converter`, `hasChanged`) and a narrowable TS type (`prop<Student>(Object)`). |
 | `register(tag, C)` | Tag binding. Auto-called by `Class.register('tag')`. |
 | `render(v, el)` | Client-side render into a DOM element. |
 | `renderToString` | Server-side async render to HTML with DSD (from `/server`). |
@@ -209,7 +210,7 @@ lit-html parity: `repeat` (keyed lists), `unsafeHTML(str)` (trusted raw HTML, **
 ## `WebComponent` essentials
 
 ```ts
-// Recommended declare-free base-class factory style
+// Reactive properties are declared in the base-class factory (declare-free)
 class MyThing extends WebComponent({
   count: prop(Number, { reflect: true })
 }) {
@@ -229,10 +230,7 @@ MyThing.register('my-thing');
 
 **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core`, read with `signal.get()` inside `render()`, and the built-in `SignalWatcher` re-renders on change. Module-scope signals share state across components and survive navigations; instance signals (constructor) are component-local.
 
-**Reactive properties ride HTML attributes, reflect to them, or arrive via SSR hydration.** webjs offers two patterns:
-1. **Base-Class Factory (Recommended):** Pass the property shape directly into `WebComponent({ ... })` (e.g. `count: Number` or `count: prop(Number, opts)`). The types flow dynamically to `this.<prop>` with no `declare` line needed. Set defaults in the constructor.
-2. **Static Properties Field:** Declare `static properties = { ... }`. In TS this requires `declare count: number` (no initializer) to prevent V8 class-field semantics from clobbering the reactive accessor. Set defaults in the constructor.
-Never use a class-field initializer (e.g., `count = 0`) for reactive properties, as it clobbers the accessor; this is enforced by `reactive-props-use-declare`. Property options: `type` (default `String`), `reflect`, `state`, `hasChanged`, `converter`.
+**Reactive properties ride HTML attributes, reflect to them, or arrive via SSR hydration.** They are declared ONLY by passing the property shape into the base-class factory `WebComponent({ ... })`. There is no `static properties` block and no `declare` line. The bare form takes a type constructor (`count: Number`, `label: String`, `open: Boolean`); the `prop()` helper carries options (`count: prop(Number, { reflect: true })`, `name: prop(String, { attribute: 'show-close-button' })`, internal state `prop({ state: true })` with no type), and narrows the TS type (`student: prop<Student>(Object)`, `mode: prop<'a' | 'b'>(String, { reflect: true })`). The types flow automatically to `this.<prop>`. Set defaults via the `default` option (`prop(Number, { default: 0 })`, a function default for a fresh object / array per instance) OR in the constructor after `super()`. NEVER use a class-field initializer (e.g., `count = 0`), which clobbers the reactive accessor (caught by `reactive-props-no-class-field`). Declaring your own `static properties` THROWS at runtime and is flagged by `no-static-properties`. Property options: `type` (default `String`), `reflect`, `state`, `hasChanged`, `converter`, `default`, `attribute`.
 
 **Lifecycle (lit-aligned), in order:** `shouldUpdate`, `willUpdate`, controllers' `hostUpdate()`, `update` (calls `render()` + commits), controllers' `hostUpdated()`, `firstUpdated`, `updated`, `updateComplete`, each receiving a `changedProperties` Map. **SSR runs only the constructor, attribute application, the pre-render hooks (`willUpdate` / `hostUpdate`), `reflect: true` reflection, and `render()`; it does NOT call `connectedCallback`, `firstUpdated`, `updated`, or any browser-only hook.** So defaults for first paint go in the constructor; browser-only data (localStorage, viewport, `navigator.*`) goes in `connectedCallback` writing a signal; server-known data arrives via the page function. Never ship a placeholder first paint that fetches in `connectedCallback`. A browser-only global in the constructor/`render()` throws at SSR (flagged by `no-browser-globals-in-render`; attribute methods and `closest()` are shimmed).
 
@@ -339,7 +337,7 @@ The advanced client-router surface is in `agent-docs/advanced.md`: **link prefet
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field. Any short-string quote works: `'tag-name'`, `"tag-name"`, or `` `tag-name` `` (single-line, no interpolation).
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
-5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core` and read via `signal.get()` inside `render()`; the built-in SignalWatcher tracks the reads and re-renders. Module-scope signals share state across components; instance-scope signals (constructor) are component-local. `static properties` (with a sibling `declare`) is reserved for values riding an HTML attribute, reflected to one, or arriving via `.prop=${value}` SSR hydration. For fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
+5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core` and read via `signal.get()` inside `render()`; the built-in SignalWatcher tracks the reads and re-renders. Module-scope signals share state across components; instance-scope signals (constructor) are component-local. The factory `WebComponent({ ... })` is reserved for values riding an HTML attribute, reflected to one, or arriving via `.prop=${value}` SSR hydration. For fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
 6. **Page and layout default exports must be functions.** They return a value (usually `TemplateResult`). They do not call `render()` themselves.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.

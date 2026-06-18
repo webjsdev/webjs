@@ -21,8 +21,9 @@ This file only covers what is specific to the extension.
 2. **Language-service intelligence.** The bundled `@webjsdev/intellisense`
    tsserver plugin, auto-registered via
    `contributes.typescriptServerPlugins` (no `tsconfig.json` edit). Gives
-   webjs-aware go-to-definition, attribute completion from
-   `static properties`, and tag diagnostics.
+   webjs-aware go-to-definition, attribute completion from the
+   factory-declared reactive props (`WebComponent({ ... })`), and tag
+   diagnostics.
 3. **Snippets** (`snippets/webjs.json`) for the common recipes and
    **commands** (`webjs.check` / `webjs.create` / `webjs.docs`, wired in
    `src/extension.js`).

@@ -1,4 +1,4 @@
-import { WebComponent, html, signal } from '@webjsdev/core';
+import { WebComponent, html, signal, prop } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
 import { inputClass } from '#components/ui/input.ts';
 import { labelClass } from '#components/ui/label.ts';
@@ -22,13 +22,10 @@ import { alertClass, alertDescriptionClass } from '#components/ui/alert.ts';
  *    is the better fit.
  */
 type Mode = 'login' | 'signup';
-export class AuthForms extends WebComponent {
-  static properties = {
-    then: { type: String },
-    mode: { type: String },
-  };
-  declare then: string;
-  declare mode: Mode;
+export class AuthForms extends WebComponent({
+  then: String,
+  mode: prop<Mode>(String),
+}) {
   busy = signal(false);
   error = signal<string | null>(null);
 

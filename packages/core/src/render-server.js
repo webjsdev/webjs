@@ -1052,12 +1052,16 @@ function appendReflectedAttrs(opening, instance, presentAttrNames) {
 function applyAttrsToInstance(instance, attrs, Cls) {
   const props = Cls.properties || {};
   for (const [key, raw] of Object.entries(attrs)) {
-    const def = props[key] || props[camelCase(key)];
+    const rawDef = props[key] || props[camelCase(key)];
     const propName = props[key] ? key : camelCase(key);
-    if (!def) {
+    if (!rawDef) {
       instance[propName] = raw;
       continue;
     }
+    // The factory accepts a bare constructor shorthand (`{ expanded: Boolean }`)
+    // alongside the long form (`{ expanded: { type: Boolean } }`); normalize so
+    // the type-based coercion below sees a `{ type }` object either way.
+    const def = typeof rawDef === 'object' ? rawDef : { type: rawDef };
     if (def.type === Number) instance[propName] = Number(raw);
     else if (def.type === Boolean) instance[propName] = raw !== 'false';
     else if (def.type === Object || def.type === Array) {

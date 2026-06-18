@@ -10,7 +10,7 @@
  * paths that linkedom doesn't replicate.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
@@ -25,8 +25,7 @@ const assert = {
 suite('Lifecycle hooks in a real browser', () => {
 
   test('updateComplete resolves after the real DOM commit', async () => {
-    class LcUcEl extends WebComponent {
-      static properties = { v: { type: Number } };
+    class LcUcEl extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       render() { return html`<p>v=${this.v}</p>`; }
     }
@@ -44,8 +43,7 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('shouldUpdate=false in real browser skips the DOM commit', async () => {
     let renders = 0;
-    class LcSuEl extends WebComponent {
-      static properties = { x: { type: Number } };
+    class LcSuEl extends WebComponent({ x: Number }) {
       constructor() { super(); this.x = 0; }
       shouldUpdate() { return this.x !== 99; }
       render() { renders++; return html`<p>x=${this.x}</p>`; }
@@ -67,11 +65,10 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('willUpdate mutations fold into the same render (no second microtask)', async () => {
     let renders = 0;
-    class LcWuEl extends WebComponent {
-      static properties = {
-        a: { type: Number },
-        b: { type: Number, state: true },
-      };
+    class LcWuEl extends WebComponent({
+      a: Number,
+      b: prop(Number, { state: true }),
+    }) {
       constructor() { super(); this.a = 0; this.b = -1; }
       willUpdate(cp) {
         if (cp.has('a')) this.b = this.a * 2;
@@ -95,8 +92,7 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('updated() runs after the DOM is live; can read post-render layout', async () => {
     let measured = null;
-    class LcUdEl extends WebComponent {
-      static properties = { tall: { type: Boolean } };
+    class LcUdEl extends WebComponent({ tall: Boolean }) {
       constructor() { super(); this.tall = false; }
       updated(cp) {
         if (cp.has('tall')) {
@@ -124,8 +120,7 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('firstUpdated runs once even across multiple updates', async () => {
     let firsts = 0;
-    class LcFuEl extends WebComponent {
-      static properties = { v: { type: Number } };
+    class LcFuEl extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       firstUpdated() { firsts++; }
       render() { return html`<p>${this.v}</p>`; }
@@ -144,8 +139,7 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('getUpdateComplete override chains additional work', async () => {
     let extraDone = false;
-    class LcGcEl extends WebComponent {
-      static properties = { v: { type: Number } };
+    class LcGcEl extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       async getUpdateComplete() {
         const r = await super.getUpdateComplete();
@@ -165,8 +159,7 @@ suite('Lifecycle hooks in a real browser', () => {
 
   test('throwing willUpdate does NOT deadlock the component', async () => {
     let willThrows = true;
-    class LcThrowEl extends WebComponent {
-      static properties = { v: { type: Number } };
+    class LcThrowEl extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       willUpdate() {
         if (willThrows) {
@@ -202,11 +195,10 @@ suite('Lifecycle hooks in a real browser', () => {
   test('shouldUpdate=false preserves changedProperties for the next cycle', async () => {
     let allow = false;
     const seen = [];
-    class LcGateEl extends WebComponent {
-      static properties = {
-        a: { type: Number },
-        b: { type: Number },
-      };
+    class LcGateEl extends WebComponent({
+      a: Number,
+      b: Number,
+    }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       shouldUpdate() { return allow; }
       updated(cp) { seen.push([...cp.keys()].sort()); }

@@ -51,7 +51,7 @@ What this gets us is that an agent in autonomous mode (running with permission t
 - `tests-exist`: every server action / query has a corresponding test
 - `no-server-imports-in-components`: components do not import `node:*` or a DB driver (`better-sqlite3` / `pg`)
 - `use-server-needs-extension`: a `'use server'` directive requires a `.server.{js,ts}` filename
-- `reactive-props-use-declare`: reactive properties use `declare` + `static properties` + constructor (not class-field initializers)
+- `no-static-properties`: reactive properties are declared via the `extends WebComponent({ … })` factory, not a hand-written `static properties`
 - `erasable-typescript-only`: `tsconfig.json` has `erasableSyntaxOnly: true`
 - `shell-in-non-root-layout`: non-root layouts and pages don't write `<!doctype>` / `<html>` / `<head>` / `<body>`
 - `no-json-data-files`: app data lives in the database, not in JSON files

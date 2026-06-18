@@ -13,9 +13,7 @@ export default function DataFetching() {
     <h2>The default: async render()</h2>
     <p>Make a component's <code>render()</code> async and call a <code>'use server'</code> action directly. Writing <code>await</code> makes the function async; webjs awaits a promise-returning <code>render()</code> automatically on both the server and the client. There is no flag.</p>
     <pre>// (a) blocking async render: real data in the first paint, the common case
-class UserProfile extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserProfile extends WebComponent({ uid: String }) {
   async render() {
     const u = await getUser(this.uid);   // real fn at SSR, RPC stub on the client
     return html\`&lt;h3&gt;${'${u.name}'}&lt;/h3&gt;\`;
@@ -44,9 +42,7 @@ html\`
 
     <h2>The re-fetch loading state: renderFallback()</h2>
     <pre>// (c) renderFallback() as the client re-fetch loading state (re-fetch on a prop change)
-class UserActivity extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserActivity extends WebComponent({ uid: String }) {
   renderFallback() { return html\`&lt;div class="skeleton h-24"&gt;&lt;/div&gt;\`; }
   async render() {
     const items = await getActivity(this.uid);

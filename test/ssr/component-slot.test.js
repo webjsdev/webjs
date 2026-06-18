@@ -219,8 +219,7 @@ describe('SSR projection', () => {
 
 describe('SSR edge cases', () => {
   test('slot inside conditional ternary (true branch)', async () => {
-    class C extends WebComponent {
-      static properties = { expanded: { type: Boolean } };
+    class C extends WebComponent({ expanded: Boolean }) {
       constructor() { super(); this.expanded =true; }
       render() {
         return html`<div>${this.expanded ? html`<section><slot></slot></section>` : html`<p>hidden</p>`}</div>`;
@@ -232,8 +231,7 @@ describe('SSR edge cases', () => {
   });
 
   test('slot inside conditional ternary (false branch absent)', async () => {
-    class C extends WebComponent {
-      static properties = { expanded: { type: Boolean } };
+    class C extends WebComponent({ expanded: Boolean }) {
       constructor() { super(); this.expanded =false; }
       render() {
         return html`<div>${this.expanded ? html`<section><slot></slot></section>` : html`<p>hidden</p>`}</div>`;

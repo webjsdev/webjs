@@ -43,7 +43,7 @@
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 // --------------------------------------------------------------------------
@@ -92,14 +92,10 @@ const TABS_CONTENT_CLASS = 'flex-1 outline-none';
 // requestUpdate() to re-render against the new parent value.
 // --------------------------------------------------------------------------
 
-export class UiTabs extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-    orientation: { type: String, reflect: true },
-  };
-  declare value: string;
-  declare orientation: 'horizontal' | 'vertical';
-
+export class UiTabs extends WebComponent({
+  value: prop(String, { reflect: true }),
+  orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.value = '';
@@ -140,12 +136,9 @@ UiTabs.register('ui-tabs');
 // <ui-tabs-list>
 // --------------------------------------------------------------------------
 
-export class UiTabsList extends WebComponent {
-  static properties = {
-    variant: { type: String, reflect: true },
-  };
-  declare variant: TabsListVariant;
-
+export class UiTabsList extends WebComponent({
+  variant: prop<TabsListVariant>(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.variant = 'default';
@@ -166,12 +159,9 @@ UiTabsList.register('ui-tabs-list');
 // <ui-tabs-trigger value="...">
 // --------------------------------------------------------------------------
 
-export class UiTabsTrigger extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-  };
-  declare value: string;
-
+export class UiTabsTrigger extends WebComponent({
+  value: prop(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.value = '';
@@ -235,12 +225,9 @@ UiTabsTrigger.register('ui-tabs-trigger');
 // <ui-tabs-content value="...">
 // --------------------------------------------------------------------------
 
-export class UiTabsContent extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-  };
-  declare value: string;
-
+export class UiTabsContent extends WebComponent({
+  value: prop(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.value = '';

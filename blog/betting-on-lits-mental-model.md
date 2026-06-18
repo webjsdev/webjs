@@ -9,7 +9,7 @@ author: Vivek
 
 The most-asked question I get about webjs is some version of "if you wanted lit's API, why didn't you just use lit?"
 
-It is a reasonable question. The webjs `WebComponent` class has `static properties`, `render() { return html\`\` }`, `ReactiveController`, the full directive set. It looks like lit. The minimal version of "just use lit" would be:
+It is a reasonable question. The webjs `WebComponent` class has reactive properties, `render() { return html\`\` }`, `ReactiveController`, the full directive set. It looks like lit. The minimal version of "just use lit" would be:
 
 ```ts
 // packages/core/src/component.js (hypothetical)
@@ -33,7 +33,7 @@ That is what I wanted to keep. Not lit specifically. Lit's _shape_. The shape an
 So webjs picked off the exact API surface that an agent recognizes:
 
 - `extends WebComponent` (in lit, `extends LitElement`)
-- `static properties = { count: { type: Number } }`
+- reactive properties declared up front (lit uses the `@property` decorator; webjs uses the `extends WebComponent({ count: Number })` factory, for the erasability reason below)
 - `render() { return html\`...\` }` with the same tagged-template directive set
 - `static styles = css\`...\`` for shadow DOM
 - Lifecycle hooks named the same: `shouldUpdate`, `willUpdate`, `update`, `updated`, `firstUpdated`, `updateComplete`
@@ -80,23 +80,21 @@ class MyCounter extends LitElement {
 
 That syntax requires `emitDecoratorMetadata: true` in tsconfig. With Node 24's built-in `module.stripTypeScriptTypes`, decorator metadata is non-erasable. webjs's `erasable-typescript-only` invariant rules it out. Strip-types-friendly TS does not support legacy decorators with metadata.
 
-The webjs alternative is the `declare` + `static properties` pattern:
+The webjs alternative is the `extends WebComponent({ … })` factory:
 
 ```ts
 import { WebComponent, html } from '@webjsdev/core';
 
-class MyCounter extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
+class MyCounter extends WebComponent({ count: Number }) {
   constructor() { super(); this.count = 0; }
   render() { return html`<button>${this.count}</button>`; }
 }
 MyCounter.register('my-counter');
 ```
 
-Three more lines per component than the lit decorator version. Tedious but tractable. The agent learns it from `AGENTS.md` and writes it correctly thereafter.
+The factory declares the reactive property and types `this.count` for you, with no decorator and no separate `declare` field. The agent learns it from `AGENTS.md` and writes it correctly thereafter.
 
-If webjs depended on lit, we would carry the decorator path as the "main" pattern in lit's docs and have to constantly fight the divergence. By owning the runtime, the constructor-based pattern is the only pattern.
+If webjs depended on lit, we would carry the decorator path as the "main" pattern in lit's docs and have to constantly fight the divergence. By owning the runtime, the factory is the only pattern.
 
 ## 3. The AI agent reads node_modules
 
@@ -126,19 +124,20 @@ Each of these is a few hundred lines. Cumulatively they justify owning the runti
 
 # What an LLM sees when it reads webjs
 
-The component file the agent reads looks like a lit component. Same `static properties`. Same `render()`. Same `html\`\`` directive syntax. The differences are minimal:
+The component file the agent reads looks like a lit component. Same reactive properties. Same `render()`. Same `html\`\`` directive syntax. The differences are minimal:
 
 ```
 - import { LitElement, html } from 'lit';
 + import { WebComponent, html } from '@webjsdev/core';
 
+- class MyCounter extends LitElement {
++ class MyCounter extends WebComponent({ count: Number }) {
+
 - @property() count = 0;
-+ static properties = { count: { type: Number } };
-+ declare count: number;
 + constructor() { super(); this.count = 0; }
 ```
 
-The decorator import goes away because of the erasable-TypeScript invariant. The `declare` + `static properties` + constructor pattern is the erasable equivalent.
+The decorator import goes away because of the erasable-TypeScript invariant. The `extends WebComponent({ … })` factory is the erasable equivalent.
 
 Everything else is the same. Lifecycle hooks. Directives. Reactive controllers. The agent writes lit-shaped code and it works.
 

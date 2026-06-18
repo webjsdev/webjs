@@ -4,9 +4,15 @@
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
-| `type` | `Number\|String\|Boolean\|Object\|Array` | `String` | Used by the default attribute converter |
+These options are passed to the `prop()` helper inside the `WebComponent({ ... })` factory (e.g. `count: prop(Number, { reflect: true })`); the bare form `count: Number` is shorthand for `prop(Number)`.
+
+| Option | Type | Default | Meaning |
+|---|---|---|---|
+| `type` | `Number\|String\|Boolean\|Object\|Array` | `String` | Used by the default attribute converter (the first `prop()` argument) |
 | `reflect` | `boolean` | `false` | Property changes write back to the HTML attribute |
 | `state` | `boolean` | `false` | Internal-only. No attribute, not in `observedAttributes` |
+| `attribute` | `string` | derived from the prop name | The HTML attribute name the property rides |
+| `default` | value or `() => value` | none | Declarative initial value (a function runs per instance for a fresh object / array) |
 | `hasChanged` | `(newVal, oldVal) => boolean` | strict `!==` | Custom change detection |
 | `converter` | `{ fromAttribute?, toAttribute? }` | type-based | Custom attribute ↔ property serialization |
 
@@ -14,11 +20,9 @@ Built-in constructors (`String`, `Number`, `Boolean`, `Array`, `Object`) feed
 the default attribute coercion. For anything the default can't parse correctly
 (Date, Map, Set, discriminated unions) supply a custom `converter`.
 
-## Why `declare` is required in TypeScript (and how to avoid it)
+## Declaring reactive properties: the base-class factory
 
-The framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`. Under traditional class declarations with a `static properties` block, if you write a class-field initializer in TypeScript without `declare` (e.g., `student: Student = { ... }`), TypeScript compiles it to an assignment after `super()`. Under modern class-field semantics, this uses `[[Define]]` to overwrite the accessor, silently breaking reactivity.
-
-The recommended way to avoid the `declare` requirement entirely is the **Base-Class Factory** style:
+Reactive properties are declared by passing the property shape into the **base-class factory** `WebComponent({ ... })`. The types flow automatically to `this.<prop>`, so there is no `static properties` block and no `declare` line. A direct `static properties` block throws at runtime (caught statically by the `no-static-properties` rule).
 
 ```ts
 class Counter extends WebComponent({
@@ -26,23 +30,36 @@ class Counter extends WebComponent({
 }) {
   constructor() {
     super();
-    this.count = 0; // Fully typed, no declare needed!
+    this.count = 0; // fully typed, no declare needed
   }
 }
 ```
 
-If you choose the traditional static field pattern, only the reactive properties need the `declare` line, and only in TypeScript files:
+The bare form takes a type constructor (`count: Number`, `label: String`, `open: Boolean`). The `prop()` helper carries options and narrows the TS type:
 
 ```ts
-class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
+class Dialog extends WebComponent({
+  open: prop(Boolean, { reflect: true }),                 // reflects to the `open` attribute
+  showClose: prop(Boolean, { attribute: 'show-close-button' }), // custom attribute name
+  variant: prop<'info' | 'danger'>(String, { reflect: true }),  // narrowed union type
+  student: prop<Student>(Object),                          // narrowed object type
+  internal: prop({ state: true }),                         // internal state, no attribute, no type
+}) {
   constructor() {
     super();
-    this.count = 0;
+    this.student = { name: '', email: '' };
   }
 }
+```
+
+Set defaults via the `default` option (a function default runs per instance for a fresh object / array) or in the constructor after `super()`. **Never** use a class-field initializer (e.g., `count = 0` or `student: Student = { ... }`): the framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`, and a class-field initializer compiles to an assignment after `super()` that uses `[[Define]]` to overwrite the accessor, silently breaking reactivity. The `reactive-props-no-class-field` rule catches this.
+
+```ts
+// default via the option (no constructor needed)
+class Counter extends WebComponent({
+  count: prop(Number, { default: 0 }),
+  items: prop(Array, { default: () => [] }), // function default = fresh array per instance
+}) {}
 ```
 
 ## Lifecycle hooks (lit-aligned)
@@ -73,9 +90,7 @@ See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usag
 A component can fetch its own server data into the first paint. `render()` may be `async`, so you write the natural line directly:
 
 ```ts
-class UserProfile extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserProfile extends WebComponent({ uid: String }) {
   async render() {
     const u = await getUser(this.uid);   // a 'use server' action: real fn at SSR, RPC stub on the client
     return html`<h3>${u.name}</h3>`;
@@ -93,9 +108,7 @@ Writing `await` makes the function async by the JS rule, and every render path a
 3. **`renderFallback()` is the OPTIONAL re-fetch loading UI.** Define it to OVERRIDE the stale-while-revalidate default with a loading state (skeleton / spinner) shown DURING a client re-fetch. It is shown ONLY on a re-fetch, NEVER on the first paint, and it does NOT create a server-streaming boundary. It is a prop-aware method (not a static field), so it can branch on the component's current state.
 
 ```ts
-class UserActivity extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+class UserActivity extends WebComponent({ uid: String }) {
   renderFallback() { return html`<div class="skeleton h-24"></div>`; }  // shown only while a re-fetch is in flight
   async render() {
     const items = await getActivity(this.uid);
@@ -171,7 +184,7 @@ server/client split to reason about. A component stays elidable as long
 as it has none of the following.
 
 - An `@event` binding in a template (`@click=${...}`), or a native event-handler property (`.onclick=${...}`).
-- A reactive property in `static properties` that is not `{ state: true }`. Attribute-driven or `.prop`-driven values are the channel a parent uses to push client updates.
+- A factory-declared reactive property (`WebComponent({ ... })`) that is not `{ state: true }`. Attribute-driven or `.prop`-driven values are the channel a parent uses to push client updates.
 - An overridden lifecycle hook (anything in the table above), as a method or an arrow class field.
 - A `signal` / `computed` / `watch` / `Task` / `ref` / `live` / streaming directive imported from `@webjsdev/core`, OR a transitive import of a module that reads shared module-scope signal state.
 - An `addController(...)` or `requestUpdate()` call.

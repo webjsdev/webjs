@@ -104,7 +104,7 @@ The breaking-change marker (`!` in the conventional-commit prefix) made the vers
 
 # What replaced reactive properties
 
-Reactive properties via `static properties` are still in the API. They are now reserved for declared HTML attributes that should round-trip from the DOM. If a component is `<my-counter count="5">` and declares `static properties = { count: { type: Number } }`, the browser-set attribute initializes the property. Useful, and signals do not replace it.
+Reactive properties are still in the API, declared via the `extends WebComponent({ … })` factory. They are now reserved for declared HTML attributes that should round-trip from the DOM. If a component is `<my-counter count="5">` and declares `class Counter extends WebComponent({ count: Number })`, the browser-set attribute initializes the property. Useful, and signals do not replace it.
 
 For component-local state that does not need to ride an HTML attribute, the answer is an instance signal:
 

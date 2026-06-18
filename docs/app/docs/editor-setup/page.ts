@@ -65,13 +65,13 @@ export default function EditorSetup() {
     </ul>
 
     <h2>Layer 1: component internals (works everywhere)</h2>
-    <p>Type each property with the two-line pattern. The runtime half goes in <code>static properties</code>; the compile-time half goes in a <code>declare</code> field that types the auto-generated accessor:</p>
-    <pre>import { WebComponent, html } from '@webjsdev/core';
+    <p>Declare each property in the <code>WebComponent({ ... })</code> factory. The factory types each field for you (no <code>declare</code> line), and the <code>prop()</code> helper narrows the type when a bare constructor is not specific enough (<code>prop&lt;Student&gt;(Object)</code>):</p>
+    <pre>import { WebComponent, html, prop } from '@webjsdev/core';
 import type { Student } from './student-types.ts';
 
-export class StudentCard extends WebComponent {
-  static properties = { student: { type: Object } };
-  declare student: Student;
+export class StudentCard extends WebComponent({
+  student: prop&lt;Student&gt;(Object),
+}) {
   render() {
     return html\`&lt;p&gt;\${this.student.name}&lt;/p&gt;\`;
   }
@@ -80,15 +80,15 @@ StudentCard.register('student-card');</pre>
 
     <p>Inside the class, <code>this.student</code> is a real <code>Student</code>. Hover, autocomplete, and type-checking all work. <code>this.requestUpdate</code>, signal helpers (<code>signal</code>, <code>computed</code>) imported from <code>@webjsdev/core</code>, and all lifecycle hooks are typed by the framework's <code>.d.ts</code> overlay.</p>
 
-    <h3>Why <code>declare</code> is required</h3>
-    <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code> inside the constructor. Without <code>declare</code>, TypeScript emits a <code>student = undefined</code> class-field initializer that runs <em>after</em> <code>super()</code> and overwrites that accessor. <code>declare</code> tells TS "type this field for me, but don't emit any runtime assignment."</p>
+    <h3>Why the factory replaces declare</h3>
+    <p>The framework installs the reactive getter/setter on <code>this</code> via <code>Object.defineProperty</code>. A plain class-field initializer (<code>student = undefined</code>) would run <em>after</em> <code>super()</code> and overwrite that accessor, which is why the old pattern needed <code>static properties</code> plus a separate <code>declare</code> line. The <code>WebComponent({ ... })</code> factory removes both: it derives the accessor type from the shape, so there is nothing to declare and no class-field initializer to clobber. Set a default via the <code>default</code> option or the constructor after <code>super()</code>.</p>
 
     <h2>Layer 2: in-template intelligence</h2>
-    <p><code>@webjsdev/intellisense</code> parses the markup inside each <code>html\`…\`</code> template and contributes webjs-specific knowledge, all driven by the component's <code>static properties</code> and <code>declare</code> types:</p>
+    <p><code>@webjsdev/intellisense</code> parses the markup inside each <code>html\`…\`</code> template and contributes webjs-specific knowledge, all driven by the component's factory shape (the <code>WebComponent({ ... })</code> call and any <code>prop()</code> helpers):</p>
     <ul>
       <li><strong>Go-to-definition</strong>: F12 / Ctrl+Click on a webjs tag jumps to its class; on an attribute / property / event name jumps to the class member; on a class name inside <code>html\`class="…"\`</code> jumps to the matching <code>css\`…\`</code> rule.</li>
       <li><strong>Completions</strong>: reachable custom-element tag names after <code>&lt;</code>, and binding-aware attributes: <code>.</code> offers property names, plain / <code>?</code> offer the hyphenated attribute names (<code>maxLength</code> becomes <code>max-length</code>), <code>@event</code> is permissive.</li>
-      <li><strong>Diagnostics</strong>: <code>&lt;your-tag .count=\${expr}&gt;</code> assignability-checks <code>typeof expr</code> against the prop's <code>declare</code> type (also for plain attributes; <code>@event</code> handlers must be callable). Quoted <code>@</code>/<code>.</code>/<code>?</code> bindings are flagged (the hole is dropped at SSR), as are expressionless <code>.prop</code> bindings. A custom-element tag registered more than once across the project is underlined where it is registered (SSR keeps the last registration, the browser keeps the first, so a duplicate resolves inconsistently; the <code>no-duplicate-tag</code> <code>webjs check</code> rule is the matching CI gate). Static (non-interpolated) attribute text like <code>mode="login"</code> is deliberately not checked.</li>
+      <li><strong>Diagnostics</strong>: <code>&lt;your-tag .count=\${expr}&gt;</code> assignability-checks <code>typeof expr</code> against the prop's factory-declared type (also for plain attributes; <code>@event</code> handlers must be callable). Quoted <code>@</code>/<code>.</code>/<code>?</code> bindings are flagged (the hole is dropped at SSR), as are expressionless <code>.prop</code> bindings. A custom-element tag registered more than once across the project is underlined where it is registered (SSR keeps the last registration, the browser keeps the first, so a duplicate resolves inconsistently; the <code>no-duplicate-tag</code> <code>webjs check</code> rule is the matching CI gate). Static (non-interpolated) attribute text like <code>mode="login"</code> is deliberately not checked.</li>
       <li><strong>Hover</strong>: a tag shows its component class; an attribute / property / event shows its declared type.</li>
     </ul>
     <p>There is deliberately <strong>no</strong> blanket "unknown tag / attribute" diagnostic: webjs has no element type map, so flagging an unrecognised tag would false-positive on legitimate third-party custom elements.</p>
@@ -177,7 +177,7 @@ return {
     <p>After setup, open a component file and check each layer:</p>
     <ol>
       <li><strong>Layer 1</strong>: hover <code>this.student</code> inside <code>render()</code> and expect <code>(property) student: Student</code>. Type <code>this.</code> inside the class and expect autocomplete for <code>student</code>, <code>requestUpdate</code>, <code>render</code>, lifecycle hooks, etc.</li>
-      <li><strong>Layer 2</strong>: write <code>&lt;student-card&gt;</code> with the side-effect import in place, position the cursor inside <code>&lt;student-card |&gt;</code>, and the completions list includes <code>student</code> (and any other key of <code>static properties</code>). Type <code>&lt;student-card .student=\${42}&gt;</code> and a webjs diagnostic flags <code>'number' is not assignable to property 'student' of type 'Student'</code>. Then comment out the <code>import './student-card.ts'</code> at the top of the file: completions disappear and the value-check goes silent (the missing import is now the surfaced problem). The plugin requires reachability so a missing import always surfaces.</li>
+      <li><strong>Layer 2</strong>: write <code>&lt;student-card&gt;</code> with the side-effect import in place, position the cursor inside <code>&lt;student-card |&gt;</code>, and the completions list includes <code>student</code> (and any other key of the factory shape). Type <code>&lt;student-card .student=\${42}&gt;</code> and a webjs diagnostic flags <code>'number' is not assignable to property 'student' of type 'Student'</code>. Then comment out the <code>import './student-card.ts'</code> at the top of the file: completions disappear and the value-check goes silent (the missing import is now the surfaced problem). The plugin requires reachability so a missing import always surfaces.</li>
     </ol>
     <p>If any layer misbehaves, the most common cause is tsserver using a different TypeScript install than your workspace's. In Neovim run <code>:LspInfo</code>; in VS Code click the TypeScript version in the status bar. Both should point inside your project's <code>node_modules/</code>.</p>
 

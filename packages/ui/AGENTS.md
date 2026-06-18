@@ -46,8 +46,9 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 
 For things the browser doesn't provide natively: dialogs, alert-dialogs,
 tabs, dropdowns, tooltips, hover-cards, toggle / toggle-group, sonner.
-Tier-2 components extend `WebComponent` from `@webjsdev/core` and are
-Lit-shaped: `static properties` for reactive attributes, `render()`
+Tier-2 components extend the `WebComponent({ ... })` factory from
+`@webjsdev/core` and are Lit-shaped: the factory shape declares reactive
+attributes, `render()`
 returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
 children. Light DOM throughout, full shadow-DOM slot parity.

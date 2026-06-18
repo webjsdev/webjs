@@ -137,10 +137,13 @@ them per app.
 4. **Custom-element tags must contain a hyphen** (HTML spec). See
    `registry.js` `register()`. The framework convention validator
    enforces this.
-5. **Reactive properties use `declare propName: Type` + constructor
-   defaults**, never class-field initializers (those clobber the
-   framework's accessor under modern class-field semantics).
-   See `component.js` and the `reactive-props-use-declare` rule.
+5. **Reactive properties are declared via the base-class factory
+   `extends WebComponent({ propName: Type })`** (the `prop()` helper
+   carries options), with defaults set via the `default` option or the
+   constructor, never class-field initializers (those clobber the
+   framework's accessor under modern class-field semantics). A direct
+   `static properties` block throws at runtime. See `component.js`, the
+   `no-static-properties` rule, and `reactive-props-no-class-field`.
 6. **New interactivity surfaces must update the elision analyser.**
    webjs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a

@@ -77,14 +77,14 @@ lit form unless the vanilla API is genuinely unavoidable.
 
 | Vanilla muscle memory | Lit-style webjs form |
 |---|---|
-| `this.getAttribute('x')` / `this.hasAttribute('x')` for own config | a reactive prop: `static properties = { x: {...} }` + `declare x`, read `this.x` (the prop rides the `x` attribute) |
+| `this.getAttribute('x')` / `this.hasAttribute('x')` for own config | a reactive prop declared in the factory: `extends WebComponent({ x: String })`, read `this.x` (the prop rides the `x` attribute) |
 | `this.setAttribute('x', v)` / `removeAttribute` to reflect own state | a reactive prop with `reflect: true`, or for non-attribute state a `signal` |
 | `state: true` reactive prop for internal state | a `signal` (instance signal in the constructor, or module-scope) |
 | `this.classList.add/toggle(...)` on self | a `class=${...}` binding in `render()` |
 | `this.innerHTML = ...` / `appendChild` / `document.createElement` | return the markup from `render()` as `` html`...` `` |
 | `this.addEventListener('click', ...)` on own/child elements | a `@click=${...}` binding in the template |
 | `this.querySelector(...)` to reach own rendered DOM | the `ref()` directive + `createRef()`, or read a `<form>` with `new FormData(form)` |
-| manual `observedAttributes` + `attributeChangedCallback` | `static properties` (the framework derives both) |
+| manual `observedAttributes` + `attributeChangedCallback` | a factory-declared reactive prop `WebComponent({ ... })` (the framework derives both) |
 | manual `customElements.define('x', C)` | `C.register('x')` |
 
 Emitting an event with `this.dispatchEvent(new CustomEvent(...))` is the
@@ -244,8 +244,8 @@ the event methods (`addEventListener` / `removeEventListener` /
 `dispatchEvent`), and `this.attachInternals()` ARE backed by a server shim,
 so reading an attribute in `render()`, wiring a delegated listener in the
 constructor, or reflecting a property during the SSR update cycle all work.
-Reading attributes that drive render through a reactive property
-(`static properties` + `declare`) is still the idiomatic path, but
+Reading attributes that drive render through a factory-declared reactive
+property (`WebComponent({ ... })`) is still the idiomatic path, but
 `this.hasAttribute(...)` no longer crashes.
 
 Two guards catch the browser-only cases. `webjs check` flags browser
@@ -278,33 +278,20 @@ connectedCallback() {
 
 ### 5. Class-field initializers for reactive properties
 
-In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In webjs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity.
+In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In webjs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity. The footgun is still live with factory-declared props, so it stays a gotcha.
 
-webjs offers two ways to solve this:
-
-#### A. Base-Class Factory (Recommended, Declare-Free)
-By passing the properties shape directly into `WebComponent({ ... })`, the properties are fully typed in TypeScript and no `declare` lines are needed. Set defaults inside the constructor:
+The fix is to declare the prop in the base-class factory `WebComponent({ ... })` (which types it automatically, no `declare` line) and set its default via the `default` option or in the constructor after `super()`, never as a class-field initializer:
 
 ```ts
-// recommended (declare-free factory style)
+// default via the option (a function default = fresh object per instance)
 class StudentCard extends WebComponent({
-  student: Object
+  student: prop<Student>(Object, { default: () => ({ name: '', email: '' }) }),
+}) {}
+
+// or set the default in the constructor (fully typed, no declare needed)
+class StudentCard extends WebComponent({
+  student: prop<Student>(Object),
 }) {
-  constructor() {
-    super();
-    this.student = { name: '', email: '' }; // fully typed, no declare needed!
-  }
-}
-```
-
-#### B. Static properties and `declare`
-Alternatively, if you use the traditional `static properties` block, use `declare` on the property to prevent it from compiling to a class-field initializer:
-
-```ts
-// traditional (static properties + declare)
-class StudentCard extends WebComponent {
-  static properties = { student: { type: Object } };
-  declare student: Student;
   constructor() {
     super();
     this.student = { name: '', email: '' };
@@ -312,11 +299,11 @@ class StudentCard extends WebComponent {
 }
 ```
 
-`webjs check` flags this via the `reactive-props-use-declare` rule.
+`webjs check` flags a class-field initializer on a factory-declared prop via the `reactive-props-no-class-field` rule.
 
-### 6. The `@property()` decorator
+### 6. The `@property()` decorator and a direct `static properties` block
 
-Banned by framework invariant 10 (erasable TS). The replacement is the base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus a matching `declare` for the typed accessor, as shown above. Decorators are non-erasable, so they would force the framework to depend on a build step.
+The `@property()` decorator is banned by framework invariant 10 (erasable TS): decorators are non-erasable, so they would force the framework to depend on a build step. A direct `static properties = { ... }` block is also gone, and webjs THROWS at runtime if a class body declares one (flagged by the `no-static-properties` rule). The single replacement for both is the declare-free base-class factory `WebComponent({ ... })` (the `prop()` helper carries options), as shown above.
 
 ## Patterns that produce different visual output
 
@@ -470,8 +457,8 @@ must move with it, use `repeat()` with a stable key.
 | `Task` for client-time async | `Task` (no change, that's its job) |
 | `window.X` or `document.X` in constructor or `render()` | Move to `connectedCallback` |
 | Top-level `import` of browser-only library | Dynamic `import()` inside `connectedCallback` |
-| `student: Student = { ... }` field initializer | Base-class factory `WebComponent({ student: Object })` (recommended), or `declare student: Student` plus constructor default |
-| `@property()` decorator | Base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus `declare` |
+| `student: Student = { ... }` field initializer | Base-class factory `WebComponent({ student: Object })`, default via the `default` option or the constructor |
+| `@property()` decorator / `static properties` block | Base-class factory `WebComponent({ ... })` (the `prop()` helper carries options) |
 | `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
 | Plain `.map()` for an interactive/stateful list | Works (reconciles in place, keeps node identity); use `repeat(items, key, t)` only when the list **reorders** |
 | `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |

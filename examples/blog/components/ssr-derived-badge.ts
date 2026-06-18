@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 
 /**
  * e2e fixture for the SSR pre-render lifecycle (#217). This component
@@ -13,13 +13,10 @@ import { WebComponent, html } from '@webjsdev/core';
  * The doc comment avoids literal tag-in-angle-brackets so the elision
  * analyser does not read this prose as a rendered tag.
  */
-export class SsrDerivedBadge extends WebComponent {
-  static properties = {
-    seed: { type: String },
-    ready: { type: Boolean, reflect: true },
-  };
-  declare seed: string;
-  declare ready: boolean;
+export class SsrDerivedBadge extends WebComponent({
+  seed: String,
+  ready: prop(Boolean, { reflect: true }),
+}) {
   declare label: string;
 
   constructor() {

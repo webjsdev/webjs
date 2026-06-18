@@ -5,7 +5,6 @@ import {
   redactStringsAndTemplates,
   extractWebComponentClassBodies,
   matchClosingBrace,
-  parsePropsFromObjectLiteral,
 } from './js-scan.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
@@ -75,9 +74,14 @@ export const RULES = [
       'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
   },
   {
-    name: 'reactive-props-use-declare',
+    name: 'no-static-properties',
     description:
-      'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
+      'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults via the `default` option or in the constructor.',
+  },
+  {
+    name: 'reactive-props-no-class-field',
+    description:
+      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field initializer (`count = 0` or `count: number = 0`) in the class body. Under modern class-field semantics that initializer runs Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default via the `default` property option (`prop(Number, { default: 0 })`) or by assigning in the constructor after super().',
   },
   {
     name: 'shell-in-non-root-layout',
@@ -165,26 +169,6 @@ function isServerActionFile(filePath, content) {
 function isComponentFile(relPath) {
   const segments = relPath.split(sep);
   return segments.includes('components');
-}
-
-/**
- * Find every `<key>:` entry inside the first `static properties = { … }`
- * literal in `classBody`. Returns the bare property names: the keys
- * we'll then look up as class fields.
- *
- * @param {string} classBody
- * @returns {Set<string>}
- */
-function extractStaticPropertyNames(classBody) {
-  const names = new Set();
-  const m = /static\s+properties\s*=\s*\{/.exec(classBody);
-  if (!m) return names;
-  const objStart = m.index + m[0].length;
-  const objEnd = matchClosingBrace(classBody, objStart);
-  if (objEnd === -1) return names;
-  const obj = classBody.slice(objStart, objEnd);
-  parsePropsFromObjectLiteral(obj, names);
-  return names;
 }
 
 /**
@@ -409,24 +393,47 @@ export async function checkConventions(appDir) {
     }
   }
 
-  // --- Rule: reactive-props-use-declare ---
+  // --- Rule: no-static-properties ---
+  // A hand-written `static properties = { … }` in a WebComponent class body is
+  // no longer supported: reactive properties are declared via the
+  // `extends WebComponent({ … })` factory (the runtime throws on a direct
+  // `static properties`). Flag it statically so the editor catches it before
+  // the page 500s.
   {
     for (const { rel, scan } of files) {
-      // Use redacted source so test-fixture-style strings like
-      // `class X extends WebComponent { x = 0 }` inside template
-      // literals don't trip the rule. Real declarations live at
+      // Use redacted source so fixture-style strings like
+      // `class X extends WebComponent { static properties = {…} }` inside
+      // template literals don't trip the rule. Real declarations live at
       // top-level code where the redactor leaves them alone.
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const { body } of extractWebComponentClassBodies(scan)) {
+        if (!/static\s+properties\s*=\s*\{/.test(body)) continue;
+        violations.push({
+          rule: 'no-static-properties',
+          file: rel,
+          message:
+            '`static properties = { … }` is no longer supported; declare reactive properties via the `extends WebComponent({ … })` factory instead.',
+          fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults via the `default` option or the constructor. Delete the `static properties` block and any `declare` fields for those props.',
+        });
+      }
+    }
+  }
+
+  // --- Rule: reactive-props-no-class-field ---
+  // A reactive property declared via the factory must not also carry a plain
+  // class-field initializer: it runs Object.defineProperty after super() and
+  // clobbers the framework's reactive accessor (silent broken re-renders).
+  {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       for (const { body, factoryProps } of extractWebComponentClassBodies(scan)) {
-        const propNames = extractStaticPropertyNames(body);
-        for (const p of factoryProps) propNames.add(p);
-        if (propNames.size === 0) continue;
-        for (const bad of findFieldInitializers(body, propNames)) {
+        if (factoryProps.size === 0) continue;
+        for (const bad of findFieldInitializers(body, factoryProps)) {
           violations.push({
-            rule: 'reactive-props-use-declare',
+            rule: 'reactive-props-no-class-field',
             file: rel,
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
-            fix: `Replace with \`declare ${bad}: <Type>;\` and set the default inside \`constructor()\` after \`super()\`.`,
+            fix: `Remove the class-field initializer and set the default via the \`default\` option (\`prop(<Type>, { default: <value> })\`) or by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
           });
         }
       }
@@ -631,7 +638,7 @@ export async function checkConventions(appDir) {
         // modifiers immediately followed by an identifier inside the
         // constructor's parameter list.
         regex: /constructor[ \t]*\([^)]*\b(?:public|private|protected|readonly)[ \t]+\w+/,
-        fix: 'Replace `constructor(public x: number)` with `x: number; constructor(x: number) { this.x = x; }`. The reactive-props-use-declare rule has the framework-specific shape: `declare x: number;` (no value) plus the assignment in the constructor body.',
+        fix: 'Replace `constructor(public x: number)` with `x: number; constructor(x: number) { this.x = x; }`.',
       },
       {
         name: 'import = require',

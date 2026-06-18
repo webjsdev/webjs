@@ -4,9 +4,7 @@ import { WebComponent, html } from '@webjsdev/core';
  * `<error-card message="…">`: inline error surface, uses the accent tint
  * for a muted alarm.
  */
-export class ErrorCard extends WebComponent {
-  static properties = { message: { type: String } };
-  declare message: string;
+export class ErrorCard extends WebComponent({ message: String }) {
   render() {
     return html`
       <div class="block p-5 px-6 rounded-lg bg-bg-elev/85 border border-border-strong/50 text-fg shadow">

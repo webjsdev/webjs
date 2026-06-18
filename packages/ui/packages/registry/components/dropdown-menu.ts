@@ -74,7 +74,7 @@
  * Design tokens used: --popover, --popover-foreground, --accent,
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
-import { WebComponent, html, unsafeHTML, signal } from '@webjsdev/core';
+import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -116,12 +116,9 @@ const SUB_CLOSE_DELAY = 200;
 // <ui-dropdown-menu>
 // --------------------------------------------------------------------------
 
-export class UiDropdownMenu extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-  };
-  declare open: boolean;
-
+export class UiDropdownMenu extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
+}) {
   _typeBuffer = '';
   _typeBufferTimer: number | undefined;
 
@@ -340,14 +337,10 @@ UiDropdownMenuContent.register('ui-dropdown-menu-content');
 // <ui-dropdown-menu-item>
 // --------------------------------------------------------------------------
 
-export class UiDropdownMenuItem extends WebComponent {
-  static properties = {
-    variant: { type: String, reflect: true },
-    inset: { type: Boolean },
-  };
-  declare variant: 'default' | 'destructive';
-  declare inset: boolean;
-
+export class UiDropdownMenuItem extends WebComponent({
+  variant: prop<'default' | 'destructive'>(String, { reflect: true }),
+  inset: Boolean,
+}) {
   // Keyboard / pointer highlight state for the own-rendered menuitem. A
   // local signal bound with ?data-highlighted keeps the highlight in the
   // declarative template instead of an imperative setAttribute on
@@ -402,10 +395,7 @@ UiDropdownMenuItem.register('ui-dropdown-menu-item');
 // <ui-dropdown-menu-label>
 // --------------------------------------------------------------------------
 
-export class UiDropdownMenuLabel extends WebComponent {
-  static properties = { inset: { type: Boolean } };
-  declare inset: boolean;
-
+export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
   constructor() {
     super();
     this.inset = false;
@@ -468,12 +458,9 @@ UiDropdownMenuGroup.register('ui-dropdown-menu-group');
 // Submenu: Sub / SubTrigger / SubContent
 // --------------------------------------------------------------------------
 
-export class UiDropdownMenuSub extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-  };
-  declare open: boolean;
-
+export class UiDropdownMenuSub extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
+}) {
   _closeTimer: number | undefined;
 
   constructor() {
@@ -555,10 +542,7 @@ export class UiDropdownMenuSub extends WebComponent {
 }
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
-export class UiDropdownMenuSubTrigger extends WebComponent {
-  static properties = { inset: { type: Boolean } };
-  declare inset: boolean;
-
+export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
   constructor() {
     super();
     this.inset = false;

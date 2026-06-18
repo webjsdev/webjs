@@ -30,8 +30,9 @@ is configured, the components render correctly. Variant names, sizes, and
 data-attribute conventions mirror shadcn's so an AI agent's existing
 knowledge of shadcn maps directly.
 
-Tier-2 elements extend `WebComponent` from `@webjsdev/core`, a tiny
-Lit-shaped base class with `static properties` for reactive attributes,
+Tier-2 elements extend the `WebComponent({ ... })` factory from
+`@webjsdev/core`, a tiny Lit-shaped base class whose factory shape declares
+reactive attributes,
 `render()` returning an `` html`...` `` template, and declarative
 bindings (`@click`, `?attr`, `attr=`). Light DOM throughout, so Tailwind
 utility classes on authored children apply directly. The `webjsui add`

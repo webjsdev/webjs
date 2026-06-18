@@ -59,8 +59,8 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
    (`src/template/parse.js`) with absolute source spans and binding-modifier
    classification (`@event` / `.property` / `?boolean` / plain).
 4. **Go-to-definition** on a custom-element tag (→ class), an attribute /
-   property / event name (→ the `declare` member or `static properties`
-   key), and a CSS class inside `class="…"` (→ the `css\`\`` rule).
+   property / event name (→ the reactive prop in the `WebComponent({ ... })`
+   factory shape), and a CSS class inside `class="…"` (→ the `css\`\`` rule).
 5. **Completions**: reachable custom tag names after `<` / `</`, and
    binding-aware attribute completions keyed by prefix (`.` → property
    names, plain / `?` → hyphenated attribute names; `@event` is permissive).

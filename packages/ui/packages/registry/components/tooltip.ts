@@ -40,7 +40,7 @@
  *
  * Design tokens used: --foreground, --background.
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with
@@ -61,18 +61,13 @@ let lastTooltipHideAt = 0;
 // <ui-tooltip>
 // --------------------------------------------------------------------------
 
-export class UiTooltip extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-    delayDuration: { type: Number },
-    skipDelayDuration: { type: Number },
-  };
-  declare open: boolean;
+export class UiTooltip extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
   // `delayDuration` / `skipDelayDuration` ride the `delay-duration` /
   // `skip-delay-duration` attributes (shadcn parity), read as typed props.
-  declare delayDuration: number;
-  declare skipDelayDuration: number;
-
+  delayDuration: Number,
+  skipDelayDuration: Number,
+}) {
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
 

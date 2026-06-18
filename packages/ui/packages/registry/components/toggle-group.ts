@@ -46,7 +46,7 @@
  * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
  * --input, --destructive).
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
@@ -66,22 +66,14 @@ const ITEM_EXTRA =
 // their own renders before we read / write their state.
 // --------------------------------------------------------------------------
 
-export class UiToggleGroup extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-    type: { type: String, reflect: true },
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-    spacing: { type: String, reflect: true },
-    orientation: { type: String, reflect: true },
-  };
-  declare value: string;
-  declare type: 'single' | 'multiple';
-  declare variant: ToggleVariant;
-  declare size: ToggleSize;
-  declare spacing: string;
-  declare orientation: 'horizontal' | 'vertical';
-
+export class UiToggleGroup extends WebComponent({
+  value: prop(String, { reflect: true }),
+  type: prop<'single' | 'multiple'>(String, { reflect: true }),
+  variant: prop<ToggleVariant>(String, { reflect: true }),
+  size: prop<ToggleSize>(String, { reflect: true }),
+  spacing: prop(String, { reflect: true }),
+  orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.value = '';
@@ -159,14 +151,10 @@ UiToggleGroup.register('ui-toggle-group');
 // Tailwind variant selectors on the joined-spacing rounded corners).
 // --------------------------------------------------------------------------
 
-export class UiToggleGroupItem extends WebComponent {
-  static properties = {
-    value: { type: String, reflect: true },
-    pressed: { type: Boolean, reflect: true },
-  };
-  declare value: string;
-  declare pressed: boolean;
-
+export class UiToggleGroupItem extends WebComponent({
+  value: prop(String, { reflect: true }),
+  pressed: prop(Boolean, { reflect: true }),
+}) {
   constructor() {
     super();
     this.value = '';

@@ -1,4 +1,4 @@
-import { WebComponent, html, repeat, connectWS, signal } from '@webjsdev/core';
+import { WebComponent, html, repeat, connectWS, signal, prop } from '@webjsdev/core';
 import '#components/muted-text.ts';
 import { inputClass } from '#components/ui/input.ts';
 import { buttonClass } from '#components/ui/button.ts';
@@ -8,15 +8,11 @@ import type { CommentFormatted } from '#modules/comments/types.ts';
  * `<comments-thread>`: live thread. Editorial card list, mono meta,
  * warm accent CTA, empty-state hint.
  */
-export class CommentsThread extends WebComponent {
-  static properties = {
-    postId:   { type: String },
-    initial:  { type: Object },
-    signedIn: { type: Boolean },
-  };
-  declare postId: string;
-  declare initial: CommentFormatted[];
-  declare signedIn: boolean;
+export class CommentsThread extends WebComponent({
+  postId:   String,
+  initial:  prop<CommentFormatted[]>(Object),
+  signedIn: Boolean,
+}) {
   comments = signal<CommentFormatted[]>([]);
   busy = signal(false);
   error = signal<string | null>(null);

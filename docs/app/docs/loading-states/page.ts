@@ -81,9 +81,7 @@ export default function Page() {
     <h2>Component re-fetch loading: renderFallback()</h2>
     <p>The loading states above are for a PAGE or REGION (a <code>loading.ts</code> skeleton, a <code>Suspense</code> boundary, a streamed <code>&lt;webjs-suspense&gt;</code>). A component that fetches its own data with <a href="/docs/data-fetching">async render</a> has a separate concern: what to show when it RE-FETCHES on the client (a prop / dependency change re-runs <code>async render()</code>).</p>
     <p>The default is stale-while-revalidate: the component keeps its current content until the new render resolves (no blank, no flash). Define <code>renderFallback()</code> ONLY to override that with an explicit loading state DURING the re-fetch. It is shown only on a client re-fetch, <strong>never on the first paint</strong>, and it does NOT trigger SSR streaming (to stream slow data on the first paint, wrap the component in <code>&lt;webjs-suspense&gt;</code> instead).</p>
-    <pre>class UserActivity extends WebComponent {
-  static properties = { uid: { type: String } };
-  declare uid: string;
+    <pre>class UserActivity extends WebComponent({ uid: String }) {
   renderFallback() { return html${'`'}&lt;div class="skeleton h-24"&gt;&lt;/div&gt;${'`'}; }   // re-fetch only
   async render() {
     const items = await getActivity(this.uid);

@@ -22,7 +22,7 @@ It means web components for the view layer. Native browser primitives: `customEl
 
 It means no proprietary component runtime to reinvent things the platform already does. Most modern frameworks ship a custom virtual DOM, a custom reconciler, a custom hydration story, a custom component lifecycle. Each of those is thousands of lines that exist because the framework chose not to use what the browser provides. webjs uses what the browser provides, then adds the smallest layer needed to make the developer experience comfortable on top.
 
-That layer is lit-shaped. `static properties`, `render() { return html\`\` }`, `ReactiveController`, the full directive set. lit's API is what the corpus and the muscle memory already knows for web components, so I aligned the public surface to it. The runtime under the hood is webjs's own (so we control the SSR pipeline end-to-end), but the surface an agent or a developer reads matches what they already know.
+That layer is lit-shaped. `render() { return html\`\` }`, `ReactiveController`, the full directive set, reactive properties declared up front (via the `extends WebComponent({ … })` factory rather than lit's decorators, the one erasability-driven divergence). lit's API is what the corpus and the muscle memory already knows for web components, so I aligned the public surface to it. The runtime under the hood is webjs's own (so we control the SSR pipeline end-to-end), but the surface an agent or a developer reads matches what they already know.
 
 
 # How small "close to standards" lets the framework be

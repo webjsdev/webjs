@@ -18,7 +18,7 @@
  */
 import { html } from '../../../src/html.js';
 import { css } from '../../../src/css.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 import { renderToString } from '../../../src/render-server.js';
 
@@ -113,8 +113,7 @@ suite('SSR vs client render parity (#184)', () => {
   });
 
   test('light-DOM with attribute-backed prop: parity reflects the prop', async () => {
-    class P2 extends WebComponent {
-      static properties = { label: { type: String } };
+    class P2 extends WebComponent({ label: String }) {
       constructor() { super(); this.label = ''; }
       render() { return html`<span>label is ${this.label}</span>`; }
     }
@@ -158,8 +157,7 @@ suite('SSR vs client render parity (#184)', () => {
   });
 
   test('.prop round-trip: rich value renders identically server and client', async () => {
-    class P5 extends WebComponent {
-      static properties = { data: { type: Object } };
+    class P5 extends WebComponent({ data: Object }) {
       constructor() { super(); this.data = null; }
       render() { return html`<ul>${(this.data?.items || []).map((i) => html`<li>${i}</li>`)}</ul>`; }
     }
@@ -204,8 +202,7 @@ suite('SSR vs client render parity (#184)', () => {
     // and client. Before #217 the SSR side skipped willUpdate, so the server
     // emitted the constructor placeholder while the client emitted the
     // derived value, a hydration divergence this case now guards against.
-    class P8 extends WebComponent {
-      static properties = { count: { type: Number } };
+    class P8 extends WebComponent({ count: Number }) {
       constructor() { super(); this.count = 0; this.derived = 'placeholder'; }
       willUpdate() { this.derived = `derived-${this.count}`; }
       render() { return html`<output>${this.derived}</output>`; }
@@ -226,8 +223,7 @@ suite('SSR vs client render parity (#184)', () => {
     // freshly-created one agree on the opening-tag attribute. Before the
     // client-side fix, SSR emitted level="4" while a fresh client mount had
     // no attribute, an SSR-vs-client divergence.
-    class P9 extends WebComponent {
-      static properties = { level: { type: Number, reflect: true } };
+    class P9 extends WebComponent({ level: prop(Number, { reflect: true }) }) {
       constructor() { super(); this.level = 4; }
       render() { return html`<p>L${this.level}</p>`; }
     }
@@ -260,15 +256,13 @@ suite('SSR vs client render parity (#184)', () => {
     // server here when run IN the browser: its instances are detached real
     // HTMLElements whose native closest() returns null, which is exactly why
     // the server path uses the ancestor-chain shim instead.)
-    class ParityCxGroup extends WebComponent {
-      static properties = { value: { type: String } };
+    class ParityCxGroup extends WebComponent({ value: String }) {
       constructor() { super(); this.value = ''; }
       render() { return html`<div data-group><slot></slot></div>`; }
     }
     ParityCxGroup.register('parityc-group');
 
-    class ParityCxItem extends WebComponent {
-      static properties = { value: { type: String } };
+    class ParityCxItem extends WebComponent({ value: String }) {
       constructor() { super(); this.value = ''; }
       render() {
         const group = typeof this.closest === 'function' ? this.closest('parityc-group') : null;

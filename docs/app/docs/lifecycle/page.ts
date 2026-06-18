@@ -69,7 +69,7 @@ await el.updateComplete;
 // DOM now reflects count = 5</pre>
 
     <h2>State mutation</h2>
-    <p>Signals are the default state primitive. Mutating a signal that the render() reads schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared in <code>static properties</code>) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
+    <p>Signals are the default state primitive. Mutating a signal that the render() reads schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
     <pre>this.count.set(this.count.get() + 1);
 this.name = 'updated';                       // reactive property assignment
 // One render. changedProperties.has('name') is true; signal change drove the watcher.</pre>
@@ -118,7 +118,7 @@ this.name = 'updated';                       // reactive property assignment
       </thead>
       <tbody>
         <tr><td><code>constructor()</code></td><td>✅</td><td>✅</td></tr>
-        <tr><td>attribute application (via <code>static properties</code> converters)</td><td>✅</td><td>✅</td></tr>
+        <tr><td>attribute application (via the factory's property converters)</td><td>✅</td><td>✅</td></tr>
         <tr><td><code>willUpdate()</code></td><td>✅</td><td>✅</td></tr>
         <tr><td>controllers' <code>hostUpdate</code></td><td>✅</td><td>✅</td></tr>
         <tr><td><code>reflect: true</code> property reflection</td><td>✅</td><td>✅</td></tr>

@@ -13,6 +13,7 @@
 
 import {
   WebComponent,
+  prop,
   html,
   type PropertyDeclaration,
   type ReactiveController,
@@ -24,16 +25,15 @@ type Assert<T extends true> = T;
 type Equal<X, Y> =
   (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true : false;
 
-/* ------------- `declare`-typed fields work alongside static properties ------------- */
+/* ------------- The factory infers field types (no `declare`) ------------- */
 
 class Student {
   id = '';
   name = '';
 }
 
-class StudentCard extends WebComponent {
-  static properties = { student: { type: Object } };
-  declare student: Student;
+// `prop<Student>(Object)` narrows the inferred field type to Student.
+class StudentCard extends WebComponent({ student: prop<Student>(Object) }) {
   render() {
     // this.student is a real Student: method access, property access, all typed.
     const _s: string = this.student.name;
@@ -45,23 +45,28 @@ StudentCard.register('student-card');
 const card = new StudentCard();
 type _Student = Assert<Equal<typeof card.student, Student>>;
 
-/* ------------- Framework APIs are typed on `this` ------------- */
-// Signals are the default state primitive (since #43). setState / this.state
-// were removed from the public API; instance signals replace them.
-// requestUpdate() is still part of the public API for controllers and the
-// rare manual re-render trigger.
+/* ------------- Bare-constructor shorthand infers primitives ------------- */
 
-class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
+class Counter extends WebComponent({ count: Number, label: String, open: Boolean }) {
   bump() {
-    // Typed via the .d.ts overlay.
+    // Typed via the factory's InferProps mapping.
     this.requestUpdate();
-    return html`<p>${this.count}</p>`;
+    return html`<p>${this.label}: ${this.count}</p>`;
   }
 }
 Counter.register('my-counter');
+
+const counter = new Counter();
+type _Count = Assert<Equal<typeof counter.count, number>>;
+type _Label = Assert<Equal<typeof counter.label, string>>;
+type _Open = Assert<Equal<typeof counter.open, boolean>>;
+
+/* ------------- prop() with options preserves the type ------------- */
+
+class Toggle extends WebComponent({ pressed: prop(Boolean, { reflect: true }) }) {}
+Toggle.register('my-toggle');
+const toggle = new Toggle();
+type _Pressed = Assert<Equal<typeof toggle.pressed, boolean>>;
 
 /* ------------- PropertyDeclaration shape accepts the expected fields ------------- */
 

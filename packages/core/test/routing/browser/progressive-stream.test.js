@@ -27,8 +27,7 @@ function container() {
   return host;
 }
 
-class ResolvedWidget extends WebComponent {
-  static properties = { label: { type: String } };
+class ResolvedWidget extends WebComponent({ label: String }) {
   constructor() { super(); this.label = ''; }
   render() { return html`<span class="widget">${this.label}</span>`; }
 }

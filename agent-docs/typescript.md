@@ -386,7 +386,7 @@ A single plugin with its OWN in-template intelligence (no Lit dependency; the `w
 Gives you, inside `` html`` `` templates:
 - **Go-to-definition** from `<my-counter>` to the class registered via `MyCounter.register('my-counter')`, from an attribute / property / event name to its class member, and from a CSS class in `class="…"` to its `` css`` `` rule.
 - **Completions**: reachable custom-element tag names after `<`, and binding-aware attribute completions: `.` offers property names, plain / `?` offer hyphenated attribute names (`maxLength` → `max-length`), `@event` is permissive.
-- **Diagnostics**: attribute / property value type-checks (`<my-counter .count=${expr}>` assignability-checks `typeof expr` against `declare count: T`; `@click=${fn}` must be callable), unquoted `@`/`.`/`?` bindings (invariant 4), and expressionless `.prop` bindings.
+- **Diagnostics**: attribute / property value type-checks (`<my-counter .count=${expr}>` assignability-checks `typeof expr` against the property's type from the `WebComponent({ count: Number })` factory shape, and `@click=${fn}` must be callable), unquoted `@`/`.`/`?` bindings (invariant 4), and expressionless `.prop` bindings.
 - **Hover**: a tag shows its component class; an attribute / property / event shows its declared type.
 
 Every feature is gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing. There is deliberately no blanket "unknown tag / attribute" diagnostic (webjs has no element type map, so it would false-positive on third-party custom elements).

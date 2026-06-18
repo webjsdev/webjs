@@ -22,7 +22,7 @@
  *     (this is the browser suite).
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
@@ -98,8 +98,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('requestUpdate(name, oldValue) populates changedProperties with the prior value', async () => {
     let captured;
-    class E extends WebComponent {
-      static properties = { foo: { type: String } };
+    class E extends WebComponent({ foo: String }) {
       constructor() { super(); this.foo = 'a'; }
       updated(cp) { captured = new Map(cp); }
       render() { return html`<p>${this.foo}</p>`; }
@@ -120,8 +119,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('updateComplete resolves to true when nothing more is pending', async () => {
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       render() { return html`<p>${this.v}</p>`; }
     }
@@ -141,8 +139,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('shouldUpdate controls whether update runs', async () => {
     let allow = true;
     let updates = 0;
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       shouldUpdate() { return allow; }
       update(cp) { updates++; super.update(cp); }
@@ -172,8 +169,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     // commits, not when the FIRST scheduled render is requested.
     let firsts = 0;
     let allow = false;
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       shouldUpdate() { return allow; }
       firstUpdated() { firsts++; }
@@ -203,11 +199,10 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('willUpdate may mutate properties without triggering a second cycle', async () => {
     let renders = 0;
-    class E extends WebComponent {
-      static properties = {
-        foo: { type: Number },
-        bar: { type: Number, state: true },
-      };
+    class E extends WebComponent({
+      foo: Number,
+      bar: prop(Number, { state: true }),
+    }) {
       constructor() { super(); this.foo = 0; this.bar = -1; }
       willUpdate(cp) {
         if (cp.has('foo')) this.bar = this.foo + 100;
@@ -229,11 +224,10 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('willUpdate-mutated property appears in changedProperties for the same cycle', async () => {
     let captured;
-    class E extends WebComponent {
-      static properties = {
-        foo: { type: Number },
-        derived: { type: Number, state: true },
-      };
+    class E extends WebComponent({
+      foo: Number,
+      derived: prop(Number, { state: true }),
+    }) {
       constructor() { super(); this.foo = 0; this.derived = 0; }
       willUpdate(cp) {
         if (cp.has('foo')) this.derived = this.foo * 10;
@@ -263,8 +257,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     // doesn't call super should still let updated()/firstUpdated() fire
     // (because didCommit is set by entry to the cycle), but no DOM should
     // be committed.
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       update(_cp) { /* intentionally no super.update */ }
       render() { return html`<p>should-not-appear-${this.foo}</p>`; }
@@ -281,8 +274,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('overriding update + calling super commits DOM and updated() observes it', async () => {
     let updatedCp;
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       update(cp) {
         // mutate AFTER super: per lit semantics this triggers another cycle
@@ -308,8 +300,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('updated runs every render commit; firstUpdated runs exactly once', async () => {
     let firsts = 0;
     let updates = 0;
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       firstUpdated() { firsts++; }
       updated() { updates++; }
@@ -343,8 +334,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
       hostUpdated() { order.push('hostUpdated'); },
       hostDisconnected() { order.push('hostDisconnected'); },
     };
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; this.addController(controller); }
       shouldUpdate() { order.push('shouldUpdate'); return true; }
       willUpdate() { order.push('willUpdate'); }
@@ -381,8 +371,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('changedProperties has only initial keys on the first render with undefined olds', async () => {
     let cpSnapshot;
-    class E extends WebComponent {
-      static properties = { foo: { type: Number }, bar: { type: String } };
+    class E extends WebComponent({ foo: Number, bar: String }) {
       constructor() { super(); this.foo = 1; this.bar = 'x'; }
       updated(cp) { cpSnapshot = new Map(cp); }
       render() { return html`<p>${this.foo}-${this.bar}</p>`; }
@@ -402,8 +391,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('subsequent renders record only the changed key with the prior value', async () => {
     let cp;
-    class E extends WebComponent {
-      static properties = { a: { type: Number }, b: { type: Number } };
+    class E extends WebComponent({ a: Number, b: Number }) {
       constructor() { super(); this.a = 1; this.b = 2; }
       updated(c) { cp = new Map(c); }
       render() { return html`<p>${this.a}/${this.b}</p>`; }
@@ -424,8 +412,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('changedProperties is fresh per cycle (not cumulative across renders)', async () => {
     const snapshots = [];
-    class E extends WebComponent {
-      static properties = { a: { type: Number }, b: { type: Number } };
+    class E extends WebComponent({ a: Number, b: Number }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       updated(cp) { snapshots.push([...cp.keys()].sort()); }
       render() { return html`<p>${this.a}/${this.b}</p>`; }
@@ -447,8 +434,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('batching: two synchronous property writes coalesce into one cycle', async () => {
     let renders = 0;
     let cp;
-    class E extends WebComponent {
-      static properties = { a: { type: Number }, b: { type: Number } };
+    class E extends WebComponent({ a: Number, b: Number }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       updated(c) { cp = new Map(c); }
       render() { renders++; return html`<p>${this.a}/${this.b}</p>`; }
@@ -473,8 +459,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     // so the next requestUpdate sees the accumulated entries.
     let allow = false;  // gate from the very first cycle
     const seen = [];
-    class E extends WebComponent {
-      static properties = { a: { type: Number }, b: { type: Number } };
+    class E extends WebComponent({ a: Number, b: Number }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       shouldUpdate() { return allow; }
       updated(cp) { seen.push([...cp.keys()].sort()); }
@@ -508,8 +493,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   // ───────────────────────────────────────────────────────────────────────
 
   test('type: Number coerces attribute', async () => {
-    class E extends WebComponent {
-      static properties = { count: { type: Number } };
+    class E extends WebComponent({ count: Number }) {
       render() { return html`<p>${this.count}</p>`; }
     }
     const t = tag('lp-type-num');
@@ -524,8 +508,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('type: Boolean coerces attribute presence', async () => {
-    class E extends WebComponent {
-      static properties = { open: { type: Boolean } };
+    class E extends WebComponent({ open: Boolean }) {
       render() { return html`<p>${String(this.open)}</p>`; }
     }
     const t = tag('lp-type-bool');
@@ -542,8 +525,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('type: Object parses JSON attribute', async () => {
-    class E extends WebComponent {
-      static properties = { data: { type: Object } };
+    class E extends WebComponent({ data: Object }) {
       render() { return html`<p>${this.data && this.data.name}</p>`; }
     }
     const t = tag('lp-type-obj');
@@ -558,8 +540,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('reflect: true writes property changes back to the attribute', async () => {
-    class E extends WebComponent {
-      static properties = { count: { type: Number, reflect: true } };
+    class E extends WebComponent({ count: prop(Number, { reflect: true }) }) {
       constructor() { super(); this.count = 0; }
       render() { return html`<p>${this.count}</p>`; }
     }
@@ -575,8 +556,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('reflect: true with Boolean toggles attribute presence', async () => {
-    class E extends WebComponent {
-      static properties = { open: { type: Boolean, reflect: true } };
+    class E extends WebComponent({ open: prop(Boolean, { reflect: true }) }) {
       constructor() { super(); this.open = false; }
       render() { return html`<p>${String(this.open)}</p>`; }
     }
@@ -596,11 +576,10 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('state: true excludes the property from observedAttributes', () => {
-    class E extends WebComponent {
-      static properties = {
-        pub: { type: String },
-        priv: { type: String, state: true },
-      };
+    class E extends WebComponent({
+      pub: String,
+      priv: prop(String, { state: true }),
+    }) {
       render() { return html``; }
     }
     const observed = E.observedAttributes;
@@ -610,16 +589,14 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('hasChanged: false skips the update', async () => {
     let renders = 0;
-    class E extends WebComponent {
-      static properties = {
-        // Treat undefined as "always different" so the initial assignment
-        // actually lands (otherwise hasChanged(n, undefined) -> NaN > 1 -> false
-        // and the constructor's `this.size = 10` is rejected).
-        size: {
-          type: Number,
-          hasChanged: (n, o) => o === undefined || Math.abs(n - o) > 1,
-        },
-      };
+    class E extends WebComponent({
+      // Treat undefined as "always different" so the initial assignment
+      // actually lands (otherwise hasChanged(n, undefined) -> NaN > 1 -> false
+      // and the constructor's `this.size = 10` is rejected).
+      size: prop(Number, {
+        hasChanged: (n, o) => o === undefined || Math.abs(n - o) > 1,
+      }),
+    }) {
       constructor() { super(); this.size = 10; }
       render() { renders++; return html`<p>${this.size}</p>`; }
     }
@@ -643,12 +620,11 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('converter.fromAttribute customizes attribute → property coercion', async () => {
-    class E extends WebComponent {
-      static properties = {
-        list: {
-          converter: { fromAttribute: (v) => v ? v.split(',').map(Number) : [] },
-        },
-      };
+    class E extends WebComponent({
+      list: prop({
+        converter: { fromAttribute: (v) => v ? v.split(',').map(Number) : [] },
+      }),
+    }) {
       render() { return html`<p>${this.list && this.list.join('|')}</p>`; }
     }
     const t = tag('lp-conv-from');
@@ -662,16 +638,15 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('converter.toAttribute customizes property → attribute reflection', async () => {
-    class E extends WebComponent {
-      static properties = {
-        coords: {
-          reflect: true,
-          converter: {
-            fromAttribute: (v) => v ? v.split(',').map(Number) : null,
-            toAttribute: (v) => v ? v.join(',') : null,
-          },
+    class E extends WebComponent({
+      coords: prop({
+        reflect: true,
+        converter: {
+          fromAttribute: (v) => v ? v.split(',').map(Number) : null,
+          toAttribute: (v) => v ? v.join(',') : null,
         },
-      };
+      }),
+    }) {
       constructor() { super(); this.coords = null; }
       render() { return html``; }
     }
@@ -695,8 +670,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('attribute change flows through to property + changedProperties', async () => {
     let lastCp;
-    class E extends WebComponent {
-      static properties = { foo: { type: String } };
+    class E extends WebComponent({ foo: String }) {
       constructor() { super(); this.foo = 'a'; }
       updated(cp) { lastCp = new Map(cp); }
       render() { return html`<p>${this.foo}</p>`; }
@@ -726,8 +700,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     // next cycle through `await __updatePromise`, gating it on the awaiter.
     // We assert the eventual fixed-point only.
     let updates = 0;
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       update(cp) { updates++; super.update(cp); }
       updated() { if (this.foo < 2) this.foo++; }
@@ -745,8 +718,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('updateComplete can be awaited in a loop until it returns true', async () => {
-    class E extends WebComponent {
-      static properties = { foo: { type: Number } };
+    class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }
       updated() { if (this.foo < 5) this.foo++; }
       render() { return html`<p>${this.foo}</p>`; }
@@ -763,8 +735,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('getUpdateComplete override can chain additional async work', async () => {
     let extraDone = false;
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       async getUpdateComplete() {
         const r = await super.getUpdateComplete();
@@ -784,8 +755,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   });
 
   test('updateComplete promise lifecycle: same promise across pending updates, new after settle', async () => {
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       render() { return html`<p>${this.v}</p>`; }
     }
@@ -811,8 +781,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('throwing willUpdate does not deadlock: next requestUpdate still renders', async () => {
     await withSilencedErrors(async () => {
       let throws = true;
-      class E extends WebComponent {
-        static properties = { v: { type: Number } };
+      class E extends WebComponent({ v: Number }) {
         constructor() { super(); this.v = 0; }
         willUpdate() {
           if (throws) { throws = false; throw new Error('willUpdate boom'); }
@@ -843,8 +812,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('throwing updated does not deadlock', async () => {
     await withSilencedErrors(async () => {
       let throws = true;
-      class E extends WebComponent {
-        static properties = { v: { type: Number } };
+      class E extends WebComponent({ v: Number }) {
         constructor() { super(); this.v = 0; }
         updated() {
           if (throws) { throws = false; throw new Error('updated boom'); }
@@ -872,8 +840,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('throwing firstUpdated does not deadlock', async () => {
     await withSilencedErrors(async () => {
       let throws = true;
-      class E extends WebComponent {
-        static properties = { v: { type: Number } };
+      class E extends WebComponent({ v: Number }) {
         constructor() { super(); this.v = 0; }
         firstUpdated() {
           if (throws) { throws = false; throw new Error('firstUpdated boom'); }
@@ -907,8 +874,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   test('throwing render() routes to renderError() fallback and does not deadlock', async () => {
     await withSilencedErrors(async () => {
       let throws = true;
-      class E extends WebComponent {
-        static properties = { v: { type: Number } };
+      class E extends WebComponent({ v: Number }) {
         constructor() { super(); this.v = 0; }
         render() {
           if (throws) { throws = false; throw new Error('render boom'); }
@@ -936,8 +902,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('requestUpdate during willUpdate folds into current cycle (no extra microtask)', async () => {
     let renders = 0;
-    class E extends WebComponent {
-      static properties = { a: { type: Number }, b: { type: Number, state: true } };
+    class E extends WebComponent({ a: Number, b: prop(Number, { state: true }) }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       willUpdate(cp) {
         if (cp.has('a')) this.requestUpdate('b', this.b);
@@ -962,8 +927,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     // the cycle that's just settled).
     let renders = 0;
     let scheduled = false;
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       updated() {
         if (!scheduled) {
@@ -991,8 +955,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('update does not occur before connect; scheduled updates run on connection', async () => {
     let renders = 0;
-    class E extends WebComponent {
-      static properties = { v: { type: Number } };
+    class E extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       render() { renders++; return html`<p>${this.v}</p>`; }
     }
@@ -1015,15 +978,13 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   // ───────────────────────────────────────────────────────────────────────
 
   test('can await a sub-element updateComplete from getUpdateComplete', async () => {
-    class Child extends WebComponent {
-      static properties = { x: { type: Number } };
+    class Child extends WebComponent({ x: Number }) {
       constructor() { super(); this.x = 0; }
       render() { return html`<span>${this.x}</span>`; }
     }
     customElements.define('lp-sub-child', Child);
 
-    class Parent extends WebComponent {
-      static properties = { v: { type: Number } };
+    class Parent extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       async getUpdateComplete() {
         const r = await super.getUpdateComplete();

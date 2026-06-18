@@ -38,7 +38,7 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border.
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
@@ -52,18 +52,13 @@ export const hoverCardContentClass = (): string =>
 // <ui-hover-card>
 // --------------------------------------------------------------------------
 
-export class UiHoverCard extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-    openDelay: { type: Number },
-    closeDelay: { type: Number },
-  };
-  declare open: boolean;
+export class UiHoverCard extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
   // `openDelay` / `closeDelay` ride the `open-delay` / `close-delay`
   // attributes (shadcn parity), read as typed props.
-  declare openDelay: number;
-  declare closeDelay: number;
-
+  openDelay: Number,
+  closeDelay: Number,
+}) {
   _showTimer: number | undefined;
   _hideTimer: number | undefined;
 

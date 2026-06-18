@@ -38,11 +38,10 @@ before(async () => {
 });
 
 test('integration: component using new lifecycle + directives SSRs correctly', async () => {
-  class CombinedEl extends WebComponent {
-    static properties = {
-      id: { type: Number },
-      title: { type: String },
-    };
+  class CombinedEl extends WebComponent({
+    id: Number,
+    title: String,
+  }) {
     constructor() {
       super();
       this.id = 0;
@@ -91,8 +90,7 @@ test('integration: component using new lifecycle + directives SSRs correctly', a
 });
 
 test('integration: component with shouldUpdate=false skips render but SSR still works', async () => {
-  class GatedEl extends WebComponent {
-    static properties = { v: { type: Number } };
+  class GatedEl extends WebComponent({ v: Number }) {
     constructor() { super(); this.v = 5; }
     shouldUpdate() { return false; }
     render() { return html`<p>v=${this.v}</p>`; }
@@ -113,8 +111,7 @@ test('integration: hook order with controllers matches lit', async () => {
     hostUpdated() { order.push('hostUpdated'); },
     hostDisconnected() { order.push('hostDisconnected'); },
   };
-  class OrderEl extends WebComponent {
-    static properties = { n: { type: Number } };
+  class OrderEl extends WebComponent({ n: Number }) {
     constructor() {
       super();
       this.n = 0;

@@ -120,7 +120,9 @@ function init(modules) {
     };
 
     // Attribute-name auto-complete inside `<webjs-tag |…>` openers, driven by
-    // the component class's `static properties` map (see webjsAttrCompletions).
+    // the component's reactive property declarations: the `extends
+    // WebComponent({ … })` factory shape, or a legacy `static properties` map
+    // (see webjsAttrCompletions).
     proxy.getCompletionsAtPosition = (fileName, position, options) => {
       const upstream = inner.getCompletionsAtPosition(fileName, position, options);
       try {
@@ -357,7 +359,8 @@ function init(modules) {
 
   /**
    * Go-to-definition on an attribute / property / event name: resolve to the
-   * class member (the `declare` field or the `static properties` key).
+   * reactive property key (the `extends WebComponent({ … })` factory shape, or
+   * a legacy `declare` field / `static properties` key).
    *
    * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
    * @param {string} fileName
@@ -443,8 +446,9 @@ function init(modules) {
   }
 
   /**
-   * The source location of a class member's name (the `declare propName`
-   * field if present, else the `static properties` key), for go-to-definition.
+   * The source location of a reactive property's name (the factory shape key,
+   * or a legacy `declare propName` field / `static properties` key), for
+   * go-to-definition.
    *
    * @param {import('typescript').Program} program
    * @param {ComponentRef} ref
@@ -470,7 +474,7 @@ function init(modules) {
         };
       }
     }
-    // Fall back to the `static properties` key.
+    // Fall back to the reactive property key (factory shape or `static properties`).
     for (const member of cls.members) {
       if (!ts.isPropertyDeclaration(member) || !member.name) continue;
       if (!ts.isIdentifier(member.name) || member.name.text !== 'properties') continue;
@@ -785,8 +789,9 @@ function init(modules) {
    *   attrName: string,
    *   state: boolean,
    * }} PropMember
-   *   One reactive property. `propName` is the `static properties` key (the
-   *   `.prop` binding name, camelCase); `attrName` is its hyphenated HTML
+   *   One reactive property. `propName` is the reactive property key (factory
+   *   shape or `static properties`, the `.prop` binding name, camelCase);
+   *   `attrName` is its hyphenated HTML
    *   attribute name (the plain / `?bool` binding name); `state: true` means
    *   it has NO attribute (excluded from `observedAttributes`).
    *
@@ -911,10 +916,12 @@ function init(modules) {
   }
 
   /**
-   * Read a class's `static properties = { … }` initializer into per-member
-   * records. webjs maps each key to a reactive property (the `.prop` binding
-   * name) plus, unless `state: true`, a hyphenated HTML attribute (the plain
-   * and `?bool` binding name).
+   * Read a class's reactive property declarations into per-member records.
+   * Covers BOTH the `extends WebComponent({ … })` factory shape (the canonical
+   * form) and a legacy `static properties = { … }` initializer. webjs maps each
+   * key to a reactive property (the `.prop` binding name) plus, unless
+   * `state: true`, a hyphenated HTML attribute (the plain and `?bool` binding
+   * name).
    *
    * @param {import('typescript').ClassDeclaration} cls
    * @returns {PropMember[]}
@@ -968,7 +975,7 @@ function init(modules) {
   }
 
   /**
-   * Does a `static properties` entry opt into internal-state mode
+   * Does a reactive property declaration opt into internal-state mode
    * (`{ state: true }`)? Such props have no HTML attribute.
    *
    * @param {import('typescript').ObjectLiteralElementLike} prop
