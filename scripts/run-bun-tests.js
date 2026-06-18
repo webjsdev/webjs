@@ -82,7 +82,9 @@ const excludeSegs = [`${SEP}browser${SEP}`, `${SEP}e2e${SEP}`, `${SEP}vendor${SE
 const filter = (process.env.WEBJS_BUN_TESTS || '').split(',').map((s) => s.trim()).filter(Boolean);
 // Repo-relative path, always forward-slashed so DENYLIST matching is OS-stable.
 const rel = (f) => f.slice(ROOT.length + 1).split(sep).join('/');
-const denyOf = (f) => DENYLIST.find((d) => rel(f) === d.match);
+// A denylist entry ending in `/` is a DIRECTORY prefix (skips every file under
+// it); otherwise it is an exact repo-relative file path.
+const denyOf = (f) => DENYLIST.find((d) => (d.match.endsWith('/') ? rel(f).startsWith(d.match) : rel(f) === d.match));
 
 const files = all
   .filter((f) => !excludeSegs.some((s) => f.includes(s)))
