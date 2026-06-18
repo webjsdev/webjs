@@ -60,11 +60,11 @@ import { likePost } from '../actions/like-post.server.js';
 const liked = signal(false);
 // in an @click handler:
 const result = await optimistic(liked, true, () =&gt; likePost(postId));
-// `liked` flips to true instantly. If likePost THROWS or returns
-// { success: false }, `liked` rolls back to its prior value; the throw
+// liked flips to true instantly. If likePost THROWS or returns
+// { success: false }, liked rolls back to its prior value. The throw
 // re-throws and the { success: false } result is returned (read its
-// error / fieldErrors). On success the optimistic value stays; reconcile
-// to the authoritative value from `result` if you need it.</pre>
+// error / fieldErrors). On success the optimistic value stays, reconcile
+// to the authoritative value from result if you need it.</pre>
     <p>It rolls back on a thrown error OR an <code>ActionResult</code> <code>{ success: false }</code> envelope, and never on success. It is client-only (it mutates a signal), so a component importing it is never elided as display-only.</p>
 
     <h2>Non-2xx HTML responses render in place</h2>
