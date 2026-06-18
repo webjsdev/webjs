@@ -8,10 +8,7 @@ import { getSeedUser } from '#modules/seed/queries/get-user.server.ts';
  * refetch). On initial load the action result is seeded, so NO action RPC fires
  * on hydration; clicking bumps `uid` to an unseeded id, which DOES fetch.
  */
-export class SeededUser extends WebComponent {
-  static properties = { uid: { type: Number } };
-  declare uid: number;
-
+export class SeededUser extends WebComponent({ uid: Number }) {
   constructor() {
     super();
     this.uid = 1;

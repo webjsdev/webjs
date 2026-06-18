@@ -8,15 +8,12 @@ import { WebComponent, html } from '@webjsdev/core';
  * attribute (`<my-counter count="3">`). The SSR pipeline applies the
  * attribute before first paint, so the server-rendered output already
  * shows the seeded value; click handlers re-render by assigning to the
- * property. Per AGENTS.md, attribute-backed values use `static
- * properties` + a `declare` field with the default set in the
- * constructor (not a class-field initializer, which would clobber the
- * reactive accessor).
+ * property. Per AGENTS.md, reactive properties are declared via the
+ * `extends WebComponent({ … })` factory (which types the field for you),
+ * with the default set in the constructor (not a class-field
+ * initializer, which would clobber the reactive accessor).
  */
-export class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
+export class Counter extends WebComponent({ count: Number }) {
   constructor() {
     super();
     this.count = 0;

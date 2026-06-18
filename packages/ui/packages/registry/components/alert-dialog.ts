@@ -63,7 +63,7 @@
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -131,12 +131,9 @@ function unlockScroll(): void {
 // content child via prop transitions.
 // --------------------------------------------------------------------------
 
-export class UiAlertDialog extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-  };
-  declare open: boolean;
-
+export class UiAlertDialog extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
+}) {
   constructor() {
     super();
     this.open = false;
@@ -223,12 +220,9 @@ UiAlertDialogTrigger.register('ui-alert-dialog-trigger');
 // explicit choice via Cancel / Action).
 // --------------------------------------------------------------------------
 
-export class UiAlertDialogContent extends WebComponent {
-  static properties = {
-    size: { type: String, reflect: true },
-  };
-  declare size: 'default' | 'sm';
-
+export class UiAlertDialogContent extends WebComponent({
+  size: prop<'default' | 'sm'>(String, { reflect: true }),
+}) {
   // ref to the own-rendered native <dialog>. render() creates it, so a
   // ref() binding is the lit-idiomatic handle (no querySelector against
   // a string selector into the component's own output).
@@ -311,14 +305,10 @@ UiAlertDialogContent.register('ui-alert-dialog-content');
 
 const ALERT_DIALOG_ACTION_GRID_STRETCH = 'group-data-[size=sm]/alert-dialog-content:w-full';
 
-export class UiAlertDialogCancel extends WebComponent {
-  static properties = {
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-  };
-  declare variant: ButtonVariant;
-  declare size: ButtonSize;
-
+export class UiAlertDialogCancel extends WebComponent({
+  variant: prop<ButtonVariant>(String, { reflect: true }),
+  size: prop<ButtonSize>(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.variant = 'outline';
@@ -338,14 +328,10 @@ export class UiAlertDialogCancel extends WebComponent {
 }
 UiAlertDialogCancel.register('ui-alert-dialog-cancel');
 
-export class UiAlertDialogAction extends WebComponent {
-  static properties = {
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-  };
-  declare variant: ButtonVariant;
-  declare size: ButtonSize;
-
+export class UiAlertDialogAction extends WebComponent({
+  variant: prop<ButtonVariant>(String, { reflect: true }),
+  size: prop<ButtonSize>(String, { reflect: true }),
+}) {
   constructor() {
     super();
     this.variant = 'default';

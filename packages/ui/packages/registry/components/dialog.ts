@@ -63,7 +63,7 @@
  *
  * Design tokens used: --background, --border, --muted-foreground.
  */
-import { WebComponent, html, unsafeHTML } from '@webjsdev/core';
+import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
 import { buttonClass } from './button.ts';
 
@@ -157,12 +157,9 @@ function unlockScroll(): void {
 // to showModal() / close() its inner <dialog>.
 // --------------------------------------------------------------------------
 
-export class UiDialog extends WebComponent {
-  static properties = {
-    open: { type: Boolean, reflect: true },
-  };
-  declare open: boolean;
-
+export class UiDialog extends WebComponent({
+  open: prop(Boolean, { reflect: true }),
+}) {
   constructor() {
     super();
     this.open = false;
@@ -257,12 +254,9 @@ UiDialogTrigger.register('ui-dialog-trigger');
 // close button. Exposes showModal() / close() so the parent <ui-dialog>
 // can drive the open state imperatively without a named slot.
 
-export class UiDialogContent extends WebComponent {
-  static properties = {
-    showCloseButton: { type: String, reflect: true, attribute: 'show-close-button' },
-  };
-  declare showCloseButton: string;
-
+export class UiDialogContent extends WebComponent({
+  showCloseButton: prop(String, { reflect: true, attribute: 'show-close-button' }),
+}) {
   // ref to the own-rendered native <dialog>. render() creates it, so a
   // ref() binding is the lit-idiomatic handle (no querySelector against
   // a string selector into the component's own output).
@@ -359,12 +353,9 @@ UiDialogClose.register('ui-dialog-close');
 // <ui-dialog-footer>
 // --------------------------------------------------------------------------
 
-export class UiDialogFooter extends WebComponent {
-  static properties = {
-    showCloseButton: { type: String, attribute: 'show-close-button' },
-  };
-  declare showCloseButton: string | null;
-
+export class UiDialogFooter extends WebComponent({
+  showCloseButton: prop<string | null>(String, { attribute: 'show-close-button' }),
+}) {
   constructor() {
     super();
     this.showCloseButton = null;

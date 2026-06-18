@@ -38,7 +38,7 @@
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 // cursor-pointer + select-none on BASE for both call sites: the
@@ -76,18 +76,12 @@ export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize }
 // project through the default slot inside the inner button.
 // --------------------------------------------------------------------------
 
-export class UiToggle extends WebComponent {
-  static properties = {
-    pressed: { type: Boolean, reflect: true },
-    variant: { type: String, reflect: true },
-    size: { type: String, reflect: true },
-    disabled: { type: Boolean, reflect: true },
-  };
-  declare pressed: boolean;
-  declare variant: ToggleVariant;
-  declare size: ToggleSize;
-  declare disabled: boolean;
-
+export class UiToggle extends WebComponent({
+  pressed: prop(Boolean, { reflect: true }),
+  variant: prop<ToggleVariant>(String, { reflect: true }),
+  size: prop<ToggleSize>(String, { reflect: true }),
+  disabled: prop(Boolean, { reflect: true }),
+}) {
   constructor() {
     super();
     this.pressed = false;

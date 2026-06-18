@@ -43,7 +43,7 @@
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
-import { WebComponent, html, repeat, unsafeHTML, signal } from '@webjsdev/core';
+import { WebComponent, html, repeat, unsafeHTML, signal, prop } from '@webjsdev/core';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
@@ -134,11 +134,9 @@ const TYPE_ICON_COLOR: Record<ToastType, string> = {
   loading: 'text-muted-foreground',
 };
 
-export class UiSonner extends WebComponent {
-  static properties = {
-    position: { type: String, reflect: true },
-  };
-  declare position: SonnerPosition;
+export class UiSonner extends WebComponent({
+  position: prop<SonnerPosition>(String, { reflect: true }),
+}) {
   items = signal<ToastItem[]>([]);
 
   constructor() {

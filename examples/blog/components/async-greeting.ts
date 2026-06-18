@@ -1,4 +1,4 @@
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, prop } from '@webjsdev/core';
 
 /**
  * `<async-greeting>`: demonstrates bare-await async render (#469). The
@@ -8,11 +8,7 @@ import { WebComponent, html } from '@webjsdev/core';
  * interactive after the async commit. On a client re-fetch the default is
  * stale-while-revalidate (the prior content stays until the new render lands).
  */
-export class AsyncGreeting extends WebComponent {
-  static properties = { name: { type: String }, n: { type: Number, state: true } };
-  declare name: string;
-  declare n: number;
-
+export class AsyncGreeting extends WebComponent({ name: String, n: prop(Number, { state: true }) }) {
   constructor() {
     super();
     this.name = '';

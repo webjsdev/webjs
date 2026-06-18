@@ -6,13 +6,11 @@ import './light-inner.ts';
  * Shadow DOM parent that nests both shadow and light DOM children.
  * Used in nested DSD e2e tests.
  */
-export class ShadowParent extends WebComponent {
+export class ShadowParent extends WebComponent({ child: String }) {
   static shadow = true;
-  static properties = { child: { type: String } };
   static styles = css`
     :host { display: block; padding: 8px; border: 1px solid #ccc; margin: 4px 0; }
   `;
-  declare child: string;
 
   constructor() {
     super();
