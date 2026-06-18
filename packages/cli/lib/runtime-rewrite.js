@@ -134,7 +134,9 @@ export function bunifyDockerfile(s) {
       '# package-lock.json is optional (it\'s absent when the app was scaffolded with\n# --no-install); the glob keeps the COPY working with or without it.\nCOPY package.json package-lock.json* ./\nRUN npm install --no-audit --no-fund',
       '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. trustedDependencies in package.json lets\n# better-sqlite3\'s native-prebuild postinstall run (bun skips postinstalls).\nCOPY package.json bun.lock* ./\nRUN bun install',
     )
-    // Healthcheck: the pure Bun image has no node; use `bun -e`.
+    // Healthcheck: the pure Bun image has no node; use `bun -e`. Keep the
+    // dependency-free-probe comment accurate (the probe runs under Bun now).
+    .replace("(Node 24's built-in fetch, no curl/wget)", "(the runtime's built-in fetch, no curl/wget)")
     .replace('CMD ["node", "-e", "fetch(', 'CMD ["bun", "-e", "fetch(')
     // Entrypoint: serve on Bun.
     .replace(

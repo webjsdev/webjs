@@ -90,6 +90,7 @@ test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun
     'COPY package.json package-lock.json* ./',
     'RUN npm install --no-audit --no-fund',
     'COPY . .',
+    "# The probe is dependency-free (Node 24's built-in fetch, no curl/wget). For",
     'HEALTHCHECK --interval=15s CMD ["node", "-e", "fetch(\'x\')"]',
     '# `npm start` is a thin alias for `webjs start` (#550). It runs the',
     '# `webjs.start.before` step before serving, so',
@@ -108,6 +109,9 @@ test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun
   // Healthcheck off node (the pure Bun image has none).
   assert.match(out, /CMD \["bun", "-e"/);
   assert.doesNotMatch(out, /CMD \["node", "-e"/);
+  // The dependency-free-probe comment is kept accurate (no stale "Node 24" claim).
+  assert.match(out, /the runtime's built-in fetch/);
+  assert.doesNotMatch(out, /Node 24's built-in fetch/);
   // Server serves on Bun.
   assert.match(out, /CMD \["bun", "--bun", "run", "start"\]/);
   assert.doesNotMatch(out, /CMD \["npm", "start"\]/);
