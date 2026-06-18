@@ -60,6 +60,14 @@ even if the user doesn't explicitly ask.**
 3. If on a feature branch → verify it matches the current task
 4. Sync with parent: `git fetch origin && git rebase origin/main` if behind
 5. Don't mix unrelated work on the wrong branch
+6. **If more than one agent may work this repo at once, use a dedicated git
+   worktree per task, never a shared checkout.** Two agents in one working
+   directory collide: a `git checkout` in one moves `HEAD` under the other, so
+   the next commit lands on the wrong branch. Isolate each task:
+   `git worktree add -b <branch> ../<repo>-<slug> origin/main`, `cd` in, work
+   there, and `git worktree remove` after the PR merges. Git enforces
+   one-branch-per-worktree, so this makes the collision impossible. A lone agent
+   in a clean checkout may use a plain branch.
 
 ### After cloning: verify the toolchain
 

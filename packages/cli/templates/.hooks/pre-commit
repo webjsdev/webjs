@@ -11,8 +11,19 @@
 # here, so a commit stays fast and the test gate cannot be skipped by a
 # local --no-verify. The CI workflow runs `webjs check` + `webjs test`
 # on every push and pull request.
+#
+# Running more than one AI agent on this repo at once? Give each task its own
+# git worktree, not a shared checkout. Two agents in one working directory
+# collide: a `git checkout` in one moves HEAD under the other, so the next
+# commit lands on the wrong branch. Before committing, confirm the branch below
+# is the one you intended; if it moved, you are sharing a checkout. Isolate:
+#   git worktree add -b <branch> ../<app>-<task> origin/main && cd ../<app>-<task>
 
 BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Surface the branch so a wrong-branch commit (a concurrent-agent HEAD move) is
+# visible in the commit output rather than silent.
+echo "[pre-commit] committing on branch: ${BRANCH:-<detached>}"
 
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo ""

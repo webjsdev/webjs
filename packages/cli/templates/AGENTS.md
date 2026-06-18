@@ -1218,7 +1218,14 @@ composition, so a nested shell ends up dropped by the HTML parser.
 
 ## Workflow expectations for AI agents
 
-1. Branch before editing. Never push to `main` directly.
+1. Branch before editing. Never push to `main` directly. **If more than one
+   agent may work this repo at once, give each task its own git worktree, not a
+   shared checkout** (`git worktree add -b <branch> ../<repo>-<slug> origin/main`,
+   `cd` in, work there, `git worktree remove` after merge). Two agents in one
+   working directory collide: a `git checkout` in one moves `HEAD` under the
+   other, so the next commit lands on the wrong branch. Git enforces
+   one-branch-per-worktree, so worktrees prevent it; a lone agent in a clean
+   checkout may use a plain branch.
 2. Every code change comes with a test, AGENTS.md / docs updates if the
    feature surface changed, `webjs check` passing. A unit test is not
    always enough: a component, hydration, the client router, or a server
