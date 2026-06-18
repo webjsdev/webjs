@@ -11,6 +11,19 @@
  * (no per-module `.d.ts`), which under `--strict` would otherwise flag the
  * library's own implicit-any imports. That noise is unrelated to the fixtures;
  * the fixtures themselves are still fully type-checked.
+ *
+ * Resolution is `nodenext`, NOT `bundler` (#566). `bundler` intermittently
+ * resolved `@webjsdev/server` to its `default` export condition (`index.js`,
+ * untyped) instead of the `types` condition (`index.d.ts`) under `node --test`
+ * cross-file concurrency, so a fixture importing a type-only export
+ * (`AuthInstance`, the generic `createAuth<TUser>`) failed with "no exported
+ * member" / "module resolves to an untyped module", non-deterministically and
+ * shifting between sibling fixtures across runs. `nodenext` honors the package
+ * `exports` `types` condition deterministically, which is how a typed Node
+ * consumer resolves the package, so the bare `@webjsdev/*` specifiers always
+ * land on the `.d.ts`. `--allowJs` is also dropped (no fixture imports a `.js`;
+ * with it, resolution could treat `index.js` as a module). Do NOT switch back
+ * to `bundler` here or re-add `--allowJs`.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,11 +46,10 @@ for (const fixture of fixtures) {
         '--noEmit',
         '--strict',
         '--target', 'esnext',
-        '--module', 'esnext',
-        '--moduleResolution', 'bundler',
+        '--module', 'nodenext',
+        '--moduleResolution', 'nodenext',
         '--lib', 'esnext,dom',
         '--skipLibCheck',
-        '--allowJs',
         join(here, fixture),
       ],
       { encoding: 'utf8' },
