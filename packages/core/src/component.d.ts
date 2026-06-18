@@ -70,7 +70,7 @@ export interface ReactiveController {
  * See the Editor Setup doc for tooling that gives attribute/tag
  * intelligence inside `html\`…\`` templates.
  */
-export abstract class WebComponent extends HTMLElement {
+abstract class WebComponentBase extends HTMLElement {
   static shadow: boolean;
   static hydrate: 'visible' | undefined;
   static properties: Record<string, PropertyDeclaration>;
@@ -129,3 +129,42 @@ export abstract class WebComponent extends HTMLElement {
   disconnectedCallback(): void;
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void;
 }
+
+export type WebComponent = WebComponentBase;
+
+export type Infer<C> =
+  C extends BooleanConstructor ? boolean :
+  C extends NumberConstructor ? number :
+  C extends StringConstructor ? string :
+  C extends new (...a: any[]) => infer T ? T :
+  C extends (v: any) => infer T ? T : unknown;
+
+export type InferProps<S> = {
+  [K in keyof S]: S[K] extends PropertyDeclaration<infer T> ? T : Infer<S[K]>
+};
+
+export interface WebComponentConstructor {
+  new (): WebComponentBase;
+  prototype: WebComponentBase;
+
+  <S extends Record<string, any>>(shape: S): {
+    new (): WebComponentBase & InferProps<S>;
+    prototype: WebComponentBase & InferProps<S>;
+  };
+}
+
+export declare const WebComponent: WebComponentConstructor;
+
+export declare function prop<C extends PropertyConstructor<any>>(
+  type: C,
+  opts?: Omit<PropertyDeclaration<Infer<C>>, 'type'>
+): PropertyDeclaration<Infer<C>>;
+
+export declare function prop<T>(
+  type: PropertyConstructor<any>,
+  opts?: Omit<PropertyDeclaration<T>, 'type'>
+): PropertyDeclaration<T>;
+
+export declare function prop<T = string>(
+  opts?: PropertyDeclaration<T>
+): PropertyDeclaration<T>;
