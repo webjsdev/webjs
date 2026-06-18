@@ -101,6 +101,56 @@ if (result.success) {
 }</pre>
     <p>At runtime, the browser never receives the server code. webjs replaces the import with a thin RPC stub that calls <code>POST /__webjs/action/:hash/createPost</code>. But TypeScript's type checker sees through the <code>.server.ts</code> boundary and validates argument/return types at compile time.</p>
 
+    <h2>Typed metadata and page props</h2>
+    <p>The same isomorphic <code>@webjsdev/core</code> surface a page already imports <code>html</code> from also exports the types for its routing files, so metadata, page / layout / route-handler props, and client-router hrefs all type-check. Every one is a pure type (zero runtime, erased at strip time, no build cost).</p>
+
+    <h3>Page metadata: <code>Metadata</code> and <code>generateMetadata</code></h3>
+    <p>A page or layout exports <code>metadata</code> (static) or <code>generateMetadata(ctx)</code> (request-scoped). Annotate the return with the exported <code>Metadata</code> type so a misspelled field (<code>titel</code>, <code>descripton</code>) or a wrong-typed value (<code>themeColor: 123</code>) is a compile-time error, the same ergonomics as Next.js's <code>import type { Metadata } from 'next'</code> (#257). <code>MetadataContext</code> types the <code>generateMetadata</code> argument.</p>
+    <pre>import type { Metadata, MetadataContext } from '@webjsdev/core';
+
+export const metadata: Metadata = {
+  title: 'Blog',
+  description: 'Latest posts',
+  openGraph: { type: 'website', image: '/og.png' },
+  twitter: { card: 'summary_large_image' },
+};
+
+export async function generateMetadata(ctx: MetadataContext): Promise&lt;Metadata&gt; {
+  return { title: ${'`Post: ${ctx.params.slug}`'}, metadataBase: new URL(ctx.url).origin };
+}</pre>
+    <p><code>Metadata</code> covers every field the SSR pipeline reads. Each field is optional, and string-or-object fields (<code>title</code>, <code>viewport</code>, <code>robots</code>, <code>appleWebApp</code>, <code>icons</code>) are unions, so both forms type-check. <code>MetadataContext</code> is <code>{ params, searchParams, url, actionData }</code> (where <code>actionData</code> is set only on a failed-page-action re-render). See <a href="/docs/metadata-routes">Metadata Routes</a> for the full field reference.</p>
+
+    <h3>Page / layout / route-handler props (<code>PageProps</code>, <code>LayoutProps</code>, <code>RouteHandlerContext</code>)</h3>
+    <p>A page default export receives <code>{ params, searchParams, url, actionData }</code>; a layout receives the same plus <code>children</code>; a <code>route.ts</code> handler receives <code>(request, { params })</code>. Type each with the exported helpers so a typo in a param name or a wrong-typed field is a compile-time error (#258).</p>
+    <pre>import type { PageProps, LayoutProps, RouteHandlerContext } from '@webjsdev/core';
+
+// A static route: params is Record&lt;string, string&gt;.
+export default function About({ searchParams }: PageProps) { /* ... */ }
+
+// A dynamic route: pass the route literal to narrow params.
+export default function Post({ params }: PageProps&lt;'/blog/[slug]'&gt;) {
+  const slug = params.slug; // typed string
+  /* ... */
+}
+
+// A layout adds children: TemplateResult.
+export default function RootLayout({ children }: LayoutProps) { /* ... */ }
+
+// A route handler's 2nd arg.
+export async function GET(req: Request, ctx: RouteHandlerContext) {
+  return Response.json({ id: ctx.params.id });
+}</pre>
+    <p><code>PageProps&lt;R&gt;</code> / <code>LayoutProps&lt;R&gt;</code> / <code>RouteHandlerContext&lt;R&gt;</code> take an optional route literal <code>R</code>. With no <code>R</code> (or in an app that has not generated route types), <code>params</code> is <code>Record&lt;string, string&gt;</code>, the runtime default. With <code>R</code> set to a generated dynamic route, <code>params</code> narrows to its exact shape (<code>{ slug: string }</code>, <code>{ rest: string[] }</code>, <code>{ slug?: string[] }</code>). The shapes mirror what the server actually passes, NOT Next.js's superset.</p>
+
+    <h3>The generated route union (<code>webjs types</code>)</h3>
+    <p>Run <code>webjs types</code> to generate <code>.webjs/routes.d.ts</code>, an opt-in overlay that augments <code>@webjsdev/core</code> with one key per route in <code>app/</code>. It narrows two things at tsserver time.</p>
+    <ul>
+      <li>The <code>Route</code> href type that <code>navigate()</code> and a typed <code>&lt;a href&gt;</code> accept: <code>navigate('/blog/anything')</code> is accepted, <code>navigate('/nonexistent')</code> is a type error. Until you generate the types, <code>Route</code> is <code>string</code>, so <code>navigate()</code> is unconstrained, non-breaking for JSDoc apps and un-generated apps alike.</li>
+      <li>Per-route <code>params</code>: <code>PageProps&lt;'/blog/[slug]'&gt;['params']</code> becomes <code>{ slug: string }</code>, derived from the generated <code>RouteParamMap</code>.</li>
+    </ul>
+    <pre>webjs types     # writes .webjs/routes.d.ts (count of routes printed)</pre>
+    <p><code>webjs dev</code> also emits it automatically at startup and re-emits after each route rebuild, so an editor always has fresh route types. The file is gitignored (regenerated per machine, like Next's <code>.next/types</code>); the scaffold <code>tsconfig.json</code> lists <code>.webjs/routes.d.ts</code> in <code>include</code> so tsserver picks it up. To opt in for an existing app, run <code>webjs types</code> once and ensure your <code>tsconfig.json</code> <code>include</code> lists <code>.webjs/routes.d.ts</code>. This is webjs's no-build equivalent of Next 15's <code>typedRoutes</code>, achieved via interface declaration-merging rather than a bundler. Output is deterministic (sorted keys), so re-running yields a byte-identical file.</p>
+
     <h2>Rich Types Across the Wire</h2>
     <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. webjs ships its own pure-ESM serializer (in <code>@webjsdev/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip, including binary content (file uploads through actions just work).</p>
     <pre>// Server action
