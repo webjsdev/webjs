@@ -21,7 +21,7 @@ export default function ErrorHandling() {
         For form validation errors there are two valid patterns, neither of which uses error boundaries:
         <ul>
           <li><strong>JS-side</strong>: handle validation in the component's submit handler, keep errors in component state.</li>
-          <li><strong>Server-rendered (Rails / Django / Laravel style)</strong>: have the server return <code>422 Unprocessable Entity</code> with the form re-rendered, errors visible inline. The client router applies any HTML response in place regardless of status code, so the user sees the validated form without a full page reload and without losing their typed values. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</li>
+          <li><strong>Server-rendered (Rails / Django / Laravel style)</strong>: export a page <code>action</code> that returns a failure <code>ActionResult</code> (<code>{ success: false, fieldErrors, values, status: 422 }</code>). The framework re-SSRs the SAME page at <code>422 Unprocessable Entity</code> with the result on <code>ctx.actionData</code>, so the page repopulates inputs from <code>actionData.values</code> and shows messages from <code>actionData.fieldErrors</code> (no hand-rolled <code>new Response(...)</code>). The client router applies that response in place regardless of status code, so the user sees the validated form without a full page reload and without losing their typed values. See the <a href="/docs/server-actions">server actions</a> docs for the page-action pattern and the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</li>
         </ul>
       </li>
     </ul>

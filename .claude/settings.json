@@ -26,6 +26,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/require-tests-with-src.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/require-docs-with-src.sh"
           }
         ]
       }

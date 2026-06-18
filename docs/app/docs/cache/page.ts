@@ -27,6 +27,7 @@ const posts = await listPosts();</pre>
     <ul>
       <li><code>key</code> (required): cache key prefix. Combined with serialized arguments to form the full key.</li>
       <li><code>ttl</code> (optional): time-to-live in seconds. Default: 60.</li>
+      <li><code>tags</code> (optional) attaches tags for cross-module invalidation. Either a static <code>string[]</code> or a function <code>(...args) =&gt; string[]</code>, so a per-entity read can tag itself with the id. Evict by tag with <code>revalidateTag</code> / <code>revalidateTags</code> (see below).</li>
     </ul>
 
     <h3>Invalidation</h3>
@@ -41,7 +42,44 @@ export async function createPost(input) {
   await listPosts.invalidate();  // next call to listPosts() will hit DB
 }</pre>
 
-    <p>Invalidation clears the no-args cache key. Argument-specific keys (from calls with different arguments) expire naturally via TTL. For full invalidation of parameterized queries, use a short TTL.</p>
+    <p>Invalidation clears the no-args cache key. Argument-specific keys (from calls with different arguments) expire naturally via TTL. To evict a specific argument's entry (for example one post id), tag the read and use <code>revalidateTag</code> (next section) rather than waiting on the TTL.</p>
+
+    <h3>Tag-based invalidation (revalidateTag)</h3>
+    <p>The <code>invalidate()</code> method only clears the no-args base key, so for a parameterized read each argument produces a distinct key. Add <code>tags</code> to a <code>cache()</code> so an unrelated mutation can evict the right entries without importing the wrapper. Tags are either a static <code>string[]</code> or a function <code>(...args) =&gt; string[]</code> that derives a per-entity tag from the arguments:</p>
+
+    <pre>export const postById = cache(
+  async (id) =&gt; db.query.posts.findFirst({ where: { id } }),
+  { key: 'post', ttl: 300, tags: (id) =&gt; ['post:' + id] }  // per-entity tag
+);
+
+export const listPosts = cache(
+  async () =&gt; db.query.posts.findMany(),
+  { key: 'posts', ttl: 60, tags: ['posts'] }                // static tag
+);</pre>
+
+    <p>A mutating server action then calls <code>revalidateTag(tag)</code> after the write. It works across modules (the comments module evicts a posts-module read with no import of the wrapper):</p>
+
+    <pre>// modules/comments/actions/create-comment.server.ts
+'use server';
+import { revalidateTag, revalidatePath } from '@webjsdev/server';
+import { db } from '../../../db/connection.server.ts';
+import { comments } from '../../../db/schema.server.ts';
+
+export async function createComment(input) {
+  await db.insert(comments).values(input);
+  await revalidateTag('post:' + input.postId);  // postById(postId) recomputes
+  await revalidateTag('posts');                  // listPosts recomputes
+  await revalidatePath('/blog');                 // also evict the cached HTML
+  return { success: true };
+}</pre>
+
+    <p><code>revalidateTag('post:5')</code> evicts ONLY the id-5 entry, leaving other ids cached. <code>revalidateTags([...])</code> clears several tags at once. This is the fix for the old argument-key leak. Tag a per-argument read and evict the exact id by tag instead of relying on a short TTL. An untagged <code>cache()</code> is untouched by any <code>revalidateTag</code>. Both <code>revalidateTag</code> and <code>revalidateTags</code> are imported from <code>@webjsdev/server</code>.</p>
+
+    <p><strong>The mutation-to-read contract.</strong> A read declares the tags it belongs to, and a mutation declares the tags it evicts. The two never import each other. This is the same pairing that <a href="/docs/server-actions">HTTP-verb server actions</a> express declaratively. A GET action exports <code>const tags = (id) =&gt; [...]</code> to tag its cached response, and a mutation exports <code>const invalidates = (id) =&gt; [...]</code> so that on completion the framework evicts those tags (via <code>revalidateTags</code>) and reports them to the client so a later read revalidates. Tagging a <code>cache()</code> read with the same tag a verb action invalidates makes one eviction reach both the action response cache and the <code>cache()</code> data.</p>
+
+    <p><strong>Tag invalidation evicts cached DATA, <code>revalidatePath</code> evicts cached HTML.</strong> Together they are the server cache invalidation surface, both imported from <code>@webjsdev/server</code>.</p>
+
+    <p><strong>Multi-instance note.</strong> The tag index is a thin, non-atomic read-modify-write of a JSON array in the store. With a shared Redis store, <code>revalidateTag</code> reaches every instance for the keys it can see, but two instances appending to one tag concurrently can lose an append, so a freshly-stored key on a peer might miss eviction and live until its TTL. The index entry carries the cache TTL so it self-prunes. For strict cross-instance invalidation, prefer a short <code>ttl</code> as the floor.</p>
 
     <h2>HTTP Cache-Control: Page-Level Caching</h2>
     <p>For page-level caching served to browsers and CDNs, use the <code>metadata.cacheControl</code> export in any <code>page.ts</code>:</p>

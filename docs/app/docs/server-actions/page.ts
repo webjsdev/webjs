@@ -420,37 +420,48 @@ TodoApp.register('todo-app');
 //   -d '{"text":"Buy milk"}'
 // => {"id":1,"text":"Buy milk","done":false,"createdAt":"2026-04-15T..."}</pre>
 
-    <h2>Plain HTML forms as an alternative</h2>
-    <p>Server actions called via JS RPC are the right tool when you need typed return values back in the component (the createPost example above returns a <code>Post</code> object). For the simpler "submit form → server processes → render new page" flow, plain HTML forms pointed at a <code>route.ts</code> handler are often a cleaner fit:</p>
-    <pre>// app/posts/route.ts
-import { redirect } from '@webjsdev/core';
+    <h2>Plain HTML forms as an alternative (the page action)</h2>
+    <p>Server actions called via JS RPC are the right tool when you need typed return values back in the component (the createPost example above returns a <code>Post</code> object). For the simpler "submit form, server processes, render the result" flow, the framework's <strong>page action</strong> is the cleaner fit. A <code>page.{js,ts}</code> may export an <code>action</code> alongside its default render function. A non-GET/HEAD submission to that page's own URL runs the action (inside the page's segment middleware), so a plain <code>&lt;form method="POST"&gt;</code> works with JavaScript disabled AND through the client router, same UI either way. You write no <code>route.ts</code> and no hand-rolled <code>new Response(...)</code>.</p>
+    <p>The action receives <code>{ request, params, searchParams, url, formData }</code> (<code>formData</code> is the already-parsed body, <code>request</code> is the raw Request) and returns an <code>ActionResult</code>. The framework interprets the result.</p>
+    <pre>// app/posts/page.ts
+import { html } from '@webjsdev/core';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 
-export async function POST(req: Request) {
-  const form = await req.formData();
-  const result = await createPost({
-    title: String(form.get('title') ?? ''),
-    body: String(form.get('body') ?? ''),
-  });
-  // Validation failure -> return HTML with errors visible.
-  // The client router applies any HTML response in place regardless of
-  // status, so the user sees errors without losing their typed input
-  // and without a full page reload.
-  if (!result.success) {
-    return new Response(renderPostFormHTML(result.errors, form), {
-      status: 422,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    });
+// Runs only on the server. Receives the already-parsed formData.
+export async function action({ formData }: { formData: FormData }) {
+  const title = String(formData.get('title') || '').trim();
+  const body = String(formData.get('body') || '').trim();
+  const values = { title, body };
+  const fieldErrors: Record&lt;string, string&gt; = {};
+  if (!title) fieldErrors.title = 'Title is required';
+  if (body.length &lt; 10) fieldErrors.body = 'Body is too short';
+  if (Object.keys(fieldErrors).length) {
+    return { success: false, fieldErrors, values, status: 422 };
   }
-  // Success -> PRG redirect; fetch auto-follows, history records /posts/&lt;id&gt;
-  redirect(\`/posts/\${result.data.id}\`);
+  const post = await createPost({ title, body });
+  return { success: true, redirect: \`/posts/\${post.id}\` };
+}
+
+export default function NewPost({ actionData }: {
+  actionData?: { fieldErrors?: Record&lt;string, string&gt;; values?: Record&lt;string, string&gt; };
+}) {
+  const errors = actionData?.fieldErrors || {};
+  const values = actionData?.values || {};
+  return html\`
+    &lt;form method="POST"&gt;
+      &lt;input name="title" value=\${values.title || ''} required /&gt;
+      \${errors.title ? html\`&lt;p class="error"&gt;\${errors.title}&lt;/p&gt;\` : ''}
+      &lt;textarea name="body" required&gt;\${values.body || ''}&lt;/textarea&gt;
+      \${errors.body ? html\`&lt;p class="error"&gt;\${errors.body}&lt;/p&gt;\` : ''}
+      &lt;button&gt;Publish&lt;/button&gt;
+    &lt;/form&gt;
+  \`;
 }</pre>
-    <pre>&lt;!-- The form: standard HTML, no JS handler needed --&gt;
-&lt;form action="/posts" method="post"&gt;
-  &lt;input name="title" required /&gt;
-  &lt;textarea name="body" required&gt;&lt;/textarea&gt;
-  &lt;button&gt;Publish&lt;/button&gt;
-&lt;/form&gt;</pre>
-    <p>The router intercepts the submit, sends the POST, applies the response (2xx with redirect for success, 4xx HTML for validation errors). Works without JavaScript (just slower, with a full page reload), and ramps up to partial-swap when the client router is active. Both ends of the progressive-enhancement spectrum from one piece of code. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</p>
+    <p>How the framework interprets the returned <code>ActionResult</code>:</p>
+    <ul>
+      <li><strong>Success</strong> (<code>{ success: true, redirect? }</code>, or any non-failure result) is a <code>303 See Other</code> to <code>result.redirect</code> if present, else the page's own path (Post/Redirect/Get, so a reload does not resubmit). <code>result.redirect</code> must be a same-site local path (a single leading <code>/</code>); for a real external redirect throw <code>redirect(absoluteUrl)</code>.</li>
+      <li><strong>Failure</strong> (<code>{ success: false }</code>, or a <code>fieldErrors</code>, or an <code>error</code>) re-SSRs the SAME page with <code>status</code> (default <code>422</code>) and the result on <code>ctx.actionData</code>. The page reads <code>actionData.fieldErrors.&lt;name&gt;</code> for messages and <code>actionData.values.&lt;name&gt;</code> to repopulate native <code>&lt;input value=...&gt;</code>, so the user's typed input survives.</li>
+    </ul>
+    <p>With JavaScript off this is a native round-trip (the browser submits, follows the 303, or renders the 422). With JavaScript on the client router applies the 422 in place (no reload, typed input preserved) and follows the 303 via fetch. Both ends of the progressive-enhancement spectrum from one piece of code, no form library. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior, and <a href="/docs/progressive-enhancement">progressive enhancement</a> for the full write-path pattern.</p>
   `;
 }

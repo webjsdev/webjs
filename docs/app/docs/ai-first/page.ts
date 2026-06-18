@@ -31,7 +31,30 @@ export default function AIFirst() {
     </ul>
     <p>An AI agent reads AGENTS.md once and knows: the shape of the app, what's safe to change, what's not, and how to add any feature. No guessing.</p>
 
-    <h3>2. Predictable File Layout</h3>
+    <h3>2. The webjs MCP Server</h3>
+    <p>Alongside the static <code>AGENTS.md</code> contract, every webjs app ships a <strong>read-only Model Context Protocol server</strong> agents can wire up for live, version-accurate introspection of THIS app and the framework. It mutates nothing, so it is safe to call freely, and it is preferred over recalling webjs from training data (which drifts). It is already available with no install (the webjs CLI, a project dependency, has it built in as <code>webjs mcp</code>, and the equivalent standalone package runs as <code>npx @webjsdev/mcp</code>). It is an MCP STDIO server, so you do not run it in a terminal and read its output. Your MCP host (Claude Code, Cursor, etc.) launches it and surfaces its tools.</p>
+    <p>Claude Code is pre-wired by the scaffold. For another host, register the server by pointing it at the package:</p>
+    <pre>// .cursor/mcp.json (or your host's MCP config)
+{
+  "mcpServers": {
+    "webjs": {
+      "command": "npx",
+      "args": ["@webjsdev/mcp"]
+    }
+  }
+}</pre>
+    <p><strong>Introspection of this app</strong> (read-only, no module load, no DB side effects):</p>
+    <ul>
+      <li><code>list_routes</code>: the live route table.</li>
+      <li><code>list_actions</code>: server actions with their <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> RPC endpoints (the real hashes).</li>
+      <li><code>list_components</code>: the registered custom-element tags.</li>
+      <li><code>check</code>: the structured <code>webjs check</code> violations.</li>
+    </ul>
+    <p>Use these to learn the real route, action, and component surface before editing, instead of grepping or assuming.</p>
+    <p><strong>Knowledge and authoring layer:</strong> an <code>init</code> tool (a read-first pointer with the mental model and invariants, the primer for a fresh setup), a <code>docs</code> tool (retrieve a topic or search the <code>agent-docs</code> corpus), and a <code>source</code> tool that reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs). On top of the tools, the server exposes MCP <code>resources</code> (the docs corpus plus this app's <code>AGENTS.md</code>) and recipe <code>prompts</code> (guided page, route, action, and component workflows), so the no-build framework source and the docs/recipes are surfaced directly to the agent.</p>
+    <p>An agent has two complementary ways to understand the framework, and either beats guessing from training data: grep the full no-build source under <code>node_modules/@webjsdev/*/src</code> (the real code that runs, no sourcemaps), and the MCP for live app introspection plus the curated <code>init</code> / <code>docs</code> / <code>source</code> knowledge tools.</p>
+
+    <h3>3. Predictable File Layout</h3>
     <pre>app/
   page.ts              → always the page component for this URL
   layout.ts            → always the wrapping layout
@@ -48,7 +71,7 @@ modules/
     types.ts           → shared type definitions</pre>
     <p>Every file has one job. An AI agent looking for "the function that creates a post" searches <code>modules/posts/actions/</code>, not a 500-line utils.ts or a re-exported barrel index. One grep, one result.</p>
 
-    <h3>3. One Function Per File</h3>
+    <h3>4. One Function Per File</h3>
     <p>Server actions and queries follow a strict <strong>one exported function per file</strong> convention:</p>
     <pre>modules/posts/actions/create-post.server.ts   → exports createPost()
 modules/posts/actions/delete-post.server.ts   → exports deletePost()
@@ -56,15 +79,15 @@ modules/posts/queries/list-posts.server.ts    → exports listPosts()
 modules/posts/queries/get-post.server.ts      → exports getPost()</pre>
     <p>This is the single most AI-friendly decision in the architecture. When an LLM needs to modify <code>createPost</code>, it reads exactly one file. It doesn't need to understand the rest of the module. Context window usage is minimal. The blast radius of a change is visible from the filename.</p>
 
-    <h3>4. No Build Step = What You See Is What Runs</h3>
+    <h3>5. No Build Step = What You See Is What Runs</h3>
     <p>Frameworks with build pipelines transform source code before it executes. The JSX you write becomes <code>React.createElement</code> calls. Your imports become webpack chunks. Your CSS modules get hashed classnames. An AI agent reading the source sees one thing, while the runtime does another.</p>
     <p>webjs has <strong>no build step you run</strong>. The <code>.ts</code> file you see is the file that runs. <code>.ts</code> imports are stripped of types by the runtime's stripper (Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on Bun), which is whitespace replacement: every <code>(line, column)</code> in the source maps to the same position in the output, so stack traces stay byte-exact. The same transform runs server-side and on browser-bound requests. No intermediate representation, no generated code, no output directory. An AI agent can reason about what the code does by reading the file, because the file IS what runs. See <a href="/docs/no-build">No-Build Model</a> for the full pipeline.</p>
 
-    <h3>5. Explicit Server Boundary</h3>
+    <h3>6. Explicit Server Boundary</h3>
     <p>The <code>.server.ts</code> extension is a visible, greppable marker that says "this code runs only on the server." An AI agent never accidentally puts a database call in a component, because the naming convention prevents it. And the framework enforces it: <code>.server.ts</code> files are rewritten to RPC stubs for the browser.</p>
     <p>Compare with NextJs where <code>'use client'</code> / <code>'use server'</code> directives are easy to forget and their scope rules are subtle. The <code>.server.ts</code> convention is filename-level. You can't accidentally import server code without the filename literally telling you.</p>
 
-    <h3>6. Typed RPC Without Schema</h3>
+    <h3>7. Typed RPC Without Schema</h3>
     <p>When an AI agent writes a server action:</p>
     <pre>// modules/posts/actions/create-post.server.ts
 export async function createPost(
@@ -78,10 +101,10 @@ export async function createPost(
     </ol>
     <p>Zero indirection. Zero codegen. Zero schema drift.</p>
 
-    <h3>7. JSDoc or TypeScript: Agent's Choice</h3>
+    <h3>8. JSDoc or TypeScript: Agent's Choice</h3>
     <p>Some AI agents work better with TypeScript, others prefer JSDoc. webjs supports both equally. The type-checking story is identical either way, since the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
 
-    <h3>8. Cross-Agent Config Files</h3>
+    <h3>9. Cross-Agent Config Files</h3>
     <p><code>webjs create</code> scaffolds guardrail config files for every major AI coding agent:</p>
     <ul>
       <li><code>CLAUDE.md</code> + <code>.claude/settings.json</code> + hooks for Claude Code</li>
@@ -92,13 +115,13 @@ export async function createPost(
     </ul>
     <p>Every agent gets the same rules: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
 
-    <h3>9. Autonomous Mode</h3>
+    <h3>10. Autonomous Mode</h3>
     <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
 
-    <h3>10. Automatic Tests and Docs</h3>
-    <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>.</p>
+    <h3>11. Automatic Tests and Docs</h3>
+    <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
-    <h3>11. Scaffold + Persistence Defaults</h3>
+    <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. webjs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
@@ -144,6 +167,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
     <pre>                       webjs        NextJs       Express
 ──────────────────────────────────────────────────────────
 AGENTS.md contract     ✅ built-in   ❌ none       ❌ none
+MCP server (read-only) ✅ webjs mcp  ❌ none       ❌ none
 Cross-agent configs    ✅ 5 agents   ❌ none       ❌ none
 Auto tests + docs      ✅ enforced   ❌ manual     ❌ manual
 Branch guardrails      ✅ hooks      ❌ none       ❌ none

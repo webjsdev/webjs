@@ -63,6 +63,30 @@ export default async function Home() {
     <h3>Components Without Shadow DOM</h3>
     <p>If a component sets <code>static shadow = false</code>, DSD injection is skipped. The component renders into the light DOM and its styles are not scoped. This is useful for components that need to participate in the parent document's layout or inherit global styles.</p>
 
+    <h2>The Server Element Shim</h2>
+    <p>The <code>injectDSD</code> pass instantiates each component server-side, but there is no real DOM, so a naive <code>this.getAttribute(...)</code> or <code>this.addEventListener(...)</code> in the constructor or <code>render()</code> would throw. webjs backs the SSR-time instance with a server element shim, so the attribute and event surface a component reads during the pre-render lifecycle is safe and does not crash.</p>
+    <ul>
+      <li><strong>Attribute methods work</strong>: <code>getAttribute</code>, <code>hasAttribute</code>, <code>setAttribute</code>, and <code>toggleAttribute</code> read and write the SSR instance's attribute map, so reading an attribute in <code>render()</code> or reflecting a property during the SSR update cycle behaves as it does in the browser.</li>
+      <li><strong>Event methods are no-ops</strong>: <code>addEventListener</code>, <code>removeEventListener</code>, and <code>dispatchEvent</code> are inert at SSR (there is no event loop on the server), so wiring a delegated listener in the constructor is safe. The real listeners bind on the client after the script loads.</li>
+      <li><strong>attachInternals() is inert</strong>: it returns an inert object server-side, so a form-associated component does not crash during its first paint.</li>
+    </ul>
+    <p>Reading attributes that drive render through a reactive property (<code>static properties</code> plus <code>declare</code>) is still the idiomatic path, but a direct <code>this.hasAttribute(...)</code> no longer crashes at SSR. Genuinely browser-only members (<code>this.classList</code>, <code>this.querySelector(...)</code>, <code>this.attachShadow(...)</code>, <code>this.getBoundingClientRect(...)</code>, layout reads) have no server shim and still throw, so keep them in <code>connectedCallback</code> or a later hook. See <a href="/docs/lifecycle">Lifecycle</a> for which hooks run where.</p>
+
+    <h3>closest() at SSR for compound components</h3>
+    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to its parent and reading the parent's value. webjs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, backed by the SSR walker's ancestor chain, so the active or pressed state is marked in the first server paint rather than only after hydration.</p>
+    <pre>get _tabs() { return this.closest('ui-tabs'); }
+render() {
+  const active = this._tabs?.value === this.value;
+  this.dataset.state = active ? 'active' : 'inactive';
+  return html\`&lt;button data-state=\${active ? 'active' : 'inactive'}&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/button&gt;\`;
+}</pre>
+    <p>The walker threads the chain of enclosing custom-element instances into each instance, and the shim's <code>closest()</code> resolves a parent over that chain, so <code>this.closest('ui-tabs').value</code> reads the live parent property the walker already applied. The first client render produces the identical state (the browser's real <code>closest()</code> against the real DOM), so there is no hydration flash. Two limits apply.</p>
+    <ul>
+      <li>Only <strong>tag-name selectors</strong> resolve at SSR (<code>closest('ui-tabs')</code>). A class, attribute, or descendant selector returns <code>null</code> server-side and resolves on the client. That covers the compound-component pattern, anything finer is client-only.</li>
+      <li>The compound <strong>parent</strong> must be light DOM (the default). A shadow-DOM parent projects its children through a native <code>&lt;slot&gt;</code>, and those slotted children are not threaded the SSR ancestor chain, so their <code>closest(parent)</code> resolves to <code>null</code> in the first server paint (it still resolves on the client after hydration). Keep compound parents light DOM for a correct first paint.</li>
+    </ul>
+    <p>See <a href="/docs/components">Components</a> for the full compound-component pattern.</p>
+
     <h2>Async Rendering</h2>
     <p>Pages, layouts, and components can all be async. The server awaits every level of the render tree:</p>
 

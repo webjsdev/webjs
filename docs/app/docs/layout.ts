@@ -53,6 +53,7 @@ const NAV_SECTIONS = [
     title: 'Infrastructure',
     items: [
       { href: '/docs/cache', label: 'Caching' },
+      { href: '/docs/file-storage', label: 'File Storage' },
       { href: '/docs/sessions', label: 'Sessions' },
       { href: '/docs/auth', label: 'Auth (Providers)' },
       { href: '/docs/rate-limiting', label: 'Rate Limiting' },
