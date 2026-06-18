@@ -20,7 +20,15 @@ const CHANGELOG_DIR = resolve(REPO_ROOT, 'changelog');
  * filesystem. Matches the GitHub Releases page (the workflow publishes
  * oldest-first so GH's `created_at DESC` sort ends up with the same
  * order).
+ *
+ * A GET server action (#488): a public, cacheable read of the release
+ * feed, identical for every visitor, so `public: true` is safe. The
+ * `changelog` tag lets a future write path evict it; entries change
+ * only on a release deploy, so a 5-minute max-age is comfortable.
  */
+export const method = 'GET';
+export const cache = { maxAge: 300, public: true };
+export const tags = () => ['changelog'];
 export async function listEntries(): Promise<Entry[]> {
   const entries: Entry[] = [];
   let pkgs: string[];

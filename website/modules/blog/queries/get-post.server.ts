@@ -20,6 +20,13 @@ const BLOG_DIR = resolve(REPO_ROOT, 'blog');
  * uses). Anything else returns null before we hit the filesystem,
  * which also blocks path-traversal attempts like `../../etc/passwd`.
  */
+// A GET server action (#488): a public, cacheable read of a single
+// post, identical for every visitor, so `public: true` is safe. The
+// cache key already includes the `slug` argument; the per-post `blog:`
+// tag (plus the shared `blog` tag) lets a future write path evict it.
+export const method = 'GET';
+export const cache = { maxAge: 300, public: true };
+export const tags = (slug: string) => ['blog', `blog:${slug}`];
 export async function getPost(slug: string): Promise<PostWithBody | null> {
   if (!/^[a-z0-9-]+$/.test(slug)) return null;
   let raw: string;
