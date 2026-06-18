@@ -801,9 +801,11 @@ async function performNavigation(href, isPopState, frameId) {
         const cachedDoc = parseHTML(cached.html);
         if (cachedDoc) {
           applySwap(cachedDoc, frameId, /* revalidating */ true, /* href */ null);
-          // Restore window scroll to where the user left it.
+          // Restore window scroll to where the user left it. Use
+          // behavior:'instant' so an app-level `scroll-behavior: smooth`
+          // stylesheet does not animate the restore (native nav jumps).
           if (typeof window !== 'undefined') {
-            window.scrollTo(cached.scrollX, cached.scrollY);
+            window.scrollTo({ left: cached.scrollX, top: cached.scrollY, behavior: 'instant' });
           }
           // Fire-and-forget revalidation. Uses a fresh AbortController
           // since this background fetch is allowed to overlap with the
@@ -819,7 +821,7 @@ async function performNavigation(href, isPopState, frameId) {
       // on the page they popped FROM. Scroll to top as the reasonable
       // default; fetchAndApply skips its own scroll handling when
       // recordHistory=false (which is the case here).
-      if (typeof window !== 'undefined') window.scrollTo(0, 0);
+      if (typeof window !== 'undefined') window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
     }
 
     await fetchAndApply(href, frameId, !isPopState, optimisticState, 'GET', null, signal, myToken);
@@ -1719,10 +1721,15 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     const url = new URL(finalUrl);
     if (url.hash) {
       const t = document.getElementById(url.hash.slice(1));
+      // A hash anchor is the one nav scroll we DON'T force instant: a
+      // `#section` link is exactly where an app's `scroll-behavior: smooth`
+      // is wanted, and native browsers animate it too.
       if (t) t.scrollIntoView();
-      else window.scrollTo(0, 0);
+      else window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
     } else {
-      window.scrollTo(0, 0);
+      // Scroll-to-top on a forward nav. behavior:'instant' so an app-level
+      // `scroll-behavior: smooth` does not animate it (match native nav).
+      window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
     }
   }
 
