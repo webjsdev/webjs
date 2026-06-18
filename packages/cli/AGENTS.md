@@ -93,11 +93,17 @@ lib/
   runtime-rewrite.js     Pure transforms (#541) that DERIVE the bun-mode
                          variant of each canonical node template:
                          `bunifyProse` (npm->bun command forms in markdown),
-                         `bunifyDockerfile` (oven/bun base + bun install +
-                         bun healthcheck/CMD), `bunifyCompose` (bun
-                         healthcheck), `bunifyCi` (setup-bun + bun install +
-                         bun --bun run). No parallel bun template, so no
-                         drift. Tests: `test/runtime-rewrite/`.
+                         `bunifyDockerfile` (KEEPS the node:24-alpine base and
+                         copies in the Bun binary, since `webjs db migrate`
+                         shells `npx drizzle-kit` and a pure oven/bun image has
+                         no npx; bun install + `bun --bun run start` CMD so the
+                         SERVER serves on Bun), and `bunifyCi` (adds setup-bun
+                         next to setup-node, bun install, plain `bun run`). Only
+                         the dev/start SCRIPTS force `--bun`; the test/db/check
+                         tooling stays on Node (webjs test spawns `node --test`).
+                         No parallel bun template, so no drift. compose.yaml is
+                         not transformed (it inherits the Dockerfile CMD). Tests:
+                         `test/runtime-rewrite/`.
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
                          copy time. The AGENTS.md / CLAUDE.md /

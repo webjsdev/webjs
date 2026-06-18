@@ -6,18 +6,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi,
+  bunifyProse, bunifyDockerfile, bunifyCi,
 } from '../../lib/runtime-rewrite.js';
 
-test('bunifyProse: rewrites npm command invocations to bun', () => {
+test('bunifyProse: server scripts force --bun, tooling scripts stay on Node', () => {
+  // dev/start are the server (must be Bun) -> --bun.
   assert.equal(bunifyProse('npm run dev'), 'bun --bun run dev');
-  assert.equal(bunifyProse('npm run db:generate'), 'bun --bun run db:generate');
+  assert.equal(bunifyProse('npm run start'), 'bun --bun run start');
   assert.equal(bunifyProse('npm start'), 'bun --bun run start');
-  assert.equal(bunifyProse('npm test'), 'bun --bun run test');
+  // tooling (webjs test -> node --test, db -> npx drizzle-kit) stays on Node:
+  // plain `bun run`, NEVER --bun (which would spawn the invalid `bun --test`).
+  assert.equal(bunifyProse('npm run db:generate'), 'bun run db:generate');
+  assert.equal(bunifyProse('npm run test:server'), 'bun run test:server');
+  assert.equal(bunifyProse('npm test'), 'bun run test');
+  assert.equal(bunifyProse('npm run check'), 'bun run check');
+});
+
+test('bunifyProse: rewrites npm install / create / npx forms', () => {
   assert.equal(bunifyProse('npm ci'), 'bun install');
   assert.equal(bunifyProse('npm install'), 'bun install');
   assert.equal(bunifyProse('npm install dayjs'), 'bun add dayjs');
   assert.equal(bunifyProse('npm install -D axe-core'), 'bun add -d axe-core');
+  assert.equal(bunifyProse('npm i -D puppeteer-core'), 'bun add -d puppeteer-core');
   assert.equal(bunifyProse('npx playwright install'), 'bunx playwright install');
   assert.equal(bunifyProse('npm create webjs@latest my-app'), 'bun create webjs my-app');
   assert.equal(bunifyProse('npm create webjs my-app'), 'bun create webjs my-app');
@@ -35,10 +45,12 @@ test('bunifyProse: leaves bare "npm" registry references alone', () => {
   );
 });
 
-test('bunifyProse: fixes Dockerfile prose claims to match the bun Dockerfile', () => {
+test('bunifyProse: rewrites the CMD prose, keeps the node:24-alpine base claim', () => {
+  // The base stays node:24-alpine (+ a copied Bun binary), so that prose is NOT
+  // rewritten; only the CMD (which becomes `bun --bun run start`) is.
   assert.equal(
     bunifyProse('The Dockerfile pins `node:24-alpine` (the same Node major CI uses)'),
-    'The Dockerfile pins `oven/bun:1`',
+    'The Dockerfile pins `node:24-alpine` (the same Node major CI uses)',
   );
   assert.equal(
     bunifyProse('`CMD ["npm", "start"]` and `CMD ["webjs", "start"]`'),
@@ -57,7 +69,7 @@ test('bunifyProse: reframes the opt-in "Running on Bun" section as the default',
   assert.doesNotMatch(out, /to run under Bun, force it with/);
 });
 
-test('bunifyDockerfile: switches to the oven/bun base + bun install + bun start', () => {
+test('bunifyDockerfile: keeps node base, copies bun binary, bun install, bun start', () => {
   const node = [
     '# webjs serves .ts directly by stripping types at the runtime layer, so there is',
     '# something something. Do not lower the Node base below 24 (the floor the CI workflow',
@@ -70,6 +82,8 @@ test('bunifyDockerfile: switches to the oven/bun base + bun install + bun start'
     'RUN apk add --no-cache ca-certificates',
     '',
     'WORKDIR /app',
+    "# package-lock.json is optional (it's absent when the app was scaffolded with",
+    '# --no-install); the glob keeps the COPY working with or without it.',
     'COPY package.json package-lock.json* ./',
     'RUN npm install --no-audit --no-fund',
     'COPY . .',
@@ -80,23 +94,20 @@ test('bunifyDockerfile: switches to the oven/bun base + bun install + bun start'
     'CMD ["npm", "start"]',
   ].join('\n');
   const out = bunifyDockerfile(node);
-  assert.match(out, /FROM oven\/bun:1/);
-  assert.doesNotMatch(out, /FROM node:24-alpine/);
-  assert.doesNotMatch(out, /apk add/);
+  // Node base stays (the tooling needs npx/node); the Bun binary is copied in.
+  assert.match(out, /FROM node:24-alpine/);
+  assert.match(out, /COPY --from=oven\/bun:1-alpine \/usr\/local\/bin\/bun \/usr\/local\/bin\/bun/);
   assert.match(out, /COPY package\.json bun\.lock\* \.\//);
   assert.match(out, /RUN bun install/);
   assert.doesNotMatch(out, /npm install/);
-  assert.match(out, /CMD \["bun", "-e"/);
+  // Healthcheck stays on node (the base provides it).
+  assert.match(out, /CMD \["node", "-e"/);
+  // Server serves on Bun.
   assert.match(out, /CMD \["bun", "--bun", "run", "start"\]/);
   assert.doesNotMatch(out, /CMD \["npm", "start"\]/);
 });
 
-test('bunifyCompose: switches the healthcheck off node', () => {
-  const node = '      test: ["CMD", "node", "-e", "fetch(\'x\')"]';
-  assert.equal(bunifyCompose(node), '      test: ["CMD", "bun", "-e", "fetch(\'x\')"]');
-});
-
-test('bunifyCi: setup-bun + bun install + bun --bun run', () => {
+test('bunifyCi: keeps setup-node, adds setup-bun, bun install, plain bun run', () => {
   const node = [
     '      - uses: actions/setup-node@v6',
     '        with:',
@@ -109,20 +120,19 @@ test('bunifyCi: setup-bun + bun install + bun --bun run', () => {
     '      - run: npx playwright install --with-deps chromium',
   ].join('\n');
   const out = bunifyCi(node);
+  // Node is kept (webjs test/db tooling runs on it); Bun is added for install.
+  assert.match(out, /uses: actions\/setup-node@v6/);
   assert.match(out, /uses: oven-sh\/setup-bun@v2/);
   assert.match(out, /bun-version: latest/);
-  assert.doesNotMatch(out, /setup-node/);
   assert.doesNotMatch(out, /cache: npm/);
   assert.match(out, /- run: bun install/);
   assert.doesNotMatch(out, /npm ci/);
-  assert.match(out, /bun --bun run check/);
-  assert.match(out, /bun --bun run db:generate && bun --bun run db:migrate/);
+  // Plain `bun run` (NOT --bun): the scripts are Node tooling via the shebang.
+  assert.match(out, /- run: bun run check/);
+  assert.match(out, /bun run db:generate && bun run db:migrate/);
+  assert.doesNotMatch(out, /bun --bun run/);
   assert.match(out, /bun add --no-save puppeteer-core/);
   assert.match(out, /bunx playwright install/);
-});
-
-test('bunifyCi: the e2e Chromium-path step uses bun -e (not node -e)', () => {
-  const node = '      - run: echo "P=$(node -e "console.log(1)")" >> "$GITHUB_ENV"';
-  assert.match(bunifyCi(node), /bun -e /);
-  assert.doesNotMatch(bunifyCi(node), /node -e /);
+  // The `node -e` Chromium-path step stays (the Node base provides node).
+  assert.match(bunifyCi('        run: X=$(node -e "1") >> $E'), /node -e /);
 });

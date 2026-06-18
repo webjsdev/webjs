@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { bunifyProse, bunifyDockerfile, bunifyCi } from './runtime-rewrite.js';
 
 /**
  * Detect which package manager invoked us. Reads `npm_config_user_agent`,
@@ -532,9 +532,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // touches npm/npx command tokens, so the test code itself is unaffected.
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
   ]);
+  // compose.yaml needs NO bun transform: it builds from the (node-base + bun
+  // binary) Dockerfile and inherits its `bun --bun run start` CMD, and its
+  // healthcheck `node -e` works because the Node base provides node.
   const FILE_REWRITE = {
     'Dockerfile': bunifyDockerfile,
-    'compose.yaml': bunifyCompose,
     '.github/workflows/ci.yml': bunifyCi,
   };
   for (const f of templateFiles) {
