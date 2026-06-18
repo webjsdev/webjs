@@ -10,13 +10,15 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveBin } from '../../lib/resolve-bin.js';
 
-// The repo root has both tools installed (they are the framework's own
-// devDependencies), so resolution from here exercises the real packages whose
-// `exports` do NOT expose the bin subpath.
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+// Resolve each tool from a cwd that genuinely DECLARES it (not via hoist luck):
+// drizzle-kit is a devDependency of examples/blog; @web/test-runner is a root
+// devDependency. Both packages block their bin subpath + ./package.json in
+// `exports`, which is exactly what resolveBin works around.
+const blogDir = fileURLToPath(new URL('../../../../examples/blog/', import.meta.url));
 
 test('resolves drizzle-kit despite its exports blocking ./bin.cjs', () => {
-  const p = resolveBin(repoRoot, 'drizzle-kit', 'drizzle-kit');
+  const p = resolveBin(blogDir, 'drizzle-kit', 'drizzle-kit');
   assert.match(p, /drizzle-kit[/\\]bin\.cjs$/);
   assert.ok(existsSync(p), 'the resolved drizzle-kit bin exists on disk');
 });
