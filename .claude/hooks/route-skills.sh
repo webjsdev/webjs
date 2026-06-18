@@ -112,6 +112,22 @@ if has 'research (whether|if|into|on|the|to|question)' \
   add_match "webjs-research-record: the deliverable is a research/design/decision writeup with no code diff. Invoke the webjs-research-record skill. The record lives in a \`research\`-labeled issue (append to the existing backlog issue if there is one, else create one), writeup in the body + comments, then CLOSE it. NOT a file under agent-docs/, NOT a PR, NOT a comment on an unrelated PR. File the follow-up implementation via webjs-file-issue."
 fi
 
+# --- webjs-doc-sync: keep all doc surfaces in sync ----------------------
+# Triggers: sync the docs, update the docs/website/docs-site, doc gap or
+# drift, find missing docs, "did we update the docs", audit shipped work
+# for documentation. The skill carries the full surface map (AGENTS.md +
+# agent-docs, README, the docs site, the website, the scaffold per-agent
+# rule files) so a feature is never documented in only ONE place (the #488
+# gap: HTTP-verb actions landed in AGENTS.md but the docs site stayed
+# stale).
+if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
+   || has '(sync|update|refresh|fix).{0,24}(the )?(doc|docs|documentation|docs site|website)' \
+   || has '(missing|stale|outdated|out-of-date|out of date).{0,20}(doc|docs|documentation)' \
+   || has 'did (we|you|i) (update|sync).{0,20}(doc|docs)' \
+   || has '(audit|sweep|check).{0,40}(doc|docs|documentation)'; then
+  add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + agent-docs/, README, the docs site under docs/app/docs/, the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
+fi
+
 # Assemble the additional context. The standing rule is always present; the
 # per-skill routing block appears only when something matched.
 read -r -d '' standing <<'EOF' || true
