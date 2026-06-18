@@ -209,18 +209,30 @@ lit-html parity: `repeat` (keyed lists), `unsafeHTML(str)` (trusted raw HTML, **
 ## `WebComponent` essentials
 
 ```ts
-class MyThing extends WebComponent {
+// Recommended declare-free base-class factory style
+class MyThing extends WebComponent({
+  count: prop(Number, { reflect: true })
+}) {
   static shadow = false;     // default light DOM; true = scoped shadow DOM
   static lazy = false;       // true = load module on viewport entry
-  static properties = { count: { type: Number, reflect: true } };
-  declare count: number;     // TS only, typed accessor
   static styles = css`…`;
+
+  constructor() {
+    super();
+    this.count = 0;          // Fully typed, no declare!
+  }
+
   render() { return html`…`; }
 }
 MyThing.register('my-thing');
 ```
 
-**Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core`, read with `signal.get()` inside `render()`, and the built-in `SignalWatcher` re-renders on change. Module-scope signals share state across components and survive navigations; instance signals (constructor) are component-local. `static properties` is reserved for values that ride an HTML attribute, reflect to one, or arrive via `.prop=${value}` SSR hydration. **Typed props in TS use the `declare` pattern** (a `student: Student = {…}` class-field initializer overwrites the reactive accessor after `super()` and breaks reactivity; instead declare the runtime in `static properties`, the type via `declare student: Student`, and set defaults in the constructor, enforced by `reactive-props-use-declare`). Property options: `type` (default `String`), `reflect`, `state`, `hasChanged`, `converter`.
+**Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core`, read with `signal.get()` inside `render()`, and the built-in `SignalWatcher` re-renders on change. Module-scope signals share state across components and survive navigations; instance signals (constructor) are component-local.
+
+**Reactive properties ride HTML attributes, reflect to them, or arrive via SSR hydration.** webjs offers two patterns:
+1. **Base-Class Factory (Recommended):** Pass the property shape directly into `WebComponent({ ... })` (e.g. `count: Number` or `count: prop(Number, opts)`). The types flow dynamically to `this.<prop>` with no `declare` line needed. Set defaults in the constructor.
+2. **Static Properties Field:** Declare `static properties = { ... }`. In TS this requires `declare count: number` (no initializer) to prevent V8 class-field semantics from clobbering the reactive accessor. Set defaults in the constructor.
+Never use a class-field initializer (e.g., `count = 0`) for reactive properties, as it clobbers the accessor; this is enforced by `reactive-props-use-declare`. Property options: `type` (default `String`), `reflect`, `state`, `hasChanged`, `converter`.
 
 **Lifecycle (lit-aligned), in order:** `shouldUpdate`, `willUpdate`, controllers' `hostUpdate()`, `update` (calls `render()` + commits), controllers' `hostUpdated()`, `firstUpdated`, `updated`, `updateComplete`, each receiving a `changedProperties` Map. **SSR runs only the constructor, attribute application, the pre-render hooks (`willUpdate` / `hostUpdate`), `reflect: true` reflection, and `render()`; it does NOT call `connectedCallback`, `firstUpdated`, `updated`, or any browser-only hook.** So defaults for first paint go in the constructor; browser-only data (localStorage, viewport, `navigator.*`) goes in `connectedCallback` writing a signal; server-known data arrives via the page function. Never ship a placeholder first paint that fetches in `connectedCallback`. A browser-only global in the constructor/`render()` throws at SSR (flagged by `no-browser-globals-in-render`; attribute methods and `closest()` are shimmed).
 

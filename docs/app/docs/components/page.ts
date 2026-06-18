@@ -54,7 +54,41 @@ UserCard.register('user-card');</pre>
     <p>If you forget the hyphen, the browser throws at registration time with a clear error message.</p>
 
     <h2>Properties</h2>
-    <p>The <code>static properties</code> object declares which HTML attributes the component observes, along with their type for coercion. The browser's <code>observedAttributes</code> list is auto-derived from the property names, so you never write it by hand.</p>
+    <p>webjs offers two ways to declare reactive properties that ride HTML attributes:</p>
+
+    <h3>1. Base-Class Factory (Recommended, Declare-Free)</h3>
+    <p>By passing the property shape directly into the base class <code>WebComponent({ ... })</code>, the property types flow dynamically to TypeScript with no extra <code>declare</code> lines needed. Default values are set in the constructor:</p>
+
+    <pre>import { WebComponent, html } from '@webjsdev/core';
+
+class UserCard extends WebComponent({
+  name:     String,
+  age:      Number,
+  active:   Boolean,
+  config:   Object,
+  tags:     Array,
+}) {
+  constructor() {
+    super();
+    this.name = 'Anonymous';
+    this.age = 0;
+    this.active = false;
+    this.config = {};
+    this.tags = [];
+  }
+
+  render() {
+    return html\`
+      &lt;p&gt;\${this.name} (age \${this.age})&lt;/p&gt;
+      &lt;p&gt;Active: \${this.active ? 'yes' : 'no'}&lt;/p&gt;
+      &lt;p&gt;Tags: \${this.tags.join(', ')}&lt;/p&gt;
+    \`;
+  }
+}
+UserCard.register('user-card');</pre>
+
+    <h3>2. Static Properties Field</h3>
+    <p>Alternatively, you can declare properties using a <code>static properties</code> field. In TypeScript, this requires using the <code>declare</code> pattern to prevent class-field initializers from clobbering the reactive accessors:</p>
 
     <pre>class UserCard extends WebComponent {
 
