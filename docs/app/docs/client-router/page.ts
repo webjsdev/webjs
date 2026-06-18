@@ -37,6 +37,36 @@ export default function ClientRouter() {
       <li>Non-HTML extensions on the <code>action</code> URL</li>
     </ul>
 
+    <h3>Submission state (<code>webjs:submit-start</code> / <code>webjs:submit-end</code> + <code>aria-busy</code>)</h3>
+    <p>When a <code>&lt;form&gt;</code> submits through the JS-enhanced router, the form gets a submission lifecycle a component can read to disable the submit button, show a spinner, or set a pending style.</p>
+    <ul>
+      <li>The router sets the native <code>aria-busy="true"</code> on the form for the in-flight duration (cleared on settle). This IS the readable "is this form submitting" primitive. Any component can poll <code>form.getAttribute('aria-busy')</code> or style <code>form[aria-busy="true"]</code> in CSS.</li>
+      <li>It dispatches a bubbling <code>webjs:submit-start</code> (detail <code>{ form, url }</code>) when the submission fetch starts, and <code>webjs:submit-end</code> (detail <code>{ form, url, ok }</code>, where <code>ok</code> is whether the submission settled as a success) on EVERY settle (a success, a 4xx/5xx validation re-render, a navigation error, or an abort by a superseding submit). The pair is balanced even under a rapid re-submit (a nav-token guard keeps a superseded submit's teardown from clearing the busy state a newer submit set, the same guard <code>&lt;webjs-frame&gt;</code> uses).</li>
+    </ul>
+    <pre>// A submit button that disables itself while its form is submitting.
+form.addEventListener('webjs:submit-start', () =&gt; { button.disabled = true; });
+form.addEventListener('webjs:submit-end', (e) =&gt; {
+  button.disabled = false;            // e.detail = { form, url, ok }
+});
+/* or purely in CSS, no JS: */
+/* form[aria-busy="true"] button[type="submit"] { opacity: .5; pointer-events: none; } */</pre>
+    <p>Progressive enhancement is unaffected. With JS off the form is a normal POST. The events and <code>aria-busy</code> are a client-only enhancement.</p>
+
+    <h3>Optimistic mutations (<code>optimistic()</code>)</h3>
+    <p><code>optimistic(signal, value, action)</code> from <code>@webjsdev/core</code> shows a mutation's expected result IMMEDIATELY (the UI feels instant), runs the real server action, and ROLLS BACK on failure. It is a thin wrapper over the signal primitive, no state machine.</p>
+    <pre>import { signal, optimistic } from '@webjsdev/core';
+import { likePost } from '../actions/like-post.server.js';
+
+const liked = signal(false);
+// in an @click handler:
+const result = await optimistic(liked, true, () =&gt; likePost(postId));
+// `liked` flips to true instantly. If likePost THROWS or returns
+// { success: false }, `liked` rolls back to its prior value; the throw
+// re-throws and the { success: false } result is returned (read its
+// error / fieldErrors). On success the optimistic value stays; reconcile
+// to the authoritative value from `result` if you need it.</pre>
+    <p>It rolls back on a thrown error OR an <code>ActionResult</code> <code>{ success: false }</code> envelope, and never on success. It is client-only (it mutates a signal), so a component importing it is never elided as display-only.</p>
+
     <h2>Non-2xx HTML responses render in place</h2>
     <p>Any response with a <code>text/html</code> body is applied to the DOM regardless of status code. This makes the standard server-rendered validation pattern work end-to-end:</p>
     <ul>
@@ -125,6 +155,25 @@ export async function POST(req, { params }) {
 import { connectWS, renderStream } from '@webjsdev/core';
 connectWS('/posts/' + id + '/feed', { onMessage: (m) =&gt; renderStream(m) });</pre>
     <p><code>stream.*</code> escapes the target id but NOT the content (server-authored HTML, like an <code>html</code> hole, so escape any user substring yourself). <code>renderStream</code> and the <code>&lt;webjs-stream&gt;</code> element are auto-registered by the client router.</p>
+
+    <h2>View Transitions (opt-in, all three swap paths)</h2>
+    <p>The router can wrap a client navigation's DOM mutation in the native <a href="https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API">View Transitions API</a> (<code>document.startViewTransition</code>), so a same-shell partial swap cross-fades (or runs your <code>::view-transition-*</code> CSS) instead of snapping. It is OFF by default and purely OPT-IN, so an unconfigured app behaves exactly as before (no animation surprise, no regression in a browser without the API). Opt in by adding a meta to the page head, mirroring Turbo's <code>&lt;meta name="view-transition"&gt;</code> convention:</p>
+    <pre>&lt;!-- in the root layout's &lt;head&gt;, or any page's head --&gt;
+&lt;meta name="view-transition" content="same-origin"&gt;</pre>
+    <p>The accepted opt-in value is <code>same-origin</code> (every client-router swap is same-origin by construction, so it reads as "animate these in-app navigations"); any other value, or the meta being absent, keeps transitions off. The meta is re-read PER navigation, so a page can turn transitions on or off as the user moves through the app (the head merge brings in the new page's head).</p>
+    <p>When enabled and supported, the transition wraps ALL THREE swap paths, the deepest-marker layout swap, the <code>&lt;webjs-frame&gt;</code> swap, AND the full-body fallback, not just the full-body case (the inverse of what an author expects, since the marker and frame swaps are the common designed-for paths). The transition wraps the DOM MUTATION ONLY, never the fetch (which already happened); the browser captures the before/after around the synchronous swap. When <code>startViewTransition</code> is unavailable (Firefox / older Safari), the swap runs synchronously, byte-identical to the no-transition path, with no flash and no throw.</p>
+
+    <h3>Persisting elements across a swap (<code>data-webjs-permanent</code>)</h3>
+    <p>An element marked <code>data-webjs-permanent</code> (it MUST also carry an <code>id</code>) survives a navigation as the SAME live DOM node, by node identity, so a playing <code>&lt;audio&gt;</code> / <code>&lt;video&gt;</code>, a live widget, an open menu, or any element with accumulated JS state keeps running across the swap instead of being destroyed and re-created from the incoming HTML. Mirrors Turbo's permanent-element behaviour.</p>
+    <pre>&lt;audio id="player" data-webjs-permanent controls src="/track.mp3"&gt;&lt;/audio&gt;</pre>
+    <p>Mechanism: before the destructive swap, for each <code>[data-webjs-permanent][id]</code> in the CURRENT DOM the router looks for a matching <code>#id</code> in the INCOMING document; when BOTH exist, the LIVE node is moved into the incoming tree's position (replacing the incoming placeholder), so the swap adopts the live node rather than recreating it. It works for the full-body path AND the in-region (marker / frame) paths, and is a STRONGER guarantee than the keyed reconciler (which preserves identity for matched keyed children): a permanent node keeps EXACT identity even where the reconciler would otherwise recreate it. Rules:</p>
+    <ul>
+      <li>The element must have an <code>id</code> (the match key) and the attribute on BOTH the current and incoming render of the page.</li>
+      <li>An id present in the current but ABSENT from the incoming doc is NOT force-persisted (it is being removed; the swap removes it as usual).</li>
+      <li>Only a CURRENT node actually carrying <code>data-webjs-permanent</code> is moved (an incoming <code>#id</code> that resolves to a non-permanent current element is left untouched).</li>
+      <li>The node is placed exactly where the incoming document puts it, so it never escapes a frame / region boundary.</li>
+    </ul>
+    <p>Progressive enhancement: with JS off, <code>data-webjs-permanent</code> is an inert attribute and the navigation is a normal full-page load.</p>
 
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
