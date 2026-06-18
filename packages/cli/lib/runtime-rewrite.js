@@ -32,6 +32,11 @@
  */
 export function bunifyProse(s) {
   return s
+    // Prose claims about the Dockerfile base + CMD (AGENTS.md "Containerized
+    // deploy" / the dev-start parity section), which the bun Dockerfile transform
+    // changes. Fixed here so the generated bun app's docs match its Dockerfile.
+    .replaceAll('pins `node:24-alpine` (the same Node major CI uses)', 'pins `oven/bun:1`')
+    .replaceAll('`CMD ["npm", "start"]`', '`CMD ["bun", "--bun", "run", "start"]`')
     // Invocation styles first, so "npm create webjs@latest" does not get
     // mangled by the generic "npm <x>" rules below.
     .replaceAll('npm create webjs@latest', 'bun create webjs')
