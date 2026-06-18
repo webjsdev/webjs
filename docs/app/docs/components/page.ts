@@ -59,29 +59,21 @@ UserCard.register('user-card');</pre>
     <pre>class UserCard extends WebComponent {
 
   static properties = {
-    name:     { type: String },
-    age:      { type: Number },
-    active:   { type: Boolean },
-    config:   { type: Object },
-    tags:     { type: Array },
+    name:     { type: String,  default: 'Anonymous' },
+    age:      { type: Number,  default: 0 },
+    active:   { type: Boolean, default: false },
+    config:   { type: Object,  default: () =&gt; ({}) },   // function default → fresh per instance
+    tags:     { type: Array,   default: () =&gt; [] },
   };
   // Compile-time types only. Never use class-field initializers for
-  // reactive props. They would clobber the framework's accessor under
-  // modern class-field semantics. Set defaults in the constructor.
+  // reactive props (\`name = 'x'\`). They would clobber the framework's
+  // accessor under modern class-field semantics. The \`declare\` line types
+  // the accessor; the \`default\` option above seeds the initial value.
   declare name: string;
   declare age: number;
   declare active: boolean;
   declare config: Record&lt;string, unknown&gt;;
   declare tags: string[];
-
-  constructor() {
-    super();
-    this.name = 'Anonymous';
-    this.age = 0;
-    this.active = false;
-    this.config = {};
-    this.tags = [];
-  }
 
   render() {
     return html\`
@@ -92,6 +84,8 @@ UserCard.register('user-card');</pre>
   }
 }
 UserCard.register('user-card');</pre>
+
+    <p>The <code>default</code> option carries a property's initial value, so the common case needs no constructor at all. A <strong>function</strong> default is called once per instance, so an object or array default is a fresh value rather than one shared across every element. An applied attribute overrides the default. Reach for a <code>constructor()</code> default only when the value must be computed from other constructor state.</p>
 
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, webjs coerces the string value to the declared type:</p>

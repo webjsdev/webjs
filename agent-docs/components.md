@@ -9,10 +9,29 @@
 | `state` | `boolean` | `false` | Internal-only. No attribute, not in `observedAttributes` |
 | `hasChanged` | `(newVal, oldVal) => boolean` | strict `!==` | Custom change detection |
 | `converter` | `{ fromAttribute?, toAttribute? }` | type-based | Custom attribute ↔ property serialization |
+| `default` | `T \| (() => T)` | none | Declarative initial value, so the common case needs no constructor |
 
 Built-in constructors (`String`, `Number`, `Boolean`, `Array`, `Object`) feed
 the default attribute coercion. For anything the default can't parse correctly
 (Date, Map, Set, discriminated unions) supply a custom `converter`.
+
+The `default` option carries a property's initial value declaratively:
+
+```ts
+static properties = {
+  count: { type: Number, default: 0 },
+  items: { type: Array, default: () => [] },   // function default → fresh per instance
+};
+declare count: number;
+declare items: string[];
+```
+
+A function `default` is **called** to produce the value, so an object /
+array default is a separate instance per element (no shared reference);
+to default a property to a function value, wrap it as `default: () =>
+theFn`. An applied attribute (it runs after construction) overrides the
+default. Set the default in the `constructor()` instead only when it must
+be computed from other constructor state.
 
 ## Why `declare` is required in TypeScript
 
@@ -26,6 +45,16 @@ no `hasChanged`, no reflect, and reactivity silently breaks.
 The `.d.ts` overlay shipped with the framework makes every other class
 member fully typed, so only the reactive properties need the `declare`
 line, and only in TypeScript files.
+
+The `declare` line is irreducible: TypeScript has no decorator-free way
+to add a typed instance member from the static runtime `properties`
+value, and decorators (`@property()`) are banned because they are
+non-erasable and webjs strips types with no build step. What the
+`default` option removes is the *constructor*, bringing the common case
+to two lines (`static properties` + `declare`). See the
+"@property() decorator" entry in `lit-muscle-memory-gotchas.md` for the
+full divergence rationale (including why the `accessor` keyword and a
+`prop()` helper do not work either).
 
 ## Lifecycle hooks (lit-aligned)
 

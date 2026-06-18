@@ -288,7 +288,15 @@ class StudentCard extends WebComponent {
   student: Student = { name: '', email: '' };
 }
 
-// right
+// right (declarative default, no constructor needed)
+class StudentCard extends WebComponent {
+  static properties = {
+    student: { type: Object, default: () => ({ name: '', email: '' }) },
+  };
+  declare student: Student;
+}
+
+// also right (constructor default, when the default depends on other state)
 class StudentCard extends WebComponent {
   static properties = { student: { type: Object } };
   declare student: Student;
@@ -299,17 +307,53 @@ class StudentCard extends WebComponent {
 }
 ```
 
-`webjs check` flags this via the `reactive-props-use-declare` rule, but
-AI agents emit the broken form on autopilot. The convention check is
-the safety net, not the primary defense. Authoring code should use
-`declare` plus constructor defaults from the start.
+`webjs check` flags the broken form via the `reactive-props-use-declare`
+rule, but AI agents emit it on autopilot. The convention check is the
+safety net, not the primary defense. Authoring code should use `declare`
+plus a default from the start.
 
-### 6. The `@property()` decorator
+Use the `default` option for the default value whenever it does not
+depend on other instance state. A function `default` is invoked per
+instance, so an object / array default is a fresh value (no shared
+reference across elements), exactly the trap a `student = {…}` field
+would also create if it worked. Use a constructor default only when the
+value must be computed from other constructor state. Either way, the
+`declare` line stays (it is the only decorator-free way to type the
+accessor; see the next entry).
 
-Banned by framework invariant 10 (erasable TS). The replacement is
-`static properties = { ... }` plus a matching `declare` for the typed
-accessor, as shown above. Decorators are non-erasable, so they would
-force the framework to depend on a build step.
+### 6. The `@property()` decorator (the deliberate Lit divergence)
+
+Lit's one-liner `@property() name = 'x'` is **deliberately unavailable**
+in webjs, and the `static properties` + `declare` (+ `default`) pattern
+is the intended replacement, not a stopgap. The reasoning, since this is
+exactly the muscle-memory trap this file exists for:
+
+- **Decorators are non-erasable, and webjs strips types with no build
+  step** (invariant 10). Types are erased by Node 24+'s
+  `module.stripTypeScriptTypes` or amaro on Bun, both of which only
+  remove *type* syntax. A decorator emits runtime calls, so it is not
+  erased; supporting `@property()` would force a tsc / Babel build step,
+  which is the one thing webjs does not have.
+- **The TC39 `accessor` keyword does not rescue it.** `accessor name =
+  'x'` is tempting because auto-accessors are not legacy decorators, but
+  (1) it is a *runtime* syntax error on the engines webjs targets (V8 in
+  Node, JSC in Bun) when written without the decorators proposal, and
+  the stripper leaves it intact because it is not a type, so it crashes
+  at load with no build step; and (2) even where it parses, a bare
+  `accessor` does not register the property as reactive without a
+  decorator, which is the part that is banned.
+- **A `prop()` field helper cannot work either.** `name = prop('x')` is
+  a class-field initializer, so it is clobbered after `super()` by the
+  same class-field semantics that break `name = 'x'` (entry 5); it would
+  store the helper's return value as a plain field, not a reactive
+  accessor, and there is no decorator-free hook to convert it back at the
+  right time.
+- **So the `declare` line is irreducible.** TypeScript has no
+  decorator-free way to add a typed instance member from a static runtime
+  value, so the type must be stated once via `declare name: string`. What
+  webjs *can* remove is the constructor: the `default` option (entry 5)
+  carries the initial value declaratively, bringing the common case to
+  two lines (`static properties` + `declare`).
 
 ## Patterns that produce different visual output
 
@@ -463,8 +507,8 @@ must move with it, use `repeat()` with a stable key.
 | `Task` for client-time async | `Task` (no change, that's its job) |
 | `window.X` or `document.X` in constructor or `render()` | Move to `connectedCallback` |
 | Top-level `import` of browser-only library | Dynamic `import()` inside `connectedCallback` |
-| `student: Student = { ... }` field initializer | `declare student: Student` plus constructor default |
-| `@property()` decorator | `static properties = { ... }` plus `declare` |
+| `student: Student = { ... }` field initializer | `declare student: Student` plus a `default` option (or constructor default) |
+| `@property() name = 'x'` decorator one-liner | `static properties = { name: { default: 'x' } }` plus `declare name: string` (decorators are non-erasable, no build step) |
 | `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
 | Plain `.map()` for an interactive/stateful list | Works (reconciles in place, keeps node identity); use `repeat(items, key, t)` only when the list **reorders** |
 | `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |
