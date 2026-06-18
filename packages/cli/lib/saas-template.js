@@ -185,8 +185,8 @@ export async function writeSaasFiles(appDir, opts = {}) {
   //   clear message instead of crashing. After DB setup it runs for real.
   await mkdir(join(appDir, 'test', 'auth'), { recursive: true });
   // The generated comments reference `npm run db:*` setup; bun-ify them so a
-  // bun-flavored saas app reads `bun --bun run db:*` (#541). The transform is a
-  // no-op on Node.
+  // bun-flavored saas app reads `bun run db:*` (#541; db is Node tooling, so a
+  // plain `bun run`, not the --bun server form). The transform is a no-op on Node.
   const authTest = [
     "import { test } from 'node:test';",
     "import assert from 'node:assert/strict';",
