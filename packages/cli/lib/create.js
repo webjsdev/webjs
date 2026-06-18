@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
 
 /**
  * Detect which package manager invoked us. Reads `npm_config_user_agent`,
@@ -259,6 +260,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   if (!VALID_DIALECTS.includes(dialect)) {
     throw new Error(`Unknown --db '${dialect}'. Only ${VALID_DIALECTS.join(' / ')} are supported.`);
   }
+
+  // Runtime axis (#541), ORTHOGONAL to --template (the exactly-3-templates
+  // invariant is untouched). Default node; bun opt-in via `--runtime bun` OR
+  // auto-detected when the scaffold is invoked through bun (`bun create webjs`),
+  // with the explicit flag winning over detection. A bun-flavored app SERVES on
+  // Bun (its dev/start scripts force `--bun`), commits `bun.lock`, sets
+  // `trustedDependencies`, and ships a bun Dockerfile / CI / agent docs.
+  const runtime = opts.runtime || (detectPackageManager() === 'bun' ? 'bun' : 'node');
+  const VALID_RUNTIMES = ['node', 'bun'];
+  if (!VALID_RUNTIMES.includes(runtime)) {
+    throw new Error(`Unknown --runtime '${runtime}'. Only ${VALID_RUNTIMES.join(' / ')} are supported.`);
+  }
+  const isBun = runtime === 'bun';
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -303,8 +317,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
       // so `npm run start` (a thin alias) behaves identically. Drizzle has no
       // codegen, so there is no dev `before` step.
-      dev: 'webjs dev',
-      start: 'webjs start',
+      //
+      // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
+      // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
+      // the `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
+      // would exec webjs under Node, silently running the "bun" app on Node).
+      // Baking it into the script body means a plain `bun run dev` (or even
+      // `npm run dev`) starts on Bun, so a user never has to remember the flag.
+      // The runtime-neutral tooling scripts below (test / db / check / typecheck
+      // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
+      // drizzle-kit, tsc) and forcing `--bun` there buys nothing (and `webjs
+      // test` shells `node --test`, which a `bun --test` would not be).
+      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
+      start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
@@ -371,6 +396,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
       start: { before: ['webjs db migrate'] },
     },
+    // Bun runtime (#541): Bun does NOT run a dependency's postinstall by default
+    // (a security default); a package must be listed here for its install script
+    // to run on `bun install`. The sqlite driver `better-sqlite3` fetches its
+    // native prebuild in a postinstall, so without this the native binding is
+    // missing and the app crashes at first DB access. Postgres `pg` is pure JS
+    // (no postinstall), so the list is sqlite-only. Omitted entirely on Node
+    // (npm runs postinstalls), keeping the node-mode package.json byte-identical.
+    ...(isBun && dialect !== 'postgres' ? { trustedDependencies: ['better-sqlite3'] } : {}),
   }, null, 2) + '\n');
 
   await writeFile(join(appDir, 'tsconfig.json'), JSON.stringify({
@@ -484,12 +517,31 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'compose.yaml',
     '.dockerignore',
   ];
+  // Bun runtime (#541): the agent-config markdown shows bun commands, and the
+  // deploy files (Dockerfile / compose / CI) run on Bun. Each is DERIVED from
+  // the canonical node template by a pure transform (see runtime-rewrite.js), so
+  // there is no parallel bun template to drift. Prose files get the command
+  // rewrites; the three infra files get their file-specific transform. On Node,
+  // every file is copied byte-identical (the map is empty).
+  const PROSE_REWRITE = new Set([
+    'AGENTS.md', 'CONVENTIONS.md', '.cursorrules',
+    '.agents/rules/workflow.md', '.github/copilot-instructions.md',
+  ]);
+  const FILE_REWRITE = {
+    'Dockerfile': bunifyDockerfile,
+    'compose.yaml': bunifyCompose,
+    '.github/workflows/ci.yml': bunifyCi,
+  };
   for (const f of templateFiles) {
     const src = join(TEMPLATES, f);
     if (existsSync(src)) {
       await mkdir(dirname(join(appDir, f)), { recursive: true });
       let content = await readFile(src, 'utf8');
       content = content.replace(/\{\{APP_NAME\}\}/g, name);
+      if (isBun) {
+        if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
+        else if (FILE_REWRITE[f]) content = FILE_REWRITE[f](content);
+      }
       await writeFile(join(appDir, f), content);
     }
   }
@@ -1173,7 +1225,7 @@ ThemeToggle.register('theme-toggle');
   // --- SaaS template extras: auth, dashboard, drizzle User model ---
   if (isSaas) {
     const { writeSaasFiles } = await import('./saas-template.js');
-    await writeSaasFiles(appDir);
+    await writeSaasFiles(appDir, { runtime });
   }
 
   // AGENTS.md is already in place via the shared `templateFiles` loop
@@ -1264,7 +1316,10 @@ For AI agents, read this before editing scaffolded files:
   // pnpm / yarn / bun users get their own. Pass `--no-install` (or
   // `{ install: false }` to scaffoldApp) to opt out, e.g. for CI tests
   // that exercise the scaffold without paying the install cost.
-  const pm = detectPackageManager();
+  // In bun mode, install with bun regardless of the invoking PM, so the app
+  // commits `bun.lock` (text JSONC, git-diffable) instead of `package-lock.json`
+  // (#541). Otherwise honour the invoking PM (npm / pnpm / yarn / bun).
+  const pm = isBun ? 'bun' : detectPackageManager();
   let installed = false;
   if (shouldInstall) {
     console.log(`Running '${pm} install' in ${name}/ ...\n`);

@@ -4,6 +4,7 @@
  */
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { bunifyProse } from './runtime-rewrite.js';
 import { existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,8 +43,10 @@ async function copyUiComponents(appDir, names) {
 
 /**
  * @param {string} appDir
+ * @param {{ runtime?: 'node'|'bun' }} [opts]
  */
-export async function writeSaasFiles(appDir) {
+export async function writeSaasFiles(appDir, opts = {}) {
+  const isBun = opts.runtime === 'bun';
   // SaaS pages use auth forms, so copy the extra ui-* components on top of
   // the standard set the full-stack scaffold already wrote. Pre-importing
   // them in login/signup/dashboard pages below means the dev server will
@@ -181,7 +184,10 @@ export async function writeSaasFiles(appDir) {
   //   Until the users table exists those flows error, so the suite skips with a
   //   clear message instead of crashing. After DB setup it runs for real.
   await mkdir(join(appDir, 'test', 'auth'), { recursive: true });
-  await writeFile(join(appDir, 'test', 'auth', 'auth.test.ts'), [
+  // The generated comments reference `npm run db:*` setup; bun-ify them so a
+  // bun-flavored saas app reads `bun --bun run db:*` (#541). The transform is a
+  // no-op on Node.
+  const authTest = [
     "import { test } from 'node:test';",
     "import assert from 'node:assert/strict';",
     "import { fileURLToPath } from 'node:url';",
@@ -260,7 +266,11 @@ export async function writeSaasFiles(appDir) {
     "  assert.match(body, /Dashboard/, 'the dashboard content rendered');",
     "});",
     "",
-  ].join('\n'));
+  ].join('\n');
+  await writeFile(
+    join(appDir, 'test', 'auth', 'auth.test.ts'),
+    isBun ? bunifyProse(authTest) : authTest,
+  );
 
   // app/api/auth/[...path]/route.ts
   await mkdir(join(appDir, 'app', 'api', 'auth', '[...path]'), { recursive: true });

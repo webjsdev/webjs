@@ -40,6 +40,9 @@ Templates:
   saas                  auth + login/signup + protected dashboard + Drizzle User model
 
 Options:
+  --runtime node|bun    target runtime (default node). bun emits a Bun-flavored app
+                        (bun.lock, bun Dockerfile/CI, bun docs). Auto-detected as bun
+                        when invoked via \`bun create webjs\`.
   --no-install          skip running the package manager's install in the new directory
   -h, --help            show this help`;
 
@@ -63,6 +66,16 @@ if (!TEMPLATES.includes(template)) {
   process.exit(1);
 }
 
+// --runtime node|bun (#541), orthogonal to --template. Omitted -> scaffoldApp
+// auto-detects bun from the invoking PM, so `bun create webjs my-app` implies
+// bun mode with no flag.
+const runtime = flagValue('--runtime');
+if (runtime && !['node', 'bun'].includes(runtime)) {
+  console.error(`Error: unknown runtime '${runtime}'. Only node / bun are supported.\n`);
+  console.error(usage);
+  process.exit(1);
+}
+
 const noInstall = args.includes('--no-install');
 
-await scaffoldApp(name, process.cwd(), { template, install: !noInstall });
+await scaffoldApp(name, process.cwd(), { template, runtime, install: !noInstall });
