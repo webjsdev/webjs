@@ -104,6 +104,18 @@ test('declarative `default` prop value is baked into the SSR first paint (#531)'
   assert.match(out, /count=7 items=a,b/);
 });
 
+test('a `reflect: true` default reflects to the attribute in the SSR markup (#531)', async () => {
+  class ReflectDefault extends WebComponent {
+    static properties = { mode: { type: String, reflect: true, default: 'dark' } };
+    render() {
+      return html`<p>${this.mode}</p>`;
+    }
+  }
+  ReflectDefault.register('ssr-reflect-default');
+  const out = await renderToString(html`<ssr-reflect-default></ssr-reflect-default>`);
+  assert.match(out, /mode="dark"/);
+});
+
 test('async component render is awaited', async () => {
   class AsyncGreet extends WebComponent {
     static shadow = true;
