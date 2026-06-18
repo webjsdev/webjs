@@ -66,21 +66,23 @@ test('bun scaffold: Dockerfile / compose / CI run on Bun', async () => {
     await scaffoldApp('bunapp', cwd, { template: 'full-stack', runtime: 'bun' });
     const appDir = join(cwd, 'bunapp');
 
-    // Node base + copied Bun binary: tooling (npx/drizzle-kit) has node, the
-    // server serves on Bun. A pure oven/bun base would break `webjs db migrate`
-    // (no npx), so it is deliberately NOT used.
+    // Pure oven/bun base (#595): safe now that cli@0.10.20 (#570) makes webjs db
+    // migrate npx-free, so no Node base / bun-binary copy / apk line.
     const dockerfile = read(appDir, 'Dockerfile');
-    assert.match(dockerfile, /FROM node:24-alpine/);
-    assert.match(dockerfile, /COPY --from=oven\/bun:1-alpine \/usr\/local\/bin\/bun/);
+    assert.match(dockerfile, /FROM oven\/bun:1/);
+    assert.doesNotMatch(dockerfile, /FROM node:24-alpine/);
+    assert.doesNotMatch(dockerfile, /COPY --from=oven\/bun/);
+    assert.doesNotMatch(dockerfile, /apk add/);
     assert.match(dockerfile, /RUN bun install/);
     assert.match(dockerfile, /COPY package\.json bun\.lock\* \.\//);
     assert.match(dockerfile, /CMD \["bun", "--bun", "run", "start"\]/);
+    assert.match(dockerfile, /CMD \["bun", "-e"/); // healthcheck off node
     assert.doesNotMatch(dockerfile, /CMD \["npm", "start"\]/);
 
-    // compose builds from that Dockerfile and inherits the bun CMD; it is not
-    // transformed (its healthcheck node -e works because the base provides node).
+    // compose builds from that Dockerfile + inherits the bun CMD; its healthcheck
+    // is switched off node (the pure Bun image has none).
     const compose = read(appDir, 'compose.yaml');
-    assert.match(compose, /test: \["CMD", "node", "-e"/);
+    assert.match(compose, /test: \["CMD", "bun", "-e"/);
 
     const ci = read(appDir, '.github/workflows/ci.yml');
     assert.match(ci, /oven-sh\/setup-bun@v2/);
@@ -130,7 +132,7 @@ test('bun scaffold works across all three templates', async () => {
       const p = pkg(appDir);
       assert.equal(p.scripts.dev, 'bun --bun webjs dev', `${template}: dev script`);
       const df = read(appDir, 'Dockerfile');
-      assert.match(df, /COPY --from=oven\/bun:1-alpine/, `${template}: bun binary copied`);
+      assert.match(df, /FROM oven\/bun:1/, `${template}: pure oven/bun base`);
       assert.match(df, /CMD \["bun", "--bun", "run", "start"\]/, `${template}: serves on bun`);
       // saas generates an auth test whose setup comments are bun-ified.
       if (template === 'saas') {
