@@ -50,8 +50,10 @@ const USAGE = `webjs commands:
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--no-install]  Scaffold a new webjs app
-                                                  (only 3 templates exist. default: full-stack, Drizzle, --db sqlite)
+  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
+                                                  (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
+                                                  --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
+                                                  also auto-detected when run via "bun create webjs".
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
@@ -522,8 +524,16 @@ Full docs: https://docs.webjs.com`);
       const noInstall = rest.includes('--no-install');
       // --db picks the database dialect: sqlite (default) or postgres.
       const db = flag(rest, '--db', 'sqlite');
+      // --runtime picks the target runtime: node (default) or bun. Orthogonal
+      // to --template (#541). When omitted, scaffoldApp auto-detects bun from
+      // the invoking PM (so `bun create webjs` implies bun).
+      const runtime = flag(rest, '--runtime');
+      if (runtime && !['node', 'bun'].includes(runtime)) {
+        console.error(`Error: unknown --runtime '${runtime}'. Only node / bun are supported.`);
+        process.exit(1);
+      }
       const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template, db, install: !noInstall });
+      await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
       break;
     }
     case 'vendor': {

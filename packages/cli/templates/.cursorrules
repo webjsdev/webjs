@@ -7,10 +7,10 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
 
 ## Persistence + scaffold rules (non-negotiable)
 
-- **Use Prisma + SQLite for data, never JSON files.** It's already wired up
-  (`prisma/schema.prisma`, `lib/prisma.server.ts`, `npm run db:migrate`). For ANY
+- **Use Drizzle + SQLite for data, never JSON files.** It's already wired up
+  (`db/schema.server.ts`, `db/connection.server.ts`, `npm run db:generate` + `npm run db:migrate`). For ANY
   data the app stores (todos, posts, messages, products, comments…),
-  define a Prisma model. NEVER create `data/*.json`, `db.json`, or any
+  define a Drizzle table. NEVER create `data/*.json`, `db.json`, or any
   JSON file as a fake database. NEVER use module-scope arrays / Maps as
   a substitute. NEVER use localStorage for app data. These are project conventions in CONVENTIONS.md (a JSON file used as a
   database resets on reload and cannot scale).
@@ -107,7 +107,7 @@ self-review loop.
 - Shadow-DOM components opt in with `static shadow = true` and use `static styles = css` for scoped CSS, not inline styles. That is the right home for scoped CSS.
 - One function per server action file (*.server.ts)
 - Components must call customElements.define('tag', Class)
-- Server-only code (@prisma/client, node:*, anything that needs Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap the access in a .server.{js,ts} file; the framework rewrites that import into an RPC stub for the browser. lib/ holds both server-only infra (lib/prisma.server.ts) and browser-safe utilities (lib/utils/cn.ts with cn); follow the same rule per file: if a lib/ file needs Node APIs, only import it from server-only files.
+- Server-only code (the DB driver `better-sqlite3` / `pg`, node:*, anything that needs Node APIs) goes only in .server.{js,ts} files, route.ts handlers, or middleware.ts. Never in pages, layouts, or components. Wrap the access in a .server.{js,ts} file; the framework rewrites that import into an RPC stub for the browser. The DB lives in db/*.server.ts (db/connection.server.ts); lib/ holds other server-only infra and browser-safe utilities (lib/utils/cn.ts with cn); follow the same rule per file: if a lib/ file needs Node APIs, only import it from server-only files.
 - Directives are deliberately minimal: only `unsafeHTML`, `live`, and `repeat` ship. Lit's `classMap` / `styleMap` / `ref` / `when` / `choose` / `guard` are NOT exported. Use plain template-literal expressions (`class=${cond ? 'a' : 'b'}`, `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in `firstUpdated`) instead.
 - **Progressive enhancement is the default.** Pages AND every web component are SSR'd to real HTML. Write components so the first paint is the right content. Read SSR-meaningful defaults in `constructor()`. `connectedCallback` is never called on the server, so anything there only runs after hydration. Initial data for components comes from the page function (server-side fetch plus pass as attribute/property) OR from an `async render()` in the component itself (`const u = await getUser(this.uid)`, which SSR awaits so the data is in the first paint), NOT from `fetch` calls in `connectedCallback`. Prefer the co-located `async render()` over prop-drilling; `renderFallback()` is the optional re-fetch loading state (never first paint), and a `Task` is for genuinely client-only data. For write-paths, prefer `<form action=...>` plus server action over `fetch` plus click handler. The framework upgrades plain forms to partial-swap submissions automatically.
 - **Client navigation is auto-magic.** Real `<a href>` and `<form action>` get partial-swap behavior with no opt-in. Because layouts persist across navigation, put shared chrome (sidenav, header) in `layout.ts` and page-specific content in `page.ts`. For validation errors, return 4xx HTML from a `route.ts` POST handler; the router renders it in place preserving the user's input. For non-layout swap regions, wrap in `<webjs-frame id="...">`. See "Client navigation patterns" in AGENTS.md.

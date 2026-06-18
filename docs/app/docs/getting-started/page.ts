@@ -42,6 +42,16 @@ webjs create my-app --template saas</pre>
 
     <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Drizzle User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>db/connection.server.ts</code>, <code>lib/{auth,password}.ts</code>).</p>
 
+    <h3>Scaffolding a Bun app</h3>
+    <p>webjs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with all three). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
+    <pre># auto-detected: scaffolding through bun implies --runtime bun
+bun create webjs my-app
+# the explicit pin-latest form (bun create maps to bunx create-webjs)
+bunx create-webjs@latest my-app
+# or via the installed CLI, on any package manager
+webjs create my-app --runtime bun</pre>
+    <p>A Bun app commits <code>bun.lock</code> instead of <code>package-lock.json</code>, sets <code>trustedDependencies</code> so the SQLite driver's native postinstall runs (Bun skips postinstalls by default), installs with Bun in CI, and its <code>dev</code> / <code>start</code> scripts force <code>bun --bun</code> so the server runs on Bun rather than the <code>webjs</code> bin's Node shebang. Run it with <code>bun --bun run dev</code>. The generated Dockerfile keeps the <code>node:24-alpine</code> base and copies in the Bun binary (the app pins <code>@webjsdev/cli: latest</code>, whose installed build may still shell <code>npx</code> for the boot-time <code>webjs db migrate</code>, so the Node base keeps it working with any CLI version) while serving the app on Bun. The other scripts (test / db / check) run on Node, the runtime the <code>webjs</code> tooling targets. One flag-forwarding difference to note: Bun forwards flags directly (<code>bun create webjs my-app --template api</code>), while npm needs the <code>--</code> separator (<code>npm create webjs@latest my-app -- --template api</code>). <code>--runtime node</code> (the default) is unchanged.</p>
+
     <h3>Manual setup</h3>
     <p>To start from scratch without the scaffold, create a directory with this structure:</p>
     <pre>my-app/

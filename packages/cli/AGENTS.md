@@ -79,10 +79,34 @@ lib/
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,
                          template-specific app/ files, prints the
-                         post-scaffold guidance for AI agents.
+                         post-scaffold guidance for AI agents. Resolves
+                         the `--runtime node|bun` axis (#541, default node,
+                         bun auto-detected from the invoking PM) and
+                         branches the package.json scripts /
+                         trustedDependencies / lockfile + applies the
+                         runtime-rewrite transforms to the copied deploy +
+                         agent-config files when bun.
   saas-template.js       Extra files written when --template saas:
                          auth + login/signup + protected dashboard
-                         + Drizzle User model.
+                         + Drizzle User model. `writeSaasFiles(appDir, {runtime})`
+                         bun-ifies the generated auth-test setup comments.
+  runtime-rewrite.js     Pure transforms (#541) that DERIVE the bun-mode
+                         variant of each canonical node template:
+                         `bunifyProse` (npm->bun command forms in markdown),
+                         `bunifyDockerfile` (KEEPS the node:24-alpine base and
+                         copies in the Bun binary: a scaffold pins cli@latest,
+                         and until the npx-free #570 build is the published
+                         latest an installed CLI may still shell `npx` for the
+                         boot `webjs db migrate`, which a pure oven/bun image
+                         lacks, so the node base works with ANY CLI version;
+                         bun install + `bun --bun run start` CMD so the SERVER
+                         serves on Bun), and `bunifyCi` (adds setup-bun
+                         next to setup-node, bun install, plain `bun run`). Only
+                         the dev/start SCRIPTS force `--bun`; the test/db/check
+                         tooling stays on Node (webjs test spawns `node --test`).
+                         No parallel bun template, so no drift. compose.yaml is
+                         not transformed (it inherits the Dockerfile CMD). Tests:
+                         `test/runtime-rewrite/`.
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
                          copy time. The AGENTS.md / CLAUDE.md /
@@ -105,7 +129,7 @@ README.md                npm-facing package readme.
 | `webjs doctor` | `runDoctorChecks()` from `lib/doctor.js`. A project-health checklist over existing signals (Node major, tsconfig `erasableSyntaxOnly`, `.env` drift vs `.env.example`, vendor-pin freshness, the `.gitignore` keeping `.webjs/vendor/` committable (`vendor-gitignore`, moved here from `webjs check` in #461 as a warn since it is a project-config concern, not source correctness), `@webjsdev/*` version coherence, importmap coherence, git pre-commit hook). PURE checks render with a `[pass]` / `[warn]` / `[fail]` marker; non-zero exit iff a HARD check fails (Node below the floor, or `erasableSyntaxOnly` missing in an existing tsconfig), so CI can gate. Warns (drift / staleness) never fail the exit. The only network touch (pin freshness, plus the importmap-coherence live resolve) is best-effort: a fetch failure is a warn, never a hard fail. The importmap-coherence check (#450) runs `@webjsdev/server`'s `checkImportmapCoherence` IDENTICALLY over the live importmap AND the vendored `.webjs/vendor/importmap.json`, warning when a pinned package needs a newer version of another pinned package than is pinned (the #446 skew class); it reads dependency metadata from the already-installed node_modules manifests (no network of its own) and degrades to "could not verify" when a manifest is unavailable. An onboarding/setup-verify tool, NOT a scaffold-CI hard gate. Tests: `test/cli/doctor.test.mjs` |
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
-| `webjs create <name> [--template …]` | `scaffoldApp()` from `lib/create.js` |
+| `webjs create <name> [--template …] [--db …] [--runtime node\|bun]` | `scaffoldApp()` from `lib/create.js`. `--runtime bun` (or `bun create webjs`, auto-detected) emits a Bun-flavored app (#541): `dev`/`start` scripts force `bun --bun`, `trustedDependencies`, `bun.lock`, a Bun-serving Dockerfile (node base + copied bun binary) + bun-install CI, and bun-command agent docs. Orthogonal to `--template` (invariant 1 stays exactly 3 templates). |
 | `webjs db <generate\|migrate\|push\|studio>` | Runs the app's resolved `drizzle-kit` bin via `process.execPath` (no codegen step; `generate` is schema-to-SQL). Resolves the bin from the app's node_modules + spawns it with the current runtime (no `npx`, #570), so it works on Node and Bun, including a Node-less `oven/bun` image. `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 
@@ -135,7 +159,10 @@ verbatim.
    The `TEMPLATES` array in `bin/webjs.js` is the single source of
    truth, and `scaffoldApp()` re-validates programmatically. Hallucinated
    templates (`blog`, `todo`, `ecommerce`, …) are rejected at the CLI
-   with a guidance message.
+   with a guidance message. The `--runtime node|bun` axis (#541) is
+   ORTHOGONAL to this: it does NOT add a fourth template, it re-flavors
+   any of the three. Adding a runtime is a `VALID_RUNTIMES` entry +
+   transforms, never a new template.
 2. **Scaffold is reference, not the final product.** The scaffold
    output ships an example `app/page.ts` ("Hello from …"), an example
    `User` Drizzle model, an example `theme-toggle` component. AI agents
