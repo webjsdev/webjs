@@ -40,6 +40,7 @@ Templates:
   saas                  auth + login/signup + protected dashboard + Drizzle User model
 
 Options:
+  --db sqlite|postgres  database dialect (default sqlite)
   --runtime node|bun    target runtime (default node). bun emits a Bun-flavored app
                         (bun.lock, bun Dockerfile/CI, bun docs). Auto-detected as bun
                         when invoked via \`bun create webjs\`.
@@ -54,7 +55,7 @@ if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
 // Positional args are the non-flag tokens, but a value-taking flag's VALUE
 // (e.g. the `bun` in `--runtime bun`) is not positional. Skip it so
 // `create-webjs --runtime bun my-app` reads `my-app` as the name, not `bun`.
-const VALUE_FLAGS = new Set(['--template', '--runtime']);
+const VALUE_FLAGS = new Set(['--template', '--runtime', '--db']);
 const positional = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -85,6 +86,11 @@ if (runtime && !['node', 'bun'].includes(runtime)) {
   process.exit(1);
 }
 
+// --db sqlite|postgres, forwarded so the wrapper matches `webjs create` (the
+// bin parses --db; the wrapper previously dropped it, silently scaffolding
+// sqlite for `npm create webjs my-app -- --db postgres`). scaffoldApp validates.
+const db = flagValue('--db');
+
 const noInstall = args.includes('--no-install');
 
-await scaffoldApp(name, process.cwd(), { template, runtime, install: !noInstall });
+await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });

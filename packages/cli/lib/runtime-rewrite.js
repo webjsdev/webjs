@@ -49,11 +49,13 @@ export function bunifyProse(s) {
     // mangled by the generic "npm <x>" rules below.
     .replaceAll('npm create webjs@latest', 'bun create webjs')
     .replaceAll('npm create webjs', 'bun create webjs')
-    // dev-dep installs
+    // dev-dep installs (`npm install -D` and the `npm i -D` shorthand)
     .replace(/npm install -D /g, 'bun add -d ')
     .replace(/npm install --save-dev /g, 'bun add -d ')
+    .replace(/npm i -D /g, 'bun add -d ')
     // a package install (followed by a package name) -> `bun add <pkg>`
     .replace(/npm install (?=[A-Za-z@])/g, 'bun add ')
+    .replace(/npm i (?=[A-Za-z@])/g, 'bun add ')
     // bare install / ci -> `bun install`
     .replace(/npm install\b/g, 'bun install')
     .replace(/npm ci\b/g, 'bun install')

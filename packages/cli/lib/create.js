@@ -526,6 +526,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   const PROSE_REWRITE = new Set([
     'AGENTS.md', 'CONVENTIONS.md', '.cursorrules',
     '.agents/rules/workflow.md', '.github/copilot-instructions.md',
+    // The starter tests carry header comments with run commands (`npx wtr`,
+    // `npm i -D puppeteer-core`); bun-ify those too so a bun app's test files
+    // do not tell the user to run npm/npx (#541 review). The transform only
+    // touches npm/npx command tokens, so the test code itself is unaffected.
+    'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
   ]);
   const FILE_REWRITE = {
     'Dockerfile': bunifyDockerfile,

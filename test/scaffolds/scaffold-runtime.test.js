@@ -102,6 +102,12 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
     }
     const agents = read(appDir, 'AGENTS.md');
     assert.match(agents, /bun --bun run dev/);
+
+    // The starter test files' header comments are bun-ified too (no npm/npx).
+    const browserTest = read(appDir, 'test/hello/browser/hello.test.js');
+    assert.doesNotMatch(browserTest, /\bnpx /, 'hello browser test uses bunx');
+    const e2eTest = read(appDir, 'test/hello/e2e/hello.test.ts');
+    assert.doesNotMatch(e2eTest, /\bnpm i /, 'hello e2e test uses bun add');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });
