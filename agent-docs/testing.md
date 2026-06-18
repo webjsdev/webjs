@@ -352,8 +352,8 @@ test/
 
 App-side runners:
 
-- `webjs test` → node tests (everything not under `browser/` or `e2e/`).
-- `webjs test --browser` → web-test-runner against `test/**/browser/**`.
+- `webjs test` → the runtime's test runner over everything not under `browser/` or `e2e/` (#570): `node --test` on Node, `bun test` on Bun (dispatched on `process.versions.bun`, since `bun --test` is invalid).
+- `webjs test --browser` → web-test-runner against `test/**/browser/**` (the app's resolved `wtr` bin, spawned with the current runtime, no `npx`).
 - `WEBJS_E2E=1 webjs test` adds e2e.
 
 App AI agents read this convention through the scaffold's
