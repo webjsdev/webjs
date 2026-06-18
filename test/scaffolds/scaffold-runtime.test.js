@@ -110,6 +110,10 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
     }
     const agents = read(appDir, 'AGENTS.md');
     assert.match(agents, /bun --bun run dev/);
+    // The "Containerized deploy" prose must describe the pure oven/bun:1 image
+    // the bun Dockerfile actually ships (#595), not the node:24-alpine base.
+    assert.match(agents, /Dockerfile is a pure `oven\/bun:1` image/);
+    assert.doesNotMatch(agents, /pins `node:24-alpine`/);
 
     // The starter test files' header comments are bun-ified too (no npm/npx).
     const browserTest = read(appDir, 'test/hello/browser/hello.test.js');

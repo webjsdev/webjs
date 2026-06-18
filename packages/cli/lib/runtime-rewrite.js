@@ -47,10 +47,17 @@
 export function bunifyProse(s) {
   return s
     // Prose claim about the Dockerfile CMD (AGENTS.md dev-start parity section);
-    // the bun Dockerfile's CMD becomes `bun --bun run start`. The base stays
-    // node:24-alpine (+ a copied Bun binary), so the "pins node:24-alpine" prose
-    // is still accurate and is NOT rewritten.
+    // the bun Dockerfile's CMD becomes `bun --bun run start`.
     .replaceAll('`CMD ["npm", "start"]`', '`CMD ["bun", "--bun", "run", "start"]`')
+    // The "Containerized deploy" prose describes the node template's
+    // node:24-alpine base; the bun Dockerfile is a pure oven/bun:1 image (#595),
+    // so rewrite the base claim to match what the bun app actually ships. (The
+    // trailing `npm start` is rewritten to `bun --bun run start` by the generic
+    // rule below.)
+    .replaceAll(
+      'Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs\ndeps (no build step, since Drizzle has no codegen), and starts via',
+      'Dockerfile is a pure `oven/bun:1` image (no Node, since `webjs db migrate`\nresolves drizzle-kit and runs under Bun with no `npx`, #570), installs deps\nwith `bun install` (no build step, since Drizzle has no codegen), and starts via',
+    )
     // The "Running on Bun" section frames Bun as opt-in ("force it with --bun").
     // In a bun-flavored app the dev/start scripts ALREADY embed --bun, so reframe
     // it as the configured default.
