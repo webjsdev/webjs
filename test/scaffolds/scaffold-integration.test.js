@@ -386,6 +386,54 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
   }
 });
 
+test('scaffoldApp: generated users module models HTTP-verb actions (#488)', async () => {
+  // The full-stack / api scaffolds emit a GET read (cache + tags) and a mutation
+  // that declares the tags it invalidates, so a new app sees the HTTP-verb idiom
+  // out of the box. Counterfactual: drop the verb config exports from create.js's
+  // list-users / create-user strings and these assertions fail.
+  const cwd = await tempCwd();
+  const restore = muteConsole();
+  try {
+    await scaffoldApp('verb-app', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'verb-app');
+
+    const listUsers = readFileSync(
+      join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts'), 'utf8');
+    assert.match(listUsers, /export const method = 'GET'/, 'list-users declares method GET');
+    assert.match(listUsers, /export const cache =/, 'list-users declares a cache window');
+    assert.match(listUsers, /export const tags =/, 'list-users declares cache tags');
+
+    const createUser = readFileSync(
+      join(appDir, 'modules', 'users', 'actions', 'create-user.server.ts'), 'utf8');
+    assert.match(createUser, /export const invalidates =/, 'create-user declares invalidates');
+    // The mutation must NOT also declare method GET (a write is POST by default).
+    assert.doesNotMatch(createUser, /export const method = 'GET'/, 'create-user is not a GET');
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('scaffoldApp saas: per-session current-user stays POST-default (#488)', async () => {
+  // The saas auth read is per-user, so it deliberately is NOT a cacheable GET
+  // server action: it ships as the documented counter-example. Counterfactual:
+  // add `export const method = 'GET'` to saas-template's current-user and this
+  // fails (which is exactly the data-leak the comment warns against).
+  const cwd = await tempCwd();
+  const restore = muteConsole();
+  try {
+    await scaffoldApp('verb-saas', cwd, { template: 'saas' });
+    const appDir = join(cwd, 'verb-saas');
+    const currentUser = readFileSync(
+      join(appDir, 'modules', 'auth', 'queries', 'current-user.server.ts'), 'utf8');
+    assert.doesNotMatch(currentUser, /export const method =/, 'current-user is not a verb-configured GET');
+    assert.match(currentUser, /per-session read/, 'current-user explains why it stays POST-default');
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test('scaffoldApp: exits / throws when the target dir already exists', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
