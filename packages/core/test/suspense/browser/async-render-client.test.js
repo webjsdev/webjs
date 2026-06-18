@@ -47,8 +47,7 @@ suite('async render() on the client', () => {
   test('stale-while-revalidate: prior content stays during a re-fetch (no renderFallback)', async () => {
     const tag = uniq('async-swr');
     let resolveGate;
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 1; this.gate = null; }
       async render() {
         const v = this.v;
@@ -77,8 +76,7 @@ suite('async render() on the client', () => {
   test('renderFallback() shows a loading state during a re-fetch, never on first paint', async () => {
     const tag = uniq('async-fallback');
     let resolveGate;
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 1; this.gate = null; }
       renderFallback() { return html`<p class="skeleton">loading…</p>`; }
       async render() {
@@ -111,8 +109,7 @@ suite('async render() on the client', () => {
   test('updateComplete does not resolve before an in-flight async commit (shouldUpdate=false cycle)', async () => {
     const tag = uniq('async-uc');
     let resolveGate;
-    class C extends WebComponent {
-      static properties = { v: { type: Number }, noop: { type: Number } };
+    class C extends WebComponent({ v: Number, noop: Number }) {
       constructor() { super(); this.v = 1; this.noop = 0; }
       // Skip ONLY a cycle whose sole change is `noop` (not the first render,
       // whose changedProperties carries every initial property value).
@@ -170,8 +167,7 @@ suite('async render() on the client', () => {
   test('race guard: the NEW render commits, a later-resolving STALE one is dropped', async () => {
     const tag = uniq('async-race');
     const gates = [];
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; }
       async render() {
         const v = this.v;
@@ -201,8 +197,7 @@ suite('async render() on the client', () => {
     // or a stale async resolution clobbers a fresh synchronous commit.
     const tag = uniq('async-sync-race');
     let resolveGate;
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; this.sync = false; }
       render() {
         if (this.sync) return html`<p class="val">v=${this.v}</p>`;   // synchronous
@@ -233,8 +228,7 @@ suite('async render() on the client', () => {
     // and the later-settling stale async render must not clobber or deadlock it.
     const tag = uniq('async-throw-supersede');
     let resolveGate;
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       constructor() { super(); this.v = 0; this.boom = false; }
       render() {
         if (this.boom) throw new Error('superseding render boom');   // synchronous throw
@@ -271,8 +265,7 @@ suite('async render() on the client', () => {
     /** @type {(AbortSignal|undefined)[]} */
     const captured = [];
     let release;
-    class C extends WebComponent {
-      static properties = { v: { type: Number } };
+    class C extends WebComponent({ v: Number }) {
       async render() {
         captured.push(activeActionSignal());        // the stub captures this synchronously
         await new Promise((r) => { release = r; }); // hold the render in flight

@@ -19,8 +19,7 @@ import { html, renderToString, WebComponent } from '../../packages/core/index.js
 describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', () => {
 
   test('plain object value is decoded and visible to render()', async () => {
-    class UserBadge extends WebComponent {
-      static properties = { user: { type: Object } };
+    class UserBadge extends WebComponent({ user: Object }) {
       constructor() { super(); this.user = null; }
       render() {
         return this.user
@@ -41,8 +40,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('array of objects survives, render() iterates them', async () => {
-    class PostList1 extends WebComponent {
-      static properties = { posts: { type: Array } };
+    class PostList1 extends WebComponent({ posts: Array }) {
       constructor() { super(); this.posts = []; }
       render() {
         return html`<ul>${this.posts.map((p) => html`<li>${p.title}</li>`)}</ul>`;
@@ -60,13 +58,12 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('rich types (Date, Map, Set, BigInt) round-trip via the wire serializer', async () => {
-    class RichProbe extends WebComponent {
-      static properties = {
-        when: { type: Object },
-        flags: { type: Object },
-        tags: { type: Object },
-        big: { type: Object },
-      };
+    class RichProbe extends WebComponent({
+      when: Object,
+      flags: Object,
+      tags: Object,
+      big: Object,
+    }) {
       constructor() {
         super();
         this.when = null;
@@ -99,8 +96,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('property binding wins when the same name is also passed as a string attribute', async () => {
-    class PriorityProbe extends WebComponent {
-      static properties = { mode: { type: String } };
+    class PriorityProbe extends WebComponent({ mode: String }) {
       constructor() { super(); this.mode = ''; }
       render() { return html`<p>${this.mode}</p>`; }
     }
@@ -115,8 +111,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('unserializable value (function) drops with a warning, does not crash SSR', async () => {
-    class CallbackProbe extends WebComponent {
-      static properties = { onTick: { type: Object } };
+    class CallbackProbe extends WebComponent({ onTick: Object }) {
       constructor() { super(); this.onTick = null; }
       render() {
         return html`<p>${typeof this.onTick}</p>`;
@@ -160,8 +155,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('nested components: parent .prop propagates to a child .prop in render()', async () => {
-    class Inner1 extends WebComponent {
-      static properties = { item: { type: Object } };
+    class Inner1 extends WebComponent({ item: Object }) {
       constructor() { super(); this.item = null; }
       render() {
         return html`<span class="inner">${this.item ? this.item.name : 'none'}</span>`;
@@ -169,8 +163,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     }
     Inner1.register('nested-inner-1');
 
-    class Outer1 extends WebComponent {
-      static properties = { user: { type: Object } };
+    class Outer1 extends WebComponent({ user: Object }) {
       constructor() { super(); this.user = null; }
       render() {
         return html`<nested-inner-1 .item=${this.user}></nested-inner-1>`;
@@ -184,8 +177,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('null value: encoded and decoded faithfully', async () => {
-    class NullProbe extends WebComponent {
-      static properties = { item: { type: Object } };
+    class NullProbe extends WebComponent({ item: Object }) {
       constructor() { super(); this.item = { sentinel: 'constructor-default' }; }
       render() {
         return html`<p>${this.item === null ? 'is-null' : 'not-null'}</p>`;
@@ -199,8 +191,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('undefined value: drops cleanly, component sees its constructor default', async () => {
-    class UndefProbe extends WebComponent {
-      static properties = { item: { type: Object } };
+    class UndefProbe extends WebComponent({ item: Object }) {
       constructor() { super(); this.item = { sentinel: 'constructor-default' }; }
       render() {
         return html`<p>${this.item && this.item.sentinel ? this.item.sentinel : 'no-default'}</p>`;
@@ -219,9 +210,8 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('shadow DOM component: prop binding flows through DSD render', async () => {
-    class ShadowProbe extends WebComponent {
+    class ShadowProbe extends WebComponent({ label: String }) {
       static shadow = true;
-      static properties = { label: { type: String } };
       constructor() { super(); this.label = ''; }
       render() {
         return html`<span class="shadow-label">${this.label}</span>`;
@@ -237,8 +227,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('string value with HTML special chars round-trips through escape and back', async () => {
-    class HtmlStr extends WebComponent {
-      static properties = { text: { type: String } };
+    class HtmlStr extends WebComponent({ text: String }) {
       constructor() { super(); this.text = ''; }
       render() {
         return html`<p data-len=${String(this.text.length)}>${this.text}</p>`;
@@ -260,8 +249,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('light DOM <slot>: prop binding on the host AND on a slotted child', async () => {
-    class SlotChild extends WebComponent {
-      static properties = { item: { type: Object } };
+    class SlotChild extends WebComponent({ item: Object }) {
       constructor() { super(); this.item = null; }
       render() {
         return html`<em class="slotted">${this.item ? this.item.label : 'none'}</em>`;
@@ -269,8 +257,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     }
     SlotChild.register('slot-child-probe');
 
-    class SlotHost extends WebComponent {
-      static properties = { title: { type: String } };
+    class SlotHost extends WebComponent({ title: String }) {
       constructor() { super(); this.title = ''; }
       render() {
         return html`
@@ -308,8 +295,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     }
     CardHost.register('card-host-probe');
 
-    class TitleProbe extends WebComponent {
-      static properties = { value: { type: String } };
+    class TitleProbe extends WebComponent({ value: String }) {
       constructor() { super(); this.value = ''; }
       render() { return html`<h2 class="t">${this.value}</h2>`; }
     }
@@ -327,8 +313,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
 
   test('repeat() directive: each iteration receives its own prop', async () => {
     const { repeat } = await import('../../packages/core/src/repeat.js');
-    class Row extends WebComponent {
-      static properties = { post: { type: Object } };
+    class Row extends WebComponent({ post: Object }) {
       constructor() { super(); this.post = null; }
       render() {
         return html`<li data-id=${String(this.post && this.post.id)}>${this.post && this.post.title}</li>`;
@@ -350,22 +335,19 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('deeply nested chain (3 levels) propagates props correctly', async () => {
-    class Leaf extends WebComponent {
-      static properties = { v: { type: String } };
+    class Leaf extends WebComponent({ v: String }) {
       constructor() { super(); this.v = ''; }
       render() { return html`<span class="leaf">${this.v}</span>`; }
     }
     Leaf.register('chain-leaf');
 
-    class Mid extends WebComponent {
-      static properties = { down: { type: String } };
+    class Mid extends WebComponent({ down: String }) {
       constructor() { super(); this.down = ''; }
       render() { return html`<chain-leaf .v=${this.down}></chain-leaf>`; }
     }
     Mid.register('chain-mid');
 
-    class Top extends WebComponent {
-      static properties = { msg: { type: String } };
+    class Top extends WebComponent({ msg: String }) {
       constructor() { super(); this.msg = ''; }
       render() { return html`<chain-mid .down=${this.msg}></chain-mid>`; }
     }
@@ -381,8 +363,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
     // consumer applies the string attribute first, then overlays the
     // typed prop. End behaviour: prop wins, but DOM has both attrs
     // during SSR-to-hydration window.
-    class BothProbe extends WebComponent {
-      static properties = { mode: { type: String } };
+    class BothProbe extends WebComponent({ mode: String }) {
       constructor() { super(); this.mode = ''; }
       render() { return html`<p>${this.mode}</p>`; }
     }
@@ -399,8 +380,7 @@ describe('SSR: property bindings round-trip via data-webjs-prop-* attributes', (
   });
 
   test('async render(): prop value flows into a render() that awaits', async () => {
-    class AsyncProbe extends WebComponent {
-      static properties = { src: { type: Object } };
+    class AsyncProbe extends WebComponent({ src: Object }) {
       constructor() { super(); this.src = null; }
       async render() {
         // Simulate a render that awaits, e.g. data normalisation
@@ -421,8 +401,7 @@ describe('SSR: streaming + Suspense + property bindings', () => {
 
   test('renderToStream produces the same data-webjs-prop output as renderToString', async () => {
     const { renderToStream } = await import('../../packages/core/index.js');
-    class StreamProbe extends WebComponent {
-      static properties = { items: { type: Array } };
+    class StreamProbe extends WebComponent({ items: Array }) {
       constructor() { super(); this.items = []; }
       render() {
         return html`<ul>${this.items.map((x) => html`<li>${x}</li>`)}</ul>`;
@@ -453,8 +432,7 @@ describe('SSR: streaming + Suspense + property bindings', () => {
 
   test('Suspense: prop binding on the late-resolved child is applied when the boundary settles', async () => {
     const { Suspense } = await import('../../packages/core/index.js');
-    class LateProbe extends WebComponent {
-      static properties = { name: { type: String } };
+    class LateProbe extends WebComponent({ name: String }) {
       constructor() { super(); this.name = ''; }
       render() { return html`<span class="late">${this.name}</span>`; }
     }

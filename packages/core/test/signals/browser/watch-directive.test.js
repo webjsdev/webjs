@@ -73,8 +73,7 @@ suite('watch() directive', () => {
     const a = signal('alpha');
     const b = signal('beta');
     const T = newTag('w-swap');
-    class C extends WebComponent {
-      static properties = { which: { type: String } };
+    class C extends WebComponent({ which: String }) {
       constructor() { super(); this.which = 'a'; }
       render() {
         const sig = this.which === 'a' ? a : b;

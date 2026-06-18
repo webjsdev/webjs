@@ -23,8 +23,7 @@ import { renderToString } from '../../src/render-server.js';
 
 // A minimal compound pair mirroring the ui-tabs shape: the trigger reads the
 // parent's selected value via closest() and marks itself active at SSR.
-class CxGroup extends WebComponent {
-  static properties = { value: { type: String } };
+class CxGroup extends WebComponent({ value: String }) {
   constructor() {
     super();
     this.value = '';
@@ -35,8 +34,7 @@ class CxGroup extends WebComponent {
 }
 CxGroup.register('cx-group');
 
-class CxItem extends WebComponent {
-  static properties = { value: { type: String } };
+class CxItem extends WebComponent({ value: String }) {
   constructor() {
     super();
     this.value = '';

@@ -2,10 +2,7 @@ import { WebComponent, html } from '@webjsdev/core';
 
 // Interactive (@click) so it ships, and carries TypeScript type
 // annotations so the served bytes exercise the position-preserving strip.
-export class TypedComp extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-
+export class TypedComp extends WebComponent({ count: Number }) {
   constructor() {
     super();
     this.count = 0;

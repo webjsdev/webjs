@@ -61,8 +61,7 @@ suite('Reactive controllers (port from lit)', () => {
   // tests are isolated. Returns { ElClass, makeEl } so tests can either
   // construct with `new` (the lit pattern) or via document.createElement.
   function makeHostClass() {
-    class A extends WebComponent {
-      static properties = { foo: { type: String } };
+    class A extends WebComponent({ foo: String }) {
       constructor() {
         super();
         this.foo = 'foo';
@@ -349,8 +348,7 @@ suite('Reactive controllers (port from lit)', () => {
   // changedProperties (controllers commonly call host.requestUpdate).
   test('controller requestUpdate(name, oldValue) propagates to changedProperties', async () => {
     const seen = [];
-    class PropEl extends WebComponent {
-      static properties = { foo: { type: String } };
+    class PropEl extends WebComponent({ foo: String }) {
       constructor() { super(); this.foo = 'x'; }
       updated(cp) {
         // Snapshot a plain object so the recorded values can't change later.

@@ -23,8 +23,7 @@ async function streamText(stream) {
   }
 }
 
-class SlowItem extends WebComponent {
-  static properties = { label: { type: String }, delay: { type: Number } };
+class SlowItem extends WebComponent({ label: String, delay: Number }) {
   constructor() { super(); this.label = ''; this.delay = 0; }
   async render() {
     if (this.delay) await new Promise((r) => setTimeout(r, this.delay));

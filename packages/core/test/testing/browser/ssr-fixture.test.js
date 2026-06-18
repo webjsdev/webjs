@@ -13,7 +13,7 @@
  *      (SSR == hydrated) is paired with the divergence case.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 import { renderToString } from '../../../src/render-server.js';
 import { ssrFixture, waitForUpdate } from '../../../src/testing.js';
@@ -49,8 +49,7 @@ suite('ssrFixture() (#268)', () => {
     // await the real updateComplete, the DOM would still show the SSR default
     // (the connectedCallback-scheduled re-render is microtask-deferred), so the
     // 'hydrated' value genuinely proves the await happened.
-    class SF1 extends WebComponent {
-      static properties = { label: { type: String, state: true } };
+    class SF1 extends WebComponent({ label: prop(String, { state: true }) }) {
       constructor() { super(); this.label = 'ssr-default'; }
       connectedCallback() { super.connectedCallback(); this.label = 'hydrated'; }
       render() { return html`<output>${this.label}</output>`; }
@@ -103,8 +102,7 @@ suite('ssrFixture() (#268)', () => {
   });
 
   test('waitForUpdate awaits the real updateComplete after a mutation', async () => {
-    class SF4 extends WebComponent {
-      static properties = { n: { type: Number } };
+    class SF4 extends WebComponent({ n: Number }) {
       constructor() { super(); this.n = 1; }
       render() { return html`<i>${this.n}</i>`; }
     }

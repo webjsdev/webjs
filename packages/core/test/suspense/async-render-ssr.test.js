@@ -27,8 +27,7 @@ async function quiet(fn) {
 }
 
 test('async render() bakes resolved data into the first paint, no fallback', async () => {
-  class UserProfile extends WebComponent {
-    static properties = { uid: { type: String } };
+  class UserProfile extends WebComponent({ uid: String }) {
     constructor() { super(); this.uid = ''; }
     renderFallback() { return html`<div class="skeleton">loading</div>`; }
     async render() {

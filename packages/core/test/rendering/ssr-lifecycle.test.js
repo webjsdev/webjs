@@ -14,13 +14,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WebComponent } from '../../src/component.js';
+import { WebComponent, prop } from '../../src/component.js';
 import { html } from '../../src/html.js';
 import { renderToString } from '../../src/render-server.js';
 
 test('willUpdate runs before render at SSR; its derived value appears in the HTML', async () => {
-  class DerivesInWillUpdate extends WebComponent {
-    static properties = { count: { type: Number } };
+  class DerivesInWillUpdate extends WebComponent({ count: Number }) {
     constructor() {
       super();
       this.count = 0;
@@ -70,8 +69,7 @@ test('reactive controllers hostUpdate runs before render at SSR', async () => {
 });
 
 test('a reflect:true property set in the constructor appears as an attribute', async () => {
-  class ReflectsLevel extends WebComponent {
-    static properties = { level: { type: Number, reflect: true } };
+  class ReflectsLevel extends WebComponent({ level: prop(Number, { reflect: true }) }) {
     constructor() {
       super();
       this.level = 7;
@@ -87,8 +85,7 @@ test('a reflect:true property set in the constructor appears as an attribute', a
 });
 
 test('a reflect:true boolean set in willUpdate appears as a bare attribute', async () => {
-  class OpensInWillUpdate extends WebComponent {
-    static properties = { open: { type: Boolean, reflect: true } };
+  class OpensInWillUpdate extends WebComponent({ open: prop(Boolean, { reflect: true }) }) {
     constructor() {
       super();
       this.open = false;
@@ -141,8 +138,7 @@ test('addEventListener and attachInternals in the constructor do not crash SSR',
 });
 
 test('a component that neither reflects nor sets attributes keeps a byte-identical opening tag', async () => {
-  class Plain extends WebComponent {
-    static properties = { name: { type: String } };
+  class Plain extends WebComponent({ name: String }) {
     constructor() {
       super();
       this.name = '';
@@ -189,8 +185,7 @@ test('an Object/Array attribute carrying JSON is entity-decoded before parse at 
   // up holding the raw string and render() sees the wrong type. Regression for
   // applyAttrsToInstance.
   let seenType = 'unset';
-  class JsonAttr extends WebComponent {
-    static properties = { data: { type: Object } };
+  class JsonAttr extends WebComponent({ data: Object }) {
     constructor() { super(); this.data = null; }
     render() {
       seenType = Array.isArray(this.data) ? 'array' : typeof this.data;
@@ -211,8 +206,7 @@ test('COUNTERFACTUAL: without the willUpdate pass, the derived value would be th
   // Mirrors the first test but proves the assertion would FAIL if willUpdate
   // did not run: a subclass that deliberately renders the raw constructor
   // value shows what the output looks like when the lifecycle is bypassed.
-  class NoDerive extends WebComponent {
-    static properties = { count: { type: Number } };
+  class NoDerive extends WebComponent({ count: Number }) {
     constructor() {
       super();
       this.count = 5;

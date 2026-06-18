@@ -29,8 +29,7 @@ const assert = {
 suite('SSR property-binding hydration in a real browser', () => {
 
   test('simple Array prop: SSR markup, browser upgrades, property applied, attribute stripped', async () => {
-    class PostListProbe extends WebComponent {
-      static properties = { posts: { type: Array } };
+    class PostListProbe extends WebComponent({ posts: Array }) {
       constructor() { super(); this.posts = []; }
       render() { return html`<ul>${this.posts.map((p) => html`<li>${p.title}</li>`)}</ul>`; }
     }
@@ -59,8 +58,7 @@ suite('SSR property-binding hydration in a real browser', () => {
   });
 
   test('rich types: Date and BigInt survive the wire serializer in a real browser', async () => {
-    class RichProbe extends WebComponent {
-      static properties = { when: { type: Object }, big: { type: Object } };
+    class RichProbe extends WebComponent({ when: Object, big: Object }) {
       constructor() { super(); this.when = null; this.big = null; }
       render() { return html`<p>x</p>`; }
     }
@@ -90,8 +88,7 @@ suite('SSR property-binding hydration in a real browser', () => {
   });
 
   test('kebab-case attribute maps back to camelCase property in a real browser', async () => {
-    class CamelProbe extends WebComponent {
-      static properties = { itemCount: { type: Number } };
+    class CamelProbe extends WebComponent({ itemCount: Number }) {
       constructor() { super(); this.itemCount = 0; }
       render() { return html`<p>${this.itemCount}</p>`; }
     }
@@ -109,12 +106,11 @@ suite('SSR property-binding hydration in a real browser', () => {
   });
 
   test('multiple props on one element: all decoded, all stripped', async () => {
-    class MultiProbe extends WebComponent {
-      static properties = {
-        a: { type: Number },
-        b: { type: String },
-        c: { type: Object },
-      };
+    class MultiProbe extends WebComponent({
+      a: Number,
+      b: String,
+      c: Object,
+    }) {
       constructor() { super(); this.a = 0; this.b = ''; this.c = null; }
       render() { return html`<p>${this.a}|${this.b}|${this.c && this.c.k}</p>`; }
     }
@@ -154,8 +150,7 @@ suite('SSR property-binding hydration in a real browser', () => {
     assert.ok(before.hasAttribute('data-webjs-prop-val'));
 
     // Late definition. Triggers upgrade.
-    class LateProbe extends WebComponent {
-      static properties = { val: { type: Number } };
+    class LateProbe extends WebComponent({ val: Number }) {
       constructor() { super(); this.val = 0; }
       render() { return html`<p>${this.val}</p>`; }
     }
@@ -173,8 +168,7 @@ suite('SSR property-binding hydration in a real browser', () => {
   });
 
   test('two siblings of the same custom-element class: each hydrates independently', async () => {
-    class SiblingProbe extends WebComponent {
-      static properties = { label: { type: String } };
+    class SiblingProbe extends WebComponent({ label: String }) {
       constructor() { super(); this.label = ''; }
       render() { return html`<p>${this.label}</p>`; }
     }
@@ -197,8 +191,7 @@ suite('SSR property-binding hydration in a real browser', () => {
   });
 
   test('property is preserved after element is moved in the DOM (no re-hydration)', async () => {
-    class MoveProbe extends WebComponent {
-      static properties = { val: { type: Number } };
+    class MoveProbe extends WebComponent({ val: Number }) {
       constructor() { super(); this.val = 0; }
       render() { return html`<p>${this.val}</p>`; }
     }

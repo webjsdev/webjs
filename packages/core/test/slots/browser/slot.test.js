@@ -191,8 +191,7 @@ suite('Light-DOM slot projection (browser)', () => {
 
   test('slotchange does NOT fire when no assignment changed (no-op re-projection)', async () => {
     const tag = tagName('slotchange-noop');
-    class C extends WebComponent {
-      static properties = { x: { type: Number } };
+    class C extends WebComponent({ x: Number }) {
       constructor() { super(); this.x = 0; }
       render() { return html`<div data-x=${this.x}><slot></slot></div>`; }
     }
@@ -278,8 +277,7 @@ suite('Light-DOM slot projection (browser)', () => {
 
   test('re-render preserves DOM identity for projected children', async () => {
     const tag = tagName('identity');
-    class C extends WebComponent {
-      static properties = { mode: { type: String } };
+    class C extends WebComponent({ mode: String }) {
       constructor() { super(); this.mode = 'a'; }
       render() {
         return html`<div data-mode=${this.mode}><slot></slot></div>`;
@@ -340,8 +338,7 @@ suite('Light-DOM slot projection (browser)', () => {
 
   test('slot inside conditional that flips false then true preserves children', async () => {
     const tag = tagName('cond');
-    class C extends WebComponent {
-      static properties = { open: { type: Boolean } };
+    class C extends WebComponent({ open: Boolean }) {
       constructor() { super(); this.open = true; }
       render() {
         return html`<div>${this.open ? html`<section><slot></slot></section>` : html`<i>closed</i>`}</div>`;
@@ -454,8 +451,7 @@ suite('Light-DOM slot projection (browser)', () => {
 
   test('input value (focus, selection) survives projection move', async () => {
     const tag = tagName('input-state');
-    class C extends WebComponent {
-      static properties = { mode: { type: String } };
+    class C extends WebComponent({ mode: String }) {
       constructor() { super(); this.mode = 'a'; }
       render() {
         // Conditional swap; slot moves in DOM but children Node identity

@@ -10,7 +10,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
 
-let WebComponent, html, css;
+let WebComponent, html, css, prop;
 
 before(async () => {
   const { window } = parseHTML('<!doctype html><html><head></head><body></body></html>');
@@ -26,19 +26,17 @@ before(async () => {
   globalThis.NodeFilter = window.NodeFilter;
   globalThis.MutationObserver = window.MutationObserver;
 
-  ({ WebComponent, html, css } = await import('../../index.js'));
+  ({ WebComponent, html, css, prop } = await import('../../index.js'));
 });
 
 /* -------------------- attribute coercion -------------------- */
 
 test('observedAttributes derives from static properties, excluding state', () => {
-  class A extends WebComponent {
-    static properties = {
-      foo: { type: String },
-      bar: { type: Number, state: true },       // state → excluded
-      fooBar: { type: String },                 // camelCase → kebab-case
-    };
-  }
+  class A extends WebComponent({
+    foo: String,
+    bar: prop(Number, { state: true }),       // state → excluded
+    fooBar: String,                           // camelCase → kebab-case
+  }) {}
   A.register('obs-attrs');
   assert.deepEqual(
     A.observedAttributes.sort(),
@@ -47,15 +45,13 @@ test('observedAttributes derives from static properties, excluding state', () =>
 });
 
 test('attributeChangedCallback coerces String / Number / Boolean / Object / Array', () => {
-  class C extends WebComponent {
-    static properties = {
-      s: { type: String },
-      n: { type: Number },
-      b: { type: Boolean },
-      o: { type: Object },
-      a: { type: Array },
-    };
-  }
+  class C extends WebComponent({
+    s: String,
+    n: Number,
+    b: Boolean,
+    o: Object,
+    a: Array,
+  }) {}
   C.register('coerce-el');
   const el = document.createElement('coerce-el');
   el.attributeChangedCallback('s', null, 'hi');
@@ -73,9 +69,7 @@ test('attributeChangedCallback coerces String / Number / Boolean / Object / Arra
 });
 
 test('attributeChangedCallback falls back to raw string on malformed JSON', () => {
-  class C extends WebComponent {
-    static properties = { o: { type: Object } };
-  }
+  class C extends WebComponent({ o: Object }) {}
   C.register('malformed-json');
   const el = document.createElement('malformed-json');
   el.attributeChangedCallback('o', null, 'not-json');
@@ -83,14 +77,9 @@ test('attributeChangedCallback falls back to raw string on malformed JSON', () =
 });
 
 test('custom converter.fromAttribute overrides type-based coercion', () => {
-  class C extends WebComponent {
-    static properties = {
-      v: {
-        type: Object,
-        converter: { fromAttribute: (v) => ({ raw: v }) },
-      },
-    };
-  }
+  class C extends WebComponent({
+    v: prop(Object, { converter: { fromAttribute: (v) => ({ raw: v }) } }),
+  }) {}
   C.register('custom-from');
   const el = document.createElement('custom-from');
   el.attributeChangedCallback('v', null, 'abc');
@@ -100,9 +89,7 @@ test('custom converter.fromAttribute overrides type-based coercion', () => {
 test('attributeChangedCallback sets property when called with new value', () => {
   // The browser itself guards against calling this with the same value;
   // when it fires, the framework trusts the value and sets the property.
-  class C extends WebComponent {
-    static properties = { s: { type: String } };
-  }
+  class C extends WebComponent({ s: String }) {}
   C.register('same-attr');
   const el = document.createElement('same-attr');
   el.attributeChangedCallback('s', null, 'a');
@@ -112,9 +99,7 @@ test('attributeChangedCallback sets property when called with new value', () => 
 /* -------------------- property reflection -------------------- */
 
 test('reflect: true writes property back to attribute (Boolean)', () => {
-  class C extends WebComponent {
-    static properties = { on: { type: Boolean, reflect: true } };
-  }
+  class C extends WebComponent({ on: prop(Boolean, { reflect: true }) }) {}
   C.register('reflect-bool');
   const el = document.createElement('reflect-bool');
   document.body.appendChild(el);
@@ -125,12 +110,10 @@ test('reflect: true writes property back to attribute (Boolean)', () => {
 });
 
 test('reflect: true writes property back to attribute (Object / Array as JSON)', () => {
-  class C extends WebComponent {
-    static properties = {
-      data: { type: Object, reflect: true },
-      tags: { type: Array, reflect: true },
-    };
-  }
+  class C extends WebComponent({
+    data: prop(Object, { reflect: true }),
+    tags: prop(Array, { reflect: true }),
+  }) {}
   C.register('reflect-json');
   const el = document.createElement('reflect-json');
   document.body.appendChild(el);
@@ -141,9 +124,7 @@ test('reflect: true writes property back to attribute (Object / Array as JSON)',
 });
 
 test('reflect: true removes attribute when value is null', () => {
-  class C extends WebComponent {
-    static properties = { s: { type: String, reflect: true } };
-  }
+  class C extends WebComponent({ s: prop(String, { reflect: true }) }) {}
   C.register('reflect-null');
   const el = document.createElement('reflect-null');
   document.body.appendChild(el);
@@ -154,15 +135,12 @@ test('reflect: true removes attribute when value is null', () => {
 });
 
 test('reflect uses converter.toAttribute when provided', () => {
-  class C extends WebComponent {
-    static properties = {
-      v: {
-        type: Object,
-        reflect: true,
-        converter: { toAttribute: (v) => (v == null ? null : `x:${v.n}`) },
-      },
-    };
-  }
+  class C extends WebComponent({
+    v: prop(Object, {
+      reflect: true,
+      converter: { toAttribute: (v) => (v == null ? null : `x:${v.n}`) },
+    }),
+  }) {}
   C.register('reflect-to-attr');
   const el = document.createElement('reflect-to-attr');
   document.body.appendChild(el);
@@ -176,10 +154,9 @@ test('reflect uses converter.toAttribute when provided', () => {
 
 test('custom hasChanged short-circuits updates when false', async () => {
   let renders = 0;
-  class C extends WebComponent {
-    static properties = {
-      size: { type: Number, hasChanged: (a, b) => (b == null ? true : Math.abs(a - b) > 1) },
-    };
+  class C extends WebComponent({
+    size: prop(Number, { hasChanged: (a, b) => (b == null ? true : Math.abs(a - b) > 1) }),
+  }) {
     render() { renders++; return html`<p>${this.size}</p>`; }
   }
   C.register('hc-el');
@@ -356,9 +333,7 @@ test('WebComponent without static properties still constructs cleanly', () => {
 test('default hasChanged treats NaN !== NaN correctly (via strict inequality semantics)', () => {
   // Default is strict inequality: NaN !== NaN is true, so setting a NaN
   // triggers a change. Document the behaviour so callers know.
-  class C extends WebComponent {
-    static properties = { n: { type: Number } };
-  }
+  class C extends WebComponent({ n: Number }) {}
   C.register('nan-el');
   const el = document.createElement('nan-el');
   document.body.appendChild(el);
@@ -373,8 +348,7 @@ test('default hasChanged treats NaN !== NaN correctly (via strict inequality sem
 /* -------------------- Phase 2: lit lifecycle hooks -------------------- */
 
 test('changedProperties: property setter records (name, oldValue) entries', async () => {
-  class C extends WebComponent {
-    static properties = { count: { type: Number } };
+  class C extends WebComponent({ count: Number }) {
     constructor() { super(); this.count = 0; this._captured = null; }
     updated(cp) { this._captured = new Map(cp); }
     render() { return html``; }
@@ -393,8 +367,7 @@ test('changedProperties: property setter records (name, oldValue) entries', asyn
 
 test('shouldUpdate returning false skips update and updated() hook', async () => {
   let renders = 0, updatedCalls = 0;
-  class C extends WebComponent {
-    static properties = { val: { type: Number } };
+  class C extends WebComponent({ val: Number }) {
     constructor() { super(); this.val = 0; }
     shouldUpdate(_cp) { return this.val < 5; }
     updated(_cp) { updatedCalls++; }
@@ -415,11 +388,10 @@ test('shouldUpdate returning false skips update and updated() hook', async () =>
 
 test('willUpdate runs pre-render and can set properties without re-triggering', async () => {
   let willRuns = 0, updateRuns = 0;
-  class C extends WebComponent {
-    static properties = {
-      a: { type: Number },
-      b: { type: Number, state: true },
-    };
+  class C extends WebComponent({
+    a: Number,
+    b: prop(Number, { state: true }),
+  }) {
     constructor() { super(); this.a = 0; this.b = -1; }
     willUpdate(cp) {
       willRuns++;
@@ -445,8 +417,7 @@ test('willUpdate runs pre-render and can set properties without re-triggering', 
 
 test('updated runs after every render commit; firstUpdated runs once', async () => {
   let firsts = 0, updates = 0;
-  class C extends WebComponent {
-    static properties = { v: { type: Number } };
+  class C extends WebComponent({ v: Number }) {
     constructor() { super(); this.v = 0; }
     firstUpdated(_cp) { firsts++; }
     updated(_cp) { updates++; }
@@ -471,8 +442,7 @@ test('updated runs after every render commit; firstUpdated runs once', async () 
 
 test('firstUpdated receives changedProperties Map with initial values', async () => {
   let captured = null;
-  class C extends WebComponent {
-    static properties = { n: { type: Number } };
+  class C extends WebComponent({ n: Number }) {
     constructor() { super(); this.n = 42; }
     firstUpdated(cp) { captured = new Map(cp); }
     render() { return html``; }
@@ -487,8 +457,7 @@ test('firstUpdated receives changedProperties Map with initial values', async ()
 
 test('update() override can short-circuit the commit', async () => {
   let renderCalls = 0;
-  class C extends WebComponent {
-    static properties = { n: { type: Number } };
+  class C extends WebComponent({ n: Number }) {
     constructor() { super(); this.n = 0; this._allowRender = true; }
     update(cp) {
       if (this._allowRender) super.update?.(cp);
@@ -499,8 +468,7 @@ test('update() override can short-circuit the commit', async () => {
   // we need to manually invoke render to count it. Simpler: just check the
   // override is called.
   let updateCalls = 0;
-  class D extends WebComponent {
-    static properties = { n: { type: Number } };
+  class D extends WebComponent({ n: Number }) {
     constructor() { super(); this.n = 0; }
     update(cp) { updateCalls++; /* no render */ }
     render() { renderCalls++; return html``; }
@@ -514,8 +482,7 @@ test('update() override can short-circuit the commit', async () => {
 });
 
 test('updateComplete resolves after the next render', async () => {
-  class C extends WebComponent {
-    static properties = { v: { type: Number } };
+  class C extends WebComponent({ v: Number }) {
     constructor() { super(); this.v = 0; this._renderedV = null; }
     updated() { this._renderedV = this.v; }
     render() { return html``; }
@@ -534,8 +501,7 @@ test('updateComplete resolves after the next render', async () => {
 
 test('getUpdateComplete can be overridden to chain additional async work', async () => {
   let extraAwaited = false;
-  class C extends WebComponent {
-    static properties = { v: { type: Number } };
+  class C extends WebComponent({ v: Number }) {
     constructor() { super(); this.v = 0; }
     async getUpdateComplete() {
       const r = await super.getUpdateComplete();
@@ -554,8 +520,7 @@ test('getUpdateComplete can be overridden to chain additional async work', async
 
 test('hook order: shouldUpdate → willUpdate → hostUpdate → update → hostUpdated → firstUpdated → updated', async () => {
   const order = [];
-  class C extends WebComponent {
-    static properties = { n: { type: Number } };
+  class C extends WebComponent({ n: Number }) {
     constructor() { super(); this.n = 0; }
     shouldUpdate() { order.push('shouldUpdate'); return true; }
     willUpdate() { order.push('willUpdate'); }

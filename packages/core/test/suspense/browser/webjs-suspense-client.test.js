@@ -25,8 +25,7 @@ function container() {
   return host;
 }
 
-class StreamedCard extends WebComponent {
-  static properties = { label: { type: String } };
+class StreamedCard extends WebComponent({ label: String }) {
   constructor() { super(); this.label = ''; }
   render() { return html`<p class="card">${this.label}</p>`; }
 }

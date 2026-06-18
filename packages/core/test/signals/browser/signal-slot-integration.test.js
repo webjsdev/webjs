@@ -37,8 +37,7 @@ suite('signal + light-DOM slot integration', () => {
     }
     customElements.define(Child, ChildEl);
 
-    class ShellEl extends WebComponent {
-      static properties = { tick: { type: Number } };
+    class ShellEl extends WebComponent({ tick: Number }) {
       constructor() { super(); this.tick = 0; }
       render() {
         return html`<section data-tick=${this.tick}>
