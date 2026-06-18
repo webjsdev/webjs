@@ -94,10 +94,13 @@ lib/
                          variant of each canonical node template:
                          `bunifyProse` (npm->bun command forms in markdown),
                          `bunifyDockerfile` (KEEPS the node:24-alpine base and
-                         copies in the Bun binary, since `webjs db migrate`
-                         shells `npx drizzle-kit` and a pure oven/bun image has
-                         no npx; bun install + `bun --bun run start` CMD so the
-                         SERVER serves on Bun), and `bunifyCi` (adds setup-bun
+                         copies in the Bun binary: a scaffold pins cli@latest,
+                         and until the npx-free #570 build is the published
+                         latest an installed CLI may still shell `npx` for the
+                         boot `webjs db migrate`, which a pure oven/bun image
+                         lacks, so the node base works with ANY CLI version;
+                         bun install + `bun --bun run start` CMD so the SERVER
+                         serves on Bun), and `bunifyCi` (adds setup-bun
                          next to setup-node, bun install, plain `bun run`). Only
                          the dev/start SCRIPTS force `--bun`; the test/db/check
                          tooling stays on Node (webjs test spawns `node --test`).
