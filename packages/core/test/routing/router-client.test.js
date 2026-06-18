@@ -1334,6 +1334,45 @@ test('navigate: forward-nav scroll-to-top is instant, not animated (#601)', asyn
   }
 });
 
+test('navigate: a found hash anchor stays SMOOTH, not forced instant (#601)', async () => {
+  // The carve-out for the instant-scroll fix: it must NOT touch the
+  // hash-anchor path. A `#section` link (e.g. a menu pointing at a section)
+  // should still animate under `scroll-behavior: smooth`, so a found anchor
+  // is scrolled via scrollIntoView (which honors the page CSS), NEVER via the
+  // forced-instant scrollTo. This guards against a later "tidy-up" that makes
+  // section links jump.
+  document.body.innerHTML =
+    '<!--wj:children:/--><section id="sec">S</section><!--/wj:children-->';
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/--><section id="sec">S</section><!--/wj:children--></body></html>',
+  });
+  let intoViewCalls = 0;
+  const scrollToArgs = [];
+  const origInto = globalThis.HTMLElement.prototype.scrollIntoView;
+  globalThis.HTMLElement.prototype.scrollIntoView = function () { intoViewCalls++; };
+  const origWinScrollTo = globalThis.window?.scrollTo;
+  const spy = (...a) => { scrollToArgs.push(a); };
+  // Set the spies AFTER installNavigationMocks (which stubs globalThis.scrollTo).
+  globalThis.scrollTo = /** @type any */ (spy);
+  if (globalThis.window) globalThis.window.scrollTo = /** @type any */ (spy);
+  try {
+    await navigate('http://localhost/page#sec');
+    assert.equal(intoViewCalls, 1,
+      'a found hash anchor scrolls via scrollIntoView (honors scroll-behavior:smooth)');
+    const forcedInstant = scrollToArgs.some((a) => a.length === 1 && a[0] && a[0].behavior === 'instant');
+    assert.ok(!forcedInstant,
+      'the hash-anchor path must NOT force behavior:instant (that would kill smooth section scrolling)');
+  } finally {
+    restore();
+    globalThis.HTMLElement.prototype.scrollIntoView = origInto;
+    if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    document.body.innerHTML = '';
+  }
+});
+
 test('navigate: clean swap clears reload flag so a later mismatch reloads again', async () => {
   // After "reload due to mismatch → clean nav → later mismatch", the
   // later mismatch must trigger its own fresh reload. Regression for
