@@ -35,6 +35,12 @@ FIRST, before writing any code:
 2. Sync with parent: `git fetch origin && git log HEAD..origin/main --oneline`
    - If upstream has new commits: `git rebase origin/main` before starting.
    - Resolve any conflicts before proceeding with the task.
+3. If more than one agent may work this repo at once, use a DEDICATED git
+   worktree per task, not a shared checkout: `git worktree add -b <branch>
+   ../<repo>-<slug> origin/main`, `cd` in, work there, `git worktree remove`
+   after merge. Two agents in one directory collide (a `git checkout` in one
+   moves HEAD under the other, so commits land on the wrong branch). A lone
+   agent in a clean checkout may use a plain branch.
 
 ## Autonomous mode (sandbox / no-prompt)
 

@@ -62,6 +62,34 @@ STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- \
         print pkg "@" v
       }')
 
+# Gate 3: a published-library version bump belongs on a chore/release-* branch.
+# A core/server/cli/mcp/ui/intellisense bump on a feature branch is almost always
+# a release commit that landed on the WRONG branch because a concurrent agent
+# moved HEAD in a shared checkout (#590: a `chore: release cli` commit once landed
+# on an unrelated feat/ branch, with a contaminated changelog). Block it. The
+# editor APPS (vscode/nvim) and the lockstep wrappers (create-webjs/webjsdev)
+# legitimately bump off release branches, so they are exempt.
+if [ -n "$STAGED_PKG_BUMPS" ] && ! printf '%s' "$BRANCH" | grep -qE '^chore/release-'; then
+  for bump in $STAGED_PKG_BUMPS; do
+    pkg="${bump%@*}"
+    case "$pkg" in
+      core|server|cli|mcp|ui|intellisense)
+        echo ""
+        echo "ERROR: '$pkg' version bump on branch '$BRANCH' (not a chore/release-* branch)."
+        echo ""
+        echo "A published-library release belongs on its own chore/release-<pkg>-<ver>"
+        echo "branch. If HEAD is not the branch you expected, a concurrent agent may have"
+        echo "moved it in this shared checkout (#590). Use a dedicated worktree per task:"
+        echo "  git worktree add -b chore/release-$pkg-<ver> ../webjs-release origin/main"
+        echo ""
+        echo "To bypass (only if this bump is genuinely intentional here): git commit --no-verify"
+        echo ""
+        exit 1
+        ;;
+    esac
+  done
+fi
+
 if [ -n "$STAGED_PKG_BUMPS" ]; then
   # Find which files need to exist and which are missing BEFORE we
   # run the generator, so we can stage exactly what the generator

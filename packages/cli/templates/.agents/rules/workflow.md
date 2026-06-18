@@ -34,6 +34,13 @@ FIRST, before writing any code:
    - If on main/master: create a feature branch before editing.
    - If on a feature branch: verify it matches the current task.
 2. Sync: `git fetch origin && git rebase origin/main` if behind.
+3. If more than one agent may work this repo at once, use a DEDICATED git
+   worktree per task (`git worktree add -b <branch> ../<repo>-<slug> origin/main`,
+   `cd` in, work there, `git worktree remove` after merge), never a shared
+   checkout. Two agents in one directory collide: a `git checkout` in one moves
+   HEAD under the other, so commits land on the wrong branch. Git enforces
+   one-branch-per-worktree, so worktrees prevent it. A lone agent in a clean
+   checkout may use a plain branch.
 
 ## Autonomous mode (sandbox / no-prompt)
 
