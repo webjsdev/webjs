@@ -23,11 +23,12 @@ out
 .env
 !.env.example
 
-# Prisma local SQLite. Schema + migrations ship; the runtime volume owns the db.
-dev.db
-dev.db-journal
-prisma/dev.db
-prisma/dev.db-journal
+# Local SQLite database (Drizzle, sqlite dialect). Schema + migrations ship;
+# the runtime volume owns the db file. Matches the `db/dev.db*` rule the
+# scaffold appends to `.gitignore` for the sqlite dialect (no-op for postgres).
+db/dev.db
+db/dev.db-journal
+db/dev.db-*
 
 # logs
 *.log
