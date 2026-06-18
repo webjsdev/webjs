@@ -31,7 +31,7 @@ const ICON = {
 };
 
 const PILLARS = [
-  { icon: ICON.bolt, title: 'No build step', desc: 'Source files are served as native ES modules. Edit, refresh, see it. TypeScript is stripped by the runtime (Node or Bun), no bundler, no compile.' },
+  { icon: ICON.bolt, title: 'No build step', desc: 'Source files are served as native ES modules. Edit, refresh, see it. TypeScript is stripped by the runtime, no bundler, no compile. Runs on Node 24+ or Bun (scaffold a Bun app with bun create webjs, run it with bun --bun run dev).' },
   { icon: ICON.cube, title: 'Web components, light DOM', desc: 'A thin reactive base class with html and css tagged templates, signals, and the full lit lifecycle. Light DOM by default so Tailwind just works.' },
   { icon: ICON.layers, title: 'Progressive enhancement', desc: 'Everything renders to real HTML on the server. JavaScript is opt-in per interactive behavior. Dead JS is statically elided and never shipped.' },
   { icon: ICON.plug, title: 'Server actions, rich types', desc: 'Mark a file with use server and import it from the client. Date, Map, Set, BigInt, Blob, and cycles all round-trip through the wire.' },
@@ -174,8 +174,8 @@ export default function LandingPage() {
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[58ch] mx-auto mb-8 text-pretty">
         WebJs is built for AI agents from the ground up. Native web components,
-        server actions, and streaming SSR, all on web standards. No bundler,
-        no config, no guesswork.
+        server actions, and streaming SSR, all on web standards. Runs on Node 24+
+        or Bun. No bundler, no config, no guesswork.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
@@ -320,6 +320,7 @@ lib/session.server.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd></div>
           </div>
         </div>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-fg-subtle text-[13px] leading-[1.55]">Prefer Bun? Add <code class="font-mono">--runtime bun</code> to any template, or run <code class="font-mono">bun create webjs my-app</code> to flavor the scaffold for Bun automatically.</p>
       </div>
     </section>
 

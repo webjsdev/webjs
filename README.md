@@ -60,6 +60,12 @@ npm create webjs@latest my-api  -- --template api
 # SaaS starter (auth + dashboard + Drizzle)
 npm create webjs@latest my-saas -- --template saas
 
+# Prefer Bun? webjs runs on Node 24+ or Bun. Add --runtime bun to any
+# template (it is orthogonal to --template), or scaffold through Bun and
+# it is auto-detected. Both forms below produce the same Bun-flavored app.
+bun create webjs my-app                          # auto-detected; runs it with bun --bun run dev
+npm create webjs@latest my-app -- --runtime bun  # the explicit flag on any package manager
+
 # Or with the CLI installed globally for repeated use.
 # `webjsdev` is the unscoped npm name for @webjsdev/cli; both install the `webjs` command.
 npm i -g webjsdev && webjs create my-app

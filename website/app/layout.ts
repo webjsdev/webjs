@@ -18,7 +18,7 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.
  */
 
 const TITLE = 'webjs: the framework your AI agent already knows how to use';
-const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Built for AI agents to read, write, and ship.';
+const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Runs on Node 24+ or Bun. Built for AI agents to read, write, and ship.';
 
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
