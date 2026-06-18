@@ -118,34 +118,49 @@ Counter.register('my-counter');</pre>
   ${'${post.title}'}
 &lt;/button&gt;</pre>
 
-    <h3>2. Use <code>&lt;form&gt;</code> + server actions for writes</h3>
+    <h3>2. Use <code>&lt;form&gt;</code> + a page action for writes</h3>
 
     <p>
-      A server action bound to a form's <code>action</code> attribute works as a plain HTML POST when JS is off, and as a partial-swap submission when JS is on. <strong>One piece of code covers both ends of the spectrum.</strong>
+      A <code>page.ts</code> may export an <code>action</code> alongside its default render function. A non-GET <code>&lt;form&gt;</code> submission to the page's own URL runs the action, which returns an <code>ActionResult</code>. It works as a plain HTML POST when JS is off, and as a partial-swap submission when JS is on. <strong>One piece of code covers both ends of the spectrum, and no form library is involved.</strong>
     </p>
 
-    <pre>'use server';
-// modules/posts/actions/create-post.server.ts
-export async function createPost(input: FormData) {
-  const post = await db.post.create({
-    data: { title: input.get('title'), body: input.get('body') },
-  });
-  return redirect(\`/posts/\${post.id}\`);
+    <p>
+      The action validates on the server, then returns one of two outcomes. A <strong>success</strong> result is a <code>303 See Other</code> to <code>result.redirect</code> (Post/Redirect/Get). A <strong>failure</strong> result re-SSRs the same page at <code>422</code> with the result on <code>ctx.actionData</code>, so the page repopulates the fields from <code>actionData.values</code> and shows the messages from <code>actionData.fieldErrors</code>.
+    </p>
+
+    <pre>// app/posts/page.ts
+import { html } from '@webjsdev/core';
+import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+
+// runs only on the server, receives the already-parsed formData
+export async function action({ formData }: { formData: FormData }) {
+  const title = String(formData.get('title') || '').trim();
+  const body = String(formData.get('body') || '').trim();
+  const values = { title, body };
+  if (!title) {
+    return { success: false, fieldErrors: { title: 'Title is required' }, values, status: 422 };
+  }
+  const post = await createPost({ title, body });
+  return { success: true, redirect: \`/posts/\${post.id}\` };
+}
+
+export default function NewPost({ actionData }: {
+  actionData?: { fieldErrors?: Record&lt;string, string&gt;; values?: Record&lt;string, string&gt; };
+}) {
+  const errors = actionData?.fieldErrors || {};
+  const values = actionData?.values || {};
+  return html\`
+    &lt;form method="POST"&gt;
+      &lt;input name="title" value=\${values.title || ''} required&gt;
+      \${errors.title ? html\`&lt;p class="error"&gt;\${errors.title}&lt;/p&gt;\` : ''}
+      &lt;textarea name="body" required&gt;\${values.body || ''}&lt;/textarea&gt;
+      &lt;button type="submit"&gt;Publish&lt;/button&gt;
+    &lt;/form&gt;
+  \`;
 }</pre>
 
-    <pre>// page.ts
-import { createPost } from '../modules/posts/actions/create-post.server.ts';
-
-return html\`
-  &lt;form action=\${createPost} method="post"&gt;
-    &lt;input name="title" required&gt;
-    &lt;textarea name="body" required&gt;&lt;/textarea&gt;
-    &lt;button type="submit"&gt;Publish&lt;/button&gt;
-  &lt;/form&gt;
-\`;</pre>
-
     <p>
-      Avoid the pattern of <code>fetch('/api/...')</code> + a click handler for write-paths. That's JS-required by construction.
+      With JS off the browser submits, follows the 303, or renders the 422. With JS on the client router applies the 422 in place (no reload, typed input preserved) and follows the 303 via fetch. Avoid the pattern of <code>fetch('/api/...')</code> + a click handler for write-paths. That's JS-required by construction.
     </p>
 
     <h3>3. Make components render correctly on the server</h3>

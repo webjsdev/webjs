@@ -304,6 +304,53 @@ export const POST = route(createPost, { validate: CreatePostSchema.parse });</pr
 
     <p><strong>Important:</strong> a <code>route.ts</code> REST endpoint is <em>not</em> CSRF-protected (only the internal RPC path is). A mutating REST endpoint is designed for external consumers who authenticate via bearer tokens, API keys, or signed requests. Add your own auth in a middleware or inside the function body.</p>
 
+    <h2>The RPC Lifecycle: Middleware, Cancellation, Streaming</h2>
+    <p>An action is a plain <code>export async function</code>, but the RPC boundary around it gives you three extra capabilities without changing the call site (the client still writes <code>await getUser(7)</code>).</p>
+
+    <h3>Per-action middleware</h3>
+    <p>Declare a chain beside the action with <code>export const middleware = [...]</code>. Each entry is an <code>async (ctx, next) =&gt; result</code> function, and the chain runs around the action on <strong>both</strong> the RPC boundary and a <code>route.ts</code> boundary (including the <code>route()</code> adapter), so an auth check, a rate-limit, or a logging wrapper applies the same way no matter how the action is reached. A middleware short-circuits by returning an <code>ActionResult</code> instead of calling <code>next()</code>, and it accumulates context the action reads via <code>actionContext()</code> from <code>@webjsdev/server</code> (no signature change to the action).</p>
+
+    <pre>// modules/posts/actions/create-post.server.ts
+'use server';
+import { actionContext } from '@webjsdev/server';
+import { currentUser } from '../../../lib/session.server.ts';
+import { db } from '../../../db/connection.server.ts';
+import { posts } from '../../../db/schema.server.ts';
+
+const requireUser = async (ctx: { request: Request }, next: () =&gt; Promise&lt;unknown&gt;) =&gt; {
+  const user = await currentUser(ctx.request);
+  if (!user) return { success: false, error: 'Not signed in', status: 401 };
+  ctx.user = user;                 // read later via actionContext()
+  return next();
+};
+
+export const middleware = [requireUser];
+
+export async function createPost(input: { title: string; body: string }) {
+  const { user } = actionContext();  // populated by the middleware above
+  const [post] = await db.insert(posts).values({ ...input, authorId: user.id }).returning();
+  return { success: true, data: post };
+}</pre>
+
+    <h3>Cancellation</h3>
+    <p>An action reads the request's <code>AbortSignal</code> via <code>actionSignal()</code> from <code>@webjsdev/server</code> to stop expensive work when the client disconnects or aborts. Pass it down to <code>fetch</code>, a database driver, or any cancelable operation. Outside an action, <code>actionSignal()</code> returns a never-aborting signal, so a server-to-server call stays safe.</p>
+
+    <pre>// modules/search/queries/search.server.ts
+'use server';
+import { actionSignal } from '@webjsdev/server';
+
+export async function search(q: string) {
+  const res = await fetch('https://api.example.com/search?q=' + encodeURIComponent(q), {
+    signal: actionSignal(),          // abort when the client goes away
+  });
+  return res.json();
+}</pre>
+
+    <p>On the client side this is automatic. When a component's <code>async render()</code> is superseded (a newer prop or signal change while a fetch is in flight), the framework <strong>aborts</strong> the previous render's in-flight action fetch, not just drops it, so the cancellation reaches the server through the signal above.</p>
+
+    <h3>Streaming results</h3>
+    <p>An action that <em>returns</em> a <code>ReadableStream</code>, an async iterable, or an async generator (any verb) streams its chunks over the single RPC response instead of buffering, and the call site gets back an async iterable to <code>for await</code>. Detection is purely on the return value, so there is no config export to set. This is the token-stream / progress / incremental-result case. See the streaming section of the <a href="/docs/data-fetching">Data fetching</a> page for the full wire details, back-pressure, and error handling.</p>
+
     <h2>ActionResult&lt;T&gt; Envelope Pattern</h2>
     <p>A recommended convention for server actions is to return a discriminated union instead of throwing errors:</p>
 
@@ -420,37 +467,48 @@ TodoApp.register('todo-app');
 //   -d '{"text":"Buy milk"}'
 // => {"id":1,"text":"Buy milk","done":false,"createdAt":"2026-04-15T..."}</pre>
 
-    <h2>Plain HTML forms as an alternative</h2>
-    <p>Server actions called via JS RPC are the right tool when you need typed return values back in the component (the createPost example above returns a <code>Post</code> object). For the simpler "submit form → server processes → render new page" flow, plain HTML forms pointed at a <code>route.ts</code> handler are often a cleaner fit:</p>
-    <pre>// app/posts/route.ts
-import { redirect } from '@webjsdev/core';
+    <h2>Plain HTML forms as an alternative (the page action)</h2>
+    <p>Server actions called via JS RPC are the right tool when you need typed return values back in the component (the createPost example above returns a <code>Post</code> object). For the simpler "submit form, server processes, render the result" flow, the framework's <strong>page action</strong> is the cleaner fit. A <code>page.{js,ts}</code> may export an <code>action</code> alongside its default render function. A non-GET/HEAD submission to that page's own URL runs the action (inside the page's segment middleware), so a plain <code>&lt;form method="POST"&gt;</code> works with JavaScript disabled AND through the client router, same UI either way. You write no <code>route.ts</code> and no hand-rolled <code>new Response(...)</code>.</p>
+    <p>The action receives <code>{ request, params, searchParams, url, formData }</code> (<code>formData</code> is the already-parsed body, <code>request</code> is the raw Request) and returns an <code>ActionResult</code>. The framework interprets the result.</p>
+    <pre>// app/posts/page.ts
+import { html } from '@webjsdev/core';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
 
-export async function POST(req: Request) {
-  const form = await req.formData();
-  const result = await createPost({
-    title: String(form.get('title') ?? ''),
-    body: String(form.get('body') ?? ''),
-  });
-  // Validation failure -> return HTML with errors visible.
-  // The client router applies any HTML response in place regardless of
-  // status, so the user sees errors without losing their typed input
-  // and without a full page reload.
-  if (!result.success) {
-    return new Response(renderPostFormHTML(result.errors, form), {
-      status: 422,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    });
+// Runs only on the server. Receives the already-parsed formData.
+export async function action({ formData }: { formData: FormData }) {
+  const title = String(formData.get('title') || '').trim();
+  const body = String(formData.get('body') || '').trim();
+  const values = { title, body };
+  const fieldErrors: Record&lt;string, string&gt; = {};
+  if (!title) fieldErrors.title = 'Title is required';
+  if (body.length &lt; 10) fieldErrors.body = 'Body is too short';
+  if (Object.keys(fieldErrors).length) {
+    return { success: false, fieldErrors, values, status: 422 };
   }
-  // Success -> PRG redirect; fetch auto-follows, history records /posts/&lt;id&gt;
-  redirect(\`/posts/\${result.data.id}\`);
+  const post = await createPost({ title, body });
+  return { success: true, redirect: \`/posts/\${post.id}\` };
+}
+
+export default function NewPost({ actionData }: {
+  actionData?: { fieldErrors?: Record&lt;string, string&gt;; values?: Record&lt;string, string&gt; };
+}) {
+  const errors = actionData?.fieldErrors || {};
+  const values = actionData?.values || {};
+  return html\`
+    &lt;form method="POST"&gt;
+      &lt;input name="title" value=\${values.title || ''} required /&gt;
+      \${errors.title ? html\`&lt;p class="error"&gt;\${errors.title}&lt;/p&gt;\` : ''}
+      &lt;textarea name="body" required&gt;\${values.body || ''}&lt;/textarea&gt;
+      \${errors.body ? html\`&lt;p class="error"&gt;\${errors.body}&lt;/p&gt;\` : ''}
+      &lt;button&gt;Publish&lt;/button&gt;
+    &lt;/form&gt;
+  \`;
 }</pre>
-    <pre>&lt;!-- The form: standard HTML, no JS handler needed --&gt;
-&lt;form action="/posts" method="post"&gt;
-  &lt;input name="title" required /&gt;
-  &lt;textarea name="body" required&gt;&lt;/textarea&gt;
-  &lt;button&gt;Publish&lt;/button&gt;
-&lt;/form&gt;</pre>
-    <p>The router intercepts the submit, sends the POST, applies the response (2xx with redirect for success, 4xx HTML for validation errors). Works without JavaScript (just slower, with a full page reload), and ramps up to partial-swap when the client router is active. Both ends of the progressive-enhancement spectrum from one piece of code. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior.</p>
+    <p>How the framework interprets the returned <code>ActionResult</code>:</p>
+    <ul>
+      <li><strong>Success</strong> (<code>{ success: true, redirect? }</code>, or any non-failure result) is a <code>303 See Other</code> to <code>result.redirect</code> if present, else the page's own path (Post/Redirect/Get, so a reload does not resubmit). <code>result.redirect</code> must be a same-site local path (a single leading <code>/</code>); for a real external redirect throw <code>redirect(absoluteUrl)</code>.</li>
+      <li><strong>Failure</strong> (<code>{ success: false }</code>, or a <code>fieldErrors</code>, or an <code>error</code>) re-SSRs the SAME page with <code>status</code> (default <code>422</code>) and the result on <code>ctx.actionData</code>. The page reads <code>actionData.fieldErrors.&lt;name&gt;</code> for messages and <code>actionData.values.&lt;name&gt;</code> to repopulate native <code>&lt;input value=...&gt;</code>, so the user's typed input survives.</li>
+    </ul>
+    <p>With JavaScript off this is a native round-trip (the browser submits, follows the 303, or renders the 422). With JavaScript on the client router applies the 422 in place (no reload, typed input preserved) and follows the 303 via fetch. Both ends of the progressive-enhancement spectrum from one piece of code, no form library. See the <a href="/docs/client-router">client router</a> docs for the rendering behavior, and <a href="/docs/progressive-enhancement">progressive enhancement</a> for the full write-path pattern.</p>
   `;
 }
