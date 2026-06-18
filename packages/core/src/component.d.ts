@@ -147,9 +147,25 @@ export interface WebComponentConstructor {
   new (): WebComponentBase;
   prototype: WebComponentBase;
 
+  shadow: boolean;
+  hydrate: 'visible' | undefined;
+  properties: Record<string, PropertyDeclaration>;
+  styles: CSSResult | CSSResult[] | null;
+  lazy?: boolean;
+  register(tag: string): void;
+  readonly observedAttributes: string[];
+
   <S extends Record<string, any>>(shape: S): {
     new (): WebComponentBase & InferProps<S>;
     prototype: WebComponentBase & InferProps<S>;
+
+    shadow: boolean;
+    hydrate: 'visible' | undefined;
+    properties: Record<string, PropertyDeclaration>;
+    styles: CSSResult | CSSResult[] | null;
+    lazy?: boolean;
+    register(tag: string): void;
+    readonly observedAttributes: string[];
   };
 }
 
