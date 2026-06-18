@@ -387,14 +387,15 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
 });
 
 test('scaffoldApp: generated users module models HTTP-verb actions (#488)', async () => {
-  // The full-stack / api scaffolds emit a GET read (cache + tags) and a mutation
-  // that declares the tags it invalidates, so a new app sees the HTTP-verb idiom
-  // out of the box. Counterfactual: drop the verb config exports from create.js's
-  // list-users / create-user strings and these assertions fail.
+  // The api template emits the example users module: a GET read (cache + tags)
+  // and a mutation that declares the tags it invalidates, so a new app sees the
+  // HTTP-verb idiom out of the box. (create.js writes modules/users/ only inside
+  // the `if (isApi)` branch.) Counterfactual: drop the verb config exports from
+  // create.js's list-users / create-user strings and these assertions fail.
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
-    await scaffoldApp('verb-app', cwd, { template: 'full-stack' });
+    await scaffoldApp('verb-app', cwd, { template: 'api' });
     const appDir = join(cwd, 'verb-app');
 
     const listUsers = readFileSync(
