@@ -939,8 +939,13 @@ class WebComponentBase extends Base {
 
     const Ctor = /** @type any */ (this.constructor);
     const propName = camelCase(name);
-    const def = Ctor.properties && (Ctor.properties[propName] || Ctor.properties[name]);
-    if (!def) return;
+    const raw = Ctor.properties && (Ctor.properties[propName] || Ctor.properties[name]);
+    if (!raw) return;
+    // A declaration is either a full descriptor (`{ type: Number, … }`) or the
+    // bare-constructor shorthand the factory accepts (`count: Number`), in which
+    // case the value IS the type. Normalise so type-based coercion fires either
+    // way (matches `_initializeProperties`).
+    const def = typeof raw === 'object' ? raw : { type: raw };
 
     let v;
     if (def.converter && def.converter.fromAttribute) {
