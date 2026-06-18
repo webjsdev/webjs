@@ -51,16 +51,30 @@ test('blocks server / core / mcp / ui / intellisense bumps off a release branch'
   assert.match(runHook('packages/editors/intellisense/package.json', 'feat/x').out, GUARD, 'intellisense is guarded');
 });
 
-test('does NOT block on a chore/release-* branch', () => {
-  // The release branch is exactly where a lib bump belongs, so gate-3 must pass
-  // (it then proceeds to the changelog step, which is out of scope here).
+// Past gate-3, a detected bump reaches the changelog step. Asserting that marker
+// (not just the ABSENCE of the guard) proves the bump was let THROUGH gate-3,
+// so these stay meaningful even if gate-3 were deleted (they would then hit the
+// guard message instead, failing the doesNotMatch).
+const REACHED_CHANGELOG_STEP = /Detected staged version bump|backfill-changelog/;
+
+test('does NOT block on a chore/release-* branch (lib bump belongs there)', () => {
   const r = runHook('packages/cli/package.json', 'chore/release-cli-0.10.20');
   assert.doesNotMatch(r.out, GUARD);
+  assert.match(r.out, REACHED_CHANGELOG_STEP, 'passed gate-3 into the changelog step');
 });
 
-test('exempts editor apps + wrappers (they ride feature/lockstep commits)', () => {
-  for (const p of ['editors/vscode', 'editors/nvim', 'wrappers/create-webjs', 'wrappers/webjsdev']) {
+test('exempts editor apps (vscode/nvim ride feature commits)', () => {
+  for (const p of ['editors/vscode', 'editors/nvim']) {
     const r = runHook(`packages/${p}/package.json`, 'feat/x');
-    assert.doesNotMatch(r.out, GUARD, `${p} is exempt`);
+    assert.doesNotMatch(r.out, GUARD, `${p} is not guarded`);
+    assert.match(r.out, REACHED_CHANGELOG_STEP, `${p} passed gate-3`);
+  }
+});
+
+test('exempts lockstep wrappers (skipped by the changelog step, clean pass)', () => {
+  for (const p of ['wrappers/create-webjs', 'wrappers/webjsdev']) {
+    const r = runHook(`packages/${p}/package.json`, 'feat/x');
+    assert.doesNotMatch(r.out, GUARD, `${p} is not guarded`);
+    assert.equal(r.code, 0, `${p} passes the hook (no changelog required)`);
   }
 });
