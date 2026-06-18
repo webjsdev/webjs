@@ -119,6 +119,26 @@ suite('Client router: viewport prefetch over-fetch gate (#530)', () => {
     } finally { teardown(); }
   });
 
+  test('a soft-nav re-scan cancels a pending dwell timer for a removed link', async () => {
+    setup();
+    try {
+      const a = addViewportAnchor('/rescan-target');
+      await settle();
+      const obs = viewObserver();
+
+      obs.emit(a, true);  // arm the dwell timer
+      await sleep(40);     // still within the 250ms dwell
+      // The soft-nav swap removes the link, then the router re-scans. The
+      // removed anchor will never get an exit callback, so the re-scan itself
+      // must cancel its pending timer (otherwise it warms a stale URL).
+      a.remove();
+      document.dispatchEvent(new Event('webjs:navigate'));
+
+      await sleep(PAST_DWELL);
+      assert.equal(calls.length, 0, 'a pending timer for a removed link is cancelled on re-scan, not fired');
+    } finally { teardown(); }
+  });
+
   test('re-entering after a cancel can still warm (the anchor is not poisoned)', async () => {
     setup();
     try {

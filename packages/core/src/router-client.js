@@ -1189,6 +1189,9 @@ function prefetchMode(anchor) {
  * @param {string} href
  */
 function prefetch(href) {
+  // Never speculate once the router is torn down: a leftover hover / queue /
+  // dwell timer that fires after disableClientRouter must not issue a fetch.
+  if (!enabled) return;
   if (typeof fetch !== 'function') return;
   if (prefetchSaysSaveData()) return;
   const key = cacheKey(href);
@@ -1410,7 +1413,13 @@ function refreshPrefetchObservers() {
         }
       }, { threshold: 0.5 });
     } else {
+      // Re-scan: drop the old observation set AND cancel any pending dwell
+      // timers, so a timer armed for an anchor the soft-nav swap removed cannot
+      // fire a prefetch for a stale URL (its exit callback never comes once it
+      // is gone). Anchors still on-screen re-arm when observe() below redelivers
+      // their current intersection state.
       prefetchViewObserver.disconnect();
+      clearPrefetchViewTimers();
     }
   }
   for (const anchor of document.querySelectorAll('a[href]')) {
