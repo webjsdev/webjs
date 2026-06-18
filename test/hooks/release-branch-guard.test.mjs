@@ -29,7 +29,11 @@ function runHook(pkgPath, branch) {
   git('add', '-A'); git('commit', '-q', '--no-verify', '-m', 'base');
   writeFileSync(join(dir, pkgPath), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n');
   git('add', pkgPath);
-  const r = spawnSync('bash', [hook], { cwd: dir, encoding: 'utf8' });
+  // The hook short-circuits (exit 0) when GITHUB_ACTIONS=true (the release-bot
+  // skip), so strip it from the child env or this test is a no-op under CI.
+  const env = { ...process.env };
+  delete env.GITHUB_ACTIONS;
+  const r = spawnSync('bash', [hook], { cwd: dir, encoding: 'utf8', env });
   rmSync(dir, { recursive: true, force: true });
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
