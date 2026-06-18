@@ -220,6 +220,7 @@ export function disableClientRouter() {
   document.removeEventListener('pointerout', onPrefetchOut, true);
   document.removeEventListener('webjs:navigate', refreshPrefetchObservers);
   clearPrefetchHover();
+  clearPrefetchViewTimers();
   if (prefetchViewObserver) { prefetchViewObserver.disconnect(); prefetchViewObserver = null; }
   if (typeof history !== 'undefined' && prevScrollRestoration !== null) {
     history.scrollRestoration = prevScrollRestoration;
@@ -960,12 +961,16 @@ function buildHaveHeader() {
  * warms a dedicated cache speculatively so the click reads it instantly.
  *
  * Strategy per anchor via a `data-prefetch` attribute (valid-HTML data-*,
- * like SvelteKit / Astro), defaulting to `intent` so the common case is
- * fast without per-link opt-in, the way Next / Nuxt / SvelteKit ship
- * auto-prefetch. Value vocabulary borrows Next's true/false/auto aliases:
- *   - intent    (default)    : hover / focus / touch, after a short dwell
+ * like SvelteKit / Astro). The default is DEVICE-ADAPTIVE so the common case
+ * is fast on every device without per-link opt-in: `intent` on a hover-capable
+ * pointer (a real head-start before the click), `viewport` on touch (no hover
+ * exists, and `touchstart` fires too close to the tap to front-run it). Value
+ * vocabulary borrows Next's true/false/auto aliases:
+ *   - absent (default)       : intent on pointer, viewport on touch (adaptive)
+ *   - intent                 : hover / focus / touch, after a short dwell
  *   - true / render          : eager, as soon as a document scan sees it
- *   - auto / viewport        : on viewport entry (IntersectionObserver, 0.5)
+ *   - auto / viewport        : on viewport entry (IntersectionObserver, 0.5),
+ *                              after a dwell so a fast scroll-through skips it
  *   - false / none           : never (also data-no-prefetch / rel="external")
  *
  * Why a separate cache, not snapshotCache: snapshotCache is keyed to the
@@ -976,7 +981,10 @@ function buildHaveHeader() {
  * prefetchTake() before falling back to the network.
  *
  * Only same-origin in-app links are prefetched (the same eligibility as
- * a click), and never under Save-Data / prefers-reduced-data. There is no
+ * a click), and never under Save-Data / prefers-reduced-data / a 2g link,
+ * never past a small concurrency cap, and never twice (deduped + cached). The
+ * viewport path additionally waits a dwell and cancels on scroll-out, so a
+ * fast scroll through a long list does not flood the network tab. There is no
  * logout-style heuristic: prefetch issues a real GET, so as everywhere in
  * the ecosystem (Next / Nuxt / Remix), a non-idempotent action must be a
  * POST or a `<form>`, and `data-no-prefetch` / `rel="external"` opt out.
@@ -996,6 +1004,13 @@ const PREFETCH_CONCURRENCY = 3;
 const PREFETCH_QUEUE_CAP = 24;
 /** Hover dwell before a prefetch fires (ms): filter drive-by pointer moves. Matches Remix's intent timeout. */
 const PREFETCH_HOVER_DELAY = 100;
+/**
+ * Viewport dwell before a prefetch fires (ms): a link must SETTLE on-screen,
+ * not merely flash past during a scroll. A fast scroll-through clears the
+ * timer on exit, so flicked-past links never fetch. Astro uses 300ms for the
+ * same purpose; we sit a touch lower so a deliberate stop still feels instant.
+ */
+const PREFETCH_VIEWPORT_DELAY = 250;
 
 /** @typedef {{ html: string, build: string | null, finalUrl: string, at: number }} PrefetchEntry */
 /** @type {Map<string, PrefetchEntry>} */
@@ -1011,23 +1026,54 @@ let prefetchHoverTimer = null;
 let prefetchHoverAnchor = null;
 /** IntersectionObserver for data-prefetch="viewport" anchors, or null. */
 let prefetchViewObserver = null;
+/** Per-anchor viewport-dwell timers, so a scroll-out can cancel before firing. */
+let prefetchViewTimers = new WeakMap();
+/** Live viewport-dwell timer ids, for bulk teardown on disable. */
+const prefetchViewPending = new Set();
 
 /**
- * True when the user or platform has asked us to conserve data. Both the
- * Save-Data client hint and the prefers-reduced-data media query disable
- * speculative fetching. Guarded for non-browser / partial DOM.
+ * True when the user or platform has asked us to conserve data, OR the
+ * connection is too slow to spend bytes speculatively. The Save-Data client
+ * hint, the prefers-reduced-data media query, and a 2g `effectiveType` all
+ * disable speculative fetching, the same gate Astro / Nuxt apply. Guarded for
+ * non-browser / partial DOM.
  *
  * @returns {boolean}
  */
 function prefetchSaysSaveData() {
   try {
     const c = typeof navigator !== 'undefined' ? /** @type any */ (navigator).connection : null;
-    if (c && c.saveData === true) return true;
+    if (c) {
+      if (c.saveData === true) return true;
+      // effectiveType is 'slow-2g' | '2g' | '3g' | '4g'; skip the 2g tiers.
+      if (typeof c.effectiveType === 'string' && /2g$/.test(c.effectiveType)) return true;
+    }
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-data: reduce)').matches) {
       return true;
     }
   } catch { /* ignore */ }
   return false;
+}
+
+/**
+ * Whether the device drives a hover-capable fine pointer (a mouse or
+ * trackpad), as opposed to touch. This picks the ADAPTIVE prefetch default:
+ * `intent` (hover / focus) on a pointer device, `viewport` on touch, since a
+ * touch device has no hover and `touchstart` fires too close to the tap to
+ * front-run it. Detected with `matchMedia('(hover: hover) and (pointer: fine)')`
+ * rather than a user-agent sniff. When `matchMedia` is unavailable we assume a
+ * pointer (the historical default), so a non-browser / partial-DOM environment
+ * keeps the `intent` behaviour and never silently switches to viewport.
+ *
+ * @returns {boolean}
+ */
+function prefetchHasHoverPointer() {
+  try {
+    if (typeof matchMedia === 'function') {
+      return matchMedia('(hover: hover) and (pointer: fine)').matches;
+    }
+  } catch { /* ignore */ }
+  return true;
 }
 
 /**
@@ -1091,11 +1137,20 @@ function prefetchSuppressed(anchor) {
  * absent or unrecognised.
  *
  * Value mapping (case-insensitive):
- *   - absent / unknown   : `intent`  (the default)
+ *   - absent / unknown   : the DEVICE-ADAPTIVE default (intent on a pointer,
+ *                          viewport on touch); an explicit value always wins
  *   - `intent`           : hover / focus / touch, after a short dwell
  *   - `true` / `render`  : eager, as soon as a document scan sees the link
- *   - `auto` / `viewport`: on viewport entry (IntersectionObserver)
+ *   - `auto` / `viewport`: on viewport entry (IntersectionObserver), after a dwell
  *   - `false` / `none`   : never (also via data-no-prefetch / rel="external")
+ *
+ * The default is adaptive (not a single `intent`) because `intent` does not
+ * help on mobile: a touch device has no hover, and `touchstart` fires at tap
+ * time, so the prefetch races the navigation. On touch we default to
+ * `viewport` (warm links as they settle on-screen) and keep `touchstart` as an
+ * extra warm for the tapped link; on a pointer device `intent` stays the
+ * default (precise, cheap, a real head-start before the click). A per-link
+ * `data-prefetch` always overrides the adaptive default.
  *
  * Returns `none` for suppressed anchors so callers have a single check.
  *
@@ -1118,8 +1173,8 @@ function prefetchMode(anchor) {
     case 'intent':
       return 'intent';
     default:
-      // Unset or unrecognised value: the fast default.
-      return 'intent';
+      // Unset or unrecognised value: the device-adaptive default.
+      return prefetchHasHoverPointer() ? 'intent' : 'viewport';
   }
 }
 
@@ -1245,12 +1300,19 @@ function onPrefetchIntent(e) {
   if (!enabled) return;
   const anchor = closestAnchor(/** @type any */ (e.target));
   if (!anchor) return;
-  // Only `intent` links prefetch on hover/focus/touch. `render` and
-  // `viewport` links are handled by the document scan / observer, and
-  // `none` is suppressed.
-  if (prefetchMode(anchor) !== 'intent') return;
+  const mode = prefetchMode(anchor);
+  // `none` is suppressed; `render` already prefetched on the document scan.
+  if (mode === 'none' || mode === 'render') return;
   const href = eligibleAnchorHref(anchor);
   if (!href) return;
+  // touchstart IS the tap: warm the tapped link immediately, for both intent
+  // and viewport modes (a single request for a link about to be navigated, the
+  // small mobile win the viewport default cannot give for the link just tapped).
+  // No dwell, since the tap is the intent.
+  if (e.type === 'touchstart') { prefetch(href); return; }
+  // hover / focus only warm `intent` links; `viewport` links are the
+  // observer's job (warmed on a dwell, not on a stray hover).
+  if (mode !== 'intent') return;
   // pointerover/focusin bubble, so re-entering a child of the same anchor
   // would re-arm; collapse to one timer per anchor.
   if (prefetchHoverAnchor === anchor && prefetchHoverTimer) return;
@@ -1272,6 +1334,13 @@ function onPrefetchOut(e) {
 function clearPrefetchHover() {
   if (prefetchHoverTimer) { clearTimeout(prefetchHoverTimer); prefetchHoverTimer = null; }
   prefetchHoverAnchor = null;
+}
+
+/** Cancel every pending viewport-dwell timer and reset the per-anchor map. */
+function clearPrefetchViewTimers() {
+  for (const timer of prefetchViewPending) clearTimeout(timer);
+  prefetchViewPending.clear();
+  prefetchViewTimers = new WeakMap();
 }
 
 /**
@@ -1314,11 +1383,30 @@ function refreshPrefetchObservers() {
     if (!prefetchViewObserver) {
       prefetchViewObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
           const anchor = /** @type {Element} */ (entry.target);
-          prefetchViewObserver.unobserve(anchor);
-          const href = eligibleAnchorHref(anchor);
-          if (href && prefetchMode(anchor) === 'viewport') prefetch(href);
+          if (entry.isIntersecting) {
+            // Arm a dwell timer; the link must STAY on-screen to warm. One
+            // timer per anchor, so re-entry while pending does not stack.
+            if (prefetchViewTimers.has(anchor)) continue;
+            const timer = setTimeout(() => {
+              prefetchViewPending.delete(timer);
+              prefetchViewTimers.delete(anchor);
+              prefetchViewObserver.unobserve(anchor);
+              const href = eligibleAnchorHref(anchor);
+              if (href && prefetchMode(anchor) === 'viewport') prefetch(href);
+            }, PREFETCH_VIEWPORT_DELAY);
+            prefetchViewTimers.set(anchor, timer);
+            prefetchViewPending.add(timer);
+          } else {
+            // Scrolled out before the dwell elapsed: cancel, so a fast
+            // scroll-through never spends a request.
+            const timer = prefetchViewTimers.get(anchor);
+            if (timer) {
+              clearTimeout(timer);
+              prefetchViewPending.delete(timer);
+              prefetchViewTimers.delete(anchor);
+            }
+          }
         }
       }, { threshold: 0.5 });
     } else {
@@ -3070,6 +3158,7 @@ export {
   regraftPermanentInSlice as _regraftPermanentInSlice,
   prefetchSuppressed as _prefetchSuppressed,
   prefetchMode as _prefetchMode,
+  prefetchHasHoverPointer as _prefetchHasHoverPointer,
   prefetch as _prefetch,
   prefetchTake as _prefetchTake,
   prefetchSaysSaveData as _prefetchSaysSaveData,
@@ -3090,6 +3179,7 @@ export function _resetPrefetch() {
   prefetchQueue.length = 0;
   prefetchQueued.clear();
   clearPrefetchHover();
+  clearPrefetchViewTimers();
 }
 
 /** Test-only: read the monotonic navigation-token counter. */
