@@ -398,6 +398,30 @@ class Cart extends WebComponent {
 
     <p>This is the design rule that makes <a href="/docs/progressive-enhancement">progressive enhancement</a> work in webjs: the component's HTML lands in the response, with the right content, before any script runs.</p>
 
+    <h3>Compound components: reading the parent with closest() at SSR</h3>
+    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to the parent and reading the parent's value. webjs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, so the active or pressed state is marked in the <strong>first server paint</strong>, not only after hydration.</p>
+
+    <pre>class UiTabsTrigger extends WebComponent {
+  static properties = { value: { type: String } };
+  declare value: string;
+
+  get _tabs() { return this.closest('ui-tabs'); }
+
+  render() {
+    const active = this._tabs?.value === this.value;
+    this.dataset.state = active ? 'active' : 'inactive';
+    return html\`&lt;button data-state=\${active ? 'active' : 'inactive'}&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/button&gt;\`;
+  }
+}
+UiTabsTrigger.register('ui-tabs-trigger');</pre>
+
+    <p>The SSR walker threads the chain of enclosing custom-element instances into each instance, and the server element shim's <code>closest()</code> resolves a parent over that chain (so <code>this.closest('ui-tabs').value</code> reads the live parent property the walker already applied). Host IDL properties a <code>render()</code> mutates on <code>this</code> (<code>this.dataset.*</code>, <code>this.className</code>, <code>this.hidden</code>, the <code>aria*</code> mixin) reflect to the matching attribute on the SSR'd host tag, so the active tab is marked before any JavaScript runs. The first client render produces the identical state (the browser's real <code>closest()</code> against the real DOM), so there is no hydration flash. Two limits apply.</p>
+    <ul>
+      <li>Only <strong>tag-name selectors</strong> resolve at SSR (<code>closest('ui-tabs')</code>). A class, attribute, or descendant selector returns <code>null</code> server-side and resolves on the client. That covers the compound-component pattern, anything finer is client-only.</li>
+      <li>The compound <strong>parent</strong> must be light DOM (the default, and what every UI-kit compound component uses). A shadow-DOM parent projects its children through a native <code>&lt;slot&gt;</code>, and those slotted children are not threaded the SSR ancestor chain, so their <code>closest(parent)</code> resolves to <code>null</code> in the first server paint (it still resolves on the client after hydration). Keep compound parents light DOM for a correct first paint.</li>
+    </ul>
+    <p>Genuine layout or live-DOM reads (<code>querySelector</code>, <code>classList</code>, <code>attachShadow</code>, geometry) still throw at SSR, so keep them in <code>connectedCallback</code> or <code>firstUpdated</code>. See <a href="/docs/ssr">Server-Side Rendering</a> for the server element shim that backs this.</p>
+
     <h2>Fetching data in a component (async render)</h2>
     <p>A leaf component can fetch its own server data into the first paint, so you do not have to fetch it in the page and prop-drill it down. Make <code>render()</code> async and call a <code>'use server'</code> action directly:</p>
     <pre>class UserProfile extends WebComponent {
