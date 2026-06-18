@@ -336,6 +336,15 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // (past 400ms) and advance the URL only once the content was already
     // resolved, so the fallback would never be observed live.
     await page.goto(baseUrl + '/about', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    // Keep this nav LIVE: the default prefetch is device-adaptive, so on a
+    // no-hover runner the home link would be viewport-prefetched and buffered
+    // (a prefetch reads the full body, resolving the boundary), and the click
+    // would then consume that buffer and never show the live fallback. Opting
+    // the trigger out of prefetch keeps the test about streaming, not prefetch.
+    await page.evaluate(() => {
+      const home = [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/');
+      if (home) home.setAttribute('data-no-prefetch', '');
+    });
     await sleep(1500);
 
     // Click the layout's home link (href="/") to soft-navigate to the homepage.
@@ -611,6 +620,14 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
   test('progressive soft-nav to a streamed page keeps the fallback live at URL advance (#471/#473)', async () => {
     await page.goto(baseUrl + '/static-info', { waitUntil: 'domcontentloaded', timeout: 10000 });
+    // Keep the nav to the streamed page LIVE (not prefetch-buffered): the
+    // adaptive default would viewport-prefetch the Stream link on a no-hover
+    // runner, buffering the resolved page and defeating the streaming assertion.
+    await page.evaluate(() => {
+      for (const a of document.querySelectorAll('nav a')) {
+        if (a.textContent.trim() === 'Stream') { a.setAttribute('data-no-prefetch', ''); break; }
+      }
+    });
     await sleep(1200);
     // Click the "Stream" nav link (soft navigation to /stream-demo).
     await page.evaluate(() => {
@@ -2111,6 +2128,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       const a = document.createElement('a');
       a.href = '/about';
       a.id = 'e2e-prefetch-link';
+      // Pin the strategy to intent: this test exercises the hover/intent path,
+      // and the default is now device-adaptive (viewport on a no-hover runner),
+      // so a bare default link would not warm on hover under headless Puppeteer.
+      a.setAttribute('data-prefetch', 'intent');
       a.textContent = 'about (e2e)';
       (document.querySelector('main') || document.body).appendChild(a);
       window.__e2ePrefetchSentinel = 'alive';
@@ -2250,6 +2271,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       const ok = document.createElement('a');
       ok.href = '/about';
       ok.id = 'e2e-ctrl-link';
+      // Pin intent: the default is device-adaptive now, so a no-hover runner
+      // would resolve a bare link to viewport and the hover control would fail.
+      ok.setAttribute('data-prefetch', 'intent');
       ok.textContent = 'control';
       const ext = document.createElement('a');
       ext.href = 'https://example.com/somewhere';
@@ -2339,6 +2363,54 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       assert.equal(warmed, 1, 'a settled viewport link warms exactly once');
     } finally {
       page.off('request', onRequest);
+    }
+  });
+
+  test('prefetch: on a TOUCH-emulated viewport, a bare link (no data-prefetch) defaults to viewport prefetch (#530)', async () => {
+    // Emulate a touch device (no hover, coarse pointer): the adaptive default
+    // must resolve a bare link to `viewport`, so it warms on scroll-into-view
+    // rather than needing a hover that touch cannot produce. Scoped + reset in
+    // finally so the emulation does not leak into later tests.
+    await page.emulateMediaFeatures([{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }]);
+    try {
+      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await sleep(2000);
+
+      const touchHref = '/about?probe=e2e-touch-default';
+      await page.evaluate((href) => {
+        const main = document.querySelector('main') || document.body;
+        const spacer = document.createElement('div');
+        spacer.style.height = '4000px';
+        const a = document.createElement('a');
+        a.href = href;          // NO data-prefetch: relies on the adaptive default
+        a.id = 'e2e-touch-link';
+        a.textContent = 'touch default link';
+        main.append(spacer, a);
+        document.dispatchEvent(new Event('webjs:navigate'));
+        window.scrollTo(0, 0);
+      }, touchHref);
+
+      let warmed = 0;
+      const origin = new URL(baseUrl).origin;
+      const onRequest = (req) => {
+        if (!req.headers()['x-webjs-prefetch']) return;
+        let u; try { u = new URL(req.url()); } catch { return; }
+        if (u.origin === origin && u.pathname === '/about' && u.search.includes('probe=e2e-touch-default')) warmed++;
+      };
+      page.on('request', onRequest);
+      try {
+        // Off-screen: no hover exists on touch, so nothing warms yet.
+        await sleep(700);
+        assert.equal(warmed, 0, 'a bare link off-screen on touch does not warm (no hover to trigger it)');
+        // Scroll it in and let it dwell: the adaptive default warms it as viewport.
+        await page.evaluate(() => document.getElementById('e2e-touch-link')?.scrollIntoView());
+        await waitFor(() => warmed >= 1, 4000,
+          () => `a bare link on touch should warm as viewport once it dwells (got ${warmed})`);
+      } finally {
+        page.off('request', onRequest);
+      }
+    } finally {
+      await page.emulateMediaFeatures([]); // reset so later tests run at the runner's native modality
     }
   });
 
