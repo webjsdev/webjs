@@ -767,6 +767,19 @@ export async function createPost(input: { title: string; body: string }) {
 Import it from a client component. The framework rewrites it into a
 type-safe RPC stub automatically.
 
+A server action is a POST by default, but reserved sibling exports change its
+HTTP semantics without changing the call site (`await getUser(7)` stays the
+same): `export const method = 'GET'` (a read; rides args in the URL, CSRF-exempt,
+cacheable), `export const cache = 60` + `export const tags` (GET response
+caching), `export const invalidates` (a mutation's tags to evict), `export const
+middleware` (a per-action chain, `actionContext()`), and `export const validate`
+(the boundary validator). One callable function per configured file. An action
+that RETURNS a `ReadableStream` / async generator streams its chunks (consume
+with `for await`); read the request `AbortSignal` via `actionSignal()` to cancel
+on disconnect. **SAFETY:** a `cache` with `public: true` shares one response
+across all users, so use it only for data identical for every visitor. Full
+reference: https://docs.webjs.com/docs/server-actions
+
 ## Client navigation patterns (auto-magic)
 
 The client router enables itself when the scaffolded root layout imports

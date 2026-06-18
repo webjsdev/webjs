@@ -200,6 +200,53 @@ option: `export const POST = route(createPost, { validate })`. A
 validator that THROWS (the classic `Schema.parse` style) becomes a 400, and a
 non-envelope return transforms the input.
 
+## HTTP verbs, caching, streaming, and cancellation (#488, #489, #490, #492)
+
+A `'use server'` action is a POST by default. Reserved sibling exports, read
+statically (the same way a page reads `export const revalidate`), change its
+HTTP semantics WITHOUT changing the call site (you still write `await
+getUser(7)`). One callable function per configured file (a second callable is a
+`webjs check` error).
+
+```ts
+// modules/users/queries/get-user.server.ts: a cached, tagged GET read
+'use server';
+export const method = 'GET';                       // absent = POST
+export const cache = 60;                            // seconds, or { maxAge, swr, public }
+export const tags = (id: number) => ['user:' + id];
+export async function getUser(id: number) { return db.query.users.findFirst({ where: { id } }); }
+```
+
+```ts
+// a mutation evicts the tags it touches
+'use server';
+export const invalidates = (id: number) => ['user:' + id];
+export const middleware = [requireAuth];           // #490: async (ctx, next) => result; actionContext()
+export async function updateUser(id: number, patch: Partial<User>) { /* ... */ }
+```
+
+- A **GET** rides args in the URL (POST fallback over a 4KB cap), is CSRF-exempt,
+  and carries `Cache-Control` + a weak `ETag` (304 on `If-None-Match`) +
+  `X-Webjs-Tags`. A **mutation** (POST/PUT/PATCH/DELETE) sends the rich body
+  (DELETE rides the URL), is CSRF-protected, and on success evicts its
+  `invalidates` tags and reports them via `X-Webjs-Invalidate`. A method mismatch
+  is a `405` + `Allow`.
+- **SAFETY:** `cache` with `public: true` SHARES one response across all users,
+  keyed only by URL + args. Use it ONLY for data identical for every visitor (the
+  same rule as a page's `export const revalidate`).
+- **Streaming (#489):** return a `ReadableStream` / async iterable / async
+  generator (any verb) and the call site does `for await (const c of await
+  streamTokens(8))`. Each chunk is rich-serialized as yielded, back-pressured,
+  and the source is cancelled on disconnect. A streamed result is never cached /
+  ETagged / seeded.
+- **Cancellation (#492):** read the request `AbortSignal` via `actionSignal()`
+  (from `@webjsdev/server`) to stop work on disconnect; a superseded client
+  `async render()` auto-aborts the previous in-flight fetch.
+- **SSR seeding (#472):** an action result invoked during a non-streamed SSR
+  render is serialized into the page; the stub reads that seed on its first client
+  call, so a shipping component does not re-fetch on hydration (consume-once,
+  fail-open; opt out with `"webjs": { "seed": false }`).
+
 ## Add a component
 
 ```ts
