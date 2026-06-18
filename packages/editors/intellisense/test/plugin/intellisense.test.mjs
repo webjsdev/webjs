@@ -368,9 +368,10 @@ test('ignores code inside ${...} holes (not part of the template markup)', () =>
  * Attribute-name auto-complete inside `<webjs-tag …>`
  * ================================================================ */
 
-test('completes static-properties keys after typing `<webjs-tag `', () => {
+test('legacy static properties: completes static-properties keys after typing `<webjs-tag `', () => {
   const svc = makeService({
     '/auth.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
       `export class AuthForms extends WebComponent {\n` +
       `  static properties = { mode: { type: String }, then: { type: String } };\n` +
       `}\n` +
@@ -395,8 +396,8 @@ test('completes static-properties keys after typing `<webjs-tag `', () => {
 test('a camelCase prop completes as a hyphenated attribute; state props are excluded', () => {
   const svc = makeService({
     '/box.ts':
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `import { WebComponent, prop } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent({ maxLength: Number, internal: prop({ state: true }) }) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -416,8 +417,8 @@ test('a camelCase prop completes as a hyphenated attribute; state props are excl
 test('`.` triggers property-name completions (camelCase, includes state props)', () => {
   const svc = makeService({
     '/box.ts':
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { maxLength: { type: Number }, internal: { state: true } };\n` +
+      `import { WebComponent, prop } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent({ maxLength: Number, internal: prop({ state: true }) }) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -436,8 +437,8 @@ test('`.` triggers property-name completions (camelCase, includes state props)',
 test('completes reachable custom-element tag names after `<`', () => {
   const svc = makeService({
     '/box.ts':
-      `export class Box extends WebComponent {\n` +
-      `  static properties = {};\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent({}) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -456,8 +457,8 @@ test('completes reachable custom-element tag names after `<`', () => {
 test('does not complete attributes for an UNREACHABLE (not imported) tag', () => {
   const svc = makeService({
     '/box.ts':
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent({ mode: String }) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -476,7 +477,7 @@ test('does not complete attributes for an UNREACHABLE (not imported) tag', () =>
  * Hover + attribute go-to-definition inside html`` templates
  * ================================================================ */
 
-test('go-to-definition on an attribute name resolves to the declared member', () => {
+test('legacy static properties: go-to-definition on an attribute name resolves to the declared member', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
@@ -504,8 +505,7 @@ test('hover on a custom-element tag shows its component class', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent {\n` +
-      `  static properties = {};\n` +
+      `export class Box extends WebComponent({}) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -526,8 +526,7 @@ test('hover on a property binding shows its declared type', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { count: { type: Number } };\n` +
+      `export class Box extends WebComponent({ count: Number }) {\n` +
       `  declare count: number;\n` +
       `}\n` +
       `Box.register('my-box');\n`,
@@ -553,8 +552,7 @@ test('flags number passed where string is declared', () => {
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
@@ -578,8 +576,7 @@ test('passes when interpolated value is assignable to declared string type', () 
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
@@ -600,8 +597,7 @@ test('flags an incompatible `.prop` binding against the declared property type',
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { count: { type: Number } };\n` +
+      `export class Box extends WebComponent({ count: Number }) {\n` +
       `  declare count: number;\n` +
       `}\n` +
       `Box.register('my-box');\n`,
@@ -622,8 +618,7 @@ test('flags a quoted binding (invariant 4) as code 9002', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { count: { type: Number } };\n` +
+      `export class Box extends WebComponent({ count: Number }) {\n` +
       `  declare count: number;\n` +
       `}\n` +
       `Box.register('my-box');\n`,
@@ -645,8 +640,7 @@ test('flags an expressionless `.prop` binding as code 9003', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent {\n` +
-      `  static properties = { value: { type: String } };\n` +
+      `export class Box extends WebComponent({ value: String }) {\n` +
       `  declare value: string;\n` +
       `}\n` +
       `Box.register('my-box');\n`,
@@ -741,8 +735,7 @@ test('9004: a register() call written as html`` template TEXT is not a registrat
 test('flags a non-callable `@event` handler; accepts a function', () => {
   const base =
     `import { WebComponent } from '@webjsdev/core';\n` +
-    `export class Box extends WebComponent {\n` +
-    `  static properties = {};\n` +
+    `export class Box extends WebComponent({}) {\n` +
     `}\n` +
     `Box.register('my-box');\n`;
   const bad = makeService({
@@ -778,8 +771,7 @@ test('flags string-or-number against a string-literal-union type', () => {
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
       `type Mode = 'login' | 'signup';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `  declare mode: Mode;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
@@ -802,8 +794,7 @@ test('does not type-check static (non-interpolated) attribute values', () => {
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
@@ -825,8 +816,7 @@ test('skips check when component is reachable but the prop has no `declare` anno
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `}\n` + // no `declare mode: …`
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
@@ -850,8 +840,7 @@ test('does not check tags that are not reachable through imports', () => {
   const svc = makeService({
     '/auth.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `  declare mode: string;\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
@@ -871,8 +860,8 @@ test('does not check tags that are not reachable through imports', () => {
 test('attribute completions are NOT offered when the component is not imported', () => {
   const svc = makeService({
     '/auth.ts':
-      `export class AuthForms extends WebComponent {\n` +
-      `  static properties = { mode: { type: String } };\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class AuthForms extends WebComponent({ mode: String }) {\n` +
       `}\n` +
       `AuthForms.register('auth-forms');\n`,
     '/page.ts':
