@@ -12,17 +12,11 @@
  * library's own implicit-any imports. That noise is unrelated to the fixtures;
  * the fixtures themselves are still fully type-checked.
  *
- * RETRY on a TRANSIENT resolution failure (#566). Under `node --test` cross-file
- * concurrency the spawned `tsc` intermittently fails to resolve a workspace
- * package's types, e.g. `@webjsdev/server` momentarily resolves to its `.js`
- * (untyped) instead of `index.d.ts`, so a fixture importing a type-only export
- * (`AuthInstance`, the generic `createAuth<TUser>`) fails with TS7016 /
- * TS2305 / TS2665, non-deterministically and shifting between sibling fixtures
- * across runs (green on main, flaky on branches that perturb test timing,
- * #563/#565). The package types are correct, so the SAME compile succeeds on a
- * fresh `tsc` process a moment later. A genuine type error in a fixture fails
- * every attempt and is still reported; only a transient race is retried, so the
- * retry cannot hide a real regression.
+ * These compilations resolve the live `@webjsdev/core` / `@webjsdev/server`
+ * overlays. The companion `server-types.test.mjs` proves the overlay is
+ * load-bearing WITHOUT moving the live `index.d.ts` aside (it copies the
+ * package), so no concurrent fixture compilation here can race a missing
+ * overlay (#566).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,37 +30,24 @@ const tscBin = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', im
 
 const fixtures = readdirSync(here).filter((f) => f.endsWith('.test-d.ts'));
 
-/** Run tsc once over a single fixture; returns the spawnSync result. */
-function compile(fixture) {
-  return spawnSync(
-    process.execPath,
-    [
-      tscBin,
-      '--noEmit',
-      '--strict',
-      '--target', 'esnext',
-      '--module', 'esnext',
-      '--moduleResolution', 'bundler',
-      '--lib', 'esnext,dom',
-      '--skipLibCheck',
-      '--allowJs',
-      join(here, fixture),
-    ],
-    { encoding: 'utf8' },
-  );
-}
-
-// A failure that names a workspace `@webjsdev/*` package is the transient
-// resolution race, not a fixture error: retry it. A real fixture type error
-// points at the fixture file itself (and persists across attempts anyway).
-const TRANSIENT = /@webjsdev\/(core|server)/;
-
 for (const fixture of fixtures) {
   test(`type fixture compiles clean: ${fixture}`, () => {
-    let res = compile(fixture);
-    for (let attempt = 1; attempt < 4 && res.status !== 0 && TRANSIENT.test(`${res.stdout}${res.stderr}`); attempt++) {
-      res = compile(fixture);
-    }
+    const res = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        '--noEmit',
+        '--strict',
+        '--target', 'esnext',
+        '--module', 'esnext',
+        '--moduleResolution', 'bundler',
+        '--lib', 'esnext,dom',
+        '--skipLibCheck',
+        '--allowJs',
+        join(here, fixture),
+      ],
+      { encoding: 'utf8' },
+    );
     assert.equal(
       res.status,
       0,
