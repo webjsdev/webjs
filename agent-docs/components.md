@@ -27,11 +27,15 @@ declare items: string[];
 ```
 
 A function `default` is **called** to produce the value, so an object /
-array default is a separate instance per element (no shared reference);
-to default a property to a function value, wrap it as `default: () =>
-theFn`. An applied attribute (it runs after construction) overrides the
-default. Set the default in the `constructor()` instead only when it must
-be computed from other constructor state.
+array default is a separate instance per element. Always use the function
+form for an object or array: a LITERAL `default: {}` / `default: []` is
+evaluated once when `static properties` is created, so every element
+would share one reference and a mutation in one would leak into the rest.
+A primitive literal (`0`, `false`, `'x'`) is safe. To default a property
+to a function VALUE, wrap it as `default: () => theFn`. An applied
+attribute (it runs after construction) overrides the default. Set the
+default in the `constructor()` instead only when it must be computed from
+other constructor state.
 
 ## Why `declare` is required in TypeScript
 

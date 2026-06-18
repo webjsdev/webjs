@@ -313,13 +313,16 @@ safety net, not the primary defense. Authoring code should use `declare`
 plus a default from the start.
 
 Use the `default` option for the default value whenever it does not
-depend on other instance state. A function `default` is invoked per
-instance, so an object / array default is a fresh value (no shared
-reference across elements), exactly the trap a `student = {…}` field
-would also create if it worked. Use a constructor default only when the
-value must be computed from other constructor state. Either way, the
-`declare` line stays (it is the only decorator-free way to type the
-accessor; see the next entry).
+depend on other instance state. One footgun to know: a LITERAL object or
+array default (`default: {}`, `default: []`) is evaluated once when the
+`static properties` object is created, so every instance shares the same
+reference and one element's mutation leaks into the others. For an object
+or array default, pass a FUNCTION (`default: () => ({})`), which the
+framework calls once per instance to produce a fresh value. A primitive
+default (`0`, `false`, `'x'`) has no such hazard, so a literal is fine
+there. Use a constructor default only when the value must be computed
+from other constructor state. Either way, the `declare` line stays (it is
+the only decorator-free way to type the accessor; see the next entry).
 
 ### 6. The `@property()` decorator (the deliberate Lit divergence)
 

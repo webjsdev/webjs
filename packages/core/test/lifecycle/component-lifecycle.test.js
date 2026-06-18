@@ -237,6 +237,20 @@ test('a function default is called to produce a FRESH value per instance', () =>
   assert.deepEqual(b.items, []);
 });
 
+test('a LITERAL object default is shared across instances (documented hazard)', () => {
+  // This locks the documented contract: a non-function default is the SAME
+  // reference for every element (evaluated once in `static properties`), so
+  // objects / arrays must use the function form. If this ever stops being
+  // true, the docs warning in lit-muscle-memory-gotchas.md must change.
+  class C extends WebComponent {
+    static properties = { bag: { type: Object, default: {} } };
+  }
+  C.register('default-literal-shared');
+  const a = document.createElement('default-literal-shared');
+  const b = document.createElement('default-literal-shared');
+  assert.equal(a.bag, b.bag, 'a literal default is shared by reference');
+});
+
 test('an applied attribute overrides the default', () => {
   class C extends WebComponent {
     static properties = { size: { type: Number, default: 7 } };
