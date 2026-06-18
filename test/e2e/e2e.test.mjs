@@ -126,6 +126,28 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     page = await browser.newPage();
+    // Model a desktop pointer deterministically. Headless Chromium reports
+    // hover:none, which would flip the adaptive prefetch default to viewport
+    // and passively warm links (breaking tests that assume nothing prefetches
+    // without a hover). Override ONLY the hover/pointer media query (other
+    // queries delegate to the real matchMedia); a test opts into touch by
+    // setting window.__webjsForceTouch before the router scans. This uses a
+    // matchMedia shim rather than emulateMediaFeatures, which CI's Chromium
+    // does not support for the hover feature.
+    await page.evaluateOnNewDocument(() => {
+      const real = window.matchMedia.bind(window);
+      window.matchMedia = (q) => {
+        if (typeof q === 'string' && q.includes('hover')) {
+          const touch = !!window.__webjsForceTouch;
+          return {
+            matches: !touch, media: q, onchange: null,
+            addEventListener() {}, removeEventListener() {},
+            addListener() {}, removeListener() {}, dispatchEvent() { return false; },
+          };
+        }
+        return real(q);
+      };
+    });
   });
 
   after(async () => {
@@ -336,15 +358,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // (past 400ms) and advance the URL only once the content was already
     // resolved, so the fallback would never be observed live.
     await page.goto(baseUrl + '/about', { waitUntil: 'domcontentloaded', timeout: 10000 });
-    // Keep this nav LIVE: the default prefetch is device-adaptive, so on a
-    // no-hover runner the home link would be viewport-prefetched and buffered
-    // (a prefetch reads the full body, resolving the boundary), and the click
-    // would then consume that buffer and never show the live fallback. Opting
-    // the trigger out of prefetch keeps the test about streaming, not prefetch.
-    await page.evaluate(() => {
-      const home = [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/');
-      if (home) home.setAttribute('data-no-prefetch', '');
-    });
     await sleep(1500);
 
     // Click the layout's home link (href="/") to soft-navigate to the homepage.
@@ -620,14 +633,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
   test('progressive soft-nav to a streamed page keeps the fallback live at URL advance (#471/#473)', async () => {
     await page.goto(baseUrl + '/static-info', { waitUntil: 'domcontentloaded', timeout: 10000 });
-    // Keep the nav to the streamed page LIVE (not prefetch-buffered): the
-    // adaptive default would viewport-prefetch the Stream link on a no-hover
-    // runner, buffering the resolved page and defeating the streaming assertion.
-    await page.evaluate(() => {
-      for (const a of document.querySelectorAll('nav a')) {
-        if (a.textContent.trim() === 'Stream') { a.setAttribute('data-no-prefetch', ''); break; }
-      }
-    });
     await sleep(1200);
     // Click the "Stream" nav link (soft navigation to /stream-demo).
     await page.evaluate(() => {
@@ -2128,10 +2133,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       const a = document.createElement('a');
       a.href = '/about';
       a.id = 'e2e-prefetch-link';
-      // Pin the strategy to intent: this test exercises the hover/intent path,
-      // and the default is now device-adaptive (viewport on a no-hover runner),
-      // so a bare default link would not warm on hover under headless Puppeteer.
-      a.setAttribute('data-prefetch', 'intent');
       a.textContent = 'about (e2e)';
       (document.querySelector('main') || document.body).appendChild(a);
       window.__e2ePrefetchSentinel = 'alive';
@@ -2271,9 +2272,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       const ok = document.createElement('a');
       ok.href = '/about';
       ok.id = 'e2e-ctrl-link';
-      // Pin intent: the default is device-adaptive now, so a no-hover runner
-      // would resolve a bare link to viewport and the hover control would fail.
-      ok.setAttribute('data-prefetch', 'intent');
       ok.textContent = 'control';
       const ext = document.createElement('a');
       ext.href = 'https://example.com/somewhere';
@@ -2366,15 +2364,17 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
-  test('prefetch: on a TOUCH-emulated viewport, a bare link (no data-prefetch) defaults to viewport prefetch (#530)', async () => {
-    // Emulate a touch device (no hover, coarse pointer): the adaptive default
-    // must resolve a bare link to `viewport`, so it warms on scroll-into-view
-    // rather than needing a hover that touch cannot produce. Scoped + reset in
-    // finally so the emulation does not leak into later tests.
-    await page.emulateMediaFeatures([{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }]);
+  test('prefetch: on a TOUCH viewport, a bare link (no data-prefetch) defaults to viewport prefetch (#530)', async () => {
+    // Force the touch modality (no hover) through the matchMedia shim the before
+    // hook installs, so the adaptive default resolves a bare link to `viewport`
+    // and it warms on scroll-into-view rather than needing a hover that touch
+    // cannot produce. Reset the flag in finally so later tests keep the desktop
+    // model. CI Chromium does not support emulateMediaFeatures for hover, so the
+    // shim is how the modality is controlled.
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
     try {
-      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await sleep(2000);
+      await page.evaluate(() => { window.__webjsForceTouch = true; });
+      await sleep(1500);
 
       const touchHref = '/about?probe=e2e-touch-default';
       await page.evaluate((href) => {
@@ -2410,7 +2410,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
         page.off('request', onRequest);
       }
     } finally {
-      await page.emulateMediaFeatures([]); // reset so later tests run at the runner's native modality
+      await page.evaluate(() => { window.__webjsForceTouch = false; }).catch(() => {});
     }
   });
 
